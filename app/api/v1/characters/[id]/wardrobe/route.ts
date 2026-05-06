@@ -59,11 +59,14 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       types: validatedData.types,
     });
 
+    // `componentItemIds: []` marks this as a leaf item — composites are built
+    // explicitly via the wardrobe-management UI by editing an existing item.
     const item = await repos.wardrobe.create({
       characterId: id,
       title: validatedData.title,
       description: validatedData.description ?? null,
       types: validatedData.types,
+      componentItemIds: [],
       appropriateness: validatedData.appropriateness ?? null,
       isDefault: validatedData.isDefault ?? false,
       migratedFromClothingRecordId: null,

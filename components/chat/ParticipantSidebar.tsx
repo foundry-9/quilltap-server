@@ -462,7 +462,7 @@ export function ParticipantSidebar({
                 : undefined}
               onWhisper={activeParticipantCount >= 3 ? onWhisper : undefined}
               equippedSlots={charOutfit?.slots}
-              equippedItems={charOutfit?.items}
+              itemsBySlot={charOutfit?.itemsBySlot}
               wardrobeItems={charWardrobe}
               onEquipSlot={onEquipSlot}
               outfitLoading={outfitLoading}

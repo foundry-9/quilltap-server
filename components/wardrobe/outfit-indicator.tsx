@@ -13,7 +13,7 @@
 import { useState, useCallback } from 'react'
 import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItemSummary } from '@/app/salon/[id]/hooks/useOutfit'
+import type { WardrobeItemSummary, ResolvedSlotItems } from '@/app/salon/[id]/hooks/useOutfit'
 
 // ============================================================================
 // TYPES
@@ -22,8 +22,11 @@ import type { WardrobeItemSummary } from '@/app/salon/[id]/hooks/useOutfit'
 export interface OutfitIndicatorProps {
   characterId: string
   equippedSlots: EquippedSlots | null
-  /** Resolved item details keyed by slot name */
-  equippedItems: Record<string, { title: string } | null>
+  /**
+   * Resolved leaf items per slot, in layering order. Multi-item slots
+   * (e.g. t-shirt under a sweater) render their titles comma-joined.
+   */
+  itemsBySlot: ResolvedSlotItems
   /** All wardrobe items for this character (for the change dropdown) */
   wardrobeItems: WardrobeItemSummary[]
   /** Callback when equipping/unequipping a slot */
@@ -58,7 +61,7 @@ const EMPTY_LABELS: Record<WardrobeItemType, string> = {
 export function OutfitIndicator({
   characterId,
   equippedSlots,
-  equippedItems,
+  itemsBySlot,
   wardrobeItems,
   onEquipSlot,
   isLoading = false,
@@ -132,9 +135,14 @@ export function OutfitIndicator({
       {expanded && equippedSlots && (
         <div className="mt-1 ml-4 space-y-0.5">
           {WARDROBE_SLOT_TYPES.map((slot) => {
-            const item = equippedItems[slot]
+            const slotEntries = itemsBySlot[slot] ?? []
+            const titleSummary = slotEntries.map(e => e.title).join(', ')
             const isChanging = changingSlot === slot
             const slotItems = getItemsForSlot(slot)
+            // The dropdown is a "replace what's worn" gesture; surface the
+            // first equipped id as the selected value so the picker doesn't
+            // jump around when layered items are present.
+            const primaryEquippedId = (equippedSlots[slot] ?? [])[0] ?? ''
 
             return (
               <div key={slot} className="flex items-center gap-1 qt-text-xs">
@@ -144,7 +152,7 @@ export function OutfitIndicator({
 
                 {isChanging ? (
                   <select
-                    value={equippedSlots[slot] || ''}
+                    value={primaryEquippedId}
                     onChange={(e) => handleSlotChange(slot, e.target.value || null)}
                     onBlur={() => setChangingSlot(null)}
                     autoFocus
@@ -163,9 +171,9 @@ export function OutfitIndicator({
                     type="button"
                     onClick={() => setChangingSlot(slot)}
                     className="qt-text-primary hover:underline cursor-pointer text-left truncate flex-1"
-                    title={item ? `${item.title} (click to change)` : `${EMPTY_LABELS[slot]} (click to change)`}
+                    title={slotEntries.length > 0 ? `${titleSummary} (click to change)` : `${EMPTY_LABELS[slot]} (click to change)`}
                   >
-                    {item ? item.title : (
+                    {slotEntries.length > 0 ? titleSummary : (
                       <span className="qt-text-muted italic">{EMPTY_LABELS[slot]}</span>
                     )}
                   </button>

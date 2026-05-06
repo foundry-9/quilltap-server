@@ -20,7 +20,7 @@ import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { OutfitIndicator } from '@/components/wardrobe/outfit-indicator'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItemSummary } from '@/app/salon/[id]/hooks/useOutfit'
+import type { WardrobeItemSummary, ResolvedSlotItems } from '@/app/salon/[id]/hooks/useOutfit'
 
 // Special constant for user impersonation selection
 const USER_IMPERSONATION_VALUE = '__user__'
@@ -102,7 +102,8 @@ interface ParticipantCardProps {
   onWhisper?: (participantId: string) => void
   // Outfit display
   equippedSlots?: EquippedSlots | null
-  equippedItems?: Record<string, { title: string } | null>
+  /** Resolved leaf items per slot, in layering order. */
+  itemsBySlot?: ResolvedSlotItems
   wardrobeItems?: WardrobeItemSummary[]
   onEquipSlot?: (participantId: string, slot: string, itemId: string | null) => void
   outfitLoading?: boolean
@@ -142,7 +143,7 @@ export function ParticipantCard({
   onStatusChange,
   onWhisper,
   equippedSlots,
-  equippedItems,
+  itemsBySlot,
   wardrobeItems,
   onEquipSlot,
   outfitLoading,
@@ -439,7 +440,7 @@ export function ParticipantCard({
             <OutfitIndicator
               characterId={participant.character?.id || ''}
               equippedSlots={equippedSlots ?? null}
-              equippedItems={equippedItems ?? {}}
+              itemsBySlot={itemsBySlot ?? { top: [], bottom: [], footwear: [], accessories: [] }}
               wardrobeItems={wardrobeItems ?? []}
               onEquipSlot={(slot, itemId) => onEquipSlot(participant.id, slot, itemId)}
               isLoading={outfitLoading}

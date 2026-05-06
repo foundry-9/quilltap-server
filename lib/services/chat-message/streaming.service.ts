@@ -142,7 +142,7 @@ export async function buildTools(
   isMultiCharacter?: boolean,
   /** Whether help tools are enabled for this character (enables help_search and help_settings) */
   helpToolsEnabled?: boolean,
-  /** Whether this character can dress themselves (enables list_wardrobe and update_outfit_item) */
+  /** Whether this character can dress themselves (enables list_wardrobe, wardrobe_set_outfit, and wardrobe_change_item) */
   canDressThemselves?: boolean,
   /** Whether this character can create new outfits (enables create_wardrobe_item) */
   canCreateOutfits?: boolean,
@@ -214,6 +214,7 @@ export async function buildTools(
     helpNavigate: !!helpToolsEnabled,
     wardrobeList: canDressThemselves !== false,
     wardrobeUpdateOutfit: canDressThemselves !== false,
+    wardrobeChangeItem: canDressThemselves !== false,
     wardrobeCreateItem: canCreateOutfits !== false,
     whisper: !!isMultiCharacter,
     shellInteractivity: isShellEnvironment(),

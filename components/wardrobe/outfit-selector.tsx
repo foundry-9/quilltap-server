@@ -6,6 +6,11 @@
  * Allows selecting outfit modes and manual slot assignments for
  * LLM-controlled characters when creating a new chat.
  *
+ * Each slot now accepts an array of items (multiple per slot for layering),
+ * matching the post-rework wardrobe model. Manual mode renders a per-slot
+ * checkbox group of every wardrobe item whose types include that slot;
+ * checking an item adds it to the slot's array.
+ *
  * @module components/wardrobe/outfit-selector
  */
 
@@ -13,7 +18,6 @@ import { useCallback, useEffect, useState, useMemo } from 'react'
 import useSWR from 'swr'
 import type {
   OutfitSelectionMode,
-  OutfitPreset,
   WardrobeItem,
   WardrobeItemType,
   EquippedSlots,
@@ -37,13 +41,13 @@ export interface OutfitSelectorCharacter {
 
 /**
  * Per-character per-slot summary of what was equipped at the end of a source
- * chat. Surfaced in the UI when the new chat is a "change of venue"
- * continuation, so the user can see what each character was wearing before
- * they click Continue.
+ * chat. Each slot is an array of resolved items (composites already expanded
+ * server-side). Surfaced in the UI when the new chat is a "change of venue"
+ * continuation.
  */
 export type PreviousOutfitSummary = Record<
   string,
-  Partial<Record<'top' | 'bottom' | 'footwear' | 'accessories', { itemId: string; title: string } | null>>
+  Partial<Record<'top' | 'bottom' | 'footwear' | 'accessories', Array<{ itemId: string; title: string }>>>
 >
 
 export interface OutfitSelectorProps {
@@ -55,9 +59,7 @@ export interface OutfitSelectorProps {
   disabled?: boolean
   /**
    * Continuation mode: when set, exposes a "Same as last conversation" option
-   * that copies each character's equipped outfit forward from the source
-   * chat. The summary is rendered as a preview alongside the option so the
-   * user can verify before committing.
+   * that copies each character's equipped outfit forward from the source chat.
    */
   sourceChatId?: string | null
   previousOutfitSummary?: PreviousOutfitSummary | null
@@ -73,12 +75,6 @@ const SLOT_LABELS: Record<WardrobeItemType, string> = {
   footwear: 'Footwear',
   accessories: 'Accessories',
 }
-
-// ============================================================================
-// INTERNAL MODE TYPE (adds 'preset' to the selection modes)
-// ============================================================================
-
-type InternalMode = OutfitSelectionMode | 'preset'
 
 // ============================================================================
 // PER-CHARACTER SECTION
@@ -101,7 +97,7 @@ interface CharacterOutfitSectionProps {
    * at the end of the source chat. Rendered as a small preview under the
    * "Same as last conversation" option.
    */
-  previousChatSlots?: Partial<Record<'top' | 'bottom' | 'footwear' | 'accessories', { itemId: string; title: string } | null>> | null
+  previousChatSlots?: Partial<Record<'top' | 'bottom' | 'footwear' | 'accessories', Array<{ itemId: string; title: string }>>> | null
 }
 
 function CharacterOutfitSection({
@@ -114,39 +110,25 @@ function CharacterOutfitSection({
   previousChatSlots,
 }: CharacterOutfitSectionProps) {
   const [expanded, setExpanded] = useState(false)
-  const [internalMode, setInternalMode] = useState<InternalMode>(selection.mode)
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
+  const [internalMode, setInternalMode] = useState<OutfitSelectionMode>(selection.mode)
 
-  // Fetch wardrobe items when mode is manual or preset
+  // Fetch wardrobe items when mode is manual
   const { data: wardrobeData, isLoading: loadingWardrobe } = useSWR<{ wardrobeItems: WardrobeItem[] }>(
-    (internalMode === 'manual' || internalMode === 'preset')
+    internalMode === 'manual'
       ? `/api/v1/characters/${character.id}/wardrobe`
       : null
   )
 
-  // Fetch presets when mode is preset
-  const { data: presetsData, isLoading: loadingPresets } = useSWR<{ presets: OutfitPreset[] }>(
-    internalMode === 'preset' ? `/api/v1/characters/${character.id}/wardrobe/presets` : null
-  )
-
   const wardrobeItems = useMemo(() => wardrobeData?.wardrobeItems ?? [], [wardrobeData])
-  const presets = useMemo(() => presetsData?.presets ?? [], [presetsData])
   const wardrobeFetched = wardrobeData !== undefined
-  const presetsFetched = presetsData !== undefined
 
   const handleModeChange = useCallback(
-    (mode: InternalMode) => {
+    (mode: OutfitSelectionMode) => {
       setInternalMode(mode)
-
-      if (mode === 'preset') {
-        // Don't emit to parent yet — wait for a preset to be selected
-        // Meanwhile, keep the current selection stable
-        return
-      }
 
       const updated: OutfitSelection = {
         characterId: character.id,
-        mode: mode as OutfitSelectionMode,
+        mode,
         slots: mode === 'manual' ? selection.slots || { ...EMPTY_EQUIPPED_SLOTS } : undefined,
       }
       onChange(updated)
@@ -154,30 +136,25 @@ function CharacterOutfitSection({
     [character.id, selection.slots, onChange]
   )
 
-  const handlePresetSelect = useCallback(
-    (presetId: string) => {
-      setSelectedPresetId(presetId)
-      const preset = presets.find((p) => p.id === presetId)
-      if (!preset) return
-
-      // Resolve preset client-side: emit as 'manual' mode with the preset's slots
-      const updated: OutfitSelection = {
-        characterId: character.id,
-        mode: 'manual',
-        slots: { ...preset.slots },
-      }
-      onChange(updated)
-    },
-    [character.id, presets, onChange]
-  )
-
-  const handleSlotChange = useCallback(
-    (slot: WardrobeItemType, itemId: string | null) => {
+  const handleToggleItem = useCallback(
+    (slot: WardrobeItemType, itemId: string, checked: boolean) => {
       const currentSlots = selection.slots || { ...EMPTY_EQUIPPED_SLOTS }
+      const currentArray = currentSlots[slot] ?? []
+      let nextArray: string[]
+      if (checked) {
+        if (currentArray.includes(itemId)) {
+          nextArray = currentArray
+        } else {
+          nextArray = [...currentArray, itemId]
+        }
+      } else {
+        nextArray = currentArray.filter((id) => id !== itemId)
+      }
+
       const updated: OutfitSelection = {
         characterId: character.id,
         mode: 'manual',
-        slots: { ...currentSlots, [slot]: itemId },
+        slots: { ...currentSlots, [slot]: nextArray },
       }
       onChange(updated)
     },
@@ -192,7 +169,7 @@ function CharacterOutfitSection({
   )
 
   const modeOptions: Array<{
-    value: InternalMode
+    value: OutfitSelectionMode
     label: string
     description?: string
     disabled?: boolean
@@ -200,7 +177,7 @@ function CharacterOutfitSection({
     ...(showPreviousChatOption
       ? [
           {
-            value: 'previous_chat' as InternalMode,
+            value: 'previous_chat' as OutfitSelectionMode,
             label: 'Same as last conversation',
             description: 'Carry forward whatever they were wearing at the end of the source chat',
           },
@@ -208,7 +185,6 @@ function CharacterOutfitSection({
       : []),
     { value: 'default', label: 'Use Defaults' },
     { value: 'manual', label: 'Choose Outfit' },
-    { value: 'preset', label: 'Use Saved Preset' },
     {
       value: 'llm_choose',
       label: 'Let Character Choose',
@@ -225,15 +201,15 @@ function CharacterOutfitSection({
     if (!previousChatSlots) return null
     const equipped = (['top', 'bottom', 'footwear', 'accessories'] as const)
       .map((slot) => {
-        const item = previousChatSlots[slot]
-        if (!item) return null
-        return { slot, title: item.title }
+        const items = previousChatSlots[slot] ?? []
+        if (items.length === 0) return null
+        return { slot, titles: items.map((i) => i.title) }
       })
-      .filter((entry): entry is { slot: 'top' | 'bottom' | 'footwear' | 'accessories'; title: string } => entry !== null)
+      .filter((entry): entry is { slot: 'top' | 'bottom' | 'footwear' | 'accessories'; titles: string[] } => entry !== null)
     if (equipped.length === 0) {
       return 'Nothing equipped at the end of the source chat — defaults will be used.'
     }
-    return equipped.map((e) => `${SLOT_LABELS[e.slot]}: ${e.title}`).join(' · ')
+    return equipped.map((e) => `${SLOT_LABELS[e.slot]}: ${e.titles.join(', ')}`).join(' · ')
   })()
 
   return (
@@ -293,46 +269,9 @@ function CharacterOutfitSection({
             ))}
           </div>
 
-          {/* Preset picker */}
-          {internalMode === 'preset' && (
-            <div className="mt-3 pl-6">
-              {loadingPresets ? (
-                <p className="text-xs qt-text-secondary">Loading presets...</p>
-              ) : presets.length === 0 && presetsFetched ? (
-                <p className="text-xs qt-text-secondary italic">
-                  No presets found. Create presets in the character&apos;s wardrobe tab.
-                </p>
-              ) : (
-                <div>
-                  <label
-                    htmlFor={`preset-select-${character.id}`}
-                    className="mb-1 block text-xs font-medium qt-text-secondary"
-                  >
-                    Select Preset
-                  </label>
-                  <select
-                    id={`preset-select-${character.id}`}
-                    value={selectedPresetId || ''}
-                    onChange={(e) => handlePresetSelect(e.target.value)}
-                    disabled={disabled}
-                    className="qt-select w-full"
-                  >
-                    <option value="">Choose a preset...</option>
-                    {presets.map((preset) => (
-                      <option key={preset.id} value={preset.id}>
-                        {preset.name}
-                        {preset.description ? ` - ${preset.description}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Manual slot pickers */}
+          {/* Manual slot pickers — multi-select per slot */}
           {internalMode === 'manual' && (
-            <div className="mt-3 space-y-2 pl-6">
+            <div className="mt-3 space-y-3 pl-6">
               {loadingWardrobe ? (
                 <p className="text-xs qt-text-secondary">Loading wardrobe...</p>
               ) : wardrobeItems.length === 0 && wardrobeFetched ? (
@@ -342,31 +281,52 @@ function CharacterOutfitSection({
               ) : (
                 WARDROBE_SLOT_TYPES.map((slot) => {
                   const items = getItemsForSlot(slot)
+                  const slotSelections = selection.slots?.[slot] ?? []
                   return (
                     <div key={slot}>
-                      <label
-                        htmlFor={`slot-${character.id}-${slot}`}
-                        className="mb-1 block text-xs font-medium qt-text-secondary"
-                      >
-                        {SLOT_LABELS[slot]}
-                      </label>
-                      <select
-                        id={`slot-${character.id}-${slot}`}
-                        value={selection.slots?.[slot] || ''}
-                        onChange={(e) =>
-                          handleSlotChange(slot, e.target.value || null)
-                        }
-                        disabled={disabled}
-                        className="w-full rounded border qt-border-default bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        <option value="">None</option>
-                        {items.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.title}
-                            {item.isDefault ? ' (Default)' : ''}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="mb-1 flex items-baseline justify-between">
+                        <span className="text-xs font-medium qt-text-secondary">
+                          {SLOT_LABELS[slot]}
+                        </span>
+                        <span className="text-xs qt-text-secondary italic">
+                          {slotSelections.length === 0
+                            ? '(none)'
+                            : `${slotSelections.length} selected`}
+                        </span>
+                      </div>
+                      {items.length === 0 ? (
+                        <p className="text-xs qt-text-secondary italic">
+                          No items cover this slot.
+                        </p>
+                      ) : (
+                        <div className="space-y-1">
+                          {items.map((item) => {
+                            const isComposite = (item.componentItemIds?.length ?? 0) > 0
+                            const checked = slotSelections.includes(item.id)
+                            return (
+                              <label
+                                key={item.id}
+                                className="flex items-start gap-2 rounded px-2 py-1 text-xs cursor-pointer hover:qt-bg-muted/40"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) =>
+                                    handleToggleItem(slot, item.id, e.target.checked)
+                                  }
+                                  disabled={disabled}
+                                  className="mt-0.5 accent-[var(--primary)]"
+                                />
+                                <span className="qt-text-primary">
+                                  {item.title}
+                                  {item.isDefault ? ' (Default)' : ''}
+                                  {isComposite ? ' · composite' : ''}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   )
                 })
@@ -381,8 +341,7 @@ function CharacterOutfitSection({
             </div>
           )}
 
-          {/* Continuation mode preview: what they were wearing at the end of
-              the source chat. Shown beneath the radio so users can verify. */}
+          {/* Continuation mode preview */}
           {internalMode === 'previous_chat' && previousChatPreview && (
             <div className="mt-2 ml-6 rounded border qt-border-default qt-bg-muted/40 px-2 py-1.5 text-xs qt-text-secondary">
               {previousChatPreview}

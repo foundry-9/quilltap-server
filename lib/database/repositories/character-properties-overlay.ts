@@ -15,12 +15,15 @@
  *   - physical-description.md  — physicalDescriptions[0].fullDescription
  *   - physical-prompts.json    — physicalDescriptions[0].{short,medium,long,complete}Prompt
  *   - Wardrobe/*.md            — wardrobe items (one file per item, frontmatter
- *                                 carries id/title/types/appropriateness/etc.;
- *                                 body is the freeform description). Applied by
- *                                 the wardrobe / outfit-presets repositories.
- *   - Outfits/*.md             — outfit presets (one file per preset; slot
- *                                 references prefer item slugs and fall back
- *                                 to UUIDs).
+ *                                 carries id/title/types/appropriateness/
+ *                                 componentItems/etc.; body is the freeform
+ *                                 description). Applied by the wardrobe
+ *                                 repository. Composite items reference their
+ *                                 components via the `componentItems:` slug
+ *                                 array (slug-first, UUID fallback). The
+ *                                 retired `Outfits/` folder is tolerated on
+ *                                 read but no longer parsed; a separate
+ *                                 migration step cleans it up.
  *   - Prompts/*.md             — character.systemPrompts (one file per variant,
  *                                 YAML frontmatter carries {name, isDefault})
  *   - Scenarios/*.md           — character.scenarios (one file per scenario,
@@ -65,13 +68,11 @@ import type {
 import { PronounsSchema } from '@/lib/schemas/character.types';
 import {
   WardrobeItemSchema,
-  OutfitPresetSchema,
   WardrobeItemTypeEnum,
   type WardrobeItem,
-  type OutfitPreset,
   type WardrobeItemType,
-  type EquippedSlots,
 } from '@/lib/schemas/wardrobe.types';
+import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
 import {
   readDatabaseDocument,
   writeDatabaseDocument,
@@ -84,13 +85,11 @@ import {
   buildSystemPromptFile,
   buildScenarioFile,
   buildWardrobeItemFile,
-  buildOutfitPresetFile,
   buildSlugByItemIdMap,
   slugifyWardrobeTitle,
   sanitizeFileName,
   renderPhysicalPromptsJson,
   CHARACTER_WARDROBE_FOLDER,
-  CHARACTER_OUTFITS_FOLDER,
 } from '@/lib/mount-index/character-vault';
 import type { DocMountDocument } from '@/lib/schemas/mount-index.types';
 
@@ -120,19 +119,21 @@ export const CharacterVaultPhysicalPromptsSchema = z.object({
 
 export type CharacterVaultPhysicalPrompts = z.infer<typeof CharacterVaultPhysicalPromptsSchema>;
 
-// Snapshot of a vault's wardrobe state — items + presets together. Returned
-// from the folder-based reader; the legacy JSON parser produces the same
-// shape so callers don't have to care which file layout the vault is on.
+// Snapshot of a vault's wardrobe state — composite items live alongside leaf
+// items in the same list and reference their components via
+// `componentItemIds`. Returned from the folder-based reader; the legacy JSON
+// parser produces the same shape so callers don't have to care which file
+// layout the vault is on.
 export interface CharacterVaultWardrobe {
   items: WardrobeItem[];
-  presets: OutfitPreset[];
 }
 
 // The legacy JSON shape we still parse on migration. New vaults never write
-// this; the folder format is authoritative going forward.
+// this; the folder format is authoritative going forward. Pre-rework vaults
+// included a `presets` array that is now ignored — the migration step folds
+// those into composite wardrobe items, so honoring it here would double-write.
 const LegacyVaultWardrobeJsonSchema = z.object({
   items: z.array(WardrobeItemSchema),
-  presets: z.array(OutfitPresetSchema),
   outfit: z
     .object({
       top: z.string().nullable().optional(),
@@ -159,7 +160,7 @@ export const CHARACTER_WARDROBE_JSON_PATH = 'wardrobe.json';
 
 export const CHARACTER_PROMPTS_FOLDER = 'Prompts';
 export const CHARACTER_SCENARIOS_FOLDER = 'Scenarios';
-export { CHARACTER_WARDROBE_FOLDER, CHARACTER_OUTFITS_FOLDER };
+export { CHARACTER_WARDROBE_FOLDER };
 
 const SINGLE_FILE_OVERLAY_PATHS = [
   CHARACTER_PROPERTIES_JSON_PATH,
@@ -294,8 +295,11 @@ function parseVaultPhysicalPrompts(
 /**
  * Parse the legacy `wardrobe.json` payload — kept for migration so vaults that
  * shipped on the old format aren't lost when they're first read or refreshed
- * onto the folder layout. Returns `{ items, presets }`; the legacy `outfit`
- * placeholder is dropped on the floor (it was never consumed by anything).
+ * onto the folder layout. Returns just `{ items }`; the legacy `presets` array
+ * is ignored here (the database-side migration folds presets into composite
+ * wardrobe items, so honoring them on read would double-write), and the
+ * legacy `outfit` placeholder is dropped on the floor (it was never consumed
+ * by anything).
  */
 function parseLegacyWardrobeJson(
   raw: string,
@@ -321,7 +325,7 @@ function parseLegacyWardrobeJson(
     return null;
   }
 
-  return { items: parsed.data.items, presets: parsed.data.presets };
+  return { items: parsed.data.items };
 }
 
 /**
@@ -403,12 +407,19 @@ function parsePromptFile(
 /**
  * Parse a `Wardrobe/<title>.md` file. Frontmatter carries the structured
  * fields (id, title, types, appropriateness, default flag, archive flag,
- * timestamps); the body is the freeform description. Hand-edited files may
- * omit `id` and timestamps — both are filled in on the next sync.
+ * componentItems, timestamps); the body is the freeform description.
+ * Hand-edited files may omit `id` and timestamps — both are filled in on the
+ * next sync.
  *
  * Returns null when the file can't yield a valid `WardrobeItem` (no usable
  * title, no valid types, etc.) so the read overlay keeps falling back to the
  * DB value for that single file rather than blowing up the whole list.
+ *
+ * `componentItemIds` is initially populated with the raw refs from the file
+ * (slug or UUID strings, in author-given order). The caller is responsible
+ * for resolving these to canonical UUIDs against the freshly-built itemBySlug
+ * / itemById maps once every item in the folder has been parsed; see
+ * `resolveAndCheckComponentItems` below.
  */
 function parseWardrobeItemFile(
   doc: DocMountDocument,
@@ -485,6 +496,13 @@ function parseWardrobeItemFile(
       ? (parsed.data.migratedFromClothingRecordId as string)
       : null;
 
+  // Raw componentItems refs (slug or UUID strings). We deliberately store
+  // these as-written into componentItemIds; `resolveAndCheckComponentItems`
+  // rewrites them to canonical UUIDs in a second pass once the slug/id maps
+  // exist. Treating them as UUIDs here would force per-item resolution and
+  // re-thread the parser through the lookup maps.
+  const componentItemIdsRaw = parseComponentItemsField(parsed.data?.componentItems);
+
   const createdAt =
     typeof parsed.data?.createdAt === 'string'
       ? (parsed.data.createdAt as string)
@@ -508,11 +526,31 @@ function parseWardrobeItemFile(
     types,
     appropriateness,
     isDefault,
+    componentItemIds: componentItemIdsRaw,
     migratedFromClothingRecordId,
     archivedAt,
     createdAt,
     updatedAt,
   };
+}
+
+/**
+ * Parse the `componentItems:` frontmatter array. Accepts a list of strings
+ * (slug or UUID); anything else is dropped with a warning-level no-op (the
+ * caller logs once at file scope rather than on every entry). Empty/missing
+ * arrays return `[]` so leaf items get the canonical empty value.
+ */
+function parseComponentItemsField(raw: unknown): string[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) {
+    if (typeof v !== 'string') continue;
+    const trimmed = v.trim();
+    if (trimmed.length === 0) continue;
+    out.push(trimmed);
+  }
+  return out;
 }
 
 function parseWardrobeTypesField(raw: unknown): WardrobeItemType[] | null {
@@ -531,131 +569,66 @@ function parseWardrobeTypesField(raw: unknown): WardrobeItemType[] | null {
 }
 
 /**
- * Parse an `Outfits/<name>.md` file. Frontmatter carries the preset's name,
- * id, slot map, and timestamps; the body is the freeform description. Slot
- * values are first resolved against the in-vault slug map (built from the
- * `Wardrobe/` items) and fall back to interpreting the value as a literal
- * UUID, so a hand-edit that uses `top: blue-tweed-jacket` keeps working
- * across renames as long as the slug or the explicit UUID matches something.
+ * Resolve the raw `componentItems:` strings that `parseWardrobeItemFile`
+ * stashed on each item into canonical UUIDs, then run a cycle check across
+ * the resolved list. Items whose composites would form a cycle have their
+ * `componentItemIds` cleared (read-tolerant — the item itself stays so the
+ * user doesn't lose a hand-edit, but the bad reference is dropped). Unknown
+ * refs (no slug or UUID match) are logged and dropped from that item's list.
+ *
+ * Mutates `items` in place because the array is freshly built by the caller
+ * and not yet exposed elsewhere.
  */
-function parseOutfitPresetFile(
-  doc: DocMountDocument,
-  characterId: string,
+function resolveAndCheckComponentItems(
+  items: WardrobeItem[],
   itemBySlug: ReadonlyMap<string, WardrobeItem>,
   itemById: ReadonlyMap<string, WardrobeItem>,
-): OutfitPreset | null {
-  const parsed = parseFrontmatter(doc.content);
-
-  let name: string | null = null;
-  if (parsed.data) {
-    const n = parsed.data.name;
-    if (typeof n === 'string' && n.trim().length > 0) {
-      name = n.trim();
-    }
-  }
-  const afterFrontmatter = doc.content.slice(parsed.bodyStartOffset);
-  const lines = afterFrontmatter.split('\n');
-  let titleLineIndex = -1;
-  if (name === null) {
-    for (let i = 0; i < lines.length; i++) {
-      const match = lines[i].match(/^#\s+(.+)$/);
-      if (match) {
-        titleLineIndex = i;
-        name = match[1].trim();
-        break;
+  characterId: string,
+  mountPointId: string,
+): void {
+  // First pass — slug/UUID → canonical UUID, dropping unknown refs.
+  for (const item of items) {
+    if (item.componentItemIds.length === 0) continue;
+    const resolved: string[] = [];
+    for (const ref of item.componentItemIds) {
+      const bySlug = itemBySlug.get(ref);
+      if (bySlug) {
+        resolved.push(bySlug.id);
+        continue;
       }
+      const byId = itemById.get(ref);
+      if (byId) {
+        resolved.push(byId.id);
+        continue;
+      }
+      logger.warn('Wardrobe item references unknown component; dropping ref', {
+        characterId,
+        mountPointId,
+        itemId: item.id,
+        title: item.title,
+        ref,
+      });
+    }
+    item.componentItemIds = resolved;
+  }
+
+  // Second pass — cycle check using the now-resolved IDs. A cycle in the
+  // declared graph wipes that item's components rather than the item itself,
+  // so the user doesn't lose anything irrecoverable to a vault edit slip.
+  for (const item of items) {
+    if (item.componentItemIds.length === 0) continue;
+    const cycles = detectComponentCycles(item.id, item.componentItemIds, itemById);
+    if (cycles.length > 0) {
+      logger.warn('Wardrobe item declares a component cycle in vault; dropping its components', {
+        characterId,
+        mountPointId,
+        itemId: item.id,
+        title: item.title,
+        cycles,
+      });
+      item.componentItemIds = [];
     }
   }
-  if (name === null) {
-    name = doc.fileName.replace(/\.md$/i, '').trim();
-  }
-  if (name.length === 0) {
-    logger.warn('Outfits/*.md file has no usable name; skipping', {
-      characterId,
-      mountPointId: doc.mountPointId,
-      relativePath: doc.relativePath,
-    });
-    return null;
-  }
-
-  const id =
-    typeof parsed.data?.id === 'string' && /^[0-9a-f-]{36}$/i.test(parsed.data.id as string)
-      ? (parsed.data.id as string)
-      : stableUuidFromString(`outfit-preset:${doc.mountPointId}:${doc.relativePath}`);
-
-  const slots: EquippedSlots = {
-    top: resolveSlotRef(parsed.data?.slots, 'top', itemBySlug, itemById, doc, characterId),
-    bottom: resolveSlotRef(parsed.data?.slots, 'bottom', itemBySlug, itemById, doc, characterId),
-    footwear: resolveSlotRef(parsed.data?.slots, 'footwear', itemBySlug, itemById, doc, characterId),
-    accessories: resolveSlotRef(
-      parsed.data?.slots,
-      'accessories',
-      itemBySlug,
-      itemById,
-      doc,
-      characterId,
-    ),
-  };
-
-  const createdAt =
-    typeof parsed.data?.createdAt === 'string'
-      ? (parsed.data.createdAt as string)
-      : doc.createdAt;
-  const updatedAt =
-    typeof parsed.data?.updatedAt === 'string'
-      ? (parsed.data.updatedAt as string)
-      : doc.updatedAt;
-
-  const bodyText = (titleLineIndex >= 0
-    ? lines.slice(titleLineIndex + 1).join('\n')
-    : afterFrontmatter
-  ).trim();
-  const description = bodyText.length > 0 ? bodyText : null;
-
-  return {
-    id,
-    characterId,
-    name: name.slice(0, 200),
-    description,
-    slots,
-    createdAt,
-    updatedAt,
-  };
-}
-
-function resolveSlotRef(
-  slotsField: unknown,
-  key: 'top' | 'bottom' | 'footwear' | 'accessories',
-  itemBySlug: ReadonlyMap<string, WardrobeItem>,
-  itemById: ReadonlyMap<string, WardrobeItem>,
-  doc: DocMountDocument,
-  characterId: string,
-): string | null {
-  if (!slotsField || typeof slotsField !== 'object' || Array.isArray(slotsField)) return null;
-  const value = (slotsField as Record<string, unknown>)[key];
-  if (value === null || value === undefined || value === '') return null;
-  if (typeof value !== 'string') {
-    logger.warn('Outfit preset slot value is not a string', {
-      characterId,
-      mountPointId: doc.mountPointId,
-      relativePath: doc.relativePath,
-      slot: key,
-      raw: value,
-    });
-    return null;
-  }
-  const bySlug = itemBySlug.get(value);
-  if (bySlug) return bySlug.id;
-  const byId = itemById.get(value);
-  if (byId) return byId.id;
-  logger.warn('Outfit preset slot references unknown wardrobe item', {
-    characterId,
-    mountPointId: doc.mountPointId,
-    relativePath: doc.relativePath,
-    slot: key,
-    ref: value,
-  });
-  return null;
 }
 
 /**
@@ -1160,13 +1133,23 @@ export async function readCharacterVaultScenarios(
  * if neither the new folder layout nor the legacy `wardrobe.json` is usable.
  *
  * Read order:
- *   1. `Wardrobe/*.md` + `Outfits/*.md` (current format).
+ *   1. `Wardrobe/*.md` (current format). Composite items reference their
+ *      components via the `componentItems:` slug array, resolved here against
+ *      the in-vault slug map (slug-first, UUID fallback).
  *   2. legacy `wardrobe.json` (still honored so existing vaults don't lose
  *      hand-edits between this change shipping and the migration running).
  *
- * Items + presets are returned together because preset slot references need
- * the item slug map; loading them apart would require resolving references
- * twice.
+ * The retired `Outfits/` folder is intentionally not read — pre-rework
+ * presets are handled by a separate database-side migration that folds them
+ * into composite wardrobe items, so re-parsing them here would double-write.
+ * Stale `Outfits/*.md` files left on disk are tolerated; cleanup happens via
+ * the migration.
+ *
+ * Cycle and unknown-ref handling: cycles in the declared component graph
+ * wipe the offending item's `componentItemIds` (logged) but leave the item
+ * itself intact so vault hand-edits aren't silently destructive. Unknown
+ * refs (slug or UUID that doesn't match anything in this vault) are dropped
+ * from that item's component list with a warning.
  */
 export async function readCharacterVaultWardrobe(
   mountPointId: string,
@@ -1175,20 +1158,13 @@ export async function readCharacterVaultWardrobe(
   const repos = getRepositories();
   const charId = characterId ?? mountPointId;
 
-  const [itemDocs, presetDocs] = await Promise.all([
-    repos.docMountDocuments.findManyByMountPointsInFolder(
-      [mountPointId],
-      CHARACTER_WARDROBE_FOLDER,
-      '.md',
-    ),
-    repos.docMountDocuments.findManyByMountPointsInFolder(
-      [mountPointId],
-      CHARACTER_OUTFITS_FOLDER,
-      '.md',
-    ),
-  ]);
+  const itemDocs = await repos.docMountDocuments.findManyByMountPointsInFolder(
+    [mountPointId],
+    CHARACTER_WARDROBE_FOLDER,
+    '.md',
+  );
 
-  if (itemDocs.length > 0 || presetDocs.length > 0) {
+  if (itemDocs.length > 0) {
     const items = itemDocs
       .slice()
       .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
@@ -1217,16 +1193,12 @@ export async function readCharacterVaultWardrobe(
       itemBySlug.set(slug, item);
     }
 
-    const presets = presetDocs
-      .slice()
-      .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-      .map((doc) => parseOutfitPresetFile(doc, charId, itemBySlug, itemById))
-      .filter((preset): preset is OutfitPreset => preset !== null);
+    resolveAndCheckComponentItems(items, itemBySlug, itemById, charId, mountPointId);
 
-    return { items, presets };
+    return { items };
   }
 
-  // Folders empty (or missing) — fall through to legacy wardrobe.json so
+  // Folder empty (or missing) — fall through to legacy wardrobe.json so
   // pre-migration vaults still surface their items.
   const legacyContent = await readVaultTextFile(
     mountPointId,
@@ -1296,54 +1268,20 @@ export async function getOverlaidWardrobeItems(
 }
 
 /**
- * Overlay an outfit-presets list read, symmetric with
- * `getOverlaidWardrobeItems`.
- */
-export async function getOverlaidOutfitPresets(
-  characterId: string,
-  loadDbPresets: () => Promise<OutfitPreset[]>,
-): Promise<OutfitPreset[]> {
-  const repos = getRepositories();
-  const character = await repos.characters.findByIdRaw(characterId);
-  if (!character || !isOverlayCandidate(character)) {
-    return loadDbPresets();
-  }
-
-  const mountPointId = character.characterDocumentMountPointId as string;
-  const vault = await readCharacterVaultWardrobe(mountPointId, characterId);
-  if (!vault) {
-    return loadDbPresets();
-  }
-
-  const presets: OutfitPreset[] = vault.presets.map((preset) => ({
-    ...preset,
-    characterId,
-  }));
-
-  logger.debug('Outfit presets read overlaid from vault folders', {
-    characterId,
-    mountPointId,
-    presetCount: presets.length,
-  });
-
-  return presets;
-}
-
-/**
- * Per-character write chain. The overlay treats the vault wardrobe folders
- * as authoritative on read, so each mutation of wardrobe items or outfit
- * presets must project the new DB state back out into Wardrobe/*.md and
- * Outfits/*.md. Chaining per characterId prevents two concurrent sync calls
- * from each reading a stale DB snapshot and writing files that lose one of
- * the changes.
+ * Per-character write chain. The overlay treats the vault Wardrobe/ folder
+ * as authoritative on read, so each mutation of wardrobe items must project
+ * the new DB state back out into `Wardrobe/*.md`. Composite items emit
+ * their `componentItems:` slug arrays in the same projection. Chaining per
+ * characterId prevents two concurrent sync calls from each reading a stale
+ * DB snapshot and writing files that lose one of the changes.
  */
 const wardrobeSyncChains = new Map<string, Promise<void>>();
 
 /**
- * After a wardrobe-item or outfit-preset write, re-project the character's
- * DB state into the vault's Wardrobe/ and Outfits/ folders. No-ops for
- * archetype rows (characterId null), missing characters, and characters
- * that aren't overlay candidates (flag off or no linked vault).
+ * After a wardrobe-item write, re-project the character's DB state into the
+ * vault's Wardrobe/ folder. No-ops for archetype rows (characterId null),
+ * missing characters, and characters that aren't overlay candidates (flag
+ * off or no linked vault).
  *
  * Failures are logged but not propagated — the DB write is already committed,
  * and the next successful sync (or the startup refresh) will reconcile. We'd
@@ -1377,28 +1315,24 @@ async function performVaultWardrobeSync(characterId: string): Promise<void> {
   const mountPointId = character.characterDocumentMountPointId as string;
 
   try {
-    // Promote any vault-only wardrobe items / outfit presets into the DB
-    // before projecting back out. The projection sweep deletes any Wardrobe/
-    // or Outfits/ file not represented in the DB-derived list, so vault-only
-    // files (created by hand or via Document Mode, with no DB row) would get
-    // wiped on every sync without this step.
+    // Promote any vault-only wardrobe items into the DB before projecting
+    // back out. The projection sweep deletes any Wardrobe/ file not
+    // represented in the DB-derived list, so vault-only files (created by
+    // hand or via Document Mode, with no DB row) would get wiped on every
+    // sync without this step.
     await ingestVaultOnlyWardrobeIntoDb(mountPointId, characterId);
 
-    const [items, presets] = await Promise.all([
-      repos.wardrobe.findByCharacterIdRaw(characterId),
-      repos.outfitPresets.findByCharacterIdRaw(characterId),
-    ]);
+    const items = await repos.wardrobe.findByCharacterIdRaw(characterId);
 
-    await projectVaultWardrobe(mountPointId, characterId, items, presets);
+    await projectVaultWardrobe(mountPointId, characterId, items);
 
-    logger.debug('Synced wardrobe folders from DB', {
+    logger.debug('Synced wardrobe folder from DB', {
       characterId,
       mountPointId,
       itemCount: items.length,
-      presetCount: presets.length,
     });
   } catch (err) {
-    logger.error('Failed to sync wardrobe folders from DB; vault is now stale', {
+    logger.error('Failed to sync wardrobe folder from DB; vault is now stale', {
       characterId,
       mountPointId,
       error: err instanceof Error ? err.message : String(err),
@@ -1408,11 +1342,10 @@ async function performVaultWardrobeSync(characterId: string): Promise<void> {
 }
 
 /**
- * Read the character's vault wardrobe folders and copy any items/presets
- * that aren't yet in the DB into the DB, preserving their ids and
- * timestamps. The downstream projection sees them as managed rows and
- * leaves their files in place; without this step it would delete them as
- * unmanaged.
+ * Read the character's vault wardrobe folder and copy any items that aren't
+ * yet in the DB into the DB, preserving their ids and timestamps. The
+ * downstream projection sees them as managed rows and leaves their files in
+ * place; without this step it would delete them as unmanaged.
  *
  * Failures on individual items are logged but don't abort the rest of the
  * ingestion or the sync — losing one item to a validation error is better
@@ -1450,45 +1383,24 @@ async function ingestVaultOnlyWardrobeIntoDb(
       }
     }
   }
-
-  if (vault.presets.length > 0) {
-    const dbPresets = await repos.outfitPresets.findByCharacterIdRaw(characterId);
-    const dbPresetIds = new Set(dbPresets.map((p) => p.id));
-    for (const preset of vault.presets) {
-      if (dbPresetIds.has(preset.id)) continue;
-      try {
-        await repos.outfitPresets.createFromVault(preset);
-        logger.info('Promoted vault-only outfit preset into DB before sync', {
-          characterId,
-          mountPointId,
-          presetId: preset.id,
-          name: preset.name,
-        });
-      } catch (err) {
-        logger.warn('Failed to promote vault-only outfit preset into DB; will be deleted by projection', {
-          characterId,
-          mountPointId,
-          presetId: preset.id,
-          name: preset.name,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-  }
 }
 
 /**
- * Project an authoritative `(items, presets)` pair into the vault's
- * `Wardrobe/` and `Outfits/` folders, deleting any stale legacy
- * `wardrobe.json` so the new format is the single source on disk. Shared
- * between the per-write sync chain, the full-character writer, and the
- * startup migration so they all produce the same on-disk shape.
+ * Project an authoritative wardrobe-item list into the vault's `Wardrobe/`
+ * folder, deleting any stale legacy `wardrobe.json` so the new format is the
+ * single source on disk. Composite items emit their `componentItems:` slug
+ * arrays via the slug map built here. Shared between the per-write sync
+ * chain, the full-character writer, and the startup migration so they all
+ * produce the same on-disk shape.
+ *
+ * The retired `Outfits/` folder is intentionally not touched — pre-rework
+ * preset files left on disk are removed by a separate database-side
+ * migration, not by every wardrobe sync.
  */
 export async function projectVaultWardrobe(
   mountPointId: string,
   characterId: string,
   items: readonly WardrobeItem[],
-  presets: readonly OutfitPreset[],
 ): Promise<void> {
   const slugByItemId = buildSlugByItemIdMap(items);
 
@@ -1498,18 +1410,7 @@ export async function projectVaultWardrobe(
     items,
     (item) => ({
       fileName: `${sanitizeFileName(item.title)}.md`,
-      content: buildWardrobeItemFile(item),
-    }),
-    characterId,
-  );
-
-  await projectArrayIntoVaultFolder(
-    mountPointId,
-    CHARACTER_OUTFITS_FOLDER,
-    presets,
-    (preset) => ({
-      fileName: `${sanitizeFileName(preset.name)}.md`,
-      content: buildOutfitPresetFile(preset, slugByItemId),
+      content: buildWardrobeItemFile(item, slugByItemId),
     }),
     characterId,
   );
@@ -1681,7 +1582,6 @@ export async function readCharacterVaultManagedFields(
 export interface VaultManagedFieldsWriteInput {
   character: Character;
   wardrobeItems: readonly WardrobeItem[];
-  outfitPresets: readonly OutfitPreset[];
 }
 
 export interface VaultManagedFieldsWriteResult {
@@ -1690,21 +1590,19 @@ export interface VaultManagedFieldsWriteResult {
   systemPromptsWritten: number;
   scenariosWritten: number;
   wardrobeItemsWritten: number;
-  outfitPresetsWritten: number;
   /** True when the character has no physicalDescriptions[0] and the physical-* files were skipped. */
   physicalSkippedNoPrimary: boolean;
 }
 
 export async function writeCharacterVaultManagedFields(
   mountPointId: string,
-  { character, wardrobeItems, outfitPresets }: VaultManagedFieldsWriteInput,
+  { character, wardrobeItems }: VaultManagedFieldsWriteInput,
 ): Promise<VaultManagedFieldsWriteResult> {
   const result: VaultManagedFieldsWriteResult = {
     singleFileWriteCount: 0,
     systemPromptsWritten: 0,
     scenariosWritten: 0,
     wardrobeItemsWritten: 0,
-    outfitPresetsWritten: 0,
     physicalSkippedNoPrimary: false,
   };
 
@@ -1787,9 +1685,8 @@ export async function writeCharacterVaultManagedFields(
   );
   result.scenariosWritten = character.scenarios?.length ?? 0;
 
-  await projectVaultWardrobe(mountPointId, character.id, wardrobeItems, outfitPresets);
+  await projectVaultWardrobe(mountPointId, character.id, wardrobeItems);
   result.wardrobeItemsWritten = wardrobeItems.length;
-  result.outfitPresetsWritten = outfitPresets.length;
 
   return result;
 }

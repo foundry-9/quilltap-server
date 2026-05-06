@@ -1,15 +1,20 @@
 /**
  * List Wardrobe Tool Handler
  *
- * Retrieves wardrobe items for a character, with optional filtering
- * by type and appropriateness. Shows equipped status per item.
+ * Retrieves wardrobe items for a character, with optional filtering by type
+ * and appropriateness. Shows equipped status per item, marks composite items
+ * (with `componentItemIds`) and lists their component titles for the LLM.
+ *
+ * Outfit presets are no longer a separate concept — composites are wardrobe
+ * items addressed by id like everything else, so they show up in the same
+ * listing.
  */
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import type { WardrobeListToolInput, WardrobeListToolOutput, WardrobeListItemResult, WardrobeListPresetResult } from '../wardrobe-list-tool';
+import type { WardrobeListToolInput, WardrobeListToolOutput, WardrobeListItemResult } from '../wardrobe-list-tool';
 import { validateWardrobeListInput } from '../wardrobe-list-tool';
-import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 
 /**
@@ -38,24 +43,21 @@ export class WardrobeListError extends Error {
 }
 
 /**
- * Determine which slot an item is equipped in, if any.
- * Returns the slot name or null.
+ * Find every slot the item is equipped in. Slots are arrays now, so a single
+ * item can occupy multiple slots (a multi-slot dress) and we want them all.
  */
-function findEquippedSlot(
+function findEquippedSlots(
   itemId: string,
   equippedSlots: EquippedSlots | null
-): string | null {
-  if (!equippedSlots) {
-    return null;
-  }
-
+): string[] {
+  if (!equippedSlots) return [];
+  const slots: string[] = [];
   for (const slot of WARDROBE_SLOT_TYPES) {
-    if (equippedSlots[slot] === itemId) {
-      return slot;
+    if ((equippedSlots[slot] ?? []).includes(itemId)) {
+      slots.push(slot);
     }
   }
-
-  return null;
+  return slots;
 }
 
 /**
@@ -72,7 +74,6 @@ export async function executeWardrobeListTool(
   const repos = getRepositories();
 
   try {
-    // Validate input
     if (!validateWardrobeListInput(input)) {
       logger.warn('Wardrobe list tool validation failed', {
         context: 'wardrobe-list-handler',
@@ -84,14 +85,14 @@ export async function executeWardrobeListTool(
         success: false,
         items: [],
         total_count: 0,
-        error: 'Invalid input: type_filter must be a string array, appropriateness_filter must be a string, include_equipped must be a boolean',
+        error:
+          'Invalid input: type_filter must be a string array, appropriateness_filter must be a string, include_equipped must be a boolean',
       };
     }
 
     const validatedInput = input as WardrobeListToolInput;
-    const { type_filter, appropriateness_filter, include_equipped, include_presets } = validatedInput;
+    const { type_filter, appropriateness_filter, include_equipped } = validatedInput;
 
-    // Load all wardrobe items for the character
     logger.debug('Loading wardrobe items for character', {
       context: 'wardrobe-list-handler',
       characterId: context.characterId,
@@ -100,7 +101,6 @@ export async function executeWardrobeListTool(
 
     const allItemsRaw = await repos.wardrobe.findByCharacterId(context.characterId);
 
-    // Filter out archived items
     const allItems = allItemsRaw.filter((item) => !item.archivedAt);
 
     logger.debug('Filtered archived wardrobe items', {
@@ -111,7 +111,6 @@ export async function executeWardrobeListTool(
       archivedCount: allItemsRaw.length - allItems.length,
     });
 
-    // Load current equipped outfit for the character in this chat
     logger.debug('Loading equipped outfit state', {
       context: 'wardrobe-list-handler',
       chatId: context.chatId,
@@ -123,10 +122,8 @@ export async function executeWardrobeListTool(
       context.characterId
     );
 
-    // Filter items
     let filteredItems = allItems;
 
-    // Filter by type if provided
     if (type_filter && type_filter.length > 0) {
       const lowerTypeFilter = type_filter.map((t) => t.toLowerCase());
       filteredItems = filteredItems.filter((item) =>
@@ -141,7 +138,6 @@ export async function executeWardrobeListTool(
       });
     }
 
-    // Filter by appropriateness if provided (case-insensitive substring match)
     if (appropriateness_filter && appropriateness_filter.trim() !== '') {
       const lowerFilter = appropriateness_filter.toLowerCase();
       filteredItems = filteredItems.filter(
@@ -157,18 +153,40 @@ export async function executeWardrobeListTool(
       });
     }
 
-    // Build result list with equipped status
+    // Map every item by id for composite-component title resolution. We
+    // include the unfiltered list so a filtered composite can still show its
+    // components (some of which may have been filtered out themselves).
+    const itemsById = new Map<string, WardrobeItem>();
+    for (const item of allItems) itemsById.set(item.id, item);
+
+    // Build result list with equipped status and composite metadata.
     const resultItems: WardrobeListItemResult[] = filteredItems.map((item) => {
-      const equippedSlot = findEquippedSlot(item.id, equippedSlots);
+      const equipped = findEquippedSlots(item.id, equippedSlots);
+      const isComposite = (item.componentItemIds?.length ?? 0) > 0;
+      const componentTitles = isComposite
+        ? item.componentItemIds
+            .map((cid) => itemsById.get(cid)?.title)
+            .filter((t): t is string => typeof t === 'string')
+        : undefined;
       return {
         item_id: item.id,
         title: item.title,
         description: item.description ?? null,
         types: item.types,
         appropriateness: item.appropriateness ?? null,
-        is_equipped: equippedSlot !== null,
-        equipped_slot: equippedSlot,
-      };
+        is_equipped: equipped.length > 0,
+        // Preserve the original single-slot field shape; with arrays-per-slot
+        // we expose the *first* slot the item appears in for back-compat,
+        // and the full set on `equipped_slots`.
+        equipped_slot: equipped[0] ?? null,
+        ...(isComposite
+          ? {
+              is_composite: true,
+              component_item_ids: item.componentItemIds,
+              component_titles: componentTitles,
+            }
+          : {}),
+      } as WardrobeListItemResult;
     });
 
     // Filter out equipped items if include_equipped is explicitly false
@@ -176,29 +194,6 @@ export async function executeWardrobeListTool(
       include_equipped === false
         ? resultItems.filter((item) => !item.is_equipped)
         : resultItems;
-
-    // Fetch presets if requested (default true)
-    let presets: WardrobeListPresetResult[] | undefined;
-    if (include_presets !== false) {
-      const rawPresets = await repos.outfitPresets.findByCharacterId(context.characterId);
-      presets = rawPresets.map((preset) => ({
-        preset_id: preset.id,
-        name: preset.name,
-        description: preset.description ?? null,
-        slots: {
-          top: preset.slots.top ?? null,
-          bottom: preset.slots.bottom ?? null,
-          footwear: preset.slots.footwear ?? null,
-          accessories: preset.slots.accessories ?? null,
-        },
-      }));
-
-      logger.debug('Loaded outfit presets for character', {
-        context: 'wardrobe-list-handler',
-        characterId: context.characterId,
-        presetCount: presets.length,
-      });
-    }
 
     logger.info('Wardrobe list completed', {
       context: 'wardrobe-list-handler',
@@ -210,15 +205,13 @@ export async function executeWardrobeListTool(
       hasTypeFilter: !!type_filter,
       hasAppropriatenessFilter: !!appropriateness_filter,
       includeEquipped: include_equipped !== false,
-      includePresets: include_presets !== false,
-      presetCount: presets?.length ?? 0,
+      compositeCount: finalItems.filter((i) => (i as WardrobeListItemResult & { is_composite?: boolean }).is_composite).length,
     });
 
     return {
       success: true,
       items: finalItems,
       total_count: finalItems.length,
-      presets,
     };
   } catch (error) {
     logger.error('Wardrobe list tool execution failed', {
@@ -259,22 +252,15 @@ export function formatWardrobeListResults(output: WardrobeListToolOutput): strin
     const equippedTag = item.is_equipped ? ` (EQUIPPED in ${item.equipped_slot})` : '';
     const appropriatenessTag = item.appropriateness ? ` | ${item.appropriateness}` : '';
     const description = item.description ? ` - ${item.description}` : '';
+    const composite = item as WardrobeListItemResult & {
+      is_composite?: boolean;
+      component_titles?: string[];
+    };
+    const compositeTag = composite.is_composite
+      ? ` [composite: ${(composite.component_titles ?? []).join(', ') || 'unresolved components'}]`
+      : '';
 
-    lines.push(`  ${typeTags} ${item.title}${equippedTag}${appropriatenessTag}${description}`);
-  }
-
-  // Include presets if present
-  if (output.presets && output.presets.length > 0) {
-    lines.push('');
-    lines.push(`Outfit Presets (${output.presets.length}):`);
-    for (const preset of output.presets) {
-      const description = preset.description ? ` - ${preset.description}` : '';
-      const slotSummary = Object.entries(preset.slots)
-        .filter(([, v]) => v !== null)
-        .map(([k]) => k)
-        .join(', ');
-      lines.push(`  [${preset.preset_id}] ${preset.name}${description} (slots: ${slotSummary || 'none'})`);
-    }
+    lines.push(`  ${typeTags} ${item.title}${equippedTag}${appropriatenessTag}${compositeTag}${description}`);
   }
 
   return lines.join('\n');

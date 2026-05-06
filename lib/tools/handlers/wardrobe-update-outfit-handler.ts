@@ -1,8 +1,14 @@
 /**
- * Update Outfit Item Tool Handler
+ * Set Outfit Tool Handler (composite items only)
  *
- * Equips or removes wardrobe items from outfit slots.
- * Validates that items exist and have the correct type for the slot.
+ * Two modes:
+ *   - `wear`   → `equipItem(composite)` — replaces each slot in the
+ *                composite's `types` with `[composite.id]`.
+ *   - `remove` → for each slot in the composite's `types`,
+ *                `removeFromSlot(slot, composite.id)`.
+ *
+ * Leaf wardrobe items (`componentItemIds` empty) are rejected with a
+ * pointer to `wardrobe_change_item`.
  */
 
 import { logger } from '@/lib/logger';
@@ -10,8 +16,9 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeUpdateOutfitToolInput, WardrobeUpdateOutfitToolOutput } from '../wardrobe-update-outfit-tool';
 import { validateWardrobeUpdateOutfitInput } from '../wardrobe-update-outfit-tool';
 import { EMPTY_EQUIPPED_SLOTS, buildCoverageSummary, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
-import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
-import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
+import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import { equipItem, removeFromSlot } from '@/lib/wardrobe/outfit-displacement';
+import { expandComposites } from '@/lib/wardrobe/expand-composites';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 
@@ -21,380 +28,202 @@ export interface WardrobeUpdateOutfitToolContext {
   characterId: string;
 }
 
-const NO_ITEM_SENTINELS = new Set(['none', 'null', '']);
-
-function normalizeNoItemSentinel(value: string | undefined): string | undefined {
-  if (value === undefined) return undefined;
-  return NO_ITEM_SENTINELS.has(value.trim().toLowerCase()) ? undefined : value;
-}
-
 export class WardrobeUpdateOutfitError extends Error {
-  constructor(message: string, public code: 'VALIDATION_ERROR' | 'EXECUTION_ERROR' | 'NOT_FOUND' | 'TYPE_MISMATCH') {
+  constructor(
+    message: string,
+    public code: 'VALIDATION_ERROR' | 'EXECUTION_ERROR' | 'NOT_FOUND' | 'NOT_COMPOSITE',
+  ) {
     super(message);
     this.name = 'WardrobeUpdateOutfitError';
   }
 }
 
+function emptyState(): EquippedSlots {
+  return { top: [], bottom: [], footwear: [], accessories: [] };
+}
+
+function buildFailureResponse(error: string): WardrobeUpdateOutfitToolOutput {
+  return {
+    success: false,
+    action: 'removed',
+    item: null,
+    slots_affected: [],
+    current_state: emptyState(),
+    coverage_summary: '',
+    error,
+  };
+}
+
 /**
- * Execute the update_outfit_item tool
- *
- * @param input - The tool input parameters
- * @param context - Execution context including user ID, chat ID, and character ID
- * @returns Tool output with operation result
+ * Look up a wardrobe item by id (preferred) or title (fallback). Uses the
+ * overlay-aware lookup so vault-only items resolve.
  */
+async function resolveCompositeItem(
+  repos: ReturnType<typeof getRepositories>,
+  characterId: string,
+  itemId: string | undefined,
+  itemTitle: string | undefined,
+): Promise<WardrobeItem | null> {
+  if (itemId) {
+    const found = await repos.wardrobe.findByIdForCharacter(characterId, itemId);
+    logger.debug('Composite lookup by ID', {
+      context: 'wardrobe-update-outfit-handler',
+      itemId,
+      found: !!found,
+    });
+    if (found) return found;
+  }
+
+  if (itemTitle) {
+    const characterItems = await repos.wardrobe.findByCharacterId(characterId);
+    const lower = itemTitle.toLowerCase();
+    const found = characterItems.find((i) => i.title.toLowerCase() === lower) ?? null;
+    logger.debug('Composite lookup by title', {
+      context: 'wardrobe-update-outfit-handler',
+      characterId,
+      itemTitle,
+      found: !!found,
+      candidateCount: characterItems.length,
+    });
+    return found;
+  }
+
+  return null;
+}
+
 export async function executeWardrobeUpdateOutfitTool(
   input: unknown,
-  context: WardrobeUpdateOutfitToolContext
+  context: WardrobeUpdateOutfitToolContext,
 ): Promise<WardrobeUpdateOutfitToolOutput> {
   const repos = getRepositories();
 
   try {
-    // Validate input
     if (!validateWardrobeUpdateOutfitInput(input)) {
-      logger.warn('Wardrobe update outfit tool validation failed', {
+      logger.warn('Wardrobe set outfit tool validation failed', {
         context: 'wardrobe-update-outfit-handler',
         userId: context.userId,
         chatId: context.chatId,
         characterId: context.characterId,
         input,
       });
-      return {
-        success: false,
-        action: 'removed',
-        slot: typeof input === 'object' && input !== null && 'slot' in input
-          ? (input as Record<string, unknown>).slot as string
-          : 'unknown',
-        item: null,
-        current_state: { ...EMPTY_EQUIPPED_SLOTS },
-        coverage_summary: '',
-        error: 'Invalid input: slot is required and must be "top", "bottom", "footwear", or "accessories"',
-      };
+      return buildFailureResponse(
+        'Invalid input: mode must be "wear" or "remove", and either item_id or item_title is required.',
+      );
     }
 
-    const { slot, preset_id } = input;
-    // Normalize "no item" sentinels ("none", "null", "") to undefined so they
-    // route through the unequip path instead of failing an item lookup. LLMs
-    // commonly fill required-looking string fields with these placeholders.
-    const item_id = normalizeNoItemSentinel(input.item_id);
-    const item_title = normalizeNoItemSentinel(input.item_title);
-    if (input.item_id !== item_id || input.item_title !== item_title) {
-      logger.debug('Normalized no-item sentinel on update_outfit_item input', {
-        context: 'wardrobe-update-outfit-handler',
-        chatId: context.chatId,
-        characterId: context.characterId,
-        slot,
-        originalItemId: input.item_id,
-        originalItemTitle: input.item_title,
-      });
+    const { mode, item_id, item_title } = input;
+
+    logger.debug('Dispatching wardrobe_set_outfit', {
+      context: 'wardrobe-update-outfit-handler',
+      userId: context.userId,
+      chatId: context.chatId,
+      characterId: context.characterId,
+      mode,
+      itemId: item_id,
+      itemTitle: item_title,
+    });
+
+    const item = await resolveCompositeItem(repos, context.characterId, item_id, item_title);
+    if (!item) {
+      throw new WardrobeUpdateOutfitError(
+        `Outfit not found${item_id ? ` with ID "${item_id}"` : ''}${item_title ? ` with title "${item_title}"` : ''}`,
+        'NOT_FOUND',
+      );
     }
 
-    // --- Preset application flow ---
-    if (preset_id) {
-      const preset = await repos.outfitPresets.findById(preset_id);
-      if (!preset) {
-        logger.warn('Outfit preset not found', {
-          context: 'wardrobe-update-outfit-handler',
-          userId: context.userId,
-          chatId: context.chatId,
-          characterId: context.characterId,
-          presetId: preset_id,
-        });
-        throw new WardrobeUpdateOutfitError(
-          `Outfit preset not found with ID "${preset_id}"`,
-          'NOT_FOUND'
-        );
-      }
+    if (item.archivedAt) {
+      throw new WardrobeUpdateOutfitError(
+        `Outfit "${item.title}" is archived and cannot be worn`,
+        'VALIDATION_ERROR',
+      );
+    }
 
-      // Validate preset belongs to this character (or is shared)
-      if (preset.characterId !== null && preset.characterId !== undefined && preset.characterId !== context.characterId) {
-        logger.warn('Outfit preset does not belong to character', {
-          context: 'wardrobe-update-outfit-handler',
-          userId: context.userId,
-          characterId: context.characterId,
-          presetCharacterId: preset.characterId,
-          presetId: preset.id,
-        });
-        throw new WardrobeUpdateOutfitError(
-          `Preset "${preset.name}" does not belong to this character`,
-          'NOT_FOUND'
-        );
-      }
+    if (!item.componentItemIds || item.componentItemIds.length === 0) {
+      throw new WardrobeUpdateOutfitError(
+        `"${item.title}" is a single garment, not a composite outfit. ` +
+          'Use the wardrobe_change_item tool with mode="equip" to put on a single item.',
+        'NOT_COMPOSITE',
+      );
+    }
 
-      // Check that none of the preset's items are archived. Use the overlay-
-      // aware lookup so vault-only items (no DB row) resolve correctly.
-      for (const slotKey of WARDROBE_SLOT_TYPES) {
-        const itemId = preset.slots[slotKey];
-        if (itemId) {
-          const item = await repos.wardrobe.findByIdForCharacter(context.characterId, itemId);
-          if (item?.archivedAt) {
-            logger.warn('Preset references archived wardrobe item', {
-              context: 'wardrobe-update-outfit-handler',
-              userId: context.userId,
-              characterId: context.characterId,
-              presetId: preset.id,
-              slot: slotKey,
-              itemId,
-              itemTitle: item.title,
-            });
-            throw new WardrobeUpdateOutfitError(
-              `Cannot apply preset "${preset.name}": item "${item.title}" in ${slotKey} slot is archived`,
-              'VALIDATION_ERROR'
-            );
-          }
-        }
-      }
+    const slotsAffected = item.types.slice();
 
-      // Apply each non-null slot from the preset with displacement
-      for (const slotKey of WARDROBE_SLOT_TYPES) {
-        const itemId = preset.slots[slotKey];
-        if (itemId !== null && itemId !== undefined) {
-          const presetItem = await repos.wardrobe.findByIdForCharacter(context.characterId, itemId);
-          if (presetItem) {
-            await equipWithDisplacement(repos, context.chatId, context.characterId, presetItem);
-          } else {
-            await repos.chats.updateEquippedSlot(context.chatId, context.characterId, slotKey, itemId);
-          }
-          logger.debug('Applied preset slot', {
-            context: 'wardrobe-update-outfit-handler',
-            chatId: context.chatId,
-            characterId: context.characterId,
-            slot: slotKey,
-            itemId,
-            presetId: preset.id,
-          });
-        }
-      }
-
-      logger.info('Outfit preset applied', {
+    if (mode === 'wear') {
+      await equipItem(repos, context.chatId, context.characterId, item);
+      logger.info('Composite outfit worn', {
         context: 'wardrobe-update-outfit-handler',
         userId: context.userId,
         chatId: context.chatId,
         characterId: context.characterId,
-        presetId: preset.id,
-        presetName: preset.name,
-      });
-
-      // Load full current state after preset application
-      const currentState = await loadCurrentState(repos, context);
-      const coverageSummary = await buildCoverageSummaryFromState(repos, context.characterId, currentState);
-
-      // Trigger avatar generation if enabled
-      await triggerAvatarGenerationIfEnabled(repos, {
-        userId: context.userId,
-        chatId: context.chatId,
-        characterId: context.characterId,
-        callerContext: 'wardrobe-update-outfit-handler',
-      });
-
-      await scheduleAnnouncement(context, 'preset');
-
-      return {
-        success: true,
-        action: 'equipped',
-        slot: 'preset',
-        item: null,
-        current_state: currentState,
-        coverage_summary: coverageSummary,
-      };
-    }
-
-    const isEquipAction = item_id !== undefined || item_title !== undefined;
-
-    if (isEquipAction) {
-      // --- Equip action ---
-      let item: WardrobeItem | null = null;
-
-      // Look up item by ID first. Use the overlay-aware lookup so vault-only
-      // items (no DB row, UUID derived from the file path) resolve correctly,
-      // and so that archetypes (characterId == null) also resolve.
-      if (item_id) {
-        item = await repos.wardrobe.findByIdForCharacter(context.characterId, item_id);
-        logger.debug('Wardrobe item lookup by ID', {
-          context: 'wardrobe-update-outfit-handler',
-          itemId: item_id,
-          found: !!item,
-        });
-      }
-
-      // Fall back to title search if no ID or ID not found
-      if (!item && item_title) {
-        const characterItems = await repos.wardrobe.findByCharacterId(context.characterId);
-        item = characterItems.find(
-          (i) => i.title.toLowerCase() === item_title.toLowerCase()
-        ) || null;
-        logger.debug('Wardrobe item lookup by title', {
-          context: 'wardrobe-update-outfit-handler',
-          characterId: context.characterId,
-          itemTitle: item_title,
-          found: !!item,
-          candidateCount: characterItems.length,
-        });
-      }
-
-      // Validate item exists
-      if (!item) {
-        logger.warn('Wardrobe item not found', {
-          context: 'wardrobe-update-outfit-handler',
-          userId: context.userId,
-          chatId: context.chatId,
-          characterId: context.characterId,
-          itemId: item_id,
-          itemTitle: item_title,
-        });
-        throw new WardrobeUpdateOutfitError(
-          `Wardrobe item not found${item_id ? ` with ID "${item_id}"` : ''}${item_title ? ` with title "${item_title}"` : ''}`,
-          'NOT_FOUND'
-        );
-      }
-
-      // Validate item is not archived
-      if (item.archivedAt) {
-        logger.warn('Attempted to equip archived wardrobe item', {
-          context: 'wardrobe-update-outfit-handler',
-          userId: context.userId,
-          characterId: context.characterId,
-          itemId: item.id,
-          itemTitle: item.title,
-          archivedAt: item.archivedAt,
-        });
-        throw new WardrobeUpdateOutfitError(
-          `Item "${item.title}" is archived and cannot be equipped`,
-          'VALIDATION_ERROR'
-        );
-      }
-
-      // Validate the item's types include the requested slot
-      if (!item.types.includes(slot as WardrobeItem['types'][number])) {
-        logger.warn('Wardrobe item type mismatch for slot', {
-          context: 'wardrobe-update-outfit-handler',
-          userId: context.userId,
-          characterId: context.characterId,
-          itemId: item.id,
-          itemTypes: item.types,
-          requestedSlot: slot,
-        });
-        throw new WardrobeUpdateOutfitError(
-          `Item "${item.title}" (types: ${item.types.join(', ')}) cannot be equipped in the "${slot}" slot`,
-          'TYPE_MISMATCH'
-        );
-      }
-
-      // Equip the item in all matching slots with displacement of conflicting items
-      await equipWithDisplacement(repos, context.chatId, context.characterId, item);
-
-      logger.info('Wardrobe item equipped', {
-        context: 'wardrobe-update-outfit-handler',
-        userId: context.userId,
-        chatId: context.chatId,
-        characterId: context.characterId,
-        slot,
         itemId: item.id,
         itemTitle: item.title,
-        slotsAffected: item.types,
+        slotsAffected,
       });
-
-      // Load full current state after update
-      const currentState = await loadCurrentState(repos, context);
-      const coverageSummary = await buildCoverageSummaryFromState(repos, context.characterId, currentState);
-
-      // Trigger avatar generation if enabled
-      await triggerAvatarGenerationIfEnabled(repos, {
-        userId: context.userId,
-        chatId: context.chatId,
-        characterId: context.characterId,
-        callerContext: 'wardrobe-update-outfit-handler',
-      });
-
-      await scheduleAnnouncement(context, slot);
-
-      return {
-        success: true,
-        action: 'equipped',
-        slot,
-        item: { item_id: item.id, title: item.title },
-        current_state: currentState,
-        coverage_summary: coverageSummary,
-      };
     } else {
-      // --- Remove action --- clear all slots covered by the item in this slot
-      await unequipWithDisplacement(repos, context.chatId, context.characterId, slot as WardrobeItemType);
-
-      logger.info('Wardrobe slot cleared (with displacement)', {
+      // mode === 'remove'
+      // Filter the composite's id out of every slot it covered. Layered items
+      // (other ids in those slots) stay.
+      for (const slot of slotsAffected) {
+        await removeFromSlot(repos, context.chatId, context.characterId, slot, item.id);
+      }
+      logger.info('Composite outfit removed', {
         context: 'wardrobe-update-outfit-handler',
         userId: context.userId,
         chatId: context.chatId,
         characterId: context.characterId,
-        slot,
+        itemId: item.id,
+        itemTitle: item.title,
+        slotsAffected,
       });
+    }
 
-      // Load full current state after update
-      const currentState = await loadCurrentState(repos, context);
-      const coverageSummary = await buildCoverageSummaryFromState(repos, context.characterId, currentState);
+    const currentState = await loadCurrentState(repos, context);
+    const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
 
-      // Trigger avatar generation if enabled
-      await triggerAvatarGenerationIfEnabled(repos, {
+    await triggerAvatarGenerationIfEnabled(repos, {
+      userId: context.userId,
+      chatId: context.chatId,
+      characterId: context.characterId,
+      callerContext: 'wardrobe-update-outfit-handler',
+    });
+
+    await scheduleAnnouncement(context);
+
+    return {
+      success: true,
+      action: mode === 'wear' ? 'worn' : 'removed',
+      item: { item_id: item.id, title: item.title },
+      slots_affected: slotsAffected,
+      current_state: currentState,
+      coverage_summary: coverageSummary,
+    };
+  } catch (error) {
+    if (error instanceof WardrobeUpdateOutfitError) {
+      logger.warn('Wardrobe set outfit error', {
+        context: 'wardrobe-update-outfit-handler',
         userId: context.userId,
         chatId: context.chatId,
         characterId: context.characterId,
-        callerContext: 'wardrobe-update-outfit-handler',
+        code: error.code,
+        message: error.message,
       });
-
-      await scheduleAnnouncement(context, slot);
-
-      return {
-        success: true,
-        action: 'removed',
-        slot,
-        item: null,
-        current_state: currentState,
-        coverage_summary: coverageSummary,
-      };
-    }
-  } catch (error) {
-    if (error instanceof WardrobeUpdateOutfitError) {
-      return {
-        success: false,
-        action: 'removed',
-        slot: typeof input === 'object' && input !== null && 'slot' in input
-          ? (input as Record<string, unknown>).slot as string
-          : 'unknown',
-        item: null,
-        current_state: { ...EMPTY_EQUIPPED_SLOTS },
-        coverage_summary: '',
-        error: error.message,
-      };
+      return buildFailureResponse(error.message);
     }
 
-    logger.error('Wardrobe update outfit tool execution failed', {
+    logger.error('Wardrobe set outfit tool execution failed', {
       context: 'wardrobe-update-outfit-handler',
       userId: context.userId,
       chatId: context.chatId,
       characterId: context.characterId,
     }, error instanceof Error ? error : undefined);
 
-    return {
-      success: false,
-      action: 'removed',
-      slot: typeof input === 'object' && input !== null && 'slot' in input
-        ? (input as Record<string, unknown>).slot as string
-        : 'unknown',
-      item: null,
-      current_state: { ...EMPTY_EQUIPPED_SLOTS },
-      coverage_summary: '',
-      error: error instanceof Error ? error.message : 'Unknown error during outfit update',
-    };
+    return buildFailureResponse(
+      error instanceof Error ? error.message : 'Unknown error during outfit update',
+    );
   }
 }
 
-/**
- * Best-effort schedule of the debounced Aurora outfit announcement.
- * Failures are swallowed — the outfit change itself succeeded, the
- * announcement is purely cosmetic.
- */
-async function scheduleAnnouncement(
-  context: WardrobeUpdateOutfitToolContext,
-  slot: string,
-): Promise<void> {
+async function scheduleAnnouncement(context: WardrobeUpdateOutfitToolContext): Promise<void> {
   try {
     await enqueueWardrobeOutfitAnnouncement(context.userId, {
       chatId: context.chatId,
@@ -405,78 +234,85 @@ async function scheduleAnnouncement(
       context: 'wardrobe-update-outfit-handler',
       chatId: context.chatId,
       characterId: context.characterId,
-      slot,
       error: error instanceof Error ? error.message : String(error),
     });
   }
 }
 
-/**
- * Load the current equipped outfit state for a character in a chat
- */
 async function loadCurrentState(
   repos: ReturnType<typeof getRepositories>,
-  context: WardrobeUpdateOutfitToolContext
+  context: WardrobeUpdateOutfitToolContext,
 ): Promise<EquippedSlots> {
   const equippedOutfit = await repos.chats.getEquippedOutfitForCharacter(
     context.chatId,
-    context.characterId
+    context.characterId,
   );
-  return equippedOutfit || { ...EMPTY_EQUIPPED_SLOTS };
+  return equippedOutfit ?? { ...EMPTY_EQUIPPED_SLOTS };
 }
 
-/**
- * Build a coverage summary by resolving item IDs to their wardrobe item details
- */
 async function buildCoverageSummaryFromState(
   repos: ReturnType<typeof getRepositories>,
-  characterId: string,
-  slots: EquippedSlots
+  slots: EquippedSlots,
 ): Promise<string> {
-  const items: Record<string, WardrobeItem | null> = {
-    top: null,
-    bottom: null,
-    footwear: null,
-    accessories: null,
+  const allIds = new Set<string>();
+  for (const slotKey of WARDROBE_SLOT_TYPES) {
+    for (const id of slots[slotKey]) allIds.add(id);
+  }
+
+  const itemsById = new Map<string, WardrobeItem>();
+  if (allIds.size > 0) {
+    const fetched = await repos.wardrobe.findByIds(Array.from(allIds));
+    for (const item of fetched) itemsById.set(item.id, item);
+  }
+
+  const perSlotItems: Record<keyof EquippedSlots, WardrobeItem[]> = {
+    top: [],
+    bottom: [],
+    footwear: [],
+    accessories: [],
   };
 
-  for (const slotKey of ['top', 'bottom', 'footwear', 'accessories'] as const) {
-    const itemId = slots[slotKey];
-    if (itemId) {
-      items[slotKey] = await repos.wardrobe.findByIdForCharacter(characterId, itemId);
+  for (const slotKey of WARDROBE_SLOT_TYPES) {
+    const equippedIds = slots[slotKey];
+    if (equippedIds.length === 0) continue;
+
+    const { leafIds } = expandComposites(equippedIds, itemsById);
+    const seen = new Set<string>();
+    for (const leafId of leafIds) {
+      if (seen.has(leafId)) continue;
+      const leaf = itemsById.get(leafId);
+      if (!leaf) continue;
+      if (!leaf.types.includes(slotKey)) continue;
+      perSlotItems[slotKey].push(leaf);
+      seen.add(leafId);
     }
   }
 
-  return buildCoverageSummary(slots, items);
+  return buildCoverageSummary(slots, perSlotItems);
 }
 
 /**
- * Format wardrobe update outfit results for inclusion in conversation context
- *
- * @param output - Wardrobe update outfit tool output to format
- * @returns Formatted string suitable for LLM context and display
+ * Format outfit set/remove results for inclusion in conversation context
  */
 export function formatWardrobeUpdateOutfitResults(output: WardrobeUpdateOutfitToolOutput): string {
   if (!output.success) {
-    return `Outfit Update Error: ${output.error || 'Unknown error'}`;
+    return `Outfit Error: ${output.error || 'Unknown error'}`;
   }
 
   const lines: string[] = [];
-
-  if (output.action === 'equipped' && output.item) {
-    lines.push(`Equipped "${output.item.title}" in ${output.slot} slot.`);
-  } else {
-    lines.push(`Removed item from ${output.slot} slot.`);
+  if (output.action === 'worn' && output.item) {
+    lines.push(`Wore the "${output.item.title}" outfit (${output.slots_affected.join(', ')}).`);
+  } else if (output.action === 'removed' && output.item) {
+    lines.push(`Removed the "${output.item.title}" outfit (${output.slots_affected.join(', ')}).`);
   }
 
-  // Show current outfit state
   lines.push('');
   lines.push('Current outfit:');
   const state = output.current_state;
-  lines.push(`  Top: ${state.top || '(empty)'}`);
-  lines.push(`  Bottom: ${state.bottom || '(empty)'}`);
-  lines.push(`  Footwear: ${state.footwear || '(empty)'}`);
-  lines.push(`  Accessories: ${state.accessories || '(empty)'}`);
+  for (const slotKey of WARDROBE_SLOT_TYPES) {
+    const ids = state[slotKey];
+    lines.push(`  ${slotKey}: ${ids.length === 0 ? '(empty)' : ids.join(', ')}`);
+  }
   lines.push('');
   lines.push(`Summary: ${output.coverage_summary}`);
 

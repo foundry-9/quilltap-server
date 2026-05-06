@@ -734,19 +734,20 @@ export async function resolveAppearance(
       return `    - ID: ${d.id}, Name: "${d.name}"${context}: ${preview}`
     })
 
-    // Build equipped wardrobe items section using canonical describeOutfit
+    // Build equipped wardrobe items section using canonical describeOutfit.
+    // Multiple entries per slot represent layering; we feed describeOutfit
+    // the per-slot title arrays in the order callers supplied them.
     let wardrobeSection = ''
     if (char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0) {
-      const findItem = (slot: string) => {
-        const item = char.equippedWardrobeItems!.find(i => i.slot === slot)
-        if (!item) return null
-        return item.description ? `${item.title} (${item.description})` : item.title
-      }
+      const valuesFor = (slot: string): string[] =>
+        char.equippedWardrobeItems!
+          .filter(i => i.slot === slot)
+          .map(i => i.description ? `${i.title} (${i.description})` : i.title)
       const outfitDescription = describeOutfit({
-        top: findItem('top'),
-        bottom: findItem('bottom'),
-        footwear: findItem('footwear'),
-        accessories: findItem('accessories'),
+        top: valuesFor('top'),
+        bottom: valuesFor('bottom'),
+        footwear: valuesFor('footwear'),
+        accessories: valuesFor('accessories'),
       })
       wardrobeSection = `\n  Current Outfit (equipped wardrobe — takes precedence over stored clothing records):\n${outfitDescription}`
     }

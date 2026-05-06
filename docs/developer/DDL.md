@@ -201,6 +201,7 @@ CREATE TABLE "wardrobe_items" (
   "title" TEXT NOT NULL,
   "description" TEXT,
   "types" TEXT NOT NULL DEFAULT '[]',
+  "componentItemIds" TEXT DEFAULT NULL,
   "appropriateness" TEXT,
   "isDefault" INTEGER DEFAULT 0,
   "migratedFromClothingRecordId" TEXT,
@@ -213,22 +214,11 @@ CREATE TABLE "wardrobe_items" (
 CREATE INDEX "idx_wardrobe_items_character" ON "wardrobe_items"("characterId");
 ```
 
-### outfit_presets
+`componentItemIds` is a JSON array of other wardrobe item ids. An empty array (or NULL, treated identically) means a leaf item; a populated array means a composite — equipping the item stores its own id but at read time `expandComposites` resolves the components transitively (cycle-tolerant, depth-capped). Cycles are rejected at save time by `WardrobeRepository`.
 
-```sql
-CREATE TABLE "outfit_presets" (
-  "id" TEXT PRIMARY KEY,
-  "characterId" TEXT,
-  "name" TEXT NOT NULL,
-  "description" TEXT,
-  "slots" TEXT NOT NULL,
-  "createdAt" TEXT NOT NULL,
-  "updatedAt" TEXT NOT NULL,
-  FOREIGN KEY ("characterId") REFERENCES "characters"("id") ON DELETE CASCADE
-);
+### outfit_presets — REMOVED in 4.5
 
-CREATE INDEX "idx_outfit_presets_character" ON "outfit_presets"("characterId");
-```
+The `outfit_presets` table was eliminated; named outfit bundles are now expressed as composite `wardrobe_items` rows whose `componentItemIds` references the constituent items. Migrations `migrate-outfit-presets-to-composites-v1` and `drop-outfit-presets-table-v1` perform the fold-and-drop. A snapshot of the table content is written to `<dataDir>/backup/pre-drop-outfit-presets.json` before the drop.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -237,6 +227,7 @@ CREATE INDEX "idx_outfit_presets_character" ON "outfit_presets"("characterId");
 | title | TEXT | Display name of the item |
 | description | TEXT | Detailed description for prompts and image generation |
 | types | TEXT (JSON array) | Coverage slots: `["top"]`, `["bottom"]`, `["top","bottom"]` for dresses, etc. |
+| componentItemIds | TEXT (JSON array, nullable) | Other wardrobe item ids this composite bundles. Empty/NULL = leaf item. Cycles rejected on save. |
 | appropriateness | TEXT | Context tags: "casual", "formal", "intimate", etc. |
 | isDefault | INTEGER | 1 = part of character's default outfit |
 | migratedFromClothingRecordId | TEXT (UUID) | Tracks provenance from legacy clothingRecords migration |

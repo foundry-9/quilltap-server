@@ -27,7 +27,7 @@ Every wardrobe item belongs to one of four slots, which together compose a compl
 | **Footwear** | Shoes, boots, and the like | Oxfords, riding boots, ballet slippers, bare feet |
 | **Accessories** | Everything else | Hats, gloves, jewellery, monocles, pocket watches, scarves |
 
-A character may have many items in each slot but can equip only one per slot at a time (with the exception of accessories, where layering is half the fun).
+A character may have many items in each slot, and equip multiple of them at once — a t-shirt under a sweater, a dress shirt beneath a waistcoat. The system trusts the LLM (and your own scene-setting) to decide what shows. List them inner-to-outer when it matters; layering is half the fun.
 
 ## Creating Wardrobe Items
 
@@ -70,27 +70,30 @@ Some garments transcend the boundaries of any single wardrobe. A Roman legionary
 
 **Shared items** (also known as archetypes) are wardrobe items not bound to any particular character. Any character may equip them directly, without the tedium of maintaining duplicate entries. To create a shared item, check the "Shared item" checkbox when adding a new garment. Shared items appear in a separate "Shared Wardrobe" section beneath each character's personal collection.
 
-### Outfit Presets
+### Composite Items (Bundled Outfits)
 
-Rather than selecting each garment individually every time a character must dress for an occasion, you may save favourite combinations as **outfit presets**. A preset captures a complete outfit --- one item per slot --- under a memorable name (e.g., "Garden Party Attire" or "Dungeon Crawl Kit").
+Rather than selecting each garment individually every time a character must dress for an occasion, you may compose a single wardrobe item out of *other* wardrobe items. A "Garden Party Attire" composite might bundle a linen blazer, white slacks, and oxfords; a "Nice Jewellery" composite might bundle a pair of earrings, a locket, and a ring. The composite itself is a wardrobe item like any other — it covers whichever slots its components do, and equipping it places the bundle in those slots in one tidy gesture.
 
-To save a preset, navigate to a character's wardrobe and use the "Save Current Outfit" feature, or create one manually by selecting items for each slot. Presets appear in the outfit selector when starting a new chat, allowing you to dress a character with a single click.
+To create one, add a wardrobe item as you ordinarily would, then in its details note the constituent items. The system protects against curious accidents (an item containing itself, or a circular reference between two items) by quietly refusing to save such arrangements.
+
+Composites used to be called "outfit presets" and lived as a separate species. They have been folded into the wardrobe, sparing the curator one extra concept to mind. Existing presets are migrated to composite items automatically, with their identities preserved.
 
 ### Archiving and Deletion
 
 Items that have fallen out of favour need not be destroyed entirely. **Archiving** an item hides it from wardrobe lists and tool results while preserving it for posterity --- and it will remain equipped if currently worn, so mid-conversation wardrobe crises are averted. Should you wish to restore an archived item, simply unarchive it.
 
-**Permanent deletion** removes an item entirely and cleans up all references: any chat where the item was equipped will have that slot emptied, and any preset containing the item will have it removed.
+**Permanent deletion** removes an item entirely and cleans up references in equipped slots across all chats. Any composite that bundled the deleted item will tolerate the absence gracefully — the dangling reference is dropped at read time without disturbing the rest of the bundle.
 
 ## Characters and Their Wardrobe Tools
 
-During a chat, characters with the appropriate permissions can interact with the wardrobe using three tools:
+During a chat, characters with the appropriate permissions can interact with the wardrobe using four tools:
 
-- **list_wardrobe** --- Browse all available items in the character's wardrobe
-- **update_outfit_item** --- Swap an equipped item for a different one from the wardrobe
-- **create_wardrobe_item** --- Invent an entirely new garment and add it to the wardrobe, or **gift one to another character** in the chat
+- **list_wardrobe** --- Browse all available items in the character's wardrobe (composites are flagged as such, with their components listed)
+- **wardrobe_change_item** --- Adjust a single garment. Modes: `equip` (swap a single item into the slots it covers), `add_to_slot` (layer an item over what is already worn), `remove_from_slot` (take off one specific item), `clear_slot` (empty a slot entirely). Refuses composite outfits — those have their own tool
+- **wardrobe_set_outfit** --- Wear or remove a composite outfit (a wardrobe item that bundles multiple pieces, like a "Rain Outfit" containing coat, jeans, and boots). Modes: `wear` (put the bundle on, replacing what was in those slots) and `remove` (take the bundle off). Refuses single garments — use `wardrobe_change_item` for those
+- **create_wardrobe_item** --- Invent an entirely new garment and add it to the wardrobe, OR compose a new outfit out of existing items by supplying `component_item_ids` or `component_titles` (a composite). You may also **gift one to another character** in the chat
 
-For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[EQUIP]]`, and `[[CREATE_WARDROBE_ITEM]]`.
+For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[CHANGE_ITEM]]`, `[[SET_OUTFIT]]`, and `[[CREATE_WARDROBE_ITEM]]`.
 
 ### Gifting Wardrobe Items
 

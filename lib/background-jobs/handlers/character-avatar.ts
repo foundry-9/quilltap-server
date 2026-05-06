@@ -31,6 +31,7 @@ import {
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 
 /**
@@ -103,23 +104,32 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     }
   }
 
-  // Equipped wardrobe items — use canonical describeOutfit utility
+  // Equipped wardrobe items — expand composites and use canonical
+  // describeOutfit. Each slot is an array of leaf item titles after expansion;
+  // we wrap titles with `(description)` when descriptions are present so the
+  // image model gets the extra detail.
   const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, payload.characterId);
   if (equippedSlots) {
-    const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
-    const items = equippedItemIds.length > 0 ? await repos.wardrobe.findByIds(equippedItemIds) : [];
-    const findTitle = (slot: string): string | null => {
-      const itemId = equippedSlots[slot as keyof typeof equippedSlots];
-      if (!itemId) return null;
-      const item = items.find(i => i.id === itemId);
-      return item ? (item.description ? `${item.title} (${item.description})` : item.title) : null;
-    };
+    const resolved = await resolveEquippedOutfitForCharacter(repos, payload.characterId, equippedSlots);
+    const decorate = (items: { title: string; description?: string | null }[]): string[] =>
+      items.map(i => i.description ? `${i.title} (${i.description})` : i.title);
     appearanceParts.push(describeOutfit({
-      top: findTitle('top'),
-      bottom: findTitle('bottom'),
-      footwear: findTitle('footwear'),
-      accessories: findTitle('accessories'),
+      top: decorate(resolved.leafItemsBySlot.top),
+      bottom: decorate(resolved.leafItemsBySlot.bottom),
+      footwear: decorate(resolved.leafItemsBySlot.footwear),
+      accessories: decorate(resolved.leafItemsBySlot.accessories),
     }));
+    logger.debug('[CharacterAvatar] Resolved equipped wardrobe', {
+      context: 'background-jobs.character-avatar',
+      jobId: job.id,
+      characterId: payload.characterId,
+      leafCounts: {
+        top: resolved.leafItemsBySlot.top.length,
+        bottom: resolved.leafItemsBySlot.bottom.length,
+        footwear: resolved.leafItemsBySlot.footwear.length,
+        accessories: resolved.leafItemsBySlot.accessories.length,
+      },
+    });
   }
 
   if (appearanceParts.length === 0) {

@@ -26,7 +26,7 @@ import type {
   CharacterPluginData,
   ConversationAnnotation,
 } from '@/lib/schemas/types';
-import type { WardrobeItem, OutfitPreset } from '@/lib/schemas/wardrobe.types';
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 // ============================================================================
 // BACKUP MANIFEST
@@ -93,8 +93,6 @@ export interface BackupManifest {
     folders?: number;
     /** Number of WardrobeItem entities (character wardrobe items) */
     wardrobeItems?: number;
-    /** Number of OutfitPreset entities (character outfit presets) */
-    outfitPresets?: number;
     /** Number of npm-installed plugins backed up */
     npmPlugins?: number;
     /** Number of CharacterPluginData entities (per-character plugin metadata) */
@@ -171,9 +169,6 @@ export interface BackupData {
 
   /** Array of WardrobeItem entities (character wardrobe items) */
   wardrobeItems?: WardrobeItem[];
-
-  /** Array of OutfitPreset entities (character outfit presets) */
-  outfitPresets?: OutfitPreset[];
 
   /** Array of CharacterPluginData entities (per-character plugin metadata) */
   characterPluginData?: CharacterPluginData[];
@@ -287,9 +282,6 @@ export interface RestoreSummary {
 
   /** Number of WardrobeItem entities restored */
   wardrobeItems?: number;
-
-  /** Number of OutfitPreset entities restored */
-  outfitPresets?: number;
 
   /** Number of npm plugins restored */
   npmPlugins?: number;

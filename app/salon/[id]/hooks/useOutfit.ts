@@ -5,14 +5,19 @@
  *
  * Manages outfit state for characters in a chat session.
  * Fetches equipped outfit slots from the server, resolves item details
- * from each character's wardrobe, and provides equip/unequip actions.
+ * from each character's wardrobe, and provides equip primitives that
+ * mirror the `wardrobe_set_outfit` LLM tool surface.
+ *
+ * Each slot is an array of wardrobe item IDs (multi-item slots support
+ * layering: t-shirt + sweater). Composite items appear as a single ID
+ * and are expanded to their leaves at read time for display.
  *
  * @module salon/hooks/useOutfit
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
+import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types'
 import { computeDisplacedSlots } from '@/lib/wardrobe/outfit-displacement'
 
 // ============================================================================
@@ -25,13 +30,18 @@ export interface WardrobeItemSummary {
   title: string
   types: string[]
   isDefault: boolean
+  /** IDs of component items if this item is a composite. */
+  componentItemIds: string[]
 }
+
+/** Per-slot resolved item details for display (full array form). */
+export type ResolvedSlotItems = Record<string, Array<{ itemId: string; title: string }>>
 
 /** Per-character outfit state including equipped slots and resolved item details */
 export interface CharacterOutfitState {
   slots: EquippedSlots
-  /** Resolved item details keyed by slot name */
-  items: Record<string, { title: string } | null>
+  /** Full per-slot array view: each slot is layered leaf items, in order. */
+  itemsBySlot: ResolvedSlotItems
 }
 
 /** Full outfit state for the hook, keyed by character ID */
@@ -39,6 +49,50 @@ export type OutfitState = Record<string, CharacterOutfitState>
 
 /** Per-character wardrobe items cache, keyed by character ID */
 export type WardrobeCache = Record<string, WardrobeItemSummary[]>
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Walk composites down to leaves using the cached wardrobe-summary list.
+ * Mirrors `expandComposites` in `lib/wardrobe/expand-composites.ts` but works
+ * off the lighter `WardrobeItemSummary` shape that the hook keeps in memory.
+ * Cycle-tolerant; unknown ids are surfaced as-is so the caller can ignore
+ * them.
+ */
+function expandSummaryComposites(
+  rootIds: readonly string[],
+  itemsById: Map<string, WardrobeItemSummary>,
+  maxDepth = 4,
+): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+
+  const visit = (id: string, path: string[], depth: number): void => {
+    const item = itemsById.get(id)
+    if (!item) {
+      if (!seen.has(id)) { seen.add(id); out.push(id) }
+      return
+    }
+    if (path.includes(id)) return // cycle, drop branch
+    if (depth >= maxDepth) {
+      if (!seen.has(id)) { seen.add(id); out.push(id) }
+      return
+    }
+    if (item.componentItemIds.length === 0) {
+      if (!seen.has(id)) { seen.add(id); out.push(id) }
+      return
+    }
+    const nextPath = [...path, id]
+    for (const child of item.componentItemIds) {
+      visit(child, nextPath, depth + 1)
+    }
+  }
+
+  for (const root of rootIds) visit(root, [], 0)
+  return out
+}
 
 // ============================================================================
 // HOOK
@@ -76,7 +130,13 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
       if (personalRes.ok) {
         const data = await personalRes.json()
         for (const item of (data.wardrobeItems || [])) {
-          personalItems.push({ id: item.id, title: item.title, types: item.types, isDefault: item.isDefault })
+          personalItems.push({
+            id: item.id,
+            title: item.title,
+            types: item.types,
+            isDefault: item.isDefault,
+            componentItemIds: Array.isArray(item.componentItemIds) ? item.componentItemIds : [],
+          })
         }
       } else {
         console.warn('[useOutfit] Failed to fetch wardrobe for character', characterId, personalRes.status)
@@ -87,7 +147,13 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
         for (const item of (data.wardrobeItems || [])) {
           // Avoid duplicates (shouldn't happen, but safety check)
           if (!personalItems.some(p => p.id === item.id)) {
-            personalItems.push({ id: item.id, title: `${item.title} (shared)`, types: item.types, isDefault: false })
+            personalItems.push({
+              id: item.id,
+              title: `${item.title} (shared)`,
+              types: item.types,
+              isDefault: false,
+              componentItemIds: Array.isArray(item.componentItemIds) ? item.componentItemIds : [],
+            })
           }
         }
       }
@@ -104,23 +170,38 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
   }, [])
 
   /**
-   * Resolve item titles for equipped slots using the wardrobe cache.
+   * Resolve item titles for equipped slots using the wardrobe cache. Each
+   * slot's array of equipped IDs is expanded through composites and mapped
+   * to leaf titles, projected back into the slots their own types cover.
    */
   const resolveItemDetails = useCallback((
     slots: EquippedSlots,
     items: WardrobeItemSummary[]
-  ): Record<string, { title: string } | null> => {
-    const result: Record<string, { title: string } | null> = {}
+  ): ResolvedSlotItems => {
+    const itemsById = new Map<string, WardrobeItemSummary>()
+    for (const item of items) itemsById.set(item.id, item)
+
+    const bySlot: ResolvedSlotItems = {
+      top: [], bottom: [], footwear: [], accessories: [],
+    }
+
     for (const slot of WARDROBE_SLOT_TYPES) {
-      const itemId = slots[slot]
-      if (itemId) {
-        const found = items.find(i => i.id === itemId)
-        result[slot] = found ? { title: found.title } : null
-      } else {
-        result[slot] = null
+      const equippedIds = slots[slot] ?? []
+      if (equippedIds.length === 0) continue
+
+      const leafIds = expandSummaryComposites(equippedIds, itemsById)
+      const seen = new Set<string>()
+      for (const leafId of leafIds) {
+        if (seen.has(leafId)) continue
+        const leaf = itemsById.get(leafId)
+        if (!leaf) continue
+        if (!leaf.types.includes(slot)) continue
+        bySlot[slot].push({ itemId: leaf.id, title: leaf.title })
+        seen.add(leafId)
       }
     }
-    return result
+
+    return bySlot
   }, [])
 
   /**
@@ -148,16 +229,14 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
       ])
       const newOutfitState: OutfitState = {}
 
-      const emptySlots: EquippedSlots = { top: null, bottom: null, footwear: null, accessories: null }
-
       await Promise.all(
         Array.from(allCharacterIds).map(async (characterId) => {
-          const slots = equippedOutfit[characterId] ?? emptySlots
+          const slots = equippedOutfit[characterId] ?? { ...EMPTY_EQUIPPED_SLOTS }
           const wardrobeItems = await fetchWardrobeForCharacter(characterId)
           // Only include characters that actually have wardrobe items
           if (wardrobeItems.length > 0 || equippedOutfit[characterId]) {
-            const items = resolveItemDetails(slots, wardrobeItems)
-            newOutfitState[characterId] = { slots, items }
+            const itemsBySlot = resolveItemDetails(slots, wardrobeItems)
+            newOutfitState[characterId] = { slots, itemsBySlot }
           }
         })
       )
@@ -174,50 +253,143 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
   }, [chatId, characterIds.length, fetchWardrobeForCharacter, resolveItemDetails])
 
   /**
-   * Equip or unequip an item in a specific slot for a character.
-   * Returns the resolved item details for the new outfit, or null on failure.
+   * Apply an optimistic update to local state and return the resolved
+   * arrays-per-slot view. Returns null if the character has no cached outfit
+   * yet (in which case a `refreshOutfit` will pick it up after the server
+   * round-trip).
    */
-  const equipSlot = useCallback(async (
-    characterId: string,
-    slot: string,
-    itemId: string | null
-  ): Promise<Record<string, { title: string } | null> | null> => {
-    try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=equip`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterId, slot, itemId }),
-      })
-
-      if (!res.ok) {
-        console.error('[useOutfit] Failed to equip slot', { characterId, slot, itemId, status: res.status })
-        return null
-      }
-
-      // Optimistic update with multi-type displacement
+  const applyOptimistic = useCallback(
+    (
+      characterId: string,
+      mutate: (slots: EquippedSlots, items: WardrobeItemSummary[]) => EquippedSlots,
+    ): ResolvedSlotItems | null => {
       const items = wardrobeCache[characterId] ?? []
       const currentChar = outfitState[characterId]
       if (!currentChar) return null
 
-      const newSlots = computeDisplacedSlots(
-        currentChar.slots,
-        items,
-        slot as WardrobeItemType,
-        itemId
-      )
-      const newItems = resolveItemDetails(newSlots, items)
+      const newSlots = mutate(currentChar.slots, items)
+      const itemsBySlot = resolveItemDetails(newSlots, items)
 
       setOutfitState(prev => ({
         ...prev,
-        [characterId]: { slots: newSlots, items: newItems },
+        [characterId]: { slots: newSlots, itemsBySlot },
       }))
 
-      return newItems
-    } catch (err) {
-      console.error('[useOutfit] Error equipping slot', { characterId, slot, itemId, error: err })
-      return null
-    }
-  }, [chatId, wardrobeCache, outfitState, resolveItemDetails])
+      return itemsBySlot
+    },
+    [wardrobeCache, outfitState, resolveItemDetails],
+  )
+
+  /**
+   * Equip an item (replace mode): for each slot the item covers, the slot's
+   * array becomes `[itemId]`. The single-call gesture for "put this on".
+   */
+  const equipItemAction = useCallback(
+    async (characterId: string, itemId: string): Promise<ResolvedSlotItems | null> => {
+      try {
+        const res = await fetch(`/api/v1/chats/${chatId}?action=equip`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ characterId, mode: 'equip', itemId }),
+        })
+        if (!res.ok) {
+          console.error('[useOutfit] Failed to equip item', { characterId, itemId, status: res.status })
+          return null
+        }
+
+        return applyOptimistic(characterId, (slots, items) => {
+          const item = items.find(i => i.id === itemId)
+          if (!item) return slots
+          return computeDisplacedSlots(slots, {
+            mode: 'equip',
+            item: { id: item.id, types: item.types },
+          })
+        })
+      } catch (err) {
+        console.error('[useOutfit] Error equipping item', { characterId, itemId, error: err })
+        return null
+      }
+    },
+    [chatId, applyOptimistic],
+  )
+
+  /**
+   * Add an item to a slot's array (layer it on top of what's already there).
+   */
+  const addToSlotAction = useCallback(
+    async (
+      characterId: string,
+      slot: WardrobeItemType,
+      itemId: string,
+    ): Promise<ResolvedSlotItems | null> => {
+      try {
+        const res = await fetch(`/api/v1/chats/${chatId}?action=equip`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ characterId, mode: 'add_to_slot', slot, itemId }),
+        })
+        if (!res.ok) {
+          console.error('[useOutfit] Failed to add to slot', { characterId, slot, itemId, status: res.status })
+          return null
+        }
+
+        return applyOptimistic(characterId, (slots, items) => {
+          const item = items.find(i => i.id === itemId)
+          if (!item) return slots
+          return computeDisplacedSlots(slots, {
+            mode: 'add_to_slot',
+            slot,
+            item: { id: item.id, types: item.types },
+          })
+        })
+      } catch (err) {
+        console.error('[useOutfit] Error adding to slot', { characterId, slot, itemId, error: err })
+        return null
+      }
+    },
+    [chatId, applyOptimistic],
+  )
+
+  /**
+   * Remove a specific item from a slot. Pass `null`/omit to clear the slot.
+   */
+  const removeFromSlotAction = useCallback(
+    async (
+      characterId: string,
+      slot: WardrobeItemType,
+      itemId?: string | null,
+    ): Promise<ResolvedSlotItems | null> => {
+      try {
+        const isClear = !itemId
+        const res = await fetch(`/api/v1/chats/${chatId}?action=equip`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            characterId,
+            mode: isClear ? 'clear_slot' : 'remove_from_slot',
+            slot,
+            ...(itemId ? { itemId } : {}),
+          }),
+        })
+        if (!res.ok) {
+          console.error('[useOutfit] Failed to remove from slot', { characterId, slot, itemId, status: res.status })
+          return null
+        }
+
+        return applyOptimistic(characterId, (slots) => {
+          return computeDisplacedSlots(slots, {
+            mode: isClear ? 'clear_slot' : 'remove_from_slot',
+            slot,
+            ...(itemId ? { itemId } : {}),
+          })
+        })
+      } catch (err) {
+        console.error('[useOutfit] Error removing from slot', { characterId, slot, itemId, error: err })
+        return null
+      }
+    },
+    [chatId, applyOptimistic],
+  )
 
   /**
    * Invalidate the wardrobe cache for a specific character (or all characters).
@@ -244,6 +416,11 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
     loading,
     refreshOutfit,
     invalidateWardrobe,
-    equipSlot,
+    /** Replace the slots covered by an item with that item alone. */
+    equipItem: equipItemAction,
+    /** Append an item to a slot's array (layering). */
+    addToSlot: addToSlotAction,
+    /** Remove a specific item from a slot, or clear the slot when itemId is null. */
+    removeFromSlot: removeFromSlotAction,
   }
 }

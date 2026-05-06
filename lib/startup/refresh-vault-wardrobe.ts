@@ -67,16 +67,17 @@ export async function refreshVaultWardrobe(): Promise<VaultWardrobeRefreshResult
 
     try {
       const items = await repos.wardrobe.findByCharacterIdRaw(character.id);
-      const presets = await repos.outfitPresets.findByCharacterIdRaw(character.id);
 
-      await projectVaultWardrobe(mountPointId, character.id, items, presets);
+      // Outfit presets no longer exist as a separate concept — composite
+      // wardrobe items (with `componentItemIds`) replace them entirely and
+      // round-trip via the same `Wardrobe/` folder.
+      await projectVaultWardrobe(mountPointId, character.id, items);
 
       result.refreshed++;
       logger.debug('Migrated wardrobe folders from DB', {
         characterId: character.id,
         mountPointId,
         itemCount: items.length,
-        presetCount: presets.length,
       });
     } catch (err) {
       result.errors++;

@@ -82,10 +82,13 @@ export const DELETE = createAuthenticatedParamsHandler<{ itemId: string }>(
         return notFound('Archetype wardrobe item');
       }
 
-      // Clean up references before deleting
+      // Clean up references before deleting.
+      // Outfit presets no longer exist as a separate table — composite
+      // wardrobe items may still reference this id in `componentItemIds`,
+      // but `expandComposites` tolerates unknown ids gracefully so any
+      // dangling references are harmless.
       try {
         await repos.chats.removeEquippedItemFromAllChats(itemId);
-        await repos.outfitPresets.removeItemFromPresets(itemId);
         logger.debug('[Wardrobe Archetypes v1] Cleaned up equipped references', { itemId });
       } catch (cleanupError) {
         logger.warn('[Wardrobe Archetypes v1] Cleanup of equipped references had issues, proceeding with delete', {

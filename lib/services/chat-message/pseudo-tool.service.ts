@@ -80,6 +80,7 @@ export interface TextBlockEnabledToolOptions extends EnabledToolOptions {
   createNote: boolean
   wardrobeList: boolean
   wardrobeUpdateOutfit: boolean
+  wardrobeChangeItem: boolean
   wardrobeCreateItem: boolean
 }
 
@@ -109,6 +110,7 @@ export function determineTextBlockToolOptions(
     createNote: true,
     wardrobeList: canDressThemselves !== false,
     wardrobeUpdateOutfit: canDressThemselves !== false,
+    wardrobeChangeItem: canDressThemselves !== false,
     wardrobeCreateItem: canCreateOutfits !== false,
   }
 }
@@ -133,6 +135,7 @@ export function buildTextBlockSystemInstructions(
     createNote: enabledOptions.createNote,
     wardrobeList: enabledOptions.wardrobeList,
     wardrobeUpdateOutfit: enabledOptions.wardrobeUpdateOutfit,
+    wardrobeChangeItem: enabledOptions.wardrobeChangeItem,
     wardrobeCreateItem: enabledOptions.wardrobeCreateItem,
   }
   return buildTextBlockInstructions(options)

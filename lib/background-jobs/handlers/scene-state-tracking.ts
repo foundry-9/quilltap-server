@@ -17,6 +17,7 @@ import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.ser
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { SceneStateTrackingPayload } from '../queue-service';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 
 const logger = createServiceLogger('SceneStateTrackingHandler');
 
@@ -178,24 +179,29 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
   const characterBaselines = await Promise.all(presentCharacters.map(async (char) => {
     let clothingDescription = '';
 
-    // Load equipped wardrobe items for clothing description
+    // Load equipped wardrobe items for clothing description. Slots are
+    // arrays-per-slot; composites are expanded to leaves before describing.
     try {
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       if (equippedSlots) {
-        const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
-        const items = equippedItemIds.length > 0 ? await repos.wardrobe.findByIds(equippedItemIds) : [];
-        const itemsMap = new Map(items.map(item => [item.id, item]));
-        const findTitle = (slot: string): string | null => {
-          const itemId = equippedSlots[slot as keyof typeof equippedSlots];
-          if (!itemId) return null;
-          const item = itemsMap.get(itemId);
-          return item ? (item.description ? `${item.title} (${item.description})` : item.title) : null;
-        };
+        const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots);
+        const decorate = (items: { title: string; description?: string | null }[]): string[] =>
+          items.map(i => i.description ? `${i.title} (${i.description})` : i.title);
         clothingDescription = describeOutfit({
-          top: findTitle('top'),
-          bottom: findTitle('bottom'),
-          footwear: findTitle('footwear'),
-          accessories: findTitle('accessories'),
+          top: decorate(resolved.leafItemsBySlot.top),
+          bottom: decorate(resolved.leafItemsBySlot.bottom),
+          footwear: decorate(resolved.leafItemsBySlot.footwear),
+          accessories: decorate(resolved.leafItemsBySlot.accessories),
+        });
+        logger.debug('[SceneStateTracking] Resolved equipped wardrobe for character', {
+          jobId: job.id,
+          characterId: char!.id,
+          leafCounts: {
+            top: resolved.leafItemsBySlot.top.length,
+            bottom: resolved.leafItemsBySlot.bottom.length,
+            footwear: resolved.leafItemsBySlot.footwear.length,
+            accessories: resolved.leafItemsBySlot.accessories.length,
+          },
         });
       }
     } catch (error) {

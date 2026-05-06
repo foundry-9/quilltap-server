@@ -25,10 +25,8 @@ import { TimestampConfigSchema } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   OutfitSelectionSchema,
-  EMPTY_EQUIPPED_SLOTS,
   type EquippedSlots,
   type OutfitSelection,
-  type WardrobeItem,
 } from '@/lib/schemas/wardrobe.types';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
@@ -240,23 +238,41 @@ async function buildAllParticipants(
 
 /**
  * Resolve the default outfit for a character from their wardrobe items marked as default.
- * Maps each default item's coverage types to the corresponding equipped slot.
- * If multiple items cover the same slot, the first one found wins.
+ * Each default item's coverage types receive the item's ID appended to the slot's array.
+ * Multiple defaults may share a slot (e.g. layered tops, several accessories) — order is
+ * deterministic by `createdAt` ascending.
  */
 async function resolveDefaultOutfit(characterId: string, repos: Repos): Promise<EquippedSlots> {
   const defaultItems = await repos.wardrobe.findDefaultsForCharacter(characterId);
 
   if (defaultItems.length === 0) {
     logger.debug('[Chats v1] No default wardrobe items found for character', { characterId });
-    return { ...EMPTY_EQUIPPED_SLOTS };
+    return {
+      top: [],
+      bottom: [],
+      footwear: [],
+      accessories: [],
+    };
   }
 
-  const slots: EquippedSlots = { ...EMPTY_EQUIPPED_SLOTS };
+  const slots: EquippedSlots = {
+    top: [],
+    bottom: [],
+    footwear: [],
+    accessories: [],
+  };
 
-  for (const item of defaultItems) {
+  // Deterministic order: oldest default first. Items lacking createdAt sort to the end.
+  const orderedDefaults = [...defaultItems].sort((a, b) => {
+    const aTime = a.createdAt ? Date.parse(a.createdAt) : Number.POSITIVE_INFINITY;
+    const bTime = b.createdAt ? Date.parse(b.createdAt) : Number.POSITIVE_INFINITY;
+    return aTime - bTime;
+  });
+
+  for (const item of orderedDefaults) {
     for (const slotType of item.types) {
-      if (slotType in slots && slots[slotType as keyof EquippedSlots] === null) {
-        slots[slotType as keyof EquippedSlots] = item.id;
+      if (slotType in slots) {
+        slots[slotType as keyof EquippedSlots].push(item.id);
       }
     }
   }
@@ -290,9 +306,10 @@ interface OutfitSelectionContext {
 /**
  * Apply outfit selections to a newly created chat.
  * Processes each selection based on its mode:
- * - 'default': Load default wardrobe items and map to slots
- * - 'manual': Use the provided slot assignments directly
- * - 'none': Set all slots to null (EMPTY_EQUIPPED_SLOTS)
+ * - 'default': Load default wardrobe items and append each to the slots it covers
+ * - 'manual': Use the provided slot assignments directly (already arrays)
+ * - 'none': Set every slot to an empty array
+ * - 'previous_chat': Copy equipped state from the source chat (continuation flow)
  * - 'llm_choose': Ask a cheap LLM to pick an outfit, fall back to defaults on failure
  */
 async function applyOutfitSelections(
@@ -313,14 +330,24 @@ async function applyOutfitSelections(
       }
 
       case 'manual': {
-        const slots = selection.slots || EMPTY_EQUIPPED_SLOTS;
+        const slots: EquippedSlots = selection.slots ?? {
+          top: [],
+          bottom: [],
+          footwear: [],
+          accessories: [],
+        };
         await repos.chats.setEquippedOutfit(chatId, characterId, slots);
         logger.debug('[Chats v1] Applied manual outfit for character', { chatId, characterId, slots });
         break;
       }
 
       case 'none': {
-        await repos.chats.setEquippedOutfit(chatId, characterId, { ...EMPTY_EQUIPPED_SLOTS });
+        await repos.chats.setEquippedOutfit(chatId, characterId, {
+          top: [],
+          bottom: [],
+          footwear: [],
+          accessories: [],
+        });
         logger.debug('[Chats v1] Applied empty outfit for character', { chatId, characterId });
         break;
       }
@@ -573,25 +600,35 @@ async function createInitialMessagesScenarioAndStaff(
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
       if (!equippedSlots) continue;
 
-      const equippedItemIds = Object.values(equippedSlots).filter(
-        (id): id is string => typeof id === 'string' && id.length > 0,
-      );
+      const equippedItemIds = (
+        [
+          ...equippedSlots.top,
+          ...equippedSlots.bottom,
+          ...equippedSlots.footwear,
+          ...equippedSlots.accessories,
+        ] as string[]
+      ).filter((id) => typeof id === 'string' && id.length > 0);
       const equippedItemsData = equippedItemIds.length > 0
         ? await repos.wardrobe.findByIds(equippedItemIds)
         : [];
       const equippedItemsMap = new Map(equippedItemsData.map((item) => [item.id, item]));
 
-      const titleFor = (slot: keyof typeof equippedSlots): string | null => {
-        const id = equippedSlots[slot];
-        if (!id) return null;
-        return equippedItemsMap.get(id)?.title ?? null;
+      const titlesFor = (slot: keyof typeof equippedSlots): string[] => {
+        const ids = equippedSlots[slot];
+        if (!ids || ids.length === 0) return [];
+        const titles: string[] = [];
+        for (const id of ids) {
+          const title = equippedItemsMap.get(id)?.title;
+          if (title) titles.push(title);
+        }
+        return titles;
       };
 
       const outfit = {
-        top: titleFor('top'),
-        bottom: titleFor('bottom'),
-        footwear: titleFor('footwear'),
-        accessories: titleFor('accessories'),
+        top: titlesFor('top'),
+        bottom: titlesFor('bottom'),
+        footwear: titlesFor('footwear'),
+        accessories: titlesFor('accessories'),
       };
 
       await postOpeningOutfitWhisper({

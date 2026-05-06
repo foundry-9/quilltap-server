@@ -85,10 +85,18 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'wardrobe': 'list_wardrobe',
   'closet': 'list_wardrobe',
 
-  'update_outfit_item': 'update_outfit_item',
-  'equip': 'update_outfit_item',
-  'wear': 'update_outfit_item',
-  'outfit': 'update_outfit_item',
+  'wardrobe_set_outfit': 'wardrobe_set_outfit',
+  'set_outfit': 'wardrobe_set_outfit',
+  'wear_outfit': 'wardrobe_set_outfit',
+  'outfit': 'wardrobe_set_outfit',
+  'wear': 'wardrobe_set_outfit',
+
+  'wardrobe_change_item': 'wardrobe_change_item',
+  'change_item': 'wardrobe_change_item',
+  'equip': 'wardrobe_change_item',
+  'unequip': 'wardrobe_change_item',
+  'layer': 'wardrobe_change_item',
+  'swap': 'wardrobe_change_item',
 
   'create_wardrobe_item': 'create_wardrobe_item',
 
@@ -134,7 +142,12 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
     'section': 'category',
     'type': 'category',
   },
-  update_outfit_item: {
+  wardrobe_set_outfit: {
+    'id': 'item_id',
+    'title': 'item_title',
+    'name': 'item_title',
+  },
+  wardrobe_change_item: {
     'id': 'item_id',
     'title': 'item_title',
     'name': 'item_title',
@@ -147,6 +160,9 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
     'for': 'recipient',
     'give_to': 'recipient',
     'gift_to': 'recipient',
+    'components': 'component_item_ids',
+    'component_ids': 'component_item_ids',
+    'component_names': 'component_titles',
   },
   search: {
     'search': 'query',

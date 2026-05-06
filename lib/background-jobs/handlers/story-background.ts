@@ -30,6 +30,7 @@ import {
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 
 /**
  * Detect post-hoc content-moderation rejections from image providers.
@@ -184,27 +185,31 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // 8. Derive scene context AND resolve character appearances in parallel
   let sceneContext = payload.sceneContext || chat.title;
 
-  // Build appearance inputs from loaded characters, enriched with equipped wardrobe items
+  // Build appearance inputs from loaded characters, enriched with equipped
+  // wardrobe items. Equipped slots are arrays-per-slot; composites are
+  // expanded via resolveEquippedOutfitForCharacter before flattening for
+  // the appearance-resolution input.
   const appearanceInputs: AppearanceResolutionInput[] = [];
   for (const char of validCharacters) {
     let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
     try {
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       if (equippedSlots) {
-        const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
-        if (equippedItemIds.length > 0) {
-          const items = await repos.wardrobe.findByIds(equippedItemIds);
-          const itemsMap = new Map(items.map(item => [item.id, item]));
-          equippedWardrobeItems = [];
-          for (const [slot, itemId] of Object.entries(equippedSlots)) {
-            if (itemId) {
-              const item = itemsMap.get(itemId);
-              if (item) {
-                equippedWardrobeItems.push({ slot, title: item.title, description: item.description });
-              }
-            }
+        const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots);
+        const flat: Array<{ slot: string; title: string; description?: string | null }> = [];
+        for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
+          for (const item of resolved.leafItemsBySlot[slot]) {
+            flat.push({ slot, title: item.title, description: item.description });
           }
         }
+        if (flat.length > 0) {
+          equippedWardrobeItems = flat;
+        }
+        logger.debug('[StoryBackground] Resolved equipped wardrobe for character', {
+          characterId: char!.id,
+          chatId: payload.chatId,
+          itemCount: flat.length,
+        });
       }
     } catch (err) {
       logger.warn('[StoryBackground] Failed to load equipped wardrobe items for character', {

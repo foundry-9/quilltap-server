@@ -42,6 +42,7 @@ import {
   resolveImageProviderForDangerousContent,
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 
 /**
  * Execution context for image generation tool
@@ -774,7 +775,10 @@ async function resolveAppearances(
           context.callingParticipantId
         );
 
-        // Build appearance inputs from resolved placeholders, enriched with equipped wardrobe items
+        // Build appearance inputs from resolved placeholders, enriched with
+        // equipped wardrobe items. Equipped slots are arrays-per-slot and may
+        // contain composite items; resolveEquippedOutfitForCharacter expands
+        // composites and returns per-slot leaf items.
         const repos = getRepositories();
         const appearanceInputs: AppearanceResolutionInput[] = [];
         for (const p of resolvedPlaceholders.filter(p => p.entityId && p.descriptions?.length)) {
@@ -783,20 +787,21 @@ async function resolveAppearances(
             try {
               const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(context.chatId, p.entityId);
               if (equippedSlots) {
-                const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
-                if (equippedItemIds.length > 0) {
-                  const items = await repos.wardrobe.findByIds(equippedItemIds);
-                  const itemsMap = new Map(items.map(item => [item.id, item]));
-                  equippedWardrobeItems = [];
-                  for (const [slot, itemId] of Object.entries(equippedSlots)) {
-                    if (itemId) {
-                      const item = itemsMap.get(itemId);
-                      if (item) {
-                        equippedWardrobeItems.push({ slot, title: item.title, description: item.description });
-                      }
-                    }
+                const resolved = await resolveEquippedOutfitForCharacter(repos, p.entityId, equippedSlots);
+                const flat: Array<{ slot: string; title: string; description?: string | null }> = [];
+                for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
+                  for (const item of resolved.leafItemsBySlot[slot]) {
+                    flat.push({ slot, title: item.title, description: item.description });
                   }
                 }
+                if (flat.length > 0) {
+                  equippedWardrobeItems = flat;
+                }
+                logger.debug('[Image Generation] Resolved equipped wardrobe for character', {
+                  characterId: p.entityId,
+                  chatId: context.chatId,
+                  itemCount: flat.length,
+                });
               }
             } catch (err) {
               logger.warn('[Image Generation] Failed to load equipped wardrobe items for character', {

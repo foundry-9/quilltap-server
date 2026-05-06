@@ -239,6 +239,14 @@ import { applyEmbeddingProfileTruncationMigration } from './apply-embedding-prof
 import { addTerminalSessionsTableMigration } from './add-terminal-sessions-table';
 // Terminal Mode fields on chats (split-pane persistence)
 import { addTerminalModeFieldsMigration } from './add-terminal-mode-fields';
+// Add componentItemIds column to wardrobe_items (composite items)
+import { addWardrobeComponentItemIdsMigration } from './add-wardrobe-component-item-ids-v1';
+// Migrate outfit_presets rows into composite wardrobe_items
+import { migrateOutfitPresetsToCompositesMigration } from './migrate-outfit-presets-to-composites-v1';
+// Convert chats.equippedOutfit slot values from UUID|null to UUID[]
+import { convertEquippedOutfitToArraysMigration } from './convert-equipped-outfit-to-arrays-v1';
+// Drop the outfit_presets table (after backup snapshot)
+import { dropOutfitPresetsTableMigration } from './drop-outfit-presets-table-v1';
 
 /**
  * All available migrations.
@@ -473,6 +481,14 @@ export const migrations: Migration[] = [
   addTerminalSessionsTableMigration,
   // Terminal Mode fields on chats (split-pane persistence)
   addTerminalModeFieldsMigration,
+  // Add componentItemIds column to wardrobe_items (composite items)
+  addWardrobeComponentItemIdsMigration,
+  // Migrate outfit_presets rows into composite wardrobe_items
+  migrateOutfitPresetsToCompositesMigration,
+  // Convert chats.equippedOutfit slot values from UUID|null to UUID[]
+  convertEquippedOutfitToArraysMigration,
+  // Drop the outfit_presets table (after backup snapshot)
+  dropOutfitPresetsTableMigration,
 ];
 
 export {
@@ -692,5 +708,13 @@ export {
   addTerminalSessionsTableMigration,
   // Terminal Mode fields on chats (split-pane persistence)
   addTerminalModeFieldsMigration,
+  // Add componentItemIds column to wardrobe_items (composite items)
+  addWardrobeComponentItemIdsMigration,
+  // Migrate outfit_presets rows into composite wardrobe_items
+  migrateOutfitPresetsToCompositesMigration,
+  // Convert chats.equippedOutfit slot values from UUID|null to UUID[]
+  convertEquippedOutfitToArraysMigration,
+  // Drop the outfit_presets table (after backup snapshot)
+  dropOutfitPresetsTableMigration,
 };
 

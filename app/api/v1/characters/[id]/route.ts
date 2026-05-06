@@ -750,7 +750,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         // active wardrobe wholesale — the same "vault is the list" semantics
         // used for systemPrompts / scenarios above.
         let wardrobeItemsWritten = 0;
-        let wardrobePresetsWritten = 0;
         const wardrobeSynced = vaultWardrobe !== null;
         if (vaultWardrobe) {
           // Use the *Raw / FromVault repo methods throughout: the standard
@@ -767,26 +766,17 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           for (const item of existingItems) {
             await repos.wardrobe.deleteRaw(item.id);
           }
-          const existingPresets = await repos.outfitPresets.findByCharacterIdRaw(
-            rawCharacter.id,
-          );
-          for (const preset of existingPresets) {
-            await repos.outfitPresets.deleteRaw(preset.id);
-          }
 
+          // Outfit presets are gone as a separate table — composite items
+          // (with `componentItemIds`) replace them entirely and round-trip
+          // via the same `Wardrobe/` folder. Anything the vault still calls
+          // a "preset" gets ignored at the read layer.
           for (const item of vaultWardrobe.items) {
             await repos.wardrobe.createFromVault({
               ...item,
               characterId: rawCharacter.id,
             });
             wardrobeItemsWritten++;
-          }
-          for (const preset of vaultWardrobe.presets) {
-            await repos.outfitPresets.createFromVault({
-              ...preset,
-              characterId: rawCharacter.id,
-            });
-            wardrobePresetsWritten++;
           }
         }
 
@@ -817,7 +807,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           syncedScenarioCount: snapshot.scenarios?.length ?? 0,
           syncedWardrobe: wardrobeSynced,
           wardrobeItemsWritten,
-          wardrobePresetsWritten,
         });
 
         return NextResponse.json({ character: updatedCharacter });
@@ -840,15 +829,16 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         }
 
         const mountId = rawCharacter.characterDocumentMountPointId;
-        const [wardrobeItems, outfitPresets] = await Promise.all([
-          repos.wardrobe.findByCharacterIdRaw(rawCharacter.id, true),
-          repos.outfitPresets.findByCharacterIdRaw(rawCharacter.id),
-        ]);
+        const wardrobeItems = await repos.wardrobe.findByCharacterIdRaw(
+          rawCharacter.id,
+          true,
+        );
 
+        // Outfit presets are gone — composite wardrobe items round-trip via
+        // the same `Wardrobe/` folder, so we project just the items list.
         const writeResult = await writeCharacterVaultManagedFields(mountId, {
           character: rawCharacter,
           wardrobeItems,
-          outfitPresets,
         });
 
         logger.info('[Characters v1] Synced character properties to vault', {
@@ -858,7 +848,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           systemPromptsWritten: writeResult.systemPromptsWritten,
           scenariosWritten: writeResult.scenariosWritten,
           wardrobeItemsWritten: writeResult.wardrobeItemsWritten,
-          outfitPresetsWritten: writeResult.outfitPresetsWritten,
           physicalSkippedNoPrimary: writeResult.physicalSkippedNoPrimary,
         });
 

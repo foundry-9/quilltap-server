@@ -93,22 +93,25 @@ function canSkipResolution(
 }
 
 /**
- * Convert an array of equipped wardrobe items into OutfitSlotValues
- * for use with the canonical describeOutfit utility.
+ * Convert an array of equipped wardrobe items into OutfitSlotValues for use
+ * with the canonical describeOutfit utility. The input is expected to already
+ * be flattened to leaves (callers expand composites before passing in).
+ *
+ * Multiple entries with the same `slot` represent layering and produce
+ * multiple values in that slot's array, in the order they appear.
  */
 function wardrobeItemsToSlotValues(
   items: Array<{ slot: string; title: string; description?: string | null }>
 ): import('@/lib/wardrobe/outfit-description').OutfitSlotValues {
-  const findItem = (slot: string) => {
-    const item = items.find(i => i.slot === slot)
-    if (!item) return null
-    return item.description ? `${item.title} (${item.description})` : item.title
-  }
+  const valuesFor = (slot: string): string[] =>
+    items
+      .filter(i => i.slot === slot)
+      .map(i => i.description ? `${i.title} (${i.description})` : i.title)
   return {
-    top: findItem('top'),
-    bottom: findItem('bottom'),
-    footwear: findItem('footwear'),
-    accessories: findItem('accessories'),
+    top: valuesFor('top'),
+    bottom: valuesFor('bottom'),
+    footwear: valuesFor('footwear'),
+    accessories: valuesFor('accessories'),
   }
 }
 

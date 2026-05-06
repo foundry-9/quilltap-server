@@ -47,11 +47,14 @@ export const POST = createAuthenticatedHandler(async (req, { repos }) => {
     types: validatedData.types,
   });
 
+  // `componentItemIds: []` marks this archetype as a leaf item — composites
+  // are built explicitly by editing an existing item.
   const item = await repos.wardrobe.create({
     characterId: null,
     title: validatedData.title,
     description: validatedData.description ?? null,
     types: validatedData.types,
+    componentItemIds: [],
     appropriateness: validatedData.appropriateness ?? null,
     isDefault: validatedData.isDefault ?? false,
     migratedFromClothingRecordId: null,

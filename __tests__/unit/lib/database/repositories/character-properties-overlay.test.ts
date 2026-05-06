@@ -51,6 +51,7 @@ import {
   readCharacterVaultScenarios,
   writeCharacterVaultManagedFields,
   syncCharacterVaultWardrobe,
+  readCharacterVaultWardrobe,
   CharacterVaultPropertiesSchema,
   CharacterVaultPhysicalPromptsSchema,
   CHARACTER_PROPERTIES_JSON_PATH,
@@ -1342,7 +1343,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     const result = await writeCharacterVaultManagedFields('mount-1', {
       character,
       wardrobeItems: [],
-      outfitPresets: [],
     });
 
     expect(result.physicalSkippedNoPrimary).toBe(false);
@@ -1397,7 +1397,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     const result = await writeCharacterVaultManagedFields('mount-2', {
       character,
       wardrobeItems: [],
-      outfitPresets: [],
     });
 
     expect(result.physicalSkippedNoPrimary).toBe(true);
@@ -1447,7 +1446,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     const result = await writeCharacterVaultManagedFields('mount-3', {
       character,
       wardrobeItems: [],
-      outfitPresets: [],
     });
 
     expect(result.systemPromptsWritten).toBe(2);
@@ -1482,7 +1480,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     const result = await writeCharacterVaultManagedFields('mount-4', {
       character,
       wardrobeItems: [],
-      outfitPresets: [],
     });
 
     expect(result.scenariosWritten).toBe(1);
@@ -1537,7 +1534,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     await writeCharacterVaultManagedFields('mount-5', {
       character,
       wardrobeItems: [],
-      outfitPresets: [],
     });
 
     const deletedPaths = deleteDatabaseDocumentMock.mock.calls.map(([, p]) => p);
@@ -1545,7 +1541,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     expect(deletedPaths).toContain(`${CHARACTER_SCENARIOS_FOLDER}/Old Scene.md`);
   });
 
-  it('projects wardrobe items into Wardrobe/*.md with frontmatter, presets into Outfits/*.md with slug slot refs', async () => {
+  it('projects leaf wardrobe items into Wardrobe/*.md with frontmatter and freeform body', async () => {
     const character = makeCharacter({
       id: 'char-wardrobe',
       physicalDescriptions: [],
@@ -1560,6 +1556,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
         title: 'Linen Jacket',
         description: 'Cream linen with ivory buttons.',
         types: ['top' as const],
+        componentItemIds: [],
         appropriateness: null,
         isDefault: true,
         migratedFromClothingRecordId: null,
@@ -1568,29 +1565,19 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
     ];
-    const outfitPresets = [
-      {
-        id: 'preset-1',
-        characterId: 'char-wardrobe',
-        name: 'Garden Party',
-        description: null,
-        slots: { top: 'item-1', bottom: null, footwear: null, accessories: null },
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      },
-    ];
 
     const result = await writeCharacterVaultManagedFields('mount-6', {
       character,
       wardrobeItems,
-      outfitPresets,
     });
 
     expect(result.wardrobeItemsWritten).toBe(1);
-    expect(result.outfitPresetsWritten).toBe(1);
 
+    // The retired Outfits/ folder is no longer projected — composites fold
+    // into Wardrobe/*.md. The legacy wardrobe.json must never be re-seeded.
     const writtenPaths = writeDatabaseDocumentMock.mock.calls.map(([, p]) => p);
     expect(writtenPaths).not.toContain('wardrobe.json');
+    expect(writtenPaths.some((p) => p.startsWith('Outfits/'))).toBe(false);
 
     const itemFile = getWrite('Wardrobe/Linen Jacket.md');
     expect(itemFile).toBeDefined();
@@ -1599,13 +1586,69 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     expect(itemFile).toContain('- top');
     expect(itemFile).toContain('default: true');
     expect(itemFile).toContain('Cream linen with ivory buttons.');
+    // Leaf items don't carry a `componentItems:` array.
+    expect(itemFile).not.toContain('componentItems:');
+  });
 
-    const presetFile = getWrite('Outfits/Garden Party.md');
-    expect(presetFile).toBeDefined();
-    expect(presetFile).toContain('id: preset-1');
-    expect(presetFile).toContain('name: Garden Party');
-    expect(presetFile).toContain('top: linen-jacket');
-    expect(presetFile).toContain('bottom: null');
+  it('projects composite wardrobe items with a componentItems: slug array in frontmatter', async () => {
+    // A composite "Rain Outfit" references three leaf items by id; the writer
+    // should translate those ids to slugs (kebab-case from the leaf titles)
+    // when emitting the frontmatter, so vault hand-edits are friendlier.
+    const character = makeCharacter({
+      id: 'char-composite',
+      physicalDescriptions: [],
+      systemPrompts: [],
+      scenarios: [],
+    });
+
+    const raincoat = {
+      id: 'raincoat-1',
+      characterId: 'char-composite',
+      title: 'Yellow Raincoat',
+      description: null,
+      types: ['top' as const],
+      componentItemIds: [],
+      appropriateness: null,
+      isDefault: false,
+      migratedFromClothingRecordId: null,
+      archivedAt: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const jeans = { ...raincoat, id: 'jeans-1', title: 'Blue Jeans', types: ['bottom' as const] };
+    const wellies = { ...raincoat, id: 'wellies-1', title: 'Wellies', types: ['footwear' as const] };
+    const rainOutfit = {
+      id: 'rain-outfit',
+      characterId: 'char-composite',
+      title: 'Rain Outfit',
+      description: 'Bundle for a rainy day.',
+      types: ['top' as const, 'bottom' as const, 'footwear' as const],
+      componentItemIds: ['raincoat-1', 'jeans-1', 'wellies-1'],
+      appropriateness: null,
+      isDefault: false,
+      migratedFromClothingRecordId: null,
+      archivedAt: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    const result = await writeCharacterVaultManagedFields('mount-7', {
+      character,
+      wardrobeItems: [raincoat, jeans, wellies, rainOutfit],
+    });
+
+    expect(result.wardrobeItemsWritten).toBe(4);
+
+    const compositeFile = getWrite('Wardrobe/Rain Outfit.md');
+    expect(compositeFile).toBeDefined();
+    expect(compositeFile).toContain('id: rain-outfit');
+    expect(compositeFile).toContain('title: Rain Outfit');
+    // componentItems is emitted as the slug array, in declared order.
+    expect(compositeFile).toContain('componentItems:');
+    expect(compositeFile).toContain('- yellow-raincoat');
+    expect(compositeFile).toContain('- blue-jeans');
+    expect(compositeFile).toContain('- wellies');
+    expect(compositeFile).toContain('Bundle for a rainy day.');
   });
 });
 
@@ -1625,12 +1668,10 @@ describe('syncCharacterVaultWardrobe — vault-only items', () => {
     // item and the projection re-writes its file instead of sweeping it.
     const dbItems: any[] = [];
     const findByCharacterIdRaw = jest.fn(async () => dbItems.slice());
-    const findByCharacterIdRawPresets = jest.fn().mockResolvedValue([]);
     const createFromVault = jest.fn(async (item) => {
       dbItems.push(item);
       return item;
     });
-    const createFromVaultPreset = jest.fn(async (preset) => preset);
     const findByIdRaw = jest.fn().mockResolvedValue({
       id: 'gary',
       readPropertiesFromDocumentStore: true,
@@ -1681,10 +1722,6 @@ describe('syncCharacterVaultWardrobe — vault-only items', () => {
         findByCharacterIdRaw,
         createFromVault,
       },
-      outfitPresets: {
-        findByCharacterIdRaw: findByCharacterIdRawPresets,
-        createFromVault: createFromVaultPreset,
-      },
     });
 
     await syncCharacterVaultWardrobe('gary');
@@ -1712,6 +1749,7 @@ describe('syncCharacterVaultWardrobe — vault-only items', () => {
       title: 'Velvet Robe',
       description: null,
       types: ['top' as const, 'bottom' as const],
+      componentItemIds: [],
       appropriateness: null,
       isDefault: false,
       migratedFromClothingRecordId: null,
@@ -1769,14 +1807,185 @@ describe('syncCharacterVaultWardrobe — vault-only items', () => {
         findByCharacterIdRaw,
         createFromVault,
       },
-      outfitPresets: {
-        findByCharacterIdRaw: jest.fn().mockResolvedValue([]),
-        createFromVault: jest.fn(),
-      },
     });
 
     await syncCharacterVaultWardrobe('gary');
 
     expect(createFromVault).not.toHaveBeenCalled();
+  });
+});
+
+describe('readCharacterVaultWardrobe — componentItems frontmatter', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  /** Helper: build a vault doc shaped like docMountDocuments.findManyByMountPointsInFolder returns. */
+  function vaultDoc(
+    mountPointId: string,
+    fileName: string,
+    body: string,
+    overrides: Partial<{
+      createdAt: string;
+      updatedAt: string;
+    }> = {},
+  ) {
+    return {
+      id: 'doc-' + fileName,
+      mountPointId,
+      relativePath: `Wardrobe/${fileName}`,
+      fileName,
+      fileType: 'markdown' as const,
+      contentSha256: 'x'.repeat(64),
+      plainTextLength: body.length,
+      folderId: null,
+      lastModified: 0,
+      createdAt: overrides.createdAt ?? '2026-04-26T00:00:00.000Z',
+      updatedAt: overrides.updatedAt ?? '2026-04-26T00:00:00.000Z',
+      content: body,
+    };
+  }
+
+  function setupVault(docs: ReturnType<typeof vaultDoc>[]) {
+    const findManyByMountPointsInFolder = jest
+      .fn()
+      .mockImplementation((_ids: string[], folder: string) => {
+        if (folder === 'Wardrobe') return Promise.resolve(docs);
+        return Promise.resolve([]);
+      });
+    getRepositoriesMock.mockReturnValue({
+      docMountDocuments: {
+        findManyByMountPointsAndPath: jest.fn().mockResolvedValue([]),
+        findManyByMountPointsInFolder,
+      },
+    });
+    return { findManyByMountPointsInFolder };
+  }
+
+  it('resolves componentItems: slug refs to canonical UUIDs from sibling Wardrobe files', async () => {
+    // Two leaf items + a composite that references them by slug. The reader
+    // should resolve the slugs to the leaf items' UUIDs.
+    const earringsId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const lockectId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const compositeId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+    setupVault([
+      vaultDoc(
+        'mount-a',
+        'Pearl Earrings.md',
+        ['---', `id: ${earringsId}`, 'title: Pearl Earrings', 'types:', '- accessories', '---', '', 'Lustrous.'].join(
+          '\n',
+        ),
+      ),
+      vaultDoc(
+        'mount-a',
+        'Gold Locket.md',
+        ['---', `id: ${lockectId}`, 'title: Gold Locket', 'types:', '- accessories', '---', '', 'Heirloom.'].join(
+          '\n',
+        ),
+      ),
+      vaultDoc(
+        'mount-a',
+        'Nice Jewelry.md',
+        [
+          '---',
+          `id: ${compositeId}`,
+          'title: Nice Jewelry',
+          'types:',
+          '- accessories',
+          'componentItems:',
+          '- pearl-earrings',
+          '- gold-locket',
+          '---',
+          '',
+          'Set.',
+        ].join('\n'),
+      ),
+    ]);
+
+    const result = await readCharacterVaultWardrobe('mount-a', 'char-a');
+    expect(result).not.toBeNull();
+    const composite = result!.items.find((i) => i.id === compositeId);
+    expect(composite).toBeDefined();
+    expect(composite!.componentItemIds).toEqual([earringsId, lockectId]);
+  });
+
+  it('drops a self-cycle in componentItems: but keeps the item itself', async () => {
+    // A composite that lists its own slug as a component must be tolerated —
+    // the bad ref is dropped, the item stays.
+    const itemId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    setupVault([
+      vaultDoc(
+        'mount-b',
+        'Self Hugger.md',
+        [
+          '---',
+          `id: ${itemId}`,
+          'title: Self Hugger',
+          'types:',
+          '- top',
+          'componentItems:',
+          '- self-hugger',
+          '---',
+          '',
+          'Curiously self-referential.',
+        ].join('\n'),
+      ),
+    ]);
+
+    const result = await readCharacterVaultWardrobe('mount-b', 'char-b');
+    expect(result).not.toBeNull();
+    expect(result!.items).toHaveLength(1);
+    // The cycle was detected → componentItemIds wiped, item itself preserved.
+    expect(result!.items[0].componentItemIds).toEqual([]);
+    expect(result!.items[0].title).toBe('Self Hugger');
+  });
+
+  it('drops unknown componentItems: refs but keeps known ones', async () => {
+    // Vault hand-edits often include typos; the reader resolves what it can
+    // and drops the rest with a log.
+    const knownId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const compositeId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    setupVault([
+      vaultDoc(
+        'mount-c',
+        'Known Item.md',
+        ['---', `id: ${knownId}`, 'title: Known Item', 'types:', '- top', '---', '', ''].join('\n'),
+      ),
+      vaultDoc(
+        'mount-c',
+        'Composite.md',
+        [
+          '---',
+          `id: ${compositeId}`,
+          'title: Composite',
+          'types:',
+          '- top',
+          'componentItems:',
+          '- known-item',
+          '- some-typo-that-doesnt-exist',
+          '---',
+          '',
+          '',
+        ].join('\n'),
+      ),
+    ]);
+
+    const result = await readCharacterVaultWardrobe('mount-c', 'char-c');
+    const composite = result!.items.find((i) => i.id === compositeId);
+    expect(composite!.componentItemIds).toEqual([knownId]);
+  });
+
+  it('parses leaf items with no componentItems: as componentItemIds: []', async () => {
+    setupVault([
+      vaultDoc(
+        'mount-d',
+        'Plain Jeans.md',
+        ['---', 'title: Plain Jeans', 'types:', '- bottom', '---', '', 'Sturdy.'].join('\n'),
+      ),
+    ]);
+
+    const result = await readCharacterVaultWardrobe('mount-d', 'char-d');
+    expect(result!.items[0].componentItemIds).toEqual([]);
   });
 });

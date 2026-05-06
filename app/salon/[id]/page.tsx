@@ -446,12 +446,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- outfit.refreshOutfit and invalidateWardrobe are stable (useCallback)
   }, [sseStreaming.streaming, sseStreaming.waitingForResponse, outfit.refreshOutfit, outfit.invalidateWardrobe])
 
-  // Equip slot handler that maps participantId -> characterId
+  // Equip slot handler that maps participantId -> characterId. The participant
+  // sidebar's per-slot dropdown is a "replace what's worn" gesture: picking an
+  // item swaps it in (`equipItem` — replace mode), choosing the empty option
+  // clears the slot entirely (`removeFromSlot` with no itemId). Layering (a
+  // t-shirt under a sweater) is a deliberate add via the wardrobe item picker
+  // or LLM tool calls, not the sidebar dropdown.
   const handleEquipSlot = useCallback(async (participantId: string, slot: string, itemId: string | null) => {
     const participant = chat?.participants.find(p => p.id === participantId)
     const characterId = participant?.character?.id
     if (characterId) {
-      await outfit.equipSlot(characterId, slot, itemId)
+      const slotKey = slot as 'top' | 'bottom' | 'footwear' | 'accessories'
+      if (itemId === null) {
+        await outfit.removeFromSlot(characterId, slotKey)
+      } else {
+        await outfit.equipItem(characterId, itemId)
+      }
       // If avatar generation is enabled, start polling for the auto-triggered avatar update
       if (chat?.avatarGenerationEnabled) {
         startAvatarPoll(characterId)

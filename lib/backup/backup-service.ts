@@ -58,7 +58,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     chatSettingsResult,
     folders,
     wardrobeItems,
-    outfitPresets,
   ] = await Promise.all([
     repos.characters.findAll(),
     repos.chats.findAll(),
@@ -82,9 +81,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     globalRepos.chatSettings.findByUserId(userId),
     // Get folders
     globalRepos.folders.findByUserId(userId),
-    // Get wardrobe items and outfit presets
+    // Get wardrobe items (composites are wardrobe items now; outfit presets retired)
     globalRepos.wardrobe.findAll(),
-    globalRepos.outfitPresets.findAll(),
   ]);
 
   // Exclude backup files from the file list - we don't want to back up old backups
@@ -152,7 +150,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     chatSettings,
     folders,
     wardrobeItems,
-    outfitPresets,
     characterPluginData,
     conversationAnnotations,
   };
@@ -229,7 +226,6 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       chatSettings: data.chatSettings?.length || 0,
       folders: data.folders?.length || 0,
       wardrobeItems: data.wardrobeItems?.length || 0,
-      outfitPresets: data.outfitPresets?.length || 0,
       npmPlugins: countNpmPlugins(),
       characterPluginData: data.characterPluginData?.length || 0,
       conversationAnnotations: data.conversationAnnotations?.length || 0,
@@ -353,7 +349,8 @@ export async function createBackup(userId: string): Promise<{
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'chat-settings.json'), data.chatSettings || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'folders.json'), data.folders || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'wardrobe-items.json'), data.wardrobeItems || []);
-    await writeJsonArrayFile(path.join(stagingDir, 'data', 'outfit-presets.json'), data.outfitPresets || []);
+    // outfit-presets.json is no longer written; pre-rework presets are folded into composite
+    // wardrobe items at restore time for back-compat with older backups.
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'character-plugin-data.json'), data.characterPluginData || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'conversation-annotations.json'), data.conversationAnnotations || []);
 

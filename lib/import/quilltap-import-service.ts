@@ -23,7 +23,72 @@ import type {
   ChatParticipantBase,
   Project,
 } from '@/lib/schemas/types';
-import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+
+/**
+ * Legacy outfit preset shape — only used to fold pre-rework `.qtap` exports
+ * into composite wardrobe items at import time. Kept local since the type is
+ * otherwise gone from the data model.
+ */
+interface LegacyOutfitPreset {
+  id: string;
+  characterId: string | null;
+  name: string;
+  description: string | null;
+  slots: {
+    top: string | null;
+    bottom: string | null;
+    footwear: string | null;
+    accessories: string | null;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+const LEGACY_PRESET_SLOT_ORDER: ReadonlyArray<keyof LegacyOutfitPreset['slots']> = [
+  'top',
+  'bottom',
+  'footwear',
+  'accessories',
+];
+
+/**
+ * Convert a legacy preset into a composite WardrobeItem. Preserves the preset id
+ * so any pre-rework reference remains valid. The existing UUID-remap path for
+ * wardrobe items rewrites it consistently.
+ */
+function legacyPresetToComposite(preset: LegacyOutfitPreset): WardrobeItem {
+  const types: WardrobeItemType[] = [];
+  const componentItemIds: string[] = [];
+  const seenTypes = new Set<WardrobeItemType>();
+  for (const slot of LEGACY_PRESET_SLOT_ORDER) {
+    const value = preset.slots?.[slot];
+    if (value) {
+      componentItemIds.push(value);
+      if (!seenTypes.has(slot)) {
+        seenTypes.add(slot);
+        types.push(slot);
+      }
+    }
+  }
+  // A composite must always declare at least one type. Fall back to "accessories"
+  // for malformed legacy presets where every slot is null.
+  if (types.length === 0) types.push('accessories');
+  return {
+    id: preset.id,
+    characterId: preset.characterId,
+    title: preset.name,
+    description: preset.description,
+    types,
+    componentItemIds,
+    appropriateness: null,
+    isDefault: false,
+    migratedFromClothingRecordId: null,
+    archivedAt: null,
+    createdAt: preset.createdAt,
+    updatedAt: preset.updatedAt,
+  };
+}
 import type {
   QuilltapExportManifest,
   QuilltapExport,
@@ -1095,9 +1160,11 @@ async function importCharacters(
           });
           idMaps.characters.set(character.id, newCharacter.id);
 
-          // Import wardrobe items for duplicated character
+          // Import wardrobe items for duplicated character (folding any legacy
+          // outfitPresets into composites for pre-rework `.qtap` exports).
           await importCharacterWardrobeItems(
             (rawCharacter as ExportedCharacter).wardrobeItems,
+            (rawCharacter as ExportedCharacter & { outfitPresets?: LegacyOutfitPreset[] }).outfitPresets,
             newCharacter.id,
             warnings
           );
@@ -1120,9 +1187,11 @@ async function importCharacters(
       const newCharacter = await repos.characters.create(charData);
       idMaps.characters.set(character.id, newCharacter.id);
 
-      // Import wardrobe items for this character
+      // Import wardrobe items for this character (folding any legacy
+      // outfitPresets into composites for pre-rework `.qtap` exports).
       await importCharacterWardrobeItems(
         (rawCharacter as ExportedCharacter).wardrobeItems,
+        (rawCharacter as ExportedCharacter & { outfitPresets?: LegacyOutfitPreset[] }).outfitPresets,
         newCharacter.id,
         warnings
       );
@@ -1156,18 +1225,48 @@ async function importCharacters(
 /**
  * Import wardrobe items for a character, assigning them to the new character ID.
  * Skips archetype items (characterId = null) since those are shared and not per-character.
+ *
+ * Back-compat: pre-rework `.qtap` exports may carry an `outfitPresets` array on
+ * the character payload. Each legacy preset is folded into a composite
+ * WardrobeItem (preserving preset.id so chat references stay valid). If the
+ * import already contains wardrobe items with a non-empty `componentItemIds`,
+ * we treat the export as post-rework and skip folding so we don't double-create
+ * the same composite.
  */
 async function importCharacterWardrobeItems(
   wardrobeItems: WardrobeItem[] | undefined,
+  legacyPresets: LegacyOutfitPreset[] | undefined,
   newCharacterId: string,
   warnings: string[]
 ): Promise<number> {
-  if (!wardrobeItems || wardrobeItems.length === 0) return 0;
+  let combined: WardrobeItem[] = wardrobeItems ? [...wardrobeItems] : [];
+
+  if (legacyPresets && legacyPresets.length > 0) {
+    const hasComposites = combined.some(
+      (item) => Array.isArray(item.componentItemIds) && item.componentItemIds.length > 0
+    );
+    if (hasComposites) {
+      moduleLogger.debug(
+        'Skipping legacy outfit-preset fold; export already contains composite wardrobe items',
+        { newCharacterId, legacyPresetCount: legacyPresets.length }
+      );
+    } else {
+      const folded = legacyPresets.map(legacyPresetToComposite);
+      moduleLogger.info('Folded legacy outfit presets into composite wardrobe items on import', {
+        newCharacterId,
+        legacyPresetCount: legacyPresets.length,
+        existingWardrobeItemCount: combined.length,
+      });
+      combined = [...combined, ...folded];
+    }
+  }
+
+  if (combined.length === 0) return 0;
 
   const globalRepos = getRepositories();
   let importedCount = 0;
 
-  for (const item of wardrobeItems) {
+  for (const item of combined) {
     // Skip archetype items (characterId = null) — they are shared, not per-character
     if (!item.characterId) {
       moduleLogger.debug('Skipping archetype wardrobe item during import', {

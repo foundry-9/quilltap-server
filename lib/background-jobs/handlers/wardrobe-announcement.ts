@@ -17,6 +17,12 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import type { WardrobeOutfitAnnouncementPayload } from '../queue-service';
 import { postOutfitChangeWhisper } from '@/lib/services/aurora-notifications/writer';
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import {
+  EquippedSlotsSchema,
+  type EquippedOutfitState,
+  type EquippedSlots,
+} from '@/lib/schemas/wardrobe.types';
 
 export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as WardrobeOutfitAnnouncementPayload;
@@ -41,13 +47,26 @@ export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Prom
     return;
   }
 
-  const equippedOutfit = (chat.equippedOutfit as Record<string, {
-    top: string | null;
-    bottom: string | null;
-    footwear: string | null;
-    accessories: string | null;
-  }> | null) ?? {};
-  const slots = equippedOutfit[characterId];
+  // equippedOutfit is keyed by characterId → EquippedSlots (arrays-per-slot).
+  // Parse defensively so legacy/null shapes can't crash the announcement job.
+  const equippedOutfit = (chat.equippedOutfit as EquippedOutfitState | null) ?? {};
+  const rawSlots = equippedOutfit[characterId];
+  let slots: EquippedSlots | null = null;
+  if (rawSlots) {
+    const parsed = EquippedSlotsSchema.safeParse(rawSlots);
+    if (parsed.success) {
+      slots = parsed.data;
+    } else {
+      logger.warn('[WardrobeAnnouncement] equippedOutfit slot shape failed validation, skipping', {
+        context: 'background-jobs.wardrobe-announcement',
+        chatId,
+        characterId,
+        issues: parsed.error.issues.slice(0, 3),
+      });
+      return;
+    }
+  }
+
   if (!slots) {
     logger.debug('[WardrobeAnnouncement] No equipped slots for character, skipping', {
       context: 'background-jobs.wardrobe-announcement',
@@ -57,15 +76,19 @@ export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Prom
     return;
   }
 
-  const equippedItemIds = Object.values(slots).filter((id): id is string => Boolean(id));
-  const equippedItems = equippedItemIds.length > 0
-    ? await repos.wardrobe.findByIds(equippedItemIds)
-    : [];
-  const itemsById = new Map(equippedItems.map((i) => [i.id, i]));
-  const titleFor = (slotId: string | null): string | null => {
-    if (!slotId) return null;
-    return itemsById.get(slotId)?.title ?? null;
-  };
+  const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots);
+
+  logger.debug('[WardrobeAnnouncement] Resolved equipped outfit for announcement', {
+    context: 'background-jobs.wardrobe-announcement',
+    chatId,
+    characterId,
+    leafCounts: {
+      top: resolved.leafItemsBySlot.top.length,
+      bottom: resolved.leafItemsBySlot.bottom.length,
+      footwear: resolved.leafItemsBySlot.footwear.length,
+      accessories: resolved.leafItemsBySlot.accessories.length,
+    },
+  });
 
   const character = await repos.characters.findById(characterId);
   const charName = character?.name ?? 'A character';
@@ -73,11 +96,6 @@ export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Prom
   await postOutfitChangeWhisper({
     chatId,
     characterName: charName,
-    outfit: {
-      top: titleFor(slots.top),
-      bottom: titleFor(slots.bottom),
-      footwear: titleFor(slots.footwear),
-      accessories: titleFor(slots.accessories),
-    },
+    outfit: resolved.outfitValues,
   });
 }

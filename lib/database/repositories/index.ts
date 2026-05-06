@@ -35,7 +35,6 @@ export { VectorIndicesRepository } from './vector-indices.repository';
 export { TfidfVocabularyRepository } from './tfidf-vocabulary.repository';
 export { EmbeddingStatusRepository } from './embedding-status.repository';
 export { WardrobeRepository } from './wardrobe.repository';
-export { OutfitPresetsRepository } from './outfit-presets.repository';
 export { CharacterPluginDataRepository } from './character-plugin-data.repository';
 export { ConversationAnnotationsRepository } from './conversation-annotations.repository';
 export { ConversationChunksRepository } from './conversation-chunks.repository';
@@ -73,7 +72,6 @@ import { VectorIndicesRepository } from './vector-indices.repository';
 import { TfidfVocabularyRepository } from './tfidf-vocabulary.repository';
 import { EmbeddingStatusRepository } from './embedding-status.repository';
 import { WardrobeRepository } from './wardrobe.repository';
-import { OutfitPresetsRepository } from './outfit-presets.repository';
 import { CharacterPluginDataRepository } from './character-plugin-data.repository';
 import { ConversationAnnotationsRepository } from './conversation-annotations.repository';
 import { ConversationChunksRepository } from './conversation-chunks.repository';
@@ -116,7 +114,6 @@ export interface RepositoryContainer {
   tfidfVocabularies: TfidfVocabularyRepository;
   embeddingStatus: EmbeddingStatusRepository;
   wardrobe: WardrobeRepository;
-  outfitPresets: OutfitPresetsRepository;
   characterPluginData: CharacterPluginDataRepository;
   conversationAnnotations: ConversationAnnotationsRepository;
   conversationChunks: ConversationChunksRepository;
@@ -171,7 +168,6 @@ export function createRepositories(): RepositoryContainer {
       tfidfVocabularies: new TfidfVocabularyRepository(),
       embeddingStatus: new EmbeddingStatusRepository(),
       wardrobe: new WardrobeRepository(),
-      outfitPresets: new OutfitPresetsRepository(),
       characterPluginData: new CharacterPluginDataRepository(),
       conversationAnnotations: new ConversationAnnotationsRepository(),
       conversationChunks: new ConversationChunksRepository(),

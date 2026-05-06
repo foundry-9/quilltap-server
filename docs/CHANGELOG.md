@@ -4,6 +4,53 @@
 
 ### 4.4-dev
 
+#### Wardrobe rework: arrays per slot, composite items, OutfitPreset eliminated
+
+Substantial change to the wardrobe data model.
+
+**Arrays per slot.** `EquippedSlots` slots are now `UUID[]` instead of `UUID|null` — a character can wear multiple items in the same slot (t-shirt under a sweater, layered accessories). Empty arrays replace nulls. `EMPTY_EQUIPPED_SLOTS` is now `{ top: [], bottom: [], footwear: [], accessories: [] }`.
+
+**Composite wardrobe items.** `WardrobeItem` gains `componentItemIds: UUID[]` — a populated array makes the item a composite ("Nice Jewelry" bundling earrings + locket + ring; "Rain Outfit" bundling raincoat + jeans + boots). Equipping a composite stores its own ID; expansion to leaves happens at read time via `lib/wardrobe/expand-composites.ts` (iterative DFS, cycle-tolerant, depth-capped at 4). `WardrobeRepository.create`/`update` rejects cycles via `detectComponentCycles` before persisting; the vault overlay code drops cycle-introducing component lists at read time without throwing.
+
+**`OutfitPreset` is eliminated.** The `outfit_presets` table and the `OutfitPresetsRepository` are gone. Existing presets are migrated into composite `WardrobeItem`s preserving their original IDs (so chat references, exports, and vault outfit-file `id` fields all stay valid). `OutfitPresetSchema`, `OutfitPreset` type, `getOverlaidOutfitPresets`, `parseOutfitPresetFile`, `buildOutfitPresetFile`, `CHARACTER_OUTFITS_FOLDER` — all deleted. The `Outfits/` vault folder is retired; existing files are tolerated but no longer parsed.
+
+**Equip primitives.** `lib/wardrobe/outfit-displacement.ts` rewritten. `equipWithDisplacement` and `unequipWithDisplacement` are gone. New API:
+
+- `equipItem(repos, chatId, characterId, item)` — replaces each slot in `item.types` with `[item.id]`.
+- `addToSlot(repos, chatId, characterId, slot, item)` — appends `item.id` (validates `slot ∈ item.types`; no-op if duplicate).
+- `removeFromSlot(repos, chatId, characterId, slot, itemId?)` — filters `itemId` out, or clears the slot if `itemId` omitted.
+- `computeDisplacedSlots(currentSlots, options)` — pure variant for frontend optimistic updates; `options = { mode, item?, slot?, itemId? }`.
+
+**LLM tool API.** Split into two tools that match LLM intent:
+
+- **`wardrobe_set_outfit`** — composite-only. `mode: 'wear' | 'remove'`. Wear puts the whole bundle on (replacing whatever was in those slots); remove takes the bundle off (filtering the composite's id out of every slot it covered, leaving any layered items alone). Rejects leaf items.
+- **`wardrobe_change_item`** — atomic-only. `mode: 'equip' | 'add_to_slot' | 'remove_from_slot' | 'clear_slot'`. Same shape as the previous unified tool's mode dispatch; rejects composite items (which belong to `wardrobe_set_outfit`). For `clear_slot` and item-less `remove_from_slot`, no item is named so the composite check is skipped.
+
+The `list_wardrobe` tool flags composites with `is_composite` / `component_item_ids` / `component_titles` so the LLM can see which items bundle others. `create_wardrobe_item` gains `component_item_ids` and `component_titles` parameters: when supplied, the new item is a composite, its `types` is computed from the union of the components' `types` (any LLM-supplied `types` is overridden), and the repository's cycle check rejects pathological compositions.
+
+Text-block aliases: `[[CHANGE_ITEM ...]]`, `[[SET_OUTFIT ...]]`, plus shorthand `[[EQUIP]]` / `[[LAYER]]` / `[[SWAP]]` / `[[UNEQUIP]]` for the atomic tool and `[[WEAR]]` / `[[OUTFIT]]` for the composite tool.
+
+**Sidebar API.** `POST /api/v1/chats/[id]?action=equip` body changed from `{ characterId, slot, itemId }` to `{ characterId, mode, slot?, itemId? }`. `useOutfit` hook exposes `equipItem`, `addToSlot`, `removeFromSlot` callbacks. The participant sidebar dropdown uses `mode: 'equip'` (replace) for selecting a new item; `null` clears the slot. `handleGetOutfitSummary` now returns per-slot arrays of `{itemId, title}`.
+
+**LLM outfit picker.** `chooseLLMOutfit` prompt updated to instruct the model to emit arrays per slot, and to allow picking a composite as a single item that covers multiple slots. Parser tolerates both array and legacy single-id-or-null shapes, dedupes within a slot, validates slot membership. Composite items are flagged in the wardrobe listing the LLM sees.
+
+**Vault round-trip.** `buildWardrobeItemFile(item, slugByItemId)` now emits `componentItems:` in frontmatter as a slug array (UUID fallback on slug collision). `parseWardrobeItemFile` reads `componentItems:` and resolves slugs back to UUIDs via the existing slug map. Self-cycles and unknown refs are dropped at read time with warnings; the item itself is retained.
+
+**Migrations.** Four sequential migrations under `migrations/scripts/`:
+
+1. `add-wardrobe-component-item-ids-v1.ts` — `ALTER TABLE wardrobe_items ADD COLUMN componentItemIds TEXT DEFAULT NULL`. Idempotent.
+2. `migrate-outfit-presets-to-composites-v1.ts` — folds `outfit_presets` rows into composite `wardrobe_items` rows, preserving each preset's UUID. Idempotent.
+3. `convert-equipped-outfit-to-arrays-v1.ts` — rewrites every chat's `equippedOutfit` JSON: `null` → `[]`, `<uuid>` → `[<uuid>]`. Detects already-migrated rows via `Array.isArray`. Skips `pendingOutfitNotifications` (opaque metadata, not slot-shaped).
+4. `drop-outfit-presets-table-v1.ts` — snapshots the table to `<dataDir>/backup/pre-drop-outfit-presets.json`, drops the index, drops the table.
+
+**Read sites updated.** New helper `lib/wardrobe/resolve-equipped.ts` centralizes the load-then-expand-then-titles pattern. Consumers updated: image-generation-handler, story-background, image-scene-tasks, character-avatar, scene-state-tracking, appearance-resolution, wardrobe-announcement.
+
+**Import / export / backup.** `lib/backup/backup-service.ts` no longer writes `outfit-presets.json`; restore-service retains a back-compat reader that folds old preset data into composite wardrobe items at restore time. `quilltap-import-service.ts` likewise folds legacy `outfitPresets` blocks from old `.qtap` exports into composites at import. `public/schemas/qtap-export.schema.json`: `WardrobeItem` gains `componentItemIds`; `equippedOutfit` slot shape accepts both old (string|null) and new (UUID array) via oneOf; `outfitPresets` is marked deprecated/legacy but retained so old exports validate.
+
+**Files deleted.** `lib/database/repositories/outfit-presets.repository.ts`, `app/api/v1/characters/[id]/wardrobe/presets/route.ts` and `[presetId]/route.ts`, `components/wardrobe/outfit-preset-card.tsx` and `outfit-preset-list.tsx`.
+
+**Tests updated.** All wardrobe-related unit tests rewritten for the new API. Added coverage for the new equip primitives (multi-slot dress, layering, removal), composite expansion (cycle handling, depth cap, leaf-only output), vault `componentItems:` round-trip, and the new tool/API mode-dispatch surfaces.
+
 #### Outfit selection: pass full description, personality, and manifesto to the LLM
 
 `lib/memory/cheap-llm-tasks/outfit-selection.ts` previously sent only `character.personality`, hard-truncated to 300 chars, and `scenarioText` truncated to 500 chars. The LLM had no idea what the character was like from the outside, what they publicly were, or what the load-bearing facts of their existence were. `chooseLLMOutfit` now takes `characterDescription`, `characterPersonality`, and `characterManifesto` as separate full-text args (each emitted only when non-empty, with a labeled header so the LLM knows which vantage point it's reading), and the scenario is passed through untruncated. Caller updated in `app/api/v1/chats/route.ts` to pass `character.description`, `character.personality`, and `character.manifesto`.

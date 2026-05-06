@@ -50,6 +50,9 @@ import {
   wardrobeUpdateOutfitToolDefinition,
 } from '@/lib/tools/wardrobe-update-outfit-tool';
 import {
+  wardrobeChangeItemToolDefinition,
+} from '@/lib/tools/wardrobe-change-item-tool';
+import {
   wardrobeCreateItemToolDefinition,
 } from '@/lib/tools/wardrobe-create-item-tool';
 import { docReadFileTool } from '@/lib/tools/doc-read-file-tool';
@@ -193,8 +196,11 @@ export interface BuildToolsOptions {
   /** Whether to enable list_wardrobe tool (gated by canDressThemselves) */
   wardrobeList?: boolean;
 
-  /** Whether to enable update_outfit_item tool (gated by canDressThemselves) */
+  /** Whether to enable wardrobe_set_outfit tool — composite outfits only (gated by canDressThemselves) */
   wardrobeUpdateOutfit?: boolean;
+
+  /** Whether to enable wardrobe_change_item tool — atomic items only (gated by canDressThemselves) */
+  wardrobeChangeItem?: boolean;
 
   /** Whether to enable create_wardrobe_item tool (gated by canCreateOutfits) */
   wardrobeCreateItem?: boolean;
@@ -261,6 +267,7 @@ export async function buildToolsForProvider(
       whisper: options.whisper,
       wardrobeList: options.wardrobeList,
       wardrobeUpdateOutfit: options.wardrobeUpdateOutfit,
+      wardrobeChangeItem: options.wardrobeChangeItem,
       wardrobeCreateItem: options.wardrobeCreateItem,
       shellInteractivity: options.shellInteractivity,
       documentEditing: options.documentEditing,
@@ -347,6 +354,9 @@ export async function buildToolsForProvider(
   }
   if (options.wardrobeUpdateOutfit) {
     universalTools.push(wardrobeUpdateOutfitToolDefinition as UniversalTool);
+  }
+  if (options.wardrobeChangeItem) {
+    universalTools.push(wardrobeChangeItemToolDefinition as UniversalTool);
   }
   if (options.wardrobeCreateItem) {
     universalTools.push(wardrobeCreateItemToolDefinition as UniversalTool);

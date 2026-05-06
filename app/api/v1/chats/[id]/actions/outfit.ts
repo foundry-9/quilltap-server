@@ -1,8 +1,14 @@
 /**
  * Chats API v1 - Outfit Actions
  *
- * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state for the chat
- * POST /api/v1/chats/[id]?action=equip - Equip/unequip a wardrobe item in a slot
+ * GET /api/v1/chats/[id]?action=outfit         — Get equipped outfit state
+ * GET /api/v1/chats/[id]?action=outfit-summary — Per-character resolved title summary
+ * POST /api/v1/chats/[id]?action=equip         — Mutate equipped state
+ *
+ * The POST body uses the same `mode` enum as the `wardrobe_set_outfit` LLM
+ * tool: `equip`, `add_to_slot`, `remove_from_slot`, `clear_slot`. Internally
+ * each mode dispatches to the matching primitive in
+ * `lib/wardrobe/outfit-displacement.ts`.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,16 +16,45 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { serverError, notFound, badRequest } from '@/lib/api/responses';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
-import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
+import {
+  equipItem,
+  addToSlot,
+  removeFromSlot,
+} from '@/lib/wardrobe/outfit-displacement';
+import { expandComposites } from '@/lib/wardrobe/expand-composites';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
-import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 
-const equipSlotSchema = z.object({
-  characterId: z.string().min(1, 'characterId is required'),
-  slot: z.enum(['top', 'bottom', 'footwear', 'accessories']),
-  itemId: z.string().nullable(),
-});
+const equipBodySchema = z
+  .object({
+    characterId: z.string().min(1, 'characterId is required'),
+    mode: z.enum(['equip', 'add_to_slot', 'remove_from_slot', 'clear_slot']),
+    slot: z.enum(['top', 'bottom', 'footwear', 'accessories']).optional(),
+    itemId: z.string().nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      (value.mode === 'add_to_slot' ||
+        value.mode === 'remove_from_slot' ||
+        value.mode === 'clear_slot') &&
+      !value.slot
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['slot'],
+        message: `slot is required for mode "${value.mode}"`,
+      });
+    }
+    if ((value.mode === 'equip' || value.mode === 'add_to_slot') && !value.itemId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['itemId'],
+        message: `itemId is required for mode "${value.mode}"`,
+      });
+    }
+  });
 
 /**
  * GET ?action=outfit — Return the full equipped outfit state for this chat
@@ -42,11 +77,10 @@ export async function handleGetOutfit(
 
 /**
  * GET ?action=outfit-summary — Return per-character equipped outfit with
- * resolved item titles. Used by the new-chat modal's continuation flow to
- * show users what each character was wearing at the end of the source chat
- * (so they can verify before clicking "Continue"). Shape:
+ * resolved item titles. Each slot is an array of items (composites are
+ * expanded to their leaves before mapping). Shape:
  *
- *   { summary: { [characterId]: { [slot]: { itemId, title } | null } } }
+ *   { summary: { [characterId]: { [slot]: [{ itemId, title }, ...] } } }
  */
 export async function handleGetOutfitSummary(
   chatId: string,
@@ -62,38 +96,53 @@ export async function handleGetOutfitSummary(
 
     const equippedOutfit = (await repos.chats.getEquippedOutfit(chatId)) ?? {};
 
-    // Collect every itemId across all characters/slots, then bulk-resolve titles.
+    // Collect every itemId across all characters/slots, then bulk-resolve.
     const allItemIds = new Set<string>();
     for (const slots of Object.values(equippedOutfit)) {
       if (!slots) continue;
-      for (const id of Object.values(slots)) {
-        if (typeof id === 'string' && id.length > 0) allItemIds.add(id);
-      }
-    }
-
-    const itemsById = new Map<string, { id: string; title: string }>();
-    if (allItemIds.size > 0) {
-      const items = await repos.wardrobe.findByIds(Array.from(allItemIds));
-      for (const item of items) {
-        itemsById.set(item.id, { id: item.id, title: item.title });
-      }
-    }
-
-    const summary: Record<string, Record<string, { itemId: string; title: string } | null>> = {};
-    for (const [characterId, slots] of Object.entries(equippedOutfit)) {
-      const slotMap: Record<string, { itemId: string; title: string } | null> = {
-        top: null,
-        bottom: null,
-        footwear: null,
-        accessories: null,
-      };
-      if (slots) {
-        for (const [slot, itemId] of Object.entries(slots)) {
-          if (typeof itemId !== 'string' || itemId.length === 0) continue;
-          const item = itemsById.get(itemId);
-          if (item) slotMap[slot] = { itemId: item.id, title: item.title };
+      for (const slotKey of WARDROBE_SLOT_TYPES) {
+        for (const id of slots[slotKey] ?? []) {
+          if (typeof id === 'string' && id.length > 0) allItemIds.add(id);
         }
       }
+    }
+
+    const itemsById = new Map<string, WardrobeItem>();
+    if (allItemIds.size > 0) {
+      const fetched = await repos.wardrobe.findByIds(Array.from(allItemIds));
+      for (const item of fetched) itemsById.set(item.id, item);
+    }
+
+    type SummaryEntry = { itemId: string; title: string };
+    const summary: Record<string, Record<string, SummaryEntry[]>> = {};
+
+    for (const [characterId, slots] of Object.entries(equippedOutfit)) {
+      const slotMap: Record<string, SummaryEntry[]> = {
+        top: [],
+        bottom: [],
+        footwear: [],
+        accessories: [],
+      };
+
+      if (slots) {
+        for (const slotKey of WARDROBE_SLOT_TYPES) {
+          const equippedIds = slots[slotKey] ?? [];
+          if (equippedIds.length === 0) continue;
+
+          const { leafIds } = expandComposites(equippedIds, itemsById);
+          const seen = new Set<string>();
+          for (const leafId of leafIds) {
+            if (seen.has(leafId)) continue;
+            const leaf = itemsById.get(leafId);
+            if (!leaf) continue;
+            // Only project the leaf into slots its own types cover.
+            if (!leaf.types.includes(slotKey)) continue;
+            slotMap[slotKey].push({ itemId: leaf.id, title: leaf.title });
+            seen.add(leafId);
+          }
+        }
+      }
+
       summary[characterId] = slotMap;
     }
 
@@ -105,7 +154,10 @@ export async function handleGetOutfitSummary(
 }
 
 /**
- * POST ?action=equip — Update a single equipped slot for a character in this chat
+ * POST ?action=equip — Mutate equipped state for a character in this chat.
+ *
+ * Body: `{ characterId, mode, slot?, itemId? }` — same `mode` semantics as
+ * the `wardrobe_set_outfit` LLM tool.
  */
 export async function handleEquipSlot(
   req: NextRequest,
@@ -115,55 +167,78 @@ export async function handleEquipSlot(
   const { repos } = ctx;
   try {
     const body = await req.json();
-    const { characterId, slot, itemId } = equipSlotSchema.parse(body);
+    const { characterId, mode, slot, itemId } = equipBodySchema.parse(body);
 
     logger.debug('[Chats v1] Equipping wardrobe slot', {
       chatId,
       characterId,
+      mode,
       slot,
-      itemId,
+      itemId: itemId ?? null,
       context: 'wardrobe',
     });
 
-    // Equip or unequip with full displacement of multi-type items
     let updatedSlots;
 
-    if (itemId) {
-      // Equipping: verify the wardrobe item exists and belongs to this character.
-      // Use the per-character lookup so vault-only items (no DB row) resolve via
-      // the document-store overlay.
-      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId);
+    if (mode === 'equip') {
+      // itemId guaranteed by schema. Validate the item resolves and covers
+      // at least one slot we recognize.
+      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!);
       if (!item) {
         return notFound('Wardrobe item');
       }
-      if (!item.types.includes(slot as typeof item.types[number])) {
-        return badRequest(`Wardrobe item "${item.title}" does not cover the ${slot} slot`);
+      updatedSlots = await equipItem(repos, chatId, characterId, item);
+      logger.info('[Chats v1] Wardrobe item equipped (replace)', {
+        chatId, characterId, itemId: item.id, slotsAffected: item.types,
+        context: 'wardrobe',
+      });
+    } else if (mode === 'add_to_slot') {
+      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!);
+      if (!item) {
+        return notFound('Wardrobe item');
       }
-
-      // Equip in all item's type slots, displacing any conflicting items
-      updatedSlots = await equipWithDisplacement(repos, chatId, characterId, item);
+      if (!item.types.includes(slot as WardrobeItemType)) {
+        return badRequest(
+          `Wardrobe item "${item.title}" does not cover the ${slot} slot`,
+        );
+      }
+      updatedSlots = await addToSlot(
+        repos,
+        chatId,
+        characterId,
+        slot as WardrobeItemType,
+        item,
+      );
+      logger.info('[Chats v1] Wardrobe item layered into slot', {
+        chatId, characterId, slot, itemId: item.id, context: 'wardrobe',
+      });
+    } else if (mode === 'remove_from_slot') {
+      updatedSlots = await removeFromSlot(
+        repos,
+        chatId,
+        characterId,
+        slot as WardrobeItemType,
+        itemId ?? undefined,
+      );
+      logger.info('[Chats v1] Wardrobe item removed from slot', {
+        chatId, characterId, slot, itemId: itemId ?? null, context: 'wardrobe',
+      });
     } else {
-      // Unequipping: clear all slots covered by the item currently in this slot
-      updatedSlots = await unequipWithDisplacement(repos, chatId, characterId, slot as WardrobeItemType);
+      // mode === 'clear_slot'
+      updatedSlots = await removeFromSlot(
+        repos,
+        chatId,
+        characterId,
+        slot as WardrobeItemType,
+      );
+      logger.info('[Chats v1] Wardrobe slot cleared', {
+        chatId, characterId, slot, context: 'wardrobe',
+      });
     }
 
     if (!updatedSlots) {
       return serverError('Failed to update equipped slot');
     }
-
-    logger.info('[Chats v1] Wardrobe slot updated', {
-      chatId,
-      characterId,
-      slot,
-      itemId,
-      context: 'wardrobe',
-    });
-
-    // Phase D: outfit-change context is now delivered via a debounced Aurora
-    // whisper (see `enqueueWardrobeOutfitAnnouncement` below). The previous
-    // per-turn `pendingOutfitNotifications` flow has been retired — the
-    // transcript-resident Aurora announcement is the single source of truth
-    // for both the user and the LLM.
 
     // Trigger avatar generation if enabled for this chat
     await triggerAvatarGenerationIfEnabled(repos, {

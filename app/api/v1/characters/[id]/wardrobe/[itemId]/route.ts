@@ -100,10 +100,11 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; itemId: str
         return notFound('Wardrobe item');
       }
 
-      // Clean up references before deleting
+      // Clean up equipped references before deleting. Composite items that
+      // reference this item via `componentItemIds` are intentionally left as-is;
+      // expand-time resolution drops unknown ids without surfacing an error.
       try {
         await repos.chats.removeEquippedItemFromAllChats(itemId);
-        await repos.outfitPresets.removeItemFromPresets(itemId);
         logger.debug('[Wardrobe v1] Cleaned up equipped references', { characterId: id, itemId });
       } catch (cleanupError) {
         logger.warn('[Wardrobe v1] Cleanup of equipped references had issues, proceeding with delete', {

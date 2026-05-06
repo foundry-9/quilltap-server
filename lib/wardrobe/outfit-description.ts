@@ -4,22 +4,23 @@
  * Single source of truth for converting equipped wardrobe slot values
  * into a human-readable description of what a character is wearing.
  *
- * A null slot means the slot is empty — nothing is worn there.
- * Defaults are set at chat startup, not inferred.
+ * Each slot holds an array of item titles. An empty array means nothing is
+ * worn in that slot. Multiple titles in a slot represent layering (e.g.
+ * t-shirt + sweater); they're listed in the order callers provided them
+ * and the LLM is expected to figure out what shows.
  *
  * @module wardrobe/outfit-description
  */
 
 /**
- * Slot values for describing an outfit. Each value is either a
- * human-readable item description (e.g. "silk blouse") or null
- * meaning the slot is empty.
+ * Slot values for describing an outfit. Each slot is an array of human-readable
+ * item titles. Empty array means the slot is empty.
  */
 export interface OutfitSlotValues {
-  top: string | null
-  bottom: string | null
-  footwear: string | null
-  accessories: string | null
+  top: string[]
+  bottom: string[]
+  footwear: string[]
+  accessories: string[]
 }
 
 /**
@@ -27,22 +28,21 @@ export interface OutfitSlotValues {
  * based on their equipped wardrobe slots.
  *
  * Rules:
- * - All four null → "- completely naked and unadorned"
- * - Top AND bottom null → "- naked" (footwear/accessories listed separately)
- * - Only top null → "- **top:** topless"
- * - Only bottom null → "- **bottom:** bottomless"
- * - Footwear null → "- **footwear:** barefoot"
- * - Accessories null → "- **accessories:** no accessories"
- * - Non-null → "- **{slot}:** {value}"
+ * - All four empty → "- completely naked and unadorned"
+ * - Top AND bottom empty → "- naked" (footwear/accessories listed separately)
+ * - Only top empty → "- **top:** topless"
+ * - Only bottom empty → "- **bottom:** bottomless"
+ * - Footwear empty → "- **footwear:** barefoot"
+ * - Accessories empty → "- **accessories:** no accessories"
+ * - Multiple items in a slot → comma-joined under the slot label
  *
  * Slots that share the same value (e.g. a single multi-slot item equipped
- * across top/bottom/footwear/accessories) are collapsed to one line:
- * "- **top, bottom, footwear, accessories:** {value}".
+ * across top/bottom/footwear/accessories) are collapsed to one line.
  */
 export function describeOutfit(slots: OutfitSlotValues): string {
   const { top, bottom, footwear, accessories } = slots
 
-  if (top === null && bottom === null && footwear === null && accessories === null) {
+  if (top.length === 0 && bottom.length === 0 && footwear.length === 0 && accessories.length === 0) {
     return '- completely naked and unadorned\n'
   }
 
@@ -54,14 +54,17 @@ export function describeOutfit(slots: OutfitSlotValues): string {
     else groups.set(value, [slot])
   }
 
-  if (top === null && bottom === null) {
+  const joinOrFallback = (items: string[], fallback: string): string =>
+    items.length === 0 ? fallback : items.join(', ')
+
+  if (top.length === 0 && bottom.length === 0) {
     lines.push('- naked')
   } else {
-    addSlot('top', top ?? 'topless')
-    addSlot('bottom', bottom ?? 'bottomless')
+    addSlot('top', joinOrFallback(top, 'topless'))
+    addSlot('bottom', joinOrFallback(bottom, 'bottomless'))
   }
-  addSlot('footwear', footwear ?? 'barefoot')
-  addSlot('accessories', accessories ?? 'no accessories')
+  addSlot('footwear', joinOrFallback(footwear, 'barefoot'))
+  addSlot('accessories', joinOrFallback(accessories, 'no accessories'))
 
   for (const [value, slotsForValue] of groups) {
     lines.push(`- **${slotsForValue.join(', ')}:** ${value}`)

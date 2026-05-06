@@ -270,6 +270,20 @@ export {
 } from './handlers/wardrobe-update-outfit-handler';
 
 export {
+  wardrobeChangeItemToolDefinition,
+  validateWardrobeChangeItemInput,
+  type WardrobeChangeItemToolInput,
+  type WardrobeChangeItemToolOutput,
+} from './wardrobe-change-item-tool';
+
+export {
+  executeWardrobeChangeItemTool,
+  formatWardrobeChangeItemResults,
+  WardrobeChangeItemError,
+  type WardrobeChangeItemToolContext,
+} from './handlers/wardrobe-change-item-handler';
+
+export {
   wardrobeCreateItemToolDefinition,
   validateWardrobeCreateItemInput,
   type WardrobeCreateItemToolInput,

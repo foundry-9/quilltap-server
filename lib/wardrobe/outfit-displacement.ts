@@ -1,215 +1,202 @@
 /**
- * Outfit Displacement Utilities
+ * Outfit Equip Primitives
  *
- * When equipping a wardrobe item, any items currently occupying conflicting
- * slots must be fully unequipped — including from slots beyond the one being
- * changed. For example, equipping a new top when a dress (types: ["top","bottom"])
- * is currently equipped should also clear the bottom slot.
+ * Three primitives mutate equipped state, named after their cascade rule:
  *
- * Similarly, when unequipping an item, all slots that item covers should be
- * set to null.
+ *   - `equipItem(item)`  — replace each slot in `item.types` with `[item.id]`.
+ *                          The default behavior of "putting something on";
+ *                          composites are stored as their own id, expansion
+ *                          to leaves happens at read time.
+ *   - `addToSlot(item, slot)` — append `item.id` to that slot's array.
+ *                               For layering ("also wear the cardigan").
+ *   - `removeFromSlot(slot, itemId?)` — filter `itemId` out of the slot's
+ *                                       array. With `itemId` omitted, clears
+ *                                       the slot entirely.
+ *
+ * `computeDisplacedSlots` is a pure (no-DB) variant for frontend optimistic
+ * updates and unit tests.
  *
  * @module wardrobe/outfit-displacement
  */
 
 import { logger } from '@/lib/logger';
 import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 
-/** Minimal repository interfaces needed for displacement logic */
+/** Minimal repository interfaces needed for these primitives */
 export interface DisplacementRepos {
-  wardrobe: {
-    findByIdForCharacter(
-      characterId: string,
-      id: string,
-    ): Promise<{ id: string; types: WardrobeItemType[] } | null>;
-  };
   chats: {
     getEquippedOutfitForCharacter(chatId: string, characterId: string): Promise<EquippedSlots | null>;
     setEquippedOutfit(chatId: string, characterId: string, slots: EquippedSlots): Promise<EquippedSlots | null>;
   };
 }
 
-/**
- * Compute the new equipped slots after equipping an item, with displacement.
- *
- * For each slot type of the new item:
- *   - If an existing item occupies that slot, ALL of that existing item's
- *     type slots are cleared (even ones the new item doesn't cover).
- *
- * Then the new item is placed in all its type slots.
- *
- * @returns The updated EquippedSlots after displacement and equipping
- */
-export async function equipWithDisplacement(
+function freshSlots(): EquippedSlots {
+  return { top: [], bottom: [], footwear: [], accessories: [] };
+}
+
+function cloneSlots(slots: EquippedSlots): EquippedSlots {
+  return {
+    top: [...slots.top],
+    bottom: [...slots.bottom],
+    footwear: [...slots.footwear],
+    accessories: [...slots.accessories],
+  };
+}
+
+async function loadSlots(
   repos: DisplacementRepos,
   chatId: string,
   characterId: string,
-  newItem: { id: string; types: WardrobeItemType[] }
 ): Promise<EquippedSlots> {
-  const currentSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
-  const slots: EquippedSlots = currentSlots
-    ? { ...currentSlots }
-    : { top: null, bottom: null, footwear: null, accessories: null };
+  const current = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
+  return current ? cloneSlots(current) : freshSlots();
+}
 
-  // Collect all item IDs that will be displaced
-  const displacedItemIds = new Set<string>();
+/**
+ * Equip an item: for each slot in `item.types`, replace that slot's array
+ * with `[item.id]`. Existing items in the affected slots are dropped.
+ *
+ * Composite items are stored as their own ID — expansion to leaves happens
+ * at read time via `expandComposites`.
+ */
+export async function equipItem(
+  repos: DisplacementRepos,
+  chatId: string,
+  characterId: string,
+  newItem: { id: string; types: WardrobeItemType[] },
+): Promise<EquippedSlots> {
+  const slots = await loadSlots(repos, chatId, characterId);
+
   for (const slotType of newItem.types) {
-    const currentItemId = slots[slotType];
-    if (currentItemId && currentItemId !== newItem.id) {
-      displacedItemIds.add(currentItemId);
-    }
+    slots[slotType] = [newItem.id];
   }
 
-  // For each displaced item, clear ALL its type slots
-  for (const displacedId of displacedItemIds) {
-    const displacedItem = await repos.wardrobe.findByIdForCharacter(characterId, displacedId);
-    if (displacedItem) {
-      for (const itemType of displacedItem.types) {
-        // Only clear if still pointing to the displaced item
-        if (slots[itemType] === displacedId) {
-          slots[itemType] = null;
-          logger.debug('[Outfit Displacement] Cleared displaced item from slot', {
-            chatId, characterId, slot: itemType,
-            displacedItemId: displacedId, newItemId: newItem.id,
-            context: 'wardrobe',
-          });
-        }
-      }
-    }
-  }
-
-  // Equip the new item in all its type slots
-  for (const slotType of newItem.types) {
-    slots[slotType] = newItem.id;
-  }
-
-  // Persist the updated slots
   const result = await repos.chats.setEquippedOutfit(chatId, characterId, slots);
 
-  logger.debug('[Outfit Displacement] Equipped item with displacement', {
-    chatId, characterId,
-    newItemId: newItem.id, newItemTypes: newItem.types,
-    displacedCount: displacedItemIds.size,
-    resultSlots: result,
+  logger.debug('[Outfit] Equipped item (replace)', {
     context: 'wardrobe',
+    chatId, characterId,
+    itemId: newItem.id,
+    types: newItem.types,
+    resultSlots: result,
   });
 
   return result ?? slots;
 }
 
 /**
- * Unequip an item from a slot, clearing ALL slots that item covers.
- *
- * If the slot is already empty, just returns the current state.
- * If the item in the slot covers multiple types, all are set to null.
- *
- * @returns The updated EquippedSlots after unequipping
+ * Append `item.id` to the given slot's array. Validates that
+ * `slot ∈ item.types`. No-op if the item is already in the slot.
  */
-export async function unequipWithDisplacement(
+export async function addToSlot(
   repos: DisplacementRepos,
   chatId: string,
   characterId: string,
-  slot: WardrobeItemType
+  slot: WardrobeItemType,
+  item: { id: string; types: WardrobeItemType[] },
 ): Promise<EquippedSlots> {
-  const currentSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
-  const slots: EquippedSlots = currentSlots
-    ? { ...currentSlots }
-    : { top: null, bottom: null, footwear: null, accessories: null };
+  if (!item.types.includes(slot)) {
+    throw new Error(
+      `Item ${item.id} (types=[${item.types.join(',')}]) cannot occupy slot '${slot}'`,
+    );
+  }
 
-  const currentItemId = slots[slot];
+  const slots = await loadSlots(repos, chatId, characterId);
 
-  if (!currentItemId) {
-    // Slot already empty, nothing to do
+  if (!slots[slot].includes(item.id)) {
+    slots[slot] = [...slots[slot], item.id];
+  }
+
+  const result = await repos.chats.setEquippedOutfit(chatId, characterId, slots);
+  logger.debug('[Outfit] Added item to slot', {
+    context: 'wardrobe',
+    chatId, characterId, slot,
+    itemId: item.id,
+    resultSlots: result,
+  });
+  return result ?? slots;
+}
+
+/**
+ * Remove a specific item from the given slot's array. If `itemId` is
+ * omitted, clears the slot entirely.
+ */
+export async function removeFromSlot(
+  repos: DisplacementRepos,
+  chatId: string,
+  characterId: string,
+  slot: WardrobeItemType,
+  itemId?: string,
+): Promise<EquippedSlots> {
+  const slots = await loadSlots(repos, chatId, characterId);
+
+  if (!itemId) {
+    slots[slot] = [];
+  } else {
+    slots[slot] = slots[slot].filter((id) => id !== itemId);
+  }
+
+  const result = await repos.chats.setEquippedOutfit(chatId, characterId, slots);
+  logger.debug('[Outfit] Removed item from slot', {
+    context: 'wardrobe',
+    chatId, characterId, slot,
+    itemId: itemId ?? null,
+    resultSlots: result,
+  });
+  return result ?? slots;
+}
+
+/** Pure-function variants for frontend optimistic updates. */
+
+export type DisplacementMode = 'equip' | 'add_to_slot' | 'remove_from_slot' | 'clear_slot';
+
+export interface ComputeDisplacedOptions {
+  mode: DisplacementMode;
+  /** Required for `equip` and `add_to_slot`. */
+  item?: { id: string; types: string[] };
+  /** Required for `add_to_slot`, `remove_from_slot`, `clear_slot`. */
+  slot?: WardrobeItemType;
+  /** Filter target for `remove_from_slot`; omit to clear the slot. */
+  itemId?: string;
+}
+
+export function computeDisplacedSlots(
+  currentSlots: EquippedSlots,
+  options: ComputeDisplacedOptions,
+): EquippedSlots {
+  const slots = cloneSlots(currentSlots);
+
+  if (options.mode === 'equip') {
+    if (!options.item) return slots;
+    for (const slotType of options.item.types as WardrobeItemType[]) {
+      slots[slotType] = [options.item.id];
+    }
     return slots;
   }
 
-  // Look up the item to find all its type slots
-  const currentItem = await repos.wardrobe.findByIdForCharacter(characterId, currentItemId);
-  if (currentItem) {
-    for (const itemType of currentItem.types) {
-      if (slots[itemType] === currentItemId) {
-        slots[itemType] = null;
-        logger.debug('[Outfit Displacement] Cleared unequipped item from slot', {
-          chatId, characterId, slot: itemType,
-          itemId: currentItemId,
-          context: 'wardrobe',
-        });
-      }
+  if (options.mode === 'add_to_slot') {
+    if (!options.item || !options.slot) return slots;
+    if (!slots[options.slot].includes(options.item.id)) {
+      slots[options.slot] = [...slots[options.slot], options.item.id];
     }
-  } else {
-    // Item not found (deleted?), just clear the requested slot
-    slots[slot] = null;
+    return slots;
   }
 
-  // Persist
-  const result = await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-
-  logger.debug('[Outfit Displacement] Unequipped item with displacement', {
-    chatId, characterId, slot,
-    itemId: currentItemId,
-    slotsCleared: currentItem?.types ?? [slot],
-    context: 'wardrobe',
-  });
-
-  return result ?? slots;
-}
-
-/**
- * Apply displacement logic for optimistic frontend updates.
- *
- * Given the current slots, wardrobe items cache, the slot being changed,
- * and the new item ID (or null for unequip), returns the new slots state.
- *
- * This is a pure function (no DB access) for use in the frontend.
- */
-export function computeDisplacedSlots(
-  currentSlots: EquippedSlots,
-  wardrobeItems: Array<{ id: string; types: string[] }>,
-  slot: WardrobeItemType,
-  newItemId: string | null
-): EquippedSlots {
-  const slots = { ...currentSlots };
-
-  if (newItemId === null) {
-    // Unequip: find what's in this slot and clear all its type slots
-    const currentItemId = slots[slot];
-    if (currentItemId) {
-      const currentItem = wardrobeItems.find(i => i.id === currentItemId);
-      if (currentItem) {
-        for (const itemType of currentItem.types) {
-          if (slots[itemType as WardrobeItemType] === currentItemId) {
-            slots[itemType as WardrobeItemType] = null;
-          }
-        }
-      } else {
-        slots[slot] = null;
-      }
+  if (options.mode === 'remove_from_slot') {
+    if (!options.slot) return slots;
+    if (!options.itemId) {
+      slots[options.slot] = [];
+    } else {
+      const target = options.itemId;
+      slots[options.slot] = slots[options.slot].filter((id) => id !== target);
     }
-  } else {
-    // Equip: find the new item's types, displace conflicting items, then equip
-    const newItem = wardrobeItems.find(i => i.id === newItemId);
-    const newItemTypes = newItem ? newItem.types : [slot];
+    return slots;
+  }
 
-    // Displace conflicting items
-    for (const slotType of newItemTypes) {
-      const currentItemId = slots[slotType as WardrobeItemType];
-      if (currentItemId && currentItemId !== newItemId) {
-        const currentItem = wardrobeItems.find(i => i.id === currentItemId);
-        if (currentItem) {
-          for (const itemType of currentItem.types) {
-            if (slots[itemType as WardrobeItemType] === currentItemId) {
-              slots[itemType as WardrobeItemType] = null;
-            }
-          }
-        }
-      }
-    }
-
-    // Equip in all the new item's type slots
-    for (const slotType of newItemTypes) {
-      slots[slotType as WardrobeItemType] = newItemId;
-    }
+  if (options.mode === 'clear_slot') {
+    if (!options.slot) return slots;
+    slots[options.slot] = [];
+    return slots;
   }
 
   return slots;

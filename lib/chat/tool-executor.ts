@@ -91,6 +91,11 @@ import {
   type WardrobeUpdateOutfitToolContext,
 } from '@/lib/tools/handlers/wardrobe-update-outfit-handler';
 import {
+  executeWardrobeChangeItemTool,
+  formatWardrobeChangeItemResults,
+  type WardrobeChangeItemToolContext,
+} from '@/lib/tools/handlers/wardrobe-change-item-handler';
+import {
   executeWardrobeCreateItemTool,
   formatWardrobeCreateItemResults,
   type WardrobeCreateItemToolContext,
@@ -231,7 +236,8 @@ const BUILT_IN_TOOLS = new Set<string>([
   'search',
   // Wardrobe tools
   'list_wardrobe',
-  'update_outfit_item',
+  'wardrobe_set_outfit',
+  'wardrobe_change_item',
   'create_wardrobe_item',
   // Shell interactivity tools
   'chdir',
@@ -659,8 +665,8 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle update_outfit_item
-    if (toolCall.name === 'update_outfit_item') {
+    // Handle wardrobe_set_outfit (composite outfits only)
+    if (toolCall.name === 'wardrobe_set_outfit') {
       const wardrobeContext: WardrobeUpdateOutfitToolContext = {
         userId,
         chatId,
@@ -671,7 +677,33 @@ export async function executeToolCallWithContext(
       const formattedResult = formatWardrobeUpdateOutfitResults(result);
 
       return {
-        toolName: 'update_outfit_item',
+        toolName: 'wardrobe_set_outfit',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          action: result.action,
+          item: result.item,
+          slots_affected: result.slots_affected,
+          current_state: result.current_state,
+          coverage_summary: result.coverage_summary,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle wardrobe_change_item (atomic items only)
+    if (toolCall.name === 'wardrobe_change_item') {
+      const wardrobeContext: WardrobeChangeItemToolContext = {
+        userId,
+        chatId,
+        characterId: characterId || '',
+      };
+
+      const result = await executeWardrobeChangeItemTool(toolCall.arguments, wardrobeContext);
+      const formattedResult = formatWardrobeChangeItemResults(result);
+
+      return {
+        toolName: 'wardrobe_change_item',
         success: result.success,
         result: result.success ? {
           formattedText: formattedResult,

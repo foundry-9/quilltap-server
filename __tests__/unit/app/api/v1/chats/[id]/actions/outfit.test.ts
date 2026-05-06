@@ -57,7 +57,7 @@ describe('chats [id] equip action — vault-overlay regression', () => {
     }
   })
 
-  it('equips a vault-only wardrobe item via the overlay lookup', async () => {
+  it('equips a vault-only wardrobe item via the overlay lookup (mode: equip)', async () => {
     // The user's reported case: a Wardrobe/<title>.md file in the vault yields
     // a stable derived UUID. The legacy raw findById returns null because no
     // DB row exists; the equip handler must instead use findByIdForCharacter.
@@ -66,6 +66,7 @@ describe('chats [id] equip action — vault-overlay regression', () => {
       characterId: 'char-1',
       title: 'Black athletic shorts',
       types: ['bottom'],
+      componentItemIds: [],
       appropriateness: null,
       isDefault: false,
       archivedAt: null,
@@ -83,7 +84,7 @@ describe('chats [id] equip action — vault-overlay regression', () => {
 
     const req = makeRequest({
       characterId: 'char-1',
-      slot: 'bottom',
+      mode: 'equip',
       itemId: vaultItem.id,
     })
 
@@ -91,11 +92,13 @@ describe('chats [id] equip action — vault-overlay regression', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
+    // Slots are arrays now; equipItem replaces every slot covered by the
+    // item's types (here, just `bottom`).
     expect(body.equippedSlots).toEqual({
-      top: null,
-      bottom: vaultItem.id,
-      footwear: null,
-      accessories: null,
+      top: [],
+      bottom: [vaultItem.id],
+      footwear: [],
+      accessories: [],
     })
 
     // The handler must use the overlay-aware lookup, not the raw one.
@@ -109,21 +112,16 @@ describe('chats [id] equip action — vault-overlay regression', () => {
     expect(ctx.repos.chats.setEquippedOutfit).toHaveBeenCalledWith(
       'chat-1',
       'char-1',
-      expect.objectContaining({ bottom: vaultItem.id })
+      expect.objectContaining({ bottom: [vaultItem.id] })
     )
-
-    // Phase D: per-turn `pendingOutfitNotifications` flow has been retired in
-    // favour of the debounced Aurora announcement, so the equip handler no
-    // longer performs its own bulk wardrobe lookup. The overlay-aware lookup
-    // moved into the debounced job (`handleWardrobeOutfitAnnouncement`).
   })
 
-  it('returns 404 when neither the overlay nor archetype lookup finds the item', async () => {
+  it('returns 404 when neither the overlay nor archetype lookup finds the item (mode: equip)', async () => {
     ctx.repos.wardrobe.findByIdForCharacter.mockResolvedValue(null)
 
     const req = makeRequest({
       characterId: 'char-1',
-      slot: 'top',
+      mode: 'equip',
       itemId: 'never-existed',
     })
 
@@ -132,12 +130,16 @@ describe('chats [id] equip action — vault-overlay regression', () => {
     expect(ctx.repos.chats.setEquippedOutfit).not.toHaveBeenCalled()
   })
 
-  it('rejects an item whose types do not cover the requested slot', async () => {
+  it('rejects an item whose types do not cover the requested slot (mode: add_to_slot)', async () => {
+    // For `equip`, the cascade infers slots from item.types so a "shoes in top"
+    // call is meaningless. For `add_to_slot`, an explicit slot is required and
+    // the handler validates it against item.types.
     ctx.repos.wardrobe.findByIdForCharacter.mockResolvedValue({
       id: 'shoes-1',
       characterId: 'char-1',
       title: 'Loafers',
       types: ['footwear'],
+      componentItemIds: [],
       appropriateness: null,
       isDefault: false,
       archivedAt: null,
@@ -149,6 +151,7 @@ describe('chats [id] equip action — vault-overlay regression', () => {
 
     const req = makeRequest({
       characterId: 'char-1',
+      mode: 'add_to_slot',
       slot: 'top',
       itemId: 'shoes-1',
     })
@@ -156,5 +159,55 @@ describe('chats [id] equip action — vault-overlay regression', () => {
     const response = await handleEquipSlot(req, 'chat-1', ctx)
     expect(response.status).toBe(400)
     expect(ctx.repos.chats.setEquippedOutfit).not.toHaveBeenCalled()
+  })
+
+  it('removes a specific item from a slot (mode: remove_from_slot)', async () => {
+    ctx.repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+      top: ['t-shirt-1', 'cardigan-1'],
+      bottom: [],
+      footwear: [],
+      accessories: [],
+    })
+
+    const req = makeRequest({
+      characterId: 'char-1',
+      mode: 'remove_from_slot',
+      slot: 'top',
+      itemId: 't-shirt-1',
+    })
+
+    const response = await handleEquipSlot(req, 'chat-1', ctx)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.equippedSlots.top).toEqual(['cardigan-1'])
+    // remove_from_slot doesn't need an item lookup — the slot edit is structural.
+    expect(ctx.repos.wardrobe.findByIdForCharacter).not.toHaveBeenCalled()
+  })
+
+  it('clears a slot entirely (mode: clear_slot)', async () => {
+    ctx.repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+      top: ['t-shirt-1', 'cardigan-1'],
+      bottom: ['jeans-1'],
+      footwear: [],
+      accessories: [],
+    })
+
+    const req = makeRequest({
+      characterId: 'char-1',
+      mode: 'clear_slot',
+      slot: 'top',
+    })
+
+    const response = await handleEquipSlot(req, 'chat-1', ctx)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.equippedSlots).toEqual({
+      top: [],
+      bottom: ['jeans-1'],
+      footwear: [],
+      accessories: [],
+    })
   })
 })

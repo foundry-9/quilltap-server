@@ -2,7 +2,12 @@
  * Wardrobe Type Definitions
  *
  * Contains schemas for the modular wardrobe system: wardrobe items,
- * equipped outfit slots, and equipped outfit state per chat.
+ * equipped outfit slots, and per-chat equipped state.
+ *
+ * Slots hold arrays of wardrobe item IDs — multiple items per slot are allowed
+ * (e.g. a t-shirt under a sweater). Wardrobe items can also be composites
+ * (referencing other items via `componentItemIds`); composites are stored
+ * as their own ID in equipped state and expanded only at read time.
  *
  * @module schemas/wardrobe.types
  */
@@ -37,6 +42,12 @@ export const WardrobeItemSchema = z.object({
   description: z.string().nullable().optional(),
   /** Coverage tags — which slots this item covers (e.g., ["top"], ["top","bottom"] for a dress) */
   types: z.array(WardrobeItemTypeEnum).min(1),
+  /**
+   * Other wardrobe items this item is composed of. Empty = leaf item.
+   * Cycles (direct or transitive self-reference) are rejected at save time
+   * by `WardrobeRepository.create`/`update` and the vault overlay materializer.
+   */
+  componentItemIds: z.array(UUIDSchema).default([]),
   /** Context tags for when this item is appropriate (e.g., "casual", "formal", "intimate") */
   appropriateness: z.string().nullable().optional(),
   /** Whether this item is part of the character's default outfit */
@@ -55,36 +66,22 @@ export type WardrobeItem = z.infer<typeof WardrobeItemSchema>;
 // EQUIPPED OUTFIT STATE
 // ============================================================================
 
-/** Per-character equipped slots — one wardrobe item ID (or null) per slot */
+/**
+ * Per-character equipped slots. Each slot holds an array of wardrobe item IDs;
+ * multiple items per slot represent layering (t-shirt + sweater). Composite
+ * items appear as a single ID and are expanded at read time.
+ */
 export const EquippedSlotsSchema = z.object({
-  top: UUIDSchema.nullable().default(null),
-  bottom: UUIDSchema.nullable().default(null),
-  footwear: UUIDSchema.nullable().default(null),
-  accessories: UUIDSchema.nullable().default(null),
+  top: z.array(UUIDSchema).default([]),
+  bottom: z.array(UUIDSchema).default([]),
+  footwear: z.array(UUIDSchema).default([]),
+  accessories: z.array(UUIDSchema).default([]),
 });
 
 export type EquippedSlots = z.infer<typeof EquippedSlotsSchema>;
 
 /** Per-chat equipped outfit state, keyed by characterId */
 export type EquippedOutfitState = Record<string, EquippedSlots>;
-
-// ============================================================================
-// OUTFIT PRESET
-// ============================================================================
-
-export const OutfitPresetSchema = z.object({
-  id: UUIDSchema,
-  /** Character this preset belongs to. Null = shared preset. */
-  characterId: UUIDSchema.nullable().optional(),
-  name: z.string().min(1),
-  description: z.string().nullable().optional(),
-  /** Slot assignments: { top: itemId|null, bottom: itemId|null, footwear: itemId|null, accessories: itemId|null } */
-  slots: EquippedSlotsSchema,
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
-});
-
-export type OutfitPreset = z.infer<typeof OutfitPresetSchema>;
 
 // ============================================================================
 // OUTFIT SELECTION (for new chat creation)
@@ -106,26 +103,27 @@ export type OutfitSelection = z.infer<typeof OutfitSelectionSchema>;
 // HELPERS
 // ============================================================================
 
-/** Empty equipped slots (all null) */
+/** Empty equipped slots (all empty arrays) */
 export const EMPTY_EQUIPPED_SLOTS: EquippedSlots = {
-  top: null,
-  bottom: null,
-  footwear: null,
-  accessories: null,
+  top: [],
+  bottom: [],
+  footwear: [],
+  accessories: [],
 };
 
 /**
- * Build a human-readable coverage summary from equipped slots and their item details.
- * Delegates to the canonical describeOutfit utility.
+ * Build a human-readable coverage summary from equipped slots and the
+ * per-slot wardrobe items occupying them. Callers must expand composites
+ * to leaves before passing them in.
  */
 export function buildCoverageSummary(
   _slots: EquippedSlots,
-  items: Record<string, WardrobeItem | null>
+  items: Record<keyof EquippedSlots, WardrobeItem[]>,
 ): string {
   return describeOutfit({
-    top: items.top?.title ?? null,
-    bottom: items.bottom?.title ?? null,
-    footwear: items.footwear?.title ?? null,
-    accessories: items.accessories?.title ?? null,
+    top: items.top.map((i) => i.title),
+    bottom: items.bottom.map((i) => i.title),
+    footwear: items.footwear.map((i) => i.title),
+    accessories: items.accessories.map((i) => i.title),
   });
 }

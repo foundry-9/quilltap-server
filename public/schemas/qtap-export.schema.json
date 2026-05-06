@@ -328,6 +328,11 @@
           "items": { "$ref": "#/$defs/WardrobeItem" },
           "description": "Wardrobe items belonging to this character, exported alongside the character"
         },
+        "outfitPresets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/LegacyOutfitPreset" },
+          "description": "Legacy: pre-rework outfit preset entities. Importers fold these into composite wardrobeItems (one composite per preset, with componentItemIds drawn from the preset's slot values). New exports never emit this field; it is retained on the schema solely so older `.qtap` files still validate."
+        },
         "pluginData": {
           "type": "object",
           "additionalProperties": true,
@@ -380,7 +385,40 @@
         },
         "equippedOutfit": {
           "type": ["object", "null"],
-          "description": "Per-character equipped outfit state: { [characterId]: { top, bottom, footwear, accessories } }"
+          "description": "Per-character equipped outfit state, keyed by characterId. Each character entry is { top, bottom, footwear, accessories } where each slot is an array of wardrobe-item UUIDs (post-rework). Legacy pre-rework exports may store each slot as a single UUID or null; importers upgrade those to single-element/empty arrays.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "top": {
+                "oneOf": [
+                  { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+                  { "type": "string" },
+                  { "type": "null" }
+                ]
+              },
+              "bottom": {
+                "oneOf": [
+                  { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+                  { "type": "string" },
+                  { "type": "null" }
+                ]
+              },
+              "footwear": {
+                "oneOf": [
+                  { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+                  { "type": "string" },
+                  { "type": "null" }
+                ]
+              },
+              "accessories": {
+                "oneOf": [
+                  { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+                  { "type": "string" },
+                  { "type": "null" }
+                ]
+              }
+            }
+          }
         },
         "documentMode": {
           "enum": ["normal", "split", "focus"],
@@ -695,6 +733,12 @@
           },
           "description": "Coverage slots this item covers"
         },
+        "componentItemIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/UUID" },
+          "default": [],
+          "description": "Other wardrobe items this item is composed of (composite items). Empty array means this is a leaf item. Not required for back-compat with pre-rework exports."
+        },
         "appropriateness": {
           "type": ["string", "null"],
           "description": "Context tags for when this item is appropriate (e.g., casual, formal, intimate)"
@@ -709,6 +753,36 @@
             { "type": "null" }
           ],
           "description": "Provenance tracking for items migrated from legacy clothingRecords"
+        },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "LegacyOutfitPreset": {
+      "type": "object",
+      "description": "Legacy: pre-rework outfit preset. Each preset bundled up to one item per slot under a named outfit. Post-rework, presets fold into composite WardrobeItems and this entity no longer exists. Retained on the schema solely so older `.qtap` exports still validate.",
+      "required": ["id", "name", "slots", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "characterId": {
+          "oneOf": [
+            { "$ref": "#/$defs/UUID" },
+            { "type": "null" }
+          ]
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": ["string", "null"] },
+        "slots": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "top": { "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
+            "bottom": { "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
+            "footwear": { "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
+            "accessories": { "oneOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] }
+          }
         },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" }

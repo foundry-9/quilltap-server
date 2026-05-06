@@ -51,7 +51,102 @@ import type {
   CharacterPluginData,
   ConversationAnnotation,
 } from '@/lib/schemas/types';
-import type { WardrobeItem, OutfitPreset } from '@/lib/schemas/wardrobe.types';
+import type { WardrobeItem, WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
+
+/**
+ * Legacy outfit preset shape — only used to fold old backups into composites.
+ * Kept local since the type is otherwise gone from the data model.
+ */
+interface LegacyOutfitPreset {
+  id: string;
+  characterId: string | null;
+  name: string;
+  description: string | null;
+  slots: {
+    top: string | null;
+    bottom: string | null;
+    footwear: string | null;
+    accessories: string | null;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Legacy per-character equipped slot shape from pre-rework backups: each slot
+ * holds a single UUID or null instead of an array of UUIDs.
+ */
+interface LegacyEquippedSlots {
+  top: string | null;
+  bottom: string | null;
+  footwear: string | null;
+  accessories: string | null;
+}
+
+/**
+ * Slot-order for stable componentItemIds derivation when folding legacy presets.
+ */
+const LEGACY_SLOT_ORDER: ReadonlyArray<keyof LegacyOutfitPreset['slots']> = [
+  'top',
+  'bottom',
+  'footwear',
+  'accessories',
+];
+
+/**
+ * Compute the deduped, ordered list of slot types covered by the non-null
+ * components of a legacy preset. Order follows LEGACY_SLOT_ORDER.
+ */
+function dedupeAndOrderSlotTypes(
+  slots: LegacyOutfitPreset['slots']
+): WardrobeItemType[] {
+  const seen = new Set<WardrobeItemType>();
+  const out: WardrobeItemType[] = [];
+  for (const slot of LEGACY_SLOT_ORDER) {
+    if (slots[slot] && !seen.has(slot)) {
+      seen.add(slot);
+      out.push(slot);
+    }
+  }
+  // A composite must always declare at least one type. If every slot is null
+  // (a malformed legacy preset), fall back to "accessories" so the schema
+  // validation still passes.
+  if (out.length === 0) out.push('accessories');
+  return out;
+}
+
+/**
+ * Collect non-null component IDs from the legacy slot map in slot order.
+ */
+function orderedComponentIds(slots: LegacyOutfitPreset['slots']): string[] {
+  const ids: string[] = [];
+  for (const slot of LEGACY_SLOT_ORDER) {
+    const id = slots[slot];
+    if (id) ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * Detect the per-character equipped-slot shape and upgrade legacy `id|null`
+ * shapes to `id ? [id] : []`. Idempotent: already-array shapes pass through.
+ */
+function upgradeLegacyEquippedSlots(
+  raw: LegacyEquippedSlots | EquippedSlots | null | undefined
+): EquippedSlots | null {
+  if (!raw) return null;
+  const upgrade = (val: unknown): string[] => {
+    if (Array.isArray(val)) return val.filter((v): v is string => typeof v === 'string');
+    if (typeof val === 'string') return [val];
+    return [];
+  };
+  return {
+    top: upgrade((raw as Record<string, unknown>).top),
+    bottom: upgrade((raw as Record<string, unknown>).bottom),
+    footwear: upgrade((raw as Record<string, unknown>).footwear),
+    accessories: upgrade((raw as Record<string, unknown>).accessories),
+  };
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -275,6 +370,45 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const manifest = await readJsonFile<BackupManifest>(rootPath, 'manifest.json');
     const characters = await readJsonArrayFile<Character>(rootPath, 'data/characters.json');
     const chats = await readJsonArrayFile<ChatWithMessages>(rootPath, 'data/chats.json');
+    // Back-compat: pre-rework backups stored each character's equippedOutfit slot
+    // values as a single UUID-or-null. Upgrade them to the new array shape so the
+    // standard restore path consumes a uniform structure.
+    let chatsEquippedOutfitUpgraded = 0;
+    for (const chat of chats) {
+      const equipped = (chat as unknown as { equippedOutfit?: Record<string, LegacyEquippedSlots | EquippedSlots> | null })
+        .equippedOutfit;
+      if (equipped && typeof equipped === 'object') {
+        let mutated = false;
+        for (const [characterId, slots] of Object.entries(equipped)) {
+          // If any slot is a string (rather than an array), it's the legacy shape.
+          const looksLegacy =
+            slots !== null &&
+            typeof slots === 'object' &&
+            (typeof (slots as Record<string, unknown>).top === 'string' ||
+              typeof (slots as Record<string, unknown>).bottom === 'string' ||
+              typeof (slots as Record<string, unknown>).footwear === 'string' ||
+              typeof (slots as Record<string, unknown>).accessories === 'string' ||
+              // Or null in any slot — old shape uses null where new shape uses [].
+              (slots as Record<string, unknown>).top === null ||
+              (slots as Record<string, unknown>).bottom === null ||
+              (slots as Record<string, unknown>).footwear === null ||
+              (slots as Record<string, unknown>).accessories === null);
+          if (looksLegacy) {
+            const upgraded = upgradeLegacyEquippedSlots(slots as LegacyEquippedSlots);
+            if (upgraded) {
+              equipped[characterId] = upgraded;
+              mutated = true;
+            }
+          }
+        }
+        if (mutated) chatsEquippedOutfitUpgraded++;
+      }
+    }
+    if (chatsEquippedOutfitUpgraded > 0) {
+      moduleLogger.info('Upgraded legacy per-character equippedOutfit slot shape', {
+        chatsTouched: chatsEquippedOutfitUpgraded,
+      });
+    }
     const tags = await readJsonArrayFile<Tag>(rootPath, 'data/tags.json');
     const connectionProfiles = await readJsonArrayFile<ConnectionProfile>(rootPath, 'data/connection-profiles.json');
     const imageProfiles = await readJsonArrayFile<ImageProfile>(rootPath, 'data/image-profiles.json');
@@ -296,9 +430,40 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const chatSettings = await readJsonArrayFileOptional<ChatSettings>(rootPath, 'data/chat-settings.json', []);
     // Folders are optional for backwards compatibility with older backups
     const folders = await readJsonArrayFileOptional<Folder>(rootPath, 'data/folders.json', []);
-    // Wardrobe items and outfit presets are optional for backwards compatibility
-    const wardrobeItems = await readJsonArrayFileOptional<WardrobeItem>(rootPath, 'data/wardrobe-items.json', []);
-    const outfitPresets = await readJsonArrayFileOptional<OutfitPreset>(rootPath, 'data/outfit-presets.json', []);
+    // Wardrobe items are optional for backwards compatibility
+    let wardrobeItems = await readJsonArrayFileOptional<WardrobeItem>(rootPath, 'data/wardrobe-items.json', []);
+    // Back-compat: pre-rework backups stored outfit presets as a separate entity in
+    // data/outfit-presets.json. New backups never write that file, but we still
+    // read it from older archives and fold each preset into a composite WardrobeItem
+    // so the standard wardrobe-restore path picks them up. We preserve the
+    // original preset id as the new composite's id; any pre-rework reference
+    // (chats, exports) stays valid.
+    const legacyOutfitPresets = await readJsonArrayFileOptional<LegacyOutfitPreset>(
+      rootPath,
+      'data/outfit-presets.json',
+      []
+    );
+    if (legacyOutfitPresets.length > 0) {
+      const foldedComposites: WardrobeItem[] = legacyOutfitPresets.map((preset) => ({
+        id: preset.id,
+        characterId: preset.characterId,
+        title: preset.name,
+        description: preset.description,
+        types: dedupeAndOrderSlotTypes(preset.slots),
+        componentItemIds: orderedComponentIds(preset.slots),
+        appropriateness: null,
+        isDefault: false,
+        migratedFromClothingRecordId: null,
+        archivedAt: null,
+        createdAt: preset.createdAt,
+        updatedAt: preset.updatedAt,
+      }));
+      moduleLogger.info('Folded legacy outfit presets into composite wardrobe items', {
+        legacyPresetCount: legacyOutfitPresets.length,
+        existingWardrobeItemCount: wardrobeItems.length,
+      });
+      wardrobeItems = [...wardrobeItems, ...foldedComposites];
+    }
     // Character plugin data and conversation annotations are optional for backwards compatibility
     const characterPluginData = await readJsonArrayFileOptional<CharacterPluginData>(rootPath, 'data/character-plugin-data.json', []);
     const conversationAnnotations = await readJsonArrayFileOptional<ConversationAnnotation>(rootPath, 'data/conversation-annotations.json', []);
@@ -328,7 +493,6 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       chatSettings,
       folders,
       wardrobeItems,
-      outfitPresets,
       characterPluginData,
       conversationAnnotations,
     };
@@ -427,7 +591,6 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       chatSettings: data.chatSettings?.length || 0,
       folders: data.folders?.length || 0,
       wardrobeItems: data.wardrobeItems?.length || 0,
-      outfitPresets: data.outfitPresets?.length || 0,
       npmPlugins: npmPluginCount,
       characterPluginData: data.characterPluginData?.length || 0,
       conversationAnnotations: data.conversationAnnotations?.length || 0,
@@ -450,7 +613,7 @@ async function deleteUserData(userId: string): Promise<void> {
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, folders, wardrobeItems, outfitPresets] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, folders, wardrobeItems] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -466,7 +629,6 @@ async function deleteUserData(userId: string): Promise<void> {
       globalRepos.chatSettings.findByUserId(userId),
       globalRepos.folders.findByUserId(userId),
       globalRepos.wardrobe.findAll(),
-      globalRepos.outfitPresets.findAll(),
     ]);
 
   // Delete memories for each character first
@@ -492,7 +654,6 @@ async function deleteUserData(userId: string): Promise<void> {
     ...(chatSettings ? [globalRepos.chatSettings.delete(chatSettings.id)] : []),
     ...folders.map((f) => globalRepos.folders.delete(f.id)),
     ...wardrobeItems.map((w) => globalRepos.wardrobe.delete(w.id)),
-    ...outfitPresets.map((o) => globalRepos.outfitPresets.delete(o.id)),
   ]);
 
   // Delete files from storage
@@ -527,7 +688,6 @@ async function deleteUserData(userId: string): Promise<void> {
       chatSettings: chatSettings ? 1 : 0,
       folders: folders.length,
       wardrobeItems: wardrobeItems.length,
-      outfitPresets: outfitPresets.length,
     },
   });
 }
@@ -923,24 +1083,16 @@ function remapBackupData(
     userId: targetUserId,
   })) as Folder[];
 
-  // Remap wardrobe items
+  // Remap wardrobe items. componentItemIds reference other wardrobe items, which
+  // share the same UUID space; remap them along with id/characterId so cross-refs
+  // stay consistent in new-account mode. Legacy outfit presets folded into
+  // composites at parse time pass through this same path.
   const remappedWardrobeItems = (data.wardrobeItems || []).map((item) => ({
-    ...remapper.remapFields(item, ['id', 'characterId']),
+    ...remapper.remapArrayFields(
+      remapper.remapFields(item, ['id', 'characterId']),
+      ['componentItemIds']
+    ),
   })) as WardrobeItem[];
-
-  // Remap outfit presets (slot values are wardrobe item IDs)
-  const remappedOutfitPresets = (data.outfitPresets || []).map((preset) => {
-    const remapped = remapper.remapFields(preset, ['id', 'characterId']);
-    if (remapped.slots) {
-      remapped.slots = {
-        top: remapped.slots.top ? remapper.remap(remapped.slots.top) : null,
-        bottom: remapped.slots.bottom ? remapper.remap(remapped.slots.bottom) : null,
-        footwear: remapped.slots.footwear ? remapper.remap(remapped.slots.footwear) : null,
-        accessories: remapped.slots.accessories ? remapper.remap(remapped.slots.accessories) : null,
-      };
-    }
-    return remapped as OutfitPreset;
-  });
 
   return {
     manifest: data.manifest,
@@ -961,7 +1113,6 @@ function remapBackupData(
     chatSettings: remappedChatSettings,
     folders: remappedFolders,
     wardrobeItems: remappedWardrobeItems,
-    outfitPresets: remappedOutfitPresets,
     characterPluginData: (data.characterPluginData || []).map((cpd) => ({
       ...remapper.remapFields(cpd, ['id', 'characterId']),
     })) as CharacterPluginData[],
@@ -1279,18 +1430,9 @@ export async function restore(
       }
     }
 
-    // 20. Outfit Presets
-    let outfitPresetsRestored = 0;
-    for (const preset of data.outfitPresets || []) {
-      try {
-        const { id, createdAt, updatedAt, ...presetData } = preset;
-        await globalRepos.outfitPresets.create(presetData, { id: preset.id });
-        outfitPresetsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore outfit preset "${preset.name}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore outfit preset', { outfitPresetId: preset.id, error });
-      }
-    }
+    // 20. Outfit Presets — REMOVED: presets are now composite WardrobeItems and
+    // were folded into data.wardrobeItems at parse time for back-compat with
+    // older backups. Nothing to restore here.
 
     // 21. Character Plugin Data (depends on characters)
     let characterPluginDataRestored = 0;
@@ -1424,7 +1566,6 @@ export async function restore(
       chatSettings: chatSettingsRestored,
       folders: foldersRestored,
       wardrobeItems: wardrobeItemsRestored,
-      outfitPresets: outfitPresetsRestored,
       npmPlugins: npmPluginsRestored,
       characterPluginData: characterPluginDataRestored,
       conversationAnnotations: conversationAnnotationsRestored,

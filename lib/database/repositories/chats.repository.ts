@@ -509,44 +509,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 
   /**
-   * Update a single equipped slot for a character in a chat
-   */
-  async updateEquippedSlot(
-    chatId: string,
-    characterId: string,
-    slot: string,
-    itemId: string | null
-  ): Promise<EquippedSlots | null> {
-    return this.safeQuery(
-      async () => {
-        const existing = await this.getEquippedOutfit(chatId);
-        const state: EquippedOutfitState = existing ?? {};
-
-        const characterSlots: EquippedSlots = state[characterId] ?? {
-          top: null,
-          bottom: null,
-          footwear: null,
-          accessories: null,
-        };
-
-        (characterSlots as Record<string, string | null>)[slot] = itemId;
-        state[characterId] = characterSlots;
-
-        await this.update(chatId, { equippedOutfit: state } as Partial<ChatMetadata>);
-
-        logger.debug('Updated equipped slot', {
-          chatId, characterId, slot, itemId, context: 'wardrobe',
-        });
-
-        return characterSlots;
-      },
-      'Failed to update equipped slot',
-      { chatId, characterId, slot, itemId, context: 'wardrobe' },
-      null
-    );
-  }
-
-  /**
    * Set the entire equipped outfit for a character in a chat
    */
   async setEquippedOutfit(
@@ -599,8 +561,9 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           for (const characterId of Object.keys(state)) {
             const slots = state[characterId];
             for (const slotKey of WARDROBE_SLOT_TYPES) {
-              if (slots[slotKey] === itemId) {
-                slots[slotKey] = null;
+              const before = slots[slotKey] ?? [];
+              if (before.includes(itemId)) {
+                slots[slotKey] = before.filter((id) => id !== itemId);
                 chatModified = true;
               }
             }
