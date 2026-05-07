@@ -41,39 +41,36 @@ export async function buildCharacterAvatarPrompt(
 ): Promise<BuildPromptResult> {
   const { equippedSlots } = options;
 
-  const appearanceParts: string[] = [];
   const leafCounts = { top: 0, bottom: 0, footwear: 0, accessories: 0 };
 
   // Physical descriptions — use the first available variant, falling back
   // through the canonical fields the avatar handler has always favored.
+  let physicalText = '';
   const physicalDescriptions = character.physicalDescriptions || [];
   if (physicalDescriptions.length > 0) {
     const desc = physicalDescriptions[0];
-    const descText =
+    physicalText = (
       desc.mediumPrompt ||
       desc.shortPrompt ||
       desc.longPrompt ||
       desc.completePrompt ||
       desc.fullDescription ||
-      '';
-    if (descText) {
-      appearanceParts.push(descText);
-    }
+      ''
+    ).trim();
   }
 
+  let outfitText = '';
   if (equippedSlots) {
     const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, equippedSlots);
     const decorate = (items: { title: string; description?: string | null }[]): string[] =>
       items.map((i) => (i.description ? `${i.title} (${i.description})` : i.title));
 
-    appearanceParts.push(
-      describeOutfit({
-        top: decorate(resolved.leafItemsBySlot.top),
-        bottom: decorate(resolved.leafItemsBySlot.bottom),
-        footwear: decorate(resolved.leafItemsBySlot.footwear),
-        accessories: decorate(resolved.leafItemsBySlot.accessories),
-      }),
-    );
+    outfitText = describeOutfit({
+      top: decorate(resolved.leafItemsBySlot.top),
+      bottom: decorate(resolved.leafItemsBySlot.bottom),
+      footwear: decorate(resolved.leafItemsBySlot.footwear),
+      accessories: decorate(resolved.leafItemsBySlot.accessories),
+    }).trimEnd();
 
     leafCounts.top = resolved.leafItemsBySlot.top.length;
     leafCounts.bottom = resolved.leafItemsBySlot.bottom.length;
@@ -81,11 +78,22 @@ export async function buildCharacterAvatarPrompt(
     leafCounts.accessories = resolved.leafItemsBySlot.accessories.length;
   }
 
-  const hasAppearance = appearanceParts.length > 0;
-  const appearanceText = appearanceParts.join('. ');
-  const prompt = hasAppearance
-    ? `Solo portrait of a single person: ${character.name}. Show exactly one figure, from the thighs up, three-quarter view. ${appearanceText}. Character portrait, detailed, high quality, natural lighting. Only one person in the image.`
-    : '';
+  const hasAppearance = Boolean(physicalText) || Boolean(outfitText);
+  let prompt = '';
+  if (hasAppearance) {
+    const intro = `Solo portrait of a single person: ${character.name}. Show exactly one figure, from the thighs up, three-quarter view.`;
+    const outro = `Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
+    // Strip any trailing terminal punctuation off the physical description so
+    // we don't end up with "background.." once we re-append a period.
+    const physBlock = physicalText ? `${physicalText.replace(/[.!?]+$/, '')}.` : '';
+    // Outfit is a markdown list (lines starting with "- "). Markdown renderers
+    // need a blank line before the first list item, so the outfit block is
+    // separated from neighboring paragraphs by `\n\n` on each side.
+    const outfitBlock = outfitText ? `\n\n${outfitText}\n\n` : ' ';
+    prompt = physBlock
+      ? `${intro} ${physBlock}${outfitBlock}${outro}`
+      : `${intro}${outfitBlock}${outro}`;
+  }
 
   return { prompt, hasAppearance, leafCounts };
 }

@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Aurora avatar prompt formats outfit list as actual markdown list
+
+`buildCharacterAvatarPrompt` joined the physical description and the outfit description with `". "`, producing prompts like `Plain off-white background.. - **top:** ...` — both a duplicated period and no leading newline, so the outfit list rendered as inline text in Aurora's avatar-refresh announcement (the `aim` text shown back inside quotes). The builder now keeps the physical description and outfit list as separate paragraphs, separated by blank lines, and strips any trailing terminal punctuation off the physical description before appending its own period. Added `__tests__/unit/lib/wardrobe/avatar-prompt.test.ts` to lock the spacing.
+
 #### Refactor: share wardrobe handler state/coverage/announcement utilities
 
 - Added `lib/tools/handlers/wardrobe-handler-shared.ts` to centralize:
