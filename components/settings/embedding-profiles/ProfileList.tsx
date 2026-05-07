@@ -349,6 +349,7 @@ export function ProfileList({
               badges={badges}
               metadata={metadata}
               actions={actions}
+              actionsPosition="footer"
               deleteConfig={{
                 isConfirming: deleteConfirming === profile.id,
                 onConfirmChange: (confirming) => setDeleteConfirming(confirming ? profile.id : null),

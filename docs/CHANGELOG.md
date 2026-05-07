@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: embedding profile cards no longer overflow their action buttons
+
+The Commonplace Book settings tab renders embedding profile cards through `SettingsCard` with the default inline action position. Default profiles can carry up to four action buttons (Edit, Re-embed Everything, Re-apply Matryoshka, Re-embed Mismatched) plus the Delete button — far more than fits in the header row, which uses `flex-shrink-0` and no wrapping. The Delete button rendered outside the card's right edge as a result. Switched the card to `actionsPosition="footer"` so the existing flex-wrap footer container handles the buttons, leaving the title and Default badge clean in the header row.
+
 #### Wardrobe UX overhaul
 
 A series of changes to make the wardrobe dialog match the way it's actually used. Tracked under `docs/developer/features/Wardrobe UX Overhaul.md`. Landing incrementally:
