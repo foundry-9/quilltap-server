@@ -12,6 +12,7 @@
   - coverage summary computation from equipped slots
   - outfit-announcement scheduling wrapper
 - Updated both `wardrobe-change-item-handler.ts` and `wardrobe-update-outfit-handler.ts` to consume the shared utility instead of maintaining duplicated helper implementations.
+- Added focused regression coverage in `__tests__/unit/lib/tools/handlers/wardrobe-handler-shared.test.ts`.
 
 #### Refactor: tighten Aurora wizard field mapping and restore Document Mode success diagnostics
 
