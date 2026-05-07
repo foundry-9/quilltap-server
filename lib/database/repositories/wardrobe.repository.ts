@@ -398,7 +398,12 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
         if (result) {
           logger.info('Wardrobe item deleted successfully', { wardrobeItemId: id });
           if (existing?.characterId) {
-            await syncCharacterVaultWardrobe(existing.characterId);
+            // Pass the deleted id as a tombstone so the sync's vault-only
+            // ingestion step doesn't re-promote the still-on-disk Wardrobe/
+            // file (preserving the same id) and resurrect the row we just
+            // deleted. With the id excluded, the projection sweep treats
+            // the file as unmanaged and removes it.
+            await syncCharacterVaultWardrobe(existing.characterId, new Set([id]));
           }
         }
 

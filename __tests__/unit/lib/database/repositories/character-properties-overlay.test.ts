@@ -1813,6 +1813,76 @@ describe('syncCharacterVaultWardrobe — vault-only items', () => {
 
     expect(createFromVault).not.toHaveBeenCalled();
   });
+
+  // Regression: deleting a wardrobe item from a vault-overlay character used
+  // to be a no-op. The DB row was removed, then the post-write sync's
+  // ingestion step saw a vault file with no DB row and re-created the row
+  // (preserving the same id) via createFromVault, leaving the projection
+  // step nothing to sweep. Now the delete path passes the deleted id as a
+  // tombstone via excludeIds: ingestion skips it, the projection treats the
+  // file as unmanaged, and the file is deleted.
+  it('skips ingestion for tombstoned ids and lets the projection sweep their files', async () => {
+    const tombstonedId = 'b1c2d3e4-f5a6-4789-aabb-ccddeeff0099';
+    const findByCharacterIdRaw = jest.fn().mockResolvedValue([]);
+    const createFromVault = jest.fn();
+
+    getRepositoriesMock.mockReturnValue({
+      docMountDocuments: {
+        findManyByMountPointsAndPath: jest.fn().mockResolvedValue([]),
+        findManyByMountPointsInFolder: jest
+          .fn()
+          .mockImplementation((_ids: string[], folder: string) => {
+            if (folder === 'Wardrobe') {
+              return Promise.resolve([
+                {
+                  id: 'doc-tombstoned',
+                  mountPointId: 'mount-gary',
+                  relativePath: 'Wardrobe/Tombstoned Shirt.md',
+                  fileName: 'Tombstoned Shirt.md',
+                  fileType: 'markdown',
+                  contentSha256: 'x'.repeat(64),
+                  plainTextLength: 50,
+                  folderId: null,
+                  lastModified: 0,
+                  createdAt: '2026-04-26T00:00:00.000Z',
+                  updatedAt: '2026-04-26T00:00:00.000Z',
+                  content: [
+                    '---',
+                    `id: ${tombstonedId}`,
+                    'title: Tombstoned Shirt',
+                    'types:',
+                    '- top',
+                    '---',
+                    '',
+                  ].join('\n'),
+                },
+              ]);
+            }
+            return Promise.resolve([]);
+          }),
+      },
+      characters: {
+        findByIdRaw: jest.fn().mockResolvedValue({
+          id: 'gary',
+          readPropertiesFromDocumentStore: true,
+          characterDocumentMountPointId: 'mount-gary',
+        }),
+      },
+      wardrobe: {
+        findByCharacterIdRaw,
+        createFromVault,
+      },
+    });
+
+    await syncCharacterVaultWardrobe('gary', new Set([tombstonedId]));
+
+    // Tombstoned id was not promoted into the DB.
+    expect(createFromVault).not.toHaveBeenCalled();
+
+    // And the projection step deleted the tombstoned vault file.
+    const deletedPaths = deleteDatabaseDocumentMock.mock.calls.map(([, p]) => p);
+    expect(deletedPaths).toContain('Wardrobe/Tombstoned Shirt.md');
+  });
 });
 
 describe('readCharacterVaultWardrobe — componentItems frontmatter', () => {

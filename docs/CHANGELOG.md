@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: deleting a wardrobe item from a vault-overlay character is no longer a no-op
+
+`WardrobeRepository.delete` removed the DB row and then ran `syncCharacterVaultWardrobe`, whose ingestion step re-created the row from the still-on-disk `Wardrobe/<title>.md` file (preserving the same id). The DB→vault projection then saw the resurrected row and left the file in place, so the API returned success but nothing was actually deleted; switching characters and back showed the item again.
+
+`syncCharacterVaultWardrobe` now accepts an optional `excludeIds: ReadonlySet<string>`. The delete path passes the deleted id through; the ingestion step skips ids in that set, the projection sweep treats their vault files as unmanaged, and the file is removed in the same sync. No other call sites pass `excludeIds`, so the create/update/archive paths are unchanged.
+
 #### Wardrobe control dialog
 
 New global wardrobe-management dialog reachable from a clothes-hanger button on the left sidebar (between Themes and Settings) and from a "Wardrobe" button on each participant card in the Salon. Available from every page that mounts the left sidebar.
