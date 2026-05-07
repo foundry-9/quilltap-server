@@ -4,6 +4,15 @@
 
 ### 4.4-dev
 
+#### Refactor: share wardrobe handler state/coverage/announcement utilities
+
+- Added `lib/tools/handlers/wardrobe-handler-shared.ts` to centralize:
+  - empty equipped-state construction
+  - current outfit state loading
+  - coverage summary computation from equipped slots
+  - outfit-announcement scheduling wrapper
+- Updated both `wardrobe-change-item-handler.ts` and `wardrobe-update-outfit-handler.ts` to consume the shared utility instead of maintaining duplicated helper implementations.
+
 #### Refactor: tighten Aurora wizard field mapping and restore Document Mode success diagnostics
 
 - Added `app/aurora/shared/wizard-text-fields.ts` as a single source of truth for AI Wizard text-field mapping.

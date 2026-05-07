@@ -15,12 +15,16 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeUpdateOutfitToolInput, WardrobeUpdateOutfitToolOutput } from '../wardrobe-update-outfit-tool';
 import { validateWardrobeUpdateOutfitInput } from '../wardrobe-update-outfit-tool';
-import { EMPTY_EQUIPPED_SLOTS, buildCoverageSummary, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { equipItem, removeFromSlot } from '@/lib/wardrobe/outfit-displacement';
-import { expandComposites } from '@/lib/wardrobe/expand-composites';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
-import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
+import {
+  buildWardrobeCoverageSummaryFromState,
+  emptyEquippedState,
+  loadCurrentWardrobeState,
+  scheduleWardrobeAnnouncement,
+} from './wardrobe-handler-shared';
 
 export interface WardrobeUpdateOutfitToolContext {
   userId: string;
@@ -39,7 +43,7 @@ export class WardrobeUpdateOutfitError extends Error {
 }
 
 function emptyState(): EquippedSlots {
-  return { top: [], bottom: [], footwear: [], accessories: [] };
+  return emptyEquippedState();
 }
 
 function buildFailureResponse(error: string): WardrobeUpdateOutfitToolOutput {
@@ -155,8 +159,8 @@ export async function executeWardrobeUpdateOutfitTool(
       });
     }
 
-    const currentState = await loadCurrentState(repos, context);
-    const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
+    const currentState = await loadCurrentWardrobeState(repos, context.chatId, context.characterId);
+    const coverageSummary = await buildWardrobeCoverageSummaryFromState(repos, currentState);
 
     await triggerAvatarGenerationIfEnabled(repos, {
       userId: context.userId,
@@ -165,7 +169,11 @@ export async function executeWardrobeUpdateOutfitTool(
       callerContext: 'wardrobe-update-outfit-handler',
     });
 
-    await scheduleAnnouncement(context);
+    await scheduleWardrobeAnnouncement('wardrobe-update-outfit-handler', {
+      userId: context.userId,
+      chatId: context.chatId,
+      characterId: context.characterId,
+    });
 
     return {
       success: true,
@@ -199,74 +207,6 @@ export async function executeWardrobeUpdateOutfitTool(
       error instanceof Error ? error.message : 'Unknown error during outfit update',
     );
   }
-}
-
-async function scheduleAnnouncement(context: WardrobeUpdateOutfitToolContext): Promise<void> {
-  try {
-    await enqueueWardrobeOutfitAnnouncement(context.userId, {
-      chatId: context.chatId,
-      characterId: context.characterId,
-    });
-  } catch (error) {
-    logger.warn('Failed to schedule wardrobe outfit announcement', {
-      context: 'wardrobe-update-outfit-handler',
-      chatId: context.chatId,
-      characterId: context.characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
-async function loadCurrentState(
-  repos: ReturnType<typeof getRepositories>,
-  context: WardrobeUpdateOutfitToolContext,
-): Promise<EquippedSlots> {
-  const equippedOutfit = await repos.chats.getEquippedOutfitForCharacter(
-    context.chatId,
-    context.characterId,
-  );
-  return equippedOutfit ?? { ...EMPTY_EQUIPPED_SLOTS };
-}
-
-async function buildCoverageSummaryFromState(
-  repos: ReturnType<typeof getRepositories>,
-  slots: EquippedSlots,
-): Promise<string> {
-  const allIds = new Set<string>();
-  for (const slotKey of WARDROBE_SLOT_TYPES) {
-    for (const id of slots[slotKey]) allIds.add(id);
-  }
-
-  const itemsById = new Map<string, WardrobeItem>();
-  if (allIds.size > 0) {
-    const fetched = await repos.wardrobe.findByIds(Array.from(allIds));
-    for (const item of fetched) itemsById.set(item.id, item);
-  }
-
-  const perSlotItems: Record<keyof EquippedSlots, WardrobeItem[]> = {
-    top: [],
-    bottom: [],
-    footwear: [],
-    accessories: [],
-  };
-
-  for (const slotKey of WARDROBE_SLOT_TYPES) {
-    const equippedIds = slots[slotKey];
-    if (equippedIds.length === 0) continue;
-
-    const { leafIds } = expandComposites(equippedIds, itemsById);
-    const seen = new Set<string>();
-    for (const leafId of leafIds) {
-      if (seen.has(leafId)) continue;
-      const leaf = itemsById.get(leafId);
-      if (!leaf) continue;
-      if (!leaf.types.includes(slotKey)) continue;
-      perSlotItems[slotKey].push(leaf);
-      seen.add(leafId);
-    }
-  }
-
-  return buildCoverageSummary(slots, perSlotItems);
 }
 
 /**
