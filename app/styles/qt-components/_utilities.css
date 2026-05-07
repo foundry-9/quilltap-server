@@ -23,6 +23,15 @@
   }
 
   /**
+   * Default background - the page/dialog default surface
+   * Pairs with qt-border-default. Use for popovers, sticky headers,
+   * and other elements that should match the underlying dialog/page.
+   */
+  .qt-bg-default {
+    background-color: var(--color-background);
+  }
+
+  /**
    * Surface alt background - slightly elevated/different surface
    * Use for nested containers, alternating rows, subtle highlights
    */
