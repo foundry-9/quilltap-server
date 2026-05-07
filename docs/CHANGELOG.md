@@ -4,6 +4,23 @@
 
 ### 4.4-dev
 
+#### Refactor: share wardrobe handler state/coverage/announcement utilities
+
+- Added `lib/tools/handlers/wardrobe-handler-shared.ts` to centralize:
+  - empty equipped-state construction
+  - current outfit state loading
+  - coverage summary computation from equipped slots
+  - outfit-announcement scheduling wrapper
+- Updated both `wardrobe-change-item-handler.ts` and `wardrobe-update-outfit-handler.ts` to consume the shared utility instead of maintaining duplicated helper implementations.
+- Added focused regression coverage in `__tests__/unit/lib/tools/handlers/wardrobe-handler-shared.test.ts`.
+
+#### Refactor: tighten Aurora wizard field mapping and restore Document Mode success diagnostics
+
+- Added `app/aurora/shared/wizard-text-fields.ts` as a single source of truth for AI Wizard text-field mapping.
+- Updated Aurora new/edit pages to use the shared mapping so `identity` and `manifesto` stay in sync across wizard apply + current-data payloads.
+- Added unit coverage for the shared helper in `__tests__/unit/app/aurora/shared/wizard-text-fields.test.ts`.
+- Restored structured `logger.debug` success-path diagnostics for Document Mode open/read/write/rename/delete operations in `app/api/v1/chats/[id]/actions/documents.ts`.
+
 #### Tests: extend unit test coverage for changes since 78d97ba
 
 Added five new test files covering new modules introduced since commit `78d97ba`:

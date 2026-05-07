@@ -7,6 +7,7 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription, type GeneratedWardrobeItem, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
 import { ImportModal } from '@/components/characters/system-prompts-editor/ImportModal'
 import type { PromptTemplate } from '@/components/characters/system-prompts-editor/types'
+import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../shared/wizard-text-fields'
 
 interface ConnectionProfile {
   id: string
@@ -45,16 +46,13 @@ export default function NewCharacterPage() {
 
   // Handle applying wizard-generated data
   const handleWizardApply = (data: GeneratedCharacterData) => {
-    setFormData((prev) => ({
-      ...prev,
-      ...(data.name && { name: data.name }),
-      ...(data.title && { title: data.title }),
-      ...(data.identity && { identity: data.identity }),
-      ...(data.description && { description: data.description }),
-      ...(data.personality && { personality: data.personality }),
-      ...(data.exampleDialogues && { exampleDialogues: data.exampleDialogues }),
-      ...(data.systemPrompt && { systemPrompt: data.systemPrompt }),
-    }))
+    setFormData((prev) => {
+      const next = { ...prev }
+      for (const entry of getGeneratedCharacterTextEntries(data)) {
+        next[entry.field] = entry.value
+      }
+      return next
+    })
     // Store physical description to save after character creation
     if (data.physicalDescription) {
       pendingPhysicalDescription.current = data.physicalDescription
@@ -482,13 +480,7 @@ export default function NewCharacterPage() {
         isOpen={showWizard}
         onClose={() => setShowWizard(false)}
         characterName={formData.name}
-        currentData={{
-          title: formData.title,
-          description: formData.description,
-          personality: formData.personality,
-          exampleDialogues: formData.exampleDialogues,
-          systemPrompt: formData.systemPrompt,
-        }}
+        currentData={buildWizardCurrentData(formData)}
         onApply={handleWizardApply}
       />
     </div>
