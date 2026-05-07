@@ -64,6 +64,22 @@ export function EquippedSlotRow({
     return () => document.removeEventListener('mousedown', onDoc)
   }, [pickerOpen])
 
+  // Close picker on Escape — capture phase + stopPropagation so the parent
+  // dialog's Escape handler doesn't also fire and dismiss the whole modal.
+  useEffect(() => {
+    if (!pickerOpen) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        e.preventDefault()
+        setPickerOpen(false)
+        setSearch('')
+      }
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [pickerOpen])
+
   const itemsById = useMemo(() => new Map(allItems.map((i) => [i.id, i])), [allItems])
 
   const equippedItems = useMemo(
@@ -83,7 +99,7 @@ export function EquippedSlotRow({
   return (
     <div className="qt-card py-2 px-3">
       <div className="flex items-center justify-between mb-1">
-        <span className={`qt-badge ${TYPE_BADGE_CLASS[slot]} qt-text-xs uppercase`}>{SLOT_LABEL[slot]}</span>
+        <span className={`qt-badge ${TYPE_BADGE_CLASS[slot]} qt-text-xs`}>{SLOT_LABEL[slot]}</span>
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -107,7 +123,7 @@ export function EquippedSlotRow({
       </div>
 
       {equippedItems.length === 0 ? (
-        <div className="qt-text-xs qt-text-secondary italic">— empty —</div>
+        <div className="qt-text-xs qt-text-secondary italic">Empty</div>
       ) : (
         <div className="flex flex-wrap gap-1">
           {equippedItems.map(({ id, item }) => {
@@ -118,7 +134,7 @@ export function EquippedSlotRow({
                 className="inline-flex items-center gap-1 rounded-full qt-bg-muted border qt-border-default px-2 py-0.5 qt-text-xs"
               >
                 {item?.title ?? <span className="qt-text-secondary italic">unknown</span>}
-                {isComposite && <span className="qt-text-secondary">· composite</span>}
+                {isComposite && <span className="qt-text-secondary">· bundle</span>}
                 <button
                   type="button"
                   aria-label={`Remove ${item?.title ?? 'item'}`}

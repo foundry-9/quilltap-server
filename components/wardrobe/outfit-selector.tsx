@@ -6,23 +6,24 @@
  * Allows selecting outfit modes and manual slot assignments for
  * LLM-controlled characters when creating a new chat.
  *
- * Each slot now accepts an array of items (multiple per slot for layering),
- * matching the post-rework wardrobe model. Manual mode renders a per-slot
- * checkbox group of every wardrobe item whose types include that slot;
- * checking an item adds it to the slot's array.
+ * The `Compose outfit` mode (was `Choose Outfit`) reveals an embedded
+ * `<OutfitComposer>` — the same component the wardrobe dialog uses for the
+ * Outfit Builder tab — seeded from the character's default-outfit items.
  *
  * @module components/wardrobe/outfit-selector
  */
 
-import { useCallback, useEffect, useState, useMemo } from 'react'
-import useSWR from 'swr'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   OutfitSelectionMode,
   WardrobeItem,
   WardrobeItemType,
   EquippedSlots,
 } from '@/lib/schemas/wardrobe.types'
-import { EMPTY_EQUIPPED_SLOTS, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
+import { EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types'
+import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
+import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
+import { OutfitComposer } from './outfit-composer'
 
 // ============================================================================
 // TYPES
@@ -112,88 +113,117 @@ function CharacterOutfitSection({
   const [expanded, setExpanded] = useState(false)
   const [internalMode, setInternalMode] = useState<OutfitSelectionMode>(selection.mode)
 
-  // Fetch wardrobe items when mode is manual
-  const { data: wardrobeData, isLoading: loadingWardrobe } = useSWR<{ wardrobeItems: WardrobeItem[] }>(
-    internalMode === 'manual'
-      ? `/api/v1/characters/${character.id}/wardrobe`
-      : null
+  // Load wardrobe (personal + archetypes) only when we're in manual mode.
+  // The hook returns an empty list before items are needed.
+  const { items: allWardrobeItems, loading: loadingWardrobe } = useCharacterWardrobeItems(
+    internalMode === 'manual' ? character.id : null,
+  )
+  const wardrobeFetched = !loadingWardrobe && allWardrobeItems.length > 0
+
+  // Visible items: skip archived and items lacking any of the four slots
+  // (defensive — schemas already enforce non-empty types).
+  const wardrobeItems = useMemo(
+    () => allWardrobeItems.filter((i) => !i.archivedAt),
+    [allWardrobeItems],
   )
 
-  const wardrobeItems = useMemo(() => wardrobeData?.wardrobeItems ?? [], [wardrobeData])
-  const wardrobeFetched = wardrobeData !== undefined
+  // Track whether we've already seeded the manual slots from defaults — once
+  // seeded, subsequent edits stay user-driven.
+  const seededRef = useRef(false)
+  useEffect(() => {
+    if (internalMode !== 'manual') return
+    if (seededRef.current) return
+    if (wardrobeItems.length === 0) return
+    if (selection.slots && Object.values(selection.slots).some((arr) => arr.length > 0)) {
+      seededRef.current = true
+      return
+    }
+    const defaults = buildDefaultOutfit(wardrobeItems)
+    seededRef.current = true
+    onChange({ characterId: character.id, mode: 'manual', slots: defaults })
+  }, [internalMode, wardrobeItems, selection.slots, character.id, onChange])
 
   const handleModeChange = useCallback(
     (mode: OutfitSelectionMode) => {
       setInternalMode(mode)
-
       const updated: OutfitSelection = {
         characterId: character.id,
         mode,
-        slots: mode === 'manual' ? selection.slots || { ...EMPTY_EQUIPPED_SLOTS } : undefined,
+        slots:
+          mode === 'manual'
+            ? selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
+            : undefined,
       }
       onChange(updated)
     },
-    [character.id, selection.slots, onChange]
+    [character.id, selection.slots, onChange],
   )
 
-  const handleToggleItem = useCallback(
-    (slot: WardrobeItemType, itemId: string, checked: boolean) => {
-      const currentSlots = selection.slots || { ...EMPTY_EQUIPPED_SLOTS }
-      const currentArray = currentSlots[slot] ?? []
-      let nextArray: string[]
-      if (checked) {
-        if (currentArray.includes(itemId)) {
-          nextArray = currentArray
-        } else {
-          nextArray = [...currentArray, itemId]
-        }
-      } else {
-        nextArray = currentArray.filter((id) => id !== itemId)
-      }
-
-      const updated: OutfitSelection = {
-        characterId: character.id,
-        mode: 'manual',
-        slots: { ...currentSlots, [slot]: nextArray },
-      }
-      onChange(updated)
+  const handleAddToSlot = useCallback(
+    (slot: WardrobeItemType, itemId: string) => {
+      const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
+      if ((currentSlots[slot] ?? []).includes(itemId)) return
+      const next = { ...currentSlots, [slot]: [...(currentSlots[slot] ?? []), itemId] }
+      onChange({ characterId: character.id, mode: 'manual', slots: next })
     },
-    [character.id, selection.slots, onChange]
+    [character.id, selection.slots, onChange],
   )
 
-  const getItemsForSlot = useCallback(
-    (slot: WardrobeItemType): WardrobeItem[] => {
-      return wardrobeItems.filter((item) => item.types.includes(slot))
+  const handleRemoveFromSlot = useCallback(
+    (slot: WardrobeItemType, itemId: string) => {
+      const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
+      const next = {
+        ...currentSlots,
+        [slot]: (currentSlots[slot] ?? []).filter((id) => id !== itemId),
+      }
+      onChange({ characterId: character.id, mode: 'manual', slots: next })
     },
-    [wardrobeItems]
+    [character.id, selection.slots, onChange],
+  )
+
+  const handleClearSlot = useCallback(
+    (slot: WardrobeItemType) => {
+      const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
+      const next = { ...currentSlots, [slot]: [] }
+      onChange({ characterId: character.id, mode: 'manual', slots: next })
+    },
+    [character.id, selection.slots, onChange],
   )
 
   const modeOptions: Array<{
     value: OutfitSelectionMode
     label: string
     description?: string
-    disabled?: boolean
   }> = [
     ...(showPreviousChatOption
       ? [
           {
             value: 'previous_chat' as OutfitSelectionMode,
             label: 'Same as last conversation',
-            description: 'Carry forward whatever they were wearing at the end of the source chat',
+            description:
+              'Carry forward whatever they were wearing at the end of the source chat',
           },
         ]
       : []),
-    { value: 'default', label: 'Use Defaults' },
-    { value: 'manual', label: 'Choose Outfit' },
+    {
+      value: 'default',
+      label: 'Use defaults',
+      description: 'Items marked default in their wardrobe.',
+    },
+    {
+      value: 'manual',
+      label: 'Compose outfit',
+      description: 'Pick the starting outfit slot by slot.',
+    },
     {
       value: 'llm_choose',
-      label: 'Let Character Choose',
-      description: 'The character picks their own outfit based on the scenario',
+      label: 'Let character choose',
+      description: 'The character picks based on the scenario.',
     },
     {
       value: 'none',
-      label: 'None',
-      description: 'Character will start undressed',
+      label: 'Start undressed',
+      description: 'Character will start undressed.',
     },
   ]
 
@@ -205,12 +235,21 @@ function CharacterOutfitSection({
         if (items.length === 0) return null
         return { slot, titles: items.map((i) => i.title) }
       })
-      .filter((entry): entry is { slot: 'top' | 'bottom' | 'footwear' | 'accessories'; titles: string[] } => entry !== null)
+      .filter(
+        (entry): entry is {
+          slot: 'top' | 'bottom' | 'footwear' | 'accessories'
+          titles: string[]
+        } => entry !== null,
+      )
     if (equipped.length === 0) {
       return 'Nothing equipped at the end of the source chat — defaults will be used.'
     }
-    return equipped.map((e) => `${SLOT_LABELS[e.slot]}: ${e.titles.join(', ')}`).join(' · ')
+    return equipped
+      .map((e) => `${SLOT_LABELS[e.slot]}: ${e.titles.join(', ')}`)
+      .join(' · ')
   })()
+
+  const stagedSlots = selection.slots ?? EMPTY_EQUIPPED_SLOTS
 
   return (
     <div className="rounded-lg border qt-border-default qt-bg-muted/20 p-3">
@@ -221,16 +260,19 @@ function CharacterOutfitSection({
           className="flex w-full items-center justify-between text-left cursor-pointer"
           disabled={disabled}
         >
-          <span className="text-sm font-medium qt-text-primary">
-            {character.name}
-          </span>
+          <span className="text-sm font-medium qt-text-primary">{character.name}</span>
           <svg
             className={`w-4 h-4 qt-text-secondary transition-transform ${expanded ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
           </svg>
         </button>
       )}
@@ -242,11 +284,7 @@ function CharacterOutfitSection({
             {modeOptions.map((opt) => (
               <label
                 key={opt.value}
-                className={`flex items-start gap-2 rounded px-2 py-1.5 text-sm transition ${
-                  opt.disabled
-                    ? 'opacity-50 cursor-not-allowed'
-                    : 'cursor-pointer hover:qt-bg-muted/40'
-                }`}
+                className="flex items-start gap-2 rounded px-2 py-1.5 text-sm transition cursor-pointer hover:qt-bg-muted/40"
               >
                 <input
                   type="radio"
@@ -254,7 +292,7 @@ function CharacterOutfitSection({
                   value={opt.value}
                   checked={internalMode === opt.value}
                   onChange={() => handleModeChange(opt.value)}
-                  disabled={disabled || opt.disabled}
+                  disabled={disabled}
                   className="mt-0.5 accent-[var(--primary)]"
                 />
                 <div className="flex-1 min-w-0">
@@ -269,72 +307,29 @@ function CharacterOutfitSection({
             ))}
           </div>
 
-          {/* Manual slot pickers — multi-select per slot */}
+          {/* Compose outfit — embedded composer, no take-off / break-apart */}
           {internalMode === 'manual' && (
-            <div className="mt-3 space-y-3 pl-6">
+            <div className="mt-3 pl-6">
               {loadingWardrobe ? (
-                <p className="text-xs qt-text-secondary">Loading wardrobe...</p>
+                <p className="text-xs qt-text-secondary">Loading wardrobe…</p>
               ) : wardrobeItems.length === 0 && wardrobeFetched ? (
                 <p className="text-xs qt-text-secondary italic">
                   No wardrobe items found. Add items in the character&apos;s wardrobe tab.
                 </p>
               ) : (
-                WARDROBE_SLOT_TYPES.map((slot) => {
-                  const items = getItemsForSlot(slot)
-                  const slotSelections = selection.slots?.[slot] ?? []
-                  return (
-                    <div key={slot}>
-                      <div className="mb-1 flex items-baseline justify-between">
-                        <span className="text-xs font-medium qt-text-secondary">
-                          {SLOT_LABELS[slot]}
-                        </span>
-                        <span className="text-xs qt-text-secondary italic">
-                          {slotSelections.length === 0
-                            ? '(none)'
-                            : `${slotSelections.length} selected`}
-                        </span>
-                      </div>
-                      {items.length === 0 ? (
-                        <p className="text-xs qt-text-secondary italic">
-                          No items cover this slot.
-                        </p>
-                      ) : (
-                        <div className="space-y-1">
-                          {items.map((item) => {
-                            const isComposite = (item.componentItemIds?.length ?? 0) > 0
-                            const checked = slotSelections.includes(item.id)
-                            return (
-                              <label
-                                key={item.id}
-                                className="flex items-start gap-2 rounded px-2 py-1 text-xs cursor-pointer hover:qt-bg-muted/40"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) =>
-                                    handleToggleItem(slot, item.id, e.target.checked)
-                                  }
-                                  disabled={disabled}
-                                  className="mt-0.5 accent-[var(--primary)]"
-                                />
-                                <span className="qt-text-primary">
-                                  {item.title}
-                                  {item.isDefault ? ' (Default)' : ''}
-                                  {isComposite ? ' · composite' : ''}
-                                </span>
-                              </label>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })
+                <OutfitComposer
+                  items={wardrobeItems}
+                  slots={stagedSlots}
+                  onAddToSlot={handleAddToSlot}
+                  onRemoveFromSlot={handleRemoveFromSlot}
+                  onClearSlot={handleClearSlot}
+                  showBundleActions={false}
+                />
               )}
             </div>
           )}
 
-          {/* Warning for none mode */}
+          {/* Warning for "Start undressed" */}
           {internalMode === 'none' && (
             <div className="mt-2 ml-6 rounded border qt-border-warning/50 qt-bg-warning/10 px-2 py-1.5 text-xs qt-text-warning">
               Character will start undressed
@@ -391,7 +386,7 @@ export function OutfitSelector({
         return next
       })
     },
-    []
+    [],
   )
 
   if (characters.length === 0) return null
@@ -400,9 +395,7 @@ export function OutfitSelector({
 
   return (
     <div className="space-y-2">
-      <label className="mb-2 block text-sm qt-text-primary">
-        Starting Outfit
-      </label>
+      <label className="mb-2 block text-sm qt-text-primary">Starting Outfit</label>
       {characters.map((char) => (
         <CharacterOutfitSection
           key={char.id}

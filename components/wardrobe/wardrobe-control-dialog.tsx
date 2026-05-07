@@ -29,19 +29,13 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { useOutfit } from '@/lib/hooks/use-outfit'
+import { type EquippedBundle } from '@/lib/wardrobe/group-equipped'
+import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
+import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
 import { WardrobeItemEditor } from './wardrobe-item-editor'
 import { WardrobeItemRow } from './wardrobe-item-row'
-import { EquippedSlotRow } from './equipped-slot-row'
-
-/** Build a fresh fitting-room snapshot from the items marked `isDefault: true`. */
-function buildDefaultFittingSlots(items: WardrobeItem[]): EquippedSlots {
-  const next: EquippedSlots = { top: [], bottom: [], footwear: [], accessories: [] }
-  for (const item of items) {
-    if (!item.isDefault || item.archivedAt) continue
-    for (const slot of item.types) next[slot].push(item.id)
-  }
-  return next
-}
+import { OutfitComposer } from './outfit-composer'
+import { ImportFromImageModal } from './import-from-image-modal'
 
 /** Deep-copy a slot snapshot (so callers can mutate without aliasing). */
 function cloneSlots(slots: EquippedSlots): EquippedSlots {
@@ -51,6 +45,44 @@ function cloneSlots(slots: EquippedSlots): EquippedSlots {
     footwear: [...slots.footwear],
     accessories: [...slots.accessories],
   }
+}
+
+/**
+ * Remove a bundle's composite id from every slot it occupies.
+ */
+function takeOffBundleFromSlots(
+  slots: EquippedSlots,
+  bundle: EquippedBundle,
+): EquippedSlots {
+  const next = cloneSlots(slots)
+  for (const slot of bundle.occupiedSlots) {
+    next[slot] = next[slot].filter((id) => id !== bundle.compositeId)
+  }
+  return next
+}
+
+/**
+ * Replace a bundle's composite id with its direct component ids in every slot
+ * it occupies. Multi-slot leaves go into all slots they cover.
+ */
+function breakApartBundleInSlots(
+  slots: EquippedSlots,
+  bundle: EquippedBundle,
+  itemsById: Map<string, WardrobeItem>,
+): EquippedSlots {
+  const composite = itemsById.get(bundle.compositeId)
+  if (!composite) return slots
+  const next = cloneSlots(slots)
+  for (const slot of bundle.occupiedSlots) {
+    const replacementIds = composite.componentItemIds.filter((leafId) => {
+      const leaf = itemsById.get(leafId)
+      return leaf?.types.includes(slot) ?? false
+    })
+    next[slot] = next[slot].flatMap((id) =>
+      id === bundle.compositeId ? replacementIds : [id],
+    )
+  }
+  return next
 }
 
 interface CharacterSummary {
@@ -67,8 +99,24 @@ interface ImageProfileSummary {
   isDefault: boolean
 }
 
-type FilterChip = 'all' | WardrobeItemType | 'composite'
-const FILTER_CHIPS: FilterChip[] = ['all', 'top', 'bottom', 'footwear', 'accessories', 'composite']
+type SlotFilter = 'all' | WardrobeItemType
+const SLOT_FILTERS: SlotFilter[] = ['all', 'top', 'bottom', 'footwear', 'accessories']
+type ItemKind = 'items' | 'outfits'
+type RightTab = 'live' | 'builder'
+type EditorIntent = 'create-single' | 'create-bundle'
+
+/** Deep array equality on the four EquippedSlots arrays, in order. */
+function equippedSlotsEqual(a: EquippedSlots, b: EquippedSlots): boolean {
+  for (const slot of WARDROBE_SLOT_TYPES) {
+    const av = a[slot]
+    const bv = b[slot]
+    if (av.length !== bv.length) return false
+    for (let i = 0; i < av.length; i++) {
+      if (av[i] !== bv[i]) return false
+    }
+  }
+  return true
+}
 
 /**
  * Wrapper component used by the layout. Reads context from the provider and
@@ -100,11 +148,18 @@ function WardrobeControlDialogInner({
 }: InnerProps) {
   const [characters, setCharacters] = useState<CharacterSummary[]>([])
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(initialCharacterId)
-  const [items, setItems] = useState<WardrobeItem[]>([])
-  const [itemsLoading, setItemsLoading] = useState(false)
+  const { items, loading: itemsLoading, reload: reloadItems } = useCharacterWardrobeItems(
+    selectedCharacterId,
+  )
   const [editingItem, setEditingItem] = useState<WardrobeItem | null>(null)
-  const [creatingNew, setCreatingNew] = useState(false)
-  const [filter, setFilter] = useState<FilterChip>('all')
+  /** null = no editor open; 'create-single' / 'create-bundle' = new item in that mode */
+  const [creatingNew, setCreatingNew] = useState<EditorIntent | null>(null)
+  /** Pre-populated component ids when Save-as-outfit opens the editor in bundle mode. */
+  const [createBundleComponents, setCreateBundleComponents] = useState<string[]>([])
+  const [importFromImageOpen, setImportFromImageOpen] = useState(false)
+  const [slotFilter, setSlotFilter] = useState<SlotFilter>('all')
+  const [kindFilter, setKindFilter] = useState<ItemKind>('items')
+  const [titleFilter, setTitleFilter] = useState('')
   const [updatingDefaultId, setUpdatingDefaultId] = useState<string | null>(null)
 
   // Image profiles + avatar gen state
@@ -122,9 +177,11 @@ function WardrobeControlDialogInner({
     ...EMPTY_EQUIPPED_SLOTS,
   }))
   const isInChat = chatId !== null
-  const [rightTab, setRightTab] = useState<'wearing' | 'fitting'>(
-    isInChat ? 'wearing' : 'fitting',
+  const [rightTab, setRightTab] = useState<RightTab>(
+    isInChat ? 'live' : 'builder',
   )
+  const [resetMenuOpen, setResetMenuOpen] = useState(false)
+  const resetMenuRef = useRef<HTMLDivElement>(null)
   const fittingSeedKeyRef = useRef<string | null>(null)
 
   const characterIdsForOutfit = useMemo(
@@ -186,42 +243,6 @@ function WardrobeControlDialogInner({
   }, [])
 
   // ---------------------------------------------------------------------------
-  // Load wardrobe items for the selected character (incl. shared archetypes)
-  // ---------------------------------------------------------------------------
-  const loadItems = useCallback(async (characterId: string): Promise<void> => {
-    setItemsLoading(true)
-    try {
-      const [personalRes, archetypeRes] = await Promise.all([
-        fetch(`/api/v1/characters/${characterId}/wardrobe`),
-        fetch('/api/v1/wardrobe'),
-      ])
-      const collected: WardrobeItem[] = []
-      if (personalRes.ok) {
-        const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItem[] }
-        for (const w of data.wardrobeItems ?? []) collected.push(w)
-      }
-      if (archetypeRes.ok) {
-        const data = (await archetypeRes.json()) as { wardrobeItems?: WardrobeItem[] }
-        for (const w of data.wardrobeItems ?? []) {
-          if (!collected.some((c) => c.id === w.id)) collected.push(w)
-        }
-      }
-      setItems(collected)
-    } catch (err) {
-      console.warn('[WardrobeControlDialog] Failed to load wardrobe', err)
-      setItems([])
-    } finally {
-      setItemsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!selectedCharacterId) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- loadItems wraps an async fetch; the setState lands well after this effect tick
-    void loadItems(selectedCharacterId)
-  }, [selectedCharacterId, loadItems])
-
-  // ---------------------------------------------------------------------------
   // Fitting-room seeding
   //
   // Seed once per character. In chat we wait for both `outfit.outfitState`
@@ -241,7 +262,7 @@ function WardrobeControlDialogInner({
 
     const seed = isInChat && wornSlots
       ? cloneSlots(wornSlots)
-      : buildDefaultFittingSlots(items)
+      : buildDefaultOutfit(items)
     setFittingSlots(seed)
   }, [selectedCharacterId, chatId, isInChat, outfit.outfitState, items])
 
@@ -250,13 +271,17 @@ function WardrobeControlDialogInner({
   // ---------------------------------------------------------------------------
   const filteredItems = useMemo(() => {
     const sorted = [...items].sort((a, b) => a.title.localeCompare(b.title))
+    const term = titleFilter.trim().toLowerCase()
     return sorted.filter((i) => {
       if (i.archivedAt) return false
-      if (filter === 'all') return true
-      if (filter === 'composite') return i.componentItemIds.length > 0
-      return i.types.includes(filter)
+      const isComposite = i.componentItemIds.length > 0
+      if (kindFilter === 'items' && isComposite) return false
+      if (kindFilter === 'outfits' && !isComposite) return false
+      if (slotFilter !== 'all' && !i.types.includes(slotFilter)) return false
+      if (term && !i.title.toLowerCase().includes(term)) return false
+      return true
     })
-  }, [items, filter])
+  }, [items, slotFilter, kindFilter, titleFilter])
 
   // ---------------------------------------------------------------------------
   // Item action handlers
@@ -278,12 +303,12 @@ function WardrobeControlDialogInner({
           showErrorToast(result.error || 'Failed to update item')
           return
         }
-        await loadItems(selectedCharacterId)
+        await reloadItems()
       } finally {
         setUpdatingDefaultId(null)
       }
     },
-    [selectedCharacterId, loadItems],
+    [selectedCharacterId, reloadItems],
   )
 
   const handleDelete = useCallback(
@@ -299,13 +324,13 @@ function WardrobeControlDialogInner({
         return
       }
       showSuccessToast(`Deleted "${item.title}"`)
-      await loadItems(selectedCharacterId)
+      await reloadItems()
       if (isInChat) {
         outfit.invalidateWardrobe(selectedCharacterId)
         await outfit.refreshOutfit()
       }
     },
-    [selectedCharacterId, loadItems, isInChat, outfit],
+    [selectedCharacterId, reloadItems, isInChat, outfit],
   )
 
   const handleEquipItem = useCallback(
@@ -382,16 +407,128 @@ function WardrobeControlDialogInner({
   const fittingResetToWorn = useCallback(() => {
     if (!selectedCharacterId) return
     const wornSlots = outfit.outfitState[selectedCharacterId]?.slots
-    setFittingSlots(wornSlots ? cloneSlots(wornSlots) : { ...EMPTY_EQUIPPED_SLOTS })
-  }, [selectedCharacterId, outfit.outfitState])
+    const target = wornSlots ? cloneSlots(wornSlots) : { ...EMPTY_EQUIPPED_SLOTS }
+    if (
+      !equippedSlotsEqual(fittingSlots, target) &&
+      !window.confirm(
+        'Discard your composition and start from what’s currently worn?',
+      )
+    ) {
+      return
+    }
+    setFittingSlots(target)
+  }, [selectedCharacterId, outfit.outfitState, fittingSlots])
 
   const fittingResetToDefaults = useCallback(() => {
-    setFittingSlots(buildDefaultFittingSlots(items))
-  }, [items])
+    const target = buildDefaultOutfit(items)
+    if (
+      !equippedSlotsEqual(fittingSlots, target) &&
+      !window.confirm(
+        'Discard your composition and start from this character’s default outfit?',
+      )
+    ) {
+      return
+    }
+    setFittingSlots(target)
+  }, [items, fittingSlots])
 
   const fittingClearAll = useCallback(() => {
+    if (
+      !equippedSlotsEqual(fittingSlots, EMPTY_EQUIPPED_SLOTS) &&
+      !window.confirm('Empty every slot in the Outfit Builder?')
+    ) {
+      return
+    }
     setFittingSlots({ ...EMPTY_EQUIPPED_SLOTS })
-  }, [])
+  }, [fittingSlots])
+
+  /**
+   * Open the editor in `Outfit bundle` mode with `componentItemIds`
+   * pre-populated from the staged slots. Composite ids are preserved by
+   * reference (per the spec's §5 default 1) — the server's cycle detection
+   * + union-of-types computation handles the resulting outfit correctly.
+   */
+  const handleSaveAsOutfit = useCallback(() => {
+    if (!selectedCharacterId) return
+    const seen = new Set<string>()
+    const components: string[] = []
+    for (const slot of WARDROBE_SLOT_TYPES) {
+      for (const id of fittingSlots[slot]) {
+        if (!seen.has(id)) {
+          seen.add(id)
+          components.push(id)
+        }
+      }
+    }
+    setCreateBundleComponents(components)
+    setCreatingNew('create-bundle')
+  }, [selectedCharacterId, fittingSlots])
+
+  /**
+   * Live atomic replace via `mode: 'set_all'` — used by the bundle-card
+   * "Take off" / "Break apart" actions when the user is on the Wearing-now
+   * tab. Aurora announcement + avatar regen still fire server-side.
+   */
+  const liveSetAll = useCallback(
+    async (next: EquippedSlots) => {
+      if (!selectedCharacterId || !chatId) return
+      const result = await fetchJson<{ equippedSlots: EquippedSlots }>(
+        `/api/v1/chats/${chatId}?action=equip`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            characterId: selectedCharacterId,
+            mode: 'set_all',
+            slots: next,
+          }),
+        },
+      )
+      if (!result.ok) {
+        showErrorToast(result.error || 'Failed to update outfit')
+        return
+      }
+      outfit.invalidateWardrobe(selectedCharacterId)
+      await outfit.refreshOutfit()
+    },
+    [selectedCharacterId, chatId, outfit],
+  )
+
+  const handleLiveTakeOffBundle = useCallback(
+    (bundle: EquippedBundle) => {
+      const wornSlots = selectedCharacterId
+        ? outfit.outfitState[selectedCharacterId]?.slots
+        : null
+      if (!wornSlots) return
+      void liveSetAll(takeOffBundleFromSlots(wornSlots, bundle))
+    },
+    [selectedCharacterId, outfit.outfitState, liveSetAll],
+  )
+
+  const handleLiveBreakApartBundle = useCallback(
+    (bundle: EquippedBundle) => {
+      const wornSlots = selectedCharacterId
+        ? outfit.outfitState[selectedCharacterId]?.slots
+        : null
+      if (!wornSlots) return
+      void liveSetAll(breakApartBundleInSlots(wornSlots, bundle, itemsById))
+    },
+    [selectedCharacterId, outfit.outfitState, itemsById, liveSetAll],
+  )
+
+  const handleFittingTakeOffBundle = useCallback(
+    (bundle: EquippedBundle) => {
+      setFittingSlots((prev) => takeOffBundleFromSlots(prev, bundle))
+    },
+    [],
+  )
+
+  const handleFittingBreakApartBundle = useCallback(
+    (bundle: EquippedBundle) => {
+      setFittingSlots((prev) => breakApartBundleInSlots(prev, bundle, itemsById))
+    },
+    [itemsById],
+  )
 
   /**
    * Wear this fitting room composition: atomic replace via `mode: 'set_all'`.
@@ -424,11 +561,11 @@ function WardrobeControlDialogInner({
   }, [selectedCharacterId, chatId, fittingSlots, outfit, onClose])
 
   /**
-   * Add an item via the wardrobe row's "Wear" / "+ Layer" buttons. Routes to
-   * the fitting room when the fitting tab is active (or always out of chat),
+   * Add an item via the wardrobe row's primary buttons. Routes to the
+   * Outfit Builder when the builder tab is active (or always out of chat),
    * else hits the live equip API.
    */
-  const useFittingActions = !isInChat || rightTab === 'fitting'
+  const useFittingActions = !isInChat || rightTab === 'builder'
 
   const rowEquip = useCallback(
     async (item: WardrobeItem) => {
@@ -533,9 +670,33 @@ function WardrobeControlDialogInner({
     [characters, selectedCharacterId],
   )
 
-  // While the editor is up, don't let a click inside it (rendered as a
-  // sibling) close the outer dialog via BaseModal's click-outside handler.
-  const editorOpen = Boolean(editingItem || creatingNew)
+  // While the editor or import modal is up, don't let a click inside them
+  // (rendered as siblings) close the outer dialog via BaseModal's
+  // click-outside handler.
+  const editorOpen = Boolean(editingItem || creatingNew || importFromImageOpen)
+
+  // Close Reset menu on outside click + Escape
+  useEffect(() => {
+    if (!resetMenuOpen) return
+    const onDoc = (e: MouseEvent): void => {
+      if (resetMenuRef.current && !resetMenuRef.current.contains(e.target as Node)) {
+        setResetMenuOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        e.preventDefault()
+        setResetMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey, true)
+    }
+  }, [resetMenuOpen])
 
   return (
     <>
@@ -559,12 +720,19 @@ function WardrobeControlDialogInner({
           </div>
         }
       >
-        {/* Character selector + filter chips */}
+        {/* Character selector */}
         <div className="flex flex-col gap-3 mb-3">
           <div className="flex items-center gap-2">
             <label htmlFor="wardrobe-char-select" className="qt-text-sm qt-text-secondary">
               Character:
             </label>
+            {selectedCharacter?.avatarUrl && (
+              <img
+                src={selectedCharacter.avatarUrl}
+                alt=""
+                className="w-6 h-6 rounded-full object-cover qt-bg-muted border qt-border-default flex-shrink-0"
+              />
+            )}
             <select
               id="wardrobe-char-select"
               className="qt-select flex-1 max-w-md"
@@ -582,47 +750,58 @@ function WardrobeControlDialogInner({
                 </option>
               ))}
             </select>
-            {isInChat && (
-              <span className="qt-text-xs qt-text-secondary">
-                In chat — equip controls active
-              </span>
-            )}
           </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
           {/* LEFT: Wardrobe list */}
-          <section className="flex flex-col min-h-0">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="qt-section-title">Wardrobe</h3>
-              <button
-                type="button"
-                className="qt-button-primary qt-button-sm"
-                disabled={!selectedCharacterId}
-                onClick={() => setCreatingNew(true)}
+          <section className="flex flex-col min-h-0 relative">
+            <div className="flex flex-col gap-2 mb-2">
+              <input
+                type="search"
+                value={titleFilter}
+                onChange={(e) => setTitleFilter(e.target.value)}
+                placeholder="Search wardrobe…"
+                className="qt-input qt-input-sm"
+                aria-label="Search wardrobe by title"
+              />
+              <div
+                role="tablist"
+                aria-label="Item kind"
+                className="inline-flex gap-1 qt-bg-muted/50 rounded-lg p-1 self-start"
               >
-                + New Item
-              </button>
+                {(['items', 'outfits'] as ItemKind[]).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    role="tab"
+                    aria-selected={kindFilter === k}
+                    onClick={() => setKindFilter(k)}
+                    className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                      kindFilter === k
+                        ? 'qt-bg-default text-foreground shadow-sm'
+                        : 'qt-text-secondary hover:text-foreground'
+                    }`}
+                  >
+                    {k === 'items' ? 'Items' : 'Outfits'}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {SLOT_FILTERS.map((slot) => (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() => setSlotFilter(slot)}
+                    className={`qt-button-sm ${slotFilter === slot ? 'qt-button-secondary' : 'qt-button-ghost'}`}
+                  >
+                    {slot === 'all' ? 'All' : slot[0].toUpperCase() + slot.slice(1)}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-1 mb-2">
-              {FILTER_CHIPS.map((chip) => (
-                <button
-                  key={chip}
-                  type="button"
-                  onClick={() => setFilter(chip)}
-                  className={`qt-button-sm ${filter === chip ? 'qt-button-secondary' : 'qt-button-ghost'}`}
-                >
-                  {chip === 'all'
-                    ? 'All'
-                    : chip === 'composite'
-                      ? 'Composites'
-                      : chip[0].toUpperCase() + chip.slice(1)}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-1 max-h-[55vh]">
+            <div className="flex-1 overflow-y-auto space-y-1 max-h-[55vh] pb-12">
               {!selectedCharacterId ? (
                 <div className="qt-text-sm qt-text-secondary px-3 py-4">
                   Select a character to see their wardrobe.
@@ -642,10 +821,10 @@ function WardrobeControlDialogInner({
                     // `inChat` here gates the visibility of the row's
                     // Wear/+Layer buttons; we want them visible whenever
                     // the dialog is showing equip-able state — that's any
-                    // time (in chat → live or fitting; out of chat → fitting).
+                    // time (in chat → live or builder; out of chat → builder).
                     inChat
                     equipLabel={useFittingActions ? 'Try on' : 'Wear'}
-                    layerLabel={useFittingActions ? '+ Add' : '+ Layer'}
+                    addAction={useFittingActions ? 'add' : 'layer'}
                     isUpdatingDefault={updatingDefaultId === item.id}
                     onToggleDefault={handleToggleDefault}
                     onEdit={(it) => setEditingItem(it)}
@@ -656,110 +835,175 @@ function WardrobeControlDialogInner({
                 ))
               )}
             </div>
+
+            {/* Sticky create / import controls */}
+            <div className="sticky bottom-0 -mx-1 px-1 pt-2 pb-1 qt-bg-default border-t qt-border-default flex items-center gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setImportFromImageOpen(true)}
+                disabled={!selectedCharacterId}
+                className="qt-button-ghost qt-button-sm"
+                title="Import wardrobe items from a reference image"
+              >
+                Import from image
+              </button>
+              <button
+                type="button"
+                className="qt-button-primary qt-button-sm"
+                disabled={!selectedCharacterId}
+                onClick={() => setCreatingNew('create-single')}
+              >
+                + New Item
+              </button>
+            </div>
           </section>
 
-          {/* RIGHT: Wearing now / Fitting room — fitting room always present;
-              "Wearing now" only when there's a chat to mutate against. */}
+          {/* RIGHT: Live outfit / Outfit Builder — Builder always present;
+              Live outfit only when there's a chat to mutate against. */}
           {selectedCharacterId && (
             <section className="flex flex-col min-h-0">
               <div className="flex items-center gap-1 mb-2 qt-tab-group">
                 {isInChat && (
                   <button
                     type="button"
-                    onClick={() => setRightTab('wearing')}
-                    className={`qt-tab ${rightTab === 'wearing' ? 'qt-tab-active' : ''}`}
+                    onClick={() => setRightTab('live')}
+                    className={`qt-tab ${rightTab === 'live' ? 'qt-tab-active' : ''}`}
                   >
-                    Wearing now
+                    Live outfit
+                    {selectedCharacter && (
+                      <span className="qt-text-xs qt-text-secondary ml-1">
+                        · {selectedCharacter.name} in this chat
+                      </span>
+                    )}
                   </button>
                 )}
                 <button
                   type="button"
-                  onClick={() => setRightTab('fitting')}
-                  className={`qt-tab ${rightTab === 'fitting' ? 'qt-tab-active' : ''}`}
+                  onClick={() => setRightTab('builder')}
+                  className={`qt-tab ${rightTab === 'builder' ? 'qt-tab-active' : ''}`}
                 >
-                  Fitting room
+                  Outfit Builder
                 </button>
               </div>
 
-              {rightTab === 'wearing' && isInChat ? (
+              {rightTab === 'live' && isInChat ? (
                 <div className="space-y-2 mb-3">
                   <p className="qt-text-xs qt-text-secondary px-1">
-                    What this character is actually wearing in this chat. Edits here
-                    persist immediately.
+                    Edits commit immediately.
                   </p>
-                  {WARDROBE_SLOT_TYPES.map((slot) => (
-                    <EquippedSlotRow
-                      key={slot}
-                      slot={slot}
-                      equippedIds={equippedSlots?.[slot] ?? []}
-                      allItems={items}
-                      onAdd={handleSlotAdd}
-                      onRemove={handleSlotRemove}
-                      onClear={handleSlotClear}
-                    />
-                  ))}
+                  <OutfitComposer
+                    items={items}
+                    slots={equippedSlots ?? EMPTY_EQUIPPED_SLOTS}
+                    onAddToSlot={handleSlotAdd}
+                    onRemoveFromSlot={handleSlotRemove}
+                    onClearSlot={handleSlotClear}
+                    showBundleActions
+                    onTakeOffBundle={handleLiveTakeOffBundle}
+                    onBreakApartBundle={handleLiveBreakApartBundle}
+                  />
                 </div>
               ) : (
                 <div className="space-y-2 mb-3">
                   <p className="qt-text-xs qt-text-secondary px-1">
-                    A virtual outfit just for the avatar generator — no equip API
-                    calls, nothing committed to the chat. Edit freely, then either
-                    click Generate avatar below or, in chat, hit&nbsp;
-                    <em>Wear this</em> to commit the composition.
+                    Compose an outfit. Save it as a reusable bundle, try it on, or
+                    generate a preview avatar.
                   </p>
-                  <div className="flex flex-wrap gap-1 px-1">
+                  <div className="flex flex-wrap gap-1 px-1 items-center">
+                    <button
+                      type="button"
+                      onClick={handleSaveAsOutfit}
+                      className="qt-button-primary qt-button-sm"
+                      title="Save this composition as a new outfit bundle"
+                    >
+                      Save as outfit
+                    </button>
                     {isInChat && (
                       <button
                         type="button"
                         onClick={wearFitting}
-                        className="qt-button-primary qt-button-sm"
-                        title="Replace what the character is wearing with this fitting room composition"
+                        className="qt-button-secondary qt-button-sm"
+                        title="Replace what the character is wearing with this composition"
                       >
-                        Wear this
+                        Try on
                       </button>
                     )}
-                    {isInChat && (
+                    <div className="relative" ref={resetMenuRef}>
                       <button
                         type="button"
-                        onClick={fittingResetToWorn}
+                        onClick={() => setResetMenuOpen((v) => !v)}
                         className="qt-button-ghost qt-button-sm"
-                        title="Re-seed the fitting room from what the character is currently wearing"
+                        aria-haspopup="menu"
+                        aria-expanded={resetMenuOpen}
+                        title="Reset the staged composition"
                       >
-                        Reset to worn
+                        Reset…
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={fittingResetToDefaults}
-                      className="qt-button-ghost qt-button-sm"
-                      title="Re-seed the fitting room from the character's default-outfit items"
-                    >
-                      Reset to defaults
-                    </button>
-                    <button
-                      type="button"
-                      onClick={fittingClearAll}
-                      className="qt-button-ghost qt-button-sm qt-text-secondary"
-                      title="Empty every slot in the fitting room"
-                    >
-                      Clear all
-                    </button>
+                      {resetMenuOpen && (
+                        <div
+                          role="menu"
+                          className="absolute left-0 top-full mt-1 z-30 min-w-[14rem] rounded border qt-border-default qt-bg-default shadow-md"
+                        >
+                          <ul className="divide-y qt-border-default">
+                            {isInChat && (
+                              <li>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setResetMenuOpen(false)
+                                    fittingResetToWorn()
+                                  }}
+                                  className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
+                                >
+                                  Reset to worn
+                                </button>
+                              </li>
+                            )}
+                            <li>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setResetMenuOpen(false)
+                                  fittingResetToDefaults()
+                                }}
+                                className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
+                              >
+                                Reset to defaults
+                              </button>
+                            </li>
+                            <li>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setResetMenuOpen(false)
+                                  fittingClearAll()
+                                }}
+                                className="block w-full text-left px-3 py-2 text-sm qt-text-secondary hover:qt-bg-muted"
+                              >
+                                Clear all
+                              </button>
+                            </li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {WARDROBE_SLOT_TYPES.map((slot) => (
-                    <EquippedSlotRow
-                      key={slot}
-                      slot={slot}
-                      equippedIds={fittingSlots[slot]}
-                      allItems={items}
-                      onAdd={fittingAdd}
-                      onRemove={fittingRemove}
-                      onClear={fittingClear}
-                    />
-                  ))}
+                  <OutfitComposer
+                    items={items}
+                    slots={fittingSlots}
+                    onAddToSlot={fittingAdd}
+                    onRemoveFromSlot={fittingRemove}
+                    onClearSlot={fittingClear}
+                    showBundleActions
+                    onTakeOffBundle={handleFittingTakeOffBundle}
+                    onBreakApartBundle={handleFittingBreakApartBundle}
+                  />
                 </div>
               )}
 
-              {rightTab === 'fitting' && (
+              {rightTab === 'builder' && (
                 <AvatarGenerationPane
                   selectedCharacterName={selectedCharacter?.name ?? ''}
                   imageProfiles={imageProfiles}
@@ -781,20 +1025,44 @@ function WardrobeControlDialogInner({
         </div>
       </BaseModal>
 
+      {/* Import-from-image modal — stacked on top of the dialog */}
+      {importFromImageOpen && selectedCharacterId && (
+        <ImportFromImageModal
+          characterId={selectedCharacterId}
+          onClose={() => setImportFromImageOpen(false)}
+          onImported={() => {
+            void reloadItems()
+          }}
+        />
+      )}
+
       {/* Inline editor — stacked on top of the dialog */}
       {(editingItem || creatingNew) && selectedCharacterId && (
         <WardrobeItemEditor
           characterId={selectedCharacterId}
           item={editingItem}
           isShared={false}
+          initialMode={
+            creatingNew === 'create-bundle'
+              ? 'bundle'
+              : creatingNew === 'create-single'
+                ? 'single'
+                : undefined
+          }
+          initialComponentItemIds={
+            creatingNew === 'create-bundle' ? createBundleComponents : undefined
+          }
+          autoFocusTitle={creatingNew === 'create-bundle'}
           onClose={() => {
             setEditingItem(null)
-            setCreatingNew(false)
+            setCreatingNew(null)
+            setCreateBundleComponents([])
           }}
           onSave={async () => {
             setEditingItem(null)
-            setCreatingNew(false)
-            await loadItems(selectedCharacterId)
+            setCreatingNew(null)
+            setCreateBundleComponents([])
+            await reloadItems()
             if (isInChat) {
               outfit.invalidateWardrobe(selectedCharacterId)
               await outfit.refreshOutfit()
@@ -842,34 +1110,35 @@ function AvatarGenerationPane({
   }, [])
 
   return (
-    <div className="qt-card py-3 px-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="flex-1 min-w-[12rem]">
-          <label htmlFor="wardrobe-image-profile" className="qt-label">
-            Image model
-          </label>
-          <select
-            id="wardrobe-image-profile"
-            className="qt-select"
-            value={selectedImageProfileId ?? ''}
-            onChange={(e) => onSelectImageProfile(e.target.value || null)}
-          >
-            {imageProfiles.length === 0 && (
-              <option value="" disabled>
-                No image profiles configured
-              </option>
-            )}
-            {imageProfiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-                {p.isDefault ? ' (default)' : ''} — {p.provider}/{p.modelName}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div className="qt-card py-3 px-3 qt-bg-muted/30">
+      <div className="flex flex-wrap items-center gap-2">
+        <label
+          htmlFor="wardrobe-image-profile"
+          className="qt-text-sm qt-text-secondary"
+        >
+          Image model
+        </label>
+        <select
+          id="wardrobe-image-profile"
+          className="qt-select flex-1 min-w-[12rem]"
+          value={selectedImageProfileId ?? ''}
+          onChange={(e) => onSelectImageProfile(e.target.value || null)}
+        >
+          {imageProfiles.length === 0 && (
+            <option value="" disabled>
+              No image profiles configured
+            </option>
+          )}
+          {imageProfiles.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+              {p.isDefault ? ' (default)' : ''} — {p.provider}/{p.modelName}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
-          className="qt-button-primary qt-button-sm"
+          className="qt-button-secondary qt-button-sm"
           onClick={onGenerate}
           disabled={generating || imageProfiles.length === 0}
         >
@@ -879,17 +1148,28 @@ function AvatarGenerationPane({
 
       <p className="mt-2 qt-text-xs qt-text-small">
         {inChat
-          ? `In-chat regeneration replaces ${selectedCharacterName || 'this character'}'s avatar in this chat using the outfit shown above. The chat's default model is not changed.`
-          : `Generates a one-off preview against the character's defaults. Nothing is saved to the character's avatar — download the file to keep it.`}
+          ? `Replaces this chat's avatar with the staged outfit.`
+          : `Generates a one-off preview. Download to keep.`}
       </p>
 
       {!inChat && previewUrl && (
         <div className="mt-3 flex flex-col sm:flex-row gap-3 items-start">
-          <img
-            src={previewUrl}
-            alt={`Preview of ${selectedCharacterName}`}
-            className="qt-bg-muted rounded border qt-border-default max-h-[40vh]"
-          />
+          <div className="relative">
+            <img
+              src={previewUrl}
+              alt={`Preview of ${selectedCharacterName}`}
+              className="qt-bg-muted rounded border qt-border-default max-h-[40vh]"
+            />
+            <button
+              type="button"
+              onClick={onDiscardPreview}
+              aria-label="Discard preview"
+              title="Discard preview"
+              className="absolute top-1 right-1 w-6 h-6 rounded-full qt-bg-default border qt-border-default flex items-center justify-center qt-text-secondary hover:text-foreground shadow-sm"
+            >
+              ×
+            </button>
+          </div>
           <div className="flex flex-col gap-2">
             <a
               ref={downloadRef}
@@ -905,13 +1185,6 @@ function AvatarGenerationPane({
               className="qt-button-primary qt-button-sm"
             >
               Download
-            </button>
-            <button
-              type="button"
-              onClick={onDiscardPreview}
-              className="qt-button-ghost qt-button-sm"
-            >
-              Discard
             </button>
           </div>
         </div>

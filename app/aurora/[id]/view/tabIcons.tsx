@@ -42,4 +42,11 @@ export const TabIcons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
   ),
+  wardrobe: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <path d="M12 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" />
+      <path d="M12 9v2" />
+      <path d="M12 11 3.5 16.5a1 1 0 0 0 .5 1.85h16a1 1 0 0 0 .5-1.85L12 11z" />
+    </svg>
+  ),
 }

@@ -28,6 +28,11 @@ export const CHARACTER_TABS: Tab[] = [
     icon: TabIcons.tags,
   },
   {
+    id: 'wardrobe',
+    label: 'Wardrobe',
+    icon: TabIcons.wardrobe,
+  },
+  {
     id: 'defaults',
     label: 'Default Settings',
     icon: TabIcons.defaults,

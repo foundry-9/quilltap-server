@@ -3,13 +3,23 @@
 /**
  * Wardrobe Item Row
  *
- * One line in the dialog's wardrobe list. Renders title + type badges,
- * an isDefault star toggle, edit/delete buttons, and (in chat) equip /
- * add-to-slot affordances. Composite items are rendered with a `▶/▼`
- * expander that reveals the component rows nested below.
+ * One line in the dialog's wardrobe list. Shows the item title (allowed to
+ * wrap to two lines, with a hover tooltip for the full title), slot-color
+ * chips, and three controls:
+ *
+ *  - Primary equip button (`Wear` / `Try on`, label depends on which right-
+ *    column tab is active).
+ *  - `[+]` icon that adds the item to a slot. For single-slot items this
+ *    targets the item's only slot directly; for multi-slot items it opens
+ *    a small popover that lets the user pick.
+ *  - `⋮` kebab menu with secondary actions: Edit, Delete, and toggle the
+ *    default-outfit flag.
+ *
+ * Composite items keep a `▶/▼` expander on the left so the user can peek at
+ * the components without entering the editor.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 
 interface WardrobeItemRowProps {
@@ -20,8 +30,11 @@ interface WardrobeItemRowProps {
   inChat: boolean
   /** Label for the equip-replace button. Defaults to "Wear". */
   equipLabel?: string
-  /** Label for the single-slot layer button. Defaults to "+ Layer". */
-  layerLabel?: string
+  /**
+   * Whether the `[+]` icon should be framed as "layer onto" (Live outfit) or
+   * "add to" (Outfit Builder). Affects the tooltip only.
+   */
+  addAction?: 'layer' | 'add'
   isUpdatingDefault?: boolean
   onToggleDefault: (item: WardrobeItem) => void
   onEdit: (item: WardrobeItem) => void
@@ -39,12 +52,19 @@ const TYPE_BADGE_CLASS: Record<WardrobeItemType, string> = {
   accessories: 'qt-badge-wardrobe-accessories',
 }
 
+const SLOT_LABEL: Record<WardrobeItemType, string> = {
+  top: 'Top',
+  bottom: 'Bottom',
+  footwear: 'Footwear',
+  accessories: 'Accessories',
+}
+
 export function WardrobeItemRow({
   item,
   allItems,
   inChat,
   equipLabel = 'Wear',
-  layerLabel = '+ Layer',
+  addAction = 'layer',
   isUpdatingDefault,
   onToggleDefault,
   onEdit,
@@ -57,6 +77,55 @@ export function WardrobeItemRow({
   const [expanded, setExpanded] = useState(false)
   const isShared = !item.characterId
 
+  const [slotPickerOpen, setSlotPickerOpen] = useState(false)
+  const [kebabOpen, setKebabOpen] = useState(false)
+  const slotPickerRef = useRef<HTMLDivElement>(null)
+  const kebabRef = useRef<HTMLDivElement>(null)
+
+  // Close popovers on outside click
+  useEffect(() => {
+    if (!slotPickerOpen && !kebabOpen) return
+    const onDoc = (e: MouseEvent): void => {
+      if (
+        slotPickerOpen &&
+        slotPickerRef.current &&
+        !slotPickerRef.current.contains(e.target as Node)
+      ) {
+        setSlotPickerOpen(false)
+      }
+      if (
+        kebabOpen &&
+        kebabRef.current &&
+        !kebabRef.current.contains(e.target as Node)
+      ) {
+        setKebabOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [slotPickerOpen, kebabOpen])
+
+  // Close popovers on Escape — capture phase + stopPropagation so the parent
+  // dialog's Escape handler doesn't dismiss the entire modal.
+  useEffect(() => {
+    if (!slotPickerOpen && !kebabOpen) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      if (slotPickerOpen) {
+        e.stopPropagation()
+        e.preventDefault()
+        setSlotPickerOpen(false)
+      }
+      if (kebabOpen) {
+        e.stopPropagation()
+        e.preventDefault()
+        setKebabOpen(false)
+      }
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [slotPickerOpen, kebabOpen])
+
   const components = useMemo(() => {
     if (!isComposite) return []
     const byId = new Map(allItems.map((i) => [i.id, i]))
@@ -64,6 +133,22 @@ export function WardrobeItemRow({
       .map((id) => byId.get(id))
       .filter((c): c is WardrobeItem => Boolean(c))
   }, [allItems, item.componentItemIds, isComposite])
+
+  const handleAddClick = (): void => {
+    if (!onAddToSlot) return
+    if (item.types.length === 1) {
+      onAddToSlot(item, item.types[0])
+      return
+    }
+    setSlotPickerOpen((v) => !v)
+  }
+
+  const addTooltip =
+    item.types.length === 1
+      ? `${addAction === 'layer' ? 'Layer onto' : 'Add to'} ${SLOT_LABEL[item.types[0]].toLowerCase()}`
+      : addAction === 'layer'
+        ? 'Layer onto a slot'
+        : 'Add to a slot'
 
   return (
     <div
@@ -86,11 +171,28 @@ export function WardrobeItemRow({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="qt-text-sm text-foreground truncate">{item.title}</span>
+            <span
+              className="qt-text-sm text-foreground"
+              style={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                wordBreak: 'break-word',
+                maxWidth: '100%',
+                minWidth: 0,
+              }}
+              title={item.title}
+            >
+              {item.title}
+            </span>
             {isComposite && (
-              <span className="qt-text-xs qt-text-secondary">· composite</span>
+              <span className="qt-text-xs qt-text-secondary">· bundle</span>
             )}
             {isShared && <span className="qt-text-xs qt-text-secondary">· shared</span>}
+            {item.isDefault && (
+              <span className="qt-text-xs qt-text-secondary">· default</span>
+            )}
             {item.types.map((t) => (
               <span key={t} className={`qt-badge ${TYPE_BADGE_CLASS[t]} qt-text-xs`}>
                 {t}
@@ -104,21 +206,9 @@ export function WardrobeItemRow({
           )}
         </div>
 
-        <div className="flex items-center gap-1">
-          {/* isDefault toggle (star) */}
-          <button
-            type="button"
-            onClick={() => onToggleDefault(item)}
-            disabled={isUpdatingDefault}
-            className={`qt-text-xs px-1 ${item.isDefault ? 'text-primary' : 'qt-text-secondary hover:text-foreground'}`}
-            title={item.isDefault ? 'Default outfit item — click to remove' : 'Mark as default outfit item'}
-            aria-pressed={item.isDefault}
-          >
-            {item.isDefault ? '★' : '☆'}
-          </button>
-
-          {/* Equip controls — labels vary based on whether the active tab is
-              the live "Wearing now" or the transient "Fitting room". */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Primary equip button — label depends on the active right-column
+              tab (Wear in Live outfit, Try on in Outfit Builder). */}
           {inChat && onEquip && (
             <button
               type="button"
@@ -130,36 +220,114 @@ export function WardrobeItemRow({
             </button>
           )}
 
-          {inChat && onAddToSlot && item.types.length === 1 && (
-            <button
-              type="button"
-              onClick={() => onAddToSlot(item, item.types[0])}
-              className="qt-button-ghost qt-button-sm"
-              title={`Layer onto ${item.types[0]}`}
-            >
-              {layerLabel}
-            </button>
+          {/* Single-icon add button. For single-typed items it adds directly;
+              for multi-typed it opens a slot picker. */}
+          {inChat && onAddToSlot && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={handleAddClick}
+                className="qt-button-ghost qt-button-sm"
+                title={addTooltip}
+                aria-label={addTooltip}
+              >
+                +
+              </button>
+              {slotPickerOpen && item.types.length > 1 && (
+                <div
+                  ref={slotPickerRef}
+                  className="absolute right-0 top-full mt-1 z-30 min-w-[10rem] rounded border qt-border-default qt-bg-default shadow-md"
+                >
+                  <ul className="divide-y qt-border-default">
+                    {item.types.map((slot) => (
+                      <li key={slot}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onAddToSlot(item, slot)
+                            setSlotPickerOpen(false)
+                          }}
+                          className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:qt-bg-muted"
+                        >
+                          <span>{SLOT_LABEL[slot]}</span>
+                          <span className={`qt-badge ${TYPE_BADGE_CLASS[slot]} qt-text-xs`}>
+                            {slot}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
 
+          {/* Kebab menu — Edit, Delete, default toggle */}
           {!isShared && (
-            <>
+            <div className="relative" ref={kebabRef}>
               <button
                 type="button"
-                onClick={() => onEdit(item)}
+                onClick={() => setKebabOpen((v) => !v)}
                 className="qt-button-ghost qt-button-sm"
-                title="Edit"
+                aria-label="More actions"
+                title="More actions"
+                aria-haspopup="menu"
+                aria-expanded={kebabOpen}
               >
-                Edit
+                ⋮
               </button>
-              <button
-                type="button"
-                onClick={() => onDelete(item)}
-                className="qt-button-ghost qt-button-sm qt-text-destructive"
-                title="Delete"
-              >
-                Delete
-              </button>
-            </>
+              {kebabOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full mt-1 z-30 min-w-[14rem] rounded border qt-border-default qt-bg-default shadow-md"
+                >
+                  <ul className="divide-y qt-border-default">
+                    <li>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setKebabOpen(false)
+                          onEdit(item)
+                        }}
+                        className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
+                      >
+                        Edit
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={isUpdatingDefault}
+                        onClick={() => {
+                          setKebabOpen(false)
+                          onToggleDefault(item)
+                        }}
+                        className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50"
+                      >
+                        {item.isDefault
+                          ? '☆ Unmark as default'
+                          : '★ Mark as default outfit item'}
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setKebabOpen(false)
+                          onDelete(item)
+                        }}
+                        className="block w-full text-left px-3 py-2 text-sm qt-text-destructive hover:qt-bg-muted"
+                      >
+                        Delete
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

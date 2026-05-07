@@ -1,6 +1,6 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-04-29
+**Last Updated**: 2026-05-06
 **Tool Used**: knip
 **Codebase**: Quilltap v4.4.0-dev.69
 
@@ -12,12 +12,18 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | Cleaned up 2026-03-24 |
+| Unused Files | Cleaned up 2026-03-24; `wardrobe-item-card.tsx` + `wardrobe-item-list.tsx` removed 2026-05-06 with the Wardrobe UX overhaul |
 | Migration Scripts | Deleted (migrations complete) |
 | Unused Dependencies | @quilltap/theme-storybook removed 2026-04-02; @aws-sdk/client-s3, svgo removed 2026-03-05; bcrypt, qrcode, ts-jest removed 2026-01-30 |
 | Unused Exported Types | ~100+ flagged; most are intentional plugin/barrel re-exports; some cleaned up 2026-04-29 |
 | Unused Enum Members | 3 in ErrorCode (preserved for future use) |
 | Duplicate Exports | ~39 (named + default pattern, low priority) |
+
+---
+
+## 2026-05-06 — Wardrobe UX overhaul cleanup
+
+`components/wardrobe/wardrobe-item-card.tsx` and `components/wardrobe/wardrobe-item-list.tsx` were retired together with the Aurora-page Wardrobe-tab move. Both components were the inline wardrobe-management surface on the character edit and view pages; they have been superseded by the global wardrobe dialog (`useWardrobeDialog().open({ characterId })`), which is reachable from a Wardrobe tab on each Aurora page (and from anywhere via the sidebar). Their barrel exports were dropped from `components/wardrobe/index.ts` in the same change. Knip confirmed neither was referenced outside the barrel after the Aurora pages were rewired.
 
 ---
 

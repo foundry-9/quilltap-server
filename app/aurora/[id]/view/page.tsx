@@ -8,6 +8,7 @@ import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { EntityTabs } from '@/components/tabs'
 import { NewChatModal } from '@/components/new-chat'
+import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import { useCharacterView } from './hooks'
 import {
   CharacterHeader,
@@ -31,6 +32,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const { id } = use(params)
   const searchParams = useSearchParams()
   const { style } = useAvatarDisplay()
+  const wardrobeDialog = useWardrobeDialogOptional()
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
   const quickHideActive = hiddenTagIds.size > 0
 
@@ -179,6 +181,25 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
       case 'tags':
         return <TagsTab characterId={id} />
+
+      case 'wardrobe':
+        return (
+          <div className="space-y-2">
+            <p className="qt-text-small qt-text-secondary">
+              The wardrobe lives in a global dialog so it travels with you —
+              edit, layer, and save outfits from anywhere, including from
+              inside a chat.
+            </p>
+            <button
+              type="button"
+              onClick={() => wardrobeDialog?.open({ characterId: id })}
+              disabled={!wardrobeDialog}
+              className="qt-button-primary"
+            >
+              Open wardrobe for {character?.name || 'this character'}
+            </button>
+          </div>
+        )
 
       case 'defaults':
         return (

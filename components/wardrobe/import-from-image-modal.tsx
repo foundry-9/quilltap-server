@@ -340,7 +340,7 @@ export function ImportFromImageModal({
                 {/* Guidance notes */}
                 <div>
                   <label htmlFor="wardrobe-image-guidance" className="qt-label mb-1">
-                    Guidance Notes (optional)
+                    Hints for the AI (optional)
                   </label>
                   <textarea
                     id="wardrobe-image-guidance"
@@ -349,7 +349,7 @@ export function ImportFromImageModal({
                     rows={2}
                     maxLength={2000}
                     disabled={state === 'analyzing'}
-                    placeholder='e.g., "Focus on the woman on the left", "This is a medieval fantasy setting", "Ignore the background characters"'
+                    placeholder='Anything specific to focus on or avoid? e.g., "the woman on the left", "ignore the background", "this is a medieval setting"'
                     className="qt-textarea text-sm"
                   />
                 </div>
