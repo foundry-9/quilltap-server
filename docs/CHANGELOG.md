@@ -4,6 +4,13 @@
 
 ### 4.4-dev
 
+#### Refactor: tighten Aurora wizard field mapping and restore Document Mode success diagnostics
+
+- Added `app/aurora/shared/wizard-text-fields.ts` as a single source of truth for AI Wizard text-field mapping.
+- Updated Aurora new/edit pages to use the shared mapping so `identity` and `manifesto` stay in sync across wizard apply + current-data payloads.
+- Added unit coverage for the shared helper in `__tests__/unit/app/aurora/shared/wizard-text-fields.test.ts`.
+- Restored structured `logger.debug` success-path diagnostics for Document Mode open/read/write/rename/delete operations in `app/api/v1/chats/[id]/actions/documents.ts`.
+
 #### Tests: extend unit test coverage for changes since 78d97ba
 
 Added five new test files covering new modules introduced since commit `78d97ba`:

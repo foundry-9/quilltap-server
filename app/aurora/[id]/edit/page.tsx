@@ -15,6 +15,7 @@ import { useCharacterEdit } from './hooks'
 import { CharacterBasicInfo } from './components'
 import type { CharacterScenario } from './types'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../../shared/wizard-text-fields'
 
 /**
  * Tab configuration for character edit page
@@ -130,21 +131,9 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   // Handle applying wizard-generated data
   const handleWizardApply = async (data: GeneratedCharacterData) => {
     // Apply text fields by creating synthetic events
-    const fieldsToApply: Array<{ name: string; value: string }> = []
-
-    if (data.name) fieldsToApply.push({ name: 'name', value: data.name })
-    if (data.title) fieldsToApply.push({ name: 'title', value: data.title })
-    if (data.identity) fieldsToApply.push({ name: 'identity', value: data.identity })
-    if (data.description) fieldsToApply.push({ name: 'description', value: data.description })
-    if (data.manifesto) fieldsToApply.push({ name: 'manifesto', value: data.manifesto })
-    if (data.personality) fieldsToApply.push({ name: 'personality', value: data.personality })
-    if (data.exampleDialogues) fieldsToApply.push({ name: 'exampleDialogues', value: data.exampleDialogues })
-    if (data.systemPrompt) fieldsToApply.push({ name: 'systemPrompt', value: data.systemPrompt })
-
-    // Apply each field
-    for (const field of fieldsToApply) {
+    for (const field of getGeneratedCharacterTextEntries(data)) {
       const syntheticEvent = {
-        target: { name: field.name, value: field.value },
+        target: { name: field.field, value: field.value },
       } as React.ChangeEvent<HTMLInputElement>
       handleChange(syntheticEvent)
     }
@@ -461,14 +450,8 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
         characterId={id}
         characterName={character?.name || ''}
         currentData={{
-          title: formData.title,
-          identity: formData.identity,
-          description: formData.description,
-          manifesto: formData.manifesto,
-          personality: formData.personality,
+          ...buildWizardCurrentData(formData),
           scenarios: formData.scenarios,
-          exampleDialogues: formData.exampleDialogues,
-          systemPrompt: formData.systemPrompt,
         }}
         onApply={handleWizardApply}
       />
