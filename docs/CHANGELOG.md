@@ -4,6 +4,18 @@
 
 ### 4.4-dev
 
+#### Tests: extend unit test coverage for changes since 78d97ba
+
+Added five new test files covering new modules introduced since commit `78d97ba`:
+
+- `__tests__/unit/lib/llm/cache-key.test.ts` — `buildPromptCacheKey` and `PROMPT_CACHE_STRUCTURE_VERSION`
+- `__tests__/unit/lib/wardrobe/default-outfit.test.ts` — `buildDefaultOutfit` (isDefault filter, archived exclusion, multi-slot items, slot accumulation)
+- `__tests__/unit/lib/wardrobe/expand-composites.test.ts` — `expandComposites` (leaf pass-through, unknown ids, transitive expansion, deduplication, cycle detection, depth truncation) and `detectComponentCycles`
+- `__tests__/unit/lib/terminal/clean-output.test.ts` — `stripAnsi`, `applyBackspaces`, `applyCarriageReturns`, `cleanTerminalOutput`
+- `__tests__/unit/lib/file-storage/retry.test.ts` — `withFsRetry` (success, non-transient rethrow, all transient codes EAGAIN/EBUSY/EDEADLK/EINTR/errno -35, retry exhaustion)
+
+Total unit tests: 5764 across 308 suites.
+
 #### Chore: remove all logger.debug and console.debug calls from source
 
 Swept `logger.debug` / `log.debug` calls from 143 source files (511 call sites) and bare `console.debug` / redundant `console.error` calls introduced alongside `showErrorToast` in `useTerminalMode.ts` and the terminal session page. Updated two unit tests that asserted on the now-removed debug calls. Cleaned up `useCallback` dependency arrays in `useTerminalMode.ts` where `chatId` / `activeTerminalSessionId` were only referenced in the removed calls.
