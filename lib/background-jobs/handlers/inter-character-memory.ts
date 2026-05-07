@@ -14,7 +14,4 @@ import type { BackgroundJob } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 
 export async function handleInterCharacterMemory(job: BackgroundJob): Promise<void> {
-  logger.debug('[InterCharacterMemory] Legacy drain — no-op', {
-    jobId: job.id,
-  });
 }

@@ -151,18 +151,11 @@ describe('HelpSearch', () => {
       expect(results).toEqual([])
     })
 
-    it('should skip docs with dimension mismatch and log debug', async () => {
+    it('should skip docs with dimension mismatch', async () => {
       // Docs have 4-dimensional embeddings, query has 2 dimensions
       const results = await helpSearch.search([1, 0])
 
       expect(results).toEqual([])
-      expect(mockedLogger.debug).toHaveBeenCalledWith(
-        'Skipping help doc with dimension mismatch',
-        expect.objectContaining({
-          context: 'help-search',
-          expected: 2,
-        })
-      )
     })
 
     it('should skip docs with null or empty embeddings', async () => {

@@ -312,18 +312,6 @@ export async function generateEmbeddingForUser(
       throw new EmbeddingError('No embedding profile configured')
     }
 
-    logger.debug('[Embedding] Generating embedding for user', {
-      context: 'embedding-service',
-      profileId: profile.id,
-      profileName: profile.name,
-      provider: profile.provider,
-      modelName: profile.modelName,
-      dimensions: profile.dimensions,
-      profileSource,
-      priority,
-      textLength: text.length,
-    })
-
     return await generateEmbedding(text, profile, userId)
   } finally {
     if (priority === 'interactive') {

@@ -125,11 +125,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     if (validatedData.delimiters && !validatedData.renderingPatterns) {
       const narDelim = validatedData.narrationDelimiters || existingTemplate.narrationDelimiters;
       updateData.renderingPatterns = generateRenderingPatterns(validatedData.delimiters, narDelim);
-      logger.debug('Auto-generated rendering patterns on template update', {
-        templateId: id,
-        delimiterCount: validatedData.delimiters.length,
-        patternCount: (updateData.renderingPatterns as unknown[]).length,
-      });
     } else if (validatedData.narrationDelimiters && !validatedData.renderingPatterns && !validatedData.delimiters) {
       // Narration delimiters changed but no delimiters or patterns provided — regenerate
       const delims = existingTemplate.delimiters || [];

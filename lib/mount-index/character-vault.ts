@@ -48,21 +48,11 @@ export async function ensureCharacterVault(
   character: Character,
 ): Promise<EnsureCharacterVaultResult> {
   if (character.characterDocumentMountPointId) {
-    logger.debug('Character already linked to vault — nothing to do', {
-      characterId: character.id,
-      mountPointId: character.characterDocumentMountPointId,
-    });
     return { mountPointId: character.characterDocumentMountPointId, created: false };
   }
 
   const repos = getRepositories();
   const vaultName = `${character.name} Character Vault`;
-
-  logger.debug('Creating character vault', {
-    characterId: character.id,
-    name: character.name,
-    vaultName,
-  });
 
   const mountPoint = await repos.docMountPoints.create({
     name: vaultName,
@@ -80,11 +70,6 @@ export async function ensureCharacterVault(
     fileCount: 0,
     chunkCount: 0,
     totalSizeBytes: 0,
-  });
-
-  logger.debug('Character vault mount point created', {
-    characterId: character.id,
-    mountPointId: mountPoint.id,
   });
 
   await scaffoldCharacterMount(mountPoint.id);

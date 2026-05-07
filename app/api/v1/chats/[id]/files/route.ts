@@ -193,10 +193,6 @@ async function ensureImageDescription(
   }
   const existing = blob.description?.trim();
   if (existing) {
-    logger.debug('[Chats v1 Files] Reusing cached blob description', {
-      blobId: blob.id,
-      descriptionLength: existing.length,
-    });
     return existing;
   }
 

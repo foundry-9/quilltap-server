@@ -59,14 +59,8 @@ export async function reindexSingleFile(
 ): Promise<void> {
   const repos = getRepositories();
 
-  logger.debug('Re-indexing single file after edit', {
-    mountPointId,
-    relativePath,
-  });
-
   const fileType = detectFileType(relativePath);
   if (!fileType) {
-    logger.debug('File type not indexable, skipping re-index', { relativePath });
     return;
   }
 
@@ -97,7 +91,6 @@ export async function reindexSingleFile(
       } else {
         const blob = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, relativePath);
         if (!blob || !blob.extractedText || blob.extractedText.trim().length === 0) {
-          logger.debug('No DB-backed text source for reindex, skipping', { relativePath });
           return;
         }
         plainText = blob.extractedText;
@@ -112,7 +105,6 @@ export async function reindexSingleFile(
       ]);
       const converted = await convertToPlainText(absolutePath, fileType);
       if (!converted || converted.trim().length === 0) {
-        logger.debug('File conversion produced no text after edit', { relativePath });
         return;
       }
       plainText = converted;
@@ -182,12 +174,6 @@ export async function reindexSingleFile(
       }));
       await repos.docMountChunks.bulkInsert(chunkData);
     }
-
-    logger.debug('Single file re-index complete', {
-      mountPointId,
-      relativePath,
-      chunkCount: chunks.length,
-    });
 
     // NOTE: Embedding jobs should be enqueued by the caller if needed,
     // following the same pattern as the scan runner.

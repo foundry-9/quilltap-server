@@ -61,10 +61,6 @@ export async function getProjectDocumentStore(
     if (!chosen) return null;
     return { mountPointId: chosen.id, mountPointName: chosen.name };
   } catch (error) {
-    logger.debug('[ProjectStoreBridge] Failed to resolve project document store', {
-      projectId,
-      error: error instanceof Error ? error.message : String(error),
-    });
     return null;
   }
 }
@@ -206,15 +202,6 @@ export async function writeProjectFileToMountStore(
 
   emitDocumentWritten({ mountPointId: target.mountPointId, relativePath });
   repos.docMountPoints.refreshStats(target.mountPointId).catch(() => { /* best-effort */ });
-
-  logger.debug('[ProjectStoreBridge] Wrote project file into mount store', {
-    projectId: input.projectId,
-    mountPointId: target.mountPointId,
-    blobId: blob.id,
-    relativePath,
-    storedMimeType: blob.storedMimeType,
-    sizeBytes: blob.sizeBytes,
-  });
 
   return {
     storageKey: buildMountBlobStorageKey(target.mountPointId, blob.id),

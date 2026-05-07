@@ -327,14 +327,6 @@ async function listMemoriesByCharacter(
       tagDetails: memory.tags.map((tagId: string) => tagMap.get(tagId)).filter(Boolean),
     }));
 
-    logger.debug('[Memories API] Paginated list', {
-      characterId,
-      limit,
-      offset,
-      returned: memoriesWithTags.length,
-      totalCount,
-    });
-
     return NextResponse.json({
       memories: memoriesWithTags,
       count: memoriesWithTags.length,

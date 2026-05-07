@@ -119,18 +119,9 @@ export class ProjectDocMountLinksRepository extends AbstractBaseRepository<Proje
   async findByProjectId(projectId: string): Promise<ProjectDocMountLink[]> {
     return this.safeQuery(
       async () => {
-        logger.debug('Finding links by project ID', {
-          context: 'ProjectDocMountLinksRepository.findByProjectId',
-          projectId,
-        });
         const results = await this.findByFilter(
           { projectId } as TypedQueryFilter<ProjectDocMountLink>
         );
-        logger.debug('Found links by project ID', {
-          context: 'ProjectDocMountLinksRepository.findByProjectId',
-          projectId,
-          count: results.length,
-        });
         return results;
       },
       'Error finding links by project ID',
@@ -147,18 +138,9 @@ export class ProjectDocMountLinksRepository extends AbstractBaseRepository<Proje
   async findByMountPointId(mountPointId: string): Promise<ProjectDocMountLink[]> {
     return this.safeQuery(
       async () => {
-        logger.debug('Finding links by mount point ID', {
-          context: 'ProjectDocMountLinksRepository.findByMountPointId',
-          mountPointId,
-        });
         const results = await this.findByFilter(
           { mountPointId } as TypedQueryFilter<ProjectDocMountLink>
         );
-        logger.debug('Found links by mount point ID', {
-          context: 'ProjectDocMountLinksRepository.findByMountPointId',
-          mountPointId,
-          count: results.length,
-        });
         return results;
       },
       'Error finding links by mount point ID',
@@ -178,11 +160,6 @@ export class ProjectDocMountLinksRepository extends AbstractBaseRepository<Proje
   async link(projectId: string, mountPointId: string): Promise<ProjectDocMountLink> {
     return this.safeQuery(
       async () => {
-        logger.debug('Linking project to mount point', {
-          context: 'ProjectDocMountLinksRepository.link',
-          projectId,
-          mountPointId,
-        });
 
         // Check for existing link to avoid duplicates
         const existing = await this.findOneByFilter({
@@ -191,12 +168,6 @@ export class ProjectDocMountLinksRepository extends AbstractBaseRepository<Proje
         } as TypedQueryFilter<ProjectDocMountLink>);
 
         if (existing) {
-          logger.debug('Link already exists between project and mount point', {
-            context: 'ProjectDocMountLinksRepository.link',
-            projectId,
-            mountPointId,
-            linkId: existing.id,
-          });
           return existing;
         }
 
@@ -204,13 +175,6 @@ export class ProjectDocMountLinksRepository extends AbstractBaseRepository<Proje
           projectId,
           mountPointId,
         } as Omit<ProjectDocMountLink, 'id' | 'createdAt' | 'updatedAt'>);
-
-        logger.debug('Created link between project and mount point', {
-          context: 'ProjectDocMountLinksRepository.link',
-          projectId,
-          mountPointId,
-          linkId: link.id,
-        });
 
         return link;
       },
@@ -230,11 +194,6 @@ export class ProjectDocMountLinksRepository extends AbstractBaseRepository<Proje
   async unlink(projectId: string, mountPointId: string): Promise<boolean> {
     return this.safeQuery(
       async () => {
-        logger.debug('Unlinking project from mount point', {
-          context: 'ProjectDocMountLinksRepository.unlink',
-          projectId,
-          mountPointId,
-        });
 
         const count = await this.deleteMany({
           projectId,
@@ -242,14 +201,6 @@ export class ProjectDocMountLinksRepository extends AbstractBaseRepository<Proje
         } as TypedQueryFilter<ProjectDocMountLink>);
 
         const deleted = count > 0;
-
-        logger.debug('Unlink result', {
-          context: 'ProjectDocMountLinksRepository.unlink',
-          projectId,
-          mountPointId,
-          deleted,
-          deletedCount: count,
-        });
 
         return deleted;
       },

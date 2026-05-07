@@ -61,12 +61,6 @@ export async function getOrComputeFrozenArchive(
   const memories = await computeFrozenArchive(characterId, size)
   cache.set(characterId, { generation: compactionGeneration, memories })
 
-  logger.debug('[FrozenArchive] Computed and cached', {
-    characterId,
-    compactionGeneration,
-    archiveSize: memories.length,
-  })
-
   return memories
 }
 

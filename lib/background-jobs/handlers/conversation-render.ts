@@ -49,10 +49,6 @@ export async function handleConversationRender(job: BackgroundJob): Promise<void
   const allEvents = await repos.chats.getMessages(payload.chatId);
 
   if (allEvents.length === 0) {
-    logger.debug('[ConversationRender] No messages to render, skipping', {
-      jobId: job.id,
-      chatId: payload.chatId,
-    });
     return;
   }
 
@@ -62,14 +58,6 @@ export async function handleConversationRender(job: BackgroundJob): Promise<void
     title: chat.title,
     createdAt: chat.createdAt,
     lastUpdatedAt: chat.updatedAt,
-  });
-
-  logger.debug('[ConversationRender] Rendered conversation', {
-    jobId: job.id,
-    chatId: payload.chatId,
-    messageCount: chat.messageCount,
-    interchangeCount: result.interchanges.length,
-    markdownLength: result.markdown.length,
   });
 
   // 5. Save renderedMarkdown to chat (do NOT set updatedAt - background job)
@@ -116,20 +104,7 @@ export async function handleConversationRender(job: BackgroundJob): Promise<void
             embeddedCount++;
           }
         }
-
-        logger.debug('[ConversationRender] Enqueued embedding for interchanges', {
-          jobId: job.id,
-          chatId: payload.chatId,
-          fullReembed: !!payload.fullReembed,
-          embeddedCount,
-          totalInterchanges: result.interchanges.length,
-          profileId: defaultProfile.id,
-        });
       } else {
-        logger.debug('[ConversationRender] No embedding profile configured, skipping embedding', {
-          jobId: job.id,
-          chatId: payload.chatId,
-        });
       }
     } catch (error) {
       // Don't fail the render job if embedding enqueue fails

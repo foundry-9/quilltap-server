@@ -61,12 +61,6 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
     // sweep anyway burns 10–15 minutes of main-thread time for no benefit
     // and blocks the next chat turn's context build. Back off for an hour.
     if (shouldSkipWatermarkSweep(characterId)) {
-      logger.debug('[Housekeeping] Skipping watermark sweep — previous sweep deleted zero within backoff window', {
-        userId,
-        characterId,
-        count,
-        cap,
-      })
       return
     }
 
@@ -74,12 +68,6 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
     await enqueueMemoryHousekeeping(userId, {
       characterId,
       reason: 'watermark',
-    })
-    logger.debug('[Housekeeping] Watermark reached; enqueued housekeeping job', {
-      userId,
-      characterId,
-      count,
-      cap,
     })
   } catch (error) {
     logger.warn('[Housekeeping] Failed watermark check after insert (non-fatal)', {
@@ -124,11 +112,6 @@ async function applyNamePresenceCheck(data: CreateMemoryOptions): Promise<Create
       text,
     })
     if (resolution.flipped) {
-      logger.debug('[Memory] Name-presence flip: collapsed aboutCharacterId to holder (self-reference)', {
-        holderCharacterId: data.characterId,
-        proposedAboutCharacterId: proposed,
-        proposedAboutName: aboutChar?.name,
-      })
       return { ...data, aboutCharacterId: data.characterId }
     }
     return data
@@ -637,16 +620,6 @@ export async function searchMemoriesSemantic(
       })
 
       const tDone = performance.now()
-      logger.debug('[Memory] Semantic search timings', {
-        characterId,
-        corpusSize: vectorStore.size,
-        vectorHits: vectorResults.length,
-        finalHits: Math.min(results.length, limit),
-        embedMs: Math.round(tEmbed - t0),
-        vectorSearchMs: Math.round(tVector - tEmbed),
-        hydrateAndRankMs: Math.round(tDone - tVector),
-        totalMs: Math.round(tDone - t0),
-      })
 
       const finalResults = results.slice(0, limit)
       bumpAccessTimes(characterId, finalResults.map(r => r.memory.id))
@@ -739,13 +712,6 @@ async function searchMemoriesText(
           }
         }
       }
-
-      logger.debug('[Memory] Text search broadened to per-word search', {
-        characterId,
-        query: query.substring(0, 100),
-        significantWords: queryWords,
-        totalCandidates: memories.length,
-      })
     }
   }
 

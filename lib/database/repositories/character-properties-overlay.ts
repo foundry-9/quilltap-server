@@ -694,12 +694,6 @@ function parseScenarioFile(
       });
       return null;
     }
-    logger.debug('Scenario file had no name/heading; using filename as title', {
-      characterId,
-      mountPointId: doc.mountPointId,
-      relativePath: doc.relativePath,
-      title,
-    });
   }
 
   // Body: when a `# heading` was used as the title, drop that line; otherwise
@@ -817,22 +811,6 @@ export async function applyDocumentStoreOverlay(
   const physDescByMount = contentByMountByPath.get(CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH)!;
   const physPromptsByMount = contentByMountByPath.get(CHARACTER_PHYSICAL_PROMPTS_JSON_PATH)!;
 
-  logger.debug('Applying character document-store overlay', {
-    totalCharacters: characters.length,
-    candidateCount: candidates.length,
-    mountPointCount: mountPointIds.length,
-    propertiesJsonFoundCount: propsByMount.size,
-    identityMdFoundCount: idByMount.size,
-    descriptionMdFoundCount: descByMount.size,
-    manifestoMdFoundCount: manifestoByMount.size,
-    personalityMdFoundCount: persByMount.size,
-    exampleDialoguesMdFoundCount: dialoguesByMount.size,
-    physicalDescriptionMdFoundCount: physDescByMount.size,
-    physicalPromptsMdFoundCount: physPromptsByMount.size,
-    promptsFolderMountCount: promptsByMount.size,
-    scenariosFolderMountCount: scenariosByMount.size,
-  });
-
   return characters.map((character) => {
     if (!isOverlayCandidate(character)) {
       return character;
@@ -898,10 +876,6 @@ export async function applyDocumentStoreOverlay(
 
     if (hasPhysicalOverlayInput) {
       if (!out.physicalDescriptions || out.physicalDescriptions.length === 0) {
-        logger.debug(
-          'Vault has physical overlay files but character has no physicalDescriptions; skipping',
-          { characterId: character.id, mountPointId: mountId },
-        );
       } else {
         const first = out.physicalDescriptions[0];
         const patched: PhysicalDescription = { ...first };
@@ -1256,14 +1230,6 @@ export async function getOverlaidWardrobeItems(
     items = items.filter((item) => item.isDefault);
   }
 
-  logger.debug('Wardrobe items read overlaid from vault folders', {
-    characterId,
-    mountPointId,
-    itemCount: items.length,
-    includeArchived: options.includeArchived ?? false,
-    defaultsOnly: options.defaultsOnly ?? false,
-  });
-
   return items;
 }
 
@@ -1336,12 +1302,6 @@ async function performVaultWardrobeSync(
     const items = await repos.wardrobe.findByCharacterIdRaw(characterId);
 
     await projectVaultWardrobe(mountPointId, characterId, items);
-
-    logger.debug('Synced wardrobe folder from DB', {
-      characterId,
-      mountPointId,
-      itemCount: items.length,
-    });
   } catch (err) {
     logger.error('Failed to sync wardrobe folder from DB; vault is now stale', {
       characterId,
@@ -1382,12 +1342,6 @@ async function ingestVaultOnlyWardrobeIntoDb(
     for (const item of vault.items) {
       if (dbItemIds.has(item.id)) continue;
       if (excludeIds?.has(item.id)) {
-        logger.debug('Skipped promoting tombstoned vault wardrobe item; projection will delete its file', {
-          characterId,
-          mountPointId,
-          itemId: item.id,
-          title: item.title,
-        });
         continue;
       }
       try {
@@ -1466,7 +1420,6 @@ export async function readVaultTextFile(
     return doc.content;
   } catch (error) {
     if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') {
-      logger.debug('Vault file not found', { mountPointId, path, characterId });
       return null;
     }
     logger.warn('Failed to read vault file', {
@@ -1883,12 +1836,6 @@ export async function applyDocumentStoreWriteOverlay(
   }
 
   if (routedFieldCount > 0) {
-    logger.debug('Routed character update fields to vault', {
-      characterId,
-      mountPointId,
-      routedFieldCount,
-      remainingDbFieldCount: Object.keys(dbPatch).length,
-    });
   }
 
   return dbPatch;

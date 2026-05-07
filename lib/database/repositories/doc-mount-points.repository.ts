@@ -141,16 +141,9 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
   async findEnabled(): Promise<DocMountPoint[]> {
     return this.safeQuery(
       async () => {
-        logger.debug('Finding enabled mount points', {
-          context: 'DocMountPointsRepository.findEnabled',
-        });
         const results = await this.findByFilter(
           { enabled: true } as TypedQueryFilter<DocMountPoint>
         );
-        logger.debug('Found enabled mount points', {
-          context: 'DocMountPointsRepository.findEnabled',
-          count: results.length,
-        });
         return results;
       },
       'Error finding enabled mount points',
@@ -169,13 +162,6 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
   async updateLastScanned(id: string, fileCount: number, chunkCount: number, totalSizeBytes: number): Promise<void> {
     await this.safeQuery(
       async () => {
-        logger.debug('Updating last scanned for mount point', {
-          context: 'DocMountPointsRepository.updateLastScanned',
-          id,
-          fileCount,
-          chunkCount,
-          totalSizeBytes,
-        });
         const updated = await this._update(id, {
           lastScannedAt: this.getCurrentTimestamp(),
           scanStatus: 'idle',
@@ -187,14 +173,6 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
         if (!updated) {
           throw new Error(`Mount point not found for scan update: ${id}`);
         }
-
-        logger.debug('Updated last scanned for mount point', {
-          context: 'DocMountPointsRepository.updateLastScanned',
-          id,
-          fileCount,
-          chunkCount,
-          totalSizeBytes,
-        });
       },
       'Error updating last scanned for mount point',
       { id, fileCount, chunkCount, totalSizeBytes }
@@ -224,14 +202,6 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
           chunkCount,
           totalSizeBytes,
         } as Partial<DocMountPoint>);
-
-        logger.debug('Refreshed mount point stats', {
-          context: 'DocMountPointsRepository.refreshStats',
-          id,
-          fileCount,
-          chunkCount,
-          totalSizeBytes,
-        });
       },
       'Error refreshing mount point stats',
       { id }
@@ -250,12 +220,6 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
   ): Promise<void> {
     await this.safeQuery(
       async () => {
-        logger.debug('Updating conversion status for mount point', {
-          context: 'DocMountPointsRepository.updateConversionStatus',
-          id,
-          status,
-          error,
-        });
 
         const updateData: Partial<DocMountPoint> = {
           conversionStatus: status,
@@ -271,12 +235,6 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
         if (!updated) {
           throw new Error(`Mount point not found for conversion status update: ${id}`);
         }
-
-        logger.debug('Updated conversion status for mount point', {
-          context: 'DocMountPointsRepository.updateConversionStatus',
-          id,
-          status,
-        });
       },
       'Error updating conversion status for mount point',
       { id, status }
@@ -296,12 +254,6 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
   ): Promise<void> {
     await this.safeQuery(
       async () => {
-        logger.debug('Updating scan status for mount point', {
-          context: 'DocMountPointsRepository.updateScanStatus',
-          id,
-          status,
-          error,
-        });
 
         const updateData: Partial<DocMountPoint> = {
           scanStatus: status,
@@ -317,12 +269,6 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
         if (!updated) {
           throw new Error(`Mount point not found for status update: ${id}`);
         }
-
-        logger.debug('Updated scan status for mount point', {
-          context: 'DocMountPointsRepository.updateScanStatus',
-          id,
-          status,
-        });
       },
       'Error updating scan status for mount point',
       { id, status }

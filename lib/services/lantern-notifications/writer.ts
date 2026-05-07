@@ -67,11 +67,6 @@ export async function postLanternImageNotification(params: PostParams): Promise<
 
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
-      logger.debug('[LanternNotification] Chat not found, skipping announcement', {
-        context: 'lantern-notifications',
-        chatId,
-        fileId,
-      });
       return;
     }
 
@@ -80,12 +75,6 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       : null;
 
     if (!isLanternImageAlertEnabled(chat, project)) {
-      logger.debug('[LanternNotification] Alert disabled, skipping', {
-        context: 'lantern-notifications',
-        chatId,
-        fileId,
-        kind: kind.kind,
-      });
       return;
     }
 
@@ -94,12 +83,6 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       const file = await repos.files.findById(fileId);
       generationPrompt = file?.generationPrompt ?? null;
     } catch (fetchError) {
-      logger.debug('[LanternNotification] Could not read generation prompt for file', {
-        context: 'lantern-notifications',
-        chatId,
-        fileId,
-        error: getErrorMessage(fetchError),
-      });
     }
 
     const messageId = randomUUID();

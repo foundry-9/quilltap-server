@@ -66,11 +66,6 @@ async function resolveCompositeItem(
 ): Promise<WardrobeItem | null> {
   if (itemId) {
     const found = await repos.wardrobe.findByIdForCharacter(characterId, itemId);
-    logger.debug('Composite lookup by ID', {
-      context: 'wardrobe-update-outfit-handler',
-      itemId,
-      found: !!found,
-    });
     if (found) return found;
   }
 
@@ -78,13 +73,6 @@ async function resolveCompositeItem(
     const characterItems = await repos.wardrobe.findByCharacterId(characterId);
     const lower = itemTitle.toLowerCase();
     const found = characterItems.find((i) => i.title.toLowerCase() === lower) ?? null;
-    logger.debug('Composite lookup by title', {
-      context: 'wardrobe-update-outfit-handler',
-      characterId,
-      itemTitle,
-      found: !!found,
-      candidateCount: characterItems.length,
-    });
     return found;
   }
 
@@ -112,16 +100,6 @@ export async function executeWardrobeUpdateOutfitTool(
     }
 
     const { mode, item_id, item_title } = input;
-
-    logger.debug('Dispatching wardrobe_set_outfit', {
-      context: 'wardrobe-update-outfit-handler',
-      userId: context.userId,
-      chatId: context.chatId,
-      characterId: context.characterId,
-      mode,
-      itemId: item_id,
-      itemTitle: item_title,
-    });
 
     const item = await resolveCompositeItem(repos, context.characterId, item_id, item_title);
     if (!item) {

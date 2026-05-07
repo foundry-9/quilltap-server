@@ -58,10 +58,6 @@ export async function triggerAvatarGenerationIfEnabled(
   try {
     const chat = await repos.chats.findById(chatId);
     if (!chat?.avatarGenerationEnabled) {
-      logger.debug('Avatar generation not enabled for chat, skipping', {
-        context: callerContext,
-        chatId,
-      });
       return;
     }
 
@@ -72,12 +68,6 @@ export async function triggerAvatarGenerationIfEnabled(
       const profile = await repos.imageProfiles.findById(imageProfileIdOverride);
       if (profile) {
         imageProfileId = profile.id;
-        logger.debug('Avatar generation using one-shot profile override', {
-          context: callerContext,
-          chatId,
-          characterId,
-          imageProfileId,
-        });
       } else {
         logger.warn('Avatar generation override profile not found, falling back', {
           context: callerContext,
@@ -103,11 +93,6 @@ export async function triggerAvatarGenerationIfEnabled(
     }
 
     if (!imageProfileId) {
-      logger.debug('No image profile available for avatar generation, skipping', {
-        context: callerContext,
-        chatId,
-        characterId,
-      });
       return;
     }
 
@@ -116,13 +101,6 @@ export async function triggerAvatarGenerationIfEnabled(
       characterId,
       imageProfileId,
       ...(equippedSlotsOverride ? { equippedSlotsOverride } : {}),
-    });
-
-    logger.debug('Avatar generation enqueued after outfit change', {
-      context: callerContext,
-      chatId,
-      characterId,
-      imageProfileId,
     });
   } catch (error) {
     logger.warn('Failed to enqueue avatar generation after outfit change', {

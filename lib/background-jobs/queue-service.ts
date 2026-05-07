@@ -437,11 +437,6 @@ export async function enqueueMemoryExtraction(
         && existingPayload.turnOpenerMessageId === payload.turnOpenerMessageId;
     });
     if (existing) {
-      logger.debug('[MemoryExtraction] Skipping enqueue — job already in-flight for turn', {
-        jobId: existing.id,
-        chatId: payload.chatId,
-        turnOpenerMessageId: payload.turnOpenerMessageId,
-      });
       return existing.id;
     }
   } catch (error) {
@@ -478,11 +473,6 @@ export async function enqueueMemoryHousekeeping(
       return existingCharId === payload.characterId;
     });
     if (existing) {
-      logger.debug('[Housekeeping] Skipping enqueue — job already in-flight', {
-        jobId: existing.id,
-        userId,
-        characterId: payload.characterId ?? '(all)',
-      });
       return existing.id;
     }
   } catch (error) {
@@ -531,10 +521,6 @@ export async function enqueueMemoryRegenerateChat(
       return existingPayload.chatId === payload.chatId;
     });
     if (existing) {
-      logger.debug('[MemoryRegenerateChat] Skipping enqueue — job already in-flight for chat', {
-        jobId: existing.id,
-        chatId: payload.chatId,
-      });
       return existing.id;
     }
   } catch (error) {
@@ -574,9 +560,6 @@ export async function enqueueMemoryRegenerateAll(
       (j) => j.type === 'MEMORY_REGENERATE_ALL',
     );
     if (existing) {
-      logger.debug('[MemoryRegenerateAll] Skipping enqueue — fan-out already in-flight', {
-        jobId: existing.id,
-      });
       return { jobId: existing.id, isNew: false };
     }
   } catch (error) {

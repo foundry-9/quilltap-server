@@ -82,11 +82,6 @@ export async function scaffoldCharacterMount(
     return result;
   }
   if (mountPoint.mountType !== 'database' || mountPoint.storeType !== 'character') {
-    logger.debug('Skipping scaffold — not a database-backed character store', {
-      mountPointId,
-      mountType: mountPoint.mountType,
-      storeType: mountPoint.storeType,
-    });
     return result;
   }
 
@@ -95,7 +90,6 @@ export async function scaffoldCharacterMount(
     await ensureFolderPath(mountPointId, folder);
     if (!existing) {
       result.foldersCreated++;
-      logger.debug('Scaffolded folder', { mountPointId, folder });
     }
   }
 
@@ -109,12 +103,10 @@ export async function scaffoldCharacterMount(
     const existing = await repos.docMountDocuments.findByMountPointAndPath(mountPointId, relPath);
     if (existing) {
       result.filesSkipped++;
-      logger.debug('Scaffold skip — file already exists', { mountPointId, relPath });
       continue;
     }
     await writeDatabaseDocument(mountPointId, relPath, content);
     result.filesCreated++;
-    logger.debug('Scaffolded file', { mountPointId, relPath });
   }
 
   logger.info('Character scaffold complete', {

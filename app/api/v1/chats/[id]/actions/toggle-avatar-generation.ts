@@ -33,13 +33,6 @@ export async function handleToggleAvatarGeneration(
     // Toggle: null/false → true, true → false
     const newValue = !chat.avatarGenerationEnabled;
 
-    logger.debug('[Chats v1] Toggling avatar generation', {
-      chatId,
-      oldValue: chat.avatarGenerationEnabled,
-      newValue,
-      context: 'avatar-generation',
-    });
-
     const updatedChat = await repos.chats.update(chatId, {
       avatarGenerationEnabled: newValue,
     });
@@ -76,22 +69,11 @@ export async function handleToggleAvatarGeneration(
         }
 
         if (!imageProfileId) {
-          logger.debug('[Chats v1] No image profile available for avatar generation, skipping initial generation', {
-            chatId,
-            context: 'avatar-generation',
-          });
         } else {
           // Find all LLM-controlled character participants
           const llmCharacterParticipants = (updatedChat.participants || []).filter(
             (p) => p.type === 'CHARACTER' && p.characterId && p.controlledBy !== 'user'
           );
-
-          logger.debug('[Chats v1] Enqueuing initial avatar generation for LLM characters', {
-            chatId,
-            characterCount: llmCharacterParticipants.length,
-            imageProfileId,
-            context: 'avatar-generation',
-          });
 
           for (const participant of llmCharacterParticipants) {
             try {
@@ -99,12 +81,6 @@ export async function handleToggleAvatarGeneration(
                 chatId,
                 characterId: participant.characterId!,
                 imageProfileId,
-              });
-              logger.debug('[Chats v1] Avatar generation enqueued for character', {
-                chatId,
-                characterId: participant.characterId,
-                imageProfileId,
-                context: 'avatar-generation',
               });
             } catch (charError) {
               logger.warn('[Chats v1] Failed to enqueue avatar generation for character', {

@@ -34,14 +34,12 @@ jest.mock('@/lib/wardrobe/outfit-displacement', () => ({
 // CommonJS require resolves AFTER jest.mock factories have run, so both the
 // handlers under test and the mock bindings stay in sync. Static `import`
 // statements get hoisted by SWC and can resolve before the mock takes effect.
-/* eslint-disable @typescript-eslint/no-var-requires */
 const { getRepositories } = require('@/lib/repositories/factory')
 const { executeWardrobeChangeItemTool } = require('@/lib/tools/handlers/wardrobe-change-item-handler')
 const { executeWardrobeCreateItemTool } = require('@/lib/tools/handlers/wardrobe-create-item-handler')
 const { executeWardrobeListTool } = require('@/lib/tools/handlers/wardrobe-list-handler')
 const { executeWardrobeUpdateOutfitTool } = require('@/lib/tools/handlers/wardrobe-update-outfit-handler')
 const outfitDisplacement = require('@/lib/wardrobe/outfit-displacement')
-/* eslint-enable @typescript-eslint/no-var-requires */
 
 const mockGetRepositories = getRepositories as jest.Mock
 const mockEquipItem = outfitDisplacement.equipItem as jest.Mock

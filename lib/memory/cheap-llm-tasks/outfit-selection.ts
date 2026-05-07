@@ -61,10 +61,6 @@ export async function chooseLLMOutfit(
   characterId?: string,
 ): Promise<CheapLLMTaskResult<EquippedSlots>> {
   if (wardrobeItems.length === 0) {
-    logger.debug('[OutfitSelection] No wardrobe items available, returning empty slots', {
-      characterName,
-      chatId,
-    })
     return {
       success: true,
       result: { top: [], bottom: [], footwear: [], accessories: [] },
@@ -172,37 +168,17 @@ Choose what ${characterName} should wear for this scene:`,
           candidates = []
         } else {
           candidates = [raw]
-          logger.debug('[OutfitSelection] LLM returned non-array for slot, coercing to single-item array', {
-            chatId,
-            slot,
-          })
         }
 
         for (const candidate of candidates) {
           if (typeof candidate !== 'string') {
-            logger.debug('[OutfitSelection] LLM emitted non-string slot entry, skipping', {
-              chatId,
-              slot,
-              candidate,
-            })
             continue
           }
           if (!validItemIds.has(candidate)) {
-            logger.debug('[OutfitSelection] LLM referenced unknown item ID, skipping', {
-              chatId,
-              slot,
-              itemId: candidate,
-            })
             continue
           }
           const itemSlots = itemSlotMap.get(candidate)
           if (!itemSlots || !itemSlots.includes(slot)) {
-            logger.debug('[OutfitSelection] LLM assigned item to slot it does not cover, skipping', {
-              chatId,
-              slot,
-              itemId: candidate,
-              itemCovers: itemSlots,
-            })
             continue
           }
           // Avoid emitting the same id twice in one slot.
@@ -211,17 +187,6 @@ Choose what ${characterName} should wear for this scene:`,
           }
         }
       }
-
-      logger.debug('[OutfitSelection] Parsed LLM outfit selection', {
-        chatId,
-        characterId,
-        slotsPicked: {
-          top: result.top.length,
-          bottom: result.bottom.length,
-          footwear: result.footwear.length,
-          accessories: result.accessories.length,
-        },
-      })
 
       return result
     },

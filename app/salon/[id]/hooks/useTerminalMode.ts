@@ -118,10 +118,6 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
           setTerminalModeState('normal')
           setActiveTerminalSessionIdState(null)
           await persist({ terminalMode: 'normal', activeTerminalSessionId: null })
-          console.debug('[TerminalMode] Bound session is dead; reset to normal', {
-            chatId,
-            sessionId: incomingSessionId,
-          })
           return
         }
         setTerminalModeState(incomingMode)
@@ -145,10 +141,6 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
       if (!detail.sessionId) return
       if (detail.sessionId !== activeTerminalSessionId) return
 
-      console.debug('[TerminalMode] Bound session exited; resetting Terminal Mode', {
-        chatId,
-        sessionId: detail.sessionId,
-      })
       setTerminalModeState('normal')
       setActiveTerminalSessionIdState(null)
       void persist({ terminalMode: 'normal', activeTerminalSessionId: null })
@@ -177,17 +169,12 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
     closeTerminalPicker()
     try {
       const session = await spawnTerminalSession(chatId)
-      console.debug('[TerminalMode] Spawned session', {
-        chatId,
-        sessionId: session.id,
-      })
       await enterModeWithSession(session.id)
       const fc = fetchChatRef.current
       if (fc) await fc()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to spawn terminal'
       showErrorToast(message)
-      console.error('[TerminalMode] Failed to spawn session', { chatId, error: message })
     }
   }, [chatId, enterModeWithSession, closeTerminalPicker])
 
@@ -203,9 +190,8 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to attach session'
       showErrorToast(message)
-      console.error('[TerminalMode] Failed to attach session', { chatId, sessionId, error: message })
     }
-  }, [chatId, enterModeWithSession, closeTerminalPicker])
+  }, [enterModeWithSession, closeTerminalPicker])
 
   const requestOpen = useCallback(async () => {
     // 1. If a live session is already bound, just re-enter mode without a new spawn.
@@ -222,11 +208,8 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
     try {
       const all = await listTerminalSessions(chatId)
       liveSessions = all.filter(isLiveSession)
-    } catch (error) {
-      console.warn('[TerminalMode] Failed to list sessions; falling through to spawn', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      })
+    } catch {
+      // fall through to spawn a new session
     }
 
     if (liveSessions.length > 0) {
@@ -242,11 +225,7 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
   const hidePane = useCallback(async () => {
     setTerminalModeState('normal')
     await persist({ terminalMode: 'normal' })
-    console.debug('[TerminalMode] Hid pane (session preserved)', {
-      chatId,
-      sessionId: activeTerminalSessionId,
-    })
-  }, [chatId, activeTerminalSessionId, persist])
+  }, [persist])
 
   const killTerminal = useCallback(async () => {
     const sessionId = activeTerminalSessionId
@@ -256,14 +235,12 @@ export function useTerminalMode({ chatId, chat, fetchChat }: UseTerminalModePara
     if (sessionId) {
       try {
         await killTerminalSessionApi(sessionId)
-        console.debug('[TerminalMode] Killed session', { chatId, sessionId })
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to terminate session'
         showErrorToast(message)
-        console.error('[TerminalMode] Failed to kill session', { chatId, sessionId, error: message })
       }
     }
-  }, [chatId, activeTerminalSessionId, persist])
+  }, [activeTerminalSessionId, persist])
 
   const toggleFocusMode = useCallback(() => {
     const nextMode: TerminalMode = terminalMode === 'focus' ? 'split' : 'focus'

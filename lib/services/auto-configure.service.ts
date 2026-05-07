@@ -363,11 +363,6 @@ export async function autoConfigureProfile(
   const allProfiles = await repos.connections.findAll()
   const candidates = pickAutoConfigureCandidates(allProfiles, defaultProfile)
 
-  logger.debug('[Auto-Configure] Candidate profiles', {
-    count: candidates.length,
-    candidates: candidates.map(c => ({ provider: c.provider, modelName: c.modelName, modelClass: c.modelClass })),
-  })
-
   let result: AutoConfigureResult | undefined
   const attempts: Array<{ provider: string; modelName: string; error: string }> = []
 

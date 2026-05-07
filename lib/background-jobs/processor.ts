@@ -147,7 +147,6 @@ function armWakeUpTimer(scheduledAt: string): void {
     logger.info('[JobQueue] Wake-up timer fired for scheduled retry', { scheduledAt });
     ensureProcessorRunning();
   }, delayMs);
-  logger.debug('[JobQueue] Wake-up timer armed for scheduled retry', { scheduledAt, delayMs });
 }
 
 /** Job types eligible for concurrent processing */
@@ -341,12 +340,6 @@ export async function processNextJob(): Promise<boolean> {
 function runConcurrentJob(job: BackgroundJob): void {
   const limit = concurrencyFor(job.type);
   bumpInFlight(job.type, +1);
-  logger.debug('[JobQueue] Concurrent job dispatched', {
-    jobId: job.id,
-    type: job.type,
-    inFlight: inFlight(job.type),
-    max: limit,
-  });
 
   executeJob(job).finally(() => {
     bumpInFlight(job.type, -1);

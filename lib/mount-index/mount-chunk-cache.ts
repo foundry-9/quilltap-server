@@ -58,12 +58,6 @@ async function loadMountPoint(mountPointId: string): Promise<CachedMountChunk[]>
       : new Float32Array(chunk.embedding as unknown as ArrayLike<number>),
   }))
 
-  logger.debug('[MountChunkCache] Loaded chunks for mount point', {
-    context: 'MountChunkCache.loadMountPoint',
-    mountPointId,
-    chunkCount: cached.length,
-  })
-
   return cached
 }
 
@@ -93,10 +87,6 @@ export async function getChunksForMountPoints(mountPointIds: string[]): Promise<
  */
 export function invalidateMountPoint(mountPointId: string): void {
   if (cache.delete(mountPointId)) {
-    logger.debug('[MountChunkCache] Invalidated mount point', {
-      context: 'MountChunkCache.invalidateMountPoint',
-      mountPointId,
-    })
   }
 }
 
@@ -108,10 +98,6 @@ export function invalidateAll(): void {
   const size = cache.size
   cache.clear()
   if (size > 0) {
-    logger.debug('[MountChunkCache] Invalidated all mount points', {
-      context: 'MountChunkCache.invalidateAll',
-      mountPointCount: size,
-    })
   }
 }
 

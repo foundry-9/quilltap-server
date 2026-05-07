@@ -87,11 +87,6 @@ export async function loadCanonForObserverAboutSubject(
     )
     const trimmedVault = fromVault?.trim()
     if (trimmedVault && trimmedVault.length > 0) {
-      logger.debug('[Memory] canon source=vault', {
-        observerId: observer.characterId,
-        subjectId: subject.id,
-        path,
-      })
       return {
         characterId: subject.id,
         characterName: subject.name,

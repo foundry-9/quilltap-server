@@ -134,7 +134,6 @@ function getCurrentState(): DbKeyState {
  */
 function setCurrentState(state: DbKeyState): void {
   global.__quilltapDbKeyState = state;
-  log.debug('DbKey state updated', { state });
 }
 
 // ============================================================================
@@ -165,11 +164,6 @@ function hashPepper(pepper: string): string {
  * @returns Complete DbKeyFileData structure ready to write to disk
  */
 function encryptPepper(pepper: string, passphrase: string): DbKeyFileData {
-  log.debug('Encrypting pepper with PBKDF2 key derivation', {
-    algorithm: ALGORITHM,
-    kdfIterations: PBKDF2_ITERATIONS,
-    kdfDigest: PBKDF2_DIGEST,
-  });
 
   const salt = crypto.randomBytes(SALT_LENGTH);
   const key = crypto.pbkdf2Sync(
@@ -185,12 +179,6 @@ function encryptPepper(pepper: string, passphrase: string): DbKeyFileData {
   let ciphertext = cipher.update(pepper, 'utf8', 'hex');
   ciphertext += cipher.final('hex');
   const authTag = cipher.getAuthTag();
-
-  log.debug('Pepper encrypted successfully', {
-    saltLength: salt.length,
-    ivLength: iv.length,
-    ciphertextLength: ciphertext.length,
-  });
 
   return {
     version: 1,
@@ -219,12 +207,6 @@ function encryptPepper(pepper: string, passphrase: string): DbKeyFileData {
  * @returns The decrypted pepper string, or null if decryption failed
  */
 function decryptPepperFromFile(data: DbKeyFileData, passphrase: string): string | null {
-  log.debug('Attempting to decrypt pepper from .dbkey file', {
-    version: data.version,
-    algorithm: data.algorithm,
-    kdf: data.kdf,
-    kdfIterations: data.kdfIterations,
-  });
 
   try {
     const salt = Buffer.from(data.salt, 'hex');
@@ -246,13 +228,8 @@ function decryptPepperFromFile(data: DbKeyFileData, passphrase: string): string 
 
     let plaintext = decipher.update(data.ciphertext, 'hex', 'utf8');
     plaintext += decipher.final('utf8');
-
-    log.debug('Pepper decrypted successfully');
     return plaintext;
   } catch (error) {
-    log.debug('Pepper decryption failed', {
-      error: error instanceof Error ? error.message : String(error),
-    });
     return null;
   }
 }
@@ -266,7 +243,6 @@ function decryptPepperFromFile(data: DbKeyFileData, passphrase: string): string 
  */
 function generatePepper(): string {
   const pepper = crypto.randomBytes(32).toString('base64');
-  log.debug('Generated new pepper', { length: pepper.length });
   return pepper;
 }
 
@@ -281,11 +257,9 @@ function generatePepper(): string {
  * @returns Parsed DbKeyFileData, or null if the file doesn't exist or is invalid
  */
 function readDbKeyFile(filePath: string): DbKeyFileData | null {
-  log.debug('Reading .dbkey file', { path: filePath });
 
   try {
     if (!fs.existsSync(filePath)) {
-      log.debug('.dbkey file does not exist', { path: filePath });
       return null;
     }
 
@@ -302,11 +276,6 @@ function readDbKeyFile(filePath: string): DbKeyFileData | null {
     }
 
     const data = raw as DbKeyFileData;
-
-    log.debug('.dbkey file read successfully', {
-      version: data.version,
-      algorithm: data.algorithm,
-    });
 
     return data;
   } catch (error) {
@@ -328,22 +297,14 @@ function readDbKeyFile(filePath: string): DbKeyFileData | null {
  * @param data - The DbKeyFileData structure to serialize
  */
 function writeDbKeyFile(filePath: string, data: DbKeyFileData): void {
-  log.debug('Writing .dbkey file', { path: filePath, version: data.version });
 
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
-    log.debug('Creating data directory for .dbkey file', { dir });
     fs.mkdirSync(dir, { recursive: true });
   }
 
   const content = JSON.stringify(data, null, 2);
   fs.writeFileSync(filePath, content, { mode: 0o600 });
-
-  log.debug('.dbkey file written successfully', {
-    path: filePath,
-    size: content.length,
-    permissions: '0600',
-  });
 }
 
 // ============================================================================
@@ -407,12 +368,6 @@ export async function provisionDbKey(): Promise<DbKeyState> {
     const envPepper = process.env.ENCRYPTION_MASTER_PEPPER || '';
     const fileData = readDbKeyFile(dbKeyPath);
 
-    log.debug('Provisioning context', {
-      hasEnvPepper: !!envPepper,
-      hasDbKeyFile: !!fileData,
-      dbKeyPath,
-    });
-
     // Case 1: Env var set + .dbkey file exists
     if (envPepper && fileData) {
       const envHash = hashPepper(envPepper);
@@ -457,7 +412,6 @@ export async function provisionDbKey(): Promise<DbKeyState> {
     // Always try the internal passphrase first. If it works, no user passphrase
     // was set. If it fails, assume a user passphrase is required.
     if (!envPepper && fileData) {
-      log.debug('Attempting silent decryption with internal passphrase');
       const pepper = decryptPepperFromFile(fileData, INTERNAL_PASSPHRASE);
 
       if (pepper && hashPepper(pepper) === fileData.pepperHash) {
@@ -512,8 +466,6 @@ export function setupDbKey(passphrase: string): { pepper: string } {
   const pepper = generatePepper();
   const hasUserPassphrase = passphrase.length > 0;
   const actualPassphrase = hasUserPassphrase ? passphrase : INTERNAL_PASSPHRASE;
-
-  log.debug('Encrypting new pepper');
   const fileData = encryptPepper(pepper, actualPassphrase);
 
   const dbKeyPath = getDbKeyPath();
@@ -621,7 +573,6 @@ export function changePassphrase(
   const actualOldPassphrase = oldPassphrase.length > 0 ? oldPassphrase : INTERNAL_PASSPHRASE;
 
   // Verify the old passphrase can decrypt the pepper
-  log.debug('Verifying old passphrase');
   const pepper = decryptPepperFromFile(fileData, actualOldPassphrase);
 
   if (!pepper) {
@@ -638,8 +589,6 @@ export function changePassphrase(
   // Re-encrypt with the new passphrase
   const hasNewUserPassphrase = newPassphrase.length > 0;
   const actualNewPassphrase = hasNewUserPassphrase ? newPassphrase : INTERNAL_PASSPHRASE;
-
-  log.debug('Re-encrypting pepper with new passphrase');
   const newFileData = encryptPepper(pepper, actualNewPassphrase);
 
   // Write both .dbkey files (main + LLM logs) with the new wrapping
@@ -684,8 +633,6 @@ export function storeEnvPepperInDbKey(passphrase: string): void {
   }
 
   const actualPassphrase = passphrase.length > 0 ? passphrase : INTERNAL_PASSPHRASE;
-
-  log.debug('Encrypting env pepper for storage');
   const fileData = encryptPepper(pepper, actualPassphrase);
 
   const dbKeyPath = getDbKeyPath();
@@ -737,17 +684,13 @@ export function getHasUserPassphrase(): boolean {
 
   if (!fileData) {
     // No .dbkey file — no passphrase can be set
-    log.debug('getHasUserPassphrase: no .dbkey file, returning false');
     global.__quilltapHasUserPassphrase = false;
     return false;
   }
 
   // Try the internal passphrase — if it works, no user passphrase is set
-  log.debug('getHasUserPassphrase: probing .dbkey file with internal passphrase');
   const pepper = decryptPepperFromFile(fileData, INTERNAL_PASSPHRASE);
   const hasPassphrase = !(pepper && hashPepper(pepper) === fileData.pepperHash);
-
-  log.debug('getHasUserPassphrase: determined from .dbkey file', { hasPassphrase });
   global.__quilltapHasUserPassphrase = hasPassphrase;
   return hasPassphrase;
 }

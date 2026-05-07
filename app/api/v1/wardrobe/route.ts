@@ -28,7 +28,6 @@ const createArchetypeSchema = z.object({
 // GET /api/v1/wardrobe
 export const GET = createAuthenticatedHandler(async (req, { repos }) => {
   try {
-    logger.debug('[Wardrobe Archetypes v1] Fetching all archetype items');
 
     const archetypeItems = await repos.wardrobe.findArchetypes();
     return NextResponse.json({ wardrobeItems: archetypeItems });
@@ -46,11 +45,6 @@ export const GET = createAuthenticatedHandler(async (req, { repos }) => {
 export const POST = createAuthenticatedHandler(async (req, { repos }) => {
   const body = await req.json();
   const validatedData = createArchetypeSchema.parse(body);
-
-  logger.debug('[Wardrobe Archetypes v1] Creating archetype item', {
-    title: validatedData.title,
-    types: validatedData.types,
-  });
 
   const item = await repos.wardrobe.create({
     characterId: null,

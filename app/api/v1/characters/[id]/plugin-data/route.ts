@@ -26,8 +26,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Character');
       }
 
-      logger.debug('[PluginData v1] Fetching all plugin data for character', { characterId: id });
-
       const pluginDataMap = await repos.characterPluginData.getPluginDataMap(id);
       return NextResponse.json({ pluginData: pluginDataMap });
     } catch (error) {
@@ -66,11 +64,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     } catch {
       return badRequest('Data must be a valid JSON value');
     }
-
-    logger.debug('[PluginData v1] Upserting plugin data', {
-      characterId: id,
-      pluginName,
-    });
 
     try {
       const entry = await repos.characterPluginData.upsert(id, pluginName, data);

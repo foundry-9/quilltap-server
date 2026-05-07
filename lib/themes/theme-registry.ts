@@ -604,9 +604,6 @@ class ThemeRegistry extends AbstractRegistry<ThemeRegistryState> {
         }
       }
     } catch (error) {
-      logger.debug('No bundled themes directory found or error loading', {
-        error: getErrorMessage(error),
-      });
     }
 
     // Then, load user-installed bundles (these can override bundled themes)

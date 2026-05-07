@@ -44,14 +44,11 @@ export async function searchConversationChunks(
   const limit = options.limit || 10
   const minScore = options.minScore || 0.3
 
-  logger.debug('Searching conversation chunks', { characterId: options.characterId, limit, minScore })
-
   // Find chats this character participates in
   const characterChats = await repos.chats.findByCharacterId(options.characterId)
   const characterChatIds = new Set(characterChats.map(c => c.id))
 
   if (characterChatIds.size === 0) {
-    logger.debug('Character has no conversations', { characterId: options.characterId })
     return []
   }
 
@@ -60,11 +57,8 @@ export async function searchConversationChunks(
     .filter(chunk => characterChatIds.has(chunk.chatId))
 
   if (allChunks.length === 0) {
-    logger.debug('No embedded conversation chunks found')
     return []
   }
-
-  logger.debug('Loaded embedded chunks for search', { chunkCount: allChunks.length })
 
   // Compute cosine similarity for each chunk
   const scored = allChunks
@@ -77,7 +71,6 @@ export async function searchConversationChunks(
     .slice(0, limit)
 
   if (scored.length === 0) {
-    logger.debug('No conversation chunks above minimum score', { minScore })
     return []
   }
 
@@ -96,11 +89,6 @@ export async function searchConversationChunks(
     participantNames: chunk.participantNames,
     score,
   }))
-
-  logger.debug('Conversation chunk search completed', {
-    resultsCount: results.length,
-    topScore: results[0]?.score,
-  })
 
   return results
 }

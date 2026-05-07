@@ -78,24 +78,16 @@ function stripMarkdownSyntax(text: string): string {
  * Returns an empty string (with a warning log) on read errors.
  */
 export async function convertMarkdownToText(absolutePath: string): Promise<string> {
-  logger.debug('Converting Markdown to text', { path: absolutePath });
 
   try {
     const raw = await fs.readFile(absolutePath, 'utf-8');
 
     if (raw.trim().length === 0) {
-      logger.debug('Markdown file is empty', { path: absolutePath });
       return '';
     }
 
     const withoutFrontmatter = stripFrontmatter(raw);
     const plainText = stripMarkdownSyntax(withoutFrontmatter);
-
-    logger.debug('Markdown conversion complete', {
-      path: absolutePath,
-      originalLength: raw.length,
-      textLength: plainText.length,
-    });
 
     return plainText;
   } catch (error) {

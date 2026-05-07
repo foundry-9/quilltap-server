@@ -205,14 +205,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const totalCount = allMatching.length;
         const memories = allMatching.slice(offset, offset + limit);
 
-        logger.debug('[Memories Repository] Paginated query', {
-          characterId,
-          totalCount,
-          limit,
-          offset,
-          returned: memories.length,
-        });
-
         return { memories, totalCount };
       },
       'Error finding paginated memories for character',

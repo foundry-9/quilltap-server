@@ -132,9 +132,6 @@ export async function shouldChainNext(
         selectionReason = 'queue'
         break
       }
-      logger.debug('[TurnOrchestrator] Skipping queued participant who just spoke', {
-        chatId, skippedParticipantId: candidate,
-      })
     }
     // Persist updated queue (even if we skipped entries)
     await repos.chats.update(chatId, { turnQueue: JSON.stringify(turnQueue) })

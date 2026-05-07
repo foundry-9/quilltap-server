@@ -95,10 +95,6 @@ export async function executeReadConversationTool(
     }
 
     if (!chat.renderedMarkdown) {
-      logger.debug('Read conversation tool: no rendered markdown available', {
-        context: 'read-conversation-handler',
-        chatId: targetChatId,
-      });
       return {
         success: false,
         error: 'Conversation has not been rendered yet.',
@@ -110,20 +106,11 @@ export async function executeReadConversationTool(
     if (exclude_annotations) {
       // Strip any inline annotations that may have been stored
       markdown = stripAnnotations(markdown);
-      logger.debug('Stripped annotations from rendered markdown', {
-        context: 'read-conversation-handler',
-        chatId: targetChatId,
-      });
     } else {
       // Load and merge annotations
       const annotations = await repos.conversationAnnotations.findByChatId(targetChatId);
       if (annotations.length > 0) {
         markdown = mergeAnnotations(markdown, annotations);
-        logger.debug('Merged annotations into rendered markdown', {
-          context: 'read-conversation-handler',
-          chatId: targetChatId,
-          annotationCount: annotations.length,
-        });
       }
     }
 

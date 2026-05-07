@@ -25,11 +25,6 @@ export const GET = createContextHandler(async (req: NextRequest) => {
     // Resolve and normalize the path
     const resolvedPath = path.resolve(requestedPath);
 
-    logger.debug('[Browse Directory] Listing directories', {
-      requestedPath,
-      resolvedPath,
-    });
-
     // Verify the path exists and is a directory
     let stat;
     try {
@@ -47,10 +42,6 @@ export const GET = createContextHandler(async (req: NextRequest) => {
     try {
       entries = await fs.readdir(resolvedPath, { withFileTypes: true });
     } catch (err) {
-      logger.debug('[Browse Directory] Cannot read directory', {
-        path: resolvedPath,
-        error: err instanceof Error ? err.message : String(err),
-      });
       return successResponse({
         path: resolvedPath,
         parent: path.dirname(resolvedPath) !== resolvedPath ? path.dirname(resolvedPath) : null,

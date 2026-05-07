@@ -144,11 +144,6 @@ export async function postCommonplaceWhisper(
   const { chatId, targetParticipantId, content, kind } = params;
 
   if (!content || content.trim().length === 0) {
-    logger.debug('[CommonplaceWhisper] Empty content, skipping', {
-      context: 'commonplace-notifications',
-      chatId,
-      kind,
-    });
     return null;
   }
 
@@ -157,11 +152,6 @@ export async function postCommonplaceWhisper(
 
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
-      logger.debug('[CommonplaceWhisper] Chat not found, skipping', {
-        context: 'commonplace-notifications',
-        chatId,
-        kind,
-      });
       return null;
     }
 

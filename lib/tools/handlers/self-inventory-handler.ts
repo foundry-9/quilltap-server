@@ -406,10 +406,6 @@ async function buildPromptSection(
         roleplayTemplate = { systemPrompt: (tpl as { systemPrompt: string }).systemPrompt };
       }
     } catch (err) {
-      logger.debug('self_inventory: roleplay template lookup failed', {
-        templateId: chat.roleplayTemplateId,
-        error: getErrorMessage(err),
-      });
     }
   }
 
@@ -425,10 +421,6 @@ async function buildPromptSection(
         };
       }
     } catch (err) {
-      logger.debug('self_inventory: project lookup failed', {
-        projectId: chat.projectId,
-        error: getErrorMessage(err),
-      });
     }
   }
 
@@ -473,11 +465,6 @@ async function buildLastTurnSection(
     try {
       contextWindow = getModelContextLimit(provider, modelName);
     } catch (err) {
-      logger.debug('self_inventory: context window lookup failed', {
-        provider,
-        modelName,
-        error: getErrorMessage(err),
-      });
     }
 
     const utilizationPercent =
@@ -711,13 +698,6 @@ export async function executeSelfInventoryTool(
       error: `Character ${context.characterId} not found`,
     };
   }
-
-  logger.debug('self_inventory: assembling report', {
-    context: 'self-inventory-handler',
-    userId: context.userId,
-    chatId: context.chatId,
-    characterId: context.characterId,
-  });
 
   const vault: SelfInventoryVaultSection = await buildVaultSection(character).catch(
     (err) => ({

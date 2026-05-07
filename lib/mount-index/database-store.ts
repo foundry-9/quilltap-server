@@ -92,11 +92,6 @@ export async function readDatabaseDocument(
       'NOT_FOUND'
     );
   }
-  logger.debug('Read database document', {
-    mountPointId,
-    relativePath: rel,
-    size: doc.content.length,
-  });
   return {
     content: doc.content,
     mtime: new Date(doc.lastModified).getTime(),
@@ -202,11 +197,6 @@ export async function writeDatabaseDocument(
   emitDocumentWritten({ mountPointId, relativePath: rel });
 
   const mtime = new Date(now).getTime();
-  logger.debug('Wrote database document', {
-    mountPointId,
-    relativePath: rel,
-    sizeBytes: Buffer.byteLength(content, 'utf-8'),
-  });
   return { mtime };
 }
 
@@ -232,7 +222,6 @@ export async function deleteDatabaseDocument(
   }
 
   emitDocumentDeleted({ mountPointId, relativePath: rel });
-  logger.debug('Deleted database document', { mountPointId, relativePath: rel });
   return true;
 }
 
@@ -293,11 +282,6 @@ export async function moveDatabaseDocument(
   }
 
   emitDocumentMoved({ mountPointId, fromRelativePath: fromRel, toRelativePath: toRel });
-  logger.debug('Moved database document', {
-    mountPointId,
-    fromRelativePath: fromRel,
-    toRelativePath: toRel,
-  });
 }
 
 // ============================================================================
@@ -384,12 +368,6 @@ export async function createDatabaseFolder(
   const folderId = await ensureFolderPath(mountPointId, rel);
   const resultPath = rel || '';
 
-  logger.debug('Created database folder', {
-    mountPointId,
-    folderPath: resultPath,
-    folderId,
-  });
-
   return { folderId: folderId || '', path: resultPath };
 }
 
@@ -421,11 +399,6 @@ export async function deleteDatabaseFolder(
 
   // Delete the folder row
   await repos.docMountFolders.delete(folder.id);
-
-  logger.debug('Deleted database folder', {
-    mountPointId,
-    folderPath: rel,
-  });
 
   return { deleted: true };
 }
@@ -551,13 +524,6 @@ export async function moveDatabaseFolder(
       await repos.docMountBlobs.updatePath(blob.id, newPath);
     }
   }
-
-  logger.debug('Moved database folder', {
-    mountPointId,
-    fromPath: fromRel,
-    toPath: toRel,
-    movedDocuments: movedDocuments.length,
-  });
 
   // Emit events after all updates (don't hold locks)
   for (const doc of movedDocuments) {

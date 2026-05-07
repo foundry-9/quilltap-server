@@ -56,12 +56,6 @@ export async function handleRegenerateAvatar(
       return badRequest('Character is not a participant in this chat.');
     }
 
-    logger.debug('[Chats v1] Manual avatar regeneration requested', {
-      chatId,
-      characterId,
-      context: 'character-avatar',
-    });
-
     await triggerAvatarGenerationIfEnabled(repos, {
       userId: user.id,
       chatId,

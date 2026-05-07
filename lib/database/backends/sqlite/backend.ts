@@ -664,8 +664,6 @@ export class SQLiteBackend implements DatabaseBackend {
     const existing = this.collectionBlobColumns.get(tableName) || [];
     const merged = [...new Set([...existing, ...columns])];
     this.collectionBlobColumns.set(tableName, merged);
-
-    logger.debug('Registered blob columns', { table: tableName, columns: merged });
   }
 
   getCollection<T = unknown>(name: string): DatabaseCollection<T> {

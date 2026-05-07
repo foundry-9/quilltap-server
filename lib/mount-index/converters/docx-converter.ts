@@ -16,11 +16,7 @@ export async function convertDocxBufferToText(buffer: Buffer): Promise<string> {
   try {
     const result = await mammoth.extractRawText({ buffer });
     if (result.messages.length > 0) {
-      logger.debug('Mammoth conversion messages', {
-        messages: result.messages.map((m) => m.message),
-      });
     }
-    logger.debug('DOCX conversion complete', { textLength: result.value.length });
     return result.value;
   } catch (error) {
     logger.warn('Failed to extract text from DOCX buffer', {
@@ -34,7 +30,6 @@ export async function convertDocxBufferToText(buffer: Buffer): Promise<string> {
  * Extract plain text from a DOCX file on disk.
  */
 export async function convertDocxToText(absolutePath: string): Promise<string> {
-  logger.debug('Converting DOCX to text', { path: absolutePath });
   try {
     const buffer = await fs.readFile(absolutePath);
     return await convertDocxBufferToText(buffer);

@@ -144,7 +144,6 @@ export async function executeDocEditTool(
   input: Record<string, unknown>,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
-  logger.debug('Executing doc-edit tool', { toolName, projectId: context.projectId });
 
   try {
     switch (toolName) {
@@ -342,11 +341,6 @@ async function buildReadResolutionContext(
 ) {
   const opaque = await actingCharacterIsOpaqueToVaults(context);
   if (opaque) {
-    logger.debug('Acting character is opaque (systemTransparency != true); withholding character-vault access', {
-      chatId: context.chatId,
-      actingCharacterId: context.characterId,
-      mountPointHint: input.mount_point,
-    });
     // No characterId / characterIds → resolver admits only project document
     // stores. Mount-point name lookups for character vaults won't resolve.
     return {
@@ -356,11 +350,6 @@ async function buildReadResolutionContext(
   }
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
   if (peerCharacterIds.length > 0) {
-    logger.debug('Cross-character vault reads enabled; expanding access', {
-      chatId: context.chatId,
-      actingCharacterId: context.characterId,
-      peerCharacterIds,
-    });
   }
   return {
     projectId: context.projectId,
@@ -381,11 +370,6 @@ async function buildWriteResolutionContext(
 ) {
   const opaque = await actingCharacterIsOpaqueToVaults(context);
   if (opaque) {
-    logger.debug('Acting character is opaque (systemTransparency != true); withholding character-vault write access', {
-      chatId: context.chatId,
-      actingCharacterId: context.characterId,
-      mountPointHint: input.mount_point,
-    });
     return {
       projectId: context.projectId,
       mountPoint: input.mount_point,
@@ -914,7 +898,6 @@ async function handleGrep(
       }
     } catch {
       // Skip files that can't be read
-      logger.debug('Skipping unreadable file in grep', { path: absolutePath });
     }
   };
 
@@ -952,7 +935,6 @@ async function handleGrep(
 
       await walkRecursive(startDir);
     } catch {
-      logger.debug('Could not walk directory for grep', { dir: startDir });
     }
   };
 
@@ -1161,7 +1143,6 @@ async function handleListFiles(
       await walkRecursive(startDir);
     } catch {
       // Directory doesn't exist or can't be read
-      logger.debug('Could not list directory', { dir: startDir });
     }
   };
 
@@ -1752,10 +1733,6 @@ async function resolveActorOrigin(context: DocEditToolContext): Promise<Libraria
       return { kind: 'by-character', characterName: character.name };
     }
   } catch (error) {
-    logger.debug('Could not resolve character name for Librarian attribution', {
-      characterId: context.characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
   }
   return { kind: 'by-user' };
 }
@@ -2188,10 +2165,6 @@ async function handleOpenDocument(
         characterName = character.name;
       }
     } catch (error) {
-      logger.debug('Could not resolve character name for Librarian attribution', {
-        characterId: context.characterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
     }
   }
 
@@ -2279,7 +2252,6 @@ async function handleDocFocus(
   input: DocFocusInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
-  logger.debug('doc_focus requested', { chatId: context.chatId, ...input });
 
   // If clear_focus is true, return immediately
   if (input.clear_focus) {

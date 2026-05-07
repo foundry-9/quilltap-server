@@ -220,16 +220,6 @@ async function replicateTurnState(
     turnQueue: newTurnQueue,
   };
 
-  logger.debug('[ChatContinuation] Replicating turn state', {
-    newChatId,
-    sourceChatId: sourceChat.id,
-    isPaused: update.isPaused,
-    lastTurnParticipantId: update.lastTurnParticipantId,
-    activeTypingParticipantId: update.activeTypingParticipantId,
-    impersonatingCount: newImpersonating.length,
-    turnQueueLength: JSON.parse(newTurnQueue).length,
-  });
-
   await repos.chats.update(newChatId, update);
 }
 
@@ -243,11 +233,6 @@ export async function applyChatContinuation(
   params: ApplyChatContinuationParams,
 ): Promise<ApplyChatContinuationResult> {
   const { newChatId, sourceChatId, repos } = params;
-
-  logger.debug('[ChatContinuation] Beginning continuation', {
-    newChatId,
-    sourceChatId,
-  });
 
   const sourceChat = await repos.chats.findById(sourceChatId);
   if (!sourceChat) {
@@ -268,13 +253,6 @@ export async function applyChatContinuation(
   }
 
   const participantMap = buildParticipantIdMap(sourceChat.participants, newChat.participants);
-  logger.debug('[ChatContinuation] Built participant map', {
-    newChatId,
-    sourceChatId,
-    sourceParticipantCount: sourceChat.participants.length,
-    newParticipantCount: newChat.participants.length,
-    mappedCount: participantMap.size,
-  });
 
   // 1. Post the Host link bubble in the new chat first, so the carryover
   //    appears beneath it.
@@ -290,14 +268,6 @@ export async function applyChatContinuation(
   const anchorIndex = findLibrarianSummaryAnchorIndex(messageEvents);
   const hadLibrarianSummary = anchorIndex >= 0;
   const carryover = anchorIndex >= 0 ? messageEvents.slice(anchorIndex) : messageEvents;
-
-  logger.debug('[ChatContinuation] Carryover window resolved', {
-    newChatId,
-    sourceChatId,
-    sourceMessageCount: messageEvents.length,
-    hadLibrarianSummary,
-    carryoverCount: carryover.length,
-  });
 
   let replayedMessageCount = 0;
   for (const source of carryover) {
@@ -315,13 +285,6 @@ export async function applyChatContinuation(
       });
     }
   }
-
-  logger.debug('[ChatContinuation] Replayed messages', {
-    newChatId,
-    sourceChatId,
-    replayedMessageCount,
-    skippedCount: carryover.length - replayedMessageCount,
-  });
 
   // 3. Replicate turn state.
   try {

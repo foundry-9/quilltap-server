@@ -108,14 +108,6 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  logger.debug('[CharacterAvatar] Generated portrait prompt', {
-    context: 'background-jobs.character-avatar',
-    jobId: job.id,
-    promptLength: prompt.length,
-    promptPreview: prompt.substring(0, 200),
-    leafCounts,
-  });
-
   // 6. Concierge check — classify the prompt for dangerous content
   const chatSettings = await repos.chatSettings.findByUserId(job.userId) ?? undefined;
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);

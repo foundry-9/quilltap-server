@@ -22,9 +22,6 @@ const analyzeImageSchema = z.object({
 
 // POST /api/v1/wardrobe/analyze-image
 export const POST = createAuthenticatedHandler(async (req, { repos, user }) => {
-  logger.debug('[Wardrobe Image Analysis API] Received analyze-image request', {
-    userId: user.id,
-  })
 
   const body = await req.json()
   const validated = analyzeImageSchema.parse(body)
@@ -33,12 +30,6 @@ export const POST = createAuthenticatedHandler(async (req, { repos, user }) => {
   if (validated.image.length > 14_000_000) {
     return badRequest('Image is too large. Maximum file size is 10 MB.')
   }
-
-  logger.debug('[Wardrobe Image Analysis API] Validated request', {
-    mimeType: validated.mimeType,
-    imageLength: validated.image.length,
-    hasGuidance: !!validated.guidance,
-  })
 
   try {
     const result = await analyzeImageForWardrobeItems(

@@ -33,8 +33,6 @@ export const GET = createAuthenticatedParamsHandler<{ itemId: string }>(
         return notFound('Archetype wardrobe item');
       }
 
-      logger.debug('[Wardrobe Archetypes v1] Fetched archetype item', { itemId });
-
       return NextResponse.json({ wardrobeItem: item });
     } catch (error) {
       logger.error(
@@ -57,11 +55,6 @@ export const PUT = createAuthenticatedParamsHandler<{ itemId: string }>(
 
     const body = await req.json();
     const validatedData = updateArchetypeSchema.parse(body);
-
-    logger.debug('[Wardrobe Archetypes v1] Updating archetype item', {
-      itemId,
-      fields: Object.keys(validatedData),
-    });
 
     const item = await repos.wardrobe.update(itemId, validatedData);
 
@@ -91,7 +84,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ itemId: string }>(
       // dangling references are harmless.
       try {
         await repos.chats.removeEquippedItemFromAllChats(itemId);
-        logger.debug('[Wardrobe Archetypes v1] Cleaned up equipped references', { itemId });
       } catch (cleanupError) {
         logger.warn('[Wardrobe Archetypes v1] Cleanup of equipped references had issues, proceeding with delete', {
           itemId,

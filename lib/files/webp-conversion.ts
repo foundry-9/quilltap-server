@@ -99,15 +99,6 @@ export async function convertToWebP(
 
     const newFilename = replaceExtensionWithWebP(filename);
 
-    logger.debug('Converted image to WebP', {
-      context: 'files.webp-conversion',
-      originalMimeType: mimeType,
-      originalFilename: filename,
-      originalSize,
-      webpSize: webpBuffer.length,
-      compressionRatio: `${((1 - webpBuffer.length / originalSize) * 100).toFixed(1)}%`,
-    });
-
     return {
       buffer: webpBuffer,
       mimeType: 'image/webp',

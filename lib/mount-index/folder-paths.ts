@@ -56,14 +56,6 @@ export async function resolvePath(
     throw new Error(msg);
   }
 
-  logger.debug('Resolved path to folder', {
-    context: 'folder-paths.resolvePath',
-    mountPointId,
-    path,
-    folderId: folder.id,
-    folderPath: dir,
-  });
-
   return {
     folderId: folder.id,
     leafName: file,
@@ -145,25 +137,11 @@ export async function ensureFolderPath(
           name: segment,
           path: currentPath,
         });
-
-        logger.debug('Created folder segment', {
-          context: 'folder-paths.ensureFolderPath',
-          mountPointId,
-          segment,
-          path: currentPath,
-          folderId: folder.id,
-        });
       } catch (error) {
         // On conflict (concurrent creation), look it up
         const existing = await repos.docMountFolders.findByMountPointAndPath(mountPointId, currentPath);
         if (existing) {
           folder = existing;
-          logger.debug('Folder created concurrently, using existing', {
-            context: 'folder-paths.ensureFolderPath',
-            mountPointId,
-            path: currentPath,
-            folderId: folder.id,
-          });
         } else {
           logger.error('Failed to create or find folder segment', {
             context: 'folder-paths.ensureFolderPath',

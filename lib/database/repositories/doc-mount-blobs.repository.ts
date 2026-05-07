@@ -227,11 +227,6 @@ export class DocMountBlobsRepository {
         sizeBytes, input.sha256, description, descriptionUpdatedAt,
         input.data, now, existing.id
       );
-      logger.debug('Replaced existing blob', {
-        mountPointId: input.mountPointId,
-        relativePath: input.relativePath,
-        sizeBytes,
-      });
       const updated = await this.findById(existing.id);
       if (!updated) {
         throw new Error(`Blob disappeared after update: ${existing.id}`);
@@ -250,13 +245,6 @@ export class DocMountBlobsRepository {
       input.originalMimeType, input.storedMimeType, sizeBytes, input.sha256,
       description, descriptionUpdatedAt, input.data, now, now
     );
-
-    logger.debug('Created blob', {
-      id,
-      mountPointId: input.mountPointId,
-      relativePath: input.relativePath,
-      sizeBytes,
-    });
     const created = await this.findById(id);
     if (!created) {
       throw new Error(`Blob disappeared immediately after creation: ${id}`);

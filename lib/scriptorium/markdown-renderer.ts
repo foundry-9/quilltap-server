@@ -55,11 +55,6 @@ export function renderConversationMarkdown(
   characterNames: Map<string, string>,
   metadata?: ConversationMetadata,
 ): RenderedConversation {
-  logger.debug('Rendering conversation markdown', {
-    messageCount: messages.length,
-    participantCount: participants.length,
-    characterNameCount: characterNames.size,
-  })
 
   // Filter to visible messages and prepare for rendering
   const visibleMessages: Array<{
@@ -96,8 +91,6 @@ export function renderConversationMarkdown(
       })
     }
   }
-
-  logger.debug('Filtered to visible messages', { visibleCount: visibleMessages.length })
 
   // Resolve display name for a message
   function resolveDisplayName(role: string, participantId: string | null | undefined): string {
@@ -226,13 +219,6 @@ export function renderConversationMarkdown(
   // When metadata is present, it's already in interchange 0's content,
   // so the join naturally includes it at the top
   const markdown = interchanges.map(ic => ic.content).join('\n')
-
-  logger.debug('Rendered conversation', {
-    interchangeCount: interchanges.length,
-    totalMessages: globalMessageIndex,
-    markdownLength: markdown.length,
-    hasMetadata: !!metadata,
-  })
 
   return { markdown, interchanges }
 }

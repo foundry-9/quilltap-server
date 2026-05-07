@@ -500,27 +500,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             // responding character sees the intro without a one-turn lag.
             // (It's already persisted to the chat for future turns.)
             pendingOffSceneAnnouncement = { content: announcement.content }
-            logger.debug('[ContextManager] Off-scene Host introduction posted', {
-              chatId: chat.id,
-              candidateCount: candidates.length,
-              matchedCount: matchedIds.size,
-              alreadyIntroducedCount: introducedIds.size,
-              newcomerCount: newcomers.length,
-              newcomerNames: newcomers.map(c => c.name),
-              contentTokens: estimateTokens(announcement.content, provider),
-            })
           }
         } else {
-          logger.debug('[ContextManager] All mentioned characters already introduced', {
-            chatId: chat.id,
-            matchedCount: matchedIds.size,
-          })
         }
       } else {
-        logger.debug('[ContextManager] No mentioned characters found', {
-          chatId: chat.id,
-          candidateCount: candidates.length,
-        })
       }
     }
   } catch (error) {
@@ -551,12 +534,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     precompiledIdentityStack,
   })
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
-  logger.debug('[ContextManager] buildSystemPrompt complete', {
-    chatId: chat.id,
-    durationMs: Math.round(performance.now() - tSystemPromptStart),
-    systemPromptChars: systemPrompt.length,
-    systemPromptTokens,
-  })
 
   // Log multi-character context info for debugging identity confusion
   if (isMultiCharacter && respondingParticipant) {
@@ -603,12 +580,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     visibleConversation.map(m => ({ role: m.role, content: m.content })),
     provider
   )
-  logger.debug('[ContextManager] Conversation token count complete', {
-    chatId: chat.id,
-    durationMs: Math.round(performance.now() - tTokenCountStart),
-    visibleMessageCount: visibleConversation.length,
-    conversationTokens,
-  })
 
   // Total estimated prompt = system prompt + conversation + a rough memory estimate
   // (Memories haven't been retrieved yet, but we use the budget allocation as an estimate)
@@ -929,16 +900,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       warnings.push(`Failed to retrieve memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
-  logger.debug('[ContextManager] Memory retrieval + format complete', {
-    chatId: chat.id,
-    characterId: character.id,
-    durationMs: Math.round(performance.now() - tMemoryStart),
-    path: memoryPath,
-    memoriesIncluded,
-    frozenArchiveCount,
-    dynamicHeadCount,
-    compactionGeneration: chat.compactionGeneration ?? 0,
-  })
 
   // 2a-bis. Render the latest scene-state snapshot as the `## Current State`
   // section that prefaces the Commonplace Book whisper. Time is included only
@@ -1033,13 +994,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
   if (isMultiCharacter) {
-    logger.debug('[ContextManager] Inter-character memory retrieval complete', {
-      chatId: chat.id,
-      characterId: character.id,
-      durationMs: Math.round(performance.now() - tInterStart),
-      loadedCount: interCharacterLoadedCount,
-      includedCount: interCharacterMemoriesIncluded,
-    })
   }
 
   // ============================================================================
@@ -1206,12 +1160,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     const anchorSet = new Set(summaryAnchorIds)
     const before = messagesToProcess.length
     messagesToProcess = messagesToProcess.filter(m => !m.id || !anchorSet.has(m.id))
-    logger.debug('[ContextManager] Dropped messages absorbed into running summary', {
-      chatId: chat.id,
-      droppedCount: before - messagesToProcess.length,
-      remainingCount: messagesToProcess.length,
-      anchorCount: summaryAnchorIds.length,
-    })
   }
 
   // 6. Select recent messages to fit budget

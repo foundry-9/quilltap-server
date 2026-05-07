@@ -76,11 +76,6 @@ async function resolveWardrobeItem(
 ): Promise<WardrobeItem | null> {
   if (itemId) {
     const found = await repos.wardrobe.findByIdForCharacter(characterId, itemId);
-    logger.debug('Wardrobe item lookup by ID', {
-      context: 'wardrobe-change-item-handler',
-      itemId,
-      found: !!found,
-    });
     if (found) return found;
   }
 
@@ -88,13 +83,6 @@ async function resolveWardrobeItem(
     const characterItems = await repos.wardrobe.findByCharacterId(characterId);
     const lower = itemTitle.toLowerCase();
     const found = characterItems.find((i) => i.title.toLowerCase() === lower) ?? null;
-    logger.debug('Wardrobe item lookup by title', {
-      context: 'wardrobe-change-item-handler',
-      characterId,
-      itemTitle,
-      found: !!found,
-      candidateCount: characterItems.length,
-    });
     return found;
   }
 
@@ -141,27 +129,7 @@ export async function executeWardrobeChangeItemTool(
     const item_title = normalizeNoItemSentinel(input.item_title);
 
     if (input.item_id !== item_id || input.item_title !== item_title) {
-      logger.debug('Normalized no-item sentinel on wardrobe_change_item input', {
-        context: 'wardrobe-change-item-handler',
-        chatId: context.chatId,
-        characterId: context.characterId,
-        mode,
-        slot,
-        originalItemId: input.item_id,
-        originalItemTitle: input.item_title,
-      });
     }
-
-    logger.debug('Dispatching wardrobe_change_item', {
-      context: 'wardrobe-change-item-handler',
-      userId: context.userId,
-      chatId: context.chatId,
-      characterId: context.characterId,
-      mode,
-      slot,
-      itemId: item_id,
-      itemTitle: item_title,
-    });
 
     let action: 'equipped' | 'removed';
     let summarySlot: string;

@@ -40,9 +40,6 @@ const createMountPointSchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    logger.debug('[Mount Points v1] Listing all mount points', {
-      userId: user.id,
-    });
 
     const mountPoints = await repos.docMountPoints.findAll();
 
@@ -62,10 +59,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
       embeddedChunkCount: embeddedCountMap.get(mp.id) || 0,
     }));
 
-    logger.debug('[Mount Points v1] Found mount points', {
-      count: mountPoints.length,
-    });
-
     return NextResponse.json({ mountPoints: enriched });
   } catch (error) {
     logger.error('[Mount Points v1] Error fetching mount points', {}, error instanceof Error ? error : undefined);
@@ -80,13 +73,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   const body = await req.json();
   const validatedData = createMountPointSchema.parse(body);
-
-  logger.debug('[Mount Points v1] Creating mount point', {
-    name: validatedData.name,
-    basePath: validatedData.basePath,
-    mountType: validatedData.mountType,
-    userId: user.id,
-  });
 
   const mountPoint = await repos.docMountPoints.create({
     name: validatedData.name,
@@ -113,9 +99,6 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
   if (validatedData.mountType !== 'database') {
     const accessible = await verifyBasePath(validatedData.basePath);
     if (accessible) {
-      logger.debug('[Mount Points v1] Base path is accessible', {
-        basePath: validatedData.basePath,
-      });
     } else {
       warning = `Base path '${validatedData.basePath}' is not currently accessible. The mount point was created but scanning will fail until the path is available.`;
       logger.warn('[Mount Points v1] Base path not accessible', {

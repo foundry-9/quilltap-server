@@ -42,14 +42,6 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
       async () => {
         const session = await this._create(data, options);
 
-        logger.debug('Terminal session created', {
-          context: 'TerminalSessionsRepository.create',
-          sessionId: session.id,
-          chatId: session.chatId,
-          shell: session.shell,
-          cwd: session.cwd,
-        });
-
         return session;
       },
       'Error creating terminal session',
@@ -70,10 +62,6 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
         const session = await this._update(id, updateData);
 
         if (session) {
-          logger.debug('Terminal session updated', {
-            context: 'TerminalSessionsRepository.update',
-            sessionId: id,
-          });
         }
 
         return session;
@@ -89,10 +77,6 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
         const deleted = await this._delete(id);
 
         if (deleted) {
-          logger.debug('Terminal session deleted', {
-            context: 'TerminalSessionsRepository.delete',
-            sessionId: id,
-          });
         }
 
         return deleted;
@@ -159,11 +143,6 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
         }
 
         if (count > 0) {
-          logger.debug('Deleted terminal sessions for chat', {
-            context: 'TerminalSessionsRepository.deleteByChatId',
-            chatId,
-            count,
-          });
         }
 
         return count;

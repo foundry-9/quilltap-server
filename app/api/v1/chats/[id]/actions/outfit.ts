@@ -73,7 +73,6 @@ export async function handleGetOutfit(
   { repos }: AuthenticatedContext
 ): Promise<NextResponse> {
   try {
-    logger.debug('[Chats v1] Fetching equipped outfit state', { chatId, context: 'wardrobe' });
 
     const equippedOutfit = await repos.chats.getEquippedOutfit(chatId);
 
@@ -96,7 +95,6 @@ export async function handleGetOutfitSummary(
   { repos }: AuthenticatedContext
 ): Promise<NextResponse> {
   try {
-    logger.debug('[Chats v1] Fetching equipped outfit summary', { chatId, context: 'wardrobe' });
 
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
@@ -177,15 +175,6 @@ export async function handleEquipSlot(
   try {
     const body = await req.json();
     const { characterId, mode, slot, itemId, slots: bodySlots } = equipBodySchema.parse(body);
-
-    logger.debug('[Chats v1] Equipping wardrobe slot', {
-      chatId,
-      characterId,
-      mode,
-      slot,
-      itemId: itemId ?? null,
-      context: 'wardrobe',
-    });
 
     let updatedSlots;
 

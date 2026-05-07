@@ -142,10 +142,6 @@ async function* streamCharacters(
         yield { kind: 'wardrobe_item', characterId: id, data: item };
       }
       if (wardrobeItems.length > 0) {
-        logger.debug('Streamed wardrobe items for character export', {
-          characterId: id,
-          wardrobeItemCount: wardrobeItems.length,
-        });
       }
     } catch (error) {
       logger.warn('Failed to load wardrobe items for character export', {
@@ -167,10 +163,6 @@ async function* streamCharacters(
         };
       }
       if (pluginNames.length > 0) {
-        logger.debug('Streamed plugin data for character export', {
-          characterId: id,
-          pluginCount: pluginNames.length,
-        });
       }
     } catch (error) {
       logger.warn('Failed to load plugin data for character export', {

@@ -205,11 +205,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         if (flat.length > 0) {
           equippedWardrobeItems = flat;
         }
-        logger.debug('[StoryBackground] Resolved equipped wardrobe for character', {
-          characterId: char!.id,
-          chatId: payload.chatId,
-          itemCount: flat.length,
-        });
       }
     } catch (err) {
       logger.warn('[StoryBackground] Failed to load equipped wardrobe items for character', {

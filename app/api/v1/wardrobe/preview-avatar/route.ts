@@ -89,14 +89,6 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     );
   }
 
-  logger.debug('[Avatar Preview] Generating preview', {
-    context: 'wardrobe.preview-avatar',
-    characterId,
-    profile: imageProfile.name,
-    promptLength: prompt.length,
-    leafCounts,
-  });
-
   // Generate the portrait. We deliberately skip the dangerous-content
   // classifier here: this is an explicit, user-initiated one-shot — the
   // operator chose the model and the outfit, and the in-chat regen path is

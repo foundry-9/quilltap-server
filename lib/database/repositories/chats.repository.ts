@@ -476,7 +476,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       async () => {
         const chat = await this.findById(chatId);
         if (!chat || !chat.equippedOutfit) {
-          logger.debug('No equipped outfit found for chat', { chatId, context: 'wardrobe' });
           return null;
         }
         return chat.equippedOutfit as EquippedOutfitState;
@@ -495,9 +494,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       async () => {
         const state = await this.getEquippedOutfit(chatId);
         if (!state || !state[characterId]) {
-          logger.debug('No equipped outfit found for character in chat', {
-            chatId, characterId, context: 'wardrobe',
-          });
           return null;
         }
         return state[characterId];
@@ -524,10 +520,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         state[characterId] = slots;
 
         await this.update(chatId, { equippedOutfit: state } as Partial<ChatMetadata>);
-
-        logger.debug('Set equipped outfit for character', {
-          chatId, characterId, slots, context: 'wardrobe',
-        });
 
         return slots;
       },
@@ -572,11 +564,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           if (chatModified) {
             await this.update(chat.id, { equippedOutfit: state } as Partial<ChatMetadata>);
             modifiedCount++;
-            logger.debug('Removed deleted wardrobe item from chat equipped outfit', {
-              chatId: chat.id,
-              removedItemId: itemId,
-              context: 'wardrobe',
-            });
           }
         }
 

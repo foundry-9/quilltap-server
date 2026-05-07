@@ -107,9 +107,6 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
         lastUpdateMessageCount = validated.data.updatedAtMessageCount;
       }
     } catch {
-      logger.debug('[SceneStateTracking] Failed to parse existing scene state, treating as first turn', {
-        jobId: job.id, chatId: payload.chatId,
-      });
     }
   }
 
@@ -124,7 +121,6 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     : allMessages.slice(-20); // First turn: use last 20 messages
 
   if (recentMessages.length === 0) {
-    logger.debug('[SceneStateTracking] No messages to process, skipping', { jobId: job.id, chatId: payload.chatId });
     return;
   }
 
@@ -192,16 +188,6 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
           bottom: decorate(resolved.leafItemsBySlot.bottom),
           footwear: decorate(resolved.leafItemsBySlot.footwear),
           accessories: decorate(resolved.leafItemsBySlot.accessories),
-        });
-        logger.debug('[SceneStateTracking] Resolved equipped wardrobe for character', {
-          jobId: job.id,
-          characterId: char!.id,
-          leafCounts: {
-            top: resolved.leafItemsBySlot.top.length,
-            bottom: resolved.leafItemsBySlot.bottom.length,
-            footwear: resolved.leafItemsBySlot.footwear.length,
-            accessories: resolved.leafItemsBySlot.accessories.length,
-          },
         });
       }
     } catch (error) {

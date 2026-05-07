@@ -52,10 +52,6 @@ async function getImageDimensions(buffer: Buffer, _mimeType: string): Promise<{ 
     const metadata = await sharp(buffer).metadata();
     return { width: metadata.width, height: metadata.height };
   } catch (error) {
-    logger.debug('Failed to extract image dimensions, returning undefined', {
-      context: 'images-v2.getImageDimensions',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return { width: undefined, height: undefined };
   }
 }
@@ -113,11 +109,6 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
       buffer = converted.buffer;
       mimeType = converted.mimeType;
       originalFilename = converted.filename;
-      logger.debug('Auto-converted image to WebP in createFile', {
-        context: 'images-v2.createFile',
-        originalFilename: params.originalFilename,
-        newFilename: originalFilename,
-      });
     }
   }
 

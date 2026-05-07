@@ -77,11 +77,6 @@ async function postAuroraMessage(params: PostParams): Promise<MessageEvent | nul
   const { chatId, content, kind, targetParticipantIds } = params;
 
   if (!content || content.trim().length === 0) {
-    logger.debug('[AuroraNotification] Empty content, skipping', {
-      context: 'aurora-notifications',
-      chatId,
-      kind,
-    });
     return null;
   }
 
@@ -89,11 +84,6 @@ async function postAuroraMessage(params: PostParams): Promise<MessageEvent | nul
     const repos = getRepositories();
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
-      logger.debug('[AuroraNotification] Chat not found, skipping', {
-        context: 'aurora-notifications',
-        chatId,
-        kind,
-      });
       return null;
     }
 

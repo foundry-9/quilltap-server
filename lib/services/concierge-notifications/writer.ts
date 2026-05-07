@@ -39,10 +39,6 @@ export async function postConciergeDangerAnnouncement(
 
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
-      logger.debug('[ConciergeNotification] Chat not found, skipping announcement', {
-        context: 'concierge-notifications',
-        chatId,
-      });
       return null;
     }
 

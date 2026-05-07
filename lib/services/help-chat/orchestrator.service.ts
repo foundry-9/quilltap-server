@@ -415,13 +415,6 @@ async function processHelpResponse(
         currentResponse = extracted
         fullResponse = extracted
         hasToolCalls = false
-
-        logger.debug('Agent submitted final response as JSON text (fallback extraction)', {
-          chatId,
-          characterName: character.name,
-          turn: agentTurnCount,
-          responseLength: fullResponse.length,
-        })
       }
     }
 
@@ -618,18 +611,15 @@ async function triggerAsyncTasks(
   try {
     const chatSettings = await repos.chatSettings.findByUserId(userId)
     if (!chatSettings?.cheapLLMSettings) {
-      logger.debug('No cheap LLM settings, skipping async tasks', { chatId })
       return
     }
 
     if (!firstParticipant.connectionProfileId) {
-      logger.debug('No connection profile on first participant, skipping async tasks', { chatId })
       return
     }
 
     const connectionProfile = await repos.connections.findById(firstParticipant.connectionProfileId)
     if (!connectionProfile) {
-      logger.debug('Connection profile not found, skipping async tasks', { chatId })
       return
     }
 

@@ -246,7 +246,6 @@ async function resolveDefaultOutfit(characterId: string, repos: Repos): Promise<
   const defaultItems = await repos.wardrobe.findDefaultsForCharacter(characterId);
 
   if (defaultItems.length === 0) {
-    logger.debug('[Chats v1] No default wardrobe items found for character', { characterId });
     return {
       top: [],
       bottom: [],
@@ -276,12 +275,6 @@ async function resolveDefaultOutfit(characterId: string, repos: Repos): Promise<
       }
     }
   }
-
-  logger.debug('[Chats v1] Resolved default outfit for character', {
-    characterId,
-    defaultItemCount: defaultItems.length,
-    slots,
-  });
 
   return slots;
 }
@@ -325,7 +318,6 @@ async function applyOutfitSelections(
       case 'default': {
         const slots = await resolveDefaultOutfit(characterId, repos);
         await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-        logger.debug('[Chats v1] Applied default outfit for character', { chatId, characterId });
         break;
       }
 
@@ -337,7 +329,6 @@ async function applyOutfitSelections(
           accessories: [],
         };
         await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-        logger.debug('[Chats v1] Applied manual outfit for character', { chatId, characterId, slots });
         break;
       }
 
@@ -348,7 +339,6 @@ async function applyOutfitSelections(
           footwear: [],
           accessories: [],
         });
-        logger.debug('[Chats v1] Applied empty outfit for character', { chatId, characterId });
         break;
       }
 
@@ -367,18 +357,7 @@ async function applyOutfitSelections(
             if (previousSlots) {
               await repos.chats.setEquippedOutfit(chatId, characterId, previousSlots);
               applied = true;
-              logger.debug('[Chats v1] Applied previous-chat outfit for character', {
-                chatId,
-                characterId,
-                sourceChatId: context.sourceChatId,
-                slots: previousSlots,
-              });
             } else {
-              logger.debug('[Chats v1] No previous outfit found in source chat; falling back to default', {
-                chatId,
-                characterId,
-                sourceChatId: context.sourceChatId,
-              });
             }
           } catch (error) {
             logger.warn('[Chats v1] Failed to copy previous-chat outfit; falling back to default', {
@@ -424,15 +403,6 @@ async function applyOutfitSelections(
                   false, // ollamaAvailable
                 );
 
-                logger.debug('[Chats v1] Requesting LLM outfit selection', {
-                  chatId,
-                  characterId,
-                  characterName: character.name,
-                  wardrobeItemCount: wardrobeItems.length,
-                  provider: cheapSelection.provider,
-                  model: cheapSelection.modelName,
-                });
-
                 const result = await chooseLLMOutfit(
                   character.name,
                   character.description || null,
@@ -449,11 +419,6 @@ async function applyOutfitSelections(
                 if (result.success && result.result) {
                   await repos.chats.setEquippedOutfit(chatId, characterId, result.result);
                   applied = true;
-                  logger.debug('[Chats v1] Applied LLM-chosen outfit for character', {
-                    chatId,
-                    characterId,
-                    slots: result.result,
-                  });
                 } else {
                   logger.warn('[Chats v1] LLM outfit selection failed, falling back to defaults', {
                     chatId,
@@ -476,7 +441,6 @@ async function applyOutfitSelections(
         if (!applied) {
           const slots = await resolveDefaultOutfit(characterId, repos);
           await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-          logger.debug('[Chats v1] Applied default outfit as fallback for llm_choose', { chatId, characterId });
         }
         break;
       }
@@ -653,7 +617,6 @@ async function createInitialMessagesScenarioAndStaff(
   }
 
   if (options.skipFirstMessage) {
-    logger.debug('[Chats v1] Skipping auto first message (continuation mode)', { chatId });
     return;
   }
 
@@ -1200,11 +1163,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       ];
 
       await applyOutfitSelections(chat.id, allSelections, repos, outfitContext);
-      logger.debug('[Chats v1] Applied outfit selections (explicit + defaults for uncovered participants)', {
-        chatId: chat.id,
-        explicitCount: validatedData.outfitSelections.length,
-        defaultBackfillCount: missingCharacterIds.length,
-      });
     } else {
       // Default behavior: apply default outfits for all character participants (LLM and user-controlled)
       const allCharacterIds = participantsWithTimestamps
@@ -1217,10 +1175,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
           mode: 'default' as const,
         }));
         await applyOutfitSelections(chat.id, defaultSelections, repos, outfitContext);
-        logger.debug('[Chats v1] Applied default outfit selections for all participants', {
-          chatId: chat.id,
-          characterIds: allCharacterIds,
-        });
       }
     }
   } catch (error) {

@@ -71,12 +71,6 @@ export async function executeDeleteAnnotationTool(
     );
 
     if (!deleted) {
-      logger.debug('Delete annotation tool: no annotation found', {
-        context: 'delete-annotation-handler',
-        chatId: context.chatId,
-        characterName: context.characterName,
-        messageIndex: message_index,
-      });
       return {
         success: false,
         message_index,

@@ -559,11 +559,6 @@ export async function loadChatFilesForLLM(
 
       const mountAttachment = await loadMountFileAsAttachment(fileId, options);
       if (mountAttachment) {
-        logger.debug('[chat-files-v2] Loaded mount-file attachment for LLM', {
-          mountFileId: fileId,
-          mimeType: mountAttachment.mimeType,
-          size: mountAttachment.size,
-        });
         attachments.push(mountAttachment);
         continue;
       }

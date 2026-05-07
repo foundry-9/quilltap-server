@@ -32,8 +32,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Character');
       }
 
-      logger.debug('[Wardrobe v1] Fetching wardrobe items', { characterId: id });
-
       const wardrobeItems = await repos.wardrobe.findByCharacterId(id);
       return NextResponse.json({ wardrobeItems });
     } catch (error) {
@@ -54,12 +52,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
     const body = await req.json();
     const validatedData = createWardrobeItemSchema.parse(body);
-
-    logger.debug('[Wardrobe v1] Creating wardrobe item', {
-      characterId: id,
-      title: validatedData.title,
-      types: validatedData.types,
-    });
 
     const item = await repos.wardrobe.create({
       characterId: id,

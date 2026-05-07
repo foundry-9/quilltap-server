@@ -384,10 +384,6 @@ export async function buildMessageContext(
     ? existingMessages.filter(m => m.systemSender !== 'commonplaceBook')
     : existingMessages
   if (cmpbStrippedCount > 0) {
-    logger.debug('Filtered Commonplace Book whispers out of LLM context', {
-      characterId: character.id,
-      strippedCount: cmpbStrippedCount,
-    })
   }
 
   // Drop TOOL whispers the responding character isn't a target of. Operator-
@@ -420,10 +416,6 @@ export async function buildMessageContext(
   if (character.systemTransparency !== true) {
     const stripped = messagesAfterWhisperFilter.filter(m => m.systemSender).length
     if (stripped > 0) {
-      logger.debug('Stripped Staff attribution from messages for opaque character', {
-        characterId: character.id,
-        strippedCount: stripped,
-      })
     }
   }
 

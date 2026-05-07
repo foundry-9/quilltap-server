@@ -272,9 +272,6 @@ async function classifyWithModerationProvider(
   // Auto-detect an API key from connection profiles
   const apiKey = await autoDetectModerationApiKey(provider.metadata.providerName, userId)
   if (!apiKey) {
-    logger.debug('[Gatekeeper] No API key for moderation provider, falling back to Cheap LLM', {
-      provider: provider.metadata.providerName,
-    })
     return null
   }
 

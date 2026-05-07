@@ -45,11 +45,6 @@ async function postProsperoMessage(
 
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
-      logger.debug('[ProsperoNotification] Chat not found, skipping announcement', {
-        context: 'prospero-notifications',
-        chatId,
-        kindLabel,
-      });
       return null;
     }
 
@@ -97,13 +92,6 @@ export async function postProsperoConnectionProfileChangeAnnouncement(
     params.oldProfileLabel,
     params.newProfileLabel,
   );
-  logger.debug('[ProsperoNotification] Posting connection-profile-change announcement', {
-    context: 'prospero-notifications',
-    chatId: params.chatId,
-    characterName: params.characterName,
-    oldProfileLabel: params.oldProfileLabel,
-    newProfileLabel: params.newProfileLabel,
-  });
   return postProsperoMessage(params.chatId, content, 'connection-profile-change');
 }
 
@@ -272,22 +260,9 @@ export async function postProsperoProjectContextAnnouncement(
   const instructions = params.project.instructions?.trim();
   const storeCount = params.project.documentStores?.length ?? 0;
   if (!description && !instructions && storeCount === 0) {
-    logger.debug('[ProsperoNotification] Nothing to whisper for project-context (no description, instructions, or linked stores)', {
-      context: 'prospero-notifications',
-      chatId: params.chatId,
-      projectName: params.project.name,
-    });
     return null;
   }
 
   const content = buildProjectContextContent(params.project);
-  logger.debug('[ProsperoNotification] Posting project-context whisper', {
-    context: 'prospero-notifications',
-    chatId: params.chatId,
-    projectName: params.project.name,
-    hasDescription: Boolean(description),
-    hasInstructions: Boolean(instructions),
-    documentStoreCount: storeCount,
-  });
   return postProsperoMessage(params.chatId, content, 'project-context');
 }

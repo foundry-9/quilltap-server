@@ -116,7 +116,6 @@ export async function generateExternalPrompt(
     const scenario = character.scenarios?.find(s => s.id === request.scenarioId);
     if (scenario) {
       scenarioContent = scenario.content;
-      log.debug('Using scenario', { scenarioId: request.scenarioId, title: scenario.title });
     }
   }
 
@@ -127,7 +126,6 @@ export async function generateExternalPrompt(
     if (desc) {
       // Use the most detailed available description
       descriptionContent = desc.fullDescription || desc.completePrompt || desc.longPrompt || desc.mediumPrompt || desc.shortPrompt || undefined;
-      log.debug('Using physical description', { descriptionId: request.descriptionId, name: desc.name });
     }
   }
 
@@ -137,7 +135,6 @@ export async function generateExternalPrompt(
     const clothing = clothingRecords.find((c: any) => c.id === request.clothingRecordId);
     if (clothing) {
       clothingContent = clothing.description ?? undefined;
-      log.debug('Using clothing record', { clothingRecordId: request.clothingRecordId, name: clothing.name });
     }
   }
 

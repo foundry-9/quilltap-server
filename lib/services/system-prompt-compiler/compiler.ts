@@ -71,12 +71,6 @@ async function resolveUserCharacter(
       description: character.description ?? '',
     };
   } catch (error) {
-    logger.debug('[SystemPromptCompiler] Failed to resolve user character', {
-      context: 'system-prompt-compiler',
-      chatId: chat.id,
-      userParticipantId: userParticipant.id,
-      error: getErrorMessage(error),
-    });
     return null;
   }
 }
@@ -108,12 +102,6 @@ async function buildStackFor(
   const repos = getRepositories();
   const character = await repos.characters.findById(participant.characterId);
   if (!character) {
-    logger.debug('[SystemPromptCompiler] Character not found, skipping compile', {
-      context: 'system-prompt-compiler',
-      chatId: chat.id,
-      participantId: participant.id,
-      characterId: participant.characterId,
-    });
     return null;
   }
 
@@ -184,11 +172,6 @@ export async function compileIdentityStackForParticipant(
 ): Promise<void> {
   const participant = chat.participants.find((p) => p.id === participantId);
   if (!participant) {
-    logger.debug('[SystemPromptCompiler] Participant not found, skipping compile', {
-      context: 'system-prompt-compiler',
-      chatId: chat.id,
-      participantId,
-    });
     return;
   }
 

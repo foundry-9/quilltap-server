@@ -90,10 +90,6 @@ export async function migrateVaultPhysicalFiles(): Promise<VaultPhysicalMigratio
       if (legacy) {
         await deleteDatabaseDocument(mountPointId, LEGACY_PHYSICAL_PROMPTS_PATH);
         result.legacyCleaned++;
-        logger.debug('Removed legacy physical-prompts.md from vault', {
-          characterId: character.id,
-          mountPointId,
-        });
       }
 
       const existingPrompts = await repos.docMountDocuments.findByMountPointAndPath(
@@ -129,11 +125,6 @@ export async function migrateVaultPhysicalFiles(): Promise<VaultPhysicalMigratio
       );
 
       result.migrated++;
-      logger.debug('Migrated vault physical files', {
-        characterId: character.id,
-        mountPointId,
-        hasPrimary: !!primary,
-      });
     } catch (err) {
       result.errors++;
       logger.error('Failed to migrate vault physical files', {
@@ -156,7 +147,6 @@ export async function migrateVaultPhysicalFiles(): Promise<VaultPhysicalMigratio
     );
     result.chatDocumentsRenamed = renamed;
     if (renamed > 0) {
-      logger.debug('Rewrote stale chat_documents filePaths', { renamed });
     }
   } catch (err) {
     result.errors++;

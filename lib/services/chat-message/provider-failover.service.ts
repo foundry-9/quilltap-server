@@ -156,10 +156,6 @@ export async function attemptEmptyResponseRecovery({
       )
 
       if (routeResult.rerouted && routeResult.connectionProfile.id === state.effectiveProfile.id) {
-        logger.debug('[DangerousContent] Uncensored fallback resolved to same profile, skipping retry', {
-          chatId,
-          profileId: state.effectiveProfile.id,
-        })
       } else if (routeResult.rerouted) {
         safeEnqueue(controller, encodeStatusEvent(encoder, {
           stage: 'rerouting',

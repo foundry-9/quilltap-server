@@ -66,18 +66,6 @@ export async function executeSearchScriptoriumTool(
     const searchConversations = sources.includes('conversations')
     const searchDocuments = sources.includes('documents')
 
-    logger.debug('Executing search scriptorium', {
-      context: 'search-scriptorium-handler',
-      userId: context.userId,
-      characterId: context.characterId,
-      query: query.substring(0, 100),
-      sources,
-      limit,
-      searchMemories,
-      searchConversations,
-      searchDocuments,
-    })
-
     const results: SearchScriptoriumResult[] = []
 
     // Search memories if requested
@@ -114,11 +102,6 @@ export async function executeSearchScriptoriumTool(
               },
             })
           }
-
-          logger.debug('Memory search completed', {
-            context: 'search-scriptorium-handler',
-            memoryResultCount: memoryResults.length,
-          })
         }
       } catch (error) {
         logger.warn('Memory search failed, continuing with other sources', {
@@ -158,11 +141,6 @@ export async function executeSearchScriptoriumTool(
             },
           })
         }
-
-        logger.debug('Conversation search completed', {
-          context: 'search-scriptorium-handler',
-          conversationResultCount: conversationResults.length,
-        })
       } catch (error) {
         logger.warn('Conversation search failed, continuing with other sources', {
           context: 'search-scriptorium-handler',
@@ -201,11 +179,6 @@ export async function executeSearchScriptoriumTool(
             },
           })
         }
-
-        logger.debug('Document search completed', {
-          context: 'search-scriptorium-handler',
-          documentResultCount: documentResults.length,
-        })
       } catch (error) {
         logger.warn('Document search failed, continuing with other sources', {
           context: 'search-scriptorium-handler',

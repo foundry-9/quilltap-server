@@ -127,12 +127,6 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
     const currentDoc = await this.findActiveForChat(chatId);
     if (currentDoc) {
       await this.update(currentDoc.id, { isActive: false });
-      logger.debug('Deactivated previous document for chat', {
-        context: 'ChatDocumentsRepository.openDocument',
-        chatId,
-        previousDocId: currentDoc.id,
-        previousFilePath: currentDoc.filePath,
-      });
     }
 
     // Check if this document was previously opened (reactivate instead of duplicate)
@@ -149,13 +143,6 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
         displayTitle: data.displayTitle ?? existingDoc.displayTitle,
       });
 
-      logger.debug('Reactivated existing document for chat', {
-        context: 'ChatDocumentsRepository.openDocument',
-        chatId,
-        docId: existingDoc.id,
-        filePath: data.filePath,
-      });
-
       return updated || existingDoc;
     }
 
@@ -169,14 +156,6 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
       isActive: true,
     });
 
-    logger.debug('Opened document for chat', {
-      context: 'ChatDocumentsRepository.openDocument',
-      chatId,
-      docId: doc.id,
-      filePath: data.filePath,
-      scope: data.scope,
-    });
-
     return doc;
   }
 
@@ -187,21 +166,10 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
   async closeDocument(chatId: string): Promise<boolean> {
     const currentDoc = await this.findActiveForChat(chatId);
     if (!currentDoc) {
-      logger.debug('No active document to close for chat', {
-        context: 'ChatDocumentsRepository.closeDocument',
-        chatId,
-      });
       return false;
     }
 
     await this.update(currentDoc.id, { isActive: false });
-
-    logger.debug('Closed document for chat', {
-      context: 'ChatDocumentsRepository.closeDocument',
-      chatId,
-      docId: currentDoc.id,
-      filePath: currentDoc.filePath,
-    });
 
     return true;
   }

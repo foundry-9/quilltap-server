@@ -69,10 +69,6 @@ export function expandComposites(
 
     if (path.includes(id)) {
       cycles.push([...path, id]);
-      logger.debug('[expandComposites] Cycle detected, truncating branch', {
-        context: 'wardrobe',
-        cyclePath: [...path, id],
-      });
       return;
     }
 

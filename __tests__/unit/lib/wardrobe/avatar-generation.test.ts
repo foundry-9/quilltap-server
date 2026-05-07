@@ -53,10 +53,6 @@ describe('triggerAvatarGenerationIfEnabled', () => {
     })
 
     expect(mockEnqueueCharacterAvatarGeneration).not.toHaveBeenCalled()
-    expect(mockLogger.debug).toHaveBeenCalledWith(
-      'Avatar generation not enabled for chat, skipping',
-      expect.objectContaining({ chatId: 'chat-1' })
-    )
   })
 
   it('uses the chat-specific image profile when it exists', async () => {

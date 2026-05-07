@@ -111,11 +111,9 @@ export function parseContent(content: string, mime: DocMimeType): ParseResult {
   if (isJsonMime(mime)) {
     try {
       const value = JSON.parse(content);
-      logger.debug('Parsed JSON content', { byteLength: content.length });
       return { ok: true, value };
     } catch (error) {
       const message = error instanceof SyntaxError ? error.message : String(error);
-      logger.debug('JSON parse failed', { error: message });
       return { ok: false, error: message };
     }
   }
@@ -141,8 +139,6 @@ export function parseContent(content: string, mime: DocMimeType): ParseResult {
         results.push({ line: lineNum, error: message, raw: line });
       }
     }
-
-    logger.debug('Parsed JSONL content', { lineCount: lines.length, successCount: results.filter(r => !r.error).length });
     return { ok: true, value: results };
   }
 
@@ -175,7 +171,6 @@ export function serializeContent(
   // If input is a string, validate it if requested, otherwise return as-is
   if (typeof value === 'string') {
     if (!validate) {
-      logger.debug('Serialized string content directly (not validated)', { byteLength: value.length });
       return { ok: true, value };
     }
 
@@ -191,7 +186,6 @@ export function serializeContent(
   try {
     if (isJsonMime(mime)) {
       const serialized = JSON.stringify(value, null, pretty ? 2 : undefined) + '\n';
-      logger.debug('Serialized JSON content', { byteLength: serialized.length });
       return { ok: true, value: serialized };
     }
 
@@ -208,14 +202,12 @@ export function serializeContent(
         lines.push(JSON.stringify(item));
       }
       const serialized = lines.join('\n') + (lines.length > 0 ? '\n' : '');
-      logger.debug('Serialized JSONL content', { lineCount: lines.length });
       return { ok: true, value: serialized };
     }
 
     return { ok: false, error: `MIME type ${mime} is not supported for serialization` };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.debug('Serialization failed', { error: message });
     return { ok: false, error: `Cannot serialize content: ${message}` };
   }
 }
@@ -228,11 +220,9 @@ export function validateJson(content: string, mime: DocMimeType): ParseResult<tr
   if (isJsonMime(mime)) {
     try {
       JSON.parse(content);
-      logger.debug('JSON validation passed');
       return { ok: true, value: true };
     } catch (error) {
       const message = error instanceof SyntaxError ? error.message : String(error);
-      logger.debug('JSON validation failed', { error: message });
       return { ok: false, error: message };
     }
   }
@@ -245,12 +235,9 @@ export function validateJson(content: string, mime: DocMimeType): ParseResult<tr
         JSON.parse(lines[i]);
       } catch (error) {
         const message = error instanceof SyntaxError ? error.message : String(error);
-        logger.debug('JSONL validation failed', { line: i + 1, error: message });
         return { ok: false, error: `Line ${i + 1}: ${message}` };
       }
     }
-
-    logger.debug('JSONL validation passed', { lineCount: lines.length });
     return { ok: true, value: true };
   }
 

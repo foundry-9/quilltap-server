@@ -62,10 +62,6 @@ export async function resolveMessageDangerState({
   const dangerSettings = dangerousContentResolved.settings
 
   if (chat.isDangerousChat === true && dangerSettings.mode !== 'OFF' && !isContinueMode && content) {
-    logger.debug('[DangerousContent] Skipping per-message classification — chat permanently dangerous', {
-      chatId,
-      dangerCategories: chat.dangerCategories,
-    })
 
     const categories = chat.dangerCategories && chat.dangerCategories.length > 0
       ? chat.dangerCategories
@@ -99,11 +95,6 @@ export async function resolveMessageDangerState({
         })
       }
     } else if (dangerSettings.mode === 'AUTO_ROUTE') {
-      logger.debug('[DangerousContent] Current provider is already uncensored-compatible, skipping reroute', {
-        chatId,
-        provider: effectiveProfile.provider,
-        model: effectiveProfile.modelName,
-      })
     }
 
     return {
@@ -180,11 +171,6 @@ export async function resolveMessageDangerState({
               })
             }
           } else {
-            logger.debug('[DangerousContent] Current provider is already uncensored-compatible, skipping reroute', {
-              chatId,
-              provider: effectiveProfile.provider,
-              model: effectiveProfile.modelName,
-            })
           }
         }
 

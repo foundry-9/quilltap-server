@@ -216,10 +216,6 @@ export async function exportCharacters(
       let wardrobeItems: WardrobeItem[] = [];
       try {
         wardrobeItems = await globalRepos.wardrobe.findByCharacterIdRaw(id);
-        logger.debug('Loaded wardrobe items for character export', {
-          characterId: id,
-          wardrobeItemCount: wardrobeItems.length,
-        });
       } catch (error) {
         logger.warn('Failed to load wardrobe items for character export', {
           characterId: id,
@@ -232,10 +228,6 @@ export async function exportCharacters(
       try {
         pluginData = await globalRepos.characterPluginData.getPluginDataMap(id);
         if (Object.keys(pluginData).length > 0) {
-          logger.debug('Loaded plugin data for character export', {
-            characterId: id,
-            pluginCount: Object.keys(pluginData).length,
-          });
         }
       } catch (error) {
         logger.warn('Failed to load plugin data for character export', {

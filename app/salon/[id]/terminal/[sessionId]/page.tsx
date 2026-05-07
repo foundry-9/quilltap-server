@@ -24,9 +24,8 @@ export default function TerminalPopoutPage({ params }: TerminalPopoutPageProps) 
       if (!res.ok) {
         showErrorToast('Failed to terminate session');
       }
-    } catch (err) {
+    } catch {
       showErrorToast('Failed to terminate session');
-      console.error('Kill session error:', err);
     }
   }, [sessionId]);
 

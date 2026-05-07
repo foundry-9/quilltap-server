@@ -100,12 +100,6 @@ export async function reconcileFilesystem(): Promise<void> {
 
             if (folderPathMismatch) {
               updates.folderPath = expectedFolderPath;
-              logger.debug('Correcting folderPath mismatch during reconciliation', {
-                fileId: dbRecord.id,
-                storageKey: scannedFile.relativePath,
-                oldFolderPath: dbRecord.folderPath || '(empty)',
-                newFolderPath: expectedFolderPath,
-              });
             }
 
             await repos.files.update(dbRecord.id, updates);
@@ -250,12 +244,6 @@ export async function reconcileFilesystem(): Promise<void> {
       try {
         await repos.files.delete(dbRecord.id);
         recordsDeleted++;
-
-        logger.debug('Deleted DB record for missing file', {
-          fileId: dbRecord.id,
-          storageKey: dbRecord.storageKey,
-          filename: dbRecord.originalFilename,
-        });
       } catch (err) {
         errors++;
         logger.warn('Failed to delete stale record during reconciliation', {

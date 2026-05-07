@@ -49,10 +49,6 @@ export async function transcodeToWebP(
   const quality = options.quality ?? 85;
 
   if (!TRANSCODABLE_MIME_TYPES.has(originalMimeType.toLowerCase())) {
-    logger.debug('Blob MIME type is not transcodable, storing as-is', {
-      originalMimeType,
-      size: input.length,
-    });
     return {
       data: input,
       storedMimeType: originalMimeType,
@@ -66,12 +62,6 @@ export async function transcodeToWebP(
       .webp({ quality, effort: 4 })
       .toBuffer();
     const sha256 = createHash('sha256').update(webp).digest('hex');
-    logger.debug('Transcoded blob to WebP', {
-      originalMimeType,
-      originalSize: input.length,
-      finalSize: webp.length,
-      quality,
-    });
     return {
       data: webp,
       storedMimeType: 'image/webp',

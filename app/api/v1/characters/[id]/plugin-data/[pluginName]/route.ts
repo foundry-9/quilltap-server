@@ -27,8 +27,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; pluginName: st
         return notFound('Plugin data');
       }
 
-      logger.debug('[PluginData v1] Fetched plugin data', { characterId: id, pluginName });
-
       return NextResponse.json({ pluginData: entry });
     } catch (error) {
       logger.error('[PluginData v1] Error fetching plugin data', { characterId: id, pluginName }, error instanceof Error ? error : undefined);
@@ -61,11 +59,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; pluginName: st
       return badRequest('Body must be a valid JSON value');
     }
 
-    logger.debug('[PluginData v1] Replacing plugin data', {
-      characterId: id,
-      pluginName,
-    });
-
     try {
       const entry = await repos.characterPluginData.upsert(id, pluginName, body);
 
@@ -94,11 +87,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; pluginName:
     if (!checkOwnership(character, user.id)) {
       return notFound('Character');
     }
-
-    logger.debug('[PluginData v1] Deleting plugin data', {
-      characterId: id,
-      pluginName,
-    });
 
     try {
       const deleted = await repos.characterPluginData.deleteByCharacterAndPlugin(id, pluginName);

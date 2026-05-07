@@ -70,13 +70,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const url = new URL(req.url);
       const folder = url.searchParams.get('folder') ?? undefined;
       const blobs = await repos.docMountBlobs.listByMountPoint(id, folder ? { folder } : {});
-
-      logger.debug('[Mount Points v1] Listed blobs', {
-        mountPointId: id,
-        folder,
-        count: blobs.length,
-        userId: user.id,
-      });
       return NextResponse.json({ blobs });
     } catch (error) {
       logger.error(

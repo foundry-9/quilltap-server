@@ -213,13 +213,6 @@ export async function executeWardrobeCreateItemTool(
 
       targetCharacterId = resolved.characterId;
       recipientName = resolved.characterName;
-
-      logger.debug('Resolved gift recipient', {
-        context: 'wardrobe-create-item-handler',
-        recipientName: resolved.characterName,
-        recipientCharacterId: resolved.characterId,
-        callingCharacterId: context.characterId,
-      });
     }
 
     // Resolve components against the target character's wardrobe so a gifted
@@ -247,12 +240,6 @@ export async function executeWardrobeCreateItemTool(
         const provided = (types as WardrobeItemType[]).slice().sort().join(',');
         const computed = resolvedTypes.slice().sort().join(',');
         if (provided !== computed) {
-          logger.debug('Composite types overridden by component union', {
-            context: 'wardrobe-create-item-handler',
-            providedTypes: types,
-            computedTypes: resolvedTypes,
-            componentCount: components.length,
-          });
         }
       }
     } else {
@@ -260,20 +247,6 @@ export async function executeWardrobeCreateItemTool(
     }
 
     const componentItemIds = components.map((c) => c.id);
-
-    logger.debug('Creating wardrobe item', {
-      context: 'wardrobe-create-item-handler',
-      userId: context.userId,
-      chatId: context.chatId,
-      characterId: context.characterId,
-      targetCharacterId,
-      recipientName,
-      title,
-      types: resolvedTypes,
-      isComposite,
-      componentItemIds,
-      equipNow: equip_now,
-    });
 
     // Cycle detection lives in the repository — if an LLM somehow contrived a
     // cycle by composing items that already point back to the new item's
@@ -288,29 +261,10 @@ export async function executeWardrobeCreateItemTool(
       isDefault: false,
     });
 
-    logger.debug('Wardrobe item created', {
-      context: 'wardrobe-create-item-handler',
-      userId: context.userId,
-      targetCharacterId,
-      recipientName,
-      itemId: newItem.id,
-      title: newItem.title,
-      isComposite,
-    });
-
     let equipped = false;
     let currentState: EquippedSlots | undefined;
 
     if (equip_now) {
-      logger.debug('Equipping new wardrobe item', {
-        context: 'wardrobe-create-item-handler',
-        userId: context.userId,
-        chatId: context.chatId,
-        targetCharacterId,
-        itemId: newItem.id,
-        slots: newItem.types,
-        isComposite,
-      });
 
       // For both leaf and composite items, `equipItem` replaces every slot in
       // `newItem.types` with `[newItem.id]`. Composites are stored as their
@@ -324,15 +278,6 @@ export async function executeWardrobeCreateItemTool(
         const equippedOutfit = (chat as Record<string, unknown>).equippedOutfit as Record<string, EquippedSlots> | undefined;
         currentState = equippedOutfit?.[targetCharacterId] || { ...EMPTY_EQUIPPED_SLOTS };
       }
-
-      logger.debug('Wardrobe item equipped', {
-        context: 'wardrobe-create-item-handler',
-        userId: context.userId,
-        chatId: context.chatId,
-        targetCharacterId,
-        itemId: newItem.id,
-        currentState,
-      });
 
       await triggerAvatarGenerationIfEnabled(repos, {
         userId: context.userId,

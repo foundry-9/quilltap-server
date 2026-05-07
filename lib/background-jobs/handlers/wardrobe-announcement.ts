@@ -39,11 +39,6 @@ export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Prom
 
   const chat = await repos.chats.findById(chatId);
   if (!chat) {
-    logger.debug('[WardrobeAnnouncement] Chat not found, skipping', {
-      context: 'background-jobs.wardrobe-announcement',
-      chatId,
-      characterId,
-    });
     return;
   }
 
@@ -68,27 +63,10 @@ export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Prom
   }
 
   if (!slots) {
-    logger.debug('[WardrobeAnnouncement] No equipped slots for character, skipping', {
-      context: 'background-jobs.wardrobe-announcement',
-      chatId,
-      characterId,
-    });
     return;
   }
 
   const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots);
-
-  logger.debug('[WardrobeAnnouncement] Resolved equipped outfit for announcement', {
-    context: 'background-jobs.wardrobe-announcement',
-    chatId,
-    characterId,
-    leafCounts: {
-      top: resolved.leafItemsBySlot.top.length,
-      bottom: resolved.leafItemsBySlot.bottom.length,
-      footwear: resolved.leafItemsBySlot.footwear.length,
-      accessories: resolved.leafItemsBySlot.accessories.length,
-    },
-  });
 
   const character = await repos.characters.findById(characterId);
   const charName = character?.name ?? 'A character';

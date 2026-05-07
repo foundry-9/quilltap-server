@@ -94,10 +94,6 @@ function scheduleDatabaseStoreEmbedding(mountPointId: string): void {
     state!.pending = false;
     try {
       const enqueued = await enqueueEmbeddingJobsForMountPoint(mountPointId);
-      logger.debug('Embedding enqueue completed for database-backed store', {
-        mountPointId,
-        enqueued,
-      });
     } catch (err) {
       logger.warn('Failed to enqueue embedding jobs for database-backed store', {
         mountPointId,
@@ -147,10 +143,6 @@ function scheduleEmbedding(watcher: MountWatcher): void {
     watcher.pendingEmbedding = false;
     try {
       const enqueued = await enqueueEmbeddingJobsForMountPoint(watcher.mountPoint.id);
-      logger.debug('Embedding enqueue completed after watcher changes', {
-        mountPointId: watcher.mountPoint.id,
-        enqueued,
-      });
     } catch (err) {
       logger.warn('Failed to enqueue embedding jobs after watcher changes', {
         mountPointId: watcher.mountPoint.id,
@@ -203,10 +195,6 @@ async function handleAddOrChange(
     case 'unsupported':
       return;
     case 'empty':
-      logger.debug('Mount watcher skipped empty file', {
-        mountPointId: watcher.mountPoint.id,
-        relativePath,
-      });
       return;
     case 'new':
     case 'modified':
@@ -248,10 +236,6 @@ async function startWatcherFor(mountPoint: DocMountPoint): Promise<void> {
   // translates into the same embedding-scheduler enqueues the chokidar path
   // triggers.
   if (mountPoint.mountType === 'database') {
-    logger.debug('Skipping filesystem watcher for database-backed mount point', {
-      mountPointId: mountPoint.id,
-      name: mountPoint.name,
-    });
     return;
   }
 

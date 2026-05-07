@@ -349,11 +349,6 @@ export async function handleUpdateParticipantAction(
   }
 
   const { participantId, ...updateFields } = validatedData;
-  logger.debug('[Chats v1] Participant update requested', {
-    chatId, participantId, characterName, preStatus,
-    updateFields: Object.keys(updateFields),
-    updates: updateFields,
-  });
 
   const result = await handleParticipantUpdate(chatId, validatedData, user.id, repos);
 
@@ -408,10 +403,6 @@ export async function handleRemoveParticipantAction(
   }
   const previousStatus = participantToRemove.status || (participantToRemove.isActive ? 'active' : 'absent');
 
-  logger.debug('[Chats v1] Participant removal requested', {
-    chatId, participantId: validatedData.participantId, characterName, previousStatus,
-  });
-
   const activeCharacters = chat.participants.filter((p) => p.type === 'CHARACTER' && isParticipantPresent(p.status));
   if (activeCharacters.length <= 1 && participantToRemove.type === 'CHARACTER') {
     logger.warn('[Chats v1] Participant removal blocked: last character', {
@@ -442,9 +433,6 @@ export async function handleRemoveParticipantAction(
       updateData.activeTypingParticipantId = cleanedIds[0] || null;
     }
     await repos.chats.update(chatId, updateData);
-    logger.debug('[Chats v1] Cleaned up impersonation state for removed participant', {
-      chatId, participantId: validatedData.participantId, characterName,
-    });
   }
 
   logger.info('[Chats v1] Participant removed', {

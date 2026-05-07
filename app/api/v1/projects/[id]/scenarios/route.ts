@@ -93,13 +93,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 
       const { scenarios, warnings } = await listProjectScenarios(ensured.mountPointId);
 
-      logger.debug('[Projects v1] Listed project scenarios', {
-        projectId: id,
-        userId: user.id,
-        scenarioCount: scenarios.length,
-        warningCount: warnings.length,
-      });
-
       return NextResponse.json({
         mountPointId: ensured.mountPointId,
         scenarios,

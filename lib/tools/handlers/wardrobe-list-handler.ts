@@ -93,29 +93,9 @@ export async function executeWardrobeListTool(
     const validatedInput = input as WardrobeListToolInput;
     const { type_filter, appropriateness_filter, include_equipped } = validatedInput;
 
-    logger.debug('Loading wardrobe items for character', {
-      context: 'wardrobe-list-handler',
-      characterId: context.characterId,
-      chatId: context.chatId,
-    });
-
     const allItemsRaw = await repos.wardrobe.findByCharacterId(context.characterId);
 
     const allItems = allItemsRaw.filter((item) => !item.archivedAt);
-
-    logger.debug('Filtered archived wardrobe items', {
-      context: 'wardrobe-list-handler',
-      characterId: context.characterId,
-      totalRaw: allItemsRaw.length,
-      activeCount: allItems.length,
-      archivedCount: allItemsRaw.length - allItems.length,
-    });
-
-    logger.debug('Loading equipped outfit state', {
-      context: 'wardrobe-list-handler',
-      chatId: context.chatId,
-      characterId: context.characterId,
-    });
 
     const equippedSlots: EquippedSlots | null = await repos.chats.getEquippedOutfitForCharacter(
       context.chatId,
@@ -129,13 +109,6 @@ export async function executeWardrobeListTool(
       filteredItems = filteredItems.filter((item) =>
         item.types.some((type) => lowerTypeFilter.includes(type.toLowerCase()))
       );
-
-      logger.debug('Applied type filter', {
-        context: 'wardrobe-list-handler',
-        type_filter: lowerTypeFilter,
-        beforeCount: allItems.length,
-        afterCount: filteredItems.length,
-      });
     }
 
     if (appropriateness_filter && appropriateness_filter.trim() !== '') {
@@ -145,12 +118,6 @@ export async function executeWardrobeListTool(
           item.appropriateness != null &&
           item.appropriateness.toLowerCase().includes(lowerFilter)
       );
-
-      logger.debug('Applied appropriateness filter', {
-        context: 'wardrobe-list-handler',
-        appropriateness_filter: lowerFilter,
-        afterCount: filteredItems.length,
-      });
     }
 
     // Map every item by id for composite-component title resolution. We

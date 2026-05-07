@@ -134,13 +134,6 @@ export async function resolveEquippedOutfitForCharacter(
   for (const slot of SLOT_KEYS) {
     const expanded = expandComposites(slots[slot], itemsById);
     if (expanded.cycles.length > 0 || expanded.truncated) {
-      logger.debug('[resolveEquippedOutfitForCharacter] expansion anomaly', {
-        context: 'wardrobe',
-        characterId,
-        slot,
-        cycleCount: expanded.cycles.length,
-        truncated: expanded.truncated,
-      });
     }
     for (const id of expanded.leafIds) {
       const item = itemsById.get(id);
@@ -149,18 +142,6 @@ export async function resolveEquippedOutfitForCharacter(
       outfitValues[slot].push(item.title);
     }
   }
-
-  logger.debug('[resolveEquippedOutfitForCharacter] resolved equipped outfit', {
-    context: 'wardrobe',
-    characterId,
-    equippedItemIds,
-    leafCounts: {
-      top: leafItemsBySlot.top.length,
-      bottom: leafItemsBySlot.bottom.length,
-      footwear: leafItemsBySlot.footwear.length,
-      accessories: leafItemsBySlot.accessories.length,
-    },
-  });
 
   return { outfitValues, leafItemsBySlot, itemsById };
 }

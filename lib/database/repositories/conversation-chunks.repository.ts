@@ -136,12 +136,6 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
         } as TypedQueryFilter<ConversationChunk>);
 
         if (existing) {
-          logger.debug('Updating existing conversation chunk', {
-            context: 'ConversationChunksRepository.upsert',
-            id: existing.id,
-            chatId: input.chatId,
-            interchangeIndex: input.interchangeIndex,
-          });
 
           // Only update content fields — preserve existing embedding
           // Embeddings are managed separately via updateEmbedding()
@@ -162,12 +156,6 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
           }
           return updated;
         }
-
-        logger.debug('Creating new conversation chunk', {
-          context: 'ConversationChunksRepository.upsert',
-          chatId: input.chatId,
-          interchangeIndex: input.interchangeIndex,
-        });
 
         return this._create(input as Omit<ConversationChunk, 'id' | 'createdAt' | 'updatedAt'>);
       },
@@ -203,11 +191,6 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
     await this.safeQuery(
       async () => {
         const count = await this.deleteMany({ chatId } as TypedQueryFilter<ConversationChunk>);
-        logger.debug('Deleted all chunks for chat', {
-          context: 'ConversationChunksRepository.deleteAllForChat',
-          chatId,
-          deletedCount: count,
-        });
       },
       'Error deleting all chunks for chat',
       { chatId }
@@ -229,12 +212,6 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
         if (!updated) {
           throw new Error(`Chunk not found for embedding update: ${id}`);
         }
-
-        logger.debug('Updated embedding for conversation chunk', {
-          context: 'ConversationChunksRepository.updateEmbedding',
-          id,
-          embeddingLength: embedding.length,
-        });
       },
       'Error updating chunk embedding',
       { id }

@@ -73,14 +73,6 @@ export async function equipItem(
 
   const result = await repos.chats.setEquippedOutfit(chatId, characterId, slots);
 
-  logger.debug('[Outfit] Equipped item (replace)', {
-    context: 'wardrobe',
-    chatId, characterId,
-    itemId: newItem.id,
-    types: newItem.types,
-    resultSlots: result,
-  });
-
   return result ?? slots;
 }
 
@@ -108,12 +100,6 @@ export async function addToSlot(
   }
 
   const result = await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-  logger.debug('[Outfit] Added item to slot', {
-    context: 'wardrobe',
-    chatId, characterId, slot,
-    itemId: item.id,
-    resultSlots: result,
-  });
   return result ?? slots;
 }
 
@@ -137,12 +123,6 @@ export async function removeFromSlot(
   }
 
   const result = await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-  logger.debug('[Outfit] Removed item from slot', {
-    context: 'wardrobe',
-    chatId, characterId, slot,
-    itemId: itemId ?? null,
-    resultSlots: result,
-  });
   return result ?? slots;
 }
 

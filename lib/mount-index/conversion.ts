@@ -164,11 +164,6 @@ export async function convertMountPointToDatabase(
           });
         }
         result.documentsWritten += 1;
-        logger.debug('Migrated text document into database', {
-          mountPointId: mountPoint.id,
-          relativePath: file.relativePath,
-          bytes: bytes.length,
-        });
       } else {
         // pdf, docx, or any other binary type the scanner picked up.
         // Store as a blob; bypass transcodeToWebP so original bytes survive.
@@ -185,12 +180,6 @@ export async function convertMountPointToDatabase(
           data: bytes,
         });
         result.blobsWritten += 1;
-        logger.debug('Migrated binary file into blob storage', {
-          mountPointId: mountPoint.id,
-          relativePath: file.relativePath,
-          fileType: file.fileType,
-          bytes: bytes.length,
-        });
       }
 
       await repos.docMountFiles.update(file.id, {
@@ -310,11 +299,6 @@ export async function deconvertMountPointToFilesystem(
       const bytes = Buffer.byteLength(doc.content, 'utf-8');
       result.filesWritten += 1;
       result.bytesWritten += bytes;
-      logger.debug('Wrote database document to disk', {
-        mountPointId: mountPoint.id,
-        relativePath: doc.relativePath,
-        bytes,
-      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(
@@ -342,11 +326,6 @@ export async function deconvertMountPointToFilesystem(
       await fs.writeFile(absolutePath, data);
       result.blobsWritten += 1;
       result.bytesWritten += data.length;
-      logger.debug('Wrote database blob to disk', {
-        mountPointId: mountPoint.id,
-        relativePath: blob.relativePath,
-        bytes: data.length,
-      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(

@@ -116,13 +116,11 @@ async function walkDirectory(
 
     // Skip symlinks entirely
     if (entry.isSymbolicLink()) {
-      logger.debug('Skipping symlink', { relativePath });
       continue;
     }
 
     // Check exclude patterns against directory/file names
     if (excludePatterns.some(pattern => matchesPattern(relativePath, pattern))) {
-      logger.debug('Excluding path by pattern', { relativePath });
       continue;
     }
 
@@ -349,11 +347,6 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
     );
     result.filesScanned = filesOnDisk.length;
 
-    logger.debug('Filesystem walk complete', {
-      mountPointId: mountPoint.id,
-      filesFound: filesOnDisk.length,
-    });
-
     // 3. Get existing files from database for this mount point
     const existingFiles = await repos.docMountFiles.findByMountPointId(mountPoint.id);
     const existingByPath = new Map(existingFiles.map(f => [f.relativePath, f]));
@@ -371,20 +364,16 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
           case 'unsupported':
             continue;
           case 'unchanged':
-            logger.debug('File unchanged, skipping', { relativePath });
             continue;
           case 'empty':
-            logger.debug('File conversion produced no text, skipping', { relativePath });
             continue;
           case 'new':
             result.filesNew++;
             result.chunksCreated += outcome.chunksCreated;
-            logger.debug('New file indexed', { relativePath, chunkCount: outcome.chunksCreated });
             break;
           case 'modified':
             result.filesModified++;
             result.chunksCreated += outcome.chunksCreated;
-            logger.debug('File modified, updated record', { relativePath, chunkCount: outcome.chunksCreated });
             break;
         }
       } catch (fileError) {
@@ -411,7 +400,6 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
       if (!seenPaths.has(existingPath)) {
         if (await removeMountFile(mountPoint.id, existingPath)) {
           result.filesDeleted++;
-          logger.debug('File deleted from index (no longer on disk)', { relativePath: existingPath });
         }
       }
     }
@@ -528,12 +516,6 @@ export async function createFilesystemFolder(
   }
 
   await fs.mkdir(target, { recursive: true });
-
-  logger.debug('Filesystem folder created inside mount point', {
-    mountPointId,
-    relativePath,
-    absolutePath: target,
-  });
 }
 
 /**

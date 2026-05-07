@@ -117,10 +117,6 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     }
 
     const markedCount = await repos.embeddingStatus.markAllPendingByProfileId(payload.profileId);
-    logger.debug('[EmbeddingReindexAll] Marked existing statuses as PENDING', {
-      context: 'handleEmbeddingReindexAll',
-      markedCount,
-    });
   }
 
   // Collect all job records, then batch-insert them at the end.
@@ -191,10 +187,6 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   if (scope === 'all') {
     for (const character of characters) {
       await vectorStoreManager.deleteStore(character.id);
-      logger.debug('[EmbeddingReindexAll] Cleared vector index for character', {
-        context: 'handleEmbeddingReindexAll',
-        characterId: character.id,
-      });
     }
   }
 
@@ -258,11 +250,6 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     inserted += batch.length;
 
     if (inserted % 1000 === 0 || inserted === totalJobs) {
-      logger.debug('[EmbeddingReindexAll] Batch insert progress', {
-        context: 'handleEmbeddingReindexAll',
-        inserted,
-        total: totalJobs,
-      });
     }
   }
 

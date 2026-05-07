@@ -157,10 +157,6 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
       const rawContent = readFileSync(filePath, 'utf-8').trim()
 
       if (!rawContent) {
-        logger.debug('[HelpDocSync] Skipping empty file', {
-          context: 'syncHelpDocs',
-          path: relPath,
-        })
         continue
       }
 

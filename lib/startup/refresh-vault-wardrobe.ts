@@ -47,7 +47,6 @@ export async function refreshVaultWardrobe(): Promise<VaultWardrobeRefreshResult
 
   if (hasRefreshRun()) {
     result.alreadyDone = true;
-    logger.debug('Wardrobe refresh already ran on this database — skipping');
     return result;
   }
 
@@ -74,11 +73,6 @@ export async function refreshVaultWardrobe(): Promise<VaultWardrobeRefreshResult
       await projectVaultWardrobe(mountPointId, character.id, items);
 
       result.refreshed++;
-      logger.debug('Migrated wardrobe folders from DB', {
-        characterId: character.id,
-        mountPointId,
-        itemCount: items.length,
-      });
     } catch (err) {
       result.errors++;
       logger.error('Failed to migrate wardrobe folders for character', {

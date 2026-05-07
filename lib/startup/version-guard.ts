@@ -54,7 +54,6 @@ export function checkVersionGuard(): VersionGuardResult {
     } = require('@/migrations/lib/database-utils');
 
     if (!isSQLiteBackend()) {
-      log.debug('Version guard skipped — not SQLite backend');
       return { blocked: false };
     }
 
@@ -117,11 +116,6 @@ export function checkVersionGuard(): VersionGuardResult {
         highestVersion: storedVersion,
       };
     }
-
-    log.debug('Version guard passed', {
-      currentVersion,
-      storedVersion,
-    });
 
     return { blocked: false };
   } catch (error) {
@@ -200,7 +194,6 @@ function patchDbKeyFileVersion(filePath: string, version: string, log: ReturnTyp
 
   try {
     if (!fs.existsSync(filePath)) {
-      log.debug('Skipping minServerVersion patch — .dbkey file does not exist', { path: filePath });
       return;
     }
 

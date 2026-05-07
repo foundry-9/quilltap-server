@@ -653,10 +653,6 @@ async function processMessage(
       const mountLinks = await repos.projectDocMountLinks.findByProjectId(chat.projectId)
       documentEditingEnabled = mountLinks.length > 0
     } catch (mountLinkError) {
-      logger.debug('[Orchestrator] Failed to check mount point links for doc editing tools', {
-        projectId: chat.projectId,
-        error: mountLinkError instanceof Error ? mountLinkError.message : String(mountLinkError),
-      })
     }
   }
 
@@ -807,11 +803,6 @@ async function processMessage(
         allProfiles
       )
       if (recallSelection !== cheapLLMSelection) {
-        logger.debug('[ProactiveRecall] Using uncensored provider for memory keyword extraction', {
-          chatId,
-          originalProvider: cheapLLMSelection.provider,
-          uncensoredProvider: recallSelection.provider,
-        })
       }
     }
 
@@ -881,12 +872,6 @@ async function processMessage(
     proactiveRecallTask(),
   ])
   const tParallelEnd = performance.now()
-  logger.debug('[Orchestrator] Parallel compression + proactive recall complete', {
-    chatId,
-    durationMs: Math.round(tParallelEnd - tParallelStart),
-    hadCachedCompression: !!cachedCompressionResponse,
-    preSearchedMemoriesCount: preSearchedMemories?.length ?? 0,
-  })
 
   // Start keep-alive pings during context building (especially important during compression)
   // This prevents proxy/load balancer timeouts during long compression operations
@@ -956,11 +941,6 @@ async function processMessage(
     fileProcessing.attachmentsToSend
   )
   const tBuildContextEnd = performance.now()
-  logger.debug('[Orchestrator] buildMessageContext complete', {
-    chatId,
-    durationMs: Math.round(tBuildContextEnd - tBuildContextStart),
-    formattedMessageCount: formattedMessages.length,
-  })
 
   // Stop keep-alive pings after context building completes
   if (keepAliveInterval) {
@@ -1145,11 +1125,6 @@ async function processMessage(
   const preservePartialOnError = async (error: unknown): Promise<void> => {
     if (partialPreserved) return
     if (!streamingState.hasStartedStreaming || streamingState.fullResponse.length === 0) {
-      logger.debug('No partial content to preserve after upstream error', {
-        chatId,
-        hasStartedStreaming: streamingState.hasStartedStreaming,
-        fullResponseLength: streamingState.fullResponse.length,
-      })
       return
     }
     partialPreserved = true

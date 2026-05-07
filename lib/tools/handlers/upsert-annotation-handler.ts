@@ -79,10 +79,6 @@ export async function executeUpsertAnnotationTool(
     }
 
     if (!chat.renderedMarkdown) {
-      logger.debug('Upsert annotation tool: no rendered markdown available', {
-        context: 'upsert-annotation-handler',
-        chatId: context.chatId,
-      });
       return {
         success: false,
         message_index,

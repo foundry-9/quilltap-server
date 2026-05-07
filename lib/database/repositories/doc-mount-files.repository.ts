@@ -133,18 +133,9 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
   async findByMountPointId(mountPointId: string): Promise<DocMountFile[]> {
     return this.safeQuery(
       async () => {
-        logger.debug('Finding files by mount point ID', {
-          context: 'DocMountFilesRepository.findByMountPointId',
-          mountPointId,
-        });
         const results = await this.findByFilter(
           { mountPointId } as TypedQueryFilter<DocMountFile>
         );
-        logger.debug('Found files by mount point ID', {
-          context: 'DocMountFilesRepository.findByMountPointId',
-          mountPointId,
-          count: results.length,
-        });
         return results;
       },
       'Error finding files by mount point ID',
@@ -165,21 +156,10 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
   ): Promise<DocMountFile | null> {
     return this.safeQuery(
       async () => {
-        logger.debug('Finding file by mount point and path', {
-          context: 'DocMountFilesRepository.findByMountPointAndPath',
-          mountPointId,
-          relativePath,
-        });
         const result = await this.findOneByFilter({
           mountPointId,
           relativePath: { $ieq: relativePath },
         } as TypedQueryFilter<DocMountFile>);
-        logger.debug('Find by mount point and path result', {
-          context: 'DocMountFilesRepository.findByMountPointAndPath',
-          mountPointId,
-          relativePath,
-          found: result !== null,
-        });
         return result;
       },
       'Error finding file by mount point and path',
@@ -196,18 +176,9 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
   async deleteByMountPointId(mountPointId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        logger.debug('Deleting files by mount point ID', {
-          context: 'DocMountFilesRepository.deleteByMountPointId',
-          mountPointId,
-        });
         const count = await this.deleteMany(
           { mountPointId } as TypedQueryFilter<DocMountFile>
         );
-        logger.debug('Deleted files by mount point ID', {
-          context: 'DocMountFilesRepository.deleteByMountPointId',
-          mountPointId,
-          deletedCount: count,
-        });
         return count;
       },
       'Error deleting files by mount point ID',
@@ -223,16 +194,7 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
   async deleteByFileId(id: string): Promise<boolean> {
     return this.safeQuery(
       async () => {
-        logger.debug('Deleting file by ID', {
-          context: 'DocMountFilesRepository.deleteByFileId',
-          id,
-        });
         const result = await this._delete(id);
-        logger.debug('Delete file by ID result', {
-          context: 'DocMountFilesRepository.deleteByFileId',
-          id,
-          deleted: result,
-        });
         return result;
       },
       'Error deleting file by ID',

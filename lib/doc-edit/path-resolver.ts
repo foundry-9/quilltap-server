@@ -147,7 +147,6 @@ export async function resolveDocEditPath(
   relativePath: string,
   context: PathResolutionContext
 ): Promise<ResolvedPath> {
-  logger.debug(`Resolving ${scope} path: ${relativePath}`);
 
   // Security check: reject traversal attempts
   if (hasTraversalSegments(relativePath)) {
@@ -254,9 +253,6 @@ async function resolveDocumentStorePath(
   const accessibleIds = await collectAccessibleMountPointIds(context);
 
   if (accessibleIds.length === 0) {
-    logger.debug(
-      `No mount points accessible for project=${context.projectId ?? 'none'} characters=${describeCharacters(context)}`,
-    );
     throw new PathResolutionError(
       `No document stores accessible in this context`,
       'ACCESS_DENIED'
@@ -308,7 +304,6 @@ async function resolveDocumentStorePath(
   // helpers need comes from (mountPointId, relativePath); callers dispatch
   // on `mountType` to decide whether to read from disk or from the DB.
   if (mountPoint.mountType === 'database') {
-    logger.debug(`Resolved database-backed document_store path: ${relativePath}`);
     return {
       absolutePath: '',
       scope: 'document_store',
@@ -337,8 +332,6 @@ async function resolveDocumentStorePath(
       'TRAVERSAL_ATTEMPT'
     );
   }
-
-  logger.debug(`Resolved document_store path: ${relativePath} -> ${realPath}`);
 
   return {
     absolutePath: realPath,
@@ -382,9 +375,6 @@ async function resolveProjectPath(
     const mountPoint = await repos.docMountPoints.findById(officialMountPointId);
     if (mountPoint && mountPoint.enabled) {
       if (mountPoint.mountType === 'database') {
-        logger.debug(
-          `Resolved project path via official database mount: ${relativePath} (mount=${mountPoint.id})`
-        );
         return {
           absolutePath: '',
           scope: 'project',
@@ -411,9 +401,6 @@ async function resolveProjectPath(
           'TRAVERSAL_ATTEMPT'
         );
       }
-      logger.debug(
-        `Resolved project path via official ${mountPoint.mountType} mount: ${relativePath} -> ${realPath}`
-      );
       return {
         absolutePath: realPath,
         scope: 'project',
@@ -448,8 +435,6 @@ async function resolveProjectPath(
     );
   }
 
-  logger.debug(`Resolved project path (legacy fs): ${relativePath} -> ${realPath}`);
-
   return {
     absolutePath: realPath,
     scope: 'project',
@@ -483,8 +468,6 @@ async function resolveGeneralPath(
       'TRAVERSAL_ATTEMPT'
     );
   }
-
-  logger.debug(`Resolved general path: ${relativePath} -> ${realPath}`);
 
   return {
     absolutePath: realPath,
@@ -547,8 +530,6 @@ export async function readFileWithMtime(
       fs.readFile(absolutePath, 'utf-8'),
       fs.stat(absolutePath),
     ]);
-
-    logger.debug(`Read file: ${absolutePath} (${stats.size} bytes)`);
 
     return {
       content,
@@ -625,8 +606,6 @@ export async function writeFileWithMtimeCheck(
     const stats = await fs.stat(absolutePath);
     const mtime = stats.mtime.getTime();
 
-    logger.debug(`Wrote file: ${absolutePath} (${content.length} bytes)`);
-
     return { mtime };
   } catch (error) {
     if (error instanceof Error) {
@@ -664,9 +643,6 @@ export async function getAccessibleMountPoints(
     });
 
     if (ids.length === 0) {
-      logger.debug(
-        `No mount points accessible for project=${projectId ?? 'none'} character=${characterId ?? 'none'}`,
-      );
       return [];
     }
 
@@ -682,10 +658,6 @@ export async function getAccessibleMountPoints(
         });
       }
     }
-
-    logger.debug(
-      `Found ${mountPoints.length} accessible mount points for project=${projectId ?? 'none'} character=${characterId ?? 'none'} peers=${extraCharacterIds?.length ?? 0}`,
-    );
 
     return mountPoints;
   } catch (error) {
@@ -738,7 +710,6 @@ export function isTextFile(filePath: string): boolean {
   const isAllowed = allowedExtensions.has(ext);
 
   if (!isAllowed) {
-    logger.debug(`File rejected as non-text: ${filePath} (extension: ${ext})`);
   }
 
   return isAllowed;

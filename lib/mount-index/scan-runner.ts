@@ -35,7 +35,6 @@ export async function scanAllMountPoints(): Promise<ScanResult[]> {
   const mountPoints = await repos.docMountPoints.findEnabled();
 
   if (mountPoints.length === 0) {
-    logger.debug('No enabled mount points to scan');
     return results;
   }
 

@@ -181,11 +181,6 @@ async function postLibrarianMessage(
 
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
-      logger.debug('[LibrarianNotification] Chat not found, skipping announcement', {
-        context: 'librarian-notifications',
-        chatId,
-        kindLabel,
-      });
       return null;
     }
 
@@ -234,14 +229,6 @@ export async function postLibrarianOpenAnnouncement(
 ): Promise<MessageEvent | null> {
   const content = buildOpenContent(params);
   const kindLabel = params.origin.kind;
-  logger.debug('[LibrarianNotification] Posting open announcement', {
-    context: 'librarian-notifications',
-    chatId: params.chatId,
-    filePath: params.filePath,
-    scope: params.scope,
-    isNew: params.isNew,
-    kindLabel,
-  });
   return postLibrarianMessage(params.chatId, content, kindLabel);
 }
 
@@ -249,17 +236,9 @@ export async function postLibrarianSaveAnnouncement(
   params: LibrarianSaveAnnouncement,
 ): Promise<MessageEvent | null> {
   if (!params.diffContent || !params.diffContent.trim()) {
-    logger.debug('[LibrarianNotification] Empty save diff, skipping announcement', {
-      context: 'librarian-notifications',
-      chatId: params.chatId,
-    });
     return null;
   }
   const content = buildSaveContent(params.diffContent);
-  logger.debug('[LibrarianNotification] Posting save announcement', {
-    context: 'librarian-notifications',
-    chatId: params.chatId,
-  });
   return postLibrarianMessage(params.chatId, content, 'saved');
 }
 
@@ -267,13 +246,6 @@ export async function postLibrarianRenameAnnouncement(
   params: LibrarianRenameAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = buildRenameContent(params);
-  logger.debug('[LibrarianNotification] Posting rename announcement', {
-    context: 'librarian-notifications',
-    chatId: params.chatId,
-    oldFilePath: params.oldFilePath,
-    newFilePath: params.newFilePath,
-    scope: params.scope,
-  });
   return postLibrarianMessage(params.chatId, content, 'renamed');
 }
 
@@ -306,13 +278,6 @@ export async function postLibrarianDeleteAnnouncement(
 ): Promise<MessageEvent | null> {
   const content = buildDeleteContent(params);
   const kindLabel = params.origin.kind === 'by-user' ? 'deleted-by-user' : 'deleted-by-character';
-  logger.debug('[LibrarianNotification] Posting delete announcement', {
-    context: 'librarian-notifications',
-    chatId: params.chatId,
-    filePath: params.filePath,
-    scope: params.scope,
-    kindLabel,
-  });
   return postLibrarianMessage(params.chatId, content, kindLabel);
 }
 
@@ -321,13 +286,6 @@ export async function postLibrarianFolderCreatedAnnouncement(
 ): Promise<MessageEvent | null> {
   const content = buildFolderCreatedContent(params);
   const kindLabel = params.origin.kind === 'by-user' ? 'folder-created-by-user' : 'folder-created-by-character';
-  logger.debug('[LibrarianNotification] Posting folder-created announcement', {
-    context: 'librarian-notifications',
-    chatId: params.chatId,
-    folderPath: params.folderPath,
-    scope: params.scope,
-    kindLabel,
-  });
   return postLibrarianMessage(params.chatId, content, kindLabel);
 }
 
@@ -357,13 +315,6 @@ export async function postLibrarianAttachAnnouncement(
   params: LibrarianAttachAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = buildAttachContent(params);
-  logger.debug('[LibrarianNotification] Posting attach announcement', {
-    context: 'librarian-notifications',
-    chatId: params.chatId,
-    filePath: params.filePath,
-    mountFileId: params.mountFileId,
-    mimeType: params.mimeType,
-  });
   return postLibrarianMessage(params.chatId, content, 'attached', [params.mountFileId]);
 }
 
@@ -372,13 +323,6 @@ export async function postLibrarianFolderDeletedAnnouncement(
 ): Promise<MessageEvent | null> {
   const content = buildFolderDeletedContent(params);
   const kindLabel = params.origin.kind === 'by-user' ? 'folder-deleted-by-user' : 'folder-deleted-by-character';
-  logger.debug('[LibrarianNotification] Posting folder-deleted announcement', {
-    context: 'librarian-notifications',
-    chatId: params.chatId,
-    folderPath: params.folderPath,
-    scope: params.scope,
-    kindLabel,
-  });
   return postLibrarianMessage(params.chatId, content, kindLabel);
 }
 
@@ -424,19 +368,9 @@ export async function postLibrarianSummaryAnnouncement(
   params: LibrarianSummaryAnnouncement,
 ): Promise<MessageEvent | null> {
   if (!params.summary || params.summary.trim().length === 0) {
-    logger.debug('[LibrarianNotification] Empty summary, skipping announcement', {
-      context: 'librarian-notifications',
-      chatId: params.chatId,
-    });
     return null;
   }
   const content = buildSummaryContent(params.summary);
-  logger.debug('[LibrarianNotification] Posting summary announcement', {
-    context: 'librarian-notifications',
-    chatId: params.chatId,
-    summaryLength: params.summary.length,
-    targetParticipantIds: params.targetParticipantIds ?? null,
-  });
   return postLibrarianMessage(
     params.chatId,
     content,

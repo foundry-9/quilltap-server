@@ -107,10 +107,8 @@ function readHeaderWithRetry(dbPath: string): Buffer {
  * @returns `'encrypted'`, `'plaintext'`, or `'unknown'`
  */
 export function getDatabaseEncryptionState(dbPath: string): DatabaseEncryptionState {
-  log.debug('Checking database encryption state', { path: dbPath });
 
   if (!fs.existsSync(dbPath)) {
-    log.debug('Database file does not exist', { path: dbPath });
     return 'plaintext';
   }
 
@@ -126,10 +124,6 @@ export function getDatabaseEncryptionState(dbPath: string): DatabaseEncryptionSt
   }
 
   if (header.length < 16) {
-    log.debug('Database file too small to determine encryption state', {
-      path: dbPath,
-      bytesRead: header.length,
-    });
     // A file shorter than the SQLite header isn't a usable SQLite DB in
     // either mode. Treat as plaintext so callers that gate on
     // `state === 'plaintext'` don't get stuck — the open/migration path
@@ -139,12 +133,6 @@ export function getDatabaseEncryptionState(dbPath: string): DatabaseEncryptionSt
 
   const headerStr = header.toString('utf8');
   const encrypted = headerStr !== SQLITE_MAGIC;
-
-  log.debug('Database encryption state determined', {
-    path: dbPath,
-    state: encrypted ? 'encrypted' : 'plaintext',
-    headerPrefix: encrypted ? '(encrypted)' : 'SQLite format 3',
-  });
 
   return encrypted ? 'encrypted' : 'plaintext';
 }

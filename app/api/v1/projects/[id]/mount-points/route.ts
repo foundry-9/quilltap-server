@@ -28,15 +28,10 @@ const linkMountPointSchema = z.object({
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
-      logger.debug('[Projects v1] Listing mount points for project', {
-        projectId: id,
-        userId: user.id,
-      });
 
       // Verify project exists
       const project = await repos.projects.findById(id);
       if (!project) {
-        logger.debug('[Projects v1] Project not found for mount point listing', { projectId: id });
         return notFound('Project');
       }
 
@@ -54,12 +49,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Filter out any null results (mount points that were deleted but links remain)
       const validMountPoints = mountPoints.filter((mp) => mp !== null);
 
-      logger.debug('[Projects v1] Found mount points for project', {
-        projectId: id,
-        totalLinks: links.length,
-        validMountPoints: validMountPoints.length,
-      });
-
       return NextResponse.json({ mountPoints: validMountPoints });
     } catch (error) {
       logger.error('[Projects v1] Error listing mount points for project', { projectId: id }, error instanceof Error ? error : undefined);
@@ -75,15 +64,10 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
-      logger.debug('[Projects v1] Linking mount point to project', {
-        projectId: id,
-        userId: user.id,
-      });
 
       // Verify project exists
       const project = await repos.projects.findById(id);
       if (!project) {
-        logger.debug('[Projects v1] Project not found for mount point linking', { projectId: id });
         return notFound('Project');
       }
 
@@ -93,10 +77,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify mount point exists
       const mountPoint = await repos.docMountPoints.findById(validatedData.mountPointId);
       if (!mountPoint) {
-        logger.debug('[Projects v1] Mount point not found for linking', {
-          projectId: id,
-          mountPointId: validatedData.mountPointId,
-        });
         return notFound('Mount point');
       }
 
@@ -124,15 +104,10 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
-      logger.debug('[Projects v1] Unlinking mount point from project', {
-        projectId: id,
-        userId: user.id,
-      });
 
       // Verify project exists
       const project = await repos.projects.findById(id);
       if (!project) {
-        logger.debug('[Projects v1] Project not found for mount point unlinking', { projectId: id });
         return notFound('Project');
       }
 
@@ -142,10 +117,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const unlinked = await repos.projectDocMountLinks.unlink(id, validatedData.mountPointId);
 
       if (!unlinked) {
-        logger.debug('[Projects v1] No link found between project and mount point', {
-          projectId: id,
-          mountPointId: validatedData.mountPointId,
-        });
         return badRequest('No link exists between this project and mount point');
       }
 

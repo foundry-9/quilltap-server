@@ -101,12 +101,6 @@ export class HelpSearch {
 
       // Validate dimension match
       if (queryEmbedding.length !== doc.embedding.length) {
-        logger.debug('Skipping help doc with dimension mismatch', {
-          context: 'help-search',
-          docId: doc.id,
-          expected: queryEmbedding.length,
-          actual: doc.embedding.length,
-        })
         continue
       }
 

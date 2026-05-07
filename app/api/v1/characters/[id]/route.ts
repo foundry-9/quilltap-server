@@ -880,11 +880,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
             queued++;
           } catch (err) {
             // Skip chats that already have a pending render job
-            logger.debug('[Characters v1] Skipped render enqueue (likely already pending)', {
-              characterId: id,
-              chatId: chat.id,
-              error: err instanceof Error ? err.message : String(err),
-            });
           }
         }
 

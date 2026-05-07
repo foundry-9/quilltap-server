@@ -824,11 +824,6 @@ export async function checkAndGenerateSummaryIfNeeded(
       forceRegenerate: decision === 'hard',
     })
   } else {
-    logger.debug('[Context Summary] Gate skipped', {
-      chatId,
-      currentInterchange,
-      lastFoldedTurn: chat.lastSummaryTurn ?? 0,
-    })
   }
 }
 

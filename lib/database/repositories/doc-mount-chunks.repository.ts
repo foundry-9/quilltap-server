@@ -131,19 +131,10 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   async findByFileId(fileId: string): Promise<DocMountChunk[]> {
     return this.safeQuery(
       async () => {
-        logger.debug('Finding chunks by file ID', {
-          context: 'DocMountChunksRepository.findByFileId',
-          fileId,
-        });
         const results = await this.findByFilter(
           { fileId } as TypedQueryFilter<DocMountChunk>,
           { sort: { chunkIndex: 1 } }
         );
-        logger.debug('Found chunks by file ID', {
-          context: 'DocMountChunksRepository.findByFileId',
-          fileId,
-          count: results.length,
-        });
         return results;
       },
       'Error finding chunks by file ID',
@@ -160,18 +151,9 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   async findByMountPointId(mountPointId: string): Promise<DocMountChunk[]> {
     return this.safeQuery(
       async () => {
-        logger.debug('Finding chunks by mount point ID', {
-          context: 'DocMountChunksRepository.findByMountPointId',
-          mountPointId,
-        });
         const results = await this.findByFilter(
           { mountPointId } as TypedQueryFilter<DocMountChunk>
         );
-        logger.debug('Found chunks by mount point ID', {
-          context: 'DocMountChunksRepository.findByMountPointId',
-          mountPointId,
-          count: results.length,
-        });
         return results;
       },
       'Error finding chunks by mount point ID',
@@ -229,11 +211,6 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
           return [];
         }
 
-        logger.debug('Finding chunks with embeddings for mount point IDs', {
-          context: 'DocMountChunksRepository.findAllWithEmbeddingsByMountPointIds',
-          mountPointIdCount: mountPointIds.length,
-        });
-
         const allChunks: DocMountChunk[] = [];
         for (const mountPointId of mountPointIds) {
           const chunks = await this.findByFilter(
@@ -246,12 +223,6 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
         const withEmbeddings = allChunks.filter(
           chunk => chunk.embedding != null && chunk.embedding.length > 0
         );
-
-        logger.debug('Found chunks with embeddings for mount point IDs', {
-          context: 'DocMountChunksRepository.findAllWithEmbeddingsByMountPointIds',
-          totalChunks: allChunks.length,
-          withEmbeddings: withEmbeddings.length,
-        });
 
         return withEmbeddings;
       },
@@ -269,10 +240,6 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   async deleteByFileId(fileId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        logger.debug('Deleting chunks by file ID', {
-          context: 'DocMountChunksRepository.deleteByFileId',
-          fileId,
-        });
         // Peek one chunk to learn the mount point so we can invalidate the
         // in-memory cache after the delete (chunks for one file all share
         // a mount point).
@@ -287,11 +254,6 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
         if (mountPointId) {
           invalidateMountPoint(mountPointId);
         }
-        logger.debug('Deleted chunks by file ID', {
-          context: 'DocMountChunksRepository.deleteByFileId',
-          fileId,
-          deletedCount: count,
-        });
         return count;
       },
       'Error deleting chunks by file ID',
@@ -307,19 +269,10 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   async deleteByMountPointId(mountPointId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        logger.debug('Deleting chunks by mount point ID', {
-          context: 'DocMountChunksRepository.deleteByMountPointId',
-          mountPointId,
-        });
         const count = await this.deleteMany(
           { mountPointId } as TypedQueryFilter<DocMountChunk>
         );
         invalidateMountPoint(mountPointId);
-        logger.debug('Deleted chunks by mount point ID', {
-          context: 'DocMountChunksRepository.deleteByMountPointId',
-          mountPointId,
-          deletedCount: count,
-        });
         return count;
       },
       'Error deleting chunks by mount point ID',
@@ -342,12 +295,6 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
         if (!updated) {
           throw new Error(`Doc mount chunk not found for embedding update: ${id}`);
         }
-
-        logger.debug('Updated embedding for doc mount chunk', {
-          context: 'DocMountChunksRepository.updateEmbedding',
-          id,
-          embeddingLength: embedding.length,
-        });
       },
       'Error updating doc mount chunk embedding',
       { id }
@@ -367,21 +314,12 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   ): Promise<DocMountChunk[]> {
     return this.safeQuery(
       async () => {
-        logger.debug('Bulk inserting doc mount chunks', {
-          context: 'DocMountChunksRepository.bulkInsert',
-          count: chunks.length,
-        });
 
         const created: DocMountChunk[] = [];
         for (const chunk of chunks) {
           const result = await this._create(chunk);
           created.push(result);
         }
-
-        logger.debug('Bulk insert complete for doc mount chunks', {
-          context: 'DocMountChunksRepository.bulkInsert',
-          insertedCount: created.length,
-        });
 
         return created;
       },

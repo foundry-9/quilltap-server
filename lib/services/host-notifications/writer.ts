@@ -132,11 +132,6 @@ async function postHostMessage(
 
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
-      logger.debug('[HostNotification] Chat not found, skipping announcement', {
-        context: 'host-notifications',
-        chatId,
-        kindLabel,
-      });
       return null;
     }
 
@@ -185,16 +180,6 @@ export async function postHostAddAnnouncement(
 ): Promise<MessageEvent | null> {
   const content = await buildAddContent(params.character);
   const toStatus: ParticipantStatus = params.initialStatus ?? 'active';
-  logger.debug('[HostNotification] Posting add announcement', {
-    context: 'host-notifications',
-    chatId: params.chatId,
-    characterId: params.character.id,
-    characterName: params.character.name,
-    participantId: params.participantId,
-    toStatus,
-    hasAvatar: Boolean(params.character.avatarUrl),
-    hasVault: Boolean(params.character.characterDocumentMountPointId),
-  });
   return postHostMessage(params.chatId, content, 'add', {
     participantId: params.participantId,
     toStatus,
@@ -205,12 +190,6 @@ export async function postHostRemoveAnnouncement(
   params: HostRemoveAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = buildRemoveContent(params.characterName);
-  logger.debug('[HostNotification] Posting remove announcement', {
-    context: 'host-notifications',
-    chatId: params.chatId,
-    characterName: params.characterName,
-    participantId: params.participantId,
-  });
   return postHostMessage(params.chatId, content, 'remove', {
     participantId: params.participantId,
     toStatus: 'removed',
@@ -225,14 +204,6 @@ export async function postHostStatusChangeAnnouncement(
     params.oldStatus,
     params.newStatus,
   );
-  logger.debug('[HostNotification] Posting status-change announcement', {
-    context: 'host-notifications',
-    chatId: params.chatId,
-    characterName: params.characterName,
-    participantId: params.participantId,
-    oldStatus: params.oldStatus,
-    newStatus: params.newStatus,
-  });
   return postHostMessage(params.chatId, content, `status:${params.oldStatus}->${params.newStatus}`, {
     participantId: params.participantId,
     toStatus: params.newStatus,
@@ -327,11 +298,6 @@ async function postHostMessageWithTargets(
 
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
-      logger.debug('[HostNotification] Chat not found, skipping announcement', {
-        context: 'host-notifications',
-        chatId,
-        kindLabel,
-      });
       return null;
     }
 
@@ -619,10 +585,6 @@ export async function postHostOffSceneCharactersAnnouncement(
 
     const chat = await repos.chats.findById(params.chatId);
     if (!chat) {
-      logger.debug('[HostNotification] Chat not found, skipping off-scene introduction', {
-        context: 'host-notifications',
-        chatId: params.chatId,
-      });
       return null;
     }
 

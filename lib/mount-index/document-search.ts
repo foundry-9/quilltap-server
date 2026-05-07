@@ -54,13 +54,6 @@ export async function searchDocumentChunks(
   const limit = options.limit || 10
   const minScore = options.minScore || 0.3
 
-  logger.debug('Searching document mount chunks', {
-    projectId: options.projectId,
-    mountPointIds: options.mountPointIds,
-    limit,
-    minScore,
-  })
-
   // Determine which mount point IDs to search
   let mountPointIds: string[] | undefined = options.mountPointIds
 
@@ -70,7 +63,6 @@ export async function searchDocumentChunks(
     mountPointIds = links.map(l => l.mountPointId)
 
     if (mountPointIds.length === 0) {
-      logger.debug('Project has no linked mount points', { projectId: options.projectId })
       return []
     }
   }
@@ -82,7 +74,6 @@ export async function searchDocumentChunks(
   }
 
   if (mountPointIds.length === 0) {
-    logger.debug('No mount points to search')
     return []
   }
 
@@ -91,11 +82,8 @@ export async function searchDocumentChunks(
   const allChunks = await getChunksForMountPoints(mountPointIds)
 
   if (allChunks.length === 0) {
-    logger.debug('No embedded document chunks found', { mountPointIds })
     return []
   }
-
-  logger.debug('Loaded embedded document chunks for search', { chunkCount: allChunks.length })
 
   // Pre-flight dimension guard: if the corpus and the query have drifted apart
   // (e.g. the embedding profile's truncateToDimensions changed but the corpus
@@ -115,7 +103,6 @@ export async function searchDocumentChunks(
     .slice(0, limit)
 
   if (scored.length === 0) {
-    logger.debug('No document chunks above minimum score', { minScore })
     return []
   }
 
@@ -153,11 +140,6 @@ export async function searchDocumentChunks(
       content: chunk.content,
       score,
     }
-  })
-
-  logger.debug('Document chunk search completed', {
-    resultsCount: results.length,
-    topScore: results[0]?.score,
   })
 
   return results

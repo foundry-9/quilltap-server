@@ -797,11 +797,6 @@ async function resolveAppearances(
                 if (flat.length > 0) {
                   equippedWardrobeItems = flat;
                 }
-                logger.debug('[Image Generation] Resolved equipped wardrobe for character', {
-                  characterId: p.entityId,
-                  chatId: context.chatId,
-                  itemCount: flat.length,
-                });
               }
             } catch (err) {
               logger.warn('[Image Generation] Failed to load equipped wardrobe items for character', {

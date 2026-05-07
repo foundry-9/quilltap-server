@@ -99,11 +99,6 @@ export async function handleEmbeddingRefit(job: BackgroundJob): Promise<void> {
     for (const doc of helpDocs) {
       documents.push(`${doc.title}\n\n${doc.content}`);
     }
-    logger.debug('[EmbeddingRefit] Added help docs to corpus', {
-      context: 'handleEmbeddingRefit',
-      helpDocCount: helpDocs.length,
-      totalDocuments: documents.length,
-    });
   } catch (error) {
     logger.warn('[EmbeddingRefit] Failed to load help docs for corpus, continuing without them', {
       context: 'handleEmbeddingRefit',

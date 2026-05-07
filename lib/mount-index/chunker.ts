@@ -139,7 +139,6 @@ export function chunkDocument(text: string, options?: ChunkOptions): ChunkResult
 
   // Handle empty / whitespace-only input
   if (!text || text.trim().length === 0) {
-    logger.debug('Empty document, returning no chunks');
     return [];
   }
 
@@ -161,9 +160,6 @@ export function chunkDocument(text: string, options?: ChunkOptions): ChunkResult
     }
 
     const trimmed = text.trim();
-    logger.debug('Document fits in single chunk', {
-      tokenCount: estimateTokens(trimmed),
-    });
     return [
       {
         content: trimmed,
@@ -227,11 +223,6 @@ export function chunkDocument(text: string, options?: ChunkOptions): ChunkResult
   if (currentContent.trim().length > 0) {
     flushChunk(currentContent, chunkHeading);
   }
-
-  logger.debug('Chunking complete', {
-    totalChunks: chunks.length,
-    totalTokens: chunks.reduce((sum, c) => sum + c.tokenCount, 0),
-  });
 
   return chunks;
 
