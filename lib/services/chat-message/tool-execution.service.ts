@@ -282,5 +282,6 @@ export function createToolContext(
     projectId: projectId || undefined,
     browserUserAgent,
     loadedMemories,
+    pendingWardrobeAnnouncements: new Set<string>(),
   }
 }

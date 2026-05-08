@@ -245,7 +245,9 @@ describe('tool-execution.service', () => {
         callingParticipantId: 'participant-101',
         imageProfileId: undefined,
         projectId: undefined,
+        pendingWardrobeAnnouncements: expect.any(Set),
       })
+      expect(context.pendingWardrobeAnnouncements?.size).toBe(0)
     })
 
     it('should include image profile ID when provided', () => {
@@ -332,6 +334,7 @@ describe('tool-execution.service', () => {
         callingParticipantId: 'participant-101',
         imageProfileId: 'image-profile-1',
         projectId: 'project-123',
+        pendingWardrobeAnnouncements: expect.any(Set),
       })
     })
 

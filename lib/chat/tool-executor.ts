@@ -192,6 +192,15 @@ export interface ToolExecutionContext {
   browserUserAgent?: string;
   /** Memories loaded into this turn's prompt, for introspection tools. */
   loadedMemories?: LoadedMemoriesContext;
+  /**
+   * Character IDs whose wardrobe was modified during this turn. Wardrobe tool
+   * handlers add to this Set instead of enqueuing Aurora announcements
+   * immediately; the orchestrator drains it once at end-of-turn so a single
+   * response with N wardrobe edits produces one announcement, not N. When
+   * absent (legacy callers without orchestrator threading), handlers fall
+   * back to immediate enqueue.
+   */
+  pendingWardrobeAnnouncements?: Set<string>;
 }
 
 /**
@@ -671,6 +680,7 @@ export async function executeToolCallWithContext(
         userId,
         chatId,
         characterId: characterId || '',
+        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
       };
 
       const result = await executeWardrobeUpdateOutfitTool(toolCall.arguments, wardrobeContext);
@@ -697,6 +707,7 @@ export async function executeToolCallWithContext(
         userId,
         chatId,
         characterId: characterId || '',
+        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
       };
 
       const result = await executeWardrobeChangeItemTool(toolCall.arguments, wardrobeContext);

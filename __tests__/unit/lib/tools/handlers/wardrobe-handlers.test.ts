@@ -78,9 +78,14 @@ describe('wardrobe tool handlers', () => {
 
     repos = {
       wardrobe: {
-        findByCharacterId: jest.fn(),
+        // buildWardrobeCoverageSummaryFromState delegates to
+        // resolveEquippedOutfitForCharacter, which loads the character's
+        // wardrobe via findByCharacterId so composite components can be
+        // expanded. Default to empty so tests that don't care about
+        // coverage_summary text still get a valid resolver path.
+        findByCharacterId: jest.fn().mockResolvedValue([]),
         findById: jest.fn(),
-        // Bulk lookup used by buildCoverageSummaryFromState — defaults to empty.
+        // Fallback bulk lookup for items not in findByCharacterId.
         findByIds: jest.fn().mockResolvedValue([]),
         // Overlay-aware single-item lookup used by the equip primitives.
         findByIdForCharacter: jest.fn((_charId: string, id: string) =>

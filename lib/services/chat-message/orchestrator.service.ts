@@ -69,6 +69,7 @@ import {
   triggerConversationRender,
 } from './memory-trigger.service'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
+import { flushPendingWardrobeAnnouncements } from '@/lib/tools/handlers/wardrobe-handler-shared'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
@@ -1846,6 +1847,12 @@ async function processMessage(
 
   // Save assistant message
   let assistantMessageId: string | null = null
+
+  // End-of-turn drain: collapse any wardrobe edits this character made into a
+  // single Aurora announcement per affected character, regardless of which
+  // terminal branch we exit through. The handlers add to the Set instead of
+  // enqueuing per-edit; here we fire one job each and clear.
+  await flushPendingWardrobeAnnouncements(toolContext)
 
   if (streamingState.fullResponse && streamingState.fullResponse.trim().length > 0) {
     return finalizeMessageResponse({

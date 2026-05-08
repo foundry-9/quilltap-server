@@ -61,26 +61,25 @@ export async function buildCharacterAvatarPrompt(
 
   let outfitText = '';
   if (equippedSlots) {
-    // Avatars are head-and-shoulders only. Drop bottom + footwear so the image
-    // generator doesn't paste shoes/pants onto a cropped torso.
-    const portraitSlots: EquippedSlots = {
-      top: equippedSlots.top,
-      bottom: [],
-      footwear: [],
-      accessories: equippedSlots.accessories,
-    };
-    const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, portraitSlots);
+    // Avatars are head-and-shoulders only. We pass the FULL equipped slots in
+    // so the resolver can route coverage by each leaf's own `types` — an item
+    // sitting in slots.bottom whose types include "top" still bubbles up into
+    // the rendered top. We then `omit` bottom/footwear at render time so the
+    // image generator doesn't paste shoes/pants onto a cropped torso.
+    const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, equippedSlots);
     const decorate = (items: { title: string; description?: string | null }[]): string[] =>
       items.map((i) => (i.description ? `${i.title} (${i.description})` : i.title));
 
     outfitText = describeOutfit({
       top: decorate(resolved.leafItemsBySlot.top),
-      bottom: [],
-      footwear: [],
+      bottom: decorate(resolved.leafItemsBySlot.bottom),
+      footwear: decorate(resolved.leafItemsBySlot.footwear),
       accessories: decorate(resolved.leafItemsBySlot.accessories),
     }, { omit: ['bottom', 'footwear'] }).trimEnd();
 
     leafCounts.top = resolved.leafItemsBySlot.top.length;
+    leafCounts.bottom = resolved.leafItemsBySlot.bottom.length;
+    leafCounts.footwear = resolved.leafItemsBySlot.footwear.length;
     leafCounts.accessories = resolved.leafItemsBySlot.accessories.length;
   }
 

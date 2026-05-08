@@ -26,13 +26,15 @@ import {
   buildWardrobeCoverageSummaryFromState,
   emptyEquippedState,
   loadCurrentWardrobeState,
-  scheduleWardrobeAnnouncement,
+  recordPendingWardrobeAnnouncement,
 } from './wardrobe-handler-shared';
 
 export interface WardrobeChangeItemToolContext {
   userId: string;
   chatId: string;
   characterId: string;
+  /** Per-turn announcement queue. Forwarded from `ToolExecutionContext`. */
+  pendingWardrobeAnnouncements?: Set<string>;
 }
 
 const NO_ITEM_SENTINELS = new Set(['none', 'null', '']);
@@ -274,7 +276,7 @@ export async function executeWardrobeChangeItemTool(
     }
 
     const currentState = await loadCurrentWardrobeState(repos, context.chatId, context.characterId);
-    const coverageSummary = await buildWardrobeCoverageSummaryFromState(repos, currentState);
+    const coverageSummary = await buildWardrobeCoverageSummaryFromState(repos, context.characterId, currentState);
 
     await triggerAvatarGenerationIfEnabled(repos, {
       userId: context.userId,
@@ -283,12 +285,18 @@ export async function executeWardrobeChangeItemTool(
       callerContext: 'wardrobe-change-item-handler',
     });
 
-    await scheduleWardrobeAnnouncement('wardrobe-change-item-handler', {
-      userId: context.userId,
-      chatId: context.chatId,
-      characterId: context.characterId,
-      extraLogFields: { slot: summarySlot },
-    });
+    await recordPendingWardrobeAnnouncement(
+      {
+        userId: context.userId,
+        chatId: context.chatId,
+        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+      },
+      {
+        sourceContext: 'wardrobe-change-item-handler',
+        characterId: context.characterId,
+        extraLogFields: { slot: summarySlot },
+      },
+    );
 
     return {
       success: true,

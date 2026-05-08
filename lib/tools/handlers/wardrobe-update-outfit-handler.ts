@@ -23,13 +23,15 @@ import {
   buildWardrobeCoverageSummaryFromState,
   emptyEquippedState,
   loadCurrentWardrobeState,
-  scheduleWardrobeAnnouncement,
+  recordPendingWardrobeAnnouncement,
 } from './wardrobe-handler-shared';
 
 export interface WardrobeUpdateOutfitToolContext {
   userId: string;
   chatId: string;
   characterId: string;
+  /** Per-turn announcement queue. Forwarded from `ToolExecutionContext`. */
+  pendingWardrobeAnnouncements?: Set<string>;
 }
 
 export class WardrobeUpdateOutfitError extends Error {
@@ -160,7 +162,7 @@ export async function executeWardrobeUpdateOutfitTool(
     }
 
     const currentState = await loadCurrentWardrobeState(repos, context.chatId, context.characterId);
-    const coverageSummary = await buildWardrobeCoverageSummaryFromState(repos, currentState);
+    const coverageSummary = await buildWardrobeCoverageSummaryFromState(repos, context.characterId, currentState);
 
     await triggerAvatarGenerationIfEnabled(repos, {
       userId: context.userId,
@@ -169,11 +171,17 @@ export async function executeWardrobeUpdateOutfitTool(
       callerContext: 'wardrobe-update-outfit-handler',
     });
 
-    await scheduleWardrobeAnnouncement('wardrobe-update-outfit-handler', {
-      userId: context.userId,
-      chatId: context.chatId,
-      characterId: context.characterId,
-    });
+    await recordPendingWardrobeAnnouncement(
+      {
+        userId: context.userId,
+        chatId: context.chatId,
+        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+      },
+      {
+        sourceContext: 'wardrobe-update-outfit-handler',
+        characterId: context.characterId,
+      },
+    );
 
     return {
       success: true,

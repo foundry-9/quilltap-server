@@ -11,7 +11,12 @@
  *      `itemsById` map can resolve composite components transitively).
  *   2. Falls back to `wardrobe.findByIds` for any equipped IDs not found in
  *      the character's own wardrobe (archetype items, etc.).
- *   3. Expands each slot's array independently via `expandComposites`.
+ *   3. Expands each input slot's array via `expandComposites`, then routes
+ *      each resulting leaf into every output slot the leaf's own `types`
+ *      declares — dedup'd across input slots. That way an atomic dress with
+ *      `types=[top,bottom]` shows up in both rendered slots even if it was
+ *      only equipped to one, and a composite outfit whose components have
+ *      heterogeneous types distributes those components correctly.
  *   4. Returns per-slot leaf items, the title-array `OutfitSlotValues` for
  *      `describeOutfit`, and the underlying `itemsById` map for callers that
  *      still want to inspect items themselves.
@@ -116,8 +121,15 @@ export async function resolveEquippedOutfitForCharacter(
     }
   }
 
-  // Per-slot expansion: each slot is independent. Composites are expanded to
-  // leaves, and leaves stay as leaves.
+  // First pass: expand each input slot's composites, dedupe by leaf id across
+  // the whole equipped set, and remember the order leaves were first seen.
+  // Second pass: route each leaf into every output slot its own `types`
+  // declares. That spreads atomic multi-slot items (a dress with
+  // `types=[top,bottom]` lands in both rendered slots) and routes composite
+  // components to the slots their own `types` say (a "casual outfit"
+  // composite whose components are blouse(top)/slacks(bottom)/loafers(footwear)
+  // distributes correctly even if the composite itself was equipped to one
+  // slot).
   const leafItemsBySlot: ResolvedEquippedOutfit['leafItemsBySlot'] = {
     top: [],
     bottom: [],
@@ -131,13 +143,25 @@ export async function resolveEquippedOutfitForCharacter(
     accessories: [],
   };
 
+  const seenLeafIds = new Set<string>();
+  const orderedLeaves: WardrobeItem[] = [];
   for (const slot of SLOT_KEYS) {
     const expanded = expandComposites(slots[slot], itemsById);
-    if (expanded.cycles.length > 0 || expanded.truncated) {
-    }
     for (const id of expanded.leafIds) {
+      if (seenLeafIds.has(id)) continue;
       const item = itemsById.get(id);
       if (!item) continue;
+      seenLeafIds.add(id);
+      orderedLeaves.push(item);
+    }
+  }
+
+  for (const item of orderedLeaves) {
+    // A leaf's `types` declare which slots it covers. Route into each.
+    // If `types` is somehow empty (shouldn't happen — the schema requires
+    // min(1)), fall back to no-op rather than guessing.
+    for (const slot of item.types) {
+      if (!SLOT_KEYS.includes(slot as SlotKey)) continue;
       leafItemsBySlot[slot].push(item);
       outfitValues[slot].push(item.title);
     }
