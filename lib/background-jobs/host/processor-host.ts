@@ -20,9 +20,10 @@
  * orphaned.
  */
 
-import { fork, ChildProcess } from 'child_process';
+import type { ChildProcess } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import * as nodeModule from 'node:module';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import {
@@ -33,6 +34,14 @@ import {
 import { startDispatcher, stopDispatcher, dispatcherWake, getDispatcherSnapshot, handleChildJobResult } from './job-dispatcher';
 
 const log = logger.child({ module: 'jobs:processor-host' });
+
+// Load `child_process.fork` via createRequire so Turbopack's static analyzer
+// can't see the call site. With a direct `import { fork }`, Turbopack treats
+// `fork(entry, ...)` as a module-resolving call and tries to bundle the
+// `entry` string as an import (failing with `Can't resolve './ROOT/...'`).
+// Routing through createRequire keeps the lookup runtime-only.
+const dynamicRequire = nodeModule.createRequire(/*turbopackIgnore: true*/ process.cwd() + '/');
+const { fork } = dynamicRequire('child_process') as typeof import('child_process');
 
 // ============================================================================
 // HMR-safe global state
@@ -101,8 +110,8 @@ function getChildEntryPath(): string {
   // For the standalone tarball build, the `.ts` file must be included in
   // the output — `next.config.js` `outputFileTracingIncludes` covers
   // `lib/**/*.ts` already.
-  const candidate = path.resolve(process.cwd(), 'lib', 'background-jobs', 'child', 'child-entry.ts');
-  if (!fs.existsSync(candidate)) {
+  const candidate = path.resolve(/*turbopackIgnore: true*/ process.cwd(), 'lib', 'background-jobs', 'child', 'child-entry.ts');
+  if (!fs.existsSync(/*turbopackIgnore: true*/ candidate)) {
     throw new Error(
       `Background-job child entry not found at ${candidate}. ` +
       `Ensure the working directory is the Quilltap project root (process.cwd() = "${process.cwd()}").`

@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: production build failure in background-job processor host
+
+`next build` (Turbopack) failed with two `Module not found: Can't resolve '/ROOT/lib/background-jobs/child/child-entry.ts'` errors. Turbopack's static analyzer treats `child_process.fork(entry, ...)` like a module-resolving call and tried to bundle the runtime entry-path string as an import. `lib/background-jobs/host/processor-host.ts` now obtains `fork` via `nodeModule.createRequire(process.cwd() + '/')` (same pattern already used in `lib/plugins/dynamic-loader.ts`), which keeps the lookup runtime-only and hides the call site from the bundler. Also added `/*turbopackIgnore: true*/` to the `path.resolve` / `fs.existsSync` of the entry path. The remaining NFT warning on the themes route is pre-existing and non-fatal.
+
 #### Refactor: background-job processor moved to a forked child process
 
 The 18 background-job handlers (memory extraction, context summary, embeddings, image generation, danger classification, scene state, conversation render, housekeeping, etc.) ran on the same Node thread that served Next.js HTTP. Heavy handlers — most notably `MEMORY_HOUSEKEEPING` on a character with tens of thousands of memories — pinned the event loop and blocked HTTP responses for minutes. The `Promise.race` timeout in `executeJob` couldn't fire because its `setTimeout` was starved on the same loop.
