@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Import-from-Image modal now stacks above the Wardrobe dialog
+
+`components/wardrobe/import-from-image-modal.tsx` rendered its overlay at `z-40` and its dialog at `z-50`, but the parent Wardrobe dialog uses the standard `qt-dialog-overlay` class which sits at `z-[60]`. Clicking "Import from image" therefore opened the import modal *behind* the wardrobe. Bumped the import modal's overlay/content to `z-[70]/z-[80]`, matching the convention already established in `wardrobe-item-editor.tsx` for nested-on-wardrobe stacking.
+
 #### Refine: story-background prompt fixes swapped examples and adds intimate-scene guidance
 
 `STORY_BACKGROUND_PROMPT` in `lib/memory/cheap-llm-tasks/image-scene-tasks.ts` had its GOOD and BAD examples reversed — the rules call for atmospheric backgrounds with characters at the left/right edges of the frame, but the GOOD example was a centered close-up portrait and the BAD example was a properly framed forest scene. Swapped them so the examples reinforce the rules.

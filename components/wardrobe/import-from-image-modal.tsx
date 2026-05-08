@@ -231,9 +231,10 @@ export function ImportFromImageModal({
 
   return (
     <>
-      {/* Overlay */}
+      {/* Overlay — z values sit above qt-dialog-overlay (z-[60]) so this
+          stacks on top of the parent wardrobe dialog. */}
       <button
-        className="qt-dialog-overlay !p-0 cursor-default border-none z-40"
+        className="qt-dialog-overlay !p-0 cursor-default border-none z-[70]"
         onClick={onClose}
         aria-label="Close dialog"
         type="button"
@@ -241,7 +242,7 @@ export function ImportFromImageModal({
 
       {/* Dialog */}
       <div
-        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto"
+        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[80] pointer-events-auto"
         style={{ width: 'min(var(--qt-page-max-width), calc(100vw - 2rem))' }}
       >
         <div className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col">
