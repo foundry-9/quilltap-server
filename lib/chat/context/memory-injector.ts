@@ -63,11 +63,19 @@ export interface FormattedInterCharacterMemoriesResult {
  * `time` is the chat's announced timestamp (the same string the Host
  * announces); pass `null`/`undefined` when the chat is not announcing time
  * and the Time line is dropped entirely.
+ *
+ * `liveClothingByCharacterId` lets the caller override each character's
+ * clothing line with a freshly-rendered description of their currently
+ * equipped wardrobe slots. The cached `c.clothing` from scene state is only
+ * refreshed at turn boundaries, so passing live values here keeps the
+ * responding character's prompt in sync with mid-turn wardrobe edits and
+ * `wardrobe_*` tool calls.
  */
 export function formatCurrentSceneState(
   sceneState: SceneState | null | undefined,
   time: string | null | undefined,
   provider?: Provider,
+  liveClothingByCharacterId?: ReadonlyMap<string, string>,
 ): { content: string; tokenCount: number } {
   if (!sceneState) return { content: '', tokenCount: 0 }
 
@@ -93,7 +101,8 @@ export function formatCurrentSceneState(
     lines.push('')
     lines.push('#### Clothing')
     lines.push('')
-    lines.push((c.clothing ?? '').trim() || '_unspecified_')
+    const liveClothing = liveClothingByCharacterId?.get(c.characterId)?.trim()
+    lines.push(liveClothing || (c.clothing ?? '').trim() || '_unspecified_')
   }
 
   const content = lines.join('\n')

@@ -47,6 +47,8 @@ import {
   type DebugInterCharacterMemoryInfo,
 } from './context/memory-injector'
 import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
+import { describeOutfit } from '@/lib/wardrobe/outfit-description'
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
 import type { MessageEvent } from '@/lib/schemas/types'
 import { getOrComputeFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import {
@@ -926,7 +928,41 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     ) {
       sceneTime = calculateCurrentTimestamp(options.timestampConfig, options.timezone).formatted
     }
-    const formatted = formatCurrentSceneState(parsedScene, sceneTime, provider)
+
+    // Scene-state tracking only re-runs at turn boundaries, so its cached
+    // clothing field can lag mid-turn wardrobe edits and `wardrobe_*` tool
+    // calls. The wardrobe slots are the source of truth — read them live so
+    // the responding character's prompt always reflects what each present
+    // character is actually wearing right now.
+    const liveClothingByCharacterId = new Map<string, string>()
+    if (parsedScene && parsedScene.characters.length > 0) {
+      const repos = getRepositories()
+      await Promise.all(parsedScene.characters.map(async (c) => {
+        if (!c.characterId) return
+        try {
+          const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chat.id, c.characterId)
+          if (!equippedSlots) return
+          const resolved = await resolveEquippedOutfitForCharacter(repos, c.characterId, equippedSlots)
+          const decorate = (items: { title: string; description?: string | null }[]): string[] =>
+            items.map(i => i.description ? `${i.title} (${i.description})` : i.title)
+          const description = describeOutfit({
+            top: decorate(resolved.leafItemsBySlot.top),
+            bottom: decorate(resolved.leafItemsBySlot.bottom),
+            footwear: decorate(resolved.leafItemsBySlot.footwear),
+            accessories: decorate(resolved.leafItemsBySlot.accessories),
+          })
+          if (description) liveClothingByCharacterId.set(c.characterId, description)
+        } catch (error) {
+          logger.warn('Failed to read live wardrobe for scene-state clothing override', {
+            chatId: chat.id,
+            characterId: c.characterId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }))
+    }
+
+    const formatted = formatCurrentSceneState(parsedScene, sceneTime, provider, liveClothingByCharacterId)
     currentStateContent = formatted.content
     currentStateTokens = formatted.tokenCount
   } catch (error) {

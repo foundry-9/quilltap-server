@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: read live wardrobe slots when rendering Current State for the responding character
+
+The Commonplace Book's `## Current State` block lists each present character's clothing under `#### Clothing`. That field came from `chat.sceneState`, which is rebuilt by the scene-state-tracking background job — and that job only runs once per turn, after every character has responded. So mid-turn wardrobe changes (Wardrobe dialog Live-tab edits committed during a response, or one character's `wardrobe_*` tool call earlier in the same turn) were invisible to subsequent responding characters: their prompt's Current State still showed the previous turn's clothing.
+
+`formatCurrentSceneState` in `lib/chat/context/memory-injector.ts` now accepts an optional `liveClothingByCharacterId` map and prefers its values over the cached `c.clothing`. `buildContext` in `lib/chat/context-manager.ts` builds that map just before formatting, calling `repos.chats.getEquippedOutfitForCharacter(chatId, characterId)` → `resolveEquippedOutfitForCharacter` → `describeOutfit` for each present character — the same pipeline the scene-state tracker uses, just synchronously at prompt-build time. Per-character lookups are parallel, and per-character failures fall back to the cached value so a wardrobe-read error never costs the whole Current State section. Inter-character memories were left as-is (a separate staleness problem). Added two tests in `__tests__/unit/lib/chat/context/memory-injector.test.ts` covering live override and whitespace-only fallback.
+
 #### Fix: stage Wardrobe dialog Live-tab edits and commit once on Done
 
 The Wardrobe control dialog's "Live outfit" tab called `/api/v1/chats/[id]?action=equip` on every per-slot tweak — every layer/remove/clear, every "Wear" button, every "Take off" / "Break apart" on a bundle card. The route's POST handler unconditionally fires `triggerAvatarGenerationIfEnabled` and `enqueueWardrobeOutfitAnnouncement` per call, so a few clicks in the dialog produced a flurry of avatar regen jobs and Aurora whispers.

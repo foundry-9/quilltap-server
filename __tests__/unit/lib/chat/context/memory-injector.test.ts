@@ -279,4 +279,24 @@ describe('memory-injector: formatCurrentSceneState', () => {
     expect(r.content).not.toContain('Strawberry-blonde')
     expect(r.content).not.toContain('jet-black wavy hair')
   })
+
+  it('overrides cached clothing with live wardrobe values when provided', () => {
+    const live = new Map<string, string>([
+      ['00000000-0000-0000-0000-000000000001', '- **top:** Linen Shirt\n- **bottom:** Denim Jeans'],
+    ])
+    const r = formatCurrentSceneState(scene(), null, provider, live)
+    expect(r.content).toContain('- **top:** Linen Shirt')
+    expect(r.content).toContain('- **bottom:** Denim Jeans')
+    expect(r.content).not.toContain('Charcoal Sweater')
+    // Amy has no live override so her cached clothing still shows
+    expect(r.content).toContain('Forest Green Long Writing Cardigan')
+  })
+
+  it('falls back to cached clothing when live override is empty/whitespace', () => {
+    const live = new Map<string, string>([
+      ['00000000-0000-0000-0000-000000000001', '   '],
+    ])
+    const r = formatCurrentSceneState(scene(), null, provider, live)
+    expect(r.content).toContain('Charcoal Sweater, Charcoal Cigarette Trousers, barefoot')
+  })
 })
