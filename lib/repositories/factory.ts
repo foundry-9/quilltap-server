@@ -115,6 +115,17 @@ export function getRepositories(): RepositoryContainer {
     return cachedRepositories;
   }
 
+  // Inside the forked job-runner child, hand back a proxy that intercepts
+  // writes (buffering them for the parent to apply) and passes reads
+  // through to the readonly SQLCipher connection.
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    // Lazy require keeps proxy code out of the parent's module graph.
+    const { getChildRepositoriesProxy } = require('@/lib/background-jobs/child/child-repositories-proxy') as
+      typeof import('@/lib/background-jobs/child/child-repositories-proxy');
+    cachedRepositories = getChildRepositoriesProxy();
+    return cachedRepositories;
+  }
+
   cachedRepositories = getDatabaseRepos();
   return cachedRepositories;
 }

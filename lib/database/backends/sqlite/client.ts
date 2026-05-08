@@ -27,9 +27,24 @@ let shutdownHandlersRegistered = false;
 
 /**
  * Initialize and return the SQLite database connection
+ *
+ * Inside the forked job-runner child (`QUILLTAP_JOB_CHILD === '1'`) this
+ * delegates to `getReadonlyChildSQLiteClient`, which opens the same
+ * SQLCipher database in readonly mode and skips WAL/journal/instance-lock
+ * configuration. The child reads freely; all writes are batched and shipped
+ * back to the parent via IPC for the parent to apply on its RW connection.
  */
 export function getSQLiteClient(config: SQLiteConfig): DatabaseType {
   if (sqliteDatabase && isInitialized) {
+    return sqliteDatabase;
+  }
+
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    // Lazy require to keep this import out of the parent's startup graph.
+    const { getReadonlyChildSQLiteClient } = require('./child-client') as
+      typeof import('./child-client');
+    sqliteDatabase = getReadonlyChildSQLiteClient(config);
+    isInitialized = true;
     return sqliteDatabase;
   }
 
@@ -220,6 +235,11 @@ export function vacuumDatabase(): void {
  * Setup shutdown handlers for graceful cleanup
  */
 export function setupSQLiteShutdownHandlers(): void {
+  // The forked job-runner child has its own shutdown protocol via IPC; it
+  // must not register process-level signal handlers that would race with the
+  // parent's lifecycle.
+  if (process.env.QUILLTAP_JOB_CHILD === '1') return;
+
   // Prevent adding listeners multiple times (important for hot reloading)
   if (shutdownHandlersRegistered) {
     return;

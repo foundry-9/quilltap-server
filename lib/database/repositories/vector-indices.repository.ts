@@ -357,6 +357,17 @@ export class VectorIndicesRepository {
 let instance: VectorIndicesRepository | null = null;
 
 export function getVectorIndicesRepository(): VectorIndicesRepository {
+  // In the forked job-runner child, return the proxied vectorIndices from
+  // the main repository container. Without this, callers like
+  // `CharacterVectorStore.save()` would talk to the unwrapped repository
+  // and try to write to the readonly DB connection — bypassing the
+  // proxy's batched-writes mechanism entirely.
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    const { getRepositories } = require('@/lib/repositories/factory') as
+      typeof import('@/lib/repositories/factory');
+    return getRepositories().vectorIndices as unknown as VectorIndicesRepository;
+  }
+
   if (!instance) {
     instance = new VectorIndicesRepository();
   }

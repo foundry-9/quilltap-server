@@ -104,6 +104,10 @@ const HEARTBEAT_INTERVAL_MS = 60_000; // 60 seconds
  * HMR-safe: stops any existing heartbeat before starting a new one.
  */
 export function startLockHeartbeat(lockPath: string): void {
+  // Forked job-runner children share the parent's lock; they must not run
+  // their own heartbeat or compete with the parent for ownership.
+  if (process.env.QUILLTAP_JOB_CHILD === '1') return;
+
   // Stop any existing heartbeat first (HMR safety)
   stopLockHeartbeat();
 
@@ -479,6 +483,9 @@ function claimStaleLock(lockPath: string, existing: LockFileContent, reason: str
  * @throws {InstanceLockError} if another live process holds the lock
  */
 export function acquireInstanceLock(lockPath: string): void {
+  // Forked job-runner children share the parent's lock; the parent holds it.
+  if (process.env.QUILLTAP_JOB_CHILD === '1') return;
+
   let existing = readLockFile(lockPath);
 
   if (!existing) {
@@ -612,6 +619,8 @@ export function acquireInstanceLock(lockPath: string): void {
  * Never throws — safe to call in shutdown handlers.
  */
 export function releaseInstanceLock(lockPath: string): void {
+  if (process.env.QUILLTAP_JOB_CHILD === '1') return;
+
   stopLockHeartbeat();
   try {
     const existing = readLockFile(lockPath);
@@ -662,6 +671,8 @@ export function releaseInstanceLock(lockPath: string): void {
  * Never throws.
  */
 export function releaseActiveInstanceLock(): void {
+  if (process.env.QUILLTAP_JOB_CHILD === '1') return;
+
   stopLockHeartbeat();
   const lockPath = getActiveLockPath();
   if (lockPath) {

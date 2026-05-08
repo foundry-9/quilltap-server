@@ -30,7 +30,7 @@ export {
   type LLMLogCleanupPayload,
 } from './queue-service';
 
-// Processor - processing jobs
+// Processor - processing jobs (now backed by a forked child process)
 export {
   startProcessor,
   stopProcessor,
@@ -40,6 +40,8 @@ export {
   resetStuckJobs,
   ensureProcessorRunning,
   getProcessorStatus,
+  wakeProcessor,
+  notifyChild,
 } from './processor';
 
 // Handler types

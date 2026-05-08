@@ -247,3 +247,29 @@ export const logger = new Logger({
 
 // Export class for creating child loggers
 export { Logger };
+
+/**
+ * Replace the singleton logger's transports with a single
+ * ParentChannelTransport. Called once at the top of the forked job-runner
+ * child's bootstrap so every log record produced inside the child
+ * (including from `child` loggers spun off via `.child(...)`) is forwarded
+ * to the parent process for unified file writing.
+ *
+ * Safe no-op if `process.send` is unavailable (i.e. running standalone).
+ */
+export function installChildLoggerTransport(): void {
+  if (typeof process.send !== 'function') return;
+
+  // Lazy import keeps the parent process from loading child-only code.
+  const { ParentChannelTransport } = require('@/lib/logging/transports/parent-channel') as {
+    ParentChannelTransport: new () => LogTransport;
+  };
+  const transport = new ParentChannelTransport();
+
+  // Cast through unknown — we are intentionally mutating the singleton's
+  // private `transports` field. Child loggers created via `.child(...)`
+  // share the same transports array reference, so a single splice swap
+  // propagates to every existing child logger as well.
+  const internal = logger as unknown as { transports: LogTransport[] };
+  internal.transports.splice(0, internal.transports.length, transport);
+}

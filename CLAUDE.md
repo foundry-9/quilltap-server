@@ -21,6 +21,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 - **User Documentation**: Found in `/help/` and maintained and searchable using MessagePack
 - **Electron**: Desktop shell lives in a separate repository ([quilltap-shell](https://github.com/foundry-9/quilltap-shell)); this repo produces the standalone tarball it consumes
 - **Native Modules**: `better-sqlite3` (compiled via node-gyp) and `sharp` (pre-built platform binaries via `@img/sharp-{platform}-{arch}`). Both require special handling in standalone and Docker builds — sharp's platform-specific binaries must be installed for the target platform. When adding new native modules, update `next.config.js` (`serverExternalPackages` + `outputFileTracingIncludes`).
+- **Background Jobs**: All job handlers run in a forked child process (`child_process.fork`, lazy-spawned). Parent (Next.js HTTP) is the only DB writer; the child opens a readonly SQLCipher connection, runs handlers, batches repository write payloads in an `AsyncLocalStorage` buffer, and ships them back over IPC for the parent to apply in one `db.transaction(...)`. See `lib/background-jobs/host/`, `lib/background-jobs/child/`, and `docs/developer/BACKGROUND_JOBS_CHILD.md`. Handlers should treat `getRepositories()` as the proxy: read methods pass through, write methods buffer; never assume read-your-writes within a single job.
 
 ## API Architecture
 
