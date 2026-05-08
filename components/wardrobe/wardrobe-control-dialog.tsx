@@ -184,6 +184,19 @@ function WardrobeControlDialogInner({
   const resetMenuRef = useRef<HTMLDivElement>(null)
   const fittingSeedKeyRef = useRef<string | null>(null)
 
+  // -------- Staged Live-outfit edits --------
+  //
+  // Per-slot tweaks on the Live tab used to call the equip API one at a time,
+  // and the server fired a fresh avatar regen + Aurora announcement on every
+  // call. A few clicks in the dialog meant a flurry of jobs and surprise
+  // portrait turns. Now: every Live-tab mutation stages here, keyed by
+  // character. On Done, each character whose staged slots differ from their
+  // baseline gets one `set_all` — so at most one announcement and one regen
+  // per character per dialog session.
+  const [liveStagedByChar, setLiveStagedByChar] = useState<Record<string, EquippedSlots>>({})
+  const liveBaselineByCharRef = useRef<Record<string, EquippedSlots>>({})
+  const liveSeededByCharRef = useRef<Set<string>>(new Set())
+
   const characterIdsForOutfit = useMemo(
     () => (selectedCharacterId ? [selectedCharacterId] : []),
     [selectedCharacterId],
@@ -266,6 +279,21 @@ function WardrobeControlDialogInner({
     setFittingSlots(seed)
   }, [selectedCharacterId, chatId, isInChat, outfit.outfitState, items])
 
+  // Seed staged Live slots once we have a worn snapshot for this character.
+  // The baseline is captured separately so the Done flush can skip no-op
+  // commits. Re-seeding is gated by `liveSeededByCharRef` so refreshOutfit
+  // round-trips don't blow away in-progress edits.
+  useEffect(() => {
+    if (!isInChat || !selectedCharacterId) return
+    const wornSlots = outfit.outfitState[selectedCharacterId]?.slots
+    if (!wornSlots) return
+    const seedKey = `${selectedCharacterId}|${chatId ?? 'no-chat'}`
+    if (liveSeededByCharRef.current.has(seedKey)) return
+    liveSeededByCharRef.current.add(seedKey)
+    liveBaselineByCharRef.current[selectedCharacterId] = cloneSlots(wornSlots)
+    setLiveStagedByChar((prev) => ({ ...prev, [selectedCharacterId]: cloneSlots(wornSlots) }))
+  }, [selectedCharacterId, chatId, isInChat, outfit.outfitState])
+
   // ---------------------------------------------------------------------------
   // Filtered items for display
   // ---------------------------------------------------------------------------
@@ -333,56 +361,85 @@ function WardrobeControlDialogInner({
     [selectedCharacterId, reloadItems, isInChat, outfit],
   )
 
-  const handleEquipItem = useCallback(
-    async (item: WardrobeItem) => {
-      if (!selectedCharacterId || !isInChat) return
-      const result = await outfit.equipItem(selectedCharacterId, item.id)
-      if (!result) showErrorToast('Failed to equip item')
+  // Lookup map shared between Live-tab staging mutators and Builder-tab
+  // fitting-room mutators below. Declared once up here so both can reference
+  // it without ordering surprises.
+  const itemsById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items])
+
+  // -------- Live-tab staging mutators --------
+  //
+  // Every Live-tab gesture goes through `updateLiveStaged`, which mutates the
+  // staged slots for the current character. None of these touch the server.
+  const updateLiveStaged = useCallback(
+    (mutator: (prev: EquippedSlots) => EquippedSlots) => {
+      if (!selectedCharacterId) return
+      setLiveStagedByChar((prev) => {
+        const wornFallback = outfit.outfitState[selectedCharacterId]?.slots
+        const current =
+          prev[selectedCharacterId] ??
+          (wornFallback ? cloneSlots(wornFallback) : { ...EMPTY_EQUIPPED_SLOTS })
+        return { ...prev, [selectedCharacterId]: mutator(current) }
+      })
     },
-    [selectedCharacterId, isInChat, outfit],
+    [selectedCharacterId, outfit.outfitState],
+  )
+
+  const handleEquipItem = useCallback(
+    (item: WardrobeItem) => {
+      if (!isInChat) return
+      updateLiveStaged((prev) => {
+        const next = cloneSlots(prev)
+        for (const slot of item.types) next[slot] = [item.id]
+        return next
+      })
+    },
+    [isInChat, updateLiveStaged],
   )
 
   const handleAddToSlot = useCallback(
-    async (item: WardrobeItem, slot: WardrobeItemType) => {
-      if (!selectedCharacterId || !isInChat) return
-      const result = await outfit.addToSlot(selectedCharacterId, slot, item.id)
-      if (!result) showErrorToast('Failed to layer item')
+    (item: WardrobeItem, slot: WardrobeItemType) => {
+      if (!isInChat) return
+      if (!item.types.includes(slot)) return
+      updateLiveStaged((prev) => {
+        if (prev[slot].includes(item.id)) return prev
+        return { ...prev, [slot]: [...prev[slot], item.id] }
+      })
     },
-    [selectedCharacterId, isInChat, outfit],
+    [isInChat, updateLiveStaged],
   )
 
   const handleSlotAdd = useCallback(
-    async (slot: WardrobeItemType, itemId: string) => {
-      if (!selectedCharacterId || !isInChat) return
-      const result = await outfit.addToSlot(selectedCharacterId, slot, itemId)
-      if (!result) showErrorToast('Failed to add to slot')
+    (slot: WardrobeItemType, itemId: string) => {
+      if (!isInChat) return
+      const item = itemsById.get(itemId)
+      if (item && !item.types.includes(slot)) return
+      updateLiveStaged((prev) => {
+        if (prev[slot].includes(itemId)) return prev
+        return { ...prev, [slot]: [...prev[slot], itemId] }
+      })
     },
-    [selectedCharacterId, isInChat, outfit],
+    [isInChat, itemsById, updateLiveStaged],
   )
 
   const handleSlotRemove = useCallback(
-    async (slot: WardrobeItemType, itemId: string) => {
-      if (!selectedCharacterId || !isInChat) return
-      const result = await outfit.removeFromSlot(selectedCharacterId, slot, itemId)
-      if (!result) showErrorToast('Failed to remove item')
+    (slot: WardrobeItemType, itemId: string) => {
+      if (!isInChat) return
+      updateLiveStaged((prev) => ({ ...prev, [slot]: prev[slot].filter((id) => id !== itemId) }))
     },
-    [selectedCharacterId, isInChat, outfit],
+    [isInChat, updateLiveStaged],
   )
 
   const handleSlotClear = useCallback(
-    async (slot: WardrobeItemType) => {
-      if (!selectedCharacterId || !isInChat) return
-      const result = await outfit.removeFromSlot(selectedCharacterId, slot)
-      if (!result) showErrorToast('Failed to clear slot')
+    (slot: WardrobeItemType) => {
+      if (!isInChat) return
+      updateLiveStaged((prev) => ({ ...prev, [slot]: [] }))
     },
-    [selectedCharacterId, isInChat, outfit],
+    [isInChat, updateLiveStaged],
   )
 
   // ---------------------------------------------------------------------------
   // Fitting-room mutations — transient; never hit the equip API.
   // ---------------------------------------------------------------------------
-  const itemsById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items])
-
   const fittingAdd = useCallback(
     (slot: WardrobeItemType, itemId: string) => {
       const item = itemsById.get(itemId)
@@ -464,56 +521,18 @@ function WardrobeControlDialogInner({
     setCreatingNew('create-bundle')
   }, [selectedCharacterId, fittingSlots])
 
-  /**
-   * Live atomic replace via `mode: 'set_all'` — used by the bundle-card
-   * "Take off" / "Break apart" actions when the user is on the Wearing-now
-   * tab. Aurora announcement + avatar regen still fire server-side.
-   */
-  const liveSetAll = useCallback(
-    async (next: EquippedSlots) => {
-      if (!selectedCharacterId || !chatId) return
-      const result = await fetchJson<{ equippedSlots: EquippedSlots }>(
-        `/api/v1/chats/${chatId}?action=equip`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            characterId: selectedCharacterId,
-            mode: 'set_all',
-            slots: next,
-          }),
-        },
-      )
-      if (!result.ok) {
-        showErrorToast(result.error || 'Failed to update outfit')
-        return
-      }
-      outfit.invalidateWardrobe(selectedCharacterId)
-      await outfit.refreshOutfit()
-    },
-    [selectedCharacterId, chatId, outfit],
-  )
-
   const handleLiveTakeOffBundle = useCallback(
     (bundle: EquippedBundle) => {
-      const wornSlots = selectedCharacterId
-        ? outfit.outfitState[selectedCharacterId]?.slots
-        : null
-      if (!wornSlots) return
-      void liveSetAll(takeOffBundleFromSlots(wornSlots, bundle))
+      updateLiveStaged((prev) => takeOffBundleFromSlots(prev, bundle))
     },
-    [selectedCharacterId, outfit.outfitState, liveSetAll],
+    [updateLiveStaged],
   )
 
   const handleLiveBreakApartBundle = useCallback(
     (bundle: EquippedBundle) => {
-      const wornSlots = selectedCharacterId
-        ? outfit.outfitState[selectedCharacterId]?.slots
-        : null
-      if (!wornSlots) return
-      void liveSetAll(breakApartBundleInSlots(wornSlots, bundle, itemsById))
+      updateLiveStaged((prev) => breakApartBundleInSlots(prev, bundle, itemsById))
     },
-    [selectedCharacterId, outfit.outfitState, itemsById, liveSetAll],
+    [itemsById, updateLiveStaged],
   )
 
   const handleFittingTakeOffBundle = useCallback(
@@ -529,6 +548,61 @@ function WardrobeControlDialogInner({
     },
     [itemsById],
   )
+
+  /**
+   * Flush staged Live-tab edits on close. For each character whose staged
+   * slots differ from their baseline, fire one `set_all` (which is what
+   * triggers a single avatar regen + Aurora announcement on the server). If
+   * nothing is dirty, no requests go out.
+   *
+   * Returns `true` if every commit succeeded (or there was nothing to
+   * commit), so the caller can decide whether to actually close the dialog.
+   */
+  const flushStagedLiveOutfits = useCallback(async (): Promise<boolean> => {
+    if (!chatId) return true
+    const baselines = liveBaselineByCharRef.current
+    const dirty: Array<{ characterId: string; slots: EquippedSlots }> = []
+    for (const [characterId, slots] of Object.entries(liveStagedByChar)) {
+      const baseline = baselines[characterId]
+      if (!baseline) continue
+      if (!equippedSlotsEqual(slots, baseline)) {
+        dirty.push({ characterId, slots })
+      }
+    }
+    if (dirty.length === 0) return true
+
+    let allOk = true
+    for (const { characterId, slots } of dirty) {
+      const result = await fetchJson<{ equippedSlots: EquippedSlots }>(
+        `/api/v1/chats/${chatId}?action=equip`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            characterId,
+            mode: 'set_all',
+            slots,
+          }),
+        },
+      )
+      if (!result.ok) {
+        showErrorToast(result.error || 'Failed to update outfit')
+        allOk = false
+      } else {
+        outfit.invalidateWardrobe(characterId)
+        liveBaselineByCharRef.current[characterId] = cloneSlots(slots)
+      }
+    }
+    await outfit.refreshOutfit()
+    return allOk
+  }, [chatId, liveStagedByChar, outfit])
+
+  const requestClose = useCallback(() => {
+    void (async () => {
+      const ok = await flushStagedLiveOutfits()
+      if (ok) onClose()
+    })()
+  }, [flushStagedLiveOutfits, onClose])
 
   /**
    * Wear this fitting room composition: atomic replace via `mode: 'set_all'`.
@@ -562,13 +636,14 @@ function WardrobeControlDialogInner({
 
   /**
    * Add an item via the wardrobe row's primary buttons. Routes to the
-   * Outfit Builder when the builder tab is active (or always out of chat),
-   * else hits the live equip API.
+   * Outfit Builder's transient state when the builder tab is active (or
+   * always out of chat), or to the Live-tab staging map otherwise. Both
+   * paths defer the server commit until Done / Try on.
    */
   const useFittingActions = !isInChat || rightTab === 'builder'
 
   const rowEquip = useCallback(
-    async (item: WardrobeItem) => {
+    (item: WardrobeItem) => {
       if (useFittingActions) {
         // Replace each slot the item covers with [item.id], matching the
         // semantics of `equipItem` for the live state.
@@ -579,18 +654,18 @@ function WardrobeControlDialogInner({
         })
         return
       }
-      await handleEquipItem(item)
+      handleEquipItem(item)
     },
     [useFittingActions, handleEquipItem],
   )
 
   const rowAddToSlot = useCallback(
-    async (item: WardrobeItem, slot: WardrobeItemType) => {
+    (item: WardrobeItem, slot: WardrobeItemType) => {
       if (useFittingActions) {
         fittingAdd(slot, item.id)
         return
       }
-      await handleAddToSlot(item, slot)
+      handleAddToSlot(item, slot)
     },
     [useFittingActions, fittingAdd, handleAddToSlot],
   )
@@ -665,6 +740,13 @@ function WardrobeControlDialogInner({
     ? outfit.outfitState[selectedCharacterId]?.slots ?? null
     : null
 
+  // What the Live tab actually paints. We prefer staged slots once seeding
+  // has captured a baseline; otherwise fall back to the worn snapshot so the
+  // tab isn't blank on first paint.
+  const liveDisplaySlots: EquippedSlots = selectedCharacterId
+    ? liveStagedByChar[selectedCharacterId] ?? equippedSlots ?? EMPTY_EQUIPPED_SLOTS
+    : EMPTY_EQUIPPED_SLOTS
+
   const selectedCharacter = useMemo(
     () => characters.find((c) => c.id === selectedCharacterId) ?? null,
     [characters, selectedCharacterId],
@@ -702,7 +784,7 @@ function WardrobeControlDialogInner({
     <>
       <BaseModal
         isOpen
-        onClose={onClose}
+        onClose={requestClose}
         title="Wardrobe"
         maxWidth="4xl"
         showCloseButton
@@ -712,7 +794,7 @@ function WardrobeControlDialogInner({
           <div className="flex items-center justify-end gap-2 w-full">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="qt-button-secondary qt-button-sm"
             >
               Done
@@ -889,11 +971,11 @@ function WardrobeControlDialogInner({
               {rightTab === 'live' && isInChat ? (
                 <div className="space-y-2 mb-3">
                   <p className="qt-text-xs qt-text-secondary px-1">
-                    Edits commit immediately.
+                    Edits stage here and apply when you click Done. Nothing happens until then.
                   </p>
                   <OutfitComposer
                     items={items}
-                    slots={equippedSlots ?? EMPTY_EQUIPPED_SLOTS}
+                    slots={liveDisplaySlots}
                     onAddToSlot={handleSlotAdd}
                     onRemoveFromSlot={handleSlotRemove}
                     onClearSlot={handleSlotClear}
