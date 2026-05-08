@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: relink legacy `files.storageKey` rows to mount-blob shims
+
+Added migration `relink-files-to-mount-blobs-v1` (`migrations/scripts/relink-files-to-mount-blobs.ts`). `convert-project-files-to-document-stores-v1` (Stage 1) imported each project's on-disk files into `doc_mount_blobs` but deliberately left the `files` table rows pointing at the now-archived `<filesDir>/<projectId>/...` paths; Stage 2 only addressed runtime writes via `writeProjectFileToMountStore`, never legacy rows. As a result, `/api/v1/files/{id}` returned 500 for any image whose bytes had moved into a project document store — gallery tiles rendered as broken images, "Set as avatar" appeared to succeed but produced an avatar URL that could not be fetched, and chat/export consumers hit the same ENOENT.
+
+The new migration walks `files`, and for any row whose storageKey starts with `<projectId>/` (where the project still exists and has a database-backed documents store), looks up the matching `doc_mount_blobs` row by `(mountPointId, relativePath)`, verifies sha256, and rewrites the storageKey to `mount-blob:{mountPointId}:{blobId}` — the same shim format used for new writes. Idempotent. Rows without a matching blob (genuine missing bytes) are left alone and logged for triage. Depends on `convert-project-files-to-document-stores-v1` and `add-project-official-mount-point-v1`.
+
 #### Fix: avatar prompt drops bottom and footwear slots from head-and-shoulders portraits
 
 `buildCharacterAvatarPrompt` in `lib/wardrobe/avatar-prompt.ts` was passing the full equipped outfit (top/bottom/footwear/accessories) into the avatar image prompt even though the prompt asks for a head-and-shoulders crop. Image providers tried to honor the listed shoes/pants and produced upper-third torsos pasted onto disembodied feet. The builder now omits `bottom` and `footwear` from both the resolver call and the rendered outfit block. Added an `omit` option to `describeOutfit` in `lib/wardrobe/outfit-description.ts` so omitted slots produce no fallback line ("bottomless", "barefoot") and don't trigger the "naked" collapse — keeping the renderer the single source of truth instead of post-stripping in the caller. Aurora's avatar announcement (which embeds the same `generationPrompt` stored on the file row) inherits the shorter list automatically.

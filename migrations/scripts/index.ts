@@ -223,6 +223,8 @@ import { addCharacterIdentityFieldMigration } from './add-character-identity-fie
 import { addCharacterManifestoFieldMigration } from './add-character-manifesto-field';
 // Re-absorb leftover project files into database-backed official store
 import { reabsorbLeftoverProjectFilesMigration } from './reabsorb-leftover-project-files';
+// Relink legacy files.storageKey rows to mount-blob shims (Stage-1 follow-up)
+import { relinkFilesToMountBlobsMigration } from './relink-files-to-mount-blobs';
 // Add requestHashes column to llm_logs (cache-stability instrumentation)
 import { addLLMLogsRequestHashesColumnMigration } from './add-llm-logs-request-hashes-column';
 // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
@@ -465,6 +467,8 @@ export const migrations: Migration[] = [
   addCharacterManifestoFieldMigration,
   // Re-absorb leftover project files into database-backed official store
   reabsorbLeftoverProjectFilesMigration,
+  // Relink legacy files.storageKey rows to mount-blob shims (Stage-1 follow-up)
+  relinkFilesToMountBlobsMigration,
   // Add requestHashes column to llm_logs (cache-stability instrumentation)
   addLLMLogsRequestHashesColumnMigration,
   // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
@@ -692,6 +696,8 @@ export {
   addCharacterManifestoFieldMigration,
   // Re-absorb leftover project files into database-backed official store
   reabsorbLeftoverProjectFilesMigration,
+  // Relink legacy files.storageKey rows to mount-blob shims (Stage-1 follow-up)
+  relinkFilesToMountBlobsMigration,
   // Add requestHashes column to llm_logs (cache-stability instrumentation)
   addLLMLogsRequestHashesColumnMigration,
   // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
