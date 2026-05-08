@@ -23,13 +23,25 @@ export interface OutfitSlotValues {
   accessories: string[]
 }
 
+export type OutfitSlotName = keyof OutfitSlotValues
+
+export interface DescribeOutfitOptions {
+  /**
+   * Slots to leave out of the rendered description entirely. Omitted slots
+   * produce no line and don't participate in the "all empty → naked" or
+   * "top + bottom both empty → naked" fallbacks. Useful for portrait/avatar
+   * prompts that only describe the upper body.
+   */
+  omit?: ReadonlyArray<OutfitSlotName>
+}
+
 /**
  * Produce a markdown description of what a character is wearing
  * based on their equipped wardrobe slots.
  *
- * Rules:
- * - All four empty → "- completely naked and unadorned"
- * - Top AND bottom empty → "- naked" (footwear/accessories listed separately)
+ * Rules (apply only to non-omitted slots):
+ * - All visible slots empty → "- completely naked and unadorned"
+ * - Top AND bottom both visible and empty → "- naked" (footwear/accessories listed separately)
  * - Only top empty → "- **top:** topless"
  * - Only bottom empty → "- **bottom:** bottomless"
  * - Footwear empty → "- **footwear:** barefoot"
@@ -39,10 +51,19 @@ export interface OutfitSlotValues {
  * Slots that share the same value (e.g. a single multi-slot item equipped
  * across top/bottom/footwear/accessories) are collapsed to one line.
  */
-export function describeOutfit(slots: OutfitSlotValues): string {
-  const { top, bottom, footwear, accessories } = slots
+export function describeOutfit(slots: OutfitSlotValues, options: DescribeOutfitOptions = {}): string {
+  const omit = new Set<OutfitSlotName>(options.omit ?? [])
+  const visible = {
+    top: omit.has('top') ? null : slots.top,
+    bottom: omit.has('bottom') ? null : slots.bottom,
+    footwear: omit.has('footwear') ? null : slots.footwear,
+    accessories: omit.has('accessories') ? null : slots.accessories,
+  }
 
-  if (top.length === 0 && bottom.length === 0 && footwear.length === 0 && accessories.length === 0) {
+  const allVisibleEmpty = (Object.values(visible) as (string[] | null)[])
+    .every((v) => v === null || v.length === 0)
+
+  if (allVisibleEmpty) {
     return '- completely naked and unadorned\n'
   }
 
@@ -57,14 +78,17 @@ export function describeOutfit(slots: OutfitSlotValues): string {
   const joinOrFallback = (items: string[], fallback: string): string =>
     items.length === 0 ? fallback : items.join(', ')
 
-  if (top.length === 0 && bottom.length === 0) {
+  // The "naked" collapse only applies when both top and bottom are visible.
+  const topVisible = visible.top !== null
+  const bottomVisible = visible.bottom !== null
+  if (topVisible && bottomVisible && visible.top!.length === 0 && visible.bottom!.length === 0) {
     lines.push('- naked')
   } else {
-    addSlot('top', joinOrFallback(top, 'topless'))
-    addSlot('bottom', joinOrFallback(bottom, 'bottomless'))
+    if (topVisible) addSlot('top', joinOrFallback(visible.top!, 'topless'))
+    if (bottomVisible) addSlot('bottom', joinOrFallback(visible.bottom!, 'bottomless'))
   }
-  addSlot('footwear', joinOrFallback(footwear, 'barefoot'))
-  addSlot('accessories', joinOrFallback(accessories, 'no accessories'))
+  if (visible.footwear !== null) addSlot('footwear', joinOrFallback(visible.footwear, 'barefoot'))
+  if (visible.accessories !== null) addSlot('accessories', joinOrFallback(visible.accessories, 'no accessories'))
 
   for (const [value, slotsForValue] of groups) {
     lines.push(`- **${slotsForValue.join(', ')}:** ${value}`)

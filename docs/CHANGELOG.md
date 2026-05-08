@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Fix: avatar prompt drops bottom and footwear slots from head-and-shoulders portraits
+
+`buildCharacterAvatarPrompt` in `lib/wardrobe/avatar-prompt.ts` was passing the full equipped outfit (top/bottom/footwear/accessories) into the avatar image prompt even though the prompt asks for a head-and-shoulders crop. Image providers tried to honor the listed shoes/pants and produced upper-third torsos pasted onto disembodied feet. The builder now omits `bottom` and `footwear` from both the resolver call and the rendered outfit block. Added an `omit` option to `describeOutfit` in `lib/wardrobe/outfit-description.ts` so omitted slots produce no fallback line ("bottomless", "barefoot") and don't trigger the "naked" collapse — keeping the renderer the single source of truth instead of post-stripping in the caller. Aurora's avatar announcement (which embeds the same `generationPrompt` stored on the file row) inherits the shorter list automatically.
+
+#### Tweak: Aurora avatar announcement reframed as a portrait commission
+
+`buildContent` in `lib/services/lantern-notifications/writer.ts` now opens the avatar announcement with "Aurora is requesting a new portrait be commissioned for {name}, with the following description which omits unnecessary detail" instead of "has refreshed the portrait filed under {name}'s name, aiming for". The new framing tells participating LLMs the description is intentionally pared down so they don't infer character state from omissions. Updated `__tests__/unit/lantern-notifications-writer.test.ts` to match the new wording.
+
 #### Fix: Import-from-Image modal now stacks above the Wardrobe dialog
 
 `components/wardrobe/import-from-image-modal.tsx` rendered its overlay at `z-40` and its dialog at `z-50`, but the parent Wardrobe dialog uses the standard `qt-dialog-overlay` class which sits at `z-[60]`. Clicking "Import from image" therefore opened the import modal *behind* the wardrobe. Bumped the import modal's overlay/content to `z-[70]/z-[80]`, matching the convention already established in `wardrobe-item-editor.tsx` for nested-on-wardrobe stacking.

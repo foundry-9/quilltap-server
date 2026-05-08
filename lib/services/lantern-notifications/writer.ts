@@ -44,8 +44,8 @@ function buildContent(kind: LanternNotificationKind, prompt: string | null): str
   switch (kind.kind) {
     case 'avatar':
       return aim
-        ? `Aurora has refreshed the portrait filed under ${kind.characterName}'s name, aiming for: "${aim}". The previous likeness is retired with due ceremony; the new one is attached here, should anyone care to take a fresh look.`
-        : `Aurora has refreshed the portrait filed under ${kind.characterName}'s name, the previous likeness now retired with due ceremony. The new one is attached here, should anyone care to take a fresh look.`;
+        ? `Aurora is requesting a new portrait be commissioned for ${kind.characterName}, with the following description which omits unnecessary detail: "${aim}". The previous likeness is retired with due ceremony; the new one is attached here, should anyone care to take a fresh look.`
+        : `Aurora is requesting a new portrait be commissioned for ${kind.characterName}. The previous likeness is retired with due ceremony; the new one is attached here, should anyone care to take a fresh look.`;
     case 'background':
       return aim
         ? `The Lantern has projected a new backdrop behind the proceedings, aiming for: "${aim}". The resulting image hangs just above, attached for your perusal.`

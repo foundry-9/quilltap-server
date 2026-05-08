@@ -61,20 +61,26 @@ export async function buildCharacterAvatarPrompt(
 
   let outfitText = '';
   if (equippedSlots) {
-    const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, equippedSlots);
+    // Avatars are head-and-shoulders only. Drop bottom + footwear so the image
+    // generator doesn't paste shoes/pants onto a cropped torso.
+    const portraitSlots: EquippedSlots = {
+      top: equippedSlots.top,
+      bottom: [],
+      footwear: [],
+      accessories: equippedSlots.accessories,
+    };
+    const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, portraitSlots);
     const decorate = (items: { title: string; description?: string | null }[]): string[] =>
       items.map((i) => (i.description ? `${i.title} (${i.description})` : i.title));
 
     outfitText = describeOutfit({
       top: decorate(resolved.leafItemsBySlot.top),
-      bottom: decorate(resolved.leafItemsBySlot.bottom),
-      footwear: decorate(resolved.leafItemsBySlot.footwear),
+      bottom: [],
+      footwear: [],
       accessories: decorate(resolved.leafItemsBySlot.accessories),
-    }).trimEnd();
+    }, { omit: ['bottom', 'footwear'] }).trimEnd();
 
     leafCounts.top = resolved.leafItemsBySlot.top.length;
-    leafCounts.bottom = resolved.leafItemsBySlot.bottom.length;
-    leafCounts.footwear = resolved.leafItemsBySlot.footwear.length;
     leafCounts.accessories = resolved.leafItemsBySlot.accessories.length;
   }
 

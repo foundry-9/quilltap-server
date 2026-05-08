@@ -151,7 +151,8 @@ describe('postLanternImageNotification', () => {
     })
 
     const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
-    expect(message.content as string).toContain('aiming for')
+    expect(message.content as string).toContain('is requesting a new portrait be commissioned')
+    expect(message.content as string).toContain('omits unnecessary detail')
     expect(message.content as string).toContain('velvet smoking jacket')
   })
 
