@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Refine: story-background prompt fixes swapped examples and adds intimate-scene guidance
+
+`STORY_BACKGROUND_PROMPT` in `lib/memory/cheap-llm-tasks/image-scene-tasks.ts` had its GOOD and BAD examples reversed — the rules call for atmospheric backgrounds with characters at the left/right edges of the frame, but the GOOD example was a centered close-up portrait and the BAD example was a properly framed forest scene. Swapped them so the examples reinforce the rules.
+
+Added a new "DEPICTING INTIMATE OR UNCLOTHED STATES" section that teaches the prompt-crafter to translate narrative nudity into cinematic concealment (drapery, framing, foreground occlusion, lighting, pose, environment, implied context) rather than rendering explicit content (which providers reject) or sanitizing the scene into something different (e.g. "woman in pajamas"). Mood language preserves the intent; only the explicit anatomy is held back. Includes a worked intimate-scene example. A future explicit/tasteful toggle may layer on top of this.
+
+#### Tweak: Aurora avatar prompt uses head-and-shoulders framing
+
+`buildCharacterAvatarPrompt` in `lib/wardrobe/avatar-prompt.ts` previously asked the image provider for "from the thighs up, three-quarter view," which produced bust-and-hips compositions that don't fit standard chat-avatar circles. Changed to "head-and-shoulders crop, three-quarter view" — the standard image-gen vocabulary for chat-avatar-style portraits. The matching code comment in `lib/background-jobs/handlers/character-avatar.ts` was updated alongside.
+
 #### Fix: Aurora avatar prompt formats outfit list as actual markdown list
 
 `buildCharacterAvatarPrompt` joined the physical description and the outfit description with `". "`, producing prompts like `Plain off-white background.. - **top:** ...` — both a duplicated period and no leading newline, so the outfit list rendered as inline text in Aurora's avatar-refresh announcement (the `aim` text shown back inside quotes). The builder now keeps the physical description and outfit list as separate paragraphs, separated by blank lines, and strips any trailing terminal punctuation off the physical description before appending its own period. Added `__tests__/unit/lib/wardrobe/avatar-prompt.test.ts` to lock the spacing.

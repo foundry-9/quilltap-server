@@ -196,11 +196,29 @@ CRITICAL GUIDELINES:
 - Avoid cluttered compositions - keep it visually calm for use as a background
 - Write in a flowing, descriptive style suitable for image generation
 
+DEPICTING INTIMATE OR UNCLOTHED STATES:
+When the scene context or a character description implies someone is undressed, partially clothed, or in an intimate state, do NOT render explicit nudity. Instead, use cinematic concealment to preserve the narrative truth while keeping the image renderable. The figure is still nude in the story — the camera is just polite about it. Choose whichever technique fits the scene most naturally, and you may combine them:
+- Drapery: a sheet, blanket, towel, or robe carelessly arranged, falling just where it needs to fall; a quilt pulled up to the collarbone; a towel knotted at the chest
+- Composition & framing: crop from the shoulders up, shoot from behind, use a side silhouette, or frame so the figure is partly off-canvas
+- Foreground occlusion: furniture, a bedpost, hanging plants, a doorframe, billowing curtains, steam, mist, smoke, snowfall
+- Lighting: backlighting to reduce the figure to silhouette; low-key candlelight or firelight casting shadow across the body; dim ambient light with only selective highlights
+- Pose: limbs drawn up, body turned away, side profile, knees folded, hair falling forward over the shoulders
+- Environment: water (bath, pool, sea, hot spring) at a discreet level; tall grass; deep snow; a steamed-over mirror
+- Implied context: tousled bedding, discarded clothing on the floor, a robe thrown over a chair — let the surroundings tell the story while the figure itself is shown with tasteful concealment
+
+The intent of the scene MUST come through. Use evocative mood language — "intimate", "tender", "vulnerable", "private moment", "morning after", "candlelit", "bare-shouldered", "barefoot", "freshly bathed" — to preserve the meaning. Do NOT erase the narrative by substituting fully-clothed alternatives ("wearing pajamas", "in casual clothes"); that destroys the scene. The reader of the final image should understand exactly what is happening; only the explicit anatomy is held back.
+
 GOOD EXAMPLE OUTPUT:
-"Close-up of two people talking to the left and right of the frame. The woman has green eyes and is smiling."
+"A misty forest clearing at twilight. A woman with flowing dark hair in a simple dress stands near a weathered stone bridge at the left of the frame, a man in traveler's clothes paused at the right edge. Soft golden light filters through ancient oaks; fog drifts across the mossy ground; fireflies just beginning to glow. Painterly, calm, atmospheric."
 
 BAD EXAMPLE OUTPUT:
-"A misty forest clearing at twilight, soft golden light filtering through ancient oak trees. Two small figures stand near a weathered stone bridge - a woman with flowing dark hair in a simple dress and a man in traveler's clothes. Fog rolls gently across the mossy ground, fireflies beginning to glow. Atmospheric, peaceful, fantasy ambience."
+"Close-up of two people talking face-to-face in the center of the frame, the woman's smile filling most of the image, fine detail on her green eyes."
+
+INTIMATE-SCENE EXAMPLE:
+SCENE INPUT: "After their first night together, she lies in bed, nude and half-asleep, while he watches her from the window."
+GOOD: "A woman half-asleep in a tousled bed, a white sheet draped loosely across her hips and trailing off the mattress, bare shoulders catching the soft dawn light. A man stands silhouetted at the window in a half-buttoned shirt, watching her. Clothing scattered across the floor. Intimate, candlelit-into-morning mood."
+BAD (too explicit, will be rejected): "A nude woman naked in bed..."
+BAD (sanitized into a different scene): "A woman in pajamas sitting up in bed while a fully-dressed man stands at the window."
 
 Respond with ONLY the final prompt - no explanations, no markdown formatting, no quotes.`
 

@@ -81,7 +81,7 @@ export async function buildCharacterAvatarPrompt(
   const hasAppearance = Boolean(physicalText) || Boolean(outfitText);
   let prompt = '';
   if (hasAppearance) {
-    const intro = `Solo portrait of a single person: ${character.name}. Show exactly one figure, from the thighs up, three-quarter view.`;
+    const intro = `Solo portrait of a single person: ${character.name}. Show exactly one figure, head-and-shoulders crop, three-quarter view.`;
     const outro = `Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
     // Strip any trailing terminal punctuation off the physical description so
     // we don't end up with "background.." once we re-append a period.

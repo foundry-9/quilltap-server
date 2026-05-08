@@ -89,7 +89,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  // 4. Build portrait prompt — 3/4 shot from thighs up, no scenario context.
+  // 4. Build portrait prompt — 3/4 head-and-shoulders crop, no scenario context.
   // Scenario text is deliberately excluded: it often mentions other characters
   // or narrative elements that cause image models to depict multiple people.
   // The fitting-room override (when present) takes priority over the chat's
