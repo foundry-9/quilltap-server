@@ -360,6 +360,23 @@
   }
 
   /**
+   * Links inside rendered chat messages must be visibly clickable. The default
+   * .qt-link decoration is `none`, which leaves markdown links indistinguishable
+   * from surrounding prose. Force a colored, underlined treatment in this scope.
+   */
+  .qt-chat-message-content a,
+  .qt-chat-message-content a.qt-link {
+    color: var(--qt-link-color, hsl(var(--primary)));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .qt-chat-message-content a:hover,
+  .qt-chat-message-content a.qt-link:hover {
+    color: var(--qt-link-hover-color, hsl(var(--primary)));
+    text-decoration: underline;
+  }
+
+  /**
    * User message content - must use user foreground color, not global foreground
    * This overrides the generic .qt-chat-message-content color to ensure
    * white text on the blue user message bubble.

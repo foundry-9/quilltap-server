@@ -642,17 +642,19 @@ const HOST_KIND_CONTINUATION_FROM = 'continuation-from';
 const HOST_KIND_CONTINUATION_TO = 'continuation-to';
 
 function buildContinuationFromContent(sourceChatId: string, sourceTitle: string | null): string {
-  const titleFragment = sourceTitle && sourceTitle.trim().length > 0 ? ` ("${sourceTitle.trim()}")` : '';
+  const trimmedTitle = sourceTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'an earlier chapter';
   return [
-    `The Host raises a hand for attention: this conversation continues from [an earlier chapter](/salon/${sourceChatId})${titleFragment}.`,
+    `The Host raises a hand for attention: this conversation continues from [${linkText}](/salon/${sourceChatId}).`,
     '',
     'The thread that brought us here is preserved below. Carry on.',
   ].join('\n');
 }
 
 function buildContinuationToContent(newChatId: string, newTitle: string | null): string {
-  const titleFragment = newTitle && newTitle.trim().length > 0 ? ` ("${newTitle.trim()}")` : '';
-  return `The Host clears their throat: the conversation has moved to [a new venue](/salon/${newChatId})${titleFragment}. The proceedings continue there.`;
+  const trimmedTitle = newTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'a new venue';
+  return `The Host clears their throat: the conversation has moved to [${linkText}](/salon/${newChatId}). The proceedings continue there.`;
 }
 
 export interface HostContinuationFromAnnouncement {
