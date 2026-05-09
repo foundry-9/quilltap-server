@@ -31,7 +31,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { buildIdentityStack } from '@/lib/chat/context/system-prompt-builder';
 import type { ChatMetadataBase, ChatParticipantBase } from '@/lib/schemas/types';
 

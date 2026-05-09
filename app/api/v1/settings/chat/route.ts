@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
 import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, DangerousContentSettingsSchema, AutoLockSettingsSchema } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
-import { getErrorMessage } from '@/lib/errors'
+import { getErrorMessage } from '@/lib/error-utils'
 
 /**
  * Validate and update chat settings

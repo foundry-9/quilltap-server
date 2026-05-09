@@ -30,7 +30,7 @@ import {
 } from '@/lib/image-gen/appearance-resolution';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import {
   resolveDangerousContentSettings,

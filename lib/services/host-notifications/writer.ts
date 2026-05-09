@@ -18,7 +18,7 @@
 import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { readDatabaseDocument } from '@/lib/mount-index/database-store';
 import type { MessageEvent } from '@/lib/schemas/types';
 import type { Character } from '@/lib/schemas/character.types';

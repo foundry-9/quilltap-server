@@ -13,7 +13,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { logger } from '@/lib/logger';
 import { getThemesDir } from '@/lib/paths';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { installThemeBundle } from '@/lib/themes/bundle-loader';
 import { hashBuffer, verifyRegistryIndex, OFFICIAL_REGISTRY_PUBLIC_KEY, OFFICIAL_REGISTRY_URL } from '@/lib/themes/crypto';
 import {

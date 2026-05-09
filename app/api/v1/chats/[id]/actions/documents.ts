@@ -35,7 +35,7 @@ import {
   postLibrarianSaveAnnouncement,
   postLibrarianDeleteAnnouncement,
 } from '@/lib/services/librarian-notifications/writer';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import path from 'path';
 import fs from 'fs/promises';
 

@@ -17,7 +17,7 @@ import type {
   ToolExecutionContext,
   ToolExecutionResult,
 } from './interfaces/tool-plugin';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { AbstractMapRegistry } from './abstract-map-registry';
 import type { BaseRegistryState } from './base-registry';
 

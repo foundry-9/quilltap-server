@@ -10,7 +10,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { getRepositories } from '@/lib/repositories/factory'
 
-import { getErrorMessage } from '@/lib/errors'
+import { getErrorMessage } from '@/lib/error-utils'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 

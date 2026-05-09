@@ -16,7 +16,7 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import type { Database } from 'better-sqlite3';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import type { BackgroundJob } from '@/lib/schemas/types';
 import type { ChildJobResultMessage, ChildWritePayload } from '../ipc-types';

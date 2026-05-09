@@ -17,7 +17,7 @@ import type { ThemeTokens, ThemeManifest } from './types';
 import { safeValidateThemeTokens } from './types';
 import { DEFAULT_THEME_TOKENS, DEFAULT_THEME_METADATA } from './default-tokens';
 import { mergeThemeTokens, themeTokensToCSS } from './utils';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { loadInstalledBundles, loadBundledThemesFromDir } from './bundle-loader';
 import type { LoadedBundleTheme } from './bundle-loader';
 import { getBundledThemesDir } from '@/lib/paths';

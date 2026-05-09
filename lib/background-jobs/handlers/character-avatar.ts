@@ -15,7 +15,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import type { CharacterAvatarGenerationPayload } from '../queue-service';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { convertToWebP } from '@/lib/files/webp-conversion';

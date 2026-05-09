@@ -27,7 +27,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ChatEvent, ChatMetadata, MessageEvent } from '@/lib/schemas/types';
 import {

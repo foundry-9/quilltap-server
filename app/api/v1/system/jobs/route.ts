@@ -10,7 +10,7 @@ import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api
 import { getQueueStats, getActiveCountsByType, enqueueJob, ensureProcessorRunning, getProcessorStatus } from '@/lib/background-jobs';
 import { BackgroundJobTypeEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { badRequest, serverError } from '@/lib/api/responses';
 
 /**

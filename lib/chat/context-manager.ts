@@ -24,7 +24,7 @@ import type { ConnectionProfile } from '@/lib/schemas/types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/errors'
+import { getErrorMessage } from '@/lib/error-utils'
 import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
 
 // Import from extracted modules

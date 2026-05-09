@@ -28,7 +28,7 @@ import { parseBackupFilename, parseLLMLogsBackupFilename } from '@/lib/database/
 import type { LLMProviderPlugin } from '@/lib/plugins/interfaces/provider-plugin';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
 import type { ChatMetadata } from '@/lib/schemas/chat.types';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 
 // Read version from package.json
 import packageJson from '@/package.json';

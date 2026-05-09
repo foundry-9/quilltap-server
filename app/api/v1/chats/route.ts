@@ -18,7 +18,7 @@ import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
 import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/memory-recap';
 import { getModelContextLimit } from '@/lib/llm/model-context-data';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { z } from 'zod';
 import type { ChatEvent, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
 import { TimestampConfigSchema } from '@/lib/schemas/types';

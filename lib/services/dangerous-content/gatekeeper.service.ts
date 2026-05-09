@@ -16,7 +16,7 @@ import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/repositories/factory'
 
-import { getErrorMessage } from '@/lib/errors'
+import { getErrorMessage } from '@/lib/error-utils'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 import { createHash } from 'node:crypto'

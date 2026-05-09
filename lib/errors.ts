@@ -176,6 +176,9 @@ export function withErrorHandling(
   }
 }
 
-// Re-export client-safe error utilities
-// Server components can import from here; client components should import from @/lib/error-utils
-export { getErrorMessage } from './error-utils'
+// `getErrorMessage` lives in `lib/error-utils.ts` and must be imported from
+// there directly — not re-exported through this module. Pulling it through
+// `lib/errors.ts` would drag `next/server` (via `NextResponse` above) into
+// every consumer's import graph, which breaks the forked background-job
+// child: the standalone tarball's pruned `node_modules/next` does not
+// expose the `next/server` subpath, so the child crashes on load.

@@ -13,7 +13,7 @@ import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
-import { getErrorMessage } from '@/lib/errors'
+import { getErrorMessage } from '@/lib/error-utils'
 import {
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,

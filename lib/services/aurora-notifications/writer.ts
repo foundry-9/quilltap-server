@@ -21,7 +21,7 @@
 import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { describeOutfit, type OutfitSlotValues } from '@/lib/wardrobe/outfit-description';
 import type { MessageEvent } from '@/lib/schemas/types';
 

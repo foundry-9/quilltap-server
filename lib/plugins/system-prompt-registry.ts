@@ -12,7 +12,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { AbstractRegistry } from '@/lib/plugins/base-registry';
 
 // ============================================================================

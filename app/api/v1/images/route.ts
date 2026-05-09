@@ -21,7 +21,7 @@ import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { classifyContent as classifyDangerousContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } from '@/lib/llm/cheap-llm';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 
 const importFromUrlSchema = z.object({

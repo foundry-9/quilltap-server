@@ -15,7 +15,7 @@ import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversat
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import type { StoryBackgroundGenerationPayload } from '../queue-service';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import {

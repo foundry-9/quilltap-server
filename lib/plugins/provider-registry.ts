@@ -18,7 +18,7 @@ import type { TextProviderPlugin, TextProvider, ImageProvider, ProviderMetadata,
 
 // Backward-compatible alias used throughout this file
 type LLMProviderPlugin = TextProviderPlugin;
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
 import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { extractPluginExport } from './dynamic-loader';

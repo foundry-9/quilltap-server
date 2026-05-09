@@ -16,7 +16,7 @@
  */
 
 import { installChildLoggerTransport, logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { getHandler } from '../handlers';
 import { runWithJobScope, flushPendingWrites, getChildRepositoriesProxy } from './child-repositories-proxy';
 import {
