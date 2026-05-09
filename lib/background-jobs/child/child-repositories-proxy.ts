@@ -257,7 +257,10 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
           // caller now has.
           const result = syntheticWriteResult(key, args);
           appendWrite(`${repoKey}.${key}`, args);
-          return result;
+          // Real repository write methods are async; mirror that here so
+          // callers that chain `.then` / `.catch` / `Promise.all` against
+          // the proxy don't trip on a synchronous `undefined`.
+          return Promise.resolve(result);
         };
       }
 

@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Fix: background-job avatar and story-background uploads silently rolled back
+
+Two follow-up bugs in the forked job-runner child surfaced after the earlier `docMountPoints.refreshStats` classification fix landed.
+
+First, write methods on the child repository proxy returned synchronously instead of as a Promise. `lib/file-storage/project-store-bridge.ts:204,260` and `lib/tools/handlers/doc-edit-handler.ts:437` chain `.catch(...)` and `Promise.all([...])` against `repos.docMountPoints.refreshStats(...)`; the proxy's synchronous `undefined` return blew up with `Cannot read properties of undefined (reading 'catch')` inside `FileStorageManager.uploadFile`, which the avatar / story-background handlers re-threw as "Failed to upload file …". `lib/background-jobs/child/child-repositories-proxy.ts` now wraps every buffered write's synthetic result in `Promise.resolve(...)` so chained `.then` / `.catch` / `Promise.all` work the same as on the real repo.
+
+Second, even with `.catch` working, the buffered-write model can't model `writeProjectFileToMountStore`. The composite goes `docMountBlobs.create` (computes `sizeBytes = data.length` server-side; takes one arg with no `options.id` slot) → `docMountFiles.create` (consumes the new blob's `sha256` and `sizeBytes`) → `docMountPoints.refreshStats`. The synthetic create result `{ id, ...data }` omits server-computed fields and uses a UUID the real `docMountBlobs.create` ignores, so the buffered `docMountFiles.create` arrived at the host with `fileSizeBytes: undefined` and Zod rolled back the entire transaction — the avatar appeared to upload but never landed, the job retried, and the second pass typically returned no images (rate-limit or repeat-fingerprint), leaving the regen producing nothing.
+
+Added a host-RPC IPC channel so file uploads run on the parent against its RW connection. New `ChildHostRpcRequestMessage` / `ParentHostRpcResponseMessage` in `lib/background-jobs/ipc-types.ts`; pending-promise client in `lib/background-jobs/child/host-rpc-client.ts` (UUID-correlated, resolved when the matching response arrives); dispatcher in `lib/background-jobs/host/host-rpc-dispatcher.ts`; `processor-host.ts` routes incoming `host-rpc` requests through the dispatcher and forwards the reply, `child-entry.ts` routes `host-rpc-response` messages back to the client. `lib/file-storage/manager.ts:uploadFile` short-circuits to `callHost('uploadFile', params)` when `QUILLTAP_JOB_CHILD === '1'`. Buffers cross IPC cleanly because the fork is already configured with `serialization: 'advanced'`. Side-effects committed by host RPCs are not rolled back if the job's later buffered writes fail; periodic file reconciliation already handles orphan blobs.
+
 #### Fix: add-character failed with "Resource not found" when character's default profile was deleted
 
 `AddCharacterDialog` auto-selected `character.defaultConnectionProfileId` without verifying the profile still existed. If the profile had been deleted, the PUT `/api/v1/chats/[id]` call hit `handleAddParticipant` in `app/api/v1/chats/[id]/helpers.ts`, failed the `repos.connections.findById(...)` check, and returned a 404 — which the PUT/POST handlers both flattened to a generic "Resource not found" toast, hiding the actual reason.

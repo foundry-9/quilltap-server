@@ -277,6 +277,19 @@ class FileStorageManager {
    * @throws {Error} If upload fails
    */
   async uploadFile(params: UploadFileParams): Promise<UploadResult> {
+    // When invoked inside the background-job child process, route through
+    // host-rpc. The child's readonly DB connection cannot perform the
+    // composite write (`docMountBlobs.create` + `docMountFiles.create`
+    // + `docMountPoints.refreshStats`) that `writeProjectFileToMountStore`
+    // issues, and the buffered-write proxy can't model the server-computed
+    // return values those calls produce. The host runs the upload immediately
+    // against its RW connection and returns the real storage key.
+    if (process.env.QUILLTAP_JOB_CHILD === '1') {
+      const { callHost } = await import(
+        '@/lib/background-jobs/child/host-rpc-client'
+      );
+      return callHost<UploadResult>('uploadFile', params);
+    }
     const {
       filename,
       content,

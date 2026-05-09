@@ -26,6 +26,7 @@ import {
   ChildStatusMessage,
   isParentToChildMessage,
 } from '../ipc-types';
+import { handleHostRpcResponse } from './host-rpc-client';
 import type { BackgroundJob } from '@/lib/schemas/types';
 
 // Bootstrap: replace the singleton logger's transports so every record
@@ -131,6 +132,9 @@ process.on('message', (raw: unknown) => {
       break;
     case 'shutdown':
       beginShutdown();
+      break;
+    case 'host-rpc-response':
+      handleHostRpcResponse(msg);
       break;
   }
 });

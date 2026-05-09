@@ -32,6 +32,7 @@ import {
   isChildToParentMessage,
 } from '../ipc-types';
 import { startDispatcher, stopDispatcher, dispatcherWake, getDispatcherSnapshot, handleChildJobResult } from './job-dispatcher';
+import { dispatchHostRpc } from './host-rpc-dispatcher';
 
 const log = logger.child({ module: 'jobs:processor-host' });
 
@@ -209,6 +210,17 @@ function handleChildMessage(raw: unknown): void {
       break;
     case 'shutdown-ack':
       log.info('Child acknowledged shutdown');
+      break;
+    case 'host-rpc':
+      dispatchHostRpc(msg)
+        .then(response => sendToChild(response))
+        .catch(err => {
+          log.error('host-rpc dispatch threw before reply', {
+            method: msg.method,
+            requestId: msg.requestId,
+            error: getErrorMessage(err),
+          });
+        });
       break;
   }
 }

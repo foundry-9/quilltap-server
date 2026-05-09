@@ -37,10 +37,26 @@ export interface ParentShutdownMessage {
   type: 'shutdown';
 }
 
+/**
+ * Reply to a `ChildHostRpcRequestMessage`. The parent runs the requested
+ * operation against its RW connections and returns the result here.
+ *
+ * `requestId` mirrors the child's request so multiple in-flight RPCs
+ * stay correlated.
+ */
+export interface ParentHostRpcResponseMessage {
+  type: 'host-rpc-response';
+  requestId: string;
+  ok: boolean;
+  result?: unknown;
+  error?: { message: string; stack?: string };
+}
+
 export type ParentToChildMessage =
   | ParentJobMessage
   | ParentInvalidateMessage
-  | ParentShutdownMessage;
+  | ParentShutdownMessage
+  | ParentHostRpcResponseMessage;
 
 // ============================================================================
 // Child → parent
@@ -104,11 +120,31 @@ export interface ChildShutdownAckMessage {
   type: 'shutdown-ack';
 }
 
+/**
+ * Synchronous request from child to parent for operations the child
+ * cannot perform on its readonly DB connection — primarily file-storage
+ * writes that need the parent's RW SQLCipher access. The parent runs the
+ * operation immediately (outside the per-job buffered-writes transaction)
+ * and replies with `ParentHostRpcResponseMessage`. Side-effects committed
+ * by host RPCs are NOT rolled back if the job's later buffered writes
+ * fail; periodic file reconciliation cleans up any orphan blobs.
+ *
+ * `args` must be structured-clone-serialisable (Buffers OK because the
+ * fork is configured with `serialization: 'advanced'`).
+ */
+export interface ChildHostRpcRequestMessage {
+  type: 'host-rpc';
+  requestId: string;
+  method: 'uploadFile';
+  args: unknown[];
+}
+
 export type ChildToParentMessage =
   | ChildJobResultMessage
   | ChildLogMessage
   | ChildStatusMessage
-  | ChildShutdownAckMessage;
+  | ChildShutdownAckMessage
+  | ChildHostRpcRequestMessage;
 
 // ============================================================================
 // Type guards
@@ -117,11 +153,11 @@ export type ChildToParentMessage =
 export function isChildToParentMessage(value: unknown): value is ChildToParentMessage {
   if (!value || typeof value !== 'object') return false;
   const t = (value as { type?: unknown }).type;
-  return t === 'job-result' || t === 'log' || t === 'status' || t === 'shutdown-ack';
+  return t === 'job-result' || t === 'log' || t === 'status' || t === 'shutdown-ack' || t === 'host-rpc';
 }
 
 export function isParentToChildMessage(value: unknown): value is ParentToChildMessage {
   if (!value || typeof value !== 'object') return false;
   const t = (value as { type?: unknown }).type;
-  return t === 'job' || t === 'invalidate' || t === 'shutdown';
+  return t === 'job' || t === 'invalidate' || t === 'shutdown' || t === 'host-rpc-response';
 }
