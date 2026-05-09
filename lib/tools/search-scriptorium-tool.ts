@@ -11,7 +11,7 @@
  */
 export interface SearchScriptoriumToolInput {
   query: string
-  sources?: ('memories' | 'conversations' | 'documents')[]
+  sources?: ('memories' | 'conversations' | 'documents' | 'knowledge')[]
   limit?: number
   minImportance?: number
 }
@@ -21,7 +21,7 @@ export interface SearchScriptoriumToolInput {
  */
 export interface SearchScriptoriumResult {
   content: string
-  sourceType: 'memory' | 'conversation' | 'document'
+  sourceType: 'memory' | 'conversation' | 'document' | 'knowledge'
   relevanceScore: number
   metadata: {
     // Memory-specific
@@ -64,14 +64,14 @@ export const searchScriptoriumToolDefinition = {
   function: {
     name: 'search',
     description:
-      'Search across your memories, past conversation history, and mounted documents. Returns results from your personal memories, rendered conversations, and indexed document collections, ranked by relevance. Use this to find information from past interactions, recall conversation details, locate specific discussions by topic, or search through reference documents.',
+      'Search across your memories, past conversation history, mounted documents, and your own knowledge base. Returns results from your personal memories, rendered conversations, indexed document collections, and the Knowledge/ folder of your character vault, ranked by relevance. Use this to find information from past interactions, recall conversation details, locate specific discussions by topic, search through reference documents, or look up what you yourself have written down in your knowledge base.',
     parameters: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
           description:
-            'What to search for across memories and conversations. Be specific about the topic, event, or detail you want to find.',
+            'What to search for across memories, conversations, documents, and your own knowledge base. Be specific about the topic, event, or detail you want to find.',
           minLength: 1,
           maxLength: 500,
         },
@@ -79,10 +79,10 @@ export const searchScriptoriumToolDefinition = {
           type: 'array',
           items: {
             type: 'string',
-            enum: ['memories', 'conversations', 'documents'],
+            enum: ['memories', 'conversations', 'documents', 'knowledge'],
           },
           description:
-            'Which sources to search. Defaults to all sources if not specified. Use "documents" to search through mounted document collections.',
+            'Which sources to search. Defaults to all sources if not specified. Use "documents" to search through mounted document collections; use "knowledge" to search the Knowledge/ folder of your own character vault (your first-person knowledge base).',
         },
         limit: {
           type: 'integer',
@@ -127,7 +127,7 @@ export function validateSearchScriptoriumInput(
     if (!Array.isArray(obj.sources)) {
       return false
     }
-    const validSources = ['memories', 'conversations', 'documents']
+    const validSources = ['memories', 'conversations', 'documents', 'knowledge']
     for (const s of obj.sources) {
       if (typeof s !== 'string' || !validSources.includes(s)) {
         return false

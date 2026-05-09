@@ -45,6 +45,13 @@ export interface CommonplaceParts {
   relevant?: string;
   /** Memories about other present characters (multi-character chats only). */
   interChar?: string;
+  /**
+   * Material drawn from the responding character's own knowledge base —
+   * files in their vault's `Knowledge/` folder, packed inline when the
+   * body is small enough or summarised as `doc_read_file` pointers
+   * otherwise. Independent of the memory sections.
+   */
+  knowledge?: string;
 }
 
 /**
@@ -57,6 +64,7 @@ export function buildCommonplacePersonaWhisper(parts: CommonplaceParts): string 
   const recap = parts.recap?.trim();
   const relevant = parts.relevant?.trim();
   const interChar = parts.interChar?.trim();
+  const knowledge = parts.knowledge?.trim();
 
   if (currentState) {
     sections.push(
@@ -78,6 +86,11 @@ export function buildCommonplacePersonaWhisper(parts: CommonplaceParts): string 
       `*The Commonplace Book opens to the pages where you have noted those present.*\n\n${interChar}`,
     );
   }
+  if (knowledge) {
+    sections.push(
+      `*The Commonplace Book pulls down volumes from your own shelves — the references and reckonings you yourself have curated —*\n\n${knowledge}`,
+    );
+  }
   return sections.join('\n\n').trim();
 }
 
@@ -92,6 +105,7 @@ export function buildCommonplaceLLMContext(parts: CommonplaceParts): string {
   const recap = parts.recap?.trim();
   const relevant = parts.relevant?.trim();
   const interChar = parts.interChar?.trim();
+  const knowledge = parts.knowledge?.trim();
 
   if (currentState) {
     sections.push(`Here is the present state of the scene:\n\n${currentState}`);
@@ -104,6 +118,9 @@ export function buildCommonplaceLLMContext(parts: CommonplaceParts): string {
   }
   if (interChar) {
     sections.push(`You also recall about the others present:\n\n${interChar}`);
+  }
+  if (knowledge) {
+    sections.push(`You also recall the following from your knowledge base:\n\n${knowledge}`);
   }
   return sections.join('\n\n').trim();
 }

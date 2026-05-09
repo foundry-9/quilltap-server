@@ -57,7 +57,7 @@ export async function executeSearchScriptoriumTool(
 
     const {
       query,
-      sources = ['memories', 'conversations', 'documents'],
+      sources = ['memories', 'conversations', 'documents', 'knowledge'],
       limit = 10,
       minImportance = 0,
     } = input
@@ -65,6 +65,7 @@ export async function executeSearchScriptoriumTool(
     const searchMemories = sources.includes('memories')
     const searchConversations = sources.includes('conversations')
     const searchDocuments = sources.includes('documents')
+    const searchKnowledge = sources.includes('knowledge')
 
     const results: SearchScriptoriumResult[] = []
 
@@ -187,6 +188,60 @@ export async function executeSearchScriptoriumTool(
       }
     }
 
+    // Search the responding character's own knowledge base if requested.
+    // Scoped to the Knowledge/ folder of their character vault. Silent
+    // no-op when the character has no vault or no Knowledge/ files.
+    if (searchKnowledge) {
+      try {
+        const repos = getRepositories()
+        const character = await repos.characters.findById(context.characterId)
+
+        if (
+          character &&
+          character.userId === context.userId &&
+          character.characterDocumentMountPointId
+        ) {
+          const embeddingResult = await generateEmbeddingForUser(
+            query,
+            context.userId,
+            context.embeddingProfileId
+          )
+
+          const knowledgeResults = await searchDocumentChunks(
+            embeddingResult.embedding,
+            {
+              mountPointIds: [character.characterDocumentMountPointId],
+              pathPrefix: 'Knowledge/',
+              limit,
+              minScore: 0.3,
+            }
+          )
+
+          for (const kr of knowledgeResults) {
+            results.push({
+              content: kr.content.length > 500
+                ? kr.content.substring(0, 500) + '...'
+                : kr.content,
+              sourceType: 'knowledge',
+              relevanceScore: kr.score,
+              metadata: {
+                mountPointName: kr.mountPointName,
+                fileName: kr.fileName,
+                filePath: kr.relativePath,
+                chunkIndex: kr.chunkIndex,
+                headingContext: kr.headingContext ?? undefined,
+              },
+            })
+          }
+        }
+      } catch (error) {
+        logger.warn('Knowledge search failed, continuing with other sources', {
+          context: 'search-scriptorium-handler',
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
     // Sort all results by relevance score and limit
     results.sort((a, b) => b.relevanceScore - a.relevanceScore)
     const limitedResults = results.slice(0, limit)
@@ -199,6 +254,7 @@ export async function executeSearchScriptoriumTool(
       memorySources: limitedResults.filter(r => r.sourceType === 'memory').length,
       conversationSources: limitedResults.filter(r => r.sourceType === 'conversation').length,
       documentSources: limitedResults.filter(r => r.sourceType === 'document').length,
+      knowledgeSources: limitedResults.filter(r => r.sourceType === 'knowledge').length,
     })
 
     return {
@@ -247,6 +303,14 @@ Conversation ID: ${result.metadata.conversationId}
 Interchange: ${result.metadata.interchangeIndex}
 Participants: ${result.metadata.participantNames?.join(', ') || 'Unknown'}
 Content: ${result.content}`
+    } else if (result.sourceType === 'knowledge') {
+      const heading = result.metadata.headingContext ? `, Section: ${result.metadata.headingContext}` : ''
+      const path = result.metadata.filePath || result.metadata.fileName || 'Unknown'
+      const mount = result.metadata.mountPointName || 'Unknown'
+      return `[Result ${index + 1} - Knowledge] (Relevance: ${(result.relevanceScore * 100).toFixed(0)}%, Vault: ${mount}${heading})
+File: ${path}
+Content: ${result.content}
+Re-read with: doc_read_file(scope=document_store, mount_point="${mount}", path="${path}")`
     } else {
       const heading = result.metadata.headingContext ? `, Section: ${result.metadata.headingContext}` : ''
       return `[Result ${index + 1} - Document] (Relevance: ${(result.relevanceScore * 100).toFixed(0)}%, Source: ${result.metadata.mountPointName || 'Unknown'}${heading})

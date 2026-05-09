@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 const mockSearchMemoriesSemantic = jest.fn()
 const mockGenerateEmbeddingForUser = jest.fn()
 const mockSearchConversationChunks = jest.fn()
+const mockSearchDocumentChunks = jest.fn()
 const mockFindCharacterById = jest.fn()
 const mockGetRepositories = jest.fn()
 const mockLogger = {
@@ -22,6 +23,10 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
 
 jest.mock('@/lib/scriptorium/conversation-search', () => ({
   searchConversationChunks: (...args: unknown[]) => mockSearchConversationChunks(...args),
+}))
+
+jest.mock('@/lib/mount-index/document-search', () => ({
+  searchDocumentChunks: (...args: unknown[]) => mockSearchDocumentChunks(...args),
 }))
 
 jest.mock('@/lib/repositories/factory', () => ({
@@ -62,6 +67,7 @@ describe('search-scriptorium-handler', () => {
     })
     mockSearchMemoriesSemantic.mockResolvedValue([])
     mockSearchConversationChunks.mockResolvedValue([])
+    mockSearchDocumentChunks.mockResolvedValue([])
   })
 
   it('merges, sorts, and truncates results across memories and conversations', async () => {
@@ -199,6 +205,96 @@ describe('search-scriptorium-handler', () => {
       error: 'Invalid input: query is required and must be a non-empty string',
       totalFound: 0,
       query: '',
+    })
+  })
+
+  describe('knowledge source', () => {
+    it('returns empty silently when the character has no vault', async () => {
+      mockFindCharacterById.mockResolvedValue({
+        id: 'character-1',
+        userId: 'user-1',
+        // no characterDocumentMountPointId
+      })
+
+      const result = await executeSearchScriptoriumTool(
+        { query: 'archives', sources: ['knowledge'] },
+        context,
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.totalFound).toBe(0)
+      expect(mockSearchDocumentChunks).not.toHaveBeenCalled()
+    })
+
+    it('passes pathPrefix "Knowledge/" and the vault mount point id to searchDocumentChunks', async () => {
+      mockFindCharacterById.mockResolvedValue({
+        id: 'character-1',
+        userId: 'user-1',
+        characterDocumentMountPointId: 'vault-mp-1',
+      })
+      mockSearchDocumentChunks.mockResolvedValue([
+        {
+          chunkId: 'kc-1',
+          mountPointId: 'vault-mp-1',
+          mountPointName: 'Robin Character Vault',
+          fileId: 'file-knowledge-1',
+          fileName: 'archives.md',
+          relativePath: 'Knowledge/archives.md',
+          chunkIndex: 0,
+          headingContext: 'Sunlit Archives',
+          content: 'The archives lie beneath the sunlit reading-room.',
+          score: 0.71,
+        },
+      ])
+
+      const result = await executeSearchScriptoriumTool(
+        { query: 'archives', sources: ['knowledge'] },
+        context,
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.totalFound).toBe(1)
+      expect(result.results?.[0]).toMatchObject({
+        sourceType: 'knowledge',
+        relevanceScore: 0.71,
+        metadata: expect.objectContaining({
+          mountPointName: 'Robin Character Vault',
+          filePath: 'Knowledge/archives.md',
+          headingContext: 'Sunlit Archives',
+        }),
+      })
+
+      expect(mockSearchDocumentChunks).toHaveBeenCalledWith(
+        [0.1, 0.2, 0.3],
+        expect.objectContaining({
+          mountPointIds: ['vault-mp-1'],
+          pathPrefix: 'Knowledge/',
+        }),
+      )
+    })
+
+    it('formats knowledge results with a doc_read_file pointer', () => {
+      const formatted = formatSearchScriptoriumResults([
+        {
+          content: 'The archives lie beneath the sunlit reading-room.',
+          sourceType: 'knowledge',
+          relevanceScore: 0.71,
+          metadata: {
+            mountPointName: 'Robin Character Vault',
+            fileName: 'archives.md',
+            filePath: 'Knowledge/archives.md',
+            chunkIndex: 0,
+            headingContext: 'Sunlit Archives',
+          },
+        },
+      ])
+
+      expect(formatted).toContain('[Result 1 - Knowledge]')
+      expect(formatted).toContain('Vault: Robin Character Vault')
+      expect(formatted).toContain('Section: Sunlit Archives')
+      expect(formatted).toContain(
+        'Re-read with: doc_read_file(scope=document_store, mount_point="Robin Character Vault", path="Knowledge/archives.md")',
+      )
     })
   })
 

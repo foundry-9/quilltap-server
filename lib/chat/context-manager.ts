@@ -67,6 +67,10 @@ import {
   findMentionedCharacterIds,
 } from './context/mentioned-characters'
 import {
+  retrieveKnowledgeForTurn,
+  type KnowledgeDebugEntry,
+} from './context/knowledge-injector'
+import {
   shouldApplyCompression,
   shouldApplyBudgetCompression,
   splitMessagesForCompression,
@@ -156,6 +160,12 @@ export interface ContextBudget {
   systemPromptBudget: number
   /** Tokens allocated for memories */
   memoryBudget: number
+  /**
+   * Tokens allocated for per-turn knowledge recall (responding character's
+   * vault Knowledge/ folder). Independent of memoryBudget — knowledge is
+   * first-class character canon and is not fed to the memory compressor.
+   */
+  knowledgeBudget: number
   /** Tokens allocated for conversation summary */
   summaryBudget: number
   /** Tokens allocated for recent messages */
@@ -174,6 +184,8 @@ export interface BuiltContext {
   tokenUsage: {
     systemPrompt: number
     memories: number
+    /** Tokens spent on per-turn knowledge recall (responding character's vault Knowledge/ folder). */
+    knowledge: number
     summary: number
     recentMessages: number
     total: number
@@ -194,6 +206,8 @@ export interface BuiltContext {
   debugMemories?: Array<{ summary: string; importance: number; score: number; effectiveWeight: number }>
   /** Debug info: the inter-character memories that were included (multi-character chats) */
   debugInterCharacterMemories?: Array<{ aboutCharacterName: string; summary: string; importance: number }>
+  /** Debug info: the knowledge entries that were included for this turn */
+  debugKnowledge?: Array<{ filePath: string; score: number; inline: boolean; tokenCount: number }>
   /** Debug info: the memory recap content injected on chat start / character join */
   debugMemoryRecap?: string
   /** Debug info: the conversation summary that was included */
@@ -351,6 +365,7 @@ export function calculateContextBudget(
     totalLimit: allocation.totalLimit,
     systemPromptBudget: allocation.systemPrompt,
     memoryBudget: allocation.memories,
+    knowledgeBudget: allocation.knowledge,
     summaryBudget: allocation.conversationSummary,
     recentMessagesBudget: allocation.recentMessages,
     responseReserve: allocation.responseReserve,
@@ -1032,6 +1047,42 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   if (isMultiCharacter) {
   }
 
+  // 2c. Retrieve relevant knowledge from the responding character's vault
+  // (Knowledge/ folder). Independent of memory retrieval and intentionally
+  // NOT fed to the Phase-2 memory compressor below — knowledge files are
+  // first-class character canon and shouldn't be lossy-summarised. Skips
+  // silently when the character has no vault or no Knowledge/ files.
+  let knowledgeContent = ''
+  let knowledgeTokens = 0
+  let debugKnowledge: KnowledgeDebugEntry[] = []
+
+  if (
+    !skipMemories &&
+    character.id &&
+    character.characterDocumentMountPointId &&
+    memorySearchQuery &&
+    budget.knowledgeBudget > 0
+  ) {
+    try {
+      const result = await retrieveKnowledgeForTurn({
+        characterId: character.id,
+        userId,
+        embeddingProfileId,
+        query: memorySearchQuery,
+        vaultMountPointId: character.characterDocumentMountPointId,
+        budgetTokens: budget.knowledgeBudget,
+        provider,
+      })
+      knowledgeContent = result.content
+      knowledgeTokens = result.tokenCount
+      debugKnowledge = result.debug
+    } catch (error) {
+      warnings.push(
+        `Failed to retrieve knowledge: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      )
+    }
+  }
+
   // ============================================================================
   // Phase 2: Memory Compression (Budget-Driven)
   // ============================================================================
@@ -1321,6 +1372,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     recap: memoryRecapContent || undefined,
     relevant: memoryContent || undefined,
     interChar: interCharacterMemoryContent || undefined,
+    knowledge: knowledgeContent || undefined,
   }
   const personaWhisper = buildCommonplacePersonaWhisper(cmpbParts)
   const llmRecallText = buildCommonplaceLLMContext(cmpbParts)
@@ -1398,7 +1450,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Calculate final token usage
   // Use effective system prompt tokens (possibly compressed)
   const totalMemoryTokens = memoryRecapTokens + memoryTokens + interCharacterMemoryTokens
-  const totalUsed = effectiveSystemPromptTokens + totalMemoryTokens + summaryTokens + messagesTokens + newUserMessageTokens
+  const totalUsed = effectiveSystemPromptTokens + totalMemoryTokens + knowledgeTokens + summaryTokens + messagesTokens + newUserMessageTokens
   const totalMemoriesIncluded = memoriesIncluded + interCharacterMemoriesIncluded
 
   return {
@@ -1406,6 +1458,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     tokenUsage: {
       systemPrompt: effectiveSystemPromptTokens,
       memories: totalMemoryTokens,
+      knowledge: knowledgeTokens,
       summary: summaryTokens,
       recentMessages: messagesTokens + newUserMessageTokens,
       total: totalUsed,
@@ -1419,6 +1472,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // Debug info for the debug panel
     debugMemories,
     debugInterCharacterMemories: debugInterCharacterMemories.length > 0 ? debugInterCharacterMemories : undefined,
+    debugKnowledge: debugKnowledge.length > 0 ? debugKnowledge : undefined,
     debugMemoryRecap: memoryRecapContent || undefined,
     debugSummary: chat.contextSummary || undefined,
     debugSystemPrompt: compressedHistoryBlock

@@ -37,6 +37,14 @@ export interface DocumentSearchOptions {
   limit?: number
   /** Minimum cosine similarity score */
   minScore?: number
+  /**
+   * Restrict results to chunks whose file's `relativePath` starts with this
+   * prefix (case-insensitive). Used by the per-character knowledge source
+   * to scope to `Knowledge/` inside a vault. When set, the search pulls a
+   * larger candidate pool than `limit` so prefix filtering doesn't starve
+   * the result.
+   */
+  pathPrefix?: string
 }
 
 /**
@@ -92,8 +100,46 @@ export async function searchDocumentChunks(
   const sampleStored = allChunks[0].embedding
   assertEmbeddingDimensionsMatch(queryEmbedding, sampleStored, 'document chunk search')
 
-  // Compute cosine similarity (dot product — vectors are unit-length) for each chunk
-  const scored = allChunks
+  // pathPrefix is a hard constraint, not a soft signal — apply it to the
+  // chunk universe *before* scoring, not as a post-filter on a top-K pool.
+  // (A post-filter starves results when the prefix matches a small fraction
+  // of files, e.g. a single Knowledge/ file in a vault of 50 wardrobe items.)
+  const pathPrefix = options.pathPrefix
+  const lowerPrefix = pathPrefix ? pathPrefix.toLowerCase() : null
+
+  let chunksInScope = allChunks
+  if (lowerPrefix) {
+    const allowedFileIds = new Set<string>()
+    for (const mpId of mountPointIds) {
+      const files = await repos.docMountFiles.findByMountPointId(mpId)
+      for (const f of files) {
+        if (f.relativePath.toLowerCase().startsWith(lowerPrefix)) {
+          allowedFileIds.add(f.id)
+        }
+      }
+    }
+    if (allowedFileIds.size === 0) {
+      logger.debug('Document search found no files matching pathPrefix', {
+        context: 'document-search',
+        pathPrefix,
+        mountPointCount: mountPointIds.length,
+      })
+      return []
+    }
+    chunksInScope = allChunks.filter(c => allowedFileIds.has(c.fileId))
+    if (chunksInScope.length === 0) {
+      logger.debug('Document search: pathPrefix files have no embedded chunks yet', {
+        context: 'document-search',
+        pathPrefix,
+        allowedFileCount: allowedFileIds.size,
+      })
+      return []
+    }
+  }
+
+  // Compute cosine similarity (dot product — vectors are unit-length) for
+  // each in-scope chunk, then sort and slice to limit.
+  const scored = chunksInScope
     .map(chunk => ({
       chunk,
       score: cosineSimilarity(queryEmbedding, chunk.embedding),
@@ -106,14 +152,14 @@ export async function searchDocumentChunks(
     return []
   }
 
-  // Build metadata maps for mount points and files
+  // Build metadata maps for mount points and files (from the surviving rows
+  // only — no need to look up files we won't render).
   const mountPointMap = new Map<string, string>()
   const mountPoints = await repos.docMountPoints.findAll()
   for (const mp of mountPoints) {
     mountPointMap.set(mp.id, mp.name)
   }
 
-  // Collect unique file IDs from results
   const fileIds = new Set(scored.map(s => s.chunk.fileId))
   const fileMap = new Map<string, { fileName: string; relativePath: string }>()
   for (const fileId of fileIds) {
@@ -126,7 +172,18 @@ export async function searchDocumentChunks(
     }
   }
 
-  const results: DocumentSearchResult[] = scored.map(({ chunk, score }) => {
+  const finalScored = scored
+
+  if (lowerPrefix) {
+    logger.debug('Document search applied pathPrefix filter', {
+      context: 'document-search',
+      pathPrefix,
+      inScopeChunkCount: chunksInScope.length,
+      returned: finalScored.length,
+    })
+  }
+
+  const results: DocumentSearchResult[] = finalScored.map(({ chunk, score }) => {
     const fileInfo = fileMap.get(chunk.fileId)
     return {
       chunkId: chunk.id,
