@@ -448,4 +448,158 @@ describe('searchDocumentChunks', () => {
     expect(withHeading?.headingContext).toBe('Introduction')
     expect(withoutHeading?.headingContext).toBeNull()
   })
+
+  // -------------------------------------------------------------------------
+  // Literal-phrase boost
+  //
+  // Pinning the contract: when applyLiteralPhraseBoost is on and the trimmed
+  // query is ≥ 8 chars, chunks whose content contains the phrase verbatim
+  // (case-insensitive) get their cosine score lifted halfway to 1.0 BEFORE
+  // the minScore filter and the limit slice — so a buried verbatim match
+  // can't be silently outranked or sliced off.
+  // -------------------------------------------------------------------------
+  describe('literal-phrase boost', () => {
+    it('boosts a chunk whose content contains the trimmed query verbatim', async () => {
+      // Low cosine (0.2) but verbatim hit → boosted to 0.6.
+      const literalHit = makeChunk({
+        id: 'literal',
+        embedding: [0.2, 0, 0],
+        content: 'A note about THE SUNLIT ARCHIVES below the abbey.',
+      })
+      // Higher pure-vector neighbour with no literal hit (0.5).
+      const vectorOnly = makeChunk({
+        id: 'vector',
+        embedding: [0.5, 0, 0],
+        content: 'Unrelated text about libraries in general.',
+      })
+      const repos = makeRepos()
+      repos.docMountChunks.findAllWithEmbeddingsByMountPointIds = jest
+        .fn()
+        .mockResolvedValue([literalHit, vectorOnly])
+      repos.docMountFiles.findById = jest.fn().mockImplementation(async (id: string) => ({
+        id,
+        fileName: `${id}.md`,
+        relativePath: `${id}.md`,
+      }))
+
+      mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+      const results = await searchDocumentChunks([1, 0, 0], {
+        minScore: 0.3,
+        query: 'sunlit archives',
+        applyLiteralPhraseBoost: true,
+      })
+
+      expect(results).toHaveLength(2)
+      // Boosted literal hit (0.6) ranks ahead of the higher-cosine vector-only (0.5).
+      expect(results[0].chunkId).toBe('literal')
+      expect(results[0].score).toBeCloseTo(0.6, 5)
+      expect(results[1].chunkId).toBe('vector')
+      expect(results[1].score).toBeCloseTo(0.5, 5)
+    })
+
+    it('rescues a literal hit that would otherwise fail minScore', async () => {
+      // Cosine 0.0 — would be filtered out by minScore=0.3 normally.
+      // Boosted to 0.5 by the literal hit, so it survives.
+      const buried = makeChunk({
+        id: 'buried',
+        embedding: [0, 1, 0],
+        content: 'Deep in the manuscript: covenant wall mention here.',
+      })
+      const repos = makeRepos()
+      repos.docMountChunks.findAllWithEmbeddingsByMountPointIds = jest
+        .fn()
+        .mockResolvedValue([buried])
+
+      mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+      const withoutBoost = await searchDocumentChunks([1, 0, 0], {
+        minScore: 0.3,
+        query: 'covenant wall mention',
+        applyLiteralPhraseBoost: false,
+      })
+      expect(withoutBoost).toEqual([])
+
+      const withBoost = await searchDocumentChunks([1, 0, 0], {
+        minScore: 0.3,
+        query: 'covenant wall mention',
+        applyLiteralPhraseBoost: true,
+      })
+      expect(withBoost).toHaveLength(1)
+      expect(withBoost[0].chunkId).toBe('buried')
+      expect(withBoost[0].score).toBeCloseTo(0.5, 5)
+    })
+
+    it('skips the boost when the trimmed query is below 8 characters', async () => {
+      const chunk = makeChunk({
+        id: 'short',
+        embedding: [0.2, 0, 0],
+        content: 'mentions cat once.',
+      })
+      const repos = makeRepos()
+      repos.docMountChunks.findAllWithEmbeddingsByMountPointIds = jest
+        .fn()
+        .mockResolvedValue([chunk])
+
+      mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+      const results = await searchDocumentChunks([1, 0, 0], {
+        minScore: 0.1,
+        query: 'cat',
+        applyLiteralPhraseBoost: true,
+      })
+
+      // No boost because phrase is < 8 chars; raw cosine 0.2 is the score.
+      expect(results).toHaveLength(1)
+      expect(results[0].score).toBeCloseTo(0.2, 5)
+    })
+
+    it('matching is case-insensitive', async () => {
+      const chunk = makeChunk({
+        id: 'mixed-case',
+        embedding: [0.2, 0, 0],
+        content: 'HE SAID THE COVENANT WALL HOLDS.',
+      })
+      const repos = makeRepos()
+      repos.docMountChunks.findAllWithEmbeddingsByMountPointIds = jest
+        .fn()
+        .mockResolvedValue([chunk])
+
+      mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+      const results = await searchDocumentChunks([1, 0, 0], {
+        minScore: 0.1,
+        query: 'Covenant Wall',
+        applyLiteralPhraseBoost: true,
+      })
+
+      expect(results).toHaveLength(1)
+      // Boost from 0.2 → 0.6.
+      expect(results[0].score).toBeCloseTo(0.6, 5)
+    })
+
+    it('does not boost when applyLiteralPhraseBoost is unset (default off)', async () => {
+      const chunk = makeChunk({
+        id: 'maybe',
+        embedding: [0.2, 0, 0],
+        content: 'A line about the sunlit archives.',
+      })
+      const repos = makeRepos()
+      repos.docMountChunks.findAllWithEmbeddingsByMountPointIds = jest
+        .fn()
+        .mockResolvedValue([chunk])
+
+      mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+      const results = await searchDocumentChunks([1, 0, 0], {
+        minScore: 0.1,
+        query: 'sunlit archives',
+        // applyLiteralPhraseBoost intentionally omitted
+      })
+
+      // Raw cosine 0.2; no boost.
+      expect(results).toHaveLength(1)
+      expect(results[0].score).toBeCloseTo(0.2, 5)
+    })
+  })
 })

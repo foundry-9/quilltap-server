@@ -9,6 +9,11 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
 import { generateEmbeddingForUser, EmbeddingError, cosineSimilarity } from '@/lib/embedding/embedding-service'
+import {
+  applyLiteralBoost,
+  containsLiteralPhrase,
+  getLiteralPhrase,
+} from '@/lib/embedding/literal-boost'
 import { getCharacterVectorStore, getVectorStoreManager } from '@/lib/embedding/vector-store'
 import { logger } from '@/lib/logger'
 import {
@@ -532,6 +537,16 @@ export async function searchMemoriesSemantic(
     minScore?: number
     minImportance?: number
     source?: 'AUTO' | 'MANUAL'
+    /**
+     * When true and the trimmed query is ≥ LITERAL_BOOST_MIN_PHRASE_LENGTH,
+     * memories whose content or summary contains the query verbatim
+     * (case-insensitive) are unioned into the vector-store top-K candidate
+     * pool — their embeddings are explicitly scored against the query if
+     * they weren't already in the pool — and their cosine score is boosted
+     * halfway to 1.0 BEFORE the importance/recency blend. Used by the
+     * unified `search` tool; per-turn injectors leave this off.
+     */
+    applyLiteralPhraseBoost?: boolean
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -578,30 +593,92 @@ export async function searchMemoriesSemantic(
     )
     const tVector = performance.now()
 
-    if (vectorResults.length > 0) {
+    // Hybrid step: when literal-boost is enabled, find every memory that
+    // contains the trimmed query verbatim (case-insensitive) and explicitly
+    // union them into the candidate pool. searchByContent runs case-
+    // insensitive regex match against content+summary, so this captures all
+    // direct hits regardless of where they ranked in the vector top-K — a
+    // buried exact match cannot stay buried because the vector store's
+    // candidate cap excluded it.
+    const literalPhrase = options.applyLiteralPhraseBoost
+      ? getLiteralPhrase(query)
+      : null
+    const literalHitIds = new Set<string>()
+    let augmentedVectorResults = vectorResults
+
+    if (literalPhrase) {
+      const directHitMemories = await repos.memories.searchByContent(
+        characterId,
+        query.trim(),
+      )
+      for (const m of directHitMemories) {
+        literalHitIds.add(m.id)
+      }
+      const inVectorPool = new Set(vectorResults.map(vr => vr.id))
+      const missingDirectHits = directHitMemories.filter(
+        m => !inVectorPool.has(m.id),
+      )
+      if (missingDirectHits.length > 0) {
+        const extras: typeof vectorResults = []
+        for (const memory of missingDirectHits) {
+          if (
+            memory.embedding &&
+            memory.embedding.length === embeddingResult.embedding.length
+          ) {
+            const score = cosineSimilarity(embeddingResult.embedding, memory.embedding)
+            extras.push({
+              id: memory.id,
+              score,
+              metadata: { memoryId: memory.id, characterId },
+            })
+          }
+        }
+        if (extras.length > 0) {
+          augmentedVectorResults = [...vectorResults, ...extras]
+          logger.debug('[Memory] Literal-boost union added direct hits to vector pool', {
+            characterId,
+            directHitCount: directHitMemories.length,
+            unionedCount: extras.length,
+            userId: options.userId,
+          })
+        }
+      }
+    }
+
+    if (augmentedVectorResults.length > 0) {
       // Hydrate only the matched memories. The previous version called
       // findByCharacterId here, which decrypted and Zod-validated the whole
       // corpus (20k+ rows on heavy characters) just to pluck ~60 hits out of
       // a Map. The Memory Gate read path already uses this shape — see
       // lib/memory/memory-gate.ts findByIds(matchedIds).
-      const matchedIds = vectorResults.map(vr => vr.id)
+      const matchedIds = augmentedVectorResults.map(vr => vr.id)
       const memories = await repos.memories.findByIds(matchedIds)
       const memoryMap = new Map(memories.map(m => [m.id, m]))
 
-      let results: SemanticSearchResult[] = vectorResults
-        .filter(vr => vr.score >= minScore)
+      let results: SemanticSearchResult[] = augmentedVectorResults
         .map(vr => {
           const memory = memoryMap.get(vr.id)
           if (!memory) return null
+          // Boost the cosine score (BEFORE the importance/recency blend) for
+          // any memory that scored a literal-phrase hit. We re-check the body
+          // here on top of literalHitIds so memories already in the vector
+          // pool also get the boost without an extra DB roundtrip.
+          const literalHit = literalPhrase
+            ? literalHitIds.has(memory.id) ||
+              containsLiteralPhrase(memory.content, literalPhrase) ||
+              containsLiteralPhrase(memory.summary, literalPhrase)
+            : false
+          const cosineScore = literalHit ? applyLiteralBoost(vr.score) : vr.score
           const { effectiveWeight } = calculateEffectiveWeight(memory)
           return {
             memory,
-            score: vr.score,
+            score: cosineScore,
             usedEmbedding: true,
             effectiveWeight,
           } as SemanticSearchResult
         })
         .filter((r): r is SemanticSearchResult => r !== null)
+        .filter(r => r.score >= minScore)
 
       // Apply additional filters
       if (options.minImportance !== undefined) {

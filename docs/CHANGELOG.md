@@ -4,6 +4,20 @@
 
 ### 4.4-dev
 
+#### Add: hybrid literal-phrase boost on the unified `search` tool
+
+The four sources behind the `search` tool — memories, conversations, documents, and knowledge — plus the `help_search` tool now run a hybrid pass: alongside the existing cosine-similarity ranking, items whose body text contains the trimmed query verbatim (case-insensitive, ≥ 8 characters) get their cosine score boosted halfway to 1.0 (`(1 + score) / 2`) before any minScore filter or limit slice is applied. The 8-char floor lives in `lib/embedding/literal-boost.ts` as `LITERAL_BOOST_MIN_PHRASE_LENGTH`.
+
+For full-pass paths (`searchDocumentChunks`, `searchConversationChunks`, `HelpSearch.search`), the boost folds into the existing per-chunk scoring loop — no extra DB cost. For the top-K path in `searchMemoriesSemantic`, direct hits are merged **explicitly** into the candidate pool: every memory returned by `repos.memories.searchByContent` (case-insensitive regex over content + summary) is added to the vector-store top-K, with its embedding scored against the query if it wasn't already in the pool. The boost is then applied to the cosine score **before** the existing `cosine × 0.4 + effectiveWeight × 0.6` blend, so importance/recency weighting still shapes the final ranking.
+
+Per Friday's note: the union is unconditional rather than gated on cutoff behavior. Even paths that already pre-score the entire corpus go through the same code path — that way a future refactor of any pool size, minScore default, or top-K cap can't quietly leave a buried verbatim match buried.
+
+The hybrid behavior is opt-in. The unified `search` tool handlers (`search-scriptorium-handler.ts`, `help-search-handler.ts`) pass `applyLiteralPhraseBoost: true` (and the original `query`); per-turn injectors (memory recall, knowledge recall) leave the flag off so their natural-language queries don't trigger a substring scan that would almost always be a no-op anyway.
+
+New: `lib/embedding/literal-boost.ts` (utility module). New options on `searchDocumentChunks` (`query`, `applyLiteralPhraseBoost`), `searchConversationChunks` (same shape), `searchMemoriesSemantic` (`applyLiteralPhraseBoost`); new third arg on `HelpSearch.search` (`query`). Tests at `__tests__/unit/lib/embedding/literal-boost.test.ts`, `__tests__/unit/lib/memory/memory-service-hybrid-recall.test.ts`, plus added describe blocks in `document-search.test.ts` and `help-search.test.ts`. Existing handler-test call-arg expectations updated for the new option fields.
+
+Also fixed: when a project's linked Scriptorium includes the responding character's vault, the same `Knowledge/` chunk used to surface twice in `search` results — once as `sourceType: 'document'` and once as `sourceType: 'knowledge'`, identical content, identical score. The handler now defers pushing document-branch hits until after the knowledge branch has run, then drops any document row whose `chunkId` is already in the knowledge set. The knowledge label wins the slot before the limit slice; one fewer real result wasted on a label collision.
+
 #### Add: `knowledge` source on the unified `search` tool, plus per-turn Commonplace Book knowledge recall
 
 The `search` tool now exposes a fourth source — `knowledge` — alongside `memories`, `conversations`, and `documents`. It searches the responding character's own character vault, scoped to the top-level `Knowledge/` folder (case-insensitive match, per the existing vault path-lookup convention). Default `sources` is now `['memories', 'conversations', 'documents', 'knowledge']`. Result rows carry `sourceType: 'knowledge'`; the formatter appends a ready-to-call `doc_read_file(scope=document_store, mount_point=..., path=...)` hint per result. Silent no-op when the character has no vault or no `Knowledge/` files — never an error.

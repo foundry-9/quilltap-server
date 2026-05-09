@@ -9,6 +9,11 @@
  */
 
 import { assertEmbeddingDimensionsMatch, cosineSimilarity } from '@/lib/embedding/embedding-service'
+import {
+  applyLiteralBoost,
+  containsLiteralPhrase,
+  getLiteralPhrase,
+} from '@/lib/embedding/literal-boost'
 import { getRepositories } from '@/lib/repositories/factory'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { getChunksForMountPoints } from './mount-chunk-cache'
@@ -45,6 +50,19 @@ export interface DocumentSearchOptions {
    * the result.
    */
   pathPrefix?: string
+  /**
+   * Original query text. Required when `applyLiteralPhraseBoost` is set —
+   * the embedding alone can't be substring-matched against chunk content.
+   */
+  query?: string
+  /**
+   * When true and the trimmed query is ≥ LITERAL_BOOST_MIN_PHRASE_LENGTH
+   * characters, items whose chunk content contains the query verbatim
+   * (case-insensitive) get their cosine score boosted halfway to 1.0
+   * before minScore filtering and slicing. Used by the unified `search`
+   * tool; per-turn injectors leave this off.
+   */
+  applyLiteralPhraseBoost?: boolean
 }
 
 /**
@@ -138,12 +156,29 @@ export async function searchDocumentChunks(
   }
 
   // Compute cosine similarity (dot product — vectors are unit-length) for
-  // each in-scope chunk, then sort and slice to limit.
-  const scored = chunksInScope
-    .map(chunk => ({
+  // each in-scope chunk. If literal-boost is on, lift the score of any chunk
+  // whose content contains the trimmed query verbatim before applying the
+  // minScore filter and the limit slice — that way a buried exact match
+  // can't be silently outranked or sliced off.
+  const literalPhrase = options.applyLiteralPhraseBoost
+    ? getLiteralPhrase(options.query)
+    : null
+
+  let literalHitCount = 0
+  const scoredAll = chunksInScope.map(chunk => {
+    const rawScore = cosineSimilarity(queryEmbedding, chunk.embedding)
+    const literalHit = literalPhrase
+      ? containsLiteralPhrase(chunk.content, literalPhrase)
+      : false
+    if (literalHit) literalHitCount++
+    return {
       chunk,
-      score: cosineSimilarity(queryEmbedding, chunk.embedding),
-    }))
+      score: literalHit ? applyLiteralBoost(rawScore) : rawScore,
+      literalHit,
+    }
+  })
+
+  const scored = scoredAll
     .filter(item => item.score >= minScore)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
@@ -179,6 +214,15 @@ export async function searchDocumentChunks(
       context: 'document-search',
       pathPrefix,
       inScopeChunkCount: chunksInScope.length,
+      returned: finalScored.length,
+    })
+  }
+
+  if (literalPhrase) {
+    logger.debug('Document search applied literal-phrase boost', {
+      context: 'document-search',
+      phraseLength: literalPhrase.length,
+      literalHitCount,
       returned: finalScored.length,
     })
   }

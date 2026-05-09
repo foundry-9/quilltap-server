@@ -130,6 +130,7 @@ describe('search-scriptorium-handler', () => {
         embeddingProfileId: 'embed-1',
         limit: 5,
         minImportance: 0.4,
+        applyLiteralPhraseBoost: true,
       })
     )
     expect(mockGenerateEmbeddingForUser).toHaveBeenCalledWith(
@@ -139,7 +140,13 @@ describe('search-scriptorium-handler', () => {
     )
     expect(mockSearchConversationChunks).toHaveBeenCalledWith(
       [0.1, 0.2, 0.3],
-      { characterId: 'character-1', limit: 5, minScore: 0.3 }
+      {
+        characterId: 'character-1',
+        limit: 5,
+        minScore: 0.3,
+        query: 'blueprints',
+        applyLiteralPhraseBoost: true,
+      }
     )
   })
 
@@ -271,6 +278,79 @@ describe('search-scriptorium-handler', () => {
           pathPrefix: 'Knowledge/',
         }),
       )
+    })
+
+    it('drops a document-source result when the same chunk is also returned as knowledge', async () => {
+      // When a project links the responding character's vault, the same
+      // chunk inside Knowledge/ surfaces in both branches. The knowledge
+      // label is more specific and must win the slot — confirmed live by
+      // Friday/Amy seeing the same archive file at positions 2 + 3 in a
+      // search result list, only differing by sourceType label.
+      mockFindCharacterById.mockResolvedValue({
+        id: 'character-1',
+        userId: 'user-1',
+        characterDocumentMountPointId: 'vault-mp-1',
+      })
+
+      const sharedChunk = {
+        chunkId: 'kc-1',
+        mountPointId: 'vault-mp-1',
+        mountPointName: 'Friday Character Vault',
+        fileId: 'file-knowledge-1',
+        fileName: 'archives.md',
+        relativePath: 'Knowledge/archives.md',
+        chunkIndex: 0,
+        headingContext: 'Sunlit Archives',
+        content: 'The archives lie beneath the sunlit reading-room.',
+        score: 0.79,
+      }
+      const distinctDocumentChunk = {
+        ...sharedChunk,
+        chunkId: 'doc-only-1',
+        fileId: 'file-doc-1',
+        fileName: 'wardrobe.md',
+        relativePath: 'Wardrobe/wardrobe.md',
+        headingContext: null,
+        content: 'Wardrobe notes only.',
+        score: 0.55,
+      }
+
+      // The document branch sees both the wardrobe chunk and the same
+      // archive chunk that knowledge will return.
+      // The knowledge branch (called second in the handler) sees only
+      // the archive chunk.
+      mockSearchDocumentChunks
+        .mockResolvedValueOnce([distinctDocumentChunk, sharedChunk])
+        .mockResolvedValueOnce([sharedChunk])
+
+      const result = await executeSearchScriptoriumTool(
+        { query: 'sunlit archives', sources: ['documents', 'knowledge'] },
+        context,
+      )
+
+      expect(result.success).toBe(true)
+      // Two rows survive: knowledge-archives and document-wardrobe. The
+      // duplicate document-archives row is dropped in favour of the
+      // knowledge-labeled twin.
+      expect(result.results).toHaveLength(2)
+
+      const archiveRow = result.results?.find(
+        r => r.metadata.filePath === 'Knowledge/archives.md',
+      )
+      expect(archiveRow).toBeDefined()
+      expect(archiveRow?.sourceType).toBe('knowledge')
+
+      const wardrobeRow = result.results?.find(
+        r => r.metadata.filePath === 'Wardrobe/wardrobe.md',
+      )
+      expect(wardrobeRow).toBeDefined()
+      expect(wardrobeRow?.sourceType).toBe('document')
+
+      // No row should be the document-labeled archive.
+      const archiveAsDocument = result.results?.find(
+        r => r.metadata.filePath === 'Knowledge/archives.md' && r.sourceType === 'document',
+      )
+      expect(archiveAsDocument).toBeUndefined()
     })
 
     it('formats knowledge results with a doc_read_file pointer', () => {

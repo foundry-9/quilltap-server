@@ -9,7 +9,7 @@
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
-import { searchDocumentChunks } from '@/lib/mount-index/document-search'
+import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search'
 import { getRepositories } from '@/lib/repositories/factory'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
@@ -85,6 +85,7 @@ export async function executeSearchScriptoriumTool(
               embeddingProfileId: context.embeddingProfileId,
               limit,
               minImportance,
+              applyLiteralPhraseBoost: true,
             }
           )
 
@@ -124,7 +125,13 @@ export async function executeSearchScriptoriumTool(
 
         const conversationResults = await searchConversationChunks(
           embeddingResult.embedding,
-          { characterId: context.characterId, limit, minScore: 0.3 }
+          {
+            characterId: context.characterId,
+            limit,
+            minScore: 0.3,
+            query,
+            applyLiteralPhraseBoost: true,
+          }
         )
 
         for (const cr of conversationResults) {
@@ -150,7 +157,12 @@ export async function executeSearchScriptoriumTool(
       }
     }
 
-    // Search documents if requested
+    // Search documents if requested. We defer pushing document hits into
+    // `results` until after the knowledge branch has run — when a character
+    // vault is linked to the active project, the same chunk surfaces here AND
+    // in the knowledge branch (scoped to that vault's `Knowledge/` folder).
+    // We drop the duplicate from this side so the knowledge-labeled row wins.
+    let documentRows: DocumentSearchResult[] = []
     if (searchDocuments) {
       try {
         const embeddingResult = await generateEmbeddingForUser(
@@ -159,27 +171,16 @@ export async function executeSearchScriptoriumTool(
           context.embeddingProfileId
         )
 
-        const documentResults = await searchDocumentChunks(
+        documentRows = await searchDocumentChunks(
           embeddingResult.embedding,
-          { projectId: context.projectId, limit, minScore: 0.3 }
+          {
+            projectId: context.projectId,
+            limit,
+            minScore: 0.3,
+            query,
+            applyLiteralPhraseBoost: true,
+          }
         )
-
-        for (const dr of documentResults) {
-          results.push({
-            content: dr.content.length > 500
-              ? dr.content.substring(0, 500) + '...'
-              : dr.content,
-            sourceType: 'document',
-            relevanceScore: dr.score,
-            metadata: {
-              mountPointName: dr.mountPointName,
-              fileName: dr.fileName,
-              filePath: dr.relativePath,
-              chunkIndex: dr.chunkIndex,
-              headingContext: dr.headingContext ?? undefined,
-            },
-          })
-        }
       } catch (error) {
         logger.warn('Document search failed, continuing with other sources', {
           context: 'search-scriptorium-handler',
@@ -191,6 +192,7 @@ export async function executeSearchScriptoriumTool(
     // Search the responding character's own knowledge base if requested.
     // Scoped to the Knowledge/ folder of their character vault. Silent
     // no-op when the character has no vault or no Knowledge/ files.
+    const knowledgeChunkIds = new Set<string>()
     if (searchKnowledge) {
       try {
         const repos = getRepositories()
@@ -214,10 +216,13 @@ export async function executeSearchScriptoriumTool(
               pathPrefix: 'Knowledge/',
               limit,
               minScore: 0.3,
+              query,
+              applyLiteralPhraseBoost: true,
             }
           )
 
           for (const kr of knowledgeResults) {
+            knowledgeChunkIds.add(kr.chunkId)
             results.push({
               content: kr.content.length > 500
                 ? kr.content.substring(0, 500) + '...'
@@ -240,6 +245,37 @@ export async function executeSearchScriptoriumTool(
           error: error instanceof Error ? error.message : String(error),
         })
       }
+    }
+
+    // Now push deferred document rows, skipping any chunk that already came
+    // through as a knowledge hit (the knowledge label is more specific and
+    // should win the slot).
+    let documentDuplicatesDropped = 0
+    for (const dr of documentRows) {
+      if (knowledgeChunkIds.has(dr.chunkId)) {
+        documentDuplicatesDropped++
+        continue
+      }
+      results.push({
+        content: dr.content.length > 500
+          ? dr.content.substring(0, 500) + '...'
+          : dr.content,
+        sourceType: 'document',
+        relevanceScore: dr.score,
+        metadata: {
+          mountPointName: dr.mountPointName,
+          fileName: dr.fileName,
+          filePath: dr.relativePath,
+          chunkIndex: dr.chunkIndex,
+          headingContext: dr.headingContext ?? undefined,
+        },
+      })
+    }
+    if (documentDuplicatesDropped > 0) {
+      logger.debug('Dropped document hits also surfaced as knowledge', {
+        context: 'search-scriptorium-handler',
+        droppedCount: documentDuplicatesDropped,
+      })
     }
 
     // Sort all results by relevance score and limit

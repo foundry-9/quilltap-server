@@ -57,8 +57,9 @@ async function semanticSearch(
   // Generate embedding for the query using the user's profile
   const embeddingResult = await generateEmbeddingForUser(query, userId)
 
-  // Search the help docs
-  const results = await helpSearch.search(embeddingResult.embedding, limit)
+  // Pass the query through so HelpSearch can apply its literal-phrase boost
+  // alongside the embedding score (see lib/embedding/literal-boost.ts).
+  const results = await helpSearch.search(embeddingResult.embedding, limit, query)
 
   return results.map(result => ({
     id: result.document.id,

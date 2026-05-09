@@ -7,6 +7,11 @@
  */
 
 import { cosineSimilarity } from '@/lib/embedding/embedding-service'
+import {
+  applyLiteralBoost,
+  containsLiteralPhrase,
+  getLiteralPhrase,
+} from '@/lib/embedding/literal-boost'
 import { getRepositories } from '@/lib/repositories/factory'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 
@@ -27,6 +32,18 @@ export interface ConversationSearchOptions {
   characterId: string
   limit?: number
   minScore?: number
+  /**
+   * Original query text. Required when `applyLiteralPhraseBoost` is set —
+   * the embedding alone can't be substring-matched against chunk content.
+   */
+  query?: string
+  /**
+   * When true and the trimmed query is ≥ LITERAL_BOOST_MIN_PHRASE_LENGTH
+   * characters, items whose chunk content contains the query verbatim
+   * (case-insensitive) get their cosine score boosted halfway to 1.0
+   * before minScore filtering and slicing.
+   */
+  applyLiteralPhraseBoost?: boolean
 }
 
 /**
@@ -60,18 +77,44 @@ export async function searchConversationChunks(
     return []
   }
 
-  // Compute cosine similarity for each chunk
-  const scored = allChunks
-    .map(chunk => ({
+  // Compute cosine similarity for each chunk. If literal-boost is on, lift
+  // the score of any chunk whose content contains the trimmed query verbatim
+  // *before* minScore filtering and the limit slice — that way a buried
+  // exact-phrase match can't be silently outranked or sliced off.
+  const literalPhrase = options.applyLiteralPhraseBoost
+    ? getLiteralPhrase(options.query)
+    : null
+
+  let literalHitCount = 0
+  const scoredAll = allChunks.map(chunk => {
+    const rawScore = cosineSimilarity(queryEmbedding, chunk.embedding!)
+    const literalHit = literalPhrase
+      ? containsLiteralPhrase(chunk.content, literalPhrase)
+      : false
+    if (literalHit) literalHitCount++
+    return {
       chunk,
-      score: cosineSimilarity(queryEmbedding, chunk.embedding!),
-    }))
+      score: literalHit ? applyLiteralBoost(rawScore) : rawScore,
+      literalHit,
+    }
+  })
+
+  const scored = scoredAll
     .filter(item => item.score >= minScore)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
 
   if (scored.length === 0) {
     return []
+  }
+
+  if (literalPhrase) {
+    logger.debug('Conversation search applied literal-phrase boost', {
+      context: 'conversation-search',
+      phraseLength: literalPhrase.length,
+      literalHitCount,
+      returned: scored.length,
+    })
   }
 
   // Build title map from already-loaded character chats
