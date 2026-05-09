@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: background jobs crashed in the Electron shell / standalone tarball
+
+In the standalone tarball install (Electron shell uses this), every background job spawn died with `Cannot find package '@/lib' imported from .../child-entry.ts`, looped through the 5-restart cap, and the host gave up. The forked child entry was raw TypeScript with `@/...` path aliases — fine under `npm run dev` (tsx is on `process.execArgv` and resolves both TS syntax and tsconfig paths), but standalone runs as plain Node with no loader. Node 24 strips TS types but doesn't know what `@/lib` is, so import resolution fails immediately. Not an Electron-as-Node bug — IPC and `child_process.fork` work fine; the shell already passes `ELECTRON_RUN_AS_NODE=1`.
+
+`scripts/build-standalone-tarball.ts` now compiles `lib/background-jobs/child/child-entry.ts` to `child-entry.js` with the same esbuild config used for `server.ts` and `lib/terminal/ws.ts` (`--bundle --packages=external --tsconfig=tsconfig.json`), so the handler graph is inlined and `@/` aliases are resolved at build time while npm deps stay external. `getChildEntryPath` in `lib/background-jobs/host/processor-host.ts` now prefers `child-entry.js` when present and falls back to `.ts` for `npm run dev`. Also corrected the misleading comment that claimed `outputFileTracingIncludes` covered `lib/**/*.ts` — it doesn't; the `.ts` was being traced implicitly by Next via the `path.resolve` call.
+
 #### Fix: background-job avatar and story-background uploads silently rolled back
 
 Two follow-up bugs in the forked job-runner child surfaced after the earlier `docMountPoints.refreshStats` classification fix landed.

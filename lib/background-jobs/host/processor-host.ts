@@ -106,15 +106,20 @@ function getChildEntryPath(): string {
   // to a synthetic path like `/ROOT/...` instead of the real source
   // location. Resolve against `process.cwd()` instead — both `npm run dev`
   // (tsx server.ts) and `next start` run from the project root, so
-  // `lib/background-jobs/child/child-entry.ts` is always there.
+  // `lib/background-jobs/child/child-entry.{js,ts}` is always there.
   //
-  // For the standalone tarball build, the `.ts` file must be included in
-  // the output — `next.config.js` `outputFileTracingIncludes` covers
-  // `lib/**/*.ts` already.
-  const candidate = path.resolve(/*turbopackIgnore: true*/ process.cwd(), 'lib', 'background-jobs', 'child', 'child-entry.ts');
+  // Prefer the precompiled `.js` when present: the standalone tarball
+  // build (`scripts/build-standalone-tarball.ts`) bundles the child entry
+  // with esbuild so the forked process — which has no tsx loader and no
+  // tsconfig-paths resolver — can `require` it directly. The `.ts`
+  // fallback covers `npm run dev`, where tsx is on `process.execArgv`.
+  const baseDir = path.resolve(/*turbopackIgnore: true*/ process.cwd(), 'lib', 'background-jobs', 'child');
+  const compiled = path.join(baseDir, 'child-entry.js');
+  const source = path.join(baseDir, 'child-entry.ts');
+  const candidate = fs.existsSync(/*turbopackIgnore: true*/ compiled) ? compiled : source;
   if (!fs.existsSync(/*turbopackIgnore: true*/ candidate)) {
     throw new Error(
-      `Background-job child entry not found at ${candidate}. ` +
+      `Background-job child entry not found at ${baseDir} (looked for child-entry.js and child-entry.ts). ` +
       `Ensure the working directory is the Quilltap project root (process.cwd() = "${process.cwd()}").`
     );
   }
