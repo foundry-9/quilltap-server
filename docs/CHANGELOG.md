@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: background jobs failed with "parent SQLite connection is not initialized"
+
+In dev (and any setup with HMR or multiple server bundles of the same source), every background job — story backgrounds, avatar regen, memory extraction, conversation render, scene state, embedding generation, LLM log cleanup — failed at apply-time with `Cannot apply child writes: parent SQLite connection is not initialized`. The dispatcher needs the raw better-sqlite3 handle to drive `BEGIN IMMEDIATE` / `COMMIT` around async repository writes; it gets it via `getRawDatabase()` in `lib/database/backends/sqlite/client.ts`, which read the singleton from module-local `let sqliteDatabase` / `let isInitialized` variables. After Turbopack/HMR reloaded the module, those locals were `null` / `false` even though the rest of the app kept working because repositories reach the DB through the `SQLiteBackend` instance stored on `globalThis.__quilltapDatabaseBackend` (set in `lib/database/manager.ts`). The dispatcher's path was the only one going through the broken module-local accessor.
+
+Fixed by moving the SQLite client's singleton state onto `globalThis` (`__quilltapMainDatabase`, `__quilltapMainDatabaseInitialized`, `__quilltapMainDatabaseShutdownHandlersRegistered`) — same pattern already used by `llm-logs-client.ts`, `mount-index-client.ts`, and the database manager. All call sites in `client.ts` now read through `getDb()` / `getInitFlag()` helpers and operate on a captured local. Public exports keep their existing shapes; no callers needed changes.
+
 #### Fix: Host continuation messages now expose a clearly clickable link
 
 The Host's "continues from" / "continues to" announcements used a markdown link with the generic anchor text "an earlier chapter" / "a new venue" and tacked the chat title on as plain parenthetical text. Three problems: the title — usually the part the reader cares about — wasn't clickable; `.qt-link` defaults to `text-decoration: none`, so the only cue that the generic phrase was a link was the cursor changing on hover; and the chat-message link renderer in `components/chat/MessageContent.tsx` slapped `target="_blank"` on every `<a>`, which doesn't translate to in-app navigation inside the Electron shell.
