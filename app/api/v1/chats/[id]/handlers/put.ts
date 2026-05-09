@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, serverError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, errorResponse } from '@/lib/api/responses';
 import { chatUpdateRequestSchema } from '../schemas';
 import { processChatUpdates } from '../helpers';
 import { handleSetState } from '../actions';
@@ -43,7 +43,7 @@ export async function handlePut(
 
   if ('error' in result) {
     if (result.status === 404) {
-      return notFound('Resource');
+      return errorResponse(result.error, 404);
     } else if (result.status === 400) {
       return badRequest(result.error);
     }

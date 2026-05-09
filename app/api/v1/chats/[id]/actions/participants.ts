@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, serverError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, errorResponse } from '@/lib/api/responses';
 import {
   impersonateSchema,
   stopImpersonateSchema,
@@ -266,7 +266,7 @@ export async function handleAddParticipantAction(
   const result = await handleAddParticipant(chatId, validatedData, chat.participants.length, user.id, repos);
 
   if ('error' in result) {
-    if (result.status === 404) return notFound('Resource');
+    if (result.status === 404) return errorResponse(result.error, 404);
     if (result.status === 400) return badRequest(result.error);
     return serverError(result.error);
   }
@@ -357,7 +357,7 @@ export async function handleUpdateParticipantAction(
       chatId, participantId, characterName,
       error: result.error, status: result.status,
     });
-    if (result.status === 404) return notFound('Resource');
+    if (result.status === 404) return errorResponse(result.error, 404);
     if (result.status === 400) return badRequest(result.error);
     return serverError(result.error);
   }
@@ -419,7 +419,7 @@ export async function handleRemoveParticipantAction(
       chatId, participantId: validatedData.participantId, characterName,
       error: result.error, status: result.status,
     });
-    if (result.status === 404) return notFound('Resource');
+    if (result.status === 404) return errorResponse(result.error, 404);
     if (result.status === 400) return badRequest(result.error);
     return serverError(result.error);
   }

@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Fix: add-character failed with "Resource not found" when character's default profile was deleted
+
+`AddCharacterDialog` auto-selected `character.defaultConnectionProfileId` without verifying the profile still existed. If the profile had been deleted, the PUT `/api/v1/chats/[id]` call hit `handleAddParticipant` in `app/api/v1/chats/[id]/helpers.ts`, failed the `repos.connections.findById(...)` check, and returned a 404 — which the PUT/POST handlers both flattened to a generic "Resource not found" toast, hiding the actual reason.
+
+`handleAddParticipant` now resolves a fallback chain when the requested `connectionProfileId` is missing or stale: user's marked-default profile (`repos.connections.findDefault(userId)`), then first available (`repos.connections.findByUserId(userId)[0]`). The fallback also kicks in when no `connectionProfileId` is provided for an LLM-controlled participant. A warn-level log records the swap (`requestedProfileId` → `fallbackProfileId`). The PUT (`handlers/put.ts`) and POST (`actions/participants.ts`) error mappers now pass through the actual 404 message via `errorResponse(result.error, 404)` instead of `notFound('Resource')`, so future failures surface what's missing. `AddCharacterDialog.tsx` mirrors the fallback client-side: if the character's default profile isn't in the loaded list, it picks the user-default (`isDefault: true`) and finally the first profile.
+
+#### Fix: background-job file uploads crashed on `docMountPoints.refreshStats`
+
+Avatar and story-background generation jobs died on every upload with `Repository method "docMountPoints.refreshStats" is not classified for child execution`. `refreshStats` calls `_update`, but `refresh` matches neither the read nor write prefix list in `lib/background-jobs/child/child-repositories-proxy.ts`, so the proxy threw on the call. The `.catch(() => {})` best-effort wrapper at the call sites (`lib/file-storage/project-store-bridge.ts:204,260`) couldn't catch the synchronous classification throw, which escaped the awaited `uploadFile(...)` chain. Added `'docMountPoints.refreshStats': 'write'` to `METHOD_OVERRIDES`.
+
 #### Fix: production build failure in background-job processor host
 
 `next build` (Turbopack) failed with two `Module not found: Can't resolve '/ROOT/lib/background-jobs/child/child-entry.ts'` errors. Turbopack's static analyzer treats `child_process.fork(entry, ...)` like a module-resolving call and tried to bundle the runtime entry-path string as an import. `lib/background-jobs/host/processor-host.ts` now obtains `fork` via `nodeModule.createRequire(process.cwd() + '/')` (same pattern already used in `lib/plugins/dynamic-loader.ts`), which keeps the lookup runtime-only and hides the call site from the bundler. Also added `/*turbopackIgnore: true*/` to the `path.resolve` / `fs.existsSync` of the entry path. The remaining NFT warning on the themes route is pre-existing and non-fatal.

@@ -119,6 +119,8 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'vectorIndices.deleteStore': 'write',
   // conversation chunks
   'conversationChunks.upsert': 'write',
+  // doc mount points
+  'docMountPoints.refreshStats': 'write',
 };
 
 /**

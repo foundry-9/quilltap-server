@@ -39,6 +39,7 @@ interface ConnectionProfile {
   name: string
   provider: string
   modelName: string
+  isDefault?: boolean
 }
 
 interface AddCharacterDialogProps {
@@ -103,19 +104,26 @@ export default function AddCharacterDialog({
     }
   }, [isOpen, isLoading])
 
-  // Set default connection profile when character is selected
+  // Set default connection profile when character is selected.
+  // Fall back through: character default → user default → first available,
+  // skipping any character default that no longer exists in the user's profiles.
   useEffect(() => {
-    if (selectedCharacterId) {
-      const character = characters.find(c => c.id === selectedCharacterId)
-      if (character?.defaultConnectionProfileId) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream selectedCharacterId changes (parent renders unconditionally)
-        setSelectedConnectionProfileId(character.defaultConnectionProfileId)
-      } else {
-        // Fall back to first available profile
-        if (connectionProfiles.length > 0) {
-          setSelectedConnectionProfileId(connectionProfiles[0].id)
-        }
-      }
+    if (!selectedCharacterId) return
+    const character = characters.find(c => c.id === selectedCharacterId)
+    const characterDefault = character?.defaultConnectionProfileId
+    const characterDefaultExists = characterDefault
+      ? connectionProfiles.some(p => p.id === characterDefault)
+      : false
+    let resolved: string | null = null
+    if (characterDefault && characterDefaultExists) {
+      resolved = characterDefault
+    } else {
+      const userDefault = connectionProfiles.find(p => p.isDefault)
+      resolved = userDefault?.id ?? connectionProfiles[0]?.id ?? null
+    }
+    if (resolved) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream selectedCharacterId changes (parent renders unconditionally)
+      setSelectedConnectionProfileId(resolved)
     }
   }, [selectedCharacterId, characters, connectionProfiles])
 

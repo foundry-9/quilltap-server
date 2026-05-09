@@ -296,6 +296,18 @@ export async function handleParticipantUpdate(
 }
 
 /**
+ * Resolve a fallback connection profile when a character's chosen profile is
+ * missing or stale. Prefers the user's marked default, then the first profile
+ * the user has. Returns null if the user has no profiles at all.
+ */
+async function resolveFallbackConnectionProfile(userId: string, repos: Repos) {
+  const userDefault = await repos.connections.findDefault(userId);
+  if (userDefault) return userDefault;
+  const all = await repos.connections.findByUserId(userId);
+  return all[0] ?? null;
+}
+
+/**
  * Handle adding a new participant to a chat
  */
 export async function handleAddParticipant(
@@ -317,14 +329,40 @@ export async function handleAddParticipant(
   const controlledBy = data.controlledBy || character.controlledBy || 'llm';
   const isUserControlled = controlledBy === 'user';
 
-  if (!isUserControlled && !data.connectionProfileId) {
-    return { error: 'connectionProfileId is required for LLM-controlled CHARACTER participants', status: 400 };
-  }
+  let resolvedConnectionProfileId: string | null = data.connectionProfileId ?? null;
 
-  if (data.connectionProfileId) {
-    const profile = await repos.connections.findById(data.connectionProfileId);
+  if (!isUserControlled) {
+    if (!resolvedConnectionProfileId) {
+      const fallback = await resolveFallbackConnectionProfile(userId, repos);
+      if (!fallback) {
+        return { error: 'connectionProfileId is required for LLM-controlled CHARACTER participants', status: 400 };
+      }
+      resolvedConnectionProfileId = fallback.id;
+      logger.info('[Chats v1] No connectionProfileId provided; using fallback', {
+        characterId: data.characterId,
+        fallbackProfileId: fallback.id,
+        fallbackProfileName: fallback.name,
+      });
+    } else {
+      const profile = await repos.connections.findById(resolvedConnectionProfileId);
+      if (!profile) {
+        const fallback = await resolveFallbackConnectionProfile(userId, repos);
+        if (!fallback) {
+          return { error: 'Connection profile not found and no fallback profile available', status: 404 };
+        }
+        logger.warn('[Chats v1] Stale connectionProfileId; using fallback', {
+          requestedProfileId: resolvedConnectionProfileId,
+          fallbackProfileId: fallback.id,
+          fallbackProfileName: fallback.name,
+          characterId: data.characterId,
+        });
+        resolvedConnectionProfileId = fallback.id;
+      }
+    }
+  } else if (resolvedConnectionProfileId) {
+    const profile = await repos.connections.findById(resolvedConnectionProfileId);
     if (!profile) {
-      return { error: 'Connection profile not found', status: 404 };
+      resolvedConnectionProfileId = null;
     }
   }
 
@@ -332,7 +370,7 @@ export async function handleAddParticipant(
     type: 'CHARACTER',
     characterId: data.characterId,
     controlledBy: controlledBy,
-    connectionProfileId: data.connectionProfileId || null,
+    connectionProfileId: resolvedConnectionProfileId,
     imageProfileId: data.imageProfileId || null,
     displayOrder: data.displayOrder ?? currentParticipantCount,
     isActive: true,
