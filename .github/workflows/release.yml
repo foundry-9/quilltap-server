@@ -55,19 +55,21 @@ jobs:
       - name: Build Next.js standalone
         run: SKIP_ENV_VALIDATION=true npx next build --webpack
 
-      # Compile the background-jobs child entry into the standalone tree.
-      # processor-host.ts forks this file via child_process.fork; without the
-      # compiled .js the child runs the raw .ts and dies on @/ path aliases
-      # (no tsx loader in the production runtime). The standalone tarball
-      # build runs the equivalent step in scripts/build-standalone-tarball.ts;
-      # this mirrors it so Dockerfile.ci's `COPY prebuild/.next/standalone/`
-      # picks up child-entry.js too.
-      - name: Compile background-job child entry
+      # Compile our custom server.ts and out-of-band entry points into the
+      # standalone tree, then drop the bootstrap shim over Next's auto-generated
+      # server.js. Without this, published Docker images run Next's default
+      # standalone server (no WebSocket upgrade handler → no terminal in Docker)
+      # and the forked background-job child loads raw .ts and crashes on @/.
+      # Mirrors scripts/build-standalone-tarball.ts; the prebuild artifact
+      # uploaded below is what Dockerfile.ci copies into the published image.
+      - name: Compile custom server, terminal handler, and child entry
         run: |
-          npx esbuild lib/background-jobs/child/child-entry.ts \
-            --bundle --platform=node --target=node24 --format=cjs \
-            --packages=external --tsconfig=tsconfig.json \
-            --outfile=.next/standalone/lib/background-jobs/child/child-entry.js
+          set -e
+          ESBUILD_BASE='--bundle --platform=node --target=node24 --format=cjs --packages=external --tsconfig=tsconfig.json'
+          npx esbuild server.ts                                $ESBUILD_BASE --external:./lib/terminal/ws --outfile=.next/standalone/server-impl.js
+          npx esbuild lib/terminal/ws.ts                       $ESBUILD_BASE --outfile=.next/standalone/lib/terminal/ws.js
+          npx esbuild lib/background-jobs/child/child-entry.ts $ESBUILD_BASE --outfile=.next/standalone/lib/background-jobs/child/child-entry.js
+          cp scripts/standalone-server-bootstrap.js .next/standalone/server.js
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7

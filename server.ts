@@ -35,8 +35,11 @@ async function main(): Promise<void> {
     const url = req.url ?? '';
     // Terminal WebSocket: /api/v1/terminals/[id]/stream
     if (/^\/api\/v1\/terminals\/[^/]+\/stream(\?|$)/.test(url)) {
-      // Lazy-load so config-only environments (build, lint) don't try to load node-pty
-      import('./lib/terminal/ws')
+      // Lazy-load so config-only environments (build, lint) don't try to load node-pty.
+      // The `.js` extension is required for Node's ESM resolution at runtime: esbuild
+      // keeps this import external (--external:./lib/terminal/ws), so we get a native
+      // dynamic import that needs the explicit suffix even though the source is .ts.
+      import('./lib/terminal/ws.js')
         .then(({ handleTerminalUpgrade }) => {
           wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
             handleTerminalUpgrade(ws, req).catch((err) => {

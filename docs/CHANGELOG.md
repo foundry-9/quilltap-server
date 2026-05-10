@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Fix: in-chat terminal (Ariel) and custom WebSocket upgrade handler dead in Docker
+
+Published Docker images shipped Next.js's auto-generated standalone `server.js` instead of our `server.ts`, so the `/api/v1/terminals/[id]/stream` upgrade handler — which is registered against the HTTP server in `server.ts` — never existed at runtime. WebSocket connections fell through to Next's default upgrade path and were dropped. Local `docker build .` ran an esbuild step at line 85 of the Dockerfile but used `--bundle=false`, so the resulting `server.js` couldn't resolve relative imports like `./lib/logger` and the container failed to start at all.
+
+Switched both the local `Dockerfile` and the CI `build-app` job to the same esbuild flow the standalone tarball uses: `server.ts` → `server-impl.js` (`--bundle --packages=external --external:./lib/terminal/ws`), `lib/terminal/ws.ts` → sibling, plus a `server.js` bootstrap that sets `__NEXT_PRIVATE_STANDALONE_CONFIG` from `.next/required-server-files.json` and hands off to `server-impl.js`. Pulled the bootstrap out of `scripts/build-standalone-tarball.ts` into a single source file (`scripts/standalone-server-bootstrap.js`) consumed by all three call sites.
+
+Also fixed a related runtime bug exposed by the move: `server.ts` did `import('./lib/terminal/ws')` without a `.js` suffix. esbuild keeps that import external, so at runtime it becomes a native dynamic ESM import that requires the explicit extension. Added the `.js` and a comment explaining why; with `moduleResolution: bundler` the dev/tsx path keeps working.
+
 #### Fix: background jobs broken in published Docker images since the move to forked workers
 
 Same root cause as the standalone-tarball fix in `f229ad4e`, but on the Docker side: the published images (`foundry9/quilltap:*`) had no compiled `child-entry.js`, so the forked child loaded the raw `.ts` and crashed on `Cannot find package '@/lib'`. The host kept spawning new children, hit the restart cap, and every queued job — embeddings, memory extraction, housekeeping, danger classification, scene state, conversation render — sat forever; in-flight jobs stayed in `PROCESSING` because the dispatcher only releases on a clean child exit.
