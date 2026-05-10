@@ -224,12 +224,14 @@ The "appropriateness" field is a comma-separated list of context tags describing
 
 const PRONOUNS_PROMPT = `Determine the character's pronouns from the source material.
 
-Respond with JSON:
+If the source material clearly indicates pronouns, respond with JSON:
 {
   "subject": "he/she/they/etc",
   "object": "him/her/them/etc",
   "possessive": "his/her/their/etc"
-}`;
+}
+
+If the source material does NOT indicate pronouns, respond with JSON null (literally: null). Do not invent placeholders like "unknown", "n/a", or empty strings — return null instead.`;
 
 const MEMORIES_PROMPT = `Generate memories that this character would have based on the source material. These are key facts, experiences, and knowledge the character should remember.
 
@@ -358,6 +360,30 @@ export function parseLLMJson<T>(text: string): T {
     const repaired = repairTruncatedJson(cleaned);
     return JSON.parse(repaired) as T;
   }
+}
+
+const PRONOUN_PLACEHOLDERS = new Set([
+  '', 'unknown', 'n/a', 'na', 'none', 'null', 'undefined', 'not specified', 'not given', 'tbd',
+]);
+
+// Validate a parsed pronouns response. Returns the trimmed object if all three
+// fields are usable strings; otherwise returns undefined so the assembler stores null.
+// PronounsSchema requires non-empty strings ≤20 chars on subject/object/possessive,
+// so anything else would explode at character-create time.
+function sanitizePronouns(raw: unknown): { subject: string; object: string; possessive: string } | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const obj = raw as Record<string, unknown>;
+  const fields = ['subject', 'object', 'possessive'] as const;
+  const cleaned: Record<string, string> = {};
+  for (const f of fields) {
+    const v = obj[f];
+    if (typeof v !== 'string') return undefined;
+    const trimmed = v.trim();
+    if (!trimmed || trimmed.length > 20) return undefined;
+    if (PRONOUN_PLACEHOLDERS.has(trimmed.toLowerCase())) return undefined;
+    cleaned[f] = trimmed;
+  }
+  return cleaned as { subject: string; object: string; possessive: string };
 }
 
 type LLMProvider = Awaited<ReturnType<typeof createLLMProvider>>;
@@ -960,12 +986,22 @@ export async function runAIImportStreaming(
           PRONOUNS_PROMPT,
           { temperature: 0.3, maxTokens: 100, ...llmOpts }
         );
-        stepResults.pronouns = parseLLMJson(raw);
-        onProgress({
-          type: 'step_complete',
-          step: 'pronouns',
-          snippet: `${stepResults.pronouns?.subject}/${stepResults.pronouns?.object}/${stepResults.pronouns?.possessive}`,
-        });
+        const parsed = parseLLMJson<unknown>(raw);
+        stepResults.pronouns = sanitizePronouns(parsed);
+        if (stepResults.pronouns) {
+          onProgress({
+            type: 'step_complete',
+            step: 'pronouns',
+            snippet: `${stepResults.pronouns.subject}/${stepResults.pronouns.object}/${stepResults.pronouns.possessive}`,
+          });
+        } else {
+          onProgress({
+            type: 'step_complete',
+            step: 'pronouns',
+            snippet: 'pronouns not derivable — left blank',
+          });
+          logger.info('[AIImport] Pronouns not derivable from source — leaving null');
+        }
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Pronouns failed';
         errors.pronouns = msg;

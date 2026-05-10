@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: Summon From Lore failed with Gemini Flash when pronouns weren't derivable
+
+The pronouns sub-step in `lib/services/ai-import.service.ts` ran a separate small LLM call and stored the parsed result on the assembled character. With Gemini Flash, when source material didn't establish pronouns, the model would either omit the keys or write placeholder strings ("unknown/unknown/unknown") into `subject`/`object`/`possessive`. The pronouns step itself succeeded so the non-fatal try/catch never fired, but the assembled character then exploded at create time because `PronounsSchema` (`character.types.ts:90`) requires non-empty strings on all three fields.
+
+Updated `PRONOUNS_PROMPT` to explicitly tell the model to return JSON `null` when pronouns aren't derivable instead of inventing placeholders. Added a `sanitizePronouns` helper next to `parseLLMJson` that drops the response if any field isn't a non-empty string ≤20 chars or matches a placeholder (`unknown`, `n/a`, `none`, etc.); the assembler already handles `undefined` correctly by storing `pronouns: null`. Pronoun failure no longer blocks the import.
+
 #### Fix: in-chat terminal (Ariel) and custom WebSocket upgrade handler dead in Docker
 
 Published Docker images shipped Next.js's auto-generated standalone `server.js` instead of our `server.ts`, so the `/api/v1/terminals/[id]/stream` upgrade handler — which is registered against the HTTP server in `server.ts` — never existed at runtime. WebSocket connections fell through to Next's default upgrade path and were dropped. Local `docker build .` ran an esbuild step at line 85 of the Dockerfile but used `--bundle=false`, so the resulting `server.js` couldn't resolve relative imports like `./lib/logger` and the container failed to start at all.
