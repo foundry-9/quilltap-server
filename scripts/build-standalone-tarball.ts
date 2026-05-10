@@ -117,10 +117,29 @@ run(
 // Compile the background-jobs child entry. The host forks this file via
 // child_process.fork; in standalone there's no tsx loader to handle the .ts
 // source or its @/ path aliases, so the child crashes on import resolution.
-// Bundling here inlines the handler graph (handlers/index.ts re-exports all
-// 18 handlers) while keeping npm deps external for the staged node_modules.
+//
+// Unlike server.ts/ws.ts above, the child is bundled WITHOUT --packages=external.
+// Next.js's outputFileTracing only sees what the HTTP routes import, so any
+// pure-JS dep that's reachable only through the handler graph (e.g. yaml via
+// lib/doc-edit/markdown-parser.ts) gets webpack-bundled into the route chunks
+// and never copied into .next/standalone/node_modules/. The npm wrapper only
+// installs natives, so the standalone install has no fallback. Bundling
+// everything pure-JS into child-entry.js makes the entry self-contained;
+// only true natives stay external (they're symlinked in by the npm wrapper).
+//
+// Keep this externals list in sync with the matching block in Dockerfile.
+const childExternals = [
+  '--external:better-sqlite3',
+  '--external:better-sqlite3-multiple-ciphers',
+  '--external:sharp',
+  '--external:@img/*',
+  '--external:node-pty',
+  '--external:@napi-rs/canvas',
+  '--external:@napi-rs/*',
+].join(' ');
+const esbuildChildBase = '--platform=node --target=node24 --format=cjs --bundle --tsconfig=tsconfig.json';
 run(
-  `npx esbuild lib/background-jobs/child/child-entry.ts ${esbuildBase} --outfile="${join(STAGING_DIR, 'lib', 'background-jobs', 'child', 'child-entry.js')}"`,
+  `npx esbuild lib/background-jobs/child/child-entry.ts ${esbuildChildBase} ${childExternals} --outfile="${join(STAGING_DIR, 'lib', 'background-jobs', 'child', 'child-entry.js')}"`,
   'Compiling lib/background-jobs/child/child-entry.ts with esbuild',
 );
 

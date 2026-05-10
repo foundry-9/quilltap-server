@@ -170,7 +170,7 @@ function spawnChild(): ChildProcess {
       recordRestart();
       if (shouldGiveUp()) {
         state.childCrashed = true;
-        log.error('Child crashed too often; giving up. Set QUILLTAP_FORCE_CHILD_RESTART=1 and restart the server to retry.', {
+        log.error('Child crashed too often; giving up. Restart the server to retry.', {
           crashCount: state.restartTimestamps.length,
         });
         return;
@@ -285,6 +285,11 @@ export function ensureProcessorRunning(): void {
 
   const state = getState();
   if (state.shuttingDown) return;
+  // If the exit handler already gave up after RESTART_CAP failures, don't let
+  // a fresh enqueue silently respawn. Without this, every enqueueJob() call
+  // re-enters the crash loop because the give-up path only suppresses the
+  // setTimeout respawn — not the lazy spawn from this entrypoint.
+  if (state.childCrashed) return;
   if (!state.child) {
     spawnChild();
     startDispatcher();

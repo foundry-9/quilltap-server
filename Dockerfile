@@ -86,14 +86,18 @@ RUN SKIP_ENV_VALIDATION=true NODE_OPTIONS="--max-old-space-size=3072" npx next b
 #   - server.ts  → server-impl.js  (bundled, npm deps external, ./lib/terminal/ws external)
 #   - lib/terminal/ws.ts  → lib/terminal/ws.js  (sibling, loaded via dynamic import on WS upgrade)
 #   - lib/background-jobs/child/child-entry.ts  → lib/background-jobs/child/child-entry.js
-#     (forked via child_process.fork; needs @/ aliases resolved at build time)
+#     (forked via child_process.fork; bundled WITHOUT --packages=external so the
+#     entire JS dep graph travels with the entry — only true natives stay
+#     external. Keep $ESBUILD_CHILD_EXTERNALS in sync with the externals
+#     in scripts/build-standalone-tarball.ts.)
 # server.js itself is the shared bootstrap shim — it sets
 # __NEXT_PRIVATE_STANDALONE_CONFIG so Next's loadWebpackHook tolerates the
 # pruned standalone tree, then requires server-impl.js.
 RUN ESBUILD_BASE='--bundle --platform=node --target=node24 --format=cjs --packages=external --tsconfig=tsconfig.json' && \
+    ESBUILD_CHILD_EXTERNALS='--external:better-sqlite3 --external:better-sqlite3-multiple-ciphers --external:sharp --external:@img/* --external:node-pty --external:@napi-rs/canvas --external:@napi-rs/*' && \
     npx esbuild server.ts                                  $ESBUILD_BASE --external:./lib/terminal/ws --outfile=.next/standalone/server-impl.js && \
     npx esbuild lib/terminal/ws.ts                         $ESBUILD_BASE --outfile=.next/standalone/lib/terminal/ws.js && \
-    npx esbuild lib/background-jobs/child/child-entry.ts   $ESBUILD_BASE --outfile=.next/standalone/lib/background-jobs/child/child-entry.js && \
+    npx esbuild lib/background-jobs/child/child-entry.ts   --bundle --platform=node --target=node24 --format=cjs --tsconfig=tsconfig.json $ESBUILD_CHILD_EXTERNALS --outfile=.next/standalone/lib/background-jobs/child/child-entry.js && \
     cp scripts/standalone-server-bootstrap.js .next/standalone/server.js
 
 # Production stage — clean image WITHOUT build tools (python3/make/g++)
