@@ -48279,8 +48279,23 @@ var GoogleImagenProvider = class {
       );
     }
     const data = await response.json();
+    const predictions = data.predictions ?? [];
+    const usable = predictions.filter(
+      (pred) => typeof pred.bytesBase64Encoded === "string" && pred.bytesBase64Encoded.length > 0
+    );
+    if (usable.length === 0) {
+      const filterReason = predictions.find((p) => typeof p.raiFilteredReason === "string")?.raiFilteredReason ?? data.raiFilteredReason ?? data.filteredReason ?? null;
+      logger2.warn("Google Imagen returned no usable images (likely safety filter)", {
+        context: "GoogleImagenProvider.generateWithImagen",
+        predictionCount: predictions.length,
+        filterReason
+      });
+      throw new Error(
+        `Google Imagen rejected prompt by content policy${filterReason ? `: ${filterReason}` : ""}`
+      );
+    }
     return {
-      images: (data.predictions ?? []).map((pred) => ({
+      images: usable.map((pred) => ({
         data: pred.bytesBase64Encoded,
         mimeType: pred.mimeType || "image/png"
       })),

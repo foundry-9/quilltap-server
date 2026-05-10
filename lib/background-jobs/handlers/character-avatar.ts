@@ -220,7 +220,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     const genDurationMs = Date.now() - genStartTime;
     const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
 
-    logLLMCall({
+    await logLLMCall({
       userId: job.userId,
       type: 'IMAGE_GENERATION',
       chatId: payload.chatId,
@@ -234,18 +234,12 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
       },
       durationMs: genDurationMs,
-    }).catch(err => {
-      logger.warn('[CharacterAvatar] Failed to log image generation to LLM Inspector', {
-        context: 'background-jobs.character-avatar',
-        jobId: job.id,
-        error: getErrorMessage(err),
-      });
     });
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     const genDurationMs = Date.now() - genStartTime;
 
-    logLLMCall({
+    await logLLMCall({
       userId: job.userId,
       type: 'IMAGE_GENERATION',
       chatId: payload.chatId,
@@ -260,7 +254,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         error: errorMessage,
       },
       durationMs: genDurationMs,
-    }).catch(() => { /* never block on logging */ });
+    });
 
     logger.error('[CharacterAvatar] Image generation failed', {
       context: 'background-jobs.character-avatar',

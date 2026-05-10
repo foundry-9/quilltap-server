@@ -515,7 +515,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     const genDurationMs = Date.now() - genStartTime;
     const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
 
-    logLLMCall({
+    await logLLMCall({
       userId: job.userId,
       type: 'IMAGE_GENERATION',
       chatId: payload.chatId,
@@ -528,18 +528,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
       },
       durationMs: genDurationMs,
-    }).catch(err => {
-      logger.warn('[StoryBackground] Failed to log image generation to LLM Inspector', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        error: getErrorMessage(err),
-      });
     });
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     const genDurationMs = Date.now() - genStartTime;
 
-    logLLMCall({
+    await logLLMCall({
       userId: job.userId,
       type: 'IMAGE_GENERATION',
       chatId: payload.chatId,
@@ -553,7 +547,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         error: errorMessage,
       },
       durationMs: genDurationMs,
-    }).catch(() => { /* never block on logging */ });
+    });
 
     // If the provider post-hoc rejected the generated image for content
     // moderation, the Concierge has a second door: retry with the configured
@@ -630,7 +624,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       const rerouteDurationMs = Date.now() - rerouteStartTime;
       const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
 
-      logLLMCall({
+      await logLLMCall({
         userId: job.userId,
         type: 'IMAGE_GENERATION',
         chatId: payload.chatId,
@@ -643,7 +637,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           content: rerouteRevisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s) (Concierge reroute)`,
         },
         durationMs: rerouteDurationMs,
-      }).catch(() => { /* never block on logging */ });
+      });
 
       activeImageProfile = uncensoredProfile;
 
@@ -658,7 +652,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       const rerouteErrorMessage = getErrorMessage(rerouteError);
       const rerouteDurationMs = Date.now() - rerouteStartTime;
 
-      logLLMCall({
+      await logLLMCall({
         userId: job.userId,
         type: 'IMAGE_GENERATION',
         chatId: payload.chatId,
@@ -672,7 +666,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           error: rerouteErrorMessage,
         },
         durationMs: rerouteDurationMs,
-      }).catch(() => { /* never block on logging */ });
+      });
 
       logger.error('[StoryBackground] Image generation failed (Concierge reroute also failed)', {
         context: 'background-jobs.story-background',

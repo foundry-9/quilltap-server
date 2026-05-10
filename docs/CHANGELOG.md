@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: Imagen safety-filter rejections silently dropped story backgrounds; image-gen LLM-log writes lost
+
+Two related bugs in the story-background pipeline. First, when Imagen 4's `:predict` API returned HTTP 200 with `predictions: []` (or predictions carrying `raiFilteredReason` but no `bytesBase64Encoded`), the Google plugin mapped that to `images: []` and returned success. The story-background handler then warned `[StoryBackground] No images returned from provider` and gave up — the Concierge uncensored-reroute branch only fires when the catch block sees a thrown error matching `isImageModerationError`, so silent empties bypassed it entirely. Second, every `logLLMCall(...)` call in the story-background and character-avatar handlers was fire-and-forget (`.catch(() => {})` with no await). Because the child-process job harness ships its AsyncLocalStorage write buffer to the parent on handler return, the `IMAGE_GENERATION` log row often missed the buffer flush and never reached `llm_logs`.
+
+In `plugins/dist/qtap-plugin-google/image-provider.ts` `generateWithImagen`: filter `predictions` to entries with non-empty `bytesBase64Encoded`; when none survive, surface the underlying `raiFilteredReason` (or `data.raiFilteredReason` / `data.filteredReason`) and throw `Google Imagen rejected prompt by content policy: <reason>`. The "content policy" phrasing matches `isImageModerationError` so the Concierge reroute now engages. Plugin bumped 1.1.26 → 1.1.27. In `lib/background-jobs/handlers/story-background.ts` (4 sites) and `lib/background-jobs/handlers/character-avatar.ts` (2 sites): `await logLLMCall(...)` instead of `.catch()`-ing the discarded promise. `logLLMCall` already swallows its own errors and returns null, so awaiting can't escape the handler — and it ensures the buffered write lands in the child's IPC shipment.
+
 #### Fix: Summon From Lore failed with Gemini Flash when pronouns weren't derivable
 
 The pronouns sub-step in `lib/services/ai-import.service.ts` ran a separate small LLM call and stored the parsed result on the assembled character. With Gemini Flash, when source material didn't establish pronouns, the model would either omit the keys or write placeholder strings ("unknown/unknown/unknown") into `subject`/`object`/`possessive`. The pronouns step itself succeeded so the non-fatal try/catch never fired, but the assembled character then exploded at create time because `PronounsSchema` (`character.types.ts:90`) requires non-empty strings on all three fields.
