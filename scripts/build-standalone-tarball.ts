@@ -97,11 +97,23 @@ copyDir(`${NEXT_STANDALONE}/.`, STAGING_DIR);
 // and the child's externals list lives in scripts/build-standalone-overlay.mjs
 // — the same script is invoked from the local Dockerfile and the CI release
 // workflow's build-app step, so the three call sites can't drift.
-console.log('==> Step 5/8: Overlaying custom server entries onto staged standalone tree');
-run(
-  `node "${join(PROJECT_ROOT, 'scripts', 'build-standalone-overlay.mjs')}" "${STAGING_DIR}"`,
-  'Running build-standalone-overlay.mjs against staging',
-);
+//
+// Skip when the staged tree already carries overlay outputs. The CI release
+// workflow's build-app step runs the overlay against .next/standalone/ before
+// uploading the artifact; the build-standalone job that consumes it never runs
+// `npm ci`, so re-running esbuild here would fail to resolve project deps
+// (zod, yauzl, @quilltap/*). Local `next build` flows still hit the overlay
+// because Next doesn't produce server-impl.js itself.
+const overlaySentinel = join(STAGING_DIR, 'server-impl.js');
+if (existsSync(overlaySentinel)) {
+  console.log('==> Step 5/8: Overlay outputs already present in staged tree (skipping)');
+} else {
+  console.log('==> Step 5/8: Overlaying custom server entries onto staged standalone tree');
+  run(
+    `node "${join(PROJECT_ROOT, 'scripts', 'build-standalone-overlay.mjs')}" "${STAGING_DIR}"`,
+    'Running build-standalone-overlay.mjs against staging',
+  );
+}
 
 // Step 6: Copy static assets and public files
 console.log('==> Step 6/8: Copying static assets and public files');

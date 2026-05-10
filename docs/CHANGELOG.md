@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Fix: standalone tarball build crashed in CI re-running overlay against staged tree
+
+47ac6c1e left `scripts/build-standalone-tarball.ts` invoking `build-standalone-overlay.mjs` against the staging copy of `.next/standalone/`. In the release workflow's `build-standalone` job that step now fails on `Could not resolve "zod" / "yauzl" / "@quilltap/plugin-utils" / "@quilltap/plugin-types"` because that job downloads the pre-built `app-build` artifact and never runs `npm ci` — there is no `node_modules/` for esbuild to bundle the child entry against. It worked before the unification because the previous in-script esbuild call kept `--packages=external` for the child, leaving every npm import as a runtime require.
+
+The CI artifact already contains overlay outputs (`server-impl.js`, `lib/terminal/ws.js`, `lib/background-jobs/child/child-entry.js`, the bootstrap `server.js`) — `build-app` runs the overlay before uploading. Re-running it in `build-standalone` was redundant work that just happened to fail without `node_modules/`.
+
+`build-standalone-tarball.ts` now checks for `<staging>/server-impl.js` after copying and skips the overlay step when the sentinel exists. Local flows where someone runs `next build` then `--skip-build` still trigger the overlay because Next doesn't produce `server-impl.js` itself.
+
 #### Refactor: collapse three duplicated standalone-overlay esbuild call sites into one shared script
 
 Three places carried the same esbuild invocations for `server.ts`, `lib/terminal/ws.ts`, and `lib/background-jobs/child/child-entry.ts`: `Dockerfile` (local docker build), `.github/workflows/release.yml` `build-app` (published Docker images via `Dockerfile.ci`), and `scripts/build-standalone-tarball.ts` (npx quilltap and shell+direct path). Every change to esbuild flags, externals, or the entry list had to be applied three times — and the previous two commits demonstrated the failure mode: the child-entry fix landed in two of three call sites and the third would have shipped the same `Cannot find module 'yaml'` crash to Docker Hub on the next release.
