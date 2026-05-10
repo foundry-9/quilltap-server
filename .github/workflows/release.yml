@@ -55,6 +55,20 @@ jobs:
       - name: Build Next.js standalone
         run: SKIP_ENV_VALIDATION=true npx next build --webpack
 
+      # Compile the background-jobs child entry into the standalone tree.
+      # processor-host.ts forks this file via child_process.fork; without the
+      # compiled .js the child runs the raw .ts and dies on @/ path aliases
+      # (no tsx loader in the production runtime). The standalone tarball
+      # build runs the equivalent step in scripts/build-standalone-tarball.ts;
+      # this mirrors it so Dockerfile.ci's `COPY prebuild/.next/standalone/`
+      # picks up child-entry.js too.
+      - name: Compile background-job child entry
+        run: |
+          npx esbuild lib/background-jobs/child/child-entry.ts \
+            --bundle --platform=node --target=node24 --format=cjs \
+            --packages=external --tsconfig=tsconfig.json \
+            --outfile=.next/standalone/lib/background-jobs/child/child-entry.js
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:

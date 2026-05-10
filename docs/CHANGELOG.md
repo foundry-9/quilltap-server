@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: background jobs broken in published Docker images since the move to forked workers
+
+Same root cause as the standalone-tarball fix in `f229ad4e`, but on the Docker side: the published images (`foundry9/quilltap:*`) had no compiled `child-entry.js`, so the forked child loaded the raw `.ts` and crashed on `Cannot find package '@/lib'`. The host kept spawning new children, hit the restart cap, and every queued job — embeddings, memory extraction, housekeeping, danger classification, scene state, conversation render — sat forever; in-flight jobs stayed in `PROCESSING` because the dispatcher only releases on a clean child exit.
+
+Local `Dockerfile` and `scripts/build-standalone-tarball.ts` were already running the esbuild step. The published path is different: `.github/workflows/release.yml` `build-app` produces a `prebuild` artifact via `next build` only, then `Dockerfile.ci` does `COPY prebuild/.next/standalone/ ./` — no esbuild anywhere. Added a `Compile background-job child entry` step to `build-app` that runs the same esbuild as the standalone tarball, writing into `.next/standalone/lib/background-jobs/child/child-entry.js` so the artifact upload picks it up and `Dockerfile.ci` ships it. Also added matching esbuild steps for `child-entry.ts` and `lib/terminal/ws.ts` to the local `Dockerfile` for parity, in case anyone runs `docker build .` directly.
+
 #### Add: hybrid literal-phrase boost on the unified `search` tool
 
 The four sources behind the `search` tool — memories, conversations, documents, and knowledge — plus the `help_search` tool now run a hybrid pass: alongside the existing cosine-similarity ranking, items whose body text contains the trimmed query verbatim (case-insensitive, ≥ 8 characters) get their cosine score boosted halfway to 1.0 (`(1 + score) / 2`) before any minScore filter or limit slice is applied. The 8-char floor lives in `lib/embedding/literal-boost.ts` as `LITERAL_BOOST_MIN_PHRASE_LENGTH`.

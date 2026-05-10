@@ -84,6 +84,20 @@ RUN SKIP_ENV_VALIDATION=true NODE_OPTIONS="--max-old-space-size=3072" npx next b
 # Compile our custom server.ts → .next/standalone/server.js, overwriting Next's generated server
 RUN npx esbuild server.ts --bundle=false --platform=node --target=node24 --format=cjs --outfile=.next/standalone/server.js
 
+# Compile out-of-band entry points that Next's tracing misses:
+#   - lib/terminal/ws.ts  — dynamically imported from server.ts on terminal WS upgrade
+#   - lib/background-jobs/child/child-entry.ts  — child_process.fork target for jobs
+# Both must be bundled (npm deps stay external) so the runtime can require them
+# without a tsx loader and without resolving @/ path aliases.
+RUN npx esbuild lib/terminal/ws.ts \
+    --bundle --platform=node --target=node24 --format=cjs \
+    --packages=external --tsconfig=tsconfig.json \
+    --outfile=.next/standalone/lib/terminal/ws.js
+RUN npx esbuild lib/background-jobs/child/child-entry.ts \
+    --bundle --platform=node --target=node24 --format=cjs \
+    --packages=external --tsconfig=tsconfig.json \
+    --outfile=.next/standalone/lib/background-jobs/child/child-entry.js
+
 # Production stage — clean image WITHOUT build tools (python3/make/g++)
 FROM node:24-bookworm-slim AS production
 WORKDIR /app
