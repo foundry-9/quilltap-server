@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Refactor: collapse three duplicated standalone-overlay esbuild call sites into one shared script
+
+Three places carried the same esbuild invocations for `server.ts`, `lib/terminal/ws.ts`, and `lib/background-jobs/child/child-entry.ts`: `Dockerfile` (local docker build), `.github/workflows/release.yml` `build-app` (published Docker images via `Dockerfile.ci`), and `scripts/build-standalone-tarball.ts` (npx quilltap and shell+direct path). Every change to esbuild flags, externals, or the entry list had to be applied three times — and the previous two commits demonstrated the failure mode: the child-entry fix landed in two of three call sites and the third would have shipped the same `Cannot find module 'yaml'` crash to Docker Hub on the next release.
+
+Extracted the overlay step into `scripts/build-standalone-overlay.mjs`, which takes a target directory (defaults to `<projectRoot>/.next/standalone`), runs the three esbuild calls with the canonical flags + child externals list, and copies the bootstrap shim. All three call sites now `node scripts/build-standalone-overlay.mjs <target>`. No behavior change vs the previous two commits — just one source of truth for the overlay so the next "missed copy" can't happen.
+
+Side effect: removes `writeFileSync` from `build-standalone-tarball.ts` (it was only used to copy the bootstrap shim, which the overlay script now handles).
+
 #### Fix: CI release workflow still bundled child entry with --packages=external
 
 The previous fix patched `Dockerfile` and `scripts/build-standalone-tarball.ts` but missed the third esbuild call site at `.github/workflows/release.yml:71` (the `build-app` job whose artifact `Dockerfile.ci` copies into published Docker images). Without this, the next release would have shipped the same `Cannot find module 'yaml'` crash to Docker Hub. Same externals list as the other two call sites; a follow-up commit unifies these into a single shared script so this can't happen again.

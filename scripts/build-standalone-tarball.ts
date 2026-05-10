@@ -16,7 +16,7 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, readdirSync, statSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
 const PROJECT_ROOT = join(__dirname, '..');
@@ -91,62 +91,17 @@ if (!existsSync(NEXT_STANDALONE)) {
 console.log('==> Step 4/8: Copying .next/standalone/ to staging');
 copyDir(`${NEXT_STANDALONE}/.`, STAGING_DIR);
 
-// Step 4.5: Compile server.ts and overwrite Next's generated server.js
-//
-// We bundle local imports (so ./lib/logger gets inlined) but keep node_modules
-// deps external (--packages=external) so they resolve from the staged
-// node_modules at runtime. ./lib/terminal/ws is kept external on purpose: it
-// pulls in node-pty at module load, and server.ts loads it dynamically only
-// when a terminal upgrade arrives. We compile it as a separate sibling file
-// so the dynamic import resolves at runtime.
-//
-// The bundle goes to server-impl.js. server.js itself is a tiny bootstrapper
-// that sets __NEXT_PRIVATE_STANDALONE_CONFIG before requiring the bundle —
-// without it, Next's loadWebpackHook throws because next/dist/compiled/webpack
-// isn't traced into the standalone output.
-console.log('==> Step 5/8: Compiling server.ts to custom server');
-const esbuildBase = '--platform=node --target=node24 --format=cjs --bundle --packages=external --tsconfig=tsconfig.json';
+// Step 4.5: Overlay our custom server entry, terminal WS handler, and child
+// entry onto the staged standalone tree, then drop the bootstrap shim over
+// Next's auto-generated server.js. Single source of truth for esbuild flags
+// and the child's externals list lives in scripts/build-standalone-overlay.mjs
+// — the same script is invoked from the local Dockerfile and the CI release
+// workflow's build-app step, so the three call sites can't drift.
+console.log('==> Step 5/8: Overlaying custom server entries onto staged standalone tree');
 run(
-  `npx esbuild server.ts ${esbuildBase} --external:./lib/terminal/ws --outfile="${join(STAGING_DIR, 'server-impl.js')}"`,
-  'Compiling server.ts with esbuild',
+  `node "${join(PROJECT_ROOT, 'scripts', 'build-standalone-overlay.mjs')}" "${STAGING_DIR}"`,
+  'Running build-standalone-overlay.mjs against staging',
 );
-run(
-  `npx esbuild lib/terminal/ws.ts ${esbuildBase} --outfile="${join(STAGING_DIR, 'lib', 'terminal', 'ws.js')}"`,
-  'Compiling lib/terminal/ws.ts with esbuild',
-);
-// Compile the background-jobs child entry. The host forks this file via
-// child_process.fork; in standalone there's no tsx loader to handle the .ts
-// source or its @/ path aliases, so the child crashes on import resolution.
-//
-// Unlike server.ts/ws.ts above, the child is bundled WITHOUT --packages=external.
-// Next.js's outputFileTracing only sees what the HTTP routes import, so any
-// pure-JS dep that's reachable only through the handler graph (e.g. yaml via
-// lib/doc-edit/markdown-parser.ts) gets webpack-bundled into the route chunks
-// and never copied into .next/standalone/node_modules/. The npm wrapper only
-// installs natives, so the standalone install has no fallback. Bundling
-// everything pure-JS into child-entry.js makes the entry self-contained;
-// only true natives stay external (they're symlinked in by the npm wrapper).
-//
-// Keep this externals list in sync with the matching block in Dockerfile.
-const childExternals = [
-  '--external:better-sqlite3',
-  '--external:better-sqlite3-multiple-ciphers',
-  '--external:sharp',
-  '--external:@img/*',
-  '--external:node-pty',
-  '--external:@napi-rs/canvas',
-  '--external:@napi-rs/*',
-].join(' ');
-const esbuildChildBase = '--platform=node --target=node24 --format=cjs --bundle --tsconfig=tsconfig.json';
-run(
-  `npx esbuild lib/background-jobs/child/child-entry.ts ${esbuildChildBase} ${childExternals} --outfile="${join(STAGING_DIR, 'lib', 'background-jobs', 'child', 'child-entry.js')}"`,
-  'Compiling lib/background-jobs/child/child-entry.ts with esbuild',
-);
-
-// Bootstrap shim is shared with the local Dockerfile and CI release workflow;
-// see scripts/standalone-server-bootstrap.js for the source of truth.
-const bootstrapJs = readFileSync(join(PROJECT_ROOT, 'scripts', 'standalone-server-bootstrap.js'), 'utf-8');
-writeFileSync(join(STAGING_DIR, 'server.js'), bootstrapJs);
 
 // Step 6: Copy static assets and public files
 console.log('==> Step 6/8: Copying static assets and public files');

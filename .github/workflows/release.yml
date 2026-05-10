@@ -63,17 +63,10 @@ jobs:
       # Mirrors scripts/build-standalone-tarball.ts; the prebuild artifact
       # uploaded below is what Dockerfile.ci copies into the published image.
       - name: Compile custom server, terminal handler, and child entry
-        run: |
-          set -e
-          ESBUILD_BASE='--bundle --platform=node --target=node24 --format=cjs --packages=external --tsconfig=tsconfig.json'
-          # Child entry bundles the entire JS dep graph and externalizes only
-          # true natives (the npm wrapper symlinks these). Keep this list in
-          # sync with Dockerfile and scripts/build-standalone-tarball.ts.
-          ESBUILD_CHILD_EXTERNALS='--external:better-sqlite3 --external:better-sqlite3-multiple-ciphers --external:sharp --external:@img/* --external:node-pty --external:@napi-rs/canvas --external:@napi-rs/*'
-          npx esbuild server.ts                                $ESBUILD_BASE --external:./lib/terminal/ws --outfile=.next/standalone/server-impl.js
-          npx esbuild lib/terminal/ws.ts                       $ESBUILD_BASE --outfile=.next/standalone/lib/terminal/ws.js
-          npx esbuild lib/background-jobs/child/child-entry.ts --bundle --platform=node --target=node24 --format=cjs --tsconfig=tsconfig.json $ESBUILD_CHILD_EXTERNALS --outfile=.next/standalone/lib/background-jobs/child/child-entry.js
-          cp scripts/standalone-server-bootstrap.js .next/standalone/server.js
+        # Single source of truth for esbuild flags + child externals lives in
+        # scripts/build-standalone-overlay.mjs (also invoked by the local
+        # Dockerfile and scripts/build-standalone-tarball.ts).
+        run: node scripts/build-standalone-overlay.mjs .next/standalone
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
