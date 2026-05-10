@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, successResponse } from '@/lib/api/responses';
-import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { triggerAvatarGeneration } from '@/lib/wardrobe/avatar-generation';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import { EquippedSlotsSchema } from '@/lib/schemas/wardrobe.types';
 
@@ -39,14 +39,13 @@ export async function handleRegenerateAvatar(
     const body = await req.json();
     const { characterId, imageProfileId, equippedSlots } = regenerateAvatarSchema.parse(body);
 
-    // Verify the character exists and is a participant in this chat
+    // Verify the character exists and is a participant in this chat.
+    // The chat-level `avatarGenerationEnabled` toggle governs *automatic*
+    // regeneration on outfit changes only — manual clicks always fire as
+    // long as an image profile is configured.
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
       return badRequest('Chat not found');
-    }
-
-    if (!chat.avatarGenerationEnabled) {
-      return badRequest('Avatar generation is not enabled for this chat.');
     }
 
     const isParticipant = chat.participants.some(
@@ -56,7 +55,7 @@ export async function handleRegenerateAvatar(
       return badRequest('Character is not a participant in this chat.');
     }
 
-    await triggerAvatarGenerationIfEnabled(repos, {
+    const result = await triggerAvatarGeneration(repos, {
       userId: user.id,
       chatId,
       characterId,
@@ -64,6 +63,10 @@ export async function handleRegenerateAvatar(
       imageProfileIdOverride: imageProfileId ?? null,
       equippedSlotsOverride: equippedSlots ?? null,
     });
+
+    if (!result.queued) {
+      return badRequest(result.message);
+    }
 
     logger.info('[Chats v1] Avatar regeneration triggered', {
       chatId,

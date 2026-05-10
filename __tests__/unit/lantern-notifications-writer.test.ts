@@ -135,12 +135,11 @@ describe('postLanternImageNotification', () => {
     expect(message.content as string).toContain('Bertie Wooster')
   })
 
-  it('includes the generation prompt in avatar announcements when available', async () => {
+  it('includes the generation prompt in avatar announcements when passed in', async () => {
     const addMessage = jest.fn()
     mockGetRepositories.mockReturnValue(makeRepos({
       chat: { id: 'c1', projectId: null, alertCharactersOfLanternImages: true },
       project: null,
-      file: { id: 'f1', generationPrompt: 'Algernon in a velvet smoking jacket' },
       addMessage,
     }))
 
@@ -148,6 +147,7 @@ describe('postLanternImageNotification', () => {
       chatId: 'c1',
       fileId: 'f1',
       kind: { kind: 'avatar', characterName: 'Algernon' },
+      prompt: 'Algernon in a velvet smoking jacket',
     })
 
     const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
@@ -156,12 +156,11 @@ describe('postLanternImageNotification', () => {
     expect(message.content as string).toContain('velvet smoking jacket')
   })
 
-  it('includes the generation prompt in background announcements when available', async () => {
+  it('includes the generation prompt in background announcements when passed in', async () => {
     const addMessage = jest.fn()
     mockGetRepositories.mockReturnValue(makeRepos({
       chat: { id: 'c1', projectId: null, alertCharactersOfLanternImages: true },
       project: null,
-      file: { id: 'f1', generationPrompt: 'a moonlit conservatory in bloom' },
       addMessage,
     }))
 
@@ -169,6 +168,7 @@ describe('postLanternImageNotification', () => {
       chatId: 'c1',
       fileId: 'f1',
       kind: { kind: 'background' },
+      prompt: 'a moonlit conservatory in bloom',
     })
 
     const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
@@ -176,12 +176,11 @@ describe('postLanternImageNotification', () => {
     expect(message.content as string).toContain('moonlit conservatory')
   })
 
-  it('falls back to the plain wording when no generation prompt is on the file', async () => {
+  it('falls back to the plain wording when no prompt is passed', async () => {
     const addMessage = jest.fn()
     mockGetRepositories.mockReturnValue(makeRepos({
       chat: { id: 'c1', projectId: null, alertCharactersOfLanternImages: true },
       project: null,
-      file: { id: 'f1', generationPrompt: null },
       addMessage,
     }))
 

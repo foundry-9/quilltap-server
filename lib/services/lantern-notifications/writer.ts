@@ -37,6 +37,10 @@ interface PostParams {
   chatId: string;
   fileId: string;
   kind: LanternNotificationKind;
+  // Generation prompt to quote in the announcement. Callers pass it in
+  // because the file row is typically a still-buffered write in the
+  // background-job child and not yet readable from the DB.
+  prompt?: string | null;
 }
 
 function buildContent(kind: LanternNotificationKind, prompt: string | null): string {
@@ -60,7 +64,7 @@ function senderForKind(kind: LanternNotificationKind): 'lantern' | 'aurora' {
 }
 
 export async function postLanternImageNotification(params: PostParams): Promise<void> {
-  const { chatId, fileId, kind } = params;
+  const { chatId, fileId, kind, prompt = null } = params;
 
   try {
     const repos = getRepositories();
@@ -78,13 +82,6 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       return;
     }
 
-    let generationPrompt: string | null = null;
-    try {
-      const file = await repos.files.findById(fileId);
-      generationPrompt = file?.generationPrompt ?? null;
-    } catch (fetchError) {
-    }
-
     const messageId = randomUUID();
     const now = new Date().toISOString();
 
@@ -92,7 +89,7 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       type: 'message',
       id: messageId,
       role: 'ASSISTANT',
-      content: buildContent(kind, generationPrompt),
+      content: buildContent(kind, prompt),
       attachments: [fileId],
       createdAt: now,
       participantId: null,

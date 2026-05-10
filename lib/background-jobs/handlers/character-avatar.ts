@@ -397,5 +397,6 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     chatId: payload.chatId,
     fileId,
     kind: { kind: 'avatar', characterName: character.name },
+    prompt,
   });
 }

@@ -807,5 +807,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     chatId: payload.chatId,
     fileId,
     kind: { kind: 'background' },
+    prompt: finalPrompt,
   });
 }

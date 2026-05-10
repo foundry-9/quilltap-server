@@ -4,6 +4,18 @@
 
 ### 4.4-dev
 
+#### Refactor: participant card avatar tools — regenerate + wardrobe as paired square buttons
+
+The participant card's avatar block previously had a translucent regenerate-avatar circle floating over the bottom edge of the portrait, and the wardrobe button lived as a text button further down the info column. Replaced both with a 48-px-wide row of square icon buttons (camera + hanger) directly beneath the avatar, each taking half the avatar's width. Removed the old `qt-participant-avatar-regenerate` class and the "Wardrobe" text button from the info column.
+
+Decoupled the regenerate button from `chat.avatarGenerationEnabled` end-to-end — that flag still governs whether avatars *auto-regenerate* on outfit changes, but manual clicks now fire whenever an image profile is configured. Three call sites changed: `app/salon/[id]/page.tsx:1507` passes `onRegenerateAvatar` unconditionally; `app/api/v1/chats/[id]/actions/regenerate-avatar.ts` dropped the `if (!chat.avatarGenerationEnabled) return badRequest(...)` pre-flight; and `lib/wardrobe/avatar-generation.ts` was split into `triggerAvatarGeneration` (always fires, returns a structured result so the manual path can surface "no image profile configured" as a real error) and a thin `triggerAvatarGenerationIfEnabled` wrapper that keeps the toggle check for automatic outfit-change triggers.
+
+#### Fix: Lantern/Aurora image announcements no longer quoted the generation prompt
+
+Since the background-job handlers moved into the forked child process, every story-background and character-avatar announcement landed in the bland "no aim" branch of `buildContent` ("The Lantern has projected a new backdrop behind the proceedings."), with no quoted prompt. The handler created the file row via `repos.files.create({ ..., generationPrompt })` — a buffered write — and immediately called `postLanternImageNotification`, which did `repos.files.findById(fileId)` to read `generationPrompt` back out. The child's readonly SQLCipher connection never sees the still-buffered row, so `findById` returned `null`. The same read-after-buffered-write warning had been firing in `combined.log` on every image job since the migration.
+
+The notification writer now takes `prompt` as an optional parameter, and `story-background.ts` / `character-avatar.ts` pass `finalPrompt` / `prompt` in directly from local scope. Removed the dead `files.findById` lookup. The `character-image` (Lantern tool) branch already ignores the prompt in its message text, so that caller is unchanged.
+
 #### Fix: standalone tarball build crashed in CI re-running overlay against staged tree
 
 47ac6c1e left `scripts/build-standalone-tarball.ts` invoking `build-standalone-overlay.mjs` against the staging copy of `.next/standalone/`. In the release workflow's `build-standalone` job that step now fails on `Could not resolve "zod" / "yauzl" / "@quilltap/plugin-utils" / "@quilltap/plugin-types"` because that job downloads the pre-built `app-build` artifact and never runs `npm ci` — there is no `node_modules/` for esbuild to bundle the child entry against. It worked before the unification because the previous in-script esbuild call kept `--packages=external` for the child, leaving every npm import as a runtime require.

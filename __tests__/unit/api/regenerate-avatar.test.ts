@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 
 import type { AuthenticatedContext } from '@/lib/api/middleware'
 
-const mockTriggerAvatarGenerationIfEnabled = jest.fn()
+const mockTriggerAvatarGeneration = jest.fn()
 const mockLogger = {
   debug: jest.fn(),
   info: jest.fn(),
@@ -11,7 +11,7 @@ const mockLogger = {
 }
 
 jest.mock('@/lib/wardrobe/avatar-generation', () => ({
-  triggerAvatarGenerationIfEnabled: (...args: unknown[]) => mockTriggerAvatarGenerationIfEnabled(...args),
+  triggerAvatarGeneration: (...args: unknown[]) => mockTriggerAvatarGeneration(...args),
 }))
 
 jest.mock('@/lib/logger', () => ({
@@ -44,13 +44,13 @@ function createContext(chat: Record<string, unknown> | null): AuthenticatedConte
 describe('handleRegenerateAvatar', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockTriggerAvatarGenerationIfEnabled.mockResolvedValue(undefined)
+    mockTriggerAvatarGeneration.mockResolvedValue({ queued: true })
   })
 
-  it('queues avatar regeneration for a chat participant when the feature is enabled', async () => {
+  it('queues avatar regeneration for a chat participant', async () => {
     const ctx = createContext({
       id: 'chat-1',
-      avatarGenerationEnabled: true,
+      avatarGenerationEnabled: false, // toggle off — manual button still fires
       participants: [
         { id: 'p-1', type: 'CHARACTER', characterId: 'char-1' },
       ],
@@ -64,7 +64,7 @@ describe('handleRegenerateAvatar', () => {
       message: 'Avatar regeneration queued',
       queued: true,
     })
-    expect(mockTriggerAvatarGenerationIfEnabled).toHaveBeenCalledWith(ctx.repos, {
+    expect(mockTriggerAvatarGeneration).toHaveBeenCalledWith(ctx.repos, {
       userId: 'user-1',
       chatId: 'chat-1',
       characterId: 'char-1',
@@ -84,10 +84,16 @@ describe('handleRegenerateAvatar', () => {
 
     expect(response.status).toBe(400)
     expect(data).toEqual({ error: 'Chat not found' })
-    expect(mockTriggerAvatarGenerationIfEnabled).not.toHaveBeenCalled()
+    expect(mockTriggerAvatarGeneration).not.toHaveBeenCalled()
   })
 
-  it('returns 400 when avatar generation is disabled for the chat', async () => {
+  it('returns 400 with the helper message when no image profile is configured', async () => {
+    mockTriggerAvatarGeneration.mockResolvedValue({
+      queued: false,
+      reason: 'no-image-profile',
+      message: 'No image profile is configured. Set one in Settings → Images before generating avatars.',
+    })
+
     const response = await handleRegenerateAvatar(
       createMockRequest({ characterId: 'char-1' }),
       'chat-1',
@@ -100,8 +106,7 @@ describe('handleRegenerateAvatar', () => {
     const data = await response.json()
 
     expect(response.status).toBe(400)
-    expect(data).toEqual({ error: 'Avatar generation is not enabled for this chat.' })
-    expect(mockTriggerAvatarGenerationIfEnabled).not.toHaveBeenCalled()
+    expect(data.error).toContain('No image profile is configured')
   })
 
   it('returns 400 when the character is not a participant in the chat', async () => {
@@ -118,7 +123,7 @@ describe('handleRegenerateAvatar', () => {
 
     expect(response.status).toBe(400)
     expect(data).toEqual({ error: 'Character is not a participant in this chat.' })
-    expect(mockTriggerAvatarGenerationIfEnabled).not.toHaveBeenCalled()
+    expect(mockTriggerAvatarGeneration).not.toHaveBeenCalled()
   })
 
   it('returns 400 when characterId is missing from the request body', async () => {
@@ -135,11 +140,11 @@ describe('handleRegenerateAvatar', () => {
 
     expect(response.status).toBe(400)
     expect(data.error).toContain('expected string')
-    expect(mockTriggerAvatarGenerationIfEnabled).not.toHaveBeenCalled()
+    expect(mockTriggerAvatarGeneration).not.toHaveBeenCalled()
   })
 
   it('returns 500 when queueing unexpectedly fails', async () => {
-    mockTriggerAvatarGenerationIfEnabled.mockRejectedValue(new Error('queue offline'))
+    mockTriggerAvatarGeneration.mockRejectedValue(new Error('queue offline'))
 
     const response = await handleRegenerateAvatar(
       createMockRequest({ characterId: 'char-1' }),

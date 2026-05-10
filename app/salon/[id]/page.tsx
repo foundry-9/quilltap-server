@@ -1504,7 +1504,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}
           chatId={id}
-          onRegenerateAvatar={chat?.avatarGenerationEnabled ? handleRegenerateAvatar : undefined}
+          onRegenerateAvatar={handleRegenerateAvatar}
           isDangerousChat={chat?.isDangerousChat === true}
         />
       )}
