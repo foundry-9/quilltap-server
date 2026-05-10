@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: CI release workflow still bundled child entry with --packages=external
+
+The previous fix patched `Dockerfile` and `scripts/build-standalone-tarball.ts` but missed the third esbuild call site at `.github/workflows/release.yml:71` (the `build-app` job whose artifact `Dockerfile.ci` copies into published Docker images). Without this, the next release would have shipped the same `Cannot find module 'yaml'` crash to Docker Hub. Same externals list as the other two call sites; a follow-up commit unifies these into a single shared script so this can't happen again.
+
 #### Fix: shell+direct background-job child crash-looping on missing transitive deps; lazy enqueue bypassed give-up
 
 Two bugs that together explained why the Friday instance had 15+ jobs sitting PENDING for hours. First, the forked job-runner child was crashing on `Cannot find module 'yaml'` every ~2 seconds. Root cause: the esbuild step that compiles `lib/background-jobs/child/child-entry.ts` for the standalone tarball (and `Dockerfile`) used `--packages=external`, leaving every npm import as a runtime `require()`. Next.js's `outputFileTracing` only sees what the HTTP routes import, so any pure-JS dep reachable only through the handler graph (yaml via `lib/doc-edit/markdown-parser.ts`, transitively reached through `lib/chat/context/knowledge-injector.ts`) gets webpack-bundled into the route chunks and never copied into `.next/standalone/node_modules/`. The `quilltap` npm wrapper only installs natives (`better-sqlite3-multiple-ciphers`, `sharp`, `@napi-rs/canvas`, `tar`, `yauzl`), so the standalone install had no fallback. Local dev passed because tsx loads the .ts source against the project's full `node_modules`; Docker passed because `COPY --from=deps-prod /app/node_modules ./node_modules` ships the full production tree. Shell+direct (the shell + embedded Node mode used by `quilltap-shell`) was the odd one out.
