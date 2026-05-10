@@ -13,6 +13,10 @@ import { uploadImage, importImageFromUrl } from '@/lib/images-v2';
 import { createImageProvider } from '@/lib/llm';
 import { logger } from '@/lib/logger';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import {
+  getLanternBackgroundsStore,
+  writeLanternBackgroundToMountStore,
+} from '@/lib/file-storage/lantern-store-bridge';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { z } from 'zod';
 import { successResponse, badRequest, serverError } from '@/lib/api/responses';
@@ -316,14 +320,28 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       const category: FileCategory = 'IMAGE';
       const source: FileSource = 'GENERATED';
 
-      // Upload to file storage
-      const { storageKey } = await fileStorageManager.uploadFile({
-        filename,
-        content: imageBuffer,
-        contentType: imageMimeType,
-        projectId: null,
-        folderPath: '/',
-      });
+      // Route through Lantern Backgrounds when provisioned; disk fallback
+      // otherwise. Matches the `generate_image` tool's storage policy.
+      let storageKey: string;
+      const lantern = await getLanternBackgroundsStore();
+      if (lantern) {
+        const written = await writeLanternBackgroundToMountStore({
+          filename,
+          content: imageBuffer,
+          contentType: imageMimeType,
+          subfolder: 'tool',
+        });
+        storageKey = written.storageKey;
+      } else {
+        const uploaded = await fileStorageManager.uploadFile({
+          filename,
+          content: imageBuffer,
+          contentType: imageMimeType,
+          projectId: null,
+          folderPath: '/',
+        });
+        storageKey = uploaded.storageKey;
+      }
 
 
       // Inherit tags from linked entities

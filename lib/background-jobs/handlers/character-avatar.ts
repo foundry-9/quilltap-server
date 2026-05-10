@@ -13,6 +13,10 @@ import { createHash } from 'node:crypto';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import {
+  getCharacterVaultStore,
+  writeCharacterAvatarToVault,
+} from '@/lib/file-storage/character-vault-bridge';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
@@ -303,27 +307,71 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   const folderProjectId = chat.projectId ?? null;
 
   try {
-    const uploadResult = await fileStorageManager.uploadFile({
-      filename: originalFilename,
-      content: buffer,
-      contentType: mimeType,
-      projectId: folderProjectId,
-      folderPath: '/character-avatars/',
-    });
+    // Route history avatars into the character vault when there's no project
+    // context to route them through. The vault is provisioned at character
+    // creation; the disk fallback only fires for characters whose vault
+    // hasn't been backfilled yet (rare post-migration).
+    let storageKey: string;
+    let fileProjectId: string | null;
+    let fileFolderPath: string | null;
+    let usedVault = false;
 
-    // Ensure /character-avatars/ folder record exists for the project (or general)
-    const existingFolder = await repos.folders.findByPath(job.userId, '/character-avatars/', folderProjectId);
-    if (!existingFolder) {
-      await repos.folders.create({
-        userId: job.userId,
-        path: '/character-avatars/',
-        name: 'character-avatars',
-        parentFolderId: null,
+    if (!folderProjectId) {
+      const vault = await getCharacterVaultStore(payload.characterId);
+      if (vault) {
+        const written = await writeCharacterAvatarToVault({
+          characterId: payload.characterId,
+          kind: 'history',
+          filename: originalFilename,
+          content: buffer,
+          contentType: mimeType,
+          description: `${character.name} — wardrobe portrait`,
+        });
+        storageKey = written.storageKey;
+        fileProjectId = null;
+        fileFolderPath = null;
+        usedVault = true;
+      } else {
+        const uploadResult = await fileStorageManager.uploadFile({
+          filename: originalFilename,
+          content: buffer,
+          contentType: mimeType,
+          projectId: null,
+          folderPath: '/character-avatars/',
+        });
+        storageKey = uploadResult.storageKey;
+        fileProjectId = null;
+        fileFolderPath = '/character-avatars/';
+      }
+    } else {
+      const uploadResult = await fileStorageManager.uploadFile({
+        filename: originalFilename,
+        content: buffer,
+        contentType: mimeType,
         projectId: folderProjectId,
+        folderPath: '/character-avatars/',
       });
+      storageKey = uploadResult.storageKey;
+      fileProjectId = folderProjectId;
+      fileFolderPath = '/character-avatars/';
     }
 
-    // Create file metadata record
+    // The legacy `folders` table backs the pre-Scriptorium file tree UI. It's
+    // only meaningful for disk-backed (or project-mount-backed) writes; vault
+    // writes own their folder structure inside doc_mount_folders.
+    if (!usedVault) {
+      const existingFolder = await repos.folders.findByPath(job.userId, '/character-avatars/', fileProjectId);
+      if (!existingFolder) {
+        await repos.folders.create({
+          userId: job.userId,
+          path: '/character-avatars/',
+          name: 'character-avatars',
+          parentFolderId: null,
+          projectId: fileProjectId,
+        });
+      }
+    }
+
     await repos.files.create({
       userId: job.userId,
       sha256,
@@ -340,9 +388,9 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       generationRevisedPrompt: imageData.revisedPrompt || null,
       description: `${character.name} — wardrobe portrait`,
       tags: [payload.characterId],
-      storageKey: uploadResult.storageKey,
-      projectId: folderProjectId,
-      folderPath: '/character-avatars/',
+      storageKey,
+      projectId: fileProjectId,
+      folderPath: fileFolderPath,
     }, { id: fileId });
 
     logger.info('[CharacterAvatar] Avatar image saved', {

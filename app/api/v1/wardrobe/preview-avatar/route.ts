@@ -23,6 +23,10 @@ import { badRequest, serverError } from '@/lib/api/responses';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import {
+  getCharacterVaultStore,
+  writeCharacterAvatarToVault,
+} from '@/lib/file-storage/character-vault-bridge';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { EquippedSlotsSchema } from '@/lib/schemas/wardrobe.types';
@@ -133,27 +137,47 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   const source: FileSource = 'GENERATED';
 
   try {
-    const uploadResult = await fileStorageManager.uploadFile({
-      filename: originalFilename,
-      content: buffer,
-      contentType: mimeType,
-      projectId: null,
-      folderPath: '/character-avatars/',
-    });
-
-    const existingFolder = await repos.folders.findByPath(
-      user.id,
-      '/character-avatars/',
-      null,
-    );
-    if (!existingFolder) {
-      await repos.folders.create({
-        userId: user.id,
-        path: '/character-avatars/',
-        name: 'character-avatars',
-        parentFolderId: null,
-        projectId: null,
+    // Previews are character-scoped and never tied to a chat — when the
+    // character has a vault, write the preview into it; otherwise fall
+    // through to the disk path.
+    let storageKey: string;
+    let fileFolderPath: string | null = '/character-avatars/';
+    const vault = await getCharacterVaultStore(characterId);
+    if (vault) {
+      const written = await writeCharacterAvatarToVault({
+        characterId,
+        kind: 'history',
+        filename: originalFilename,
+        content: buffer,
+        contentType: mimeType,
+        description: `${character.name} — outfit preview`,
       });
+      storageKey = written.storageKey;
+      fileFolderPath = null;
+    } else {
+      const uploadResult = await fileStorageManager.uploadFile({
+        filename: originalFilename,
+        content: buffer,
+        contentType: mimeType,
+        projectId: null,
+        folderPath: '/character-avatars/',
+      });
+      storageKey = uploadResult.storageKey;
+
+      const existingFolder = await repos.folders.findByPath(
+        user.id,
+        '/character-avatars/',
+        null,
+      );
+      if (!existingFolder) {
+        await repos.folders.create({
+          userId: user.id,
+          path: '/character-avatars/',
+          name: 'character-avatars',
+          parentFolderId: null,
+          projectId: null,
+        });
+      }
     }
 
     await repos.files.create(
@@ -178,9 +202,9 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         // tags must be UUIDs (tag IDs); the "preview" nature is captured in the
         // description and folder path, not via a string tag.
         tags: [characterId],
-        storageKey: uploadResult.storageKey,
+        storageKey,
         projectId: null,
-        folderPath: '/character-avatars/',
+        folderPath: fileFolderPath,
       },
       { id: fileId },
     );

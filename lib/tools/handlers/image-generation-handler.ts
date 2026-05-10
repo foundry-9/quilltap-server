@@ -6,6 +6,10 @@
 import { createHash } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import {
+  getLanternBackgroundsStore,
+  writeLanternBackgroundToMountStore,
+} from '@/lib/file-storage/lantern-store-bridge';
 
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
@@ -130,14 +134,27 @@ async function saveGeneratedImage(
     // Generate a new file ID
     const fileId = crypto.randomUUID();
 
-    // Upload to file storage
-    const uploadResult = await fileStorageManager.uploadFile({
-      filename: originalFilename,
-      content: buffer,
-      contentType: finalMimeType,
-      projectId: null,
-      folderPath: '/',
-    });
+    // Generic image-tool output goes into the Lantern Backgrounds mount under
+    // `tool/`. Falls back to disk only when the mount hasn't been provisioned.
+    let uploadResult: { storageKey: string };
+    const lantern = await getLanternBackgroundsStore();
+    if (lantern) {
+      const written = await writeLanternBackgroundToMountStore({
+        filename: originalFilename,
+        content: buffer,
+        contentType: finalMimeType,
+        subfolder: 'tool',
+      });
+      uploadResult = { storageKey: written.storageKey };
+    } else {
+      uploadResult = await fileStorageManager.uploadFile({
+        filename: originalFilename,
+        content: buffer,
+        contentType: finalMimeType,
+        projectId: null,
+        folderPath: '/',
+      });
+    }
     // Inherit tags from linked entities (e.g., the chat)
     const inheritedTags = await getInheritedTags(linkedTo, userId);
 

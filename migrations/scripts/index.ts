@@ -249,6 +249,12 @@ import { migrateOutfitPresetsToCompositesMigration } from './migrate-outfit-pres
 import { convertEquippedOutfitToArraysMigration } from './convert-equipped-outfit-to-arrays-v1';
 // Drop the outfit_presets table (after backup snapshot)
 import { dropOutfitPresetsTableMigration } from './drop-outfit-presets-table-v1';
+// Provision the global Lantern Backgrounds mount point
+import { provisionLanternBackgroundsMountMigration } from './provision-lantern-backgrounds-mount';
+// Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount
+import { migrateGeneralStoryBackgroundsToMountMigration } from './migrate-general-story-backgrounds-to-mount';
+// Move character avatars off _general/ into each character's vault under images/
+import { migrateCharacterAvatarsToVaultsMigration } from './migrate-character-avatars-to-vaults';
 
 /**
  * All available migrations.
@@ -493,6 +499,12 @@ export const migrations: Migration[] = [
   convertEquippedOutfitToArraysMigration,
   // Drop the outfit_presets table (after backup snapshot)
   dropOutfitPresetsTableMigration,
+  // Provision the global Lantern Backgrounds mount point
+  provisionLanternBackgroundsMountMigration,
+  // Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount
+  migrateGeneralStoryBackgroundsToMountMigration,
+  // Move character avatars off _general/ into each character's vault under images/
+  migrateCharacterAvatarsToVaultsMigration,
 ];
 
 export {
@@ -722,5 +734,11 @@ export {
   convertEquippedOutfitToArraysMigration,
   // Drop the outfit_presets table (after backup snapshot)
   dropOutfitPresetsTableMigration,
+  // Provision the global Lantern Backgrounds mount point
+  provisionLanternBackgroundsMountMigration,
+  // Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount
+  migrateGeneralStoryBackgroundsToMountMigration,
+  // Move character avatars off _general/ into each character's vault under images/
+  migrateCharacterAvatarsToVaultsMigration,
 };
 

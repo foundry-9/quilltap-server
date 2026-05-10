@@ -24,6 +24,10 @@ import {
 } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import {
+  getCharacterVaultStore,
+  writeCharacterAvatarToVault,
+} from '@/lib/file-storage/character-vault-bridge';
 
 /**
  * Seed initial data if the database is empty
@@ -286,12 +290,29 @@ async function seedAvatars(
         // Calculate SHA256 hash for the image
         const sha256 = createHash('sha256').update(avatar.content).digest('hex');
 
-        // Upload the file to storage
-        const { storageKey } = await fileStorageManager.uploadFile({
-          filename: avatar.filename,
-          content: avatar.content,
-          contentType: avatar.mimeType,
-        });
+        // Route the seed avatar into the character vault when one exists.
+        // Seeds are the canonical "main" — they overwrite images/avatar.webp.
+        let storageKey: string;
+        let fileFolderPath: string | null = '/';
+        const vault = await getCharacterVaultStore(character.id);
+        if (vault) {
+          const written = await writeCharacterAvatarToVault({
+            characterId: character.id,
+            kind: 'main',
+            filename: avatar.filename,
+            content: avatar.content,
+            contentType: avatar.mimeType,
+          });
+          storageKey = written.storageKey;
+          fileFolderPath = null;
+        } else {
+          const uploaded = await fileStorageManager.uploadFile({
+            filename: avatar.filename,
+            content: avatar.content,
+            contentType: avatar.mimeType,
+          });
+          storageKey = uploaded.storageKey;
+        }
 
         // Create the file entry in the database
         const fileId = randomUUID();
@@ -312,7 +333,7 @@ async function seedAvatars(
           generationRevisedPrompt: null,
           description: null,
           tags: [],
-          folderPath: '/',
+          folderPath: fileFolderPath,
           projectId: null,
         }, { id: fileId });
 

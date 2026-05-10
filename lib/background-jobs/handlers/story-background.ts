@@ -9,6 +9,10 @@ import { createHash } from 'node:crypto';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import {
+  getLanternBackgroundsStore,
+  writeLanternBackgroundToMountStore,
+} from '@/lib/file-storage/lantern-store-bridge';
 
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
@@ -714,34 +718,69 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const linkedTo = [payload.chatId, ...payload.characterIds];
 
   try {
-    // Upload to file storage
-    const uploadResult = await fileStorageManager.uploadFile({
-      filename: originalFilename,
-      content: buffer,
-      contentType: mimeType,
-      projectId: payload.projectId ?? null,
-      folderPath: '/story-backgrounds/',
-    });
-
-    // Ensure /story-backgrounds/ folder record exists in database
     const folderProjectId = payload.projectId ?? null;
-    const existingFolder = await repos.folders.findByPath(
-      job.userId,
-      '/story-backgrounds/',
-      folderProjectId
-    );
-    if (!existingFolder) {
-      await repos.folders.create({
-        userId: job.userId,
-        path: '/story-backgrounds/',
-        name: 'story-backgrounds',
-        parentFolderId: null,
-        projectId: folderProjectId,
-      });
 
+    // Project-scoped backgrounds keep landing in the project's official mount
+    // (handled by fileStorageManager → project-store-bridge). Project-less
+    // backgrounds land in the global Lantern Backgrounds mount; a disk
+    // fallback remains for pre-provision boots.
+    let storageKey: string;
+    let fileFolderPath: string | null = '/story-backgrounds/';
+    let usedLantern = false;
+
+    if (folderProjectId) {
+      const uploadResult = await fileStorageManager.uploadFile({
+        filename: originalFilename,
+        content: buffer,
+        contentType: mimeType,
+        projectId: folderProjectId,
+        folderPath: '/story-backgrounds/',
+      });
+      storageKey = uploadResult.storageKey;
+    } else {
+      const lantern = await getLanternBackgroundsStore();
+      if (lantern) {
+        const written = await writeLanternBackgroundToMountStore({
+          filename: originalFilename,
+          content: buffer,
+          contentType: mimeType,
+          subfolder: 'generated',
+          description: `Story background for: ${payload.sceneContext || chat.title}`,
+        });
+        storageKey = written.storageKey;
+        fileFolderPath = null;
+        usedLantern = true;
+      } else {
+        const uploadResult = await fileStorageManager.uploadFile({
+          filename: originalFilename,
+          content: buffer,
+          contentType: mimeType,
+          projectId: null,
+          folderPath: '/story-backgrounds/',
+        });
+        storageKey = uploadResult.storageKey;
+      }
     }
 
-    // Create file metadata record
+    // Legacy folder records only matter for the pre-Scriptorium tree; the
+    // Lantern mount manages its own folder hierarchy in doc_mount_folders.
+    if (!usedLantern) {
+      const existingFolder = await repos.folders.findByPath(
+        job.userId,
+        '/story-backgrounds/',
+        folderProjectId
+      );
+      if (!existingFolder) {
+        await repos.folders.create({
+          userId: job.userId,
+          path: '/story-backgrounds/',
+          name: 'story-backgrounds',
+          parentFolderId: null,
+          projectId: folderProjectId,
+        });
+      }
+    }
+
     const category: FileCategory = 'IMAGE';
     const source: FileSource = 'GENERATED';
 
@@ -761,9 +800,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       generationRevisedPrompt: imageData.revisedPrompt || null,
       description: `Story background for: ${payload.sceneContext || chat.title}`,
       tags: [],
-      storageKey: uploadResult.storageKey,
+      storageKey,
       projectId: folderProjectId,
-      folderPath: '/story-backgrounds/',
+      folderPath: fileFolderPath,
     }, { id: fileId });
 
     logger.info('[StoryBackground] Image saved successfully', {

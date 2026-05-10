@@ -4,6 +4,38 @@
 
 ### 4.4-dev
 
+#### Migrate general files off the filesystem into document stores
+
+Continues the project-files-to-Scriptorium migration pattern shipped in v4.3, this time covering the catch-all `<instance>/files/_general/` namespace. New writes for character avatars and Lantern-generated images now land in document stores; on-disk content is moved in during a Stage 1 migration and archived in place.
+
+Layout after the migration:
+
+- Character avatars (current default + history): each character's existing database-backed vault (`characters.characterDocumentMountPointId`), under `images/avatar.webp` (main) and `images/history/<safeFilename>` (history with `(2)` collision bumping).
+- Story-background images and generic `generate_image` tool output: one new global database-backed mount named "Lantern Backgrounds" (`storeType=documents`, `mountType=database`). Mount-point id is persisted in `instance_settings.lanternBackgroundsMountPointId`; no new column on existing tables. Story backgrounds land at `generated/<filename>`; generic tool output at `tool/<filename>`.
+- Project-scoped backgrounds (chats with a `projectId`) continue to land in that project's official mount, unchanged.
+- Thumbnails (`_thumbnails/`) remain on disk as a derived cache.
+
+Reference compatibility: chat/character/message references at `chats.storyBackgroundImageId`, `chats.characterAvatars[c].imageId`, `characters.avatarOverrides[].imageId`, `characters.defaultImageId`, `projects.storyBackgroundImageId`, and `MessageEvent.attachments[]` all use the `FileEntry.id`. The migration never deletes `files` rows; it only rewrites `files.storageKey` from `_general/...` to `mount-blob:{mountPointId}:{blobId}` and clears `projectId` / `folderPath`. The existing `isMountBlobStorageKey` / `parseMountBlobStorageKey` plumbing in `lib/file-storage/manager.ts` resolves the bytes through `readMountBlob` regardless of which mount owns the blob.
+
+Runtime rewires:
+
+- `lib/file-storage/character-vault-bridge.ts` (new) — `getCharacterVaultStore(characterId)` and `writeCharacterAvatarToVault({ kind: 'main' | 'history' })`. Reuses the mount-blob storage-key helpers from `lib/file-storage/project-store-bridge.ts`.
+- `lib/file-storage/lantern-store-bridge.ts` (new) — `getLanternBackgroundsStore()` and `writeLanternBackgroundToMountStore({ subfolder: 'generated' | 'tool' })`. Mount id read from `instance_settings`.
+- `lib/instance-settings/index.ts` — `getLanternBackgroundsMountPointId()` / `setLanternBackgroundsMountPointId()` + key constant.
+- `lib/background-jobs/handlers/character-avatar.ts` — when `chat.projectId` is null and the character has a vault, route through the vault bridge (history kind); disk fallback preserved for the no-vault case.
+- `app/api/v1/wardrobe/preview-avatar/route.ts` — same vault routing for preview avatars.
+- `lib/startup/seed-initial-data.ts` — initial-data seeds land in `images/avatar.webp` (main kind).
+- `lib/background-jobs/handlers/story-background.ts` — project-less story backgrounds route through the Lantern mount; project-scoped path unchanged.
+- `lib/tools/handlers/image-generation-handler.ts` and `app/api/v1/images/route.ts` — generic `generate_image` output routes to Lantern `tool/`.
+
+Migrations (run in dependency order):
+
+- `provision-lantern-backgrounds-mount-v1` — creates the Lantern Backgrounds mount, pre-creates `generated/` and `tool/` folders, persists id to `instance_settings`. Idempotent (adopts an existing row when the setting already points at one).
+- `migrate-general-story-backgrounds-to-mount-v1` — walks `<filesDir>/_general/story-backgrounds/` and root-level `<filesDir>/_general/generated_*.webp`; imports bytes, sha256-verifies against `files.sha256` when present, rewrites `files.storageKey`, archives source dirs/files. Also rewrites the `storageKey` of `files` rows whose bytes are gone but whose sha matches an already-imported blob.
+- `migrate-character-avatars-to-vaults-v1` — for each character with a vault, imports `defaultImageId` (if disk-anchored) as `images/avatar.webp` and every other `_general/`-anchored `files` row linked to that character as `images/history/<filename>`. Rewrites `files.storageKey`, archives source files per-file into `<filesDir>/_general/_avatar_archive/`.
+
+Project-mount avatars (storageKey already `mount-blob:` from `relink-files-to-mount-blobs-v1`) are intentionally left in place. Characters without a vault are skipped — the vault is provisioned at character creation, so a subsequent deploy's reabsorb migration (planned for the next release alongside `reabsorb-leftover-character-avatars-v1` and `reabsorb-leftover-lantern-backgrounds-v1`) catches stragglers from the runtime cut-over window.
+
 #### Refactor: participant card avatar tools — regenerate + wardrobe as paired square buttons
 
 The participant card's avatar block previously had a translucent regenerate-avatar circle floating over the bottom edge of the portrait, and the wardrobe button lived as a text button further down the info column. Replaced both with a 48-px-wide row of square icon buttons (camera + hanger) directly beneath the avatar, each taking half the avatar's width. Removed the old `qt-participant-avatar-regenerate` class and the "Wardrobe" text button from the info column.
