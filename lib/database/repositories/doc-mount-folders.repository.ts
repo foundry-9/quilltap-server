@@ -43,7 +43,13 @@ export class DocMountFoldersRepository extends AbstractBaseRepository<DocMountFo
       throw new Error('Mount index database not initialized');
     }
 
-    // Ensure the table exists in the mount index DB on first access
+    // Ensure the table exists in the mount index DB on first access.
+    // CRITICAL: set `mountIndexCollectionInitialized = true` after DDL but
+    // BEFORE the folder backfill runs. The backfill calls `ensureFolderPath`,
+    // which calls back into this repo's `getCollection`; if the flag isn't
+    // set yet, the recursive call re-enters the init block and re-runs the
+    // backfill, recursively forever. Setting the flag first lets the
+    // recursive calls get a valid `SQLiteCollection` and proceed.
     if (!this.mountIndexCollectionInitialized) {
       try {
         const ddlStatements = generateDDL(this.collectionName, this.schema);
@@ -64,44 +70,52 @@ export class DocMountFoldersRepository extends AbstractBaseRepository<DocMountFo
           `ON "${this.collectionName}" ("mountPointId", "path")`
         );
 
-        // Check PRAGMA user_version to determine if backfill is needed
-        const versionResult = db.prepare('PRAGMA user_version').get() as { user_version: number } | undefined;
-        const currentVersion = versionResult?.user_version ?? 0;
-
-        // Backfill folder rows from existing documents/blobs for all database-backed mounts
-        if (currentVersion < 1) {
-          try {
-            const repos = await import('@/lib/repositories/factory').then(m => m.getRepositories());
-            const mounts = await repos.docMountPoints.findAll();
-            const dbBackedMounts = mounts.filter(m => m.mountType === 'database');
-
-            for (const mount of dbBackedMounts) {
-              try {
-                const { backfillFolderRowsForMountPoint } = await import('@/lib/mount-index/database-store');
-                await backfillFolderRowsForMountPoint(mount.id);
-              } catch (err) {
-                logger.warn('Failed to backfill folder rows for mount point', {
-                  mountPointId: mount.id,
-                  error: err instanceof Error ? err.message : String(err),
-                });
-              }
-            }
-
-            // Set PRAGMA user_version to 1 after backfill completes
-            db.exec('PRAGMA user_version = 1');
-          } catch (err) {
-            logger.warn('Failed to run folder backfill', {
-              error: err instanceof Error ? err.message : String(err),
-            });
-          }
-        }
-
+        // Mark the collection initialized BEFORE the backfill so re-entrant
+        // calls from inside `ensureFolderPath` (which the backfill invokes)
+        // skip this entire block and don't recurse into the backfill.
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
         logger.error('Failed to ensure doc_mount_folders table in mount index database', {
           error: error instanceof Error ? error.message : String(error),
         });
         throw error;
+      }
+
+      // Check PRAGMA user_version to determine if backfill is needed.
+      // Run AFTER the init flag is set so any recursion (via ensureFolderPath)
+      // sees a ready collection. The user_version bump is the source of truth
+      // for "backfill has run on this DB" across process restarts.
+      try {
+        const versionResult = db.prepare('PRAGMA user_version').get() as { user_version: number } | undefined;
+        const currentVersion = versionResult?.user_version ?? 0;
+
+        if (currentVersion < 1) {
+          // Optimistically bump user_version FIRST so that even if this
+          // process is killed mid-backfill, the next start doesn't repeat
+          // the same partial work. A missed-folder backfill row is a
+          // tolerable downside; an infinite-loop OOM is not.
+          db.exec('PRAGMA user_version = 1');
+
+          const repos = await import('@/lib/repositories/factory').then(m => m.getRepositories());
+          const mounts = await repos.docMountPoints.findAll();
+          const dbBackedMounts = mounts.filter(m => m.mountType === 'database');
+
+          for (const mount of dbBackedMounts) {
+            try {
+              const { backfillFolderRowsForMountPoint } = await import('@/lib/mount-index/database-store');
+              await backfillFolderRowsForMountPoint(mount.id);
+            } catch (err) {
+              logger.warn('Failed to backfill folder rows for mount point', {
+                mountPointId: mount.id,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn('Failed to run folder backfill', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 

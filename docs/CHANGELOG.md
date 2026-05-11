@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Fix: doc_mount_folders backfill no longer recurses into OOM on startup
+
+`DocMountFoldersRepository.getCollection()` ran a one-time folder backfill the first time it was called per process (gated on `PRAGMA user_version < 1`). The backfill iterated every database-backed mount point and called `ensureFolderPath(mountPointId, folderPath)` for each document's parent directory — which itself calls `findByMountPointAndPath` → `getCollection`. Because the `mountIndexCollectionInitialized` flag was only set *after* the backfill completed, every recursive `getCollection` call re-entered the init block, re-ran DDL, and re-launched the backfill. The result was unbounded async recursion that pinned the microtask queue, swallowed timer ticks, and OOMed Node around the 7.6 GB mark roughly 80–90 seconds into Phase 3.4 (`ensure-project-scenarios`).
+
+`mountIndexCollectionInitialized` is now set immediately after the DDL succeeds, before the backfill runs. The backfill is moved out of the init guard and uses `PRAGMA user_version` as its own one-shot lock: the version is bumped to 1 *before* the loop starts, so a crash mid-backfill leaves a slightly incomplete folder index rather than re-running on the next boot — a tolerable tradeoff against the OOM. Re-entrant calls from inside the backfill now find a ready collection and proceed.
+
+Symptom on affected instances: startup stalls at "Reconciling the file ledger" / "Tidying the character vaults" on the loading screen, server never responds to requests, `combined.log` shows the last log line as roughly `Plugin system initialized` or `Starting filesystem reconciliation` followed by silence until the OS kills the node process. Lebanon's apparent "failed migration" was actually this — the migration runner had already completed.
+
 #### Fix: TEXT embedding repair no longer OOMs on large instances
 
 `lib/startup/repair-text-embeddings.ts` previously loaded every TEXT-typed embedding row from `vector_entries` and `memories` in a single `.all()` call before processing. On instances with tens of thousands of TEXT embeddings (each row's JSON-stringified embedding is ~30 KB for a 1536-dimension vector, more for larger models), that one call could push the V8 heap past 4–8 GB and OOM the Node process during Phase 1.1 of startup — leaving the server unresponsive after migrations completed.
