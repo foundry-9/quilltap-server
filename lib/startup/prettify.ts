@@ -42,6 +42,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'subsystem:vault-backfill:complete': 'Character vaults in good order',
   'subsystem:embeddings-backfill:start': 'Brewing fresh embeddings',
   'subsystem:embeddings-backfill:complete': 'Embeddings brewed',
+  'subsystem:embedding-repair:start': 'Recasting embeddings into their proper form',
+  'subsystem:embedding-repair:complete': 'Embeddings recast',
   'subsystem:ready': 'At your service',
   'subsystem:errored': 'A spanner has been thrown in the works',
 

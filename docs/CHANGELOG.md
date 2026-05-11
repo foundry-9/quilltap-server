@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: TEXT embedding repair no longer OOMs on large instances
+
+`lib/startup/repair-text-embeddings.ts` previously loaded every TEXT-typed embedding row from `vector_entries` and `memories` in a single `.all()` call before processing. On instances with tens of thousands of TEXT embeddings (each row's JSON-stringified embedding is ~30 KB for a 1536-dimension vector, more for larger models), that one call could push the V8 heap past 4–8 GB and OOM the Node process during Phase 1.1 of startup — leaving the server unresponsive after migrations completed.
+
+The repair now pages through TEXT rows in fixed batches of 500. Each batch is fetched, converted in a transaction, then released before the next page is selected; the `WHERE typeof(embedding) = 'text'` filter naturally drops rows once they've been re-stored as BLOBs. Stall detection nullifies any page whose rows can't be JSON-parsed after two consecutive attempts so the loop can't spin forever on corrupt data. Progress is reported into the loading-screen sub-progress field with `subsystem:embedding-repair:start` / `:complete` milestones in the pretty-label table.
+
 #### Feature: observable startup loading screen
 
 Added `GET /api/v1/system/startup-status` (unauthenticated, served before unlock) that returns the current startup phase, current pretty-labeled work, optional sub-progress tiers, and a ring buffer of the last 25 events. The loading screen at `components/loading/StartupProgress.tsx` polls this endpoint every second and renders what the server is doing right now — phase headline, current label, and a "Recently" list — instead of the silent `Loading...` spinner that used to sit on screen for the entire startup window.

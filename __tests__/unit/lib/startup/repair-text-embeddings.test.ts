@@ -43,18 +43,29 @@ describe('repairTextEmbeddings', () => {
   })
 
   it('repairs JSON text embeddings in both vector_entries and memories tables', async () => {
-    const updateVectorRun = jest.fn()
-    const updateMemoryRun = jest.fn()
+    // The mock simulates the production WHERE filter:
+    // once a row is updated (BLOB or NULL), the next page-select drops it.
+    const vectorTable = new Map<string, string | Buffer | null>([
+      ['vec-1', '[1, 2, 3]'],
+      ['vec-bad', 'not-json'],
+    ])
+    const memoryTable = new Map<string, string | Buffer | null>([
+      ['mem-1', '[4, 5]'],
+      ['mem-empty', '[]'],
+      ['mem-bad', '{oops'],
+    ])
 
-    const vectorRows = [
-      { id: 'vec-1', embedding: '[1, 2, 3]' },
-      { id: 'vec-bad', embedding: 'not-json' },
-    ]
-    const memoryRows = [
-      { id: 'mem-1', embedding: '[4, 5]' },
-      { id: 'mem-empty', embedding: '[]' },
-      { id: 'mem-bad', embedding: '{oops' },
-    ]
+    const updateVectorRun = jest.fn((value: Buffer | null, id: string) => {
+      vectorTable.set(id, value)
+    })
+    const updateMemoryRun = jest.fn((value: Buffer | null, id: string) => {
+      memoryTable.set(id, value)
+    })
+
+    const textRowsFrom = (table: Map<string, string | Buffer | null>) =>
+      [...table.entries()]
+        .filter(([, v]) => typeof v === 'string')
+        .map(([id, embedding]) => ({ id, embedding: embedding as string }))
 
     const db = {
       prepare: jest.fn((sql: string) => {
@@ -67,20 +78,26 @@ describe('repairTextEmbeddings', () => {
         }
 
         if (sql.includes("COUNT(*) as count FROM vector_entries")) {
-          return { get: () => ({ count: vectorRows.length }) }
+          return { get: () => ({ count: textRowsFrom(vectorTable).length }) }
         }
         if (sql.includes("SELECT id, embedding FROM vector_entries")) {
-          return { all: () => vectorRows }
+          return { all: () => textRowsFrom(vectorTable) }
+        }
+        if (sql.includes("UPDATE vector_entries SET embedding = NULL")) {
+          return { run: (id: string) => vectorTable.set(id, null) }
         }
         if (sql.includes("UPDATE vector_entries SET embedding = ?")) {
           return { run: updateVectorRun }
         }
 
         if (sql.includes("COUNT(*) as count FROM memories")) {
-          return { get: () => ({ count: memoryRows.length }) }
+          return { get: () => ({ count: textRowsFrom(memoryTable).length }) }
         }
         if (sql.includes("SELECT id, embedding FROM memories")) {
-          return { all: () => memoryRows }
+          return { all: () => textRowsFrom(memoryTable) }
+        }
+        if (sql.includes("UPDATE memories SET embedding = NULL")) {
+          return { run: (id: string) => memoryTable.set(id, null) }
         }
         if (sql.includes("UPDATE memories SET embedding = ? WHERE id = ?")) {
           return { run: updateMemoryRun }
