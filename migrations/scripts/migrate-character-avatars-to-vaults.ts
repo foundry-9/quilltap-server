@@ -39,6 +39,7 @@ import path from 'path';
 import { randomUUID, createHash } from 'crypto';
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
+import { reportProgress } from '../lib/progress';
 import {
   isSQLiteBackend,
   getSQLiteDatabase,
@@ -367,7 +368,10 @@ export const migrateCharacterAvatarsToVaultsMigration: Migration = {
         kind: 'main' | 'history';
       }
 
+      let characterIndex = 0;
       for (const character of characters) {
+        characterIndex++;
+        reportProgress(characterIndex, characters.length, 'characters');
         const vaultId = character.characterDocumentMountPointId;
 
         const targets: AvatarTarget[] = [];

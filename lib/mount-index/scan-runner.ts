@@ -38,13 +38,23 @@ export async function scanAllMountPoints(): Promise<ScanResult[]> {
     return results;
   }
 
+  const { startupProgress } = await import('@/lib/startup/progress');
+  startupProgress.setCurrent('subsystem:mount-index:start', {
+    detail: `${mountPoints.length} mount ${mountPoints.length === 1 ? 'point' : 'points'}`,
+  });
+
   logger.info('Starting mount point scan for all enabled mount points', {
     count: mountPoints.length,
     names: mountPoints.map(mp => mp.name),
   });
 
   // Scan each mount point sequentially to avoid disk I/O contention
+  let mountIndex = 0;
   for (const mountPoint of mountPoints) {
+    mountIndex++;
+    startupProgress.setSubProgress([
+      { current: mountIndex, total: mountPoints.length, unit: 'mount points' },
+    ]);
     try {
       // Database-backed stores have no filesystem basePath to validate;
       // scanMountPoint delegates to the database rescan path directly.
@@ -102,14 +112,27 @@ export async function scanAllMountPoints(): Promise<ScanResult[]> {
     }
   }
 
+  const totalNew = results.reduce((s, r) => s + r.filesNew, 0);
+  const totalModified = results.reduce((s, r) => s + r.filesModified, 0);
+  const totalDeleted = results.reduce((s, r) => s + r.filesDeleted, 0);
+  const totalChunks = results.reduce((s, r) => s + r.chunksCreated, 0);
+  const totalErrors = results.reduce((s, r) => s + r.errors.length, 0);
+
   logger.info('All mount point scans completed', {
     totalMountPoints: mountPoints.length,
-    totalNew: results.reduce((s, r) => s + r.filesNew, 0),
-    totalModified: results.reduce((s, r) => s + r.filesModified, 0),
-    totalDeleted: results.reduce((s, r) => s + r.filesDeleted, 0),
-    totalChunks: results.reduce((s, r) => s + r.chunksCreated, 0),
-    totalErrors: results.reduce((s, r) => s + r.errors.length, 0),
+    totalNew,
+    totalModified,
+    totalDeleted,
+    totalChunks,
+    totalErrors,
   });
+
+  startupProgress.publish({
+    rawLabel: 'subsystem:mount-index:complete',
+    detail: `${mountPoints.length} stores, ${totalNew} new, ${totalModified} modified${totalErrors > 0 ? `, ${totalErrors} errors` : ''}`,
+    level: totalErrors > 0 ? 'warn' : 'info',
+  });
+  startupProgress.setSubProgress(null);
 
   return results;
 }

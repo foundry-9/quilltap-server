@@ -38,6 +38,7 @@ import path from 'path';
 import { randomUUID, createHash } from 'crypto';
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
+import { reportProgress } from '../lib/progress';
 import {
   isSQLiteBackend,
   getSQLiteDatabase,
@@ -361,7 +362,10 @@ export const migrateRemainingGeneralToUploadsMigration: Migration = {
         return { ok: true, storageKey: `mount-blob:${mountPointId}:${blobId}`, blobId };
       }
 
+      let candidateIndex = 0;
       for (const candidate of candidates) {
+        candidateIndex++;
+        reportProgress(candidateIndex, candidates.length, 'files');
         try {
           const subfolder = pickSubfolder(candidate.relativeToGeneral);
           const fileRow = findFileEntryByKey.get(candidate.storageKey) as
@@ -420,7 +424,10 @@ export const migrateRemainingGeneralToUploadsMigration: Migration = {
         )
         .all() as Array<{ id: string; sha256: string; originalFilename: string; mimeType: string; storageKey: string }>;
 
+      let dbOnlyIndex = 0;
       for (const row of dbOnlyRows) {
+        dbOnlyIndex++;
+        reportProgress(dbOnlyIndex, dbOnlyRows.length, 'orphan rows');
         if (handledRowIds.has(row.id)) continue;
         if (!row.sha256) continue;
         try {

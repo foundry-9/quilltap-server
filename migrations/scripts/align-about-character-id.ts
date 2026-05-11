@@ -30,6 +30,7 @@
 
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
+import { reportProgress } from '../lib/progress';
 import {
   isSQLiteBackend,
   getSQLiteDatabase,
@@ -247,6 +248,12 @@ function runMigration(): MigrationResult {
     let totalAttributedToUser = 0;
     let lastId = '';
 
+    // Count memories upfront so reportProgress can show real x/total.
+    const totalMemoriesRow = db
+      .prepare('SELECT COUNT(*) AS n FROM memories')
+      .get() as { n: number } | undefined;
+    const totalMemories = totalMemoriesRow?.n ?? 0;
+
     // Stream rows in id-ordered batches so we never load 19k+ memories at once.
     while (true) {
       const batch = db
@@ -286,6 +293,7 @@ function runMigration(): MigrationResult {
       });
       tx(batch);
 
+      reportProgress(totalScanned, totalMemories, 'memories');
       lastId = batch[batch.length - 1].id;
     }
 

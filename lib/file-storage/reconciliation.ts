@@ -40,6 +40,9 @@ export async function reconcileFilesystem(): Promise<void> {
   const startTime = Date.now();
   const filesDir = getFilesDir();
 
+  const { startupProgress } = await import('@/lib/startup/progress');
+  startupProgress.setCurrent('subsystem:reconcile:start');
+
   logger.info('Starting filesystem reconciliation', { filesDir });
 
   let filesOnDisk = 0;
@@ -269,11 +272,20 @@ export async function reconcileFilesystem(): Promise<void> {
       errors,
       durationMs,
     });
+    startupProgress.publish({
+      rawLabel: 'subsystem:reconcile:complete',
+      detail: `${filesOnDisk} on disk, ${recordsCreated} added, ${recordsDeleted} pruned, ${recordsPreserved} preserved`,
+    });
   } catch (error) {
     const durationMs = Date.now() - startTime;
     logger.error('Filesystem reconciliation failed', {
       error: error instanceof Error ? error.message : String(error),
       durationMs,
+    });
+    startupProgress.publish({
+      rawLabel: 'subsystem:reconcile:complete',
+      level: 'warn',
+      detail: error instanceof Error ? error.message : String(error),
     });
   }
 }

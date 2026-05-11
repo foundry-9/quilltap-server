@@ -65,6 +65,9 @@ export async function register() {
     // Use dynamic import for logger to avoid Edge Runtime issues
     const { logger } = await import('./lib/logger');
     const { startupState } = await import('./lib/startup/startup-state');
+    const { startupProgress } = await import('./lib/startup/progress');
+
+    startupProgress.setCurrent('subsystem:booting');
 
     // Transfer pepper state from global to startupState
     if ((global as any).__quilltapPepperState) {
@@ -74,6 +77,7 @@ export async function register() {
     // If in locked mode, stop here and wait for passphrase via unlock endpoint
     if (startupState.isLockedMode()) {
       startupState.setPhase('locked');
+      startupProgress.setCurrent('subsystem:locked');
       logger.info('Server entering locked mode — passphrase required to proceed', {
         context: 'instrumentation.register',
         dbKeyState: startupState.getPepperState(),
@@ -377,6 +381,7 @@ export async function register() {
       // ================================================================
       // This ensures data compatibility before any API requests
       startupState.setPhase('migrations');
+      startupProgress.setCurrent('subsystem:migrations:start');
 
       const { MigrationRunner } = await import('./migrations');
       const migrationRunner = new MigrationRunner();
@@ -408,6 +413,7 @@ export async function register() {
 
       // Mark migrations as complete
       startupState.markMigrationsComplete();
+      startupProgress.publish({ rawLabel: 'subsystem:migrations:complete', detail: `${migrationResult.migrationsRun} migrations run, ${migrationResult.migrationsSkipped} already current` });
 
       // Store current version in instance_settings so future older versions
       // know not to touch this database
@@ -440,6 +446,7 @@ export async function register() {
       // ================================================================
       // Seeds default character(s) when database is empty
       startupState.setPhase('seeding');
+      startupProgress.setCurrent('subsystem:seeding');
 
       try {
         const { seedInitialData } = await import('./lib/startup/seed-initial-data');
@@ -456,6 +463,7 @@ export async function register() {
       // PHASE 1.5: Auto-upgrade npm-installed plugins
       // ================================================================
       startupState.setPhase('plugin-updates');
+      startupProgress.setCurrent('subsystem:plugin-updates:start', { prettyLabel: 'Polishing the plugin brass' });
 
       try {
         const { checkForUpdates } = await import('./lib/plugins/version-checker');
@@ -503,6 +511,7 @@ export async function register() {
       // ================================================================
       const { initializePlugins } = await import('./lib/startup/plugin-initialization');
       startupState.setPhase('plugins');
+      startupProgress.setCurrent('subsystem:plugins:start');
       const result = await initializePlugins();
 
       if (result.success) {
@@ -526,6 +535,7 @@ export async function register() {
       // ================================================================
       const { fileStorageManager } = await import('./lib/file-storage/manager');
       startupState.setPhase('file-storage');
+      startupProgress.setCurrent('subsystem:file-storage:start');
       if (!fileStorageManager.isInitialized()) {
         await fileStorageManager.initialize();
       }
@@ -670,6 +680,7 @@ export async function register() {
       // ================================================================
       startupState.setPhase('complete');
       startupState.markReady();
+      startupProgress.setCurrent('subsystem:ready');
 
       logger.info('All services initialized successfully', {
         context: 'instrumentation.register',
@@ -683,6 +694,11 @@ export async function register() {
       });
       // Mark startup as failed but allow server to start
       startupState.setPhase('failed');
+      startupProgress.publish({
+        rawLabel: 'subsystem:errored',
+        level: 'error',
+        detail: error instanceof Error ? error.message : String(error),
+      });
       // Don't throw - allow server to start even if initialization fails
     }
   }

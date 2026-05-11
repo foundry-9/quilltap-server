@@ -86,18 +86,19 @@ function CustomSessionProvider({
       });
 
       if (!response.ok) {
-        if (response.status === 503) {
-          // Server not ready (e.g., pepper vault setup needed)
-          // Keep status as "loading" so the UI shows a loading state
-          // rather than rendering without sidebar. The PepperVaultGate
-          // will redirect to /setup if needed, and our retry interval
-          // will pick up once the server is ready.
+        // Any 5xx (server-side) puts us on the fast-retry path. 503 was the
+        // original signal (pepper vault setup needed); 500/502/504/etc. also
+        // happen during the startup window when subsystems aren't ready —
+        // we want the same 5-second retry loop in all those cases so the UI
+        // recovers as soon as the server is healthy, instead of waiting out
+        // the 5-minute refetchInterval.
+        if (response.status >= 500 && response.status < 600) {
           setSession(null);
           setStatus("loading");
           setServerNotReady(true);
           return null;
         }
-        // Other errors - log and retry
+        // Other errors - log and retry on the slow interval
         console.error("Failed to fetch session, will retry");
         setStatus("loading");
         return null;

@@ -216,6 +216,31 @@ Rules for adding or updating these assets:
 - All writing for users is to be in the style of "steampunk + roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket"
 - **IMPORTANT**: We need the human developer's confirmation that they have walked through the release checklist in [DEVELOPMENT.md](./docs/developer/DEVELOPMENT.md#checklist-before-release) when they are ready to run the command `tag-for-release` in production - if they want to go through them, then go through that list with them. Don't do anything there on your own unless they ask you to; this is up to the developer.
 
+## Writing migrations
+
+Every migration registered in [`migrations/scripts/`](./migrations/scripts) and listed in `migrations/scripts/index.ts` must satisfy two rules so the loading screen at startup can tell users what's happening:
+
+1. **Each migration must have a pretty-label entry in [`lib/startup/prettify.ts`](./lib/startup/prettify.ts)** (the `PRETTY_LABELS` table). Use the project's steampunk-Wodehouse voice — terse, present-continuous, oriented around what's happening to the user's data, not the implementation. Without an entry, the loading screen falls back to a hyphen-split humanization of the migration ID, which leaks an internal name to users.
+
+2. **Any migration that iterates over a collection must call `reportProgress(...)` inside the loop**, imported from [`migrations/lib/progress.ts`](./migrations/lib/progress.ts). The helper is throttled (one emit per ~250 ms), so it is safe to call every iteration. Use the single-tier form for flat loops and the multi-tier form for nested ones:
+
+   ```ts
+   import { reportProgress } from '../lib/progress';
+
+   // Flat:
+   reportProgress(i + 1, items.length, 'items');
+
+   // Nested (outer first):
+   reportProgress([
+     { current: p + 1, total: projects.length, unit: 'projects' },
+     { current: f + 1, total: files.length, unit: 'files' },
+   ]);
+   ```
+
+   For batched/streaming migrations where the loop is internal to a SQL batch, count the total upfront with `SELECT COUNT(*)` and pass the running `totalScanned` against it. For synchronous transactions (`db.transaction(...)`) the progress can't reach the UI mid-transaction — fine to skip there.
+
+The commit skill enforces both rules. Adding a migration without a prettify entry, or with a non-trivial loop that doesn't call `reportProgress`, will block the commit.
+
 ## Best Practices and Principles
 
 - respect encapsulation and single source of truth

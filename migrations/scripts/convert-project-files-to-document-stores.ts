@@ -42,6 +42,7 @@ import path from 'path';
 import { randomUUID, createHash } from 'crypto';
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
+import { reportProgress } from '../lib/progress';
 import {
   isSQLiteBackend,
   getSQLiteDatabase,
@@ -363,7 +364,8 @@ async function importProjectDirectory(
   mountDb: DatabaseType,
   projectId: string,
   mountPointId: string,
-  projectDir: string
+  projectDir: string,
+  outerTier?: { current: number; total: number; unit: string }
 ): Promise<ImportCounts> {
   const counts: ImportCounts = {
     textDocuments: 0,
@@ -373,6 +375,7 @@ async function importProjectDirectory(
   };
 
   const files = await walkProjectDirectory(projectDir);
+  let fileIndex = 0;
 
   const insertDocument = mountDb.prepare(
     `INSERT INTO "doc_mount_documents"
@@ -397,6 +400,15 @@ async function importProjectDirectory(
   );
 
   for (const file of files) {
+    fileIndex++;
+    if (outerTier) {
+      reportProgress([
+        outerTier,
+        { current: fileIndex, total: files.length, unit: 'files' },
+      ]);
+    } else {
+      reportProgress(fileIndex, files.length, 'files');
+    }
     try {
       const bytes = await fsPromises.readFile(file.absolutePath);
       const ext = path.extname(file.relativePath);
@@ -641,7 +653,11 @@ export const convertProjectFilesToDocumentStoresMigration: Migration = {
         `DELETE FROM "project_doc_mount_links" WHERE mountPointId = ?`
       );
 
+      let projectIndex = 0;
       for (const project of projects) {
+        projectIndex++;
+        const outerTier = { current: projectIndex, total: projects.length, unit: 'projects' };
+        reportProgress([outerTier]);
         const projectDir = path.join(filesDir, project.id);
         const archiveDir = `${projectDir}_doc_store_archive`;
 
@@ -674,7 +690,8 @@ export const convertProjectFilesToDocumentStoresMigration: Migration = {
             mountDb,
             project.id,
             mountPointId,
-            projectDir
+            projectDir,
+            outerTier
           );
 
           insertLinkStmt.run(randomUUID(), project.id, mountPointId, now, now);

@@ -4,6 +4,26 @@
 
 ### 4.4-dev
 
+#### Feature: observable startup loading screen
+
+Added `GET /api/v1/system/startup-status` (unauthenticated, served before unlock) that returns the current startup phase, current pretty-labeled work, optional sub-progress tiers, and a ring buffer of the last 25 events. The loading screen at `components/loading/StartupProgress.tsx` polls this endpoint every second and renders what the server is doing right now — phase headline, current label, and a "Recently" list — instead of the silent `Loading...` spinner that used to sit on screen for the entire startup window.
+
+Wiring in `instrumentation.ts`, `app/api/v1/system/unlock/route.ts`, `lib/file-storage/reconciliation.ts`, `lib/mount-index/scan-runner.ts`, and `lib/startup/backfill-character-vaults.ts` publishes phase + milestone events into the new `lib/startup/progress.ts` singleton. The pretty-label table at `lib/startup/prettify.ts` has curated steampunk-voice strings for every migration in `migrations/scripts/` plus the subsystem milestones; unknown labels fall back to a hyphen-split humanization.
+
+`components/layout/app-layout.tsx` now keeps the loading screen visible until the polled phase reaches `complete` (or `failed`), not just until the session endpoint resolves — closes the gap where the app would render with empty SWR caches because data endpoints were still 500ing during reconcile / vault backfill.
+
+#### Feature: migration progress reporting
+
+Added `migrations/lib/progress.ts` exporting `reportProgress(current, total, unit)` (and a nested-tier form). Migrations that iterate over a collection call this inside their loop; the helper throttles to one emit per ~250 ms, writes a `Migration progress` line to `combined.log`, and updates the loading-screen sub-progress field. The migration runner sets the active id via `beginMigration` / `endMigration` so each migration's progress is scoped to its own context.
+
+Retrofitted with `reportProgress` calls: `convert-images-to-webp`, `convert-project-files-to-document-stores` (two-tier: projects → files), `migrate-general-story-backgrounds-to-mount`, `migrate-remaining-general-to-uploads`, `migrate-character-avatars-to-vaults`, `align-about-character-id` (v1 and v2). The pre-existing `[WebP Migration] Progress` every-50-files log was removed in favor of the unified helper.
+
+`CLAUDE.md` gained a "Writing migrations" section and the commit skill at `.claude/commands/commit.md` gained a new item 3 that blocks commits if a new migration is missing a `lib/startup/prettify.ts` entry or has an unannotated iteration loop.
+
+#### Fix: session provider's 5xx retry path now covers all server errors, not just 503
+
+`components/providers/session-provider.tsx` previously only treated HTTP 503 as "server not ready" (which triggers the 5-second fast-retry loop). Any other 5xx fell through to the 5-minute `refetchInterval`, so a transient 500 during startup would leave the loading screen stuck for minutes after the server was actually healthy. Now any 5xx response sets `serverNotReady` and joins the fast-retry path.
+
 #### Fix: file-storage scanner choked on migration archive directories
 
 After the v4.3 / v4.4 `_general/` sweep, instances now have safety-net archive directories alongside the live tree: `<projectId>_doc_store_archive/` at the top level and `_general/_avatar_archive/`, `_general/_generated_archive/`, `_general/_uploads_archive/`, `_general/story-backgrounds_archive/` underneath. The startup reconciler and the chokidar watcher were walking every one of those, treating each file as an orphan, and trying to write a `files` row with `projectId` set to the archive directory name (e.g. `46300c1f-…_doc_store_archive`). The Zod UUID validator rejected every attempt, so no rows ever landed — but the SHA-256 compute + Zod validation cycle still ran per file, and on iCloud-backed instances that's measured in seconds per file. Symptom: the Salon UI hung at "Loading…" while the dev server burned through hundreds of failing reconcile/watcher attempts.

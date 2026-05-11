@@ -263,6 +263,8 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
   // If the server was in locked mode, trigger deferred initialization
   if (startupState.getPhase() === 'locked') {
     unlockLogger.info('Server unlocked — triggering deferred startup initialization');
+    const { startupProgress } = await import('@/lib/startup/progress');
+    startupProgress.setCurrent('subsystem:unlocking');
 
     // Run the rest of the startup sequence asynchronously
     // (The register() function in instrumentation.ts already returned,
@@ -277,6 +279,11 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
         });
         startupState.setPhase('failed');
         startupState.setError(err instanceof Error ? err.message : String(err));
+        startupProgress.publish({
+          rawLabel: 'subsystem:errored',
+          level: 'error',
+          detail: err instanceof Error ? err.message : String(err),
+        });
       }
     });
   }

@@ -24,6 +24,7 @@
 
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
+import { reportProgress } from '../lib/progress';
 import {
   isSQLiteBackend,
   getSQLiteDatabase,
@@ -171,6 +172,17 @@ function runMigration(): MigrationResult {
     let totalFlippedToSelf = 0;
     let lastId = '';
 
+    // Count the candidate set upfront so reportProgress can show real x/total.
+    const totalCandidatesRow = db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM memories
+         WHERE aboutCharacterId IS NOT NULL
+           AND aboutCharacterId != ''
+           AND aboutCharacterId != characterId`,
+      )
+      .get() as { n: number } | undefined;
+    const totalCandidates = totalCandidatesRow?.n ?? 0;
+
     while (true) {
       const batch = db
         .prepare(
@@ -222,6 +234,7 @@ function runMigration(): MigrationResult {
       });
       tx(batch);
 
+      reportProgress(totalScanned, totalCandidates, 'memories');
       lastId = batch[batch.length - 1].id;
     }
 

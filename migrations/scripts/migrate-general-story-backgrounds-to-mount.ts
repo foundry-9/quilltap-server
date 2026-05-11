@@ -35,6 +35,7 @@ import path from 'path';
 import { randomUUID, createHash } from 'crypto';
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
+import { reportProgress } from '../lib/progress';
 import {
   isSQLiteBackend,
   getSQLiteDatabase,
@@ -392,7 +393,10 @@ export const migrateGeneralStoryBackgroundsToMountMigration: Migration = {
 
       const handledRowIds = new Set<string>();
 
+      let candidateIndex = 0;
       for (const candidate of candidates) {
+        candidateIndex++;
+        reportProgress(candidateIndex, candidates.length, 'backgrounds');
         try {
           const fileRow = findFileEntryByKey.get(candidate.storageKey) as
             | { id: string; sha256: string; originalFilename: string; mimeType: string }
@@ -473,7 +477,10 @@ export const migrateGeneralStoryBackgroundsToMountMigration: Migration = {
       // prior run already imported the blob (by sha), or maybe the row is
       // genuinely orphaned. Either way, never lose the row — we either link
       // it to an existing blob or leave it untouched for inspection.
+      let dbOnlyIndex = 0;
       for (const row of dbOnlyRows) {
+        dbOnlyIndex++;
+        reportProgress(dbOnlyIndex, dbOnlyRows.length, 'orphan rows');
         if (handledRowIds.has(row.id)) continue;
         if (!row.sha256) continue;
         try {
