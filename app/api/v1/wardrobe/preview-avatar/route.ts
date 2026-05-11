@@ -22,7 +22,6 @@ import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
-import { fileStorageManager } from '@/lib/file-storage/manager';
 import {
   getCharacterVaultStore,
   writeCharacterAvatarToVault,
@@ -137,48 +136,26 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   const source: FileSource = 'GENERATED';
 
   try {
-    // Previews are character-scoped and never tied to a chat — when the
-    // character has a vault, write the preview into it; otherwise fall
-    // through to the disk path.
-    let storageKey: string;
-    let fileFolderPath: string | null = '/character-avatars/';
+    // Previews are character-scoped and never tied to a chat. The character's
+    // vault is provisioned at character creation and re-asserted by startup
+    // backfill, so getCharacterVaultStore should never return null in practice.
+    // Refuse to write rather than leaking bytes into the catch-all _general/.
     const vault = await getCharacterVaultStore(characterId);
-    if (vault) {
-      const written = await writeCharacterAvatarToVault({
-        characterId,
-        kind: 'history',
-        filename: originalFilename,
-        content: buffer,
-        contentType: mimeType,
-        description: `${character.name} — outfit preview`,
-      });
-      storageKey = written.storageKey;
-      fileFolderPath = null;
-    } else {
-      const uploadResult = await fileStorageManager.uploadFile({
-        filename: originalFilename,
-        content: buffer,
-        contentType: mimeType,
-        projectId: null,
-        folderPath: '/character-avatars/',
-      });
-      storageKey = uploadResult.storageKey;
-
-      const existingFolder = await repos.folders.findByPath(
-        user.id,
-        '/character-avatars/',
-        null,
+    if (!vault) {
+      throw new Error(
+        `Character ${characterId} has no linked database-backed vault; cannot persist avatar preview.`,
       );
-      if (!existingFolder) {
-        await repos.folders.create({
-          userId: user.id,
-          path: '/character-avatars/',
-          name: 'character-avatars',
-          parentFolderId: null,
-          projectId: null,
-        });
-      }
     }
+    const written = await writeCharacterAvatarToVault({
+      characterId,
+      kind: 'history',
+      filename: originalFilename,
+      content: buffer,
+      contentType: mimeType,
+      description: `${character.name} — outfit preview`,
+    });
+    const storageKey = written.storageKey;
+    const fileFolderPath: string | null = null;
 
     await repos.files.create(
       {

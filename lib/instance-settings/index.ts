@@ -23,6 +23,7 @@ import { MemoryExtractionLimitsSchema, type MemoryExtractionLimits } from '@/lib
 const KEY_MEMORY_EXTRACTION_CONCURRENCY = 'memoryExtractionConcurrency';
 const KEY_MEMORY_EXTRACTION_LIMITS = 'memoryExtractionLimits';
 const KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID = 'lanternBackgroundsMountPointId';
+const KEY_USER_UPLOADS_MOUNT_POINT_ID = 'userUploadsMountPointId';
 
 const DEFAULT_MEMORY_EXTRACTION_CONCURRENCY = 1;
 const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = {
@@ -115,10 +116,26 @@ export async function setLanternBackgroundsMountPointId(value: string): Promise<
   await writeSetting(KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID, value);
 }
 
+/**
+ * Read the Quilltap Uploads mount-point id. The provisioning migration writes
+ * this on first boot; runtime callers (the user-uploads bridge) read it to
+ * find where to land project-less file uploads, image pastes, shell-tool
+ * copies, capabilities reports, and restored project-less backup files.
+ */
+export async function getUserUploadsMountPointId(): Promise<string | null> {
+  return readSetting(KEY_USER_UPLOADS_MOUNT_POINT_ID);
+}
+
+export async function setUserUploadsMountPointId(value: string): Promise<void> {
+  if (!value) throw new Error('userUploadsMountPointId must be a non-empty id');
+  await writeSetting(KEY_USER_UPLOADS_MOUNT_POINT_ID, value);
+}
+
 export const InstanceSettingsKeys = {
   memoryExtractionConcurrency: KEY_MEMORY_EXTRACTION_CONCURRENCY,
   memoryExtractionLimits: KEY_MEMORY_EXTRACTION_LIMITS,
   lanternBackgroundsMountPointId: KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID,
+  userUploadsMountPointId: KEY_USER_UPLOADS_MOUNT_POINT_ID,
 } as const;
 
 // Re-export the schema for callers that want to validate independently.

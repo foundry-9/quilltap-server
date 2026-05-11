@@ -5,7 +5,6 @@
 
 import { createHash } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
-import { fileStorageManager } from '@/lib/file-storage/manager';
 import {
   getLanternBackgroundsStore,
   writeLanternBackgroundToMountStore,
@@ -135,26 +134,21 @@ async function saveGeneratedImage(
     const fileId = crypto.randomUUID();
 
     // Generic image-tool output goes into the Lantern Backgrounds mount under
-    // `tool/`. Falls back to disk only when the mount hasn't been provisioned.
-    let uploadResult: { storageKey: string };
+    // `tool/`. The mount is provisioned by provision-lantern-backgrounds-mount-v1;
+    // refuse to write rather than leak bytes into the catch-all _general/ space.
     const lantern = await getLanternBackgroundsStore();
-    if (lantern) {
-      const written = await writeLanternBackgroundToMountStore({
-        filename: originalFilename,
-        content: buffer,
-        contentType: finalMimeType,
-        subfolder: 'tool',
-      });
-      uploadResult = { storageKey: written.storageKey };
-    } else {
-      uploadResult = await fileStorageManager.uploadFile({
-        filename: originalFilename,
-        content: buffer,
-        contentType: finalMimeType,
-        projectId: null,
-        folderPath: '/',
-      });
+    if (!lantern) {
+      throw new Error(
+        'Lantern Backgrounds mount is not provisioned; cannot persist generate_image output.',
+      );
     }
+    const written = await writeLanternBackgroundToMountStore({
+      filename: originalFilename,
+      content: buffer,
+      contentType: finalMimeType,
+      subfolder: 'tool',
+    });
+    const uploadResult: { storageKey: string } = { storageKey: written.storageKey };
     // Inherit tags from linked entities (e.g., the chat)
     const inheritedTags = await getInheritedTags(linkedTo, userId);
 

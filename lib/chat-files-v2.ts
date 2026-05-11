@@ -8,6 +8,7 @@ import { extname } from 'node:path';
 import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
 import { fileStorageManager } from './file-storage/manager';
+import { writeUserUploadToMountStore } from './file-storage/user-uploads-bridge';
 import { detectTextContent, getBestMimeType } from './files/text-detection';
 import type { FileEntry, FileCategory, Provider } from './schemas/types';
 import { logger } from '@/lib/logger';
@@ -313,14 +314,34 @@ async function uploadFileToProject(
   // Generate a new file ID
   const fileId = crypto.randomUUID();
 
-  // Upload to file storage
-  const { storageKey } = await fileStorageManager.uploadFile({
-    filename,
-    content: buffer,
-    contentType: mimeType,
-    projectId: projectId || null,
-    folderPath: '/',
-  });
+  // Route project-bound attachments through the project mount (via FSM, which
+  // resolves to project-store-bridge). Project-less attachments land in the
+  // Quilltap Uploads mount under chat/, not the catch-all _general/.
+  let storageKey: string;
+  let fileFolderPath: string | null;
+  let fileProjectId: string | null;
+  if (projectId) {
+    const uploaded = await fileStorageManager.uploadFile({
+      filename,
+      content: buffer,
+      contentType: mimeType,
+      projectId,
+      folderPath: '/',
+    });
+    storageKey = uploaded.storageKey;
+    fileFolderPath = '/';
+    fileProjectId = projectId;
+  } else {
+    const written = await writeUserUploadToMountStore({
+      filename,
+      content: buffer,
+      contentType: mimeType,
+      subfolder: 'chat',
+    });
+    storageKey = written.storageKey;
+    fileFolderPath = null;
+    fileProjectId = null;
+  }
   // Inherit tags from the chat (and any other linked entities)
   const inheritedTags = await getInheritedTags(linkedTo, userId);
   // Create metadata in repository
@@ -342,8 +363,8 @@ async function uploadFileToProject(
     generationRevisedPrompt: null,
     description: null,
     tags: inheritedTags,
-    projectId: projectId || null,
-    folderPath: '/',
+    projectId: fileProjectId,
+    folderPath: fileFolderPath,
     storageKey,
   }, { id: fileId });
   return {

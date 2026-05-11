@@ -1830,16 +1830,18 @@ async function reconcileRelationships(
         }
       }
 
-      // Remap characterDocumentMountPointId
+      // Remap characterDocumentMountPointId. Only rewrite when the imported
+      // value resolves to a remapped mount-point row — character vaults are
+      // typically provisioned fresh at import time by
+      // provisionImportedCharacterVault, and the post-provision row holds a
+      // freshly-allocated id we must not blow away. The earlier behavior of
+      // nulling the field on a failed remap created orphaned vaults: the
+      // importer would provision a vault, then this pass would clear the link,
+      // and the startup vault backfill would provision yet another one.
       if (character.characterDocumentMountPointId) {
         const newMountId = remapId(character.characterDocumentMountPointId, idMaps.mountPoints);
         if (newMountId) {
           updates.characterDocumentMountPointId = newMountId;
-          hasUpdates = true;
-        } else {
-          // Referenced mount point was not part of the import — null the link
-          // rather than leave a dangling reference.
-          updates.characterDocumentMountPointId = null;
           hasUpdates = true;
         }
       }

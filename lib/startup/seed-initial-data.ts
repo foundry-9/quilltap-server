@@ -23,11 +23,11 @@ import {
   getSeedAvatars,
 } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
-import { fileStorageManager } from '@/lib/file-storage/manager';
 import {
   getCharacterVaultStore,
   writeCharacterAvatarToVault,
 } from '@/lib/file-storage/character-vault-bridge';
+import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 
 /**
  * Seed initial data if the database is empty
@@ -290,29 +290,29 @@ async function seedAvatars(
         // Calculate SHA256 hash for the image
         const sha256 = createHash('sha256').update(avatar.content).digest('hex');
 
-        // Route the seed avatar into the character vault when one exists.
-        // Seeds are the canonical "main" — they overwrite images/avatar.webp.
-        let storageKey: string;
-        let fileFolderPath: string | null = '/';
+        // Seed characters created during first-startup do not auto-provision a
+        // vault the way API-created ones do, so ensure one exists here.
+        // ensureCharacterVault is idempotent and reads the current DB row, so
+        // a character that already carries characterDocumentMountPointId
+        // returns unchanged. Re-fetch first so we see vaults provisioned by
+        // an upstream step like seedFromImports.
+        const freshCharacter = await repos.characters.findById(character.id) ?? character;
+        await ensureCharacterVault(freshCharacter);
         const vault = await getCharacterVaultStore(character.id);
-        if (vault) {
-          const written = await writeCharacterAvatarToVault({
-            characterId: character.id,
-            kind: 'main',
-            filename: avatar.filename,
-            content: avatar.content,
-            contentType: avatar.mimeType,
-          });
-          storageKey = written.storageKey;
-          fileFolderPath = null;
-        } else {
-          const uploaded = await fileStorageManager.uploadFile({
-            filename: avatar.filename,
-            content: avatar.content,
-            contentType: avatar.mimeType,
-          });
-          storageKey = uploaded.storageKey;
+        if (!vault) {
+          throw new Error(
+            `Failed to resolve vault for seed character ${character.id} (${character.name}) after provisioning.`,
+          );
         }
+        const written = await writeCharacterAvatarToVault({
+          characterId: character.id,
+          kind: 'main',
+          filename: avatar.filename,
+          content: avatar.content,
+          contentType: avatar.mimeType,
+        });
+        const storageKey = written.storageKey;
+        const fileFolderPath: string | null = null;
 
         // Create the file entry in the database
         const fileId = randomUUID();

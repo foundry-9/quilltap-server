@@ -19,6 +19,7 @@ import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
 import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { UuidRemapper } from './uuid-remapper';
@@ -1214,14 +1215,28 @@ export async function restore(
       try {
         const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile, data.manifest?.backupFormat);
         if (fileBuffer) {
-          // Upload to storage using file storage manager
-          const uploadResult = await fileStorageManager.uploadFile({
-            filename: file.originalFilename,
-            content: fileBuffer,
-            contentType: file.mimeType,
-            projectId: file.projectId || null,
-            folderPath: file.folderPath || '/',
-          });
+          // Project-bound files restore into the project mount (via FSM →
+          // project-store-bridge). Project-less files land in the Quilltap
+          // Uploads mount under restored/, not the catch-all _general/.
+          let restoredStorageKey: string;
+          if (file.projectId) {
+            const uploadResult = await fileStorageManager.uploadFile({
+              filename: file.originalFilename,
+              content: fileBuffer,
+              contentType: file.mimeType,
+              projectId: file.projectId,
+              folderPath: file.folderPath || '/',
+            });
+            restoredStorageKey = uploadResult.storageKey;
+          } else {
+            const written = await writeUserUploadToMountStore({
+              filename: file.originalFilename,
+              content: fileBuffer,
+              contentType: file.mimeType,
+              subfolder: 'restored',
+            });
+            restoredStorageKey = written.storageKey;
+          }
 
           // Create file metadata with storage key
           // Strip auto-generated and legacy fields from backup data
@@ -1233,7 +1248,7 @@ export async function restore(
           await repos.files.create(
             {
               ...fileData,
-              storageKey: uploadResult.storageKey,
+              storageKey: restoredStorageKey,
             },
             { id: file.id }
           );

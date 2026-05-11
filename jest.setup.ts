@@ -314,6 +314,48 @@ jest.mock('@/lib/file-storage/manager', () => {
   }
 })
 
+// Mock the document-store bridges so route/handler tests that exercise the
+// post-fallback writers (character avatars, Lantern backgrounds, project files)
+// don't need to spin up real mounts. Tests can override per-suite as needed.
+jest.mock('@/lib/file-storage/lantern-store-bridge', () => ({
+  getLanternBackgroundsStore: jest.fn().mockResolvedValue({ mountPointId: 'mock-lantern-mount' }),
+  writeLanternBackgroundToMountStore: jest.fn().mockResolvedValue({
+    storageKey: 'mount-blob:mock-lantern-mount:mock-blob-id',
+    mountPointId: 'mock-lantern-mount',
+    blobId: 'mock-blob-id',
+    relativePath: 'tool/mock.webp',
+    storedMimeType: 'image/webp',
+    sizeBytes: 1024,
+    sha256: 'mock-sha256',
+  }),
+}))
+
+jest.mock('@/lib/file-storage/character-vault-bridge', () => ({
+  getCharacterVaultStore: jest.fn().mockResolvedValue({ mountPointId: 'mock-vault-mount', mountPointName: 'Mock Vault' }),
+  writeCharacterAvatarToVault: jest.fn().mockResolvedValue({
+    storageKey: 'mount-blob:mock-vault-mount:mock-blob-id',
+    mountPointId: 'mock-vault-mount',
+    blobId: 'mock-blob-id',
+    relativePath: 'images/avatar.webp',
+    storedMimeType: 'image/webp',
+    sizeBytes: 1024,
+    sha256: 'mock-sha256',
+  }),
+}))
+
+jest.mock('@/lib/file-storage/user-uploads-bridge', () => ({
+  getUserUploadsStore: jest.fn().mockResolvedValue({ mountPointId: 'mock-uploads-mount' }),
+  writeUserUploadToMountStore: jest.fn().mockResolvedValue({
+    storageKey: 'mount-blob:mock-uploads-mount:mock-blob-id',
+    mountPointId: 'mock-uploads-mount',
+    blobId: 'mock-blob-id',
+    relativePath: 'uploads/mock-file',
+    storedMimeType: 'application/octet-stream',
+    sizeBytes: 1024,
+    sha256: 'mock-sha256',
+  }),
+}))
+
 // Mock LLM logging service — same SWC hoisting reason as below. Tests that need
 // to assert against logLLMCall do so via `jest.mocked(logLLMCall)`.
 jest.mock('@/lib/services/llm-logging.service', () => ({

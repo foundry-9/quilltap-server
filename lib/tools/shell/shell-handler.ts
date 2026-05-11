@@ -21,6 +21,7 @@ import {
   getWorkspaceProjectDir,
 } from '@/lib/paths';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
 import type {
   ShellToolContext,
   ShellCommandResult,
@@ -695,14 +696,34 @@ async function copyWorkspaceToFiles(
   const content = fs.readFileSync(absolutePath);
   const filename = path.basename(absolutePath);
 
-  // Upload to Files storage
-  const uploadResult = await fileStorageManager.uploadFile({
-    filename,
-    content,
-    contentType: 'application/octet-stream',
-    projectId: context.projectId || undefined,
-    folderPath: '/',
-  });
+  // Project-scoped shells keep landing in the project mount (FSM →
+  // project-store-bridge). Project-less shells land in the Quilltap Uploads
+  // mount under shell/, not the catch-all _general/.
+  let storageKey: string;
+  let fileFolderPath: string | null;
+  let fileProjectId: string | null;
+  if (context.projectId) {
+    const uploaded = await fileStorageManager.uploadFile({
+      filename,
+      content,
+      contentType: 'application/octet-stream',
+      projectId: context.projectId,
+      folderPath: '/',
+    });
+    storageKey = uploaded.storageKey;
+    fileFolderPath = '/';
+    fileProjectId = context.projectId;
+  } else {
+    const written = await writeUserUploadToMountStore({
+      filename,
+      content,
+      contentType: 'application/octet-stream',
+      subfolder: 'shell',
+    });
+    storageKey = written.storageKey;
+    fileFolderPath = null;
+    fileProjectId = null;
+  }
 
   // Create file record in database
   const repos = getRepositories();
@@ -716,10 +737,10 @@ async function copyWorkspaceToFiles(
     linkedTo: [],
     source: 'UPLOADED' as const,
     category: 'DOCUMENT' as const,
-    storageKey: uploadResult.storageKey,
+    storageKey,
     tags: [],
-    projectId: context.projectId || null,
-    folderPath: '/',
+    projectId: fileProjectId,
+    folderPath: fileFolderPath,
   });
   const fileId = fileRecord.id;
 

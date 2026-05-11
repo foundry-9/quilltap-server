@@ -298,64 +298,40 @@ class FileStorageManager {
       folderPath,
     } = params;
     try {
-      // When the project has a linked database-backed document store
-      // (established by the Stage 1 migration), route writes there instead of
-      // onto disk. A shim storageKey `mount-blob:{mountPointId}:{blobId}` is
-      // returned so downstream reads/deletes can tell the two storage modes
-      // apart.
-      if (projectId) {
-        const target = await getProjectDocumentStore(projectId);
-        if (target) {
-          const result = await writeProjectFileToMountStore({
-            projectId,
-            filename,
-            content,
-            contentType,
-            folderPath,
-          });
-          logger.info('File uploaded to project document store', {
-            filename,
-            projectId,
-            mountPointId: result.mountPointId,
-            blobId: result.blobId,
-            relativePath: result.relativePath,
-            size: result.sizeBytes,
-          });
-          return { storageKey: result.storageKey };
-        }
+      // Strict mode: every call must resolve to a document store. Project-bound
+      // writes go through the project bridge; project-less writes are not this
+      // method's responsibility — those callers must use one of the dedicated
+      // bridges (user-uploads-bridge, lantern-store-bridge, character-vault-
+      // bridge) instead. No bytes leak into _general/ on disk.
+      if (!projectId) {
+        throw new Error(
+          `FileStorageManager.uploadFile requires projectId. Project-less uploads must route through a dedicated bridge (writeUserUploadToMountStore, writeLanternBackgroundToMountStore, or writeCharacterAvatarToVault). Filename: ${filename}`,
+        );
       }
 
-      const backend = await this.getBackend();
+      const target = await getProjectDocumentStore(projectId);
+      if (!target) {
+        throw new Error(
+          `Project ${projectId} has no linked database-backed document store. Run convert-project-files-to-document-stores-v1 to provision one before uploading.`,
+        );
+      }
 
-      // Generate storage key
-      let storageKey = this.buildStorageKey({
-        filename,
+      const result = await writeProjectFileToMountStore({
         projectId,
+        filename,
+        content,
+        contentType,
         folderPath,
       });
-
-      // Handle filename collision — append (2), (3), etc.
-      let attempt = 1;
-      while (await backend.exists(storageKey)) {
-        attempt++;
-        storageKey = this.buildStorageKeyWithSuffix({
-          filename,
-          projectId,
-          folderPath,
-        }, attempt);
-      }
-
-      // Upload file
-      await backend.upload(storageKey, content, contentType);
-
-      logger.info('File uploaded successfully', {
+      logger.info('File uploaded to project document store', {
         filename,
-        storageKey,
-        size: content.length,
-        projectId: projectId || '_general',
+        projectId,
+        mountPointId: result.mountPointId,
+        blobId: result.blobId,
+        relativePath: result.relativePath,
+        size: result.sizeBytes,
       });
-
-      return { storageKey };
+      return { storageKey: result.storageKey };
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown upload error';

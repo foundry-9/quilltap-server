@@ -4,6 +4,70 @@
 
 ### 4.4-dev
 
+#### Fix: .qtap importer was nulling out freshly-provisioned character vaults
+
+The post-import reconcile pass in `lib/import/quilltap-import-service.ts` was clearing `characters.characterDocumentMountPointId` on any imported character whose vault id didn't appear in `idMaps.mountPoints` — which is always the case, because character vaults are runtime-allocated per instance and never carried in `.qtap` exports as standalone mount-point rows. The flow was: import creates the character, `provisionImportedCharacterVault` allocates vault A and links the row, then reconcile reads the row, fails to remap A, and writes `characterDocumentMountPointId = null` over the freshly-set value. The startup vault backfill would later allocate vault B and link to that, leaving vault A orphaned.
+
+Behavior was hidden in normal use because the orphaned vault still existed in the mount-index DB and the backfill always produced something — the only visible effect was that every imported character on every instance accumulated one orphan vault per import run.
+
+It surfaced now because the new `seed-initial-data.ts` path calls `ensureCharacterVault` synchronously before writing the seeded avatar, so the duplicate vault gets the avatar bytes and the original (orphan) vault stays empty.
+
+Fix: drop the `else` branch that nulled the field on a failed remap. The reconcile pass now only rewrites `characterDocumentMountPointId` when the imported value is actually present in `idMaps.mountPoints`. Source-instance vault ids that don't carry over are simply left alone, since the post-provision value in the DB is already correct.
+
+Verified on a fresh-instance dev boot: `doc_mount_points` now contains exactly the two global mounts (Lantern Backgrounds, Quilltap Uploads) plus one vault per seed character (Lorian, Riya) — no orphans. Both characters' `defaultImageId` points at a `mount-blob:` storage key whose blob lives at `images/avatar.webp` inside the correct vault. `<filesDir>/files/` is empty (no `_general/` ever created).
+
+#### Provision Quilltap Uploads mount; route every project-less writer through a bridge; strict-mode FileStorageManager.uploadFile
+
+Closes the `_general/` namespace as a legitimate destination for new writes. Provisions a single global database-backed mount named **"Quilltap Uploads"** (`storeType=documents`, `mountType=database`), persists its id in `instance_settings.userUploadsMountPointId`, and routes every project-less writer through a new bridge into that mount instead of onto disk.
+
+New runtime modules:
+
+- `lib/file-storage/user-uploads-bridge.ts` — `getUserUploadsStore()` + `writeUserUploadToMountStore({ subfolder: 'chat' | 'images' | 'shell' | 'diagnostics' | 'restored' | 'uploads' })`. Returns the same `mount-blob:{mountPointId}:{blobId}` shim the other bridges use.
+- `lib/instance-settings/index.ts` — `getUserUploadsMountPointId()` / `setUserUploadsMountPointId()` + key constant.
+
+Rewired writers (all gain bridge routing for the no-project case; project-scoped paths continue through `FileStorageManager.uploadFile` → `writeProjectFileToMountStore`):
+
+- `lib/chat-files-v2.ts` — chat attachments → `chat/`
+- `lib/images-v2.ts` — paste/drag-drop/URL-import images → `images/` (always non-project)
+- `app/api/v1/files/shared.ts` — Files-tab generic uploader → `images/` for IMAGE category, otherwise `uploads/`
+- `lib/tools/shell/shell-handler.ts` — workspace→Files copy → `shell/`
+- `lib/tools/capabilities-report.ts` — diagnostic markdown → `diagnostics/` (always non-project)
+- `lib/backup/restore-service.ts` — project-less restore replay → `restored/`
+
+New migrations:
+
+- `provision-user-uploads-mount-v1` — creates the mount, pre-creates the six subfolders, persists the id to `instance_settings`. Idempotent (adopts an existing row when the setting already points at one).
+- `migrate-remaining-general-to-uploads-v1` — depends on `provision-user-uploads-mount-v1` + the prior Lantern / vault migrations. Walks `<filesDir>/_general/` (excluding the `_*_archive` siblings that the Lantern + vault migrations created), imports each remaining file into the Uploads mount under `uploads/` (or `diagnostics/` for `capabilities-report-*.md`), sha256-verifies against `files.sha256` when present, rewrites `files.storageKey` to the `mount-blob:` shim, and moves the source bytes into `_general/_uploads_archive/`. Also re-links any `files` row that still points at `_general/...` but whose disk bytes are gone, when a matching sha already exists in the mount.
+
+`FileStorageManager.uploadFile` is now strict: project-less callers throw with a clear "use one of the dedicated bridges" error. The legacy disk fallback (`<basePath>/_general/...`) is no longer reachable from any in-tree caller. Project-scoped uploads where the project lacks a linked document store also throw — older instances missing the v3 conversion are flagged to re-run `convert-project-files-to-document-stores-v1`. The legacy `buildStorageKey` / `buildStorageKeyWithSuffix` / `buildLegacyStorageKey` helpers remain for read-side path reconstruction (the watcher and reconciliation scanners still recognize `_general/...` keys during archive cleanup).
+
+Test setup: added a global `jest.mock` for `@/lib/file-storage/user-uploads-bridge` mirroring the Lantern and character-vault mocks. The full suite (315 files, 5829 tests) passes.
+
+Net effect: every code path that ever wrote into `_general/` now routes through a database-backed document store. The only legitimate on-disk writers remaining under `<filesDir>/` are `_thumbnails/` (derived cache) and the migration archive siblings. New deploys will see an empty `_general/` after the migrations run.
+
+#### Remove disk fallback from six bridge-routed writers
+
+Following the SillyTavern-import fix and the v4.3 `_general/` migration, the six writers that already had a document-store target no longer fall back to disk when that target is missing — they fail with a descriptive error instead. After the v4.3 migrations the Lantern Backgrounds mount and per-character vaults are guaranteed to exist, so the fallback path was unused in practice and only existed as a safety net that re-introduced bytes into `_general/` on edge cases.
+
+- `app/api/v1/wardrobe/preview-avatar/route.ts` — vault required.
+- `lib/startup/seed-initial-data.ts` — synchronously `ensureCharacterVault(character)` before each seed-avatar write (seed characters didn't auto-provision a vault the way API-created ones do), then throw if it can't be resolved.
+- `app/api/v1/images/route.ts` (`?action=generate`) — Lantern mount required.
+- `lib/tools/handlers/image-generation-handler.ts` (`generate_image` tool) — Lantern mount required.
+- `lib/background-jobs/handlers/story-background.ts` — Lantern mount required for project-less chats (project-scoped path unchanged).
+- `lib/background-jobs/handlers/character-avatar.ts` — vault required for project-less chats (forked-child handler, so vault must be provisioned by the parent's character-create flow or startup backfill; cannot ensureCharacterVault inline due to readonly DB + buffered-write semantics).
+
+Test setup: added global `jest.mock` for `@/lib/file-storage/lantern-store-bridge` and `@/lib/file-storage/character-vault-bridge` so route/handler tests don't need to spin up real mounts. `__tests__/unit/images-generate.test.ts` asserts against `writeLanternBackgroundToMountStore` instead of `fileStorageManager.uploadFile`.
+
+Net effect: every writer that ever touched `_general/` for character avatars or Lantern-generated images now either succeeds against a real document store or surfaces a hard error. No bytes leak into the catch-all space.
+
+#### Fix: SillyTavern PNG import dropped the embedded portrait
+
+`POST /api/v1/characters?action=import` (multipart upload of a SillyTavern character card) parsed the JSON metadata out of the PNG's tEXt chunk, then set `avatarUrl = null` and discarded the PNG bytes. Every imported character had to have its portrait regenerated from the wardrobe before anyone could see it.
+
+The import handler now keeps the uploaded buffer when it's a PNG, synchronously provisions the character's vault (`ensureCharacterVault`), and writes the bytes through `writeCharacterAvatarToVault({ kind: 'main' })` — landing as `images/avatar.webp` inside the vault (`transcodeToWebP` re-encodes via sharp, which also strips the now-redundant tEXt chunk). The resulting `files` row is linked to the character via `defaultImageId` and tagged `source: 'IMPORTED'`, `category: 'AVATAR'`. JSON-only imports still kick off vault provisioning in the background as before.
+
+No disk fallback: if vault provisioning or the vault write fails, the failure is logged and the character is kept without a portrait (user can regenerate from the UI). Bytes never leak into the catch-all `_general/` space.
+
 #### Migrate general files off the filesystem into document stores
 
 Continues the project-files-to-Scriptorium migration pattern shipped in v4.3, this time covering the catch-all `<instance>/files/_general/` namespace. New writes for character avatars and Lantern-generated images now land in document stores; on-disk content is moved in during a Stage 1 migration and archived in place.

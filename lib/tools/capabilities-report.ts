@@ -19,7 +19,7 @@ import {
 } from '@/lib/plugins/provider-registry';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
-import { fileStorageManager } from '@/lib/file-storage/manager';
+import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
 import { isDockerEnvironment, isElectronShell, isLimaEnvironment, getDataDir, getElectronShellVersion, getShellCapabilities, getSQLiteDatabasePath, getLLMLogsDatabasePath, getBackupsDir } from '@/lib/paths';
 import { getHasUserPassphrase } from '@/lib/startup/dbkey';
 import { getAllThemes, getThemeStats } from '@/lib/themes/theme-registry';
@@ -1719,13 +1719,14 @@ export async function generateAndSaveReport(userId: string): Promise<{
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `capabilities-report-${timestamp}.md`;
 
-  // Upload to file storage
+  // The report is always non-project; route it into the Quilltap Uploads
+  // mount under diagnostics/ rather than the catch-all _general/.
   const buffer = Buffer.from(markdown, 'utf-8');
-  const uploadResult = await fileStorageManager.uploadFile({
+  const uploadResult = await writeUserUploadToMountStore({
     filename,
     content: buffer,
     contentType: 'text/markdown',
-    projectId: null,
+    subfolder: 'diagnostics',
   });
 
   moduleLogger.info('Capabilities report saved', {

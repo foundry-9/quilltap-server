@@ -255,6 +255,10 @@ import { provisionLanternBackgroundsMountMigration } from './provision-lantern-b
 import { migrateGeneralStoryBackgroundsToMountMigration } from './migrate-general-story-backgrounds-to-mount';
 // Move character avatars off _general/ into each character's vault under images/
 import { migrateCharacterAvatarsToVaultsMigration } from './migrate-character-avatars-to-vaults';
+// Provision the global Quilltap Uploads mount point
+import { provisionUserUploadsMountMigration } from './provision-user-uploads-mount';
+// Sweep any remaining files under _general/ into the Quilltap Uploads mount
+import { migrateRemainingGeneralToUploadsMigration } from './migrate-remaining-general-to-uploads';
 
 /**
  * All available migrations.
@@ -505,6 +509,10 @@ export const migrations: Migration[] = [
   migrateGeneralStoryBackgroundsToMountMigration,
   // Move character avatars off _general/ into each character's vault under images/
   migrateCharacterAvatarsToVaultsMigration,
+  // Provision the global Quilltap Uploads mount point
+  provisionUserUploadsMountMigration,
+  // Sweep any remaining files under _general/ into the Quilltap Uploads mount
+  migrateRemainingGeneralToUploadsMigration,
 ];
 
 export {
@@ -740,5 +748,9 @@ export {
   migrateGeneralStoryBackgroundsToMountMigration,
   // Move character avatars off _general/ into each character's vault under images/
   migrateCharacterAvatarsToVaultsMigration,
+  // Provision the global Quilltap Uploads mount point
+  provisionUserUploadsMountMigration,
+  // Sweep any remaining files under _general/ into the Quilltap Uploads mount
+  migrateRemainingGeneralToUploadsMigration,
 };
 

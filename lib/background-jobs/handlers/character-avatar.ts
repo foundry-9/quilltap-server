@@ -309,8 +309,13 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   try {
     // Route history avatars into the character vault when there's no project
     // context to route them through. The vault is provisioned at character
-    // creation; the disk fallback only fires for characters whose vault
-    // hasn't been backfilled yet (rare post-migration).
+    // creation and re-asserted by startup backfill; if it is somehow missing
+    // we refuse to write rather than leak bytes into the catch-all _general/.
+    //
+    // The handler runs in the forked job child whose DB connection is readonly
+    // and whose writes are buffered (no read-your-writes), so we cannot
+    // ensureCharacterVault() inline here — the parent's character-create flow
+    // (or the startup backfill) is responsible for provisioning.
     let storageKey: string;
     let fileProjectId: string | null;
     let fileFolderPath: string | null;
@@ -318,31 +323,23 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
 
     if (!folderProjectId) {
       const vault = await getCharacterVaultStore(payload.characterId);
-      if (vault) {
-        const written = await writeCharacterAvatarToVault({
-          characterId: payload.characterId,
-          kind: 'history',
-          filename: originalFilename,
-          content: buffer,
-          contentType: mimeType,
-          description: `${character.name} — wardrobe portrait`,
-        });
-        storageKey = written.storageKey;
-        fileProjectId = null;
-        fileFolderPath = null;
-        usedVault = true;
-      } else {
-        const uploadResult = await fileStorageManager.uploadFile({
-          filename: originalFilename,
-          content: buffer,
-          contentType: mimeType,
-          projectId: null,
-          folderPath: '/character-avatars/',
-        });
-        storageKey = uploadResult.storageKey;
-        fileProjectId = null;
-        fileFolderPath = '/character-avatars/';
+      if (!vault) {
+        throw new Error(
+          `Character ${payload.characterId} has no linked database-backed vault; cannot persist wardrobe avatar.`,
+        );
       }
+      const written = await writeCharacterAvatarToVault({
+        characterId: payload.characterId,
+        kind: 'history',
+        filename: originalFilename,
+        content: buffer,
+        contentType: mimeType,
+        description: `${character.name} — wardrobe portrait`,
+      });
+      storageKey = written.storageKey;
+      fileProjectId = null;
+      fileFolderPath = null;
+      usedVault = true;
     } else {
       const uploadResult = await fileStorageManager.uploadFile({
         filename: originalFilename,

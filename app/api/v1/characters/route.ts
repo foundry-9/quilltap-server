@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash, randomUUID } from 'node:crypto';
 import { createAuthenticatedHandler, AuthenticatedContext, enrichWithDefaultImage } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/character';
@@ -22,6 +23,7 @@ import { getSeedImports } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
 import { reseedAvatarsForCharacters } from '@/lib/startup/seed-initial-data';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
+import { writeCharacterAvatarToVault } from '@/lib/file-storage/character-vault-bridge';
 import type { Character } from '@/lib/schemas/character.types';
 
 /**
@@ -514,7 +516,10 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
     const contentType = req.headers.get('content-type');
 
     let characterData = null;
-    let avatarUrl = null;
+    // SillyTavern character cards embed their JSON metadata in a PNG tEXt chunk;
+    // the same PNG is the character's portrait. Keep the bytes so we can land
+    // them in the new vault as the imported avatar.
+    let pngAvatarBytes: Buffer | null = null;
 
     if (contentType?.includes('multipart/form-data')) {
       const formData = await req.formData();
@@ -533,7 +538,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
           return badRequest('Invalid SillyTavern PNG file');
         }
 
-        avatarUrl = null;
+        pngAvatarBytes = buffer;
       } else if (file.type === 'application/json' || file.name.endsWith('.json')) {
         const jsonText = buffer.toString('utf-8');
         characterData = JSON.parse(jsonText);
@@ -556,7 +561,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
     const character = await repos.characters.create({
       userId: user.id,
       ...importedData,
-      avatarUrl: avatarUrl,
+      avatarUrl: null,
       isFavorite: false,
       tags: [] as string[],
       partnerLinks: [] as { partnerId: string; isDefault: boolean }[],
@@ -566,14 +571,64 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
       clothingRecords: [],
     });
 
+    let defaultImageId: string | null = null;
+    if (pngAvatarBytes) {
+      // Provision the vault synchronously so the imported portrait lands inside
+      // it. There is no disk fallback: if the vault write fails the character
+      // is still created (avatar regen from the UI can recover), but bytes
+      // never leak into the catch-all _general/ space.
+      try {
+        await ensureCharacterVault(character);
+        const filename = `${character.name || 'avatar'}.png`;
+        const written = await writeCharacterAvatarToVault({
+          characterId: character.id,
+          kind: 'main',
+          filename,
+          content: pngAvatarBytes,
+          contentType: 'image/png',
+        });
+        const fileEntry = await repos.files.create({
+          userId: user.id,
+          sha256: createHash('sha256').update(pngAvatarBytes).digest('hex'),
+          originalFilename: filename,
+          mimeType: 'image/png',
+          size: pngAvatarBytes.length,
+          width: null,
+          height: null,
+          linkedTo: [character.id],
+          source: 'IMPORTED',
+          category: 'AVATAR',
+          storageKey: written.storageKey,
+          generationPrompt: null,
+          generationModel: null,
+          generationRevisedPrompt: null,
+          description: null,
+          tags: [character.id],
+          folderPath: null,
+          projectId: null,
+        }, { id: randomUUID() });
+        await repos.characters.update(character.id, { defaultImageId: fileEntry.id });
+        defaultImageId = fileEntry.id;
+      } catch (avatarError) {
+        logger.error(
+          '[Characters v1] Failed to persist imported SillyTavern avatar; character kept without portrait',
+          {
+            characterId: character.id,
+            error: avatarError instanceof Error ? avatarError.message : String(avatarError),
+          },
+        );
+      }
+    } else {
+      provisionVaultInBackground(character);
+    }
+
     const chats = await repos.chats.findByCharacterId(character.id);
 
     logger.info('[Characters v1] Character imported', {
       characterId: character.id,
       name: character.name,
+      hasAvatar: defaultImageId !== null,
     });
-
-    provisionVaultInBackground(character);
 
     return NextResponse.json(
       {
@@ -582,6 +637,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
           name: character.name,
           description: character.description,
           avatarUrl: character.avatarUrl,
+          defaultImageId,
           createdAt: character.createdAt,
           updatedAt: character.updatedAt,
           _count: {
