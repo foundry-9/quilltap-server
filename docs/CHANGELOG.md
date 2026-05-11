@@ -4,6 +4,17 @@
 
 ### 4.4-dev
 
+#### Fix: file-storage scanner choked on migration archive directories
+
+After the v4.3 / v4.4 `_general/` sweep, instances now have safety-net archive directories alongside the live tree: `<projectId>_doc_store_archive/` at the top level and `_general/_avatar_archive/`, `_general/_generated_archive/`, `_general/_uploads_archive/`, `_general/story-backgrounds_archive/` underneath. The startup reconciler and the chokidar watcher were walking every one of those, treating each file as an orphan, and trying to write a `files` row with `projectId` set to the archive directory name (e.g. `46300c1f-…_doc_store_archive`). The Zod UUID validator rejected every attempt, so no rows ever landed — but the SHA-256 compute + Zod validation cycle still ran per file, and on iCloud-backed instances that's measured in seconds per file. Symptom: the Salon UI hung at "Loading…" while the dev server burned through hundreds of failing reconcile/watcher attempts.
+
+Two fixes:
+
+- `lib/file-storage/scanner.ts` now skips any directory whose name ends in `_doc_store_archive` or `_archive`, so the reconciler's full filesystem walk never enters the archives. Existing `_thumbnails/` skip behavior is unchanged.
+- `lib/file-storage/watcher.ts` adds the same archive-segment check to `shouldIgnore()`, so live chokidar events under those paths are dropped immediately.
+
+Defense in depth: both `reconciliation.ts` and `watcher.ts` now validate the first path segment as a UUID before treating it as a `projectId`. Non-UUID top-level segments (the archive directories, or any future similar drift) collapse to `projectId = null` instead of failing Zod validation downstream. New test covers the archive case.
+
 #### Fix: mount-index migrations failed on instances predating the storeType column
 
 `convert-project-files-to-document-stores-v1`, `provision-lantern-backgrounds-mount-v1`, and `provision-user-uploads-mount-v1` each ensure the mount-index DB schema with `CREATE TABLE IF NOT EXISTS "doc_mount_points" (...)`. That's a no-op when the table already exists, so instances whose mount-index DB was created before `storeType` was introduced kept the older 17-column shape. The very first `INSERT INTO "doc_mount_points" (..., storeType, ...)` then failed with `table doc_mount_points has no column named storeType`, the migration runner stopped on that error, and every dependent v4.3 / v4.4 file-system migration (Lantern provisioning, story-bg sweep, character-avatar vault sweep, Quilltap Uploads provisioning, remaining-general sweep) silently never ran on that instance.

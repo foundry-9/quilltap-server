@@ -24,6 +24,8 @@ import { scanDirectory, computeSha256, detectMimeType } from './scanner';
 
 const logger = createLogger('file-storage:reconciliation');
 
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+
 // ============================================================================
 // RECONCILIATION
 // ============================================================================
@@ -142,10 +144,13 @@ export async function reconcileFilesystem(): Promise<void> {
         const sha256 = await computeSha256(absolutePath);
         const mimeType = detectMimeType(scannedFile.name);
 
-        // Parse projectId and folderPath from path
+        // Parse projectId and folderPath from path. Only treat the first
+        // segment as a projectId if it's a valid UUID — migration archive
+        // siblings (e.g. `<uuid>_doc_store_archive/`) and other non-UUID
+        // top-level dirs collapse to projectId=null.
         const parts = scannedFile.relativePath.split('/');
         const projectOrGeneral = parts[0];
-        const projectId = projectOrGeneral === '_general' ? null : projectOrGeneral;
+        const projectId = UUID_REGEX.test(projectOrGeneral) ? projectOrGeneral : null;
         const folderPath = deriveFolderPathFromStorageKey(scannedFile.relativePath);
 
         // Check for SHA-256 match among unmatched DB records (moved file)

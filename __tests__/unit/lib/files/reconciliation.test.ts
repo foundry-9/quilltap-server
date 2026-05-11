@@ -312,8 +312,9 @@ describe('reconcileFilesystem', () => {
       )
     })
 
-    it('sets projectId to the directory name for project files', async () => {
-      const scannedFile = makeScannedFile('my-project-id/photo.jpg', 4000)
+    it('sets projectId to the directory name for project files when it is a valid UUID', async () => {
+      const projectId = 'b2e1f0d9-6c4a-4f2b-8a3d-1e2f3a4b5c6d'
+      const scannedFile = makeScannedFile(`${projectId}/photo.jpg`, 4000)
 
       mockScanDirectory.mockResolvedValue([scannedFile])
       mockFilesRepo.findByUserId.mockResolvedValue([])
@@ -324,7 +325,27 @@ describe('reconcileFilesystem', () => {
 
       expect(mockFilesRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          projectId: 'my-project-id',
+          projectId,
+        })
+      )
+    })
+
+    it('collapses non-UUID top-level segments (e.g. migration archives) to projectId=null', async () => {
+      const scannedFile = makeScannedFile(
+        'b2e1f0d9-6c4a-4f2b-8a3d-1e2f3a4b5c6d_doc_store_archive/leftover.jpg',
+        4000
+      )
+
+      mockScanDirectory.mockResolvedValue([scannedFile])
+      mockFilesRepo.findByUserId.mockResolvedValue([])
+      mockComputeSha256.mockResolvedValue('sha256-archive')
+      mockDetectMimeType.mockReturnValue('image/jpeg')
+
+      await reconcileFilesystem()
+
+      expect(mockFilesRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: null,
         })
       )
     })
