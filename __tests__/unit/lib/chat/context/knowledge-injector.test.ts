@@ -37,7 +37,9 @@ const baseParams = {
   userId: 'user-1',
   embeddingProfileId: 'embed-1',
   query: 'archives',
-  vaultMountPointId: 'vault-mp-1',
+  characterMountPointId: 'vault-mp-1',
+  projectMountPointIds: [] as string[],
+  globalMountPointId: null,
   budgetTokens: 4000,
   provider: 'ANTHROPIC' as const,
 }
@@ -71,9 +73,13 @@ describe('retrieveKnowledgeForTurn', () => {
     mockGenerateEmbeddingForUser.mockResolvedValue({
       embedding: new Float32Array([0.1, 0.2, 0.3]),
     })
-    mockFindMountPointById.mockResolvedValue({
-      id: 'vault-mp-1',
-      name: 'Robin Character Vault',
+    mockFindMountPointById.mockImplementation(async (id: string) => {
+      const names: Record<string, string> = {
+        'vault-mp-1': 'Robin Character Vault',
+        'project-mp-1': 'Storyboard Mount',
+        'global-mp-1': 'Quilltap General',
+      }
+      return { id, name: names[id] ?? 'Unknown Mount' }
     })
   })
 
@@ -93,6 +99,18 @@ describe('retrieveKnowledgeForTurn', () => {
     expect(mockSearchDocumentChunks).not.toHaveBeenCalled()
   })
 
+  it('returns empty when no tier has a mount configured', async () => {
+    const result = await retrieveKnowledgeForTurn({
+      ...baseParams,
+      characterMountPointId: null,
+      projectMountPointIds: [],
+      globalMountPointId: null,
+    })
+
+    expect(result).toEqual({ content: '', tokenCount: 0, debug: [] })
+    expect(mockSearchDocumentChunks).not.toHaveBeenCalled()
+  })
+
   it('inlines a small markdown file with frontmatter tags and emits a re-read pointer', async () => {
     mockSearchDocumentChunks.mockResolvedValue([knowledgeHit()])
     mockFindFileByPath.mockResolvedValue({
@@ -107,7 +125,7 @@ describe('retrieveKnowledgeForTurn', () => {
 
     const result = await retrieveKnowledgeForTurn(baseParams)
 
-    expect(result.content).toContain('### Knowledge: Knowledge/archives.md')
+    expect(result.content).toContain('### Knowledge (character) — Robin Character Vault/Knowledge/archives.md')
     expect(result.content).toContain('Tags: archives, history · sunlit reading-room')
     expect(result.content).toContain('The archives lie beneath the sunlit reading-room.')
     expect(result.content).toContain(
@@ -115,6 +133,7 @@ describe('retrieveKnowledgeForTurn', () => {
     )
     expect(result.debug).toHaveLength(1)
     expect(result.debug[0].inline).toBe(true)
+    expect(result.debug[0].tier).toBe('character')
     expect(result.tokenCount).toBeGreaterThan(0)
   })
 
@@ -126,18 +145,16 @@ describe('retrieveKnowledgeForTurn', () => {
       relativePath: 'Knowledge/archives.md',
       fileName: 'archives.md',
     })
-    // Generate a body that comfortably exceeds the 500-token threshold by character count.
     const bigBody = 'A'.repeat(8000)
     mockFindDocumentByPath.mockResolvedValue({ content: bigBody })
 
     const result = await retrieveKnowledgeForTurn(baseParams)
 
-    expect(result.content).toContain('### Knowledge: Knowledge/archives.md')
+    expect(result.content).toContain('### Knowledge (character) — Robin Character Vault/Knowledge/archives.md')
     expect(result.content).toContain('Why: Sunlit Archives')
     expect(result.content).toContain(
       'Read with: doc_read_file(scope="document_store", mount_point="Robin Character Vault", path="Knowledge/archives.md")',
     )
-    // Pointer-only — no full body in output.
     expect(result.content).not.toContain('AAAAAAAAAA')
     expect(result.debug[0].inline).toBe(false)
   })
@@ -155,7 +172,7 @@ describe('retrieveKnowledgeForTurn', () => {
 
     const result = await retrieveKnowledgeForTurn(baseParams)
 
-    expect(result.content).toContain('### Knowledge: Knowledge/legacy.pdf')
+    expect(result.content).toContain('### Knowledge (character) — Robin Character Vault/Knowledge/legacy.pdf')
     expect(result.content).toContain('Read with: doc_read_file')
     expect(mockFindDocumentByPath).not.toHaveBeenCalled()
     expect(result.debug[0].inline).toBe(false)
@@ -171,8 +188,6 @@ describe('retrieveKnowledgeForTurn', () => {
   })
 
   it('demotes inline candidates to pointers when the budget would overflow', async () => {
-    // Two candidates. First is a long markdown that — when inlined — eats most of the budget;
-    // budget is just barely too tight so it must be demoted to a pointer.
     mockSearchDocumentChunks.mockResolvedValue([
       knowledgeHit({ chunkId: 'k1', fileId: 'f1', relativePath: 'Knowledge/big.md', fileName: 'big.md', score: 0.9 }),
       knowledgeHit({ chunkId: 'k2', fileId: 'f2', relativePath: 'Knowledge/small.md', fileName: 'small.md', score: 0.4 }),
@@ -185,17 +200,107 @@ describe('retrieveKnowledgeForTurn', () => {
     })
     mockFindDocumentByPath.mockImplementation(async (_mp: string, path: string) => {
       if (path === 'Knowledge/big.md') {
-        return { content: 'B'.repeat(1000) } // ~280 tokens at 3.5 chars/token
+        return { content: 'B'.repeat(1000) }
       }
       return { content: 'A short, well-curated note.' }
     })
 
-    // Budget too small for the big inline (~340 tokens) but big enough for two pointers.
     const result = await retrieveKnowledgeForTurn({ ...baseParams, budgetTokens: 200 })
 
-    // The big file should appear as a pointer (demoted), not inline.
-    expect(result.content).toContain('### Knowledge: Knowledge/big.md')
+    expect(result.content).toContain('### Knowledge (character) — Robin Character Vault/Knowledge/big.md')
     expect(result.content).not.toContain('B'.repeat(50))
     expect(result.tokenCount).toBeLessThanOrEqual(200)
+  })
+
+  it('merges all three tiers with distinct tier headers and boost fractions', async () => {
+    // One hit per tier, each from its own mount, each with a different
+    // base cosine. The literal-boost fractions are wired by tier in the
+    // call to searchDocumentChunks — we assert on the per-call options
+    // rather than on the boosted score directly (the mock doesn't apply
+    // the boost). The debug array carries the tier label, which is what
+    // downstream consumers use.
+    mockSearchDocumentChunks.mockImplementation(async (_emb, opts: Record<string, unknown>) => {
+      const mountPointIds = opts.mountPointIds as string[]
+      if (mountPointIds[0] === 'vault-mp-1') {
+        return [knowledgeHit({ chunkId: 'kc-char', mountPointId: 'vault-mp-1', mountPointName: 'Robin Character Vault', relativePath: 'Knowledge/char.md', fileName: 'char.md', score: 0.6 })]
+      }
+      if (mountPointIds[0] === 'project-mp-1') {
+        return [knowledgeHit({ chunkId: 'kc-proj', mountPointId: 'project-mp-1', mountPointName: 'Storyboard Mount', fileId: 'fp', relativePath: 'Knowledge/project.md', fileName: 'project.md', score: 0.55 })]
+      }
+      if (mountPointIds[0] === 'global-mp-1') {
+        return [knowledgeHit({ chunkId: 'kc-gen', mountPointId: 'global-mp-1', mountPointName: 'Quilltap General', fileId: 'fg', relativePath: 'Knowledge/general.md', fileName: 'general.md', score: 0.5 })]
+      }
+      return []
+    })
+    mockFindFileByPath.mockImplementation(async (_mp: string, path: string) => ({
+      id: `f-${path}`,
+      fileType: 'markdown',
+      relativePath: path,
+      fileName: path.split('/').pop(),
+    }))
+    mockFindDocumentByPath.mockResolvedValue({ content: 'A small body.' })
+
+    const result = await retrieveKnowledgeForTurn({
+      ...baseParams,
+      characterMountPointId: 'vault-mp-1',
+      projectMountPointIds: ['project-mp-1'],
+      globalMountPointId: 'global-mp-1',
+    })
+
+    expect(result.debug.map(d => d.tier).sort()).toEqual(['character', 'general'.replace('general', 'global'), 'project'].sort())
+    expect(result.content).toContain('### Knowledge (character) — Robin Character Vault/Knowledge/char.md')
+    expect(result.content).toContain('### Knowledge (project) — Storyboard Mount/Knowledge/project.md')
+    expect(result.content).toContain('### Knowledge (general) — Quilltap General/Knowledge/general.md')
+
+    // Confirm tier-specific boost fractions were passed through to the
+    // search call for each mount.
+    const callArgs = mockSearchDocumentChunks.mock.calls as Array<[Float32Array, Record<string, unknown>]>
+    const byMount = new Map<string, Record<string, unknown>>()
+    for (const [, opts] of callArgs) {
+      const mountIds = opts.mountPointIds as string[]
+      byMount.set(mountIds[0], opts)
+    }
+    expect(byMount.get('vault-mp-1')?.literalBoostFraction).toBe(0.5)
+    expect(byMount.get('project-mp-1')?.literalBoostFraction).toBe(0.4)
+    expect(byMount.get('global-mp-1')?.literalBoostFraction).toBe(0.25)
+    // pathPrefix and literal-boost flag should be set the same way on every tier.
+    for (const [, opts] of callArgs) {
+      expect(opts.pathPrefix).toBe('Knowledge/')
+      expect(opts.applyLiteralPhraseBoost).toBe(true)
+    }
+  })
+
+  it('deduplicates the same chunk across tiers, keeping the highest-scoring entry', async () => {
+    // Same chunkId surfaces in both character and project tiers
+    // (defensively — shouldn't happen in practice since we filter
+    // overlapping mount ids out, but a single chunk hash can't appear
+    // twice in the output). Highest score wins.
+    mockSearchDocumentChunks.mockImplementation(async (_emb, opts: Record<string, unknown>) => {
+      const mountPointIds = opts.mountPointIds as string[]
+      if (mountPointIds[0] === 'vault-mp-1') {
+        return [knowledgeHit({ chunkId: 'dup', mountPointId: 'vault-mp-1', mountPointName: 'Robin Character Vault', score: 0.85 })]
+      }
+      if (mountPointIds[0] === 'project-mp-1') {
+        return [knowledgeHit({ chunkId: 'dup', mountPointId: 'project-mp-1', mountPointName: 'Storyboard Mount', score: 0.5 })]
+      }
+      return []
+    })
+    mockFindFileByPath.mockResolvedValue({
+      id: 'f1',
+      fileType: 'markdown',
+      relativePath: 'Knowledge/archives.md',
+      fileName: 'archives.md',
+    })
+    mockFindDocumentByPath.mockResolvedValue({ content: 'Short body.' })
+
+    const result = await retrieveKnowledgeForTurn({
+      ...baseParams,
+      characterMountPointId: 'vault-mp-1',
+      projectMountPointIds: ['project-mp-1'],
+    })
+
+    expect(result.debug).toHaveLength(1)
+    expect(result.debug[0].tier).toBe('character')
+    expect(result.debug[0].score).toBe(0.85)
   })
 })

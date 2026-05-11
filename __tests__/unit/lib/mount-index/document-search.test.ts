@@ -601,5 +601,59 @@ describe('searchDocumentChunks', () => {
       expect(results).toHaveLength(1)
       expect(results[0].score).toBeCloseTo(0.2, 5)
     })
+
+    it.each([
+      // [fraction, expectedBoostedScore]
+      [0.5, 0.6],  // character tier
+      [0.4, 0.52], // project tier   (0.2 + (1 - 0.2) * 0.4 = 0.52)
+      [0.25, 0.4], // global tier    (0.2 + (1 - 0.2) * 0.25 = 0.4)
+    ])('applies literalBoostFraction=%s to lift the cosine score', async (fraction, expected) => {
+      const chunk = makeChunk({
+        id: 'tiered',
+        embedding: [0.2, 0, 0],
+        content: 'A line about the sunlit archives.',
+      })
+      const repos = makeRepos()
+      repos.docMountChunks.findAllWithEmbeddingsByMountPointIds = jest
+        .fn()
+        .mockResolvedValue([chunk])
+
+      mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+      const results = await searchDocumentChunks([1, 0, 0], {
+        minScore: 0.1,
+        query: 'sunlit archives',
+        applyLiteralPhraseBoost: true,
+        literalBoostFraction: fraction,
+      })
+
+      expect(results).toHaveLength(1)
+      expect(results[0].score).toBeCloseTo(expected, 5)
+    })
+
+    it('leaves non-literal hits at raw cosine regardless of literalBoostFraction', async () => {
+      const chunk = makeChunk({
+        id: 'no-literal',
+        embedding: [0.4, 0, 0],
+        content: 'Unrelated text about libraries in general.',
+      })
+      const repos = makeRepos()
+      repos.docMountChunks.findAllWithEmbeddingsByMountPointIds = jest
+        .fn()
+        .mockResolvedValue([chunk])
+
+      mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+      const results = await searchDocumentChunks([1, 0, 0], {
+        minScore: 0.1,
+        query: 'covenant wall mention',
+        applyLiteralPhraseBoost: true,
+        literalBoostFraction: 0.25,
+      })
+
+      // No literal substring match → raw 0.4, no boost from any tier.
+      expect(results).toHaveLength(1)
+      expect(results[0].score).toBeCloseTo(0.4, 5)
+    })
   })
 })

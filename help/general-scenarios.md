@@ -73,6 +73,10 @@ Should the Quilltap General store or its `Scenarios/` folder be deleted by some 
 
 The Quilltap General store isn't only a pantry for scenarios. Every character in every non-help chat — project or no project, character vault or no — has standing access to it via the `doc_*` tools. Prospero whispers a reminder at chat-start (and again on the periodic context cadence) so the cast can address it by name: `mount_point: "Quilltap General"`. Curate it as a household shelf for things you'd like every chat to be able to reach.
 
+## Quilltap General's Knowledge Shelf
+
+Alongside `Scenarios/`, a `Knowledge/` folder in the Quilltap General store is read on every turn by every character, and is searchable through the unified `search` tool as the **general** tier of the knowledge source. Drop one's house style guide, master glossary, or the rules by which all one's worlds abide here, and they'll be available to every chat without further ceremony. Character vaults and project-linked stores keep their own `Knowledge/` folders too; in the rankings, the closer voice wins on a literal-substring hit — character first, project next, general last — so the general shelf is best reserved for material that should genuinely span everything.
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

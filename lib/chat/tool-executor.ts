@@ -871,6 +871,7 @@ export async function executeToolCallWithContext(
         userId,
         characterId,
         embeddingProfileId,
+        projectId: context.projectId,
       };
 
       const result = await executeSearchScriptoriumTool(toolCall.arguments, searchContext);

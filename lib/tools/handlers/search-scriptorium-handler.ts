@@ -10,6 +10,12 @@ import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search'
+import {
+  LITERAL_BOOST_CHARACTER,
+  LITERAL_BOOST_PROJECT,
+  LITERAL_BOOST_GLOBAL,
+} from '@/lib/embedding/literal-boost'
+import { getGeneralMountPointId } from '@/lib/instance-settings'
 import { getRepositories } from '@/lib/repositories/factory'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
@@ -189,61 +195,141 @@ export async function executeSearchScriptoriumTool(
       }
     }
 
-    // Search the responding character's own knowledge base if requested.
-    // Scoped to the Knowledge/ folder of their character vault. Silent
-    // no-op when the character has no vault or no Knowledge/ files.
+    // Search the three Knowledge/ tiers if requested:
+    //   - character: Knowledge/ inside the responding character's vault
+    //   - project:   Knowledge/ inside every mount linked to the active project
+    //   - global:    Knowledge/ inside the Quilltap General singleton mount
+    //
+    // Each tier passes a distinct literalBoostFraction so a verbatim hit in
+    // the character's own vault outranks the same hit in the project pool,
+    // which in turn outranks the same hit in Quilltap General. Branches are
+    // independent — any one can silently no-op (no vault, no project links,
+    // not provisioned yet) without disturbing the others.
     const knowledgeChunkIds = new Set<string>()
     if (searchKnowledge) {
+      const repos = getRepositories()
+      let character: Awaited<ReturnType<typeof repos.characters.findById>> = null
       try {
-        const repos = getRepositories()
-        const character = await repos.characters.findById(context.characterId)
+        character = await repos.characters.findById(context.characterId)
+      } catch (error) {
+        logger.warn('Knowledge search: character lookup failed', {
+          context: 'search-scriptorium-handler',
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
 
-        if (
-          character &&
-          character.userId === context.userId &&
-          character.characterDocumentMountPointId
-        ) {
+      const ownsCharacter = !!character && character.userId === context.userId
+
+      // Resolve project-linked mounts (if a project is in scope).
+      let projectMountPointIds: string[] = []
+      if (ownsCharacter && context.projectId) {
+        try {
+          const links = await repos.projectDocMountLinks.findByProjectId(context.projectId)
+          projectMountPointIds = links.map(l => l.mountPointId)
+        } catch (error) {
+          logger.warn('Knowledge search: project mount lookup failed', {
+            context: 'search-scriptorium-handler',
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+
+      // Resolve Quilltap General. Tolerates the pre-migration window where
+      // the mount hasn't been provisioned yet.
+      let globalMountPointId: string | null = null
+      try {
+        globalMountPointId = await getGeneralMountPointId()
+      } catch (error) {
+        logger.debug('Knowledge search: general mount not provisioned yet', {
+          context: 'search-scriptorium-handler',
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+
+      // Drop the character vault from the project/global lists if it
+      // happens to be linked there too — same chunk shouldn't enter the
+      // pool through more than one tier.
+      const characterMountPointId = ownsCharacter ? character?.characterDocumentMountPointId ?? null : null
+      if (characterMountPointId) {
+        projectMountPointIds = projectMountPointIds.filter(id => id !== characterMountPointId)
+        if (globalMountPointId === characterMountPointId) globalMountPointId = null
+      }
+      if (globalMountPointId) {
+        projectMountPointIds = projectMountPointIds.filter(id => id !== globalMountPointId)
+      }
+
+      const tiers: Array<{
+        tier: 'character' | 'project' | 'global'
+        mountPointIds: string[]
+        boost: number
+      }> = []
+      if (characterMountPointId) {
+        tiers.push({ tier: 'character', mountPointIds: [characterMountPointId], boost: LITERAL_BOOST_CHARACTER })
+      }
+      if (projectMountPointIds.length > 0) {
+        tiers.push({ tier: 'project', mountPointIds: projectMountPointIds, boost: LITERAL_BOOST_PROJECT })
+      }
+      if (globalMountPointId) {
+        tiers.push({ tier: 'global', mountPointIds: [globalMountPointId], boost: LITERAL_BOOST_GLOBAL })
+      }
+
+      if (ownsCharacter && tiers.length > 0) {
+        try {
+          // One embedding for all three tiers (plus the documents branch
+          // would also reuse it ideally — left as a future tidy).
           const embeddingResult = await generateEmbeddingForUser(
             query,
             context.userId,
             context.embeddingProfileId
           )
 
-          const knowledgeResults = await searchDocumentChunks(
-            embeddingResult.embedding,
-            {
-              mountPointIds: [character.characterDocumentMountPointId],
-              pathPrefix: 'Knowledge/',
-              limit,
-              minScore: 0.3,
-              query,
-              applyLiteralPhraseBoost: true,
-            }
-          )
+          await Promise.all(
+            tiers.map(async ({ tier, mountPointIds, boost }) => {
+              try {
+                const hits = await searchDocumentChunks(embeddingResult.embedding, {
+                  mountPointIds,
+                  pathPrefix: 'Knowledge/',
+                  limit,
+                  minScore: 0.3,
+                  query,
+                  applyLiteralPhraseBoost: true,
+                  literalBoostFraction: boost,
+                })
 
-          for (const kr of knowledgeResults) {
-            knowledgeChunkIds.add(kr.chunkId)
-            results.push({
-              content: kr.content.length > 500
-                ? kr.content.substring(0, 500) + '...'
-                : kr.content,
-              sourceType: 'knowledge',
-              relevanceScore: kr.score,
-              metadata: {
-                mountPointName: kr.mountPointName,
-                fileName: kr.fileName,
-                filePath: kr.relativePath,
-                chunkIndex: kr.chunkIndex,
-                headingContext: kr.headingContext ?? undefined,
-              },
+                for (const kr of hits) {
+                  if (knowledgeChunkIds.has(kr.chunkId)) continue
+                  knowledgeChunkIds.add(kr.chunkId)
+                  results.push({
+                    content: kr.content.length > 500
+                      ? kr.content.substring(0, 500) + '...'
+                      : kr.content,
+                    sourceType: 'knowledge',
+                    relevanceScore: kr.score,
+                    metadata: {
+                      mountPointName: kr.mountPointName,
+                      fileName: kr.fileName,
+                      filePath: kr.relativePath,
+                      chunkIndex: kr.chunkIndex,
+                      headingContext: kr.headingContext ?? undefined,
+                      knowledgeTier: tier,
+                    },
+                  })
+                }
+              } catch (error) {
+                logger.warn('Knowledge tier search failed, continuing with other tiers', {
+                  context: 'search-scriptorium-handler',
+                  tier,
+                  error: error instanceof Error ? error.message : String(error),
+                })
+              }
             })
-          }
+          )
+        } catch (error) {
+          logger.warn('Knowledge search embedding failed, skipping all tiers', {
+            context: 'search-scriptorium-handler',
+            error: error instanceof Error ? error.message : String(error),
+          })
         }
-      } catch (error) {
-        logger.warn('Knowledge search failed, continuing with other sources', {
-          context: 'search-scriptorium-handler',
-          error: error instanceof Error ? error.message : String(error),
-        })
       }
     }
 
@@ -291,6 +377,9 @@ export async function executeSearchScriptoriumTool(
       conversationSources: limitedResults.filter(r => r.sourceType === 'conversation').length,
       documentSources: limitedResults.filter(r => r.sourceType === 'document').length,
       knowledgeSources: limitedResults.filter(r => r.sourceType === 'knowledge').length,
+      knowledgeCharacter: limitedResults.filter(r => r.sourceType === 'knowledge' && r.metadata.knowledgeTier === 'character').length,
+      knowledgeProject: limitedResults.filter(r => r.sourceType === 'knowledge' && r.metadata.knowledgeTier === 'project').length,
+      knowledgeGlobal: limitedResults.filter(r => r.sourceType === 'knowledge' && r.metadata.knowledgeTier === 'global').length,
     })
 
     return {
@@ -343,7 +432,10 @@ Content: ${result.content}`
       const heading = result.metadata.headingContext ? `, Section: ${result.metadata.headingContext}` : ''
       const path = result.metadata.filePath || result.metadata.fileName || 'Unknown'
       const mount = result.metadata.mountPointName || 'Unknown'
-      return `[Result ${index + 1} - Knowledge] (Relevance: ${(result.relevanceScore * 100).toFixed(0)}%, Vault: ${mount}${heading})
+      const tier = result.metadata.knowledgeTier
+        ? ` ${result.metadata.knowledgeTier.charAt(0).toUpperCase()}${result.metadata.knowledgeTier.slice(1)}`
+        : ''
+      return `[Result ${index + 1} -${tier} Knowledge] (Relevance: ${(result.relevanceScore * 100).toFixed(0)}%, Source: ${mount}${heading})
 File: ${path}
 Content: ${result.content}
 Re-read with: doc_read_file(scope=document_store, mount_point="${mount}", path="${path}")`

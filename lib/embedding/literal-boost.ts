@@ -40,13 +40,32 @@ export function containsLiteralPhrase(
 }
 
 /**
- * Half-the-distance-to-1 boost: 0.0 → 0.5, 0.5 → 0.75, 0.8 → 0.9.
+ * Fraction-of-distance-to-1 boost.
+ *
+ * With the default fraction of 0.5 ("halfway to 1"): 0.0 → 0.5, 0.5 → 0.75,
+ * 0.8 → 0.9 — the legacy half-the-distance behaviour, used by every search
+ * source that doesn't tier its hits.
+ *
+ * The knowledge sources scale the fraction by how "close" the knowledge is
+ * to the responding character — `LITERAL_BOOST_CHARACTER` for the
+ * character's own vault, `LITERAL_BOOST_PROJECT` for the project's linked
+ * mounts, `LITERAL_BOOST_GLOBAL` for the Quilltap General mount — so a
+ * verbatim hit in a personal vault outranks the same hit in a shared pool.
  *
  * Applied to the cosine similarity of items that ALSO scored a literal
  * phrase hit. The intent is to ensure a buried verbatim match cannot be
  * silently outranked or sliced off, while still leaving stronger pure-vector
  * neighbours room to win when their semantic relevance is compelling.
  */
-export function applyLiteralBoost(score: number): number {
-  return score + (1 - score) / 2
+export function applyLiteralBoost(score: number, fraction: number = 0.5): number {
+  return score + (1 - score) * fraction
 }
+
+/** Literal-hit boost fraction for the responding character's vault Knowledge/ folder. */
+export const LITERAL_BOOST_CHARACTER = 0.5
+
+/** Literal-hit boost fraction for a chat-project-linked mount's Knowledge/ folder. */
+export const LITERAL_BOOST_PROJECT = 0.4
+
+/** Literal-hit boost fraction for the Quilltap General mount's Knowledge/ folder. */
+export const LITERAL_BOOST_GLOBAL = 0.25

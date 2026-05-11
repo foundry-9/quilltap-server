@@ -58,11 +58,19 @@ export interface DocumentSearchOptions {
   /**
    * When true and the trimmed query is ≥ LITERAL_BOOST_MIN_PHRASE_LENGTH
    * characters, items whose chunk content contains the query verbatim
-   * (case-insensitive) get their cosine score boosted halfway to 1.0
-   * before minScore filtering and slicing. Used by the unified `search`
-   * tool; per-turn injectors leave this off.
+   * (case-insensitive) get their cosine score lifted toward 1.0 by
+   * `literalBoostFraction` (default 0.5) before minScore filtering and
+   * slicing. Used by the unified `search` tool and the per-turn knowledge
+   * injector.
    */
   applyLiteralPhraseBoost?: boolean
+  /**
+   * Fraction of the distance from the cosine score to 1.0 that a literal
+   * hit lifts the score by. Defaults to 0.5 — the legacy halfway boost.
+   * The knowledge sources pass smaller fractions for project/global tiers
+   * so personal-vault hits outrank shared-pool hits at equal cosine.
+   */
+  literalBoostFraction?: number
 }
 
 /**
@@ -164,6 +172,7 @@ export async function searchDocumentChunks(
     ? getLiteralPhrase(options.query)
     : null
 
+  const literalBoostFraction = options.literalBoostFraction ?? 0.5
   let literalHitCount = 0
   const scoredAll = chunksInScope.map(chunk => {
     const rawScore = cosineSimilarity(queryEmbedding, chunk.embedding)
@@ -173,7 +182,7 @@ export async function searchDocumentChunks(
     if (literalHit) literalHitCount++
     return {
       chunk,
-      score: literalHit ? applyLiteralBoost(rawScore) : rawScore,
+      score: literalHit ? applyLiteralBoost(rawScore, literalBoostFraction) : rawScore,
       literalHit,
     }
   })

@@ -1047,11 +1047,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   if (isMultiCharacter) {
   }
 
-  // 2c. Retrieve relevant knowledge from the responding character's vault
-  // (Knowledge/ folder). Independent of memory retrieval and intentionally
-  // NOT fed to the Phase-2 memory compressor below — knowledge files are
-  // first-class character canon and shouldn't be lossy-summarised. Skips
-  // silently when the character has no vault or no Knowledge/ files.
+  // 2c. Retrieve relevant knowledge from all three tiers available to the
+  // responding character: their own vault, every document store linked to
+  // the active project, and the instance-wide Quilltap General mount.
+  // Independent of memory retrieval and intentionally NOT fed to the
+  // Phase-2 memory compressor below — knowledge files are first-class
+  // canon and shouldn't be lossy-summarised. Each tier silently no-ops
+  // when its mount(s) aren't available.
   let knowledgeContent = ''
   let knowledgeTokens = 0
   let debugKnowledge: KnowledgeDebugEntry[] = []
@@ -1059,23 +1061,45 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   if (
     !skipMemories &&
     character.id &&
-    character.characterDocumentMountPointId &&
     memorySearchQuery &&
     budget.knowledgeBudget > 0
   ) {
     try {
-      const result = await retrieveKnowledgeForTurn({
-        characterId: character.id,
-        userId,
-        embeddingProfileId,
-        query: memorySearchQuery,
-        vaultMountPointId: character.characterDocumentMountPointId,
-        budgetTokens: budget.knowledgeBudget,
-        provider,
-      })
-      knowledgeContent = result.content
-      knowledgeTokens = result.tokenCount
-      debugKnowledge = result.debug
+      const repos = getRepositories()
+
+      const projectId = options.chat.projectId ?? null
+      const projectMountPointIds = projectId
+        ? (await repos.projectDocMountLinks.findByProjectId(projectId)).map(l => l.mountPointId)
+        : []
+
+      let globalMountPointId: string | null = null
+      try {
+        const { getGeneralMountPointId } = await import('@/lib/instance-settings')
+        globalMountPointId = await getGeneralMountPointId()
+      } catch (error) {
+        logger.debug('[ContextManager] Quilltap General mount not provisioned yet; skipping global knowledge tier', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+
+      const characterMountPointId = character.characterDocumentMountPointId ?? null
+
+      if (characterMountPointId || projectMountPointIds.length > 0 || globalMountPointId) {
+        const result = await retrieveKnowledgeForTurn({
+          characterId: character.id,
+          userId,
+          embeddingProfileId,
+          query: memorySearchQuery,
+          characterMountPointId,
+          projectMountPointIds,
+          globalMountPointId,
+          budgetTokens: budget.knowledgeBudget,
+          provider,
+        })
+        knowledgeContent = result.content
+        knowledgeTokens = result.tokenCount
+        debugKnowledge = result.debug
+      }
     } catch (error) {
       warnings.push(
         `Failed to retrieve knowledge: ${error instanceof Error ? error.message : 'Unknown error'}`,

@@ -42,6 +42,8 @@ export interface SearchScriptoriumResult {
     filePath?: string
     chunkIndex?: number
     headingContext?: string
+    // Knowledge-specific
+    knowledgeTier?: 'character' | 'project' | 'global'
   }
 }
 
@@ -64,7 +66,7 @@ export const searchScriptoriumToolDefinition = {
   function: {
     name: 'search',
     description:
-      'Search across your memories, past conversation history, mounted documents, and your own knowledge base. Returns results from your personal memories, rendered conversations, indexed document collections, and the Knowledge/ folder of your character vault, ranked by relevance. Use this to find information from past interactions, recall conversation details, locate specific discussions by topic, search through reference documents, or look up what you yourself have written down in your knowledge base.',
+      "Search across your memories, past conversation history, mounted documents, and every Knowledge/ folder available to you. Returns results from your personal memories, rendered conversations, indexed document collections, and the Knowledge/ folder of your own character vault, the Knowledge/ folder of every document store linked to this chat's project, and the Knowledge/ folder of the instance-wide Quilltap General store — all ranked by relevance. Use this to find information from past interactions, recall conversation details, locate specific discussions by topic, search through reference documents, or look up what's been written down — by you, by the project, or by the operator at large.",
     parameters: {
       type: 'object',
       properties: {
@@ -82,7 +84,7 @@ export const searchScriptoriumToolDefinition = {
             enum: ['memories', 'conversations', 'documents', 'knowledge'],
           },
           description:
-            'Which sources to search. Defaults to all sources if not specified. Use "documents" to search through mounted document collections; use "knowledge" to search the Knowledge/ folder of your own character vault (your first-person knowledge base).',
+            "Which sources to search. Defaults to all sources if not specified. Use \"documents\" to search through mounted document collections; use \"knowledge\" to search every Knowledge/ folder available to you — the one in your own character vault, the one in each document store linked to the active chat's project, and the one in the instance-wide Quilltap General store. Each knowledge result is tagged with its tier (character, project, or global) so you can tell whose voice it speaks in.",
         },
         limit: {
           type: 'integer',

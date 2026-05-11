@@ -5,6 +5,8 @@ const mockGenerateEmbeddingForUser = jest.fn()
 const mockSearchConversationChunks = jest.fn()
 const mockSearchDocumentChunks = jest.fn()
 const mockFindCharacterById = jest.fn()
+const mockFindProjectMountLinks = jest.fn()
+const mockGetGeneralMountPointId = jest.fn()
 const mockGetRepositories = jest.fn()
 const mockLogger = {
   warn: jest.fn(),
@@ -27,6 +29,10 @@ jest.mock('@/lib/scriptorium/conversation-search', () => ({
 
 jest.mock('@/lib/mount-index/document-search', () => ({
   searchDocumentChunks: (...args: unknown[]) => mockSearchDocumentChunks(...args),
+}))
+
+jest.mock('@/lib/instance-settings', () => ({
+  getGeneralMountPointId: (...args: unknown[]) => mockGetGeneralMountPointId(...args),
 }))
 
 jest.mock('@/lib/repositories/factory', () => ({
@@ -56,12 +62,17 @@ describe('search-scriptorium-handler', () => {
       characters: {
         findById: mockFindCharacterById,
       },
+      projectDocMountLinks: {
+        findByProjectId: mockFindProjectMountLinks,
+      },
     })
 
     mockFindCharacterById.mockResolvedValue({
       id: 'character-1',
       userId: 'user-1',
     })
+    mockFindProjectMountLinks.mockResolvedValue([])
+    mockGetGeneralMountPointId.mockResolvedValue(null)
     mockGenerateEmbeddingForUser.mockResolvedValue({
       embedding: [0.1, 0.2, 0.3],
     })
@@ -216,11 +227,11 @@ describe('search-scriptorium-handler', () => {
   })
 
   describe('knowledge source', () => {
-    it('returns empty silently when the character has no vault', async () => {
+    it('returns empty silently when no knowledge tier is available', async () => {
+      // Character has no vault, no project, no Quilltap General.
       mockFindCharacterById.mockResolvedValue({
         id: 'character-1',
         userId: 'user-1',
-        // no characterDocumentMountPointId
       })
 
       const result = await executeSearchScriptoriumTool(
@@ -233,7 +244,7 @@ describe('search-scriptorium-handler', () => {
       expect(mockSearchDocumentChunks).not.toHaveBeenCalled()
     })
 
-    it('passes pathPrefix "Knowledge/" and the vault mount point id to searchDocumentChunks', async () => {
+    it('searches the character vault with pathPrefix "Knowledge/" and character-tier boost', async () => {
       mockFindCharacterById.mockResolvedValue({
         id: 'character-1',
         userId: 'user-1',
@@ -268,6 +279,7 @@ describe('search-scriptorium-handler', () => {
           mountPointName: 'Robin Character Vault',
           filePath: 'Knowledge/archives.md',
           headingContext: 'Sunlit Archives',
+          knowledgeTier: 'character',
         }),
       })
 
@@ -276,16 +288,104 @@ describe('search-scriptorium-handler', () => {
         expect.objectContaining({
           mountPointIds: ['vault-mp-1'],
           pathPrefix: 'Knowledge/',
+          literalBoostFraction: 0.5,
         }),
       )
     })
 
+    it('surfaces project and global tiers with the right boost fractions and tier labels', async () => {
+      mockFindCharacterById.mockResolvedValue({
+        id: 'character-1',
+        userId: 'user-1',
+        characterDocumentMountPointId: 'vault-mp-1',
+      })
+      mockFindProjectMountLinks.mockResolvedValue([
+        { mountPointId: 'proj-mp-1' },
+        { mountPointId: 'proj-mp-2' },
+      ])
+      mockGetGeneralMountPointId.mockResolvedValue('global-mp-1')
+
+      mockSearchDocumentChunks.mockImplementation(async (_emb: unknown, opts: Record<string, unknown>) => {
+        const mountIds = opts.mountPointIds as string[]
+        if (mountIds.includes('vault-mp-1')) {
+          return [
+            {
+              chunkId: 'kc-char',
+              mountPointId: 'vault-mp-1',
+              mountPointName: 'Robin Character Vault',
+              fileId: 'fc',
+              fileName: 'char.md',
+              relativePath: 'Knowledge/char.md',
+              chunkIndex: 0,
+              headingContext: null,
+              content: 'Character knowledge content.',
+              score: 0.6,
+            },
+          ]
+        }
+        if (mountIds.includes('proj-mp-1')) {
+          return [
+            {
+              chunkId: 'kc-proj',
+              mountPointId: 'proj-mp-1',
+              mountPointName: 'Storyboard Mount',
+              fileId: 'fp',
+              fileName: 'project.md',
+              relativePath: 'Knowledge/project.md',
+              chunkIndex: 0,
+              headingContext: null,
+              content: 'Project knowledge content.',
+              score: 0.55,
+            },
+          ]
+        }
+        if (mountIds.includes('global-mp-1')) {
+          return [
+            {
+              chunkId: 'kc-gen',
+              mountPointId: 'global-mp-1',
+              mountPointName: 'Quilltap General',
+              fileId: 'fg',
+              fileName: 'general.md',
+              relativePath: 'Knowledge/general.md',
+              chunkIndex: 0,
+              headingContext: null,
+              content: 'Global knowledge content.',
+              score: 0.5,
+            },
+          ]
+        }
+        return []
+      })
+
+      const result = await executeSearchScriptoriumTool(
+        { query: 'archives', sources: ['knowledge'], limit: 10 },
+        { ...context, projectId: 'project-1' },
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.totalFound).toBe(3)
+
+      const tiers = result.results?.map(r => r.metadata.knowledgeTier).sort()
+      expect(tiers).toEqual(['character', 'global', 'project'])
+
+      // Inspect the three calls to confirm tier-specific boost fractions.
+      const callsByMount = new Map<string, Record<string, unknown>>()
+      for (const call of mockSearchDocumentChunks.mock.calls as Array<[unknown, Record<string, unknown>]>) {
+        const opts = call[1]
+        const mountIds = opts.mountPointIds as string[]
+        callsByMount.set(mountIds.sort().join(','), opts)
+      }
+      expect(callsByMount.get('vault-mp-1')?.literalBoostFraction).toBe(0.5)
+      expect(callsByMount.get('proj-mp-1,proj-mp-2')?.literalBoostFraction).toBe(0.4)
+      expect(callsByMount.get('global-mp-1')?.literalBoostFraction).toBe(0.25)
+      for (const opts of callsByMount.values()) {
+        expect(opts.pathPrefix).toBe('Knowledge/')
+        expect(opts.applyLiteralPhraseBoost).toBe(true)
+      }
+    })
+
     it('drops a document-source result when the same chunk is also returned as knowledge', async () => {
-      // When a project links the responding character's vault, the same
-      // chunk inside Knowledge/ surfaces in both branches. The knowledge
-      // label is more specific and must win the slot — confirmed live by
-      // Friday/Amy seeing the same archive file at positions 2 + 3 in a
-      // search result list, only differing by sourceType label.
       mockFindCharacterById.mockResolvedValue({
         id: 'character-1',
         userId: 'user-1',
@@ -315,13 +415,14 @@ describe('search-scriptorium-handler', () => {
         score: 0.55,
       }
 
-      // The document branch sees both the wardrobe chunk and the same
-      // archive chunk that knowledge will return.
-      // The knowledge branch (called second in the handler) sees only
-      // the archive chunk.
-      mockSearchDocumentChunks
-        .mockResolvedValueOnce([distinctDocumentChunk, sharedChunk])
-        .mockResolvedValueOnce([sharedChunk])
+      mockSearchDocumentChunks.mockImplementation(async (_emb: unknown, opts: Record<string, unknown>) => {
+        // The documents branch is called WITHOUT pathPrefix. Knowledge
+        // branches always pass pathPrefix.
+        if (!opts.pathPrefix) {
+          return [distinctDocumentChunk, sharedChunk]
+        }
+        return [sharedChunk]
+      })
 
       const result = await executeSearchScriptoriumTool(
         { query: 'sunlit archives', sources: ['documents', 'knowledge'] },
@@ -329,9 +430,6 @@ describe('search-scriptorium-handler', () => {
       )
 
       expect(result.success).toBe(true)
-      // Two rows survive: knowledge-archives and document-wardrobe. The
-      // duplicate document-archives row is dropped in favour of the
-      // knowledge-labeled twin.
       expect(result.results).toHaveLength(2)
 
       const archiveRow = result.results?.find(
@@ -346,14 +444,36 @@ describe('search-scriptorium-handler', () => {
       expect(wardrobeRow).toBeDefined()
       expect(wardrobeRow?.sourceType).toBe('document')
 
-      // No row should be the document-labeled archive.
       const archiveAsDocument = result.results?.find(
         r => r.metadata.filePath === 'Knowledge/archives.md' && r.sourceType === 'document',
       )
       expect(archiveAsDocument).toBeUndefined()
     })
 
-    it('formats knowledge results with a doc_read_file pointer', () => {
+    it('skips the global tier silently when Quilltap General is not provisioned', async () => {
+      mockFindCharacterById.mockResolvedValue({
+        id: 'character-1',
+        userId: 'user-1',
+        characterDocumentMountPointId: 'vault-mp-1',
+      })
+      mockGetGeneralMountPointId.mockResolvedValue(null)
+      mockSearchDocumentChunks.mockResolvedValue([])
+
+      await executeSearchScriptoriumTool(
+        { query: 'archives', sources: ['knowledge'] },
+        context,
+      )
+
+      // Only the character-tier call should fire; no call should target
+      // a global mount.
+      const calls = mockSearchDocumentChunks.mock.calls as Array<[unknown, Record<string, unknown>]>
+      const characterCalls = calls.filter(c => (c[1].mountPointIds as string[]).includes('vault-mp-1'))
+      expect(characterCalls.length).toBe(1)
+      const globalCalls = calls.filter(c => (c[1].mountPointIds as string[]).some(id => id.startsWith('global')))
+      expect(globalCalls.length).toBe(0)
+    })
+
+    it('formats knowledge results with a tier-tagged label and doc_read_file pointer', () => {
       const formatted = formatSearchScriptoriumResults([
         {
           content: 'The archives lie beneath the sunlit reading-room.',
@@ -365,12 +485,13 @@ describe('search-scriptorium-handler', () => {
             filePath: 'Knowledge/archives.md',
             chunkIndex: 0,
             headingContext: 'Sunlit Archives',
+            knowledgeTier: 'character',
           },
         },
       ])
 
-      expect(formatted).toContain('[Result 1 - Knowledge]')
-      expect(formatted).toContain('Vault: Robin Character Vault')
+      expect(formatted).toContain('[Result 1 - Character Knowledge]')
+      expect(formatted).toContain('Source: Robin Character Vault')
       expect(formatted).toContain('Section: Sunlit Archives')
       expect(formatted).toContain(
         'Re-read with: doc_read_file(scope=document_store, mount_point="Robin Character Vault", path="Knowledge/archives.md")',

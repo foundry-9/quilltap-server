@@ -295,6 +295,15 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
         if (!updated) {
           throw new Error(`Doc mount chunk not found for embedding update: ${id}`);
         }
+
+        // Invalidate the in-memory mount-chunk cache: until embedding lands,
+        // findAllWithEmbeddingsByMountPointIds excludes this chunk, so the
+        // cache that powers searchDocumentChunks won't surface it on its
+        // own. Same applies when this write originates in a child job and
+        // gets replayed in the parent via the job-dispatcher — the replay
+        // runs this method here, so the parent's cache is dropped exactly
+        // where it needs to be.
+        invalidateMountPoint(updated.mountPointId);
       },
       'Error updating doc mount chunk embedding',
       { id }
@@ -319,6 +328,23 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
         for (const chunk of chunks) {
           const result = await this._create(chunk);
           created.push(result);
+        }
+
+        // Invalidate the mount-chunk cache for every mount touched. New
+        // chunks land here without embeddings (the embedding pipeline
+        // fills those in later via `updateEmbedding`), but the cache
+        // load filters chunks-with-embeddings — if we don't drop the
+        // cache now, the rebuild after the eventual updateEmbedding will
+        // be the only chance for the chunk to enter the searchable set.
+        // Invalidating here also avoids stale "this file has no chunks"
+        // verdicts from any pathPrefix scan that fires between insert and
+        // embed (e.g. the per-turn knowledge injector mid-pipeline).
+        const touchedMounts = new Set<string>();
+        for (const chunk of chunks) {
+          if (chunk.mountPointId) touchedMounts.add(chunk.mountPointId);
+        }
+        for (const mountPointId of touchedMounts) {
+          invalidateMountPoint(mountPointId);
         }
 
         return created;

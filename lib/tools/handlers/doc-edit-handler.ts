@@ -424,10 +424,16 @@ async function resolveOfficialProjectMount(
 }
 
 /**
- * Trigger re-indexing and embedding for document store files after a write.
+ * Trigger re-indexing and embedding for any write that lands in a mount
+ * point. The gate is `mountPointId`, not `scope`: a `scope: 'project'`
+ * write into a project's `officialMountPointId` mount needs the same
+ * chunk/embed pass as a `scope: 'document_store'` write, otherwise the
+ * file is invisible to search until the next periodic mount scan. Legacy
+ * filesystem-only projects (no `officialMountPointId`) return without a
+ * `mountPointId` and silently no-op here, as before.
  */
 async function triggerReindexIfNeeded(resolved: ResolvedPath): Promise<void> {
-  if (resolved.scope === 'document_store' && resolved.mountPointId) {
+  if (resolved.mountPointId) {
     const mountPointId = resolved.mountPointId;
     const repos = getRepositories();
     // Fire-and-forget: don't block the tool response on re-indexing
