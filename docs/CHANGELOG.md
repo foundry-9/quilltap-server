@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: background context-summary job no longer locks out Lantern story backgrounds
+
+`lib/background-jobs/handlers/context-summary.ts` was a stale, parallel summarizer that read/wrote `lastRenameCheckInterchange` as if it were a message-index cursor — at line 110 it stored `chatMessages.length` into a field that the title-update path (`lib/chat/context-summary.ts:784`) reads as the *interchange count* through which titles were last checked. The scheduled danger-scan enqueues this handler whenever a long chat has no summary yet, so any chat the scan touched ended up with `lastRenameCheckInterchange` jumped to its visible-message count (e.g. 100 on a 154-message chat at interchange 77). `shouldCheckTitleAtInterchange` then returned false at every subsequent check, `considerTitleUpdateAsync` never ran, and the only Lantern story-background trigger that fires from the title path (`queueStoryBackgroundIfEnabled` at `context-summary.ts:736`) was unreachable. Affected chats kept updating their titles via the summary-fold path (which does not queue Lantern) but never produced a story background.
+
+The handler now delegates to the in-process `generateContextSummary`, so both the live message loop and the background bootstrap share one fold implementation — anchored on `lastSummaryTurn`, never touching `lastRenameCheckInterchange`. Danger-classification chaining is preserved. The title-check cadence (2 / 3 / 5 / 7 / 10, then every 10) is unchanged. Existing chats with already-inflated cursors will resume normal cadence once their interchange count exceeds the inflated value; no data backfill is performed.
+
 #### Feature: General Scenarios
 
 Added a third scenario scope alongside project and character: instance-wide General Scenarios, offered in every non-help New Chat dialog regardless of project context. Files live in a new singleton "Quilltap General" database-backed mount point (`storeType='documents'`) provisioned by `provision-general-mount-v1`; its id is persisted in `instance_settings.generalMountPointId`. Same on-disk shape as project scenarios: `.md` files with optional `name`/`description`/`isDefault` frontmatter, alphabetical default-conflict resolution.
