@@ -30,10 +30,8 @@ import {
   setProjectScenarioDefault,
   PROJECT_SCENARIOS_FOLDER,
 } from '@/lib/mount-index/project-scenarios';
+import { buildScenarioFileContent } from '@/lib/mount-index/scenarios-common';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
-import {
-  serializeFrontmatter,
-} from '@/lib/doc-edit/markdown-parser';
 import { sanitizeFileName } from '@/lib/mount-index/character-vault';
 
 // ============================================================================
@@ -48,32 +46,6 @@ const createScenarioSchema = z.object({
   isDefault: z.boolean().optional(),
   body: z.string().min(1, 'Scenario body cannot be empty'),
 });
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function buildScenarioFileContent(input: {
-  name?: string;
-  description?: string;
-  isDefault?: boolean;
-  body: string;
-}): string {
-  const frontmatter: Record<string, unknown> = {};
-  if (input.name && input.name.trim().length > 0) {
-    frontmatter.name = input.name.trim();
-  }
-  if (input.description && input.description.trim().length > 0) {
-    frontmatter.description = input.description.trim();
-  }
-  if (input.isDefault) {
-    frontmatter.isDefault = true;
-  }
-  const fmBlock = Object.keys(frontmatter).length > 0
-    ? serializeFrontmatter(frontmatter)
-    : '';
-  return `${fmBlock}${fmBlock ? '\n' : ''}${input.body}`;
-}
 
 // ============================================================================
 // GET — list scenarios

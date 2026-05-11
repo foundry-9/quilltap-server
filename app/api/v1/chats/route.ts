@@ -53,6 +53,8 @@ import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generati
 import {
   loadProsperoProjectContext,
   postProsperoProjectContextAnnouncement,
+  loadProsperoGeneralContext,
+  postProsperoGeneralContextAnnouncement,
 } from '@/lib/services/prospero-notifications/writer';
 import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
@@ -89,6 +91,13 @@ const createChatSchema = z.object({
    * and `scenarioId`. Requires `projectId` to also be set.
    */
   projectScenarioPath: z.string().max(500).optional(),
+  /**
+   * Relative path of a general scenario file (`Scenarios/<filename>.md`) inside the
+   * instance-wide "Quilltap General" mount. Lower precedence than `projectScenarioPath`
+   * — only consulted when no higher-precedence scenario field is set. Does NOT require
+   * `projectId`: general scenarios apply to project-less chats too.
+   */
+  generalScenarioPath: z.string().max(500).optional(),
   timestampConfig: TimestampConfigSchema.optional(),
   projectId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
@@ -511,6 +520,20 @@ async function createInitialMessagesScenarioAndStaff(
         error: getErrorMessage(error, 'Unknown error'),
       });
     }
+  }
+
+  // Always-on: announce the instance-wide "Quilltap General" store so every
+  // character knows it can reach the household shelf regardless of project.
+  try {
+    const generalContext = await loadProsperoGeneralContext();
+    if (generalContext) {
+      await postProsperoGeneralContextAnnouncement({ chatId, general: generalContext });
+    }
+  } catch (error) {
+    logger.warn('[Chats v1] Failed to post chat-start Prospero general-context whisper', {
+      chatId,
+      error: getErrorMessage(error, 'Unknown error'),
+    });
   }
 
   // Phase C: emit Host whispers establishing the opening state — scenario,
@@ -1046,6 +1069,17 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
           });
         }
       }
+    }
+  }
+  if (!resolvedScenario && validatedData.generalScenarioPath) {
+    const { resolveGeneralScenarioBody } = await import('@/lib/mount-index/general-scenarios');
+    const body = await resolveGeneralScenarioBody(validatedData.generalScenarioPath);
+    if (body) {
+      resolvedScenario = body;
+    } else {
+      logger.warn('[Chats v1] generalScenarioPath did not resolve to a body', {
+        generalScenarioPath: validatedData.generalScenarioPath,
+      });
     }
   }
 

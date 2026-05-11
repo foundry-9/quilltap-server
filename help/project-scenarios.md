@@ -12,7 +12,9 @@ A scenario, in our particular sense of the word, is a sealed envelope handed to 
 
 A character may, of course, carry her own personal scenarios — favourite settings she returns to, like a comfortable parlour. But a *project* scenario is one rung larger: it belongs to the project itself, and is offered to **every** chat begun within that project's confines, regardless of which character takes the stage. Imagine an Estate housing several characters; the Estate's grand hall, its rose garden, its Sunday teas — those belong to all who reside there, and so they belong to the project rather than to any single character.
 
-When you start a new chat in a project that has scenarios on file, you'll see them in the same drop-down where character scenarios have always lived, neatly grouped under **Project Scenarios**. The two collections sit shoulder-to-shoulder, and you may pick from either, or write a one-off "Custom" scenario in the textarea below as before.
+For envelopes you'd like handed out at *every* chat, regardless of project, see [General Scenarios](general-scenarios.md). When more than one default is in play, the project's wish wins out over the household custom.
+
+When you start a new chat in a project that has scenarios on file, you'll see them in the same drop-down where character scenarios have always lived, neatly grouped under **Project Scenarios**. They sit shoulder-to-shoulder with the General Scenarios and any Character Scenarios on offer, and you may pick from any group — or write a one-off "Custom" scenario in the textarea below as before.
 
 ## The Files Themselves
 

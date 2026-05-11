@@ -266,3 +266,70 @@ export async function postProsperoProjectContextAnnouncement(
   const content = buildProjectContextContent(params.project);
   return postProsperoMessage(params.chatId, content, 'project-context');
 }
+
+// ---------------------------------------------------------------------------
+// Always-on general-context whisper. Names the instance-wide "Quilltap
+// General" mount so every character knows it can reach the household
+// `Scenarios/` library and any other curated content kept there, regardless
+// of which project (if any) the chat lives in. Fires at chat-start and at
+// the same cadence as the project-context whisper.
+// ---------------------------------------------------------------------------
+
+export interface ProsperoGeneralContext {
+  /** Mount-point UUID — usable as the `mount_point` argument on any `doc_*` tool. */
+  mountPointId: string;
+  /** Display name — also accepted as the `mount_point` argument. */
+  name: string;
+  /** Backing storage kind. Always 'database' for the Quilltap General mount today. */
+  mountType: 'filesystem' | 'obsidian' | 'database';
+}
+
+/**
+ * Fetch the Quilltap General mount info. Returns null when the provisioning
+ * migration hasn't yet stored an id (pre-migration race) or the mount row
+ * has gone missing — callers should treat null as "no general announcement
+ * to make."
+ */
+export async function loadProsperoGeneralContext(): Promise<ProsperoGeneralContext | null> {
+  try {
+    const { getGeneralMountPointId } = await import('@/lib/instance-settings');
+    const mountPointId = await getGeneralMountPointId();
+    if (!mountPointId) return null;
+    const repos = getRepositories();
+    const mp = await repos.docMountPoints.findById(mountPointId);
+    if (!mp || !mp.enabled) return null;
+    return {
+      mountPointId: mp.id,
+      name: mp.name,
+      mountType: mp.mountType,
+    };
+  } catch (error) {
+    logger.warn('[ProsperoNotification] Failed to load Quilltap General context', {
+      context: 'prospero-notifications',
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}
+
+export function buildGeneralContextContent(general: ProsperoGeneralContext): string {
+  const safeName = general.name.replace(/`/g, '\\`');
+  const lines: string[] = [
+    `Prospero would have you remember that, beyond any particular project or vault, every character in this instance has standing access to the household's shared shelf — **${general.name}** — at all times.`,
+    '',
+    `Use \`mount_point: "${safeName}"\` on any \`doc_*\` tool (the ID \`${general.mountPointId}\` also works). Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content the household keeps lives here as well.`,
+  ];
+  return lines.join('\n');
+}
+
+export interface ProsperoGeneralContextAnnouncement {
+  chatId: string;
+  general: ProsperoGeneralContext;
+}
+
+export async function postProsperoGeneralContextAnnouncement(
+  params: ProsperoGeneralContextAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildGeneralContextContent(params.general);
+  return postProsperoMessage(params.chatId, content, 'general-context');
+}

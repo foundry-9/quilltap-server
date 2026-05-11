@@ -29,6 +29,20 @@ export interface ProjectScenarioOption {
   body: string
 }
 
+/**
+ * Instance-wide scenario sourced from the "Quilltap General" mount's
+ * `Scenarios/` folder (`/api/v1/scenarios`). Same shape as a project
+ * scenario, but applies to every non-help chat regardless of project.
+ */
+export interface GeneralScenarioOption {
+  path: string
+  filename: string
+  name: string
+  description?: string
+  isDefault: boolean
+  body: string
+}
+
 export interface Character {
   id: string
   name: string
@@ -97,6 +111,8 @@ export interface NewChatFormState {
   scenarioId: string | null
   /** Relative path of a selected project scenario; mutually exclusive with `scenarioId` and free-text `scenario`. */
   projectScenarioPath: string | null
+  /** Relative path of a selected general scenario; mutually exclusive with the other scenario fields. */
+  generalScenarioPath: string | null
   timestampConfig: TimestampConfig | null
   avatarGenerationEnabled: boolean
   outfitSelections: OutfitSelection[]
@@ -110,3 +126,8 @@ export const CUSTOM_SCENARIO_VALUE = '__custom__'
  * to use their UUID; "Custom" uses CUSTOM_SCENARIO_VALUE.
  */
 export const PROJECT_SCENARIO_PREFIX = 'project:'
+/**
+ * Stable token for general scenarios in the dropdown. Format:
+ * `general:<relativePath>`.
+ */
+export const GENERAL_SCENARIO_PREFIX = 'general:'

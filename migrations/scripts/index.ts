@@ -259,6 +259,8 @@ import { migrateCharacterAvatarsToVaultsMigration } from './migrate-character-av
 import { provisionUserUploadsMountMigration } from './provision-user-uploads-mount';
 // Sweep any remaining files under _general/ into the Quilltap Uploads mount
 import { migrateRemainingGeneralToUploadsMigration } from './migrate-remaining-general-to-uploads';
+// Provision the global Quilltap General mount point (houses general Scenarios/)
+import { provisionGeneralMountMigration } from './provision-general-mount';
 
 /**
  * All available migrations.
@@ -513,6 +515,8 @@ export const migrations: Migration[] = [
   provisionUserUploadsMountMigration,
   // Sweep any remaining files under _general/ into the Quilltap Uploads mount
   migrateRemainingGeneralToUploadsMigration,
+  // Provision the global Quilltap General mount point (houses general Scenarios/)
+  provisionGeneralMountMigration,
 ];
 
 export {
@@ -752,5 +756,7 @@ export {
   provisionUserUploadsMountMigration,
   // Sweep any remaining files under _general/ into the Quilltap Uploads mount
   migrateRemainingGeneralToUploadsMigration,
+  // Provision the global Quilltap General mount point (houses general Scenarios/)
+  provisionGeneralMountMigration,
 };
 

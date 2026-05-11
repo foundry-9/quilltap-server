@@ -30,6 +30,8 @@ import {
 import {
   loadProsperoProjectContext,
   postProsperoProjectContextAnnouncement,
+  loadProsperoGeneralContext,
+  postProsperoGeneralContextAnnouncement,
 } from '@/lib/services/prospero-notifications/writer'
 import {
   processToolCalls,
@@ -451,24 +453,36 @@ async function processMessage(
   // system-prompt builder is now unused; the system-prompt block was dropped
   // along with this rewire.
 
-  if (project) {
-    const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
-    const messageCount = existingMessages.filter(m => m.type === 'message').length
+  const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
+  const messageCount = existingMessages.filter(m => m.type === 'message').length
+  // Skip messageCount === 0 — chat-start handles the initial emit. Cadence
+  // re-injects at multiples of N thereafter.
+  const shouldInjectContext = reinjectInterval > 0 && messageCount > 0 && messageCount % reinjectInterval === 0
 
-    // Skip messageCount === 0 — chat-start handles the initial emit. Cadence
-    // re-injects at multiples of N thereafter.
-    const shouldInject = reinjectInterval > 0 && messageCount > 0 && messageCount % reinjectInterval === 0
+  if (project && shouldInjectContext) {
+    const projectContext = await loadProsperoProjectContext(project.id)
+    if (projectContext) {
+      const posted = await postProsperoProjectContextAnnouncement({
+        chatId,
+        project: projectContext,
+      })
+      if (posted) {
+        existingMessages.push(posted)
+      }
+    }
+  }
 
-    if (shouldInject) {
-      const projectContext = await loadProsperoProjectContext(project.id)
-      if (projectContext) {
-        const posted = await postProsperoProjectContextAnnouncement({
-          chatId,
-          project: projectContext,
-        })
-        if (posted) {
-          existingMessages.push(posted)
-        }
+  // Always-on general-context re-injection — fires for every chat, project
+  // or not, at the same cadence as the project-context whisper.
+  if (shouldInjectContext) {
+    const generalContext = await loadProsperoGeneralContext()
+    if (generalContext) {
+      const posted = await postProsperoGeneralContextAnnouncement({
+        chatId,
+        general: generalContext,
+      })
+      if (posted) {
+        existingMessages.push(posted)
       }
     }
   }

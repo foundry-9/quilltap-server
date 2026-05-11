@@ -6,6 +6,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type {
   Character,
   ConnectionProfile,
+  GeneralScenarioOption,
   ImageProfile,
   NewChatFormState,
   Project,
@@ -48,6 +49,8 @@ interface UseNewChatReturn {
   project: Project | null
   /** Project scenarios from `/api/v1/projects/[id]/scenarios`; empty when no project. */
   projectScenarios: ProjectScenarioOption[]
+  /** General scenarios from `/api/v1/scenarios`; fetched for every non-help chat. */
+  generalScenarios: GeneralScenarioOption[]
   // Form state
   selectedCharacters: SelectedCharacter[]
   setSelectedCharacters: React.Dispatch<React.SetStateAction<SelectedCharacter[]>>
@@ -63,6 +66,7 @@ const INITIAL_STATE: NewChatFormState = {
   scenario: '',
   scenarioId: null,
   projectScenarioPath: null,
+  generalScenarioPath: null,
   timestampConfig: null,
   avatarGenerationEnabled: false,
   outfitSelections: [],
@@ -99,6 +103,7 @@ export function useNewChat({
   const [userControlledCharacters, setUserControlledCharacters] = useState<UserControlledCharacter[]>([])
   const [project, setProject] = useState<Project | null>(null)
   const [projectScenarios, setProjectScenarios] = useState<ProjectScenarioOption[]>([])
+  const [generalScenarios, setGeneralScenarios] = useState<GeneralScenarioOption[]>([])
 
   const [selectedCharacters, setSelectedCharacters] = useState<SelectedCharacter[]>([])
   const [state, setState] = useState<NewChatFormState>(INITIAL_STATE)
@@ -119,6 +124,7 @@ export function useNewChat({
           fetch('/api/v1/characters'),
           fetch('/api/v1/connection-profiles'),
           fetch('/api/v1/image-profiles'),
+          fetch('/api/v1/scenarios'),
         ]
         if (projectId) {
           requests.push(fetch(`/api/v1/projects/${projectId}`))
@@ -136,6 +142,7 @@ export function useNewChat({
         const charsRes = responses[idx++]
         const profilesRes = responses[idx++]
         const imageProfilesRes = responses[idx++]
+        const generalScenariosRes = responses[idx++]
         const projectRes = projectId ? responses[idx++] : null
         const projectScenariosRes = projectId ? responses[idx++] : null
         const seedCharacterRes = initialCharacterId ? responses[idx++] : null
@@ -160,6 +167,22 @@ export function useNewChat({
         if (imageProfilesRes.ok) {
           const data = await imageProfilesRes.json()
           loadedImageProfiles = Array.isArray(data) ? data : data.profiles || []
+        }
+        let loadedGeneralScenarios: GeneralScenarioOption[] = []
+        if (generalScenariosRes.ok) {
+          const data = await generalScenariosRes.json()
+          loadedGeneralScenarios = (data.scenarios || []).map((s: { path: string; filename: string; name: string; description?: string; isDefault: boolean; body: string }) => ({
+            path: s.path,
+            filename: s.filename,
+            name: s.name,
+            ...(s.description !== undefined && { description: s.description }),
+            isDefault: s.isDefault,
+            body: s.body,
+          }))
+        } else {
+          console.warn('[useNewChat] Failed to load general scenarios', {
+            status: generalScenariosRes.status,
+          })
         }
         let loadedProject: Project | null = null
         if (projectRes && projectRes.ok) {
@@ -205,11 +228,18 @@ export function useNewChat({
         setImageProfiles(loadedImageProfiles)
         setProject(loadedProject)
         setProjectScenarios(loadedProjectScenarios)
+        setGeneralScenarios(loadedGeneralScenarios)
 
-        // The project default scenario (if any) — used to seed both the
-        // initial-character branch below and the project-only branch.
+        // Project default wins over general default for pre-selection. When a
+        // project default exists, seed `projectScenarioPath`; otherwise fall
+        // back to the general default.
         const projectDefaultScenarioPath =
           loadedProjectScenarios.find((s) => s.isDefault)?.path ?? null
+        const generalDefaultScenarioPath =
+          loadedGeneralScenarios.find((s) => s.isDefault)?.path ?? null
+        const seededGeneralScenarioPath = projectDefaultScenarioPath
+          ? null
+          : generalDefaultScenarioPath
 
         // Continuation mode: seed multi-character + form state from the
         // source chat's roster, bypassing the single-character seed branch.
@@ -246,6 +276,7 @@ export function useNewChat({
             // the whole point is to pick a new one.
             scenarioId: null,
             projectScenarioPath: projectDefaultScenarioPath,
+            generalScenarioPath: seededGeneralScenarioPath,
             imageProfileId:
               initialImageProfileId ||
               loadedProject?.defaultImageProfileId ||
@@ -277,12 +308,14 @@ export function useNewChat({
           // Scenario default: project default wins over character default.
           // The character default still rides on `state.scenarioId` so the form
           // can render the override-visibility note offering a one-click switch.
+          // General default fills in only when no project default exists.
           setState((prev) => ({
             ...prev,
             selectedUserCharacterId: seededPartnerId || char.defaultPartnerId || '',
             timestampConfig: char.defaultTimestampConfig ?? null,
             scenarioId: char.defaultScenarioId ?? null,
             projectScenarioPath: projectDefaultScenarioPath,
+            generalScenarioPath: seededGeneralScenarioPath,
             imageProfileId:
               loadedProject?.defaultImageProfileId ||
               char.defaultImageProfileId ||
@@ -294,9 +327,17 @@ export function useNewChat({
           setState((prev) => ({
             ...prev,
             projectScenarioPath: projectDefaultScenarioPath,
+            generalScenarioPath: seededGeneralScenarioPath,
             imageProfileId: loadedProject.defaultImageProfileId || prev.imageProfileId,
             avatarGenerationEnabled:
               loadedProject.defaultAvatarGenerationEnabled ?? prev.avatarGenerationEnabled,
+          }))
+        } else if (generalDefaultScenarioPath) {
+          // No project, no initial character — still pre-select the general
+          // default so the dropdown lands on something meaningful.
+          setState((prev) => ({
+            ...prev,
+            generalScenarioPath: generalDefaultScenarioPath,
           }))
         }
       } catch (err) {
@@ -410,13 +451,15 @@ export function useNewChat({
         requestBody.imageProfileId = state.imageProfileId
       }
 
-      // Scenario precedence: custom text > character scenarioId > projectScenarioPath.
+      // Scenario precedence: custom text > character scenarioId > projectScenarioPath > generalScenarioPath.
       if (state.scenario) {
         requestBody.scenario = state.scenario
       } else if (state.scenarioId) {
         requestBody.scenarioId = state.scenarioId
       } else if (state.projectScenarioPath) {
         requestBody.projectScenarioPath = state.projectScenarioPath
+      } else if (state.generalScenarioPath) {
+        requestBody.generalScenarioPath = state.generalScenarioPath
       }
 
       if (state.timestampConfig && state.timestampConfig.mode !== 'NONE') {
@@ -473,6 +516,7 @@ export function useNewChat({
     userControlledCharacters,
     project,
     projectScenarios,
+    generalScenarios,
     selectedCharacters,
     setSelectedCharacters,
     state,

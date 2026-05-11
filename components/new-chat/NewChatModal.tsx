@@ -132,6 +132,7 @@ export function NewChatModal({
     userControlledCharacters,
     project,
     projectScenarios,
+    generalScenarios,
     selectedCharacters,
     setSelectedCharacters,
     state,
@@ -249,6 +250,7 @@ export function NewChatModal({
               setState={setState}
               project={project}
               projectScenarios={projectScenarios}
+              generalScenarios={generalScenarios}
               creating={creating}
               showSingleCharacterControls={!pickerExpanded}
               continuationFromChatId={continuationFromChatId ?? null}

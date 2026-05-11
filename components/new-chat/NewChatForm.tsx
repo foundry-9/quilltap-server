@@ -10,6 +10,7 @@ import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import type {
   ConnectionProfile,
+  GeneralScenarioOption,
   ImageProfile,
   NewChatFormState,
   Project,
@@ -17,7 +18,11 @@ import type {
   SelectedCharacter,
   UserControlledCharacter,
 } from './types'
-import { CUSTOM_SCENARIO_VALUE, PROJECT_SCENARIO_PREFIX } from './types'
+import {
+  CUSTOM_SCENARIO_VALUE,
+  GENERAL_SCENARIO_PREFIX,
+  PROJECT_SCENARIO_PREFIX,
+} from './types'
 
 interface NewChatFormProps {
   profiles: ConnectionProfile[]
@@ -30,6 +35,8 @@ interface NewChatFormProps {
   project: Project | null
   /** Project scenarios from `/api/v1/projects/[id]/scenarios`; empty when no project. */
   projectScenarios?: ProjectScenarioOption[]
+  /** General scenarios from `/api/v1/scenarios`; fetched for every non-help chat. */
+  generalScenarios?: GeneralScenarioOption[]
   creating: boolean
   /**
    * When true, renders connection-profile and system-prompt selects inline for a
@@ -59,6 +66,7 @@ export function NewChatForm({
   setState,
   project,
   projectScenarios = [],
+  generalScenarios = [],
   creating,
   showSingleCharacterControls = false,
   continuationFromChatId,
@@ -79,20 +87,26 @@ export function NewChatForm({
   }, [singleLlm])
 
   const hasProjectScenarios = projectScenarios.length > 0
+  const hasGeneralScenarios = generalScenarios.length > 0
   const hasCharacterScenarios = singleCharacterScenarios && singleCharacterScenarios.length > 0
-  const showScenarioDropdown = hasProjectScenarios || hasCharacterScenarios
+  const showScenarioDropdown = hasProjectScenarios || hasGeneralScenarios || hasCharacterScenarios
 
   const selectedProjectScenario = state.projectScenarioPath
     ? projectScenarios.find((s) => s.path === state.projectScenarioPath)
+    : undefined
+  const selectedGeneralScenario = state.generalScenarioPath
+    ? generalScenarios.find((s) => s.path === state.generalScenarioPath)
     : undefined
   const selectedCharacterScenario = state.scenarioId
     ? singleCharacterScenarios?.find((s) => s.id === state.scenarioId)
     : undefined
   const selectedPreset = selectedProjectScenario
     ? { kind: 'project' as const, content: selectedProjectScenario.body }
-    : selectedCharacterScenario
-      ? { kind: 'character' as const, content: selectedCharacterScenario.content }
-      : null
+    : selectedGeneralScenario
+      ? { kind: 'general' as const, content: selectedGeneralScenario.body }
+      : selectedCharacterScenario
+        ? { kind: 'character' as const, content: selectedCharacterScenario.content }
+        : null
   const showCustomTextarea = !selectedPreset
 
   // The character's own default — used to render the override-visibility note
@@ -110,13 +124,20 @@ export function NewChatForm({
 
   const dropdownValue = selectedProjectScenario
     ? `${PROJECT_SCENARIO_PREFIX}${selectedProjectScenario.path}`
-    : selectedCharacterScenario
-      ? selectedCharacterScenario.id
-      : CUSTOM_SCENARIO_VALUE
+    : selectedGeneralScenario
+      ? `${GENERAL_SCENARIO_PREFIX}${selectedGeneralScenario.path}`
+      : selectedCharacterScenario
+        ? selectedCharacterScenario.id
+        : CUSTOM_SCENARIO_VALUE
 
   const handleScenarioSelectChange = (value: string) => {
     if (value === CUSTOM_SCENARIO_VALUE || value === '') {
-      setState((prev) => ({ ...prev, scenarioId: null, projectScenarioPath: null }))
+      setState((prev) => ({
+        ...prev,
+        scenarioId: null,
+        projectScenarioPath: null,
+        generalScenarioPath: null,
+      }))
       return
     }
     if (value.startsWith(PROJECT_SCENARIO_PREFIX)) {
@@ -124,6 +145,18 @@ export function NewChatForm({
       setState((prev) => ({
         ...prev,
         projectScenarioPath: path,
+        generalScenarioPath: null,
+        scenarioId: null,
+        scenario: '',
+      }))
+      return
+    }
+    if (value.startsWith(GENERAL_SCENARIO_PREFIX)) {
+      const path = value.slice(GENERAL_SCENARIO_PREFIX.length)
+      setState((prev) => ({
+        ...prev,
+        generalScenarioPath: path,
+        projectScenarioPath: null,
         scenarioId: null,
         scenario: '',
       }))
@@ -134,6 +167,7 @@ export function NewChatForm({
       ...prev,
       scenarioId: value,
       projectScenarioPath: null,
+      generalScenarioPath: null,
       scenario: '',
     }))
   }
@@ -144,6 +178,7 @@ export function NewChatForm({
       ...prev,
       scenarioId: characterDefaultScenario.id,
       projectScenarioPath: null,
+      generalScenarioPath: null,
       scenario: '',
     }))
   }
@@ -328,6 +363,17 @@ export function NewChatForm({
                     <option key={`project:${s.path}`} value={`${PROJECT_SCENARIO_PREFIX}${s.path}`}>
                       {s.name}
                       {s.isDefault ? ' (project default)' : ''}
+                      {s.description ? ` — ${s.description}` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {hasGeneralScenarios && (
+                <optgroup label="General Scenarios">
+                  {generalScenarios.map((s) => (
+                    <option key={`general:${s.path}`} value={`${GENERAL_SCENARIO_PREFIX}${s.path}`}>
+                      {s.name}
+                      {s.isDefault ? ' (general default)' : ''}
                       {s.description ? ` — ${s.description}` : ''}
                     </option>
                   ))}

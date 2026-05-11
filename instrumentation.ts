@@ -639,6 +639,21 @@ export async function register() {
         });
       }
 
+      // Companion: ensure the instance-wide "Quilltap General" mount has its
+      // Scenarios/ folder. Idempotent and silent when the provisioning
+      // migration hasn't run yet (returns null mountPointId).
+      try {
+        const { ensureGeneralScenariosFolder } = await import(
+          './lib/mount-index/general-scenarios'
+        );
+        await ensureGeneralScenariosFolder();
+      } catch (ensureError) {
+        logger.warn('Error ensuring general scenarios folder, continuing startup', {
+          context: 'instrumentation.register',
+          error: ensureError instanceof Error ? ensureError.message : String(ensureError),
+        });
+      }
+
       // ================================================================
       // PHASE 3.5: Start Background Schedulers (non-critical)
       // ================================================================

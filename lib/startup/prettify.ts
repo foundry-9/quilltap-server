@@ -180,6 +180,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'migrate-character-avatars-to-vaults-v1': "Moving character avatars into each character's vault",
   'provision-user-uploads-mount-v1': 'Provisioning the Quilltap Uploads mount',
   'migrate-remaining-general-to-uploads-v1': 'Sweeping leftover uploads into the Quilltap Uploads mount',
+  'provision-general-mount-v1': 'Provisioning the Quilltap General mount',
 
   // Memory backfills
   'fix-memory-timestamps-from-source-v1': 'Mending memory timestamps from their source messages',

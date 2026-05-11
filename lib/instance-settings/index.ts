@@ -24,6 +24,7 @@ const KEY_MEMORY_EXTRACTION_CONCURRENCY = 'memoryExtractionConcurrency';
 const KEY_MEMORY_EXTRACTION_LIMITS = 'memoryExtractionLimits';
 const KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID = 'lanternBackgroundsMountPointId';
 const KEY_USER_UPLOADS_MOUNT_POINT_ID = 'userUploadsMountPointId';
+const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
 
 const DEFAULT_MEMORY_EXTRACTION_CONCURRENCY = 1;
 const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = {
@@ -131,11 +132,27 @@ export async function setUserUploadsMountPointId(value: string): Promise<void> {
   await writeSetting(KEY_USER_UPLOADS_MOUNT_POINT_ID, value);
 }
 
+/**
+ * Read the Quilltap General mount-point id. The provisioning migration writes
+ * this on first boot; runtime callers (`lib/mount-index/general-scenarios.ts`)
+ * read it to find the instance-wide store that houses general chat-starter
+ * scenarios offered alongside project and character scenarios.
+ */
+export async function getGeneralMountPointId(): Promise<string | null> {
+  return readSetting(KEY_GENERAL_MOUNT_POINT_ID);
+}
+
+export async function setGeneralMountPointId(value: string): Promise<void> {
+  if (!value) throw new Error('generalMountPointId must be a non-empty id');
+  await writeSetting(KEY_GENERAL_MOUNT_POINT_ID, value);
+}
+
 export const InstanceSettingsKeys = {
   memoryExtractionConcurrency: KEY_MEMORY_EXTRACTION_CONCURRENCY,
   memoryExtractionLimits: KEY_MEMORY_EXTRACTION_LIMITS,
   lanternBackgroundsMountPointId: KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID,
   userUploadsMountPointId: KEY_USER_UPLOADS_MOUNT_POINT_ID,
+  generalMountPointId: KEY_GENERAL_MOUNT_POINT_ID,
 } as const;
 
 // Re-export the schema for callers that want to validate independently.

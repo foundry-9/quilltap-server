@@ -1,31 +1,31 @@
 'use client'
 
 /**
- * ScenarioEditorModal — modal for creating or editing a project scenario file.
+ * ScenarioEditorModal — modal for creating or editing a scenario file.
  *
  * Wraps the reusable `MarkdownLexicalEditor` with name / description / default
  * fields, plus filename for the create flow. Save persists via the parent's
- * `onSave` callback (which routes to `useProjectScenarios.createScenario` or
- * `updateScenario`).
+ * `onSave` callback (which routes to a scope-specific `createScenario` or
+ * `updateScenario` mutator — project- or general-scoped).
  *
  * Built on top of `BaseModal`, which portals to `document.body` so the modal
- * escapes the qt-page-container's stacking context (a parent qt-card with
- * `backdrop-filter` would otherwise trap fixed-position children and let
- * sibling cards render on top of the modal).
+ * escapes the qt-page-container's stacking context.
  *
- * @module app/prospero/[id]/components/ScenarioEditorModal
+ * @module components/scenarios/ScenarioEditorModal
  */
 
 import { useEffect, useMemo, useState } from 'react'
 import BaseModal from '@/components/ui/BaseModal'
 import FormActions from '@/components/ui/FormActions'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
-import type { ProjectScenario } from '../hooks'
+import type { Scenario } from './types'
 
 interface ScenarioEditorModalProps {
   isOpen: boolean
   /** Existing scenario being edited; null when creating. */
-  scenario: ProjectScenario | null
+  scenario: Scenario | null
+  /** Label used in the "Use this scenario as the {scope} default" checkbox. */
+  defaultScopeLabel?: string
   onClose: () => void
   onSave: (input: {
     filename?: string  // only for create
@@ -36,7 +36,13 @@ interface ScenarioEditorModalProps {
   }) => Promise<{ ok: true } | { ok: false; error: string }>
 }
 
-export function ScenarioEditorModal({ isOpen, scenario, onClose, onSave }: ScenarioEditorModalProps) {
+export function ScenarioEditorModal({
+  isOpen,
+  scenario,
+  defaultScopeLabel = 'default',
+  onClose,
+  onSave,
+}: ScenarioEditorModalProps) {
   const isEdit = scenario !== null
   const [filename, setFilename] = useState('')
   const [name, setName] = useState('')
@@ -46,7 +52,6 @@ export function ScenarioEditorModal({ isOpen, scenario, onClose, onSave }: Scena
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Reset form whenever the modal opens for a different scenario.
   useEffect(() => {
     if (!isOpen) return
     /* eslint-disable react-hooks/set-state-in-effect -- syncs local form state to parent-driven scenario prop on modal open */
@@ -199,7 +204,7 @@ export function ScenarioEditorModal({ isOpen, scenario, onClose, onSave }: Scena
             className="qt-checkbox"
           />
           <label htmlFor="scenario-default" className="qt-text-small">
-            Use this scenario as the project default for new chats
+            Use this scenario as the {defaultScopeLabel} default for new chats
           </label>
         </div>
 

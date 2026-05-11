@@ -4,6 +4,24 @@
 
 ### 4.4-dev
 
+#### Feature: General Scenarios
+
+Added a third scenario scope alongside project and character: instance-wide General Scenarios, offered in every non-help New Chat dialog regardless of project context. Files live in a new singleton "Quilltap General" database-backed mount point (`storeType='documents'`) provisioned by `provision-general-mount-v1`; its id is persisted in `instance_settings.generalMountPointId`. Same on-disk shape as project scenarios: `.md` files with optional `name`/`description`/`isDefault` frontmatter, alphabetical default-conflict resolution.
+
+New API: `GET/POST /api/v1/scenarios` (collection) and `GET/PUT/POST?action=rename/DELETE /api/v1/scenarios/[scenarioPath]` (item). New top-level page at `/scenarios` with full CRUD, plus a sidebar nav link. The project-scoped CRUD UI (`ScenariosCard`, `ScenarioEditorModal`) was factored into reusable `components/scenarios/ScenariosManager.tsx` and `components/scenarios/ScenarioEditorModal.tsx`; both the project page and the new general page render that shared manager. File-IO primitives in `lib/mount-index/project-scenarios.ts` were extracted into `lib/mount-index/scenarios-common.ts`; project-scenarios.ts now re-wraps them, and the new `lib/mount-index/general-scenarios.ts` mirrors that wrapping for the general mount.
+
+The New Chat dialog (`components/new-chat/NewChatForm.tsx`) now fetches `/api/v1/scenarios` unconditionally on open and renders a third "General Scenarios" optgroup between Project and Character. Pre-selection precedence: project default > general default; character default still triggers the existing override-note. Chat creation precedence in `app/api/v1/chats/route.ts` adds a fourth branch: `scenario` (custom text) > `scenarioId` (character) > `projectScenarioPath` > `generalScenarioPath`. Help chats stay on their own `/api/v1/help-chats` route and never see scenarios.
+
+Pre-migration race tolerance: GET `/api/v1/scenarios` returns `{ mountPointId: null, scenarios: [], warnings: [] }` rather than 500 when the provisioning migration hasn't yet stored the id; writes return 400 in that window. Startup ensure of the `Scenarios/` folder runs immediately after the project-scenarios ensure pass in `instrumentation.ts`.
+
+Help docs added: `help/general-scenarios.md` (with `url: /scenarios` and the matching `help_navigate` call); `help/project-scenarios.md` gained a brief cross-reference to the new scope and the precedence rule.
+
+#### Feature: characters always reach the Quilltap General store
+
+`collectAccessibleMountPointIds` in `lib/doc-edit/path-resolver.ts` now adds the "Quilltap General" mount to every character's accessible set unconditionally — regardless of project, character vault, or `systemTransparency`. The general mount is `storeType='documents'` (not a character vault), so it is not subject to the vault-opacity filter. Every `doc_*` tool that enumerates accessible stores (doc_list_files, doc_grep, doc_copy_file, doc_read_file/doc_write_file resolution) now sees it by name and id.
+
+Companion: a new always-on Prospero whisper announces the general store. `lib/services/prospero-notifications/writer.ts` gains `loadProsperoGeneralContext` and `postProsperoGeneralContextAnnouncement` (systemKind `'general-context'`). Fires at chat-start (in `app/api/v1/chats/route.ts`, alongside the project-context whisper but with no `projectId` gate) and re-injects at the configured `projectContextReinjectInterval` cadence (in `lib/services/chat-message/orchestrator.service.ts`). Pre-migration race tolerance: returns null when the mount hasn't been provisioned yet; the whisper is simply skipped.
+
 #### Fix: doc_mount_folders backfill no longer recurses into OOM on startup
 
 `DocMountFoldersRepository.getCollection()` ran a one-time folder backfill the first time it was called per process (gated on `PRAGMA user_version < 1`). The backfill iterated every database-backed mount point and called `ensureFolderPath(mountPointId, folderPath)` for each document's parent directory — which itself calls `findByMountPointAndPath` → `getCollection`. Because the `mountIndexCollectionInitialized` flag was only set *after* the backfill completed, every recursive `getCollection` call re-entered the init block, re-ran DDL, and re-launched the backfill. The result was unbounded async recursion that pinned the microtask queue, swallowed timer ticks, and OOMed Node around the 7.6 GB mark roughly 80–90 seconds into Phase 3.4 (`ensure-project-scenarios`).

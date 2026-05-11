@@ -195,6 +195,11 @@ function describeCharacters(context: PathResolutionContext): string {
  * character's own vault (if any). The character vault is always accessible
  * to the LLM acting as that character, even when the vault is not linked
  * to the active project.
+ *
+ * The instance-wide "Quilltap General" mount (when provisioned) is always
+ * included so every character can reach its `Scenarios/` library and any
+ * other curated content kept at the household level — regardless of which
+ * project the chat lives in, if any.
  */
 async function collectAccessibleMountPointIds(
   context: PathResolutionContext
@@ -220,6 +225,19 @@ async function collectAccessibleMountPointIds(
     if (character?.characterDocumentMountPointId) {
       ids.add(character.characterDocumentMountPointId);
     }
+  }
+
+  // Quilltap General is always accessible to every character. Lazy-imported
+  // to keep the path resolver free of an instance-settings dependency at load
+  // time.
+  try {
+    const { getGeneralMountPointId } = await import('@/lib/instance-settings');
+    const generalMountPointId = await getGeneralMountPointId();
+    if (generalMountPointId) ids.add(generalMountPointId);
+  } catch (error) {
+    logger.warn('Failed to look up Quilltap General mount; continuing without it', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   return Array.from(ids);
