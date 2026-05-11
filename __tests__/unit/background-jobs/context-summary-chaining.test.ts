@@ -1,8 +1,6 @@
 import { handleContextSummary } from '@/lib/background-jobs/handlers/context-summary';
 import { getRepositories } from '@/lib/repositories/factory';
-import { updateContextSummary } from '@/lib/memory/cheap-llm-tasks';
-import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
-import { createContextSummaryEvent } from '@/lib/services/system-events.service';
+import { generateContextSummary } from '@/lib/chat/context-summary';
 import { enqueueChatDangerClassification } from '@/lib/background-jobs/queue-service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 
@@ -20,17 +18,12 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }));
 
-jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
-  updateContextSummary: jest.fn(),
-  extractVisibleConversation: jest.requireActual('@/lib/memory/cheap-llm-tasks').extractVisibleConversation,
-}));
-
-jest.mock('@/lib/llm/cheap-llm', () => ({
-  getCheapLLMProvider: jest.fn(),
-}));
-
-jest.mock('@/lib/services/system-events.service', () => ({
-  createContextSummaryEvent: jest.fn(),
+// The handler delegates summary generation to generateContextSummary in
+// @/lib/chat/context-summary (rewritten in 8957382f). Mock the delegate
+// directly — this test is about the danger-classification chaining that
+// runs *after* the delegate succeeds, not about summary generation itself.
+jest.mock('@/lib/chat/context-summary', () => ({
+  generateContextSummary: jest.fn(),
 }));
 
 jest.mock('@/lib/background-jobs/queue-service', () => ({
@@ -42,9 +35,7 @@ jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
 }));
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>;
-const mockUpdateContextSummary = updateContextSummary as jest.MockedFunction<typeof updateContextSummary>;
-const mockGetCheapLLMProvider = getCheapLLMProvider as jest.MockedFunction<typeof getCheapLLMProvider>;
-const mockCreateContextSummaryEvent = createContextSummaryEvent as jest.MockedFunction<typeof createContextSummaryEvent>;
+const mockGenerateContextSummary = generateContextSummary as jest.MockedFunction<typeof generateContextSummary>;
 const mockEnqueueDangerClassification = enqueueChatDangerClassification as jest.MockedFunction<typeof enqueueChatDangerClassification>;
 const mockResolveDangerousContentSettings = resolveDangerousContentSettings as jest.MockedFunction<typeof resolveDangerousContentSettings>;
 
@@ -113,20 +104,12 @@ beforeEach(() => {
 
   mockGetRepositories.mockReturnValue(repositories as any);
 
-  mockGetCheapLLMProvider.mockReturnValue({
-    provider: 'OPENAI',
-    modelName: 'gpt-4o-mini',
-    connectionProfileId: 'profile-1',
-    isLocal: false,
-  });
-
-  mockUpdateContextSummary.mockResolvedValue({
+  mockGenerateContextSummary.mockResolvedValue({
     success: true,
-    result: 'Updated summary text',
+    wasGenerated: true,
+    summary: 'Updated summary text',
     usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
   });
-
-  mockCreateContextSummaryEvent.mockResolvedValue(undefined as any);
 
   mockResolveDangerousContentSettings.mockReturnValue({
     settings: {
@@ -183,8 +166,8 @@ describe('Context Summary → Danger Classification Chaining', () => {
     // Should NOT throw
     await handleContextSummary(buildJob());
 
-    // Summary update should still have completed
-    expect(mockUpdateContextSummary).toHaveBeenCalled();
+    // Summary generation should still have completed
+    expect(mockGenerateContextSummary).toHaveBeenCalled();
   });
 
   it('uses priority -2 for chained jobs', async () => {

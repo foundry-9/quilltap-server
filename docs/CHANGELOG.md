@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: context-summary chaining test now mocks the right delegate
+
+`__tests__/unit/background-jobs/context-summary-chaining.test.ts` had been failing on `main` since 8957382f rewrote the background handler to delegate to `generateContextSummary` instead of calling `updateContextSummary` directly. The test still mocked `updateContextSummary`, which the new handler never calls — so the real `foldChatSummary` ran inside `generateContextSummary`, failed without an LLM, and the handler short-circuited before the danger-classification chain. Three of the four cases failed. Test now mocks `generateContextSummary` directly with a `{ success: true, wasGenerated: true, summary }` return; the chain assertions fire as intended. No production code changes.
+
 #### Fix: doc-mount-chunks cache invalidated on insert and embed
 
 `lib/database/repositories/doc-mount-chunks.repository.ts` only called `invalidateMountPoint` from `deleteByFileId` and `deleteByMountPointId`. The two methods that grow the searchable corpus — `bulkInsert` (called from `reindexSingleFile` after a `doc_write_file`) and `updateEmbedding` (called by the embedding-generate background handler after a successful Ollama/OpenAI embed) — never touched the cache. Result: the in-memory mount-chunk cache in `lib/mount-index/mount-chunk-cache.ts` kept whatever snapshot it loaded on the previous search; freshly written + embedded chunks were invisible to `searchDocumentChunks` (and so to the unified `search` tool and the per-turn Commonplace Book knowledge recall) until the next process restart or until something else triggered an invalidation. Discovered when Friday/Amy's second project-Knowledge test wrote `selenite meridian trellis`, the embedding pipeline reported success, and the search tool still returned `knowledgeProject: 0` thirty-plus seconds later.
