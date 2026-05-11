@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Fix: mount-index migrations failed on instances predating the storeType column
+
+`convert-project-files-to-document-stores-v1`, `provision-lantern-backgrounds-mount-v1`, and `provision-user-uploads-mount-v1` each ensure the mount-index DB schema with `CREATE TABLE IF NOT EXISTS "doc_mount_points" (...)`. That's a no-op when the table already exists, so instances whose mount-index DB was created before `storeType` was introduced kept the older 17-column shape. The very first `INSERT INTO "doc_mount_points" (..., storeType, ...)` then failed with `table doc_mount_points has no column named storeType`, the migration runner stopped on that error, and every dependent v4.3 / v4.4 file-system migration (Lantern provisioning, story-bg sweep, character-avatar vault sweep, Quilltap Uploads provisioning, remaining-general sweep) silently never ran on that instance.
+
+New `migrations/lib/mount-index-schema.ts` exports `alignDocMountPointsSchema(db)`, which runs `PRAGMA table_info` and issues an idempotent `ALTER TABLE "doc_mount_points" ADD COLUMN ...` for every column with a safe default that's missing. All three of the migrations above now call it from their `ensureMountIndexTables` helper right after the `CREATE TABLE IF NOT EXISTS` block, so older databases are brought to the current column set before any INSERT touches them. NOT NULL columns without defaults (`id`, `name`, `createdAt`, `updatedAt`) are skipped because SQLite can't add those to a non-empty table; those columns predate every drift case we know about, so the helper never needs them.
+
+Effect on the default macOS instance (last successful migration was `add-lantern-image-alert-fields-v1` on 2026-05-04): the next dev boot will run the full backlog of v4.3 + v4.4 migrations and the instance will gain its Lantern Backgrounds mount, per-character vaults, Quilltap Uploads mount, and `_general/` sweep. Fresh instances are unaffected — they already create the table with `storeType` present.
+
 #### Fix: .qtap importer was nulling out freshly-provisioned character vaults
 
 The post-import reconcile pass in `lib/import/quilltap-import-service.ts` was clearing `characters.characterDocumentMountPointId` on any imported character whose vault id didn't appear in `idMaps.mountPoints` — which is always the case, because character vaults are runtime-allocated per instance and never carried in `.qtap` exports as standalone mount-point rows. The flow was: import creates the character, `provisionImportedCharacterVault` allocates vault A and links the row, then reconcile reads the row, fails to remap A, and writes `characterDocumentMountPointId = null` over the freshly-set value. The startup vault backfill would later allocate vault B and link to that, leaving vault A orphaned.

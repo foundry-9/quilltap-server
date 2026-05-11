@@ -37,6 +37,7 @@ import {
   getSQLiteDatabase,
   sqliteTableExists,
 } from '../lib/database-utils';
+import { alignDocMountPointsSchema } from '../lib/mount-index-schema';
 import { getMountIndexDatabasePath } from '../../lib/paths';
 
 const MIGRATION_ID = 'provision-user-uploads-mount-v1';
@@ -107,6 +108,10 @@ function ensureMountIndexTables(db: DatabaseType): void {
   for (const sql of TABLE_DDL) {
     db.exec(sql);
   }
+  // Bring older mount-index DBs in line with the current shape — CREATE TABLE
+  // IF NOT EXISTS is a no-op when the table already exists, so columns added
+  // after the original schema (e.g. storeType) must be backfilled here.
+  alignDocMountPointsSchema(db);
 }
 
 function nowIso(): string {
