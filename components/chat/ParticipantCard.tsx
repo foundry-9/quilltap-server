@@ -93,6 +93,11 @@ interface ParticipantCardProps {
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
   // System prompt selection (from character's named systemPrompts[])
   onSystemPromptChange?: (participantId: string, promptId: string | null) => void
+  /** Force-rebuild the chat-level cached system prompt (identity stack) for
+   *  this participant — picks up edits to the underlying character that the
+   *  compiler doesn't auto-invalidate (manifesto, personality, prompt content,
+   *  etc.). */
+  onRebuildSystemPrompt?: (participantId: string) => void
   // Inline settings controls
   onActiveChange?: (participantId: string, isActive: boolean) => void
   onStatusChange?: (participantId: string, status: 'active' | 'silent' | 'absent' | 'removed') => void
@@ -131,6 +136,7 @@ export function ParticipantCard({
   connectionProfiles,
   onConnectionProfileChange,
   onSystemPromptChange,
+  onRebuildSystemPrompt,
   onActiveChange,
   onStatusChange,
   onWhisper,
@@ -424,25 +430,43 @@ export function ParticipantCard({
             )
           )}
 
-          {/* System prompt dropdown — shown for LLM-controlled characters whose
-              character has one or more named system prompts. Changing this
-              takes effect immediately on the next generation. */}
-          {isCharacter && !isUserParticipant && !isUserControlledCharacter && onSystemPromptChange && entity && (participant.character?.systemPrompts?.length ?? 0) > 0 && (
-            <div className="mt-1">
-              <select
-                value={participant.selectedSystemPromptId || ''}
-                onChange={handleSystemPromptChangeEvent}
-                className="qt-select qt-select-sm w-full"
-                title="System prompt"
-                aria-label={`System prompt for ${name}`}
-              >
-                <option value="">Use default prompt</option>
-                {participant.character!.systemPrompts!.map((prompt) => (
-                  <option key={prompt.id} value={prompt.id}>
-                    {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
-                  </option>
-                ))}
-              </select>
+          {/* System prompt row — dropdown (when the character has named prompts)
+              and/or a manual rebuild button. The dropdown picks which named
+              prompt is used; the rebuild button force-recompiles the cached
+              identity stack from the latest character data so edits to
+              manifesto/personality/prompt content show up without waiting for
+              another invalidation trigger. */}
+          {isCharacter && !isUserParticipant && !isUserControlledCharacter && entity && (onSystemPromptChange || onRebuildSystemPrompt) && (
+            <div className="mt-1 flex items-center gap-1">
+              {onSystemPromptChange && (participant.character?.systemPrompts?.length ?? 0) > 0 && (
+                <select
+                  value={participant.selectedSystemPromptId || ''}
+                  onChange={handleSystemPromptChangeEvent}
+                  className="qt-select qt-select-sm flex-1 min-w-0"
+                  title="System prompt"
+                  aria-label={`System prompt for ${name}`}
+                >
+                  <option value="">Use default prompt</option>
+                  {participant.character!.systemPrompts!.map((prompt) => (
+                    <option key={prompt.id} value={prompt.id}>
+                      {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {onRebuildSystemPrompt && (
+                <button
+                  type="button"
+                  onClick={() => onRebuildSystemPrompt(participant.id)}
+                  className="qt-button qt-button-secondary qt-button-sm py-1 px-1.5 flex-shrink-0"
+                  title="Rebuild system prompt from latest character data"
+                  aria-label={`Rebuild system prompt for ${name}`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              )}
             </div>
           )}
 

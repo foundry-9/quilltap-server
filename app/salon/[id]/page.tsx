@@ -1502,6 +1502,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           connectionProfiles={chatControls.connectionProfiles}
           onConnectionProfileChange={chatControls.handleConnectionProfileChange}
           onSystemPromptChange={chatControls.handleSystemPromptChange}
+          onRebuildSystemPrompt={chatControls.handleRebuildSystemPrompt}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}
           chatId={id}

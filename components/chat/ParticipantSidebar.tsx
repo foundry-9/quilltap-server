@@ -62,6 +62,8 @@ interface ParticipantSidebarProps {
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
   // System prompt override per participant (passed to cards)
   onSystemPromptChange?: (participantId: string, promptId: string | null) => void
+  /** Force-rebuild the cached chat-level system prompt for a participant. */
+  onRebuildSystemPrompt?: (participantId: string) => void
   onParticipantSettingsChange?: (participantId: string, updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
   /** Chat ID — forwarded to participant cards so the Wardrobe button can
    *  surface chat-scoped equip controls when opened. */
@@ -99,6 +101,7 @@ export function ParticipantSidebar({
   connectionProfiles,
   onConnectionProfileChange,
   onSystemPromptChange,
+  onRebuildSystemPrompt,
   onParticipantSettingsChange,
   chatId,
   onRegenerateAvatar,
@@ -440,6 +443,7 @@ export function ParticipantSidebar({
               connectionProfiles={connectionProfiles}
               onConnectionProfileChange={onConnectionProfileChange}
               onSystemPromptChange={onSystemPromptChange}
+              onRebuildSystemPrompt={onRebuildSystemPrompt}
               onActiveChange={onParticipantSettingsChange
                 ? (pId, active) => onParticipantSettingsChange(pId, { isActive: active })
                 : undefined}

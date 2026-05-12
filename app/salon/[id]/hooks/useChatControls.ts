@@ -396,6 +396,29 @@ export function useChatControls({
     }
   }, [chatId, fetchChat])
 
+  // Force-rebuild the cached system-prompt prefix for one participant —
+  // picks up edits made to the underlying character record (manifesto,
+  // personality, named systemPrompts, etc.) since the cache was last built.
+  const handleRebuildSystemPrompt = useCallback(async (participantId: string) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=rebuild-system-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to rebuild system prompt')
+      }
+
+      showSuccessToast('System prompt rebuilt')
+      await fetchChat()
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to rebuild system prompt')
+    }
+  }, [chatId, fetchChat])
+
   // Handle participant settings change
   const handleParticipantSettingsChange = useCallback(async (
     participantId: string,
@@ -452,6 +475,7 @@ export function useChatControls({
     handleRemoveCharacter,
     handleConnectionProfileChange,
     handleSystemPromptChange,
+    handleRebuildSystemPrompt,
     handleParticipantSettingsChange,
     handleAllLLMContinue,
     handleAllLLMStop,

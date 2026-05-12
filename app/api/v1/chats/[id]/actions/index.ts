@@ -13,6 +13,7 @@ export {
   handleAddParticipantAction,
   handleUpdateParticipantAction,
   handleRemoveParticipantAction,
+  handleRebuildSystemPromptAction,
 } from './participants';
 export { handleTurnAction } from './turn';
 export { handleGetAvatars, handleSetAvatar, handleRemoveAvatar } from './avatars';

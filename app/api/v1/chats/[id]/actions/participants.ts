@@ -324,6 +324,55 @@ export async function handleAddParticipantAction(
 }
 
 /**
+ * Force-rebuild the cached identity stack (system prompt prefix) for a single
+ * participant. Used by the Participants sidebar "Rebuild system prompt"
+ * button to pick up edits to the underlying character (manifesto, personality,
+ * named systemPrompts, etc.) that aren't auto-invalidated by the compiler.
+ */
+export async function handleRebuildSystemPromptAction(
+  req: NextRequest,
+  chatId: string,
+  { repos }: AuthenticatedContext,
+): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const participantId = typeof body?.participantId === 'string' ? body.participantId : null;
+  if (!participantId) {
+    return badRequest('participantId is required');
+  }
+
+  const chat = await repos.chats.findById(chatId);
+  if (!chat) return notFound('Chat');
+
+  const participant = chat.participants.find((p) => p.id === participantId);
+  if (!participant) return notFound('Participant');
+
+  if (participant.type !== 'CHARACTER' || participant.controlledBy === 'user') {
+    return badRequest('System prompt rebuild is only available for LLM-controlled characters');
+  }
+
+  let characterName = 'Unknown';
+  if (participant.characterId) {
+    const character = await repos.characters.findById(participant.characterId);
+    if (character) characterName = character.name;
+  }
+
+  try {
+    await compileIdentityStackForParticipant(chat, participantId);
+  } catch (error) {
+    logger.error('[Chats v1] Manual system-prompt rebuild failed', {
+      chatId, participantId, characterName,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serverError('Failed to rebuild system prompt');
+  }
+
+  logger.info('[Chats v1] System prompt rebuilt manually', { chatId, participantId, characterName });
+
+  const refreshedChat = await repos.chats.findById(chatId);
+  return NextResponse.json({ ok: true, chat: refreshedChat ?? chat });
+}
+
+/**
  * Update an existing participant
  */
 export async function handleUpdateParticipantAction(

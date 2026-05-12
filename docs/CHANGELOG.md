@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Feature: manual "rebuild system prompt" button in Participants sidebar
+
+Each LLM-controlled participant card now shows a small refresh icon next to the system-prompt dropdown. Clicking it posts to a new `?action=rebuild-system-prompt` endpoint that calls `compileIdentityStackForParticipant` to recompile the cached identity stack from the latest character data and persists it to `chats.compiledIdentityStacks[participantId]`. Toasts on success ("System prompt rebuilt") and on error. The existing dropdown-change auto-recompile path (helpers.ts:276-293) is unchanged — selecting a different named prompt already invalidates the cache and toasts "System prompt updated". The new button covers the gap the compiler explicitly leaves open: edits to the underlying character record (manifesto, personality, prompt content, aliases, etc.) are not auto-invalidated across chats, so the button gives the operator a one-click way to pull those edits into a running chat without waiting for the read-through fallback.
+
 #### Change: new characters default to vault-backed properties
 
 `charactersRepository.create` now defaults `readPropertiesFromDocumentStore` to `true` when the caller does not pass an explicit value. Combined with synchronous vault provisioning (86e53ecb), every freshly created character — main create, quick-create, SillyTavern PNG import, bulk SillyTavern import, initial-data seed, and `.qtap` imports of older exports that did not carry the field — now reads pronouns/aliases/title/firstMessage/talkativeness from the vault's `properties.json` rather than from the SQLite row. Explicit `false` or `null` from a backup snapshot / `.qtap` export is preserved (the change uses `data.readPropertiesFromDocumentStore ?? true`). The overlay already short-circuits on a missing mount point, so a character whose vault provisioning failed silently still works against the row values until the next startup backfill links the vault.
