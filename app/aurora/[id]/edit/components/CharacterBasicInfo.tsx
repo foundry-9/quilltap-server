@@ -9,6 +9,8 @@ interface CharacterBasicInfoProps {
   characterId: string
   formData: CharacterFormData
   hasLinkedVault: boolean
+  /** Bumped when formData is replaced externally; forces editor remount. */
+  externalUpdateCount: number
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
   onAliasesChange: (aliases: string[]) => void
   onPronounsChange: (pronouns: { subject: string; object: string; possessive: string } | null) => void
@@ -75,6 +77,7 @@ export function CharacterBasicInfo({
   characterId,
   formData,
   hasLinkedVault,
+  externalUpdateCount,
   onChange,
   onAliasesChange,
   onPronounsChange,
@@ -373,6 +376,7 @@ export function CharacterBasicInfo({
         <MarkdownLexicalEditor
           value={formData.identity}
           onChange={handleMarkdownFieldChange('identity')}
+          remountKey={externalUpdateCount}
           namespace="CharacterBasicInfo.identity"
           ariaLabel="Identity"
           minHeight="6rem"
@@ -390,6 +394,7 @@ export function CharacterBasicInfo({
         <MarkdownLexicalEditor
           value={formData.description}
           onChange={handleMarkdownFieldChange('description')}
+          remountKey={externalUpdateCount}
           namespace="CharacterBasicInfo.description"
           ariaLabel="Description"
           minHeight="8rem"
@@ -407,6 +412,7 @@ export function CharacterBasicInfo({
         <MarkdownLexicalEditor
           value={formData.manifesto}
           onChange={handleMarkdownFieldChange('manifesto')}
+          remountKey={externalUpdateCount}
           namespace="CharacterBasicInfo.manifesto"
           ariaLabel="Manifesto"
           minHeight="8rem"
@@ -424,6 +430,7 @@ export function CharacterBasicInfo({
         <MarkdownLexicalEditor
           value={formData.personality}
           onChange={handleMarkdownFieldChange('personality')}
+          remountKey={externalUpdateCount}
           namespace="CharacterBasicInfo.personality"
           ariaLabel="Personality"
           minHeight="8rem"
@@ -524,7 +531,7 @@ export function CharacterBasicInfo({
                     )
                     onScenariosChange(updated)
                   }}
-                  remountKey={scenario.id}
+                  remountKey={`${scenario.id}-${externalUpdateCount}`}
                   namespace={`CharacterBasicInfo.scenario.${scenario.id}`}
                   ariaLabel="Scenario content"
                   minHeight="6rem"
@@ -546,6 +553,7 @@ export function CharacterBasicInfo({
         <MarkdownLexicalEditor
           value={formData.firstMessage}
           onChange={handleMarkdownFieldChange('firstMessage')}
+          remountKey={externalUpdateCount}
           namespace="CharacterBasicInfo.firstMessage"
           ariaLabel="First message"
           minHeight="6rem"
@@ -563,6 +571,7 @@ export function CharacterBasicInfo({
         <MarkdownLexicalEditor
           value={formData.exampleDialogues}
           onChange={handleMarkdownFieldChange('exampleDialogues')}
+          remountKey={externalUpdateCount}
           namespace="CharacterBasicInfo.exampleDialogues"
           ariaLabel="Example dialogues"
           minHeight="12rem"
@@ -580,6 +589,7 @@ export function CharacterBasicInfo({
         <MarkdownLexicalEditor
           value={formData.systemPrompt}
           onChange={handleMarkdownFieldChange('systemPrompt')}
+          remountKey={externalUpdateCount}
           namespace="CharacterBasicInfo.systemPrompt"
           ariaLabel="System prompt"
           minHeight="8rem"

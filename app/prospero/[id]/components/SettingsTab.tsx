@@ -7,6 +7,7 @@
  */
 
 import type { Project, EditForm } from '../types'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 interface SettingsTabProps {
   project: Project
@@ -31,12 +32,13 @@ export function SettingsTab({
         <p className="qt-text-small mb-3">
           These instructions are included in the system prompt for all conversations in this project.
         </p>
-        <textarea
+        <MarkdownLexicalEditor
           value={editForm.instructions}
-          onChange={(e) => onEditFormChange({ ...editForm, instructions: e.target.value })}
-          rows={6}
-          placeholder="Add instructions for characters in this project..."
-          className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-foreground focus:qt-border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          onChange={(value) => onEditFormChange({ ...editForm, instructions: value })}
+          remountKey={project.id}
+          namespace="ProsperoSettingsTab.instructions"
+          ariaLabel="Project instructions"
+          minHeight="10rem"
         />
         <div className="mt-2 flex justify-end">
           <button

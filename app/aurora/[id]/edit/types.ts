@@ -67,4 +67,9 @@ export interface CharacterEditState {
   formData: CharacterFormData
   originalFormData: CharacterFormData
   avatarRefreshKey: number
+  // Bumped whenever formData is replaced from an external source (initial
+  // load, vault overlay toggle, sync from/to vault, wizard apply) so the
+  // markdown editors remount and re-parse the fresh values. Without this,
+  // MarkdownBridgePlugin's one-shot init keeps showing pre-replace content.
+  externalUpdateCount: number
 }

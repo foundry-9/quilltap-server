@@ -11,6 +11,7 @@ import { useState } from 'react'
 import type { Project, EditForm } from '../types'
 import StateEditorModal from '@/components/state/StateEditorModal'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 interface SettingsCardProps {
   project: Project
@@ -70,12 +71,13 @@ export function SettingsCard({
             <p className="qt-text-xs qt-text-secondary mb-2">
               These instructions are included in system prompts for all project chats.
             </p>
-            <textarea
+            <MarkdownLexicalEditor
               value={editForm.instructions}
-              onChange={(e) => onEditFormChange({ ...editForm, instructions: e.target.value })}
-              rows={10}
-              placeholder="Add instructions for characters in this project..."
-              className="qt-textarea w-full"
+              onChange={(value) => onEditFormChange({ ...editForm, instructions: value })}
+              remountKey={project.id}
+              namespace="ProsperoSettingsCard.instructions"
+              ariaLabel="Project instructions"
+              minHeight="14rem"
             />
             <div className="mt-2 flex justify-end">
               <button onClick={onSave} className="qt-button qt-button-primary">

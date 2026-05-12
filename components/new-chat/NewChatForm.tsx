@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { OutfitSelector } from '@/components/wardrobe'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardrobe'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
@@ -412,14 +413,13 @@ export function NewChatForm({
             </div>
           )}
           {showCustomTextarea && (
-            <textarea
-              id="new-chat-scenario"
+            <MarkdownLexicalEditor
               value={state.scenario}
-              onChange={(e) => setState((prev) => ({ ...prev, scenario: e.target.value }))}
-              placeholder="Describe the starting scenario for this chat..."
+              onChange={(value) => setState((prev) => ({ ...prev, scenario: value }))}
               disabled={creating}
-              rows={3}
-              className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              namespace="NewChatForm.scenario"
+              ariaLabel="Starting scenario"
+              minHeight="6rem"
             />
           )}
         </div>

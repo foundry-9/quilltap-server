@@ -87,12 +87,10 @@ export function SystemPromptsEditor({
         isOpen={editor.isModalOpen}
         editingPrompt={editor.editingPrompt}
         formData={editor.formData}
-        showPreview={editor.showPreview}
         saving={editor.saving}
         onClose={editor.closeModal}
         onSave={editor.handleSave}
         onFormChange={handleFormChange}
-        onPreviewToggle={() => editor.setShowPreview(!editor.showPreview)}
       />
 
       {/* Import Modal */}

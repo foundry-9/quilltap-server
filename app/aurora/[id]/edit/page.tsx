@@ -86,6 +86,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     showAvatarSelector,
     showUploadDialog,
     avatarRefreshKey,
+    externalUpdateCount,
     handleChange,
     handleAliasesChange,
     handlePronounsChange,
@@ -101,6 +102,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     toggleAvatarSelector,
     toggleUploadDialog,
     fetchCharacter,
+    bumpExternalUpdateCount,
     isNpc,
   } = useCharacterEdit(id)
 
@@ -131,11 +133,17 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   // Handle applying wizard-generated data
   const handleWizardApply = async (data: GeneratedCharacterData) => {
     // Apply text fields by creating synthetic events
-    for (const field of getGeneratedCharacterTextEntries(data)) {
+    const textEntries = getGeneratedCharacterTextEntries(data)
+    for (const field of textEntries) {
       const syntheticEvent = {
         target: { name: field.field, value: field.value },
       } as React.ChangeEvent<HTMLInputElement>
       handleChange(syntheticEvent)
+    }
+    // Remount markdown editors so they pick up the wizard-written values
+    // instead of staying on whatever was on screen before.
+    if (textEntries.length > 0) {
+      bumpExternalUpdateCount()
     }
 
     // Handle physical description if generated
@@ -328,6 +336,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                     characterId={id}
                     formData={formData}
                     hasLinkedVault={!!character?.characterDocumentMountPointId}
+                    externalUpdateCount={externalUpdateCount}
                     onChange={handleChange}
                     onAliasesChange={handleAliasesChange}
                     onPronounsChange={handlePronounsChange}

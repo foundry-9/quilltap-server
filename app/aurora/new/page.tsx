@@ -7,6 +7,7 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription, type GeneratedWardrobeItem, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
 import { ImportModal } from '@/components/characters/system-prompts-editor/ImportModal'
 import type { PromptTemplate } from '@/components/characters/system-prompts-editor/types'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../shared/wizard-text-fields'
 
 interface ConnectionProfile {
@@ -23,6 +24,11 @@ export default function NewCharacterPage() {
   const [showTemplateImport, setShowTemplateImport] = useState(false)
   const [templates, setTemplates] = useState<PromptTemplate[]>([])
   const [loadingTemplates, setLoadingTemplates] = useState(false)
+  // Bumped whenever formData fields are replaced externally (AI wizard apply,
+  // template import) so the markdown editors remount and re-parse the new
+  // values. Without this, MarkdownBridgePlugin's one-shot init keeps the
+  // editor showing whatever was on screen before the external write.
+  const [externalUpdateCount, setExternalUpdateCount] = useState(0)
   // Store pending physical description from wizard to save after character creation
   const pendingPhysicalDescription = useRef<GeneratedPhysicalDescription | null>(null)
   // Store pending scenarios from wizard to save after character creation
@@ -66,6 +72,7 @@ export default function NewCharacterPage() {
     if (data.wardrobeItems && data.wardrobeItems.length > 0) {
       pendingWardrobeItems.current = data.wardrobeItems
     }
+    setExternalUpdateCount((n) => n + 1)
   }
 
   const openTemplateImport = async () => {
@@ -88,6 +95,7 @@ export default function NewCharacterPage() {
 
   const handleTemplateImport = (content: string, _suggestedName: string) => {
     setFormData(prev => ({ ...prev, systemPrompt: content }))
+    setExternalUpdateCount((n) => n + 1)
     setShowTemplateImport(false)
   }
 
@@ -220,6 +228,14 @@ export default function NewCharacterPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
+  // Adapter so MarkdownLexicalEditor's (value: string) => void onChange feeds
+  // handleChange's event-based shape (same pattern as the edit page).
+  const handleMarkdownFieldChange = (name: string) => (value: string) => {
+    handleChange({
+      target: { name, value },
+    } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+  }
+
   return (
     <div className="qt-page-container">
       <div className="mb-8">
@@ -286,14 +302,16 @@ export default function NewCharacterPage() {
           <label htmlFor="identity" className="block qt-label mb-2 text-foreground">
             Identity (Optional)
           </label>
-          <textarea
-            id="identity"
-            name="identity"
+          <p className="text-xs qt-text-secondary mb-2">
+            What strangers know about the character on sight or by reputation &mdash; name, station, occupation, public reputation. The shallow first impression.
+          </p>
+          <MarkdownLexicalEditor
             value={formData.identity}
-            onChange={handleChange}
-            rows={3}
-            className="qt-textarea"
-            placeholder="What strangers know about the character on sight or by reputation — name, station, occupation, public reputation. The shallow first impression."
+            onChange={handleMarkdownFieldChange('identity')}
+            remountKey={externalUpdateCount}
+            namespace="NewCharacter.identity"
+            ariaLabel="Identity"
+            minHeight="6rem"
           />
         </div>
 
@@ -301,14 +319,16 @@ export default function NewCharacterPage() {
           <label htmlFor="description" className="block qt-label mb-2 text-foreground">
             Description (Optional)
           </label>
-          <textarea
-            id="description"
-            name="description"
+          <p className="text-xs qt-text-secondary mb-2">
+            How acquaintances perceive the character &mdash; behaviour, mannerisms, frequent verbal patterns. Not physical appearance (that lives in physical descriptions).
+          </p>
+          <MarkdownLexicalEditor
             value={formData.description}
-            onChange={handleChange}
-            rows={4}
-            className="qt-textarea"
-            placeholder="How acquaintances perceive the character — behaviour, mannerisms, frequent verbal patterns. Not physical appearance (that lives in physical descriptions)."
+            onChange={handleMarkdownFieldChange('description')}
+            remountKey={externalUpdateCount}
+            namespace="NewCharacter.description"
+            ariaLabel="Description"
+            minHeight="8rem"
           />
         </div>
 
@@ -316,14 +336,16 @@ export default function NewCharacterPage() {
           <label htmlFor="manifesto" className="block qt-label mb-2 text-foreground">
             Manifesto (Optional)
           </label>
-          <textarea
-            id="manifesto"
-            name="manifesto"
+          <p className="text-xs qt-text-secondary mb-2">
+            The foundational tenets of this character &mdash; the basic truths that anchor everything else. What this character is, at root.
+          </p>
+          <MarkdownLexicalEditor
             value={formData.manifesto}
-            onChange={handleChange}
-            rows={4}
-            className="qt-textarea"
-            placeholder="The foundational tenets of this character — the basic truths that anchor everything else. What this character is, at root."
+            onChange={handleMarkdownFieldChange('manifesto')}
+            remountKey={externalUpdateCount}
+            namespace="NewCharacter.manifesto"
+            ariaLabel="Manifesto"
+            minHeight="8rem"
           />
         </div>
 
@@ -331,14 +353,16 @@ export default function NewCharacterPage() {
           <label htmlFor="personality" className="block qt-label mb-2 text-foreground">
             Personality (Optional)
           </label>
-          <textarea
-            id="personality"
-            name="personality"
+          <p className="text-xs qt-text-secondary mb-2">
+            What the character knows about themselves &mdash; inner drivers of speech and behaviour, motivations, beliefs.
+          </p>
+          <MarkdownLexicalEditor
             value={formData.personality}
-            onChange={handleChange}
-            rows={4}
-            className="qt-textarea"
-            placeholder="What the character knows about themselves — inner drivers of speech and behaviour, motivations, beliefs."
+            onChange={handleMarkdownFieldChange('personality')}
+            remountKey={externalUpdateCount}
+            namespace="NewCharacter.personality"
+            ariaLabel="Personality"
+            minHeight="8rem"
           />
         </div>
 
@@ -346,14 +370,16 @@ export default function NewCharacterPage() {
           <label htmlFor="scenario" className="block qt-label mb-2 text-foreground">
             Scenario (Optional)
           </label>
-          <textarea
-            id="scenario"
-            name="scenario"
+          <p className="text-xs qt-text-secondary mb-2">
+            Describe the setting and context for conversations.
+          </p>
+          <MarkdownLexicalEditor
             value={formData.scenario}
-            onChange={handleChange}
-            rows={4}
-            className="qt-textarea"
-            placeholder="Describe the setting and context for conversations"
+            onChange={handleMarkdownFieldChange('scenario')}
+            remountKey={externalUpdateCount}
+            namespace="NewCharacter.scenario"
+            ariaLabel="Scenario"
+            minHeight="8rem"
           />
         </div>
 
@@ -361,14 +387,16 @@ export default function NewCharacterPage() {
           <label htmlFor="firstMessage" className="block qt-label mb-2 text-foreground">
             First Message (Optional)
           </label>
-          <textarea
-            id="firstMessage"
-            name="firstMessage"
+          <p className="text-xs qt-text-secondary mb-2">
+            The character&rsquo;s opening message to start conversations.
+          </p>
+          <MarkdownLexicalEditor
             value={formData.firstMessage}
-            onChange={handleChange}
-            rows={3}
-            className="qt-textarea"
-            placeholder="The character's opening message to start conversations"
+            onChange={handleMarkdownFieldChange('firstMessage')}
+            remountKey={externalUpdateCount}
+            namespace="NewCharacter.firstMessage"
+            ariaLabel="First message"
+            minHeight="6rem"
           />
         </div>
 
@@ -376,14 +404,16 @@ export default function NewCharacterPage() {
           <label htmlFor="exampleDialogues" className="block qt-label mb-2 text-foreground">
             Example Dialogues (Optional)
           </label>
-          <textarea
-            id="exampleDialogues"
-            name="exampleDialogues"
+          <p className="text-xs qt-text-secondary mb-2">
+            Example conversations to guide the AI&rsquo;s responses.
+          </p>
+          <MarkdownLexicalEditor
             value={formData.exampleDialogues}
-            onChange={handleChange}
-            rows={6}
-            className="qt-textarea"
-            placeholder="Example conversations to guide the AI's responses"
+            onChange={handleMarkdownFieldChange('exampleDialogues')}
+            remountKey={externalUpdateCount}
+            namespace="NewCharacter.exampleDialogues"
+            ariaLabel="Example dialogues"
+            minHeight="12rem"
           />
         </div>
 
@@ -400,14 +430,16 @@ export default function NewCharacterPage() {
               Import Template
             </button>
           </div>
-          <textarea
-            id="systemPrompt"
-            name="systemPrompt"
+          <p className="text-xs qt-text-secondary mb-2">
+            Custom system instructions (will be combined with auto-generated prompt).
+          </p>
+          <MarkdownLexicalEditor
             value={formData.systemPrompt}
-            onChange={handleChange}
-            rows={4}
-            className="qt-textarea"
-            placeholder="Custom system instructions (will be combined with auto-generated prompt)"
+            onChange={handleMarkdownFieldChange('systemPrompt')}
+            remountKey={externalUpdateCount}
+            namespace="NewCharacter.systemPrompt"
+            ariaLabel="System prompt"
+            minHeight="8rem"
           />
         </div>
 

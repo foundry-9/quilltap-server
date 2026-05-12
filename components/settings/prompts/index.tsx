@@ -17,7 +17,6 @@ export default function PromptsTab() {
   const [previewTemplate, setPreviewTemplate] = useState<PromptTemplate | null>(null)
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [showPreview, setShowPreview] = useState(false)
 
   const form = useFormState(INITIAL_FORM_DATA)
   const prompts = usePrompts()
@@ -31,7 +30,6 @@ export default function PromptsTab() {
   const openCreateModal = useCallback(() => {
     setEditingTemplate(null)
     form.resetForm()
-    setShowPreview(false)
     setIsModalOpen(true)
   }, [form])
 
@@ -41,7 +39,6 @@ export default function PromptsTab() {
       form.setField('name', template.name)
       form.setField('description', template.description || '')
       form.setField('content', template.content)
-      setShowPreview(false)
       setIsModalOpen(true)
     },
     [form]
@@ -51,7 +48,6 @@ export default function PromptsTab() {
     setIsModalOpen(false)
     setEditingTemplate(null)
     form.resetForm()
-    setShowPreview(false)
   }, [form])
 
   const handleSave = useCallback(async () => {
@@ -67,7 +63,6 @@ export default function PromptsTab() {
       form.setField('name', `${template.name} (Copy)`)
       form.setField('description', template.description || '')
       form.setField('content', template.content)
-      setShowPreview(false)
       setIsModalOpen(true)
     },
     [form]
@@ -165,12 +160,10 @@ export default function PromptsTab() {
         isOpen={isModalOpen}
         editingTemplate={editingTemplate}
         formData={form.formData}
-        showPreview={showPreview}
         isSaving={prompts.saveOp.loading}
         onClose={closeModal}
         onSave={handleSave}
         onFormChange={form.handleChange}
-        onPreviewToggle={() => setShowPreview(!showPreview)}
       />
 
       {/* Preview modal */}

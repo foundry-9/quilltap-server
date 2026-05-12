@@ -4,6 +4,31 @@
 
 ### 4.4-dev
 
+#### Feature: Project, scenario, prompt, memory, physical, and wardrobe editors use MarkdownLexicalEditor
+
+Continues the textarea → `MarkdownLexicalEditor` migration across the remaining narrative-bearing forms. Converted callsites:
+
+- `app/prospero/[id]/components/SettingsTab.tsx` and `SettingsCard.tsx` — project instructions (two separate callsites of the same field).
+- `components/new-chat/NewChatForm.tsx` — custom starting scenario.
+- `components/chat/AddCharacterDialog.tsx` — join scenario.
+- `components/settings/prompts/PromptModal.tsx` — prompt template content. Removed the now-redundant Edit/Preview toggle and the parent's `showPreview` state — rich mode is the preview, source mode is the textarea.
+- `components/characters/system-prompts-editor/PromptModal.tsx` — character system prompt content. Same `showPreview` cleanup, including pruning the unused state and setter from `useSystemPrompts`.
+- `components/settings/roleplay-templates/index.tsx` — template LLM prompt.
+- `components/memory/memory-editor.tsx` — full memory content.
+- `components/physical-descriptions/physical-description-editor.tsx` — shortPrompt, mediumPrompt, longPrompt, completePrompt, fullDescription (all five `<textarea>` elements). Removed the fullDescription Edit/Preview toggle. The four sized prompts keep their character counters but lose the `maxLength` hard cap; the visual warning state still fires when the user goes over.
+- `components/wardrobe/wardrobe-item-editor.tsx` — wardrobe item description. Removed the Edit/Preview toggle.
+- `components/clothing-records/clothing-record-editor.tsx` — clothing record description. Removed the Edit/Preview toggle.
+
+Where the form holds a single record per mount (modal dialogs that close-and-reopen, project pages keyed by id, etc.) the editors get `remountKey` tied to the record id so a different record triggers a fresh editor mount and the bridge re-parses the new markdown. `NewChatForm.scenario` does not need a counter — the only external setter sets it to `''`, which `MarkdownBridgePlugin` already special-cases by clearing the editor.
+
+`__tests__/unit/components/memory/memory-editor.test.tsx` updated to target the editor's `aria-label="Memory content"` wrapper and the inner `[contenteditable="true"]` instead of `textarea#content`; the populate-from-existing-memory assertion uses `waitFor` because `MarkdownBridgePlugin` schedules its initial markdown-to-Lexical conversion via `editor.update`, which lands a microtask after `render`.
+
+#### Feature: Aurora new page and CreateNPCDialog use MarkdownLexicalEditor
+
+Mirrors the edit-page conversion across the rest of the character-creation surface. `app/aurora/new/page.tsx` now uses `MarkdownLexicalEditor` for all eight narrative fields (identity, description, manifesto, personality, scenario, firstMessage, exampleDialogues, systemPrompt). `components/chat/CreateNPCDialog.tsx` uses it for its four narrative fields (description, physicalDescription, scenario, systemPrompt). Placeholder copy moves to helper paragraphs below each label, matching the established pattern.
+
+Both pages, plus the previously-converted edit page, now track an `externalUpdateCount` counter that bumps whenever `formData` is replaced from outside user input — AI wizard apply on the new and edit pages, template import on the new page, and `fetchCharacter()` on the edit page (which is the convergence point for initial load, vault overlay toggle, sync-from-vault, sync-to-vault, and post-save refetch). The counter feeds each editor's `remountKey` so `MarkdownBridgePlugin`'s one-shot init re-fires against the new value instead of stranding stale content on screen. Per-scenario editors on the edit page combine the counter with `scenario.id` so per-row identity is preserved. `CreateNPCDialog` doesn't need the counter — the dialog conditionally renders, so editors unmount/remount with the dialog itself. The hook `useCharacterEdit` exports a new `bumpExternalUpdateCount` helper for callers (like the page-level wizard apply) that bypass `fetchCharacter`.
+
 #### Feature: Aurora edit first tab uses MarkdownLexicalEditor
 
 The eight narrative fields on the Aurora character-edit Basic Info tab (identity, description, manifesto, personality, every per-scenario body, first message, example dialogues, system prompt) now render in `MarkdownLexicalEditor` instead of plain `<textarea>` elements. All eight fields are Markdown content that lands in the character's system prompt or syncs to `.md` files in the linked Scriptorium vault, so the rich editor lets operators format with bold/italic/lists/headings/quotes the same way Document Mode does. Placeholder text moves to a helper paragraph below each label so the per-field vantage-point hints stay visible.

@@ -1,12 +1,11 @@
 'use client'
 
-import { useState } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import FormActions from '@/components/ui/FormActions'
-import MessageContent from '@/components/chat/MessageContent'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import type { ClothingRecord } from './clothing-record-card'
 
 interface ClothingRecordEditorProps {
@@ -31,7 +30,12 @@ export function ClothingRecordEditor({
   })
 
   const { loading: saving, execute: executeSave, clearError } = useAsyncOperation<void>()
-  const [showPreview, setShowPreview] = useState(false)
+
+  const handleMarkdownDescriptionChange = (value: string) => {
+    handleChange({
+      target: { name: 'description', value },
+    } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+  }
 
   const handleSave = async () => {
     clearError()
@@ -148,37 +152,19 @@ export function ClothingRecordEditor({
 
             {/* Description (Markdown) */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="clothing-description" className="block text-sm qt-text-primary">
-                  Description (Markdown)
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowPreview(!showPreview)}
-                  className="text-xs text-primary hover:underline"
-                >
-                  {showPreview ? 'Edit' : 'Preview'}
-                </button>
-              </div>
-              {showPreview ? (
-                <div className="w-full px-3 py-2 border qt-border-default qt-bg-muted text-foreground rounded-lg min-h-[120px] prose qt-prose-auto prose-sm max-w-none">
-                  {formData.description ? (
-                    <MessageContent content={formData.description} />
-                  ) : (
-                    <span className="qt-text-secondary italic">No content</span>
-                  )}
-                </div>
-              ) : (
-                <textarea
-                  id="clothing-description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  rows={8}
-                  placeholder="Describe the outfit in detail. You can use Markdown formatting..."
-                  className="qt-textarea font-mono text-sm"
-                />
-              )}
+              <label htmlFor="clothing-description" className="block text-sm qt-text-primary mb-1">
+                Description
+              </label>
+              <p className="text-xs qt-text-secondary mb-2">
+                Describe the outfit in detail.
+              </p>
+              <MarkdownLexicalEditor
+                value={formData.description}
+                onChange={handleMarkdownDescriptionChange}
+                namespace="ClothingRecord.description"
+                ariaLabel="Clothing description"
+                minHeight="10rem"
+              />
             </div>
           </div>
 

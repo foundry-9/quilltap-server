@@ -4,6 +4,7 @@ import { useRoleplayTemplates } from './hooks/useRoleplayTemplates'
 import { TemplateCard } from './TemplateCard'
 import { EMPTY_DELIMITER } from './types'
 import type { DelimiterFormEntry } from './types'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 /** Known CSS style options for delimiter entries */
 const STYLE_OPTIONS = [
@@ -244,17 +245,18 @@ export default function RoleplayTemplatesTab() {
                   <label className="qt-label mb-1">
                     LLM Prompt <span className="qt-text-destructive">*</span>
                   </label>
-                  <textarea
-                    value={formData.systemPrompt}
-                    onChange={(e) => setFormData(prev => ({ ...prev, systemPrompt: e.target.value }))}
-                    rows={12}
-                    placeholder="Enter the formatting instructions that will be prepended to character system prompts..."
-                    className="qt-textarea w-full font-mono text-sm"
-                  />
-                  <p className="qt-text-xs mt-1">
-                    This will be prepended to the character&apos;s system prompt when this template is selected.
+                  <p className="qt-text-xs mb-2">
+                    The formatting instructions prepended to the character&rsquo;s system prompt when this template is selected.
                     You can use placeholders like {'{{char}}'} and {'{{user}}'}.
                   </p>
+                  <MarkdownLexicalEditor
+                    value={formData.systemPrompt}
+                    onChange={(value) => setFormData(prev => ({ ...prev, systemPrompt: value }))}
+                    remountKey={editingTemplate?.id ?? 'new'}
+                    namespace="RoleplayTemplate.systemPrompt"
+                    ariaLabel="Template LLM prompt"
+                    minHeight="14rem"
+                  />
                 </div>
 
                 <div>

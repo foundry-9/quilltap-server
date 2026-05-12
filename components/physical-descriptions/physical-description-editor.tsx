@@ -1,12 +1,11 @@
 'use client'
 
-import { useState } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import FormActions from '@/components/ui/FormActions'
-import MessageContent from '@/components/chat/MessageContent'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 export interface PhysicalDescription {
   id: string
@@ -50,7 +49,14 @@ export function PhysicalDescriptionEditor({
   })
 
   const { loading: saving, error: saveError, execute: executeSave, clearError } = useAsyncOperation<void>()
-  const [showFullDescPreview, setShowFullDescPreview] = useState(false)
+
+  // Adapter so MarkdownLexicalEditor's (value: string) => void onChange feeds
+  // useFormState's event-based handleChange.
+  const handleMarkdownFieldChange = (name: string) => (value: string) => {
+    handleChange({
+      target: { name, value },
+    } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+  }
 
   const handleSave = async () => {
     clearError()
@@ -185,15 +191,15 @@ export function PhysicalDescriptionEditor({
                 {formData.shortPrompt.length}/350
               </span>
             </div>
-            <textarea
-              id="shortPrompt"
-              name="shortPrompt"
+            <p className="text-xs qt-text-secondary mb-2">
+              Brief description for small prompts.
+            </p>
+            <MarkdownLexicalEditor
               value={formData.shortPrompt}
-              onChange={handleChange}
-              rows={2}
-              maxLength={350}
-              placeholder="Brief description for small prompts..."
-              className="qt-textarea"
+              onChange={handleMarkdownFieldChange('shortPrompt')}
+              namespace="PhysicalDescription.shortPrompt"
+              ariaLabel="Short prompt"
+              minHeight="4rem"
             />
           </div>
 
@@ -207,15 +213,15 @@ export function PhysicalDescriptionEditor({
                 {formData.mediumPrompt.length}/500
               </span>
             </div>
-            <textarea
-              id="mediumPrompt"
-              name="mediumPrompt"
+            <p className="text-xs qt-text-secondary mb-2">
+              More detailed description.
+            </p>
+            <MarkdownLexicalEditor
               value={formData.mediumPrompt}
-              onChange={handleChange}
-              rows={3}
-              maxLength={500}
-              placeholder="More detailed description..."
-              className="qt-textarea"
+              onChange={handleMarkdownFieldChange('mediumPrompt')}
+              namespace="PhysicalDescription.mediumPrompt"
+              ariaLabel="Medium prompt"
+              minHeight="6rem"
             />
           </div>
 
@@ -229,15 +235,15 @@ export function PhysicalDescriptionEditor({
                 {formData.longPrompt.length}/750
               </span>
             </div>
-            <textarea
-              id="longPrompt"
-              name="longPrompt"
+            <p className="text-xs qt-text-secondary mb-2">
+              Extended description with more detail.
+            </p>
+            <MarkdownLexicalEditor
               value={formData.longPrompt}
-              onChange={handleChange}
-              rows={4}
-              maxLength={750}
-              placeholder="Extended description with more detail..."
-              className="qt-textarea"
+              onChange={handleMarkdownFieldChange('longPrompt')}
+              namespace="PhysicalDescription.longPrompt"
+              ariaLabel="Long prompt"
+              minHeight="8rem"
             />
           </div>
 
@@ -251,51 +257,33 @@ export function PhysicalDescriptionEditor({
                 {formData.completePrompt.length}/1000
               </span>
             </div>
-            <textarea
-              id="completePrompt"
-              name="completePrompt"
+            <p className="text-xs qt-text-secondary mb-2">
+              Full detailed description for maximum context.
+            </p>
+            <MarkdownLexicalEditor
               value={formData.completePrompt}
-              onChange={handleChange}
-              rows={5}
-              maxLength={1000}
-              placeholder="Full detailed description for maximum context..."
-              className="qt-textarea"
+              onChange={handleMarkdownFieldChange('completePrompt')}
+              namespace="PhysicalDescription.completePrompt"
+              ariaLabel="Complete prompt"
+              minHeight="10rem"
             />
           </div>
 
           {/* Full Description (Markdown) */}
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label htmlFor="fullDescription" className="block text-sm qt-text-primary">
-                Full Description (Markdown)
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowFullDescPreview(!showFullDescPreview)}
-                className="text-xs text-primary hover:underline"
-              >
-                {showFullDescPreview ? 'Edit' : 'Preview'}
-              </button>
-            </div>
-            {showFullDescPreview ? (
-              <div className="w-full px-3 py-2 border qt-border-default qt-bg-muted text-foreground rounded-lg min-h-[120px] prose qt-prose-auto prose-sm max-w-none">
-                {formData.fullDescription ? (
-                  <MessageContent content={formData.fullDescription} />
-                ) : (
-                  <span className="qt-text-secondary italic">No content</span>
-                )}
-              </div>
-            ) : (
-              <textarea
-                id="fullDescription"
-                name="fullDescription"
-                value={formData.fullDescription}
-                onChange={handleChange}
-                rows={6}
-                placeholder="Complete freeform description in Markdown format. Use this to generate shorter prompts..."
-                className="qt-textarea font-mono text-sm"
-              />
-            )}
+            <label htmlFor="fullDescription" className="block text-sm qt-text-primary mb-1">
+              Full Description (Markdown)
+            </label>
+            <p className="text-xs qt-text-secondary mb-2">
+              Complete freeform description. Use this to generate the shorter prompts above.
+            </p>
+            <MarkdownLexicalEditor
+              value={formData.fullDescription}
+              onChange={handleMarkdownFieldChange('fullDescription')}
+              namespace="PhysicalDescription.fullDescription"
+              ariaLabel="Full description"
+              minHeight="10rem"
+            />
           </div>
 
           {/* Actions */}

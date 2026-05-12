@@ -19,6 +19,7 @@ import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import CreateNPCDialog from './CreateNPCDialog'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 interface CharacterOption {
   id: string
@@ -496,18 +497,18 @@ export default function AddCharacterDialog({
                   <label htmlFor="joinScenario" className="block text-sm qt-text-primary mb-2">
                     How did they join? <span className="qt-text-secondary font-normal">(optional)</span>
                   </label>
-                  <textarea
-                    id="joinScenario"
-                    value={joinScenario}
-                    onChange={(e) => setJoinScenario(e.target.value)}
-                    placeholder="e.g., They walked up and joined the group at the tavern table..."
-                    rows={3}
-                    disabled={isAdding}
-                    className="qt-textarea"
-                  />
-                  <p className="qt-text-xs mt-1">
-                    This text will be included in the character&apos;s context to explain how they joined the conversation.
+                  <p className="qt-text-xs mb-2">
+                    Included in the character&rsquo;s context to explain how they joined the conversation.
                   </p>
+                  <MarkdownLexicalEditor
+                    value={joinScenario}
+                    onChange={setJoinScenario}
+                    disabled={isAdding}
+                    remountKey={selectedCharacterId}
+                    namespace="AddCharacterDialog.joinScenario"
+                    ariaLabel="Join scenario"
+                    minHeight="6rem"
+                  />
                 </div>
               )}
             </div>
