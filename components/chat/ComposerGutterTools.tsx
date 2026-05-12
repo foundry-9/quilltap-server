@@ -12,6 +12,8 @@ interface ComposerGutterToolsProps {
   onLibraryFileClick: () => void
   /** Callback to open standalone image generation dialog */
   onStandaloneGenerateImageClick: () => void
+  /** Callback to open the Insert Announcement dialog */
+  onInsertAnnouncementClick: () => void
   /** Chat ID for RNG API calls */
   chatId: string
   /** Callback when RNG result is ready */
@@ -23,10 +25,12 @@ interface ComposerGutterToolsProps {
 /**
  * Gutter tools for the chat composer.
  *
- * Displays small icon buttons for frequently-used message-level tools
- * in a 2x2 grid:
- * - Row 1: Library file (document), Generate image (camera)
- * - Row 2: Attach file (paperclip), RNG (dice)
+ * Displays small icon buttons for frequently-used message-level tools.
+ * The top row is a full-width Insert Announcement button; the lower
+ * block is a 2x2 grid:
+ * - Row 1: Insert Announcement (megaphone, spans both columns)
+ * - Row 2: Library file (document), Generate image (camera)
+ * - Row 3: Attach file (paperclip), RNG (dice)
  *
  * These are positioned in the left gutter of the composer for quick access.
  */
@@ -35,6 +39,7 @@ export function ComposerGutterTools({
   uploadingFile = false,
   onLibraryFileClick,
   onStandaloneGenerateImageClick,
+  onInsertAnnouncementClick,
   chatId,
   onPendingToolResult,
   disabled = false,
@@ -43,7 +48,27 @@ export function ComposerGutterTools({
 
   return (
     <div className="qt-composer-gutter-tools">
-      {/* Row 1, Col 1: Library File */}
+      {/* Row 1: Insert Announcement (spans full width) */}
+      <button
+        type="button"
+        onClick={onInsertAnnouncementClick}
+        disabled={disabled}
+        className="qt-composer-gutter-button qt-composer-gutter-button-wide"
+        title="Insert announcement"
+        aria-label="Insert announcement"
+        style={{ gridColumn: '1 / -1' }}
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"
+          />
+        </svg>
+      </button>
+
+      {/* Row 2, Col 1: Library File */}
       <button
         type="button"
         onClick={onLibraryFileClick}

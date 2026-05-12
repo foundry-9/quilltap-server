@@ -25,6 +25,7 @@ import SudoApprovalModal from '@/components/chat/SudoApprovalModal'
 import WorkspaceAcknowledgementModal from '@/components/chat/WorkspaceAcknowledgementModal'
 import LibraryFilePickerModal from '@/components/chat/LibraryFilePickerModal'
 import StandaloneGenerateImageDialog from '@/components/chat/StandaloneGenerateImageDialog'
+import InsertAnnouncementDialog from '@/components/chat/InsertAnnouncementDialog'
 import type { ReattributeDialogState, SudoApprovalState, WorkspaceAcknowledgementState, SelectLLMProfileDialogState } from '../hooks/useModalState'
 
 interface ChatModalsProps {
@@ -65,6 +66,8 @@ interface ChatModalsProps {
   closeLibraryFilePicker: () => void
   standaloneGenerateImageOpen: boolean
   closeStandaloneGenerateImage: () => void
+  insertAnnouncementOpen: boolean
+  closeInsertAnnouncement: () => void
   allLLMPauseModalOpen: boolean
   setAllLLMPauseModalOpen: (open: boolean) => void
   // Complex modal states
@@ -127,6 +130,7 @@ export function ChatModals({
   stateEditorModalOpen, closeStateEditor,
   libraryFilePickerOpen, closeLibraryFilePicker,
   standaloneGenerateImageOpen, closeStandaloneGenerateImage,
+  insertAnnouncementOpen, closeInsertAnnouncement,
   allLLMPauseModalOpen, setAllLLMPauseModalOpen,
   // Complex
   reattributeDialogState, setReattributeDialogState,
@@ -329,6 +333,19 @@ export function ChatModals({
           .map(p => p.character?.id)
           .filter((id): id is string => id !== null && id !== undefined) || []}
         onCharacterAdded={onCharacterAdded}
+      />
+
+      <InsertAnnouncementDialog
+        isOpen={insertAnnouncementOpen}
+        onClose={closeInsertAnnouncement}
+        chatId={chatId}
+        participantCharacterIds={chat?.participants
+          .filter(p => p.type === 'CHARACTER' && !p.removedAt)
+          .map(p => p.character?.id)
+          .filter((id): id is string => id !== null && id !== undefined) || []}
+        onPosted={() => {
+          fetchChat()
+        }}
       />
 
       {reattributeDialogState && chat && (

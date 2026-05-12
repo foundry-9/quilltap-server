@@ -315,9 +315,43 @@ export async function handleGet(
             isSilentMessage: event.isSilentMessage || null,
             systemSender: event.systemSender || null,
             systemKind: event.systemKind || null,
+            customAnnouncer: event.customAnnouncer || null,
           };
         })
     ).then((results) => results.filter(Boolean));
+
+    // Resolve off-scene character cards referenced by ad-hoc announcement
+    // bubbles (customAnnouncer.kind === 'character'). The Salon renderer looks
+    // these up by id to render the bubble's avatar/name; the chat's
+    // `participants` array doesn't include them since they aren't participants.
+    const offSceneCharacterIds = new Set<string>();
+    const participantCharacterIds = new Set(
+      chatMetadata.participants
+        .map((p) => p.characterId)
+        .filter((id): id is string => typeof id === 'string'),
+    );
+    for (const m of messages) {
+      const id = m?.customAnnouncer?.characterId;
+      if (typeof id === 'string' && !participantCharacterIds.has(id)) {
+        offSceneCharacterIds.add(id);
+      }
+    }
+    const offSceneCharacters: Array<{ id: string; name: string; title: string | null; avatarUrl: string | null }> = [];
+    for (const charId of offSceneCharacterIds) {
+      try {
+        const c = await repos.characters.findById(charId);
+        if (c) {
+          offSceneCharacters.push({
+            id: c.id,
+            name: c.name,
+            title: c.title ?? null,
+            avatarUrl: c.avatarUrl ?? null,
+          });
+        }
+      } catch {
+        // Character may have been deleted; skip and let the renderer fall back.
+      }
+    }
 
     let projectName: string | null = null;
     let project = null;
@@ -379,6 +413,7 @@ export async function handleGet(
       terminalMode: chatMetadata.terminalMode || 'normal',
       activeTerminalSessionId: chatMetadata.activeTerminalSessionId ?? null,
       rightPaneVerticalSplit: chatMetadata.rightPaneVerticalSplit ?? 50,
+      offSceneCharacters,
     };
 
     return NextResponse.json({ chat });

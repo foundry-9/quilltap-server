@@ -130,3 +130,23 @@ export const queueMemoriesSchema = z.object({
     assistantContent: z.string(),
   })).optional(),
 });
+
+const STAFF_SENDER_ENUM = z.enum([
+  'lantern',
+  'aurora',
+  'librarian',
+  'concierge',
+  'prospero',
+  'host',
+  'commonplaceBook',
+  'ariel',
+]);
+
+export const insertAnnouncementSchema = z.object({
+  contentMarkdown: z.string().min(1),
+  sender: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('staff'), staffId: STAFF_SENDER_ENUM }),
+    z.object({ kind: z.literal('character'), characterId: z.uuid() }),
+    z.object({ kind: z.literal('custom'), displayName: z.string().min(1).max(120) }),
+  ]),
+});

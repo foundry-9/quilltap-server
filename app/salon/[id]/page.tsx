@@ -948,6 +948,43 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [respondingParticipantId, chat?.participants, participantsWithImpersonation])
 
   const getMessageAvatar = useCallback((message: Message) => {
+    // Ad-hoc announcement bubble (Insert Announcement composer button).
+    // customAnnouncer takes precedence over systemSender by construction:
+    // the writer only sets one or the other per message.
+    if (message.customAnnouncer) {
+      if (message.customAnnouncer.kind === 'character' && message.customAnnouncer.characterId) {
+        const charId = message.customAnnouncer.characterId
+        const participant = chat?.participants.find(p => p.character?.id === charId)
+        if (participant?.character) {
+          return {
+            name: participant.character.name,
+            title: participant.character.title ?? null,
+            avatarUrl: participant.character.avatarUrl ?? null,
+            defaultImage: participant.character.defaultImage ?? null,
+          }
+        }
+        const offScene = chat?.offSceneCharacters?.find(c => c.id === charId)
+        if (offScene) {
+          return {
+            name: offScene.name,
+            title: offScene.title,
+            avatarUrl: offScene.avatarUrl,
+            defaultImage: null,
+          }
+        }
+        // Character no longer exists; render with a placeholder name so the
+        // bubble is still legible.
+        return { name: 'Off-scene character', title: null, avatarUrl: null, defaultImage: null }
+      }
+      if (message.customAnnouncer.kind === 'custom') {
+        return {
+          name: message.customAnnouncer.displayName || 'Announcement',
+          title: null,
+          avatarUrl: null,
+          defaultImage: null,
+        }
+      }
+    }
     if (message.systemSender === 'lantern') {
       return { name: 'The Lantern', title: null, avatarUrl: '/images/avatars/lantern-avatar.webp', defaultImage: null }
     }
@@ -994,7 +1031,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
     }
     return null
-  }, [participantsWithImpersonation, chat?.user])
+  }, [participantsWithImpersonation, chat?.user, chat?.participants, chat?.offSceneCharacters])
 
   // --- Reattribute handler ---
   const handleReattribute = useCallback((messageId: string) => {
@@ -1280,6 +1317,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onGenerateImageClick={modals.openGenerateImage}
           onLibraryFileClick={modals.openLibraryFilePicker}
           onStandaloneGenerateImageClick={modals.openStandaloneGenerateImage}
+          onInsertAnnouncementClick={modals.openInsertAnnouncement}
           onAddCharacterClick={modals.openAddCharacter}
           onSettingsClick={modals.openChatSettings}
           onRenameClick={modals.openRename}
@@ -1433,6 +1471,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           closeLibraryFilePicker={modals.closeLibraryFilePicker}
           standaloneGenerateImageOpen={modals.standaloneGenerateImageOpen}
           closeStandaloneGenerateImage={modals.closeStandaloneGenerateImage}
+          insertAnnouncementOpen={modals.insertAnnouncementOpen}
+          closeInsertAnnouncement={modals.closeInsertAnnouncement}
           allLLMPauseModalOpen={modals.allLLMPauseModalOpen}
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}
           reattributeDialogState={modals.reattributeDialogState}

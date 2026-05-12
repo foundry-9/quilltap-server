@@ -40,3 +40,4 @@ export {
   handleRenameDocument,
   handleDeleteDocument,
 } from './documents';
+export { handleInsertAnnouncement } from './announcement';

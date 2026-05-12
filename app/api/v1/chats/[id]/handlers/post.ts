@@ -43,6 +43,7 @@ import {
   handleWriteDocument,
   handleRenameDocument,
   handleDeleteDocument,
+  handleInsertAnnouncement,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -82,6 +83,7 @@ const CHAT_POST_ACTIONS = [
   'write-document',
   'rename-document',
   'delete-document',
+  'announcement',
 ] as const;
 
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
@@ -143,6 +145,7 @@ export async function handlePost(
     'write-document': () => handleWriteDocument(req, chatId, ctx),
     'rename-document': () => handleRenameDocument(req, chatId, ctx),
     'delete-document': () => handleDeleteDocument(chatId, ctx),
+    announcement: () => handleInsertAnnouncement(req, chatId, ctx),
   };
 
   return actionHandlers[action]();

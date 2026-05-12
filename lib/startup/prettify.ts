@@ -111,6 +111,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-system-sender-field-v1': 'Adding the system-sender field to messages',
   'add-system-kind-field-v1': 'Adding the system-kind label to messages',
   'add-host-event-field-v1': "Adding the Host's event field to messages",
+  'add-custom-announcer-field-v1': "Preparing the announcer's lectern",
   'add-compiled-identity-stacks-field-v1': 'Compiling identity stacks onto chats',
   'add-equipped-outfit-field-v1': 'Adding equipped-outfit tracking to chats',
   'add-pending-outfit-notifications-field-v1': 'Queuing outfit notifications on chats',

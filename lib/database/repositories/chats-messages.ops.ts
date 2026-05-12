@@ -60,6 +60,15 @@ export const ChatMessageRowSchema = z.object({
     toStatus: z.enum(['active', 'silent', 'absent', 'removed']).optional(),
     introducedCharacterIds: z.array(UUIDSchema).optional(),
   }).nullable().optional(),
+  // Ad-hoc announcer metadata for user-authored announcement bubbles
+  // (Insert Announcement composer button). Mutually exclusive with
+  // systemSender. Shape: { kind: 'character', characterId } or
+  // { kind: 'custom', displayName }.
+  customAnnouncer: z.object({
+    kind: z.enum(['character', 'custom']),
+    characterId: UUIDSchema.nullable().optional(),
+    displayName: z.string().nullable().optional(),
+  }).nullable().optional(),
   // Phase 3c: anchor tying a Staff-authored whisper to the compaction
   // generation under which it was produced. Set on per-character Librarian
   // summary whispers; null on every other message.

@@ -261,6 +261,8 @@ import { provisionUserUploadsMountMigration } from './provision-user-uploads-mou
 import { migrateRemainingGeneralToUploadsMigration } from './migrate-remaining-general-to-uploads';
 // Provision the global Quilltap General mount point (houses general Scenarios/)
 import { provisionGeneralMountMigration } from './provision-general-mount';
+// Add customAnnouncer column to chat_messages (Insert Announcement composer button)
+import { addCustomAnnouncerFieldMigration } from './add-custom-announcer-field';
 
 /**
  * All available migrations.
@@ -517,6 +519,8 @@ export const migrations: Migration[] = [
   migrateRemainingGeneralToUploadsMigration,
   // Provision the global Quilltap General mount point (houses general Scenarios/)
   provisionGeneralMountMigration,
+  // Add customAnnouncer column to chat_messages (Insert Announcement composer button)
+  addCustomAnnouncerFieldMigration,
 ];
 
 export {
@@ -758,5 +762,7 @@ export {
   migrateRemainingGeneralToUploadsMigration,
   // Provision the global Quilltap General mount point (houses general Scenarios/)
   provisionGeneralMountMigration,
+  // Add customAnnouncer column to chat_messages (Insert Announcement composer button)
+  addCustomAnnouncerFieldMigration,
 };
 

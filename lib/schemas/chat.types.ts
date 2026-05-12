@@ -163,6 +163,26 @@ export const MessageEventSchema = z.object({
   summaryAnchor: z.object({
     compactionGeneration: z.number(),
   }).nullable().optional(),
+  /**
+   * Ad-hoc announcer metadata for user-authored announcement bubbles
+   * (Insert Announcement composer button). Mutually exclusive with
+   * `systemSender`: when this is set, the message renders with the named
+   * character or custom display name in lieu of any Staff member.
+   *
+   * - `kind: 'character'` → `characterId` references a workspace character
+   *   who is not a participant in this chat. The renderer resolves the
+   *   character's avatar/name via the off-scene character lookup attached
+   *   to the chat payload.
+   * - `kind: 'custom'` → `displayName` is the free-text label shown next
+   *   to a placeholder avatar.
+   *
+   * NULL on every other message.
+   */
+  customAnnouncer: z.object({
+    kind: z.enum(['character', 'custom']),
+    characterId: UUIDSchema.nullable().optional(),
+    displayName: z.string().nullable().optional(),
+  }).nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;

@@ -37,6 +37,12 @@ export interface Message {
   systemSender?: 'lantern' | 'aurora' | 'librarian' | 'concierge' | 'prospero' | 'host' | 'commonplaceBook' | 'ariel' | null
   /** Sub-classification of a Staff-authored message — used by the Salon UI to label collapsed system-message bars (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender. */
   systemKind?: string | null
+  /** Ad-hoc announcer metadata for user-authored announcement bubbles (Insert Announcement composer button). Mutually exclusive with systemSender. */
+  customAnnouncer?: {
+    kind: 'character' | 'custom'
+    characterId?: string | null
+    displayName?: string | null
+  } | null
   /** Danger flags from content classification */
   dangerFlags?: Array<{
     category: string
@@ -168,6 +174,13 @@ export interface Chat {
   isDangerousChat?: boolean | null
   /** Categories of dangerous content detected (e.g. 'nsfw', 'violence') */
   dangerCategories?: string[]
+  /** Off-scene character cards referenced by ad-hoc announcement bubbles (customAnnouncer.kind === 'character'). Populated server-side from message rows. */
+  offSceneCharacters?: Array<{
+    id: string
+    name: string
+    title: string | null
+    avatarUrl: string | null
+  }>
 }
 
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'
