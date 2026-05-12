@@ -27,18 +27,24 @@ import { writeCharacterAvatarToVault } from '@/lib/file-storage/character-vault-
 import type { Character } from '@/lib/schemas/character.types';
 
 /**
- * Fire-and-forget vault provisioning for a just-created character.
- * The API response returns immediately; vault creation runs in the
- * background. If it fails, the next server startup backfill will
- * retry the same character (the helper is idempotent).
+ * Provision the character's vault synchronously before returning from the
+ * create API, so the vault is ready by the time the response is sent.
+ * Failures are logged but don't fail the request — the character record
+ * still exists and the next startup backfill will retry (the helper is
+ * idempotent). The previous fire-and-forget version was unreliable: a
+ * dangling promise started after `return NextResponse.json(...)` in a
+ * Next.js route can be torn down before it completes, leaving the
+ * character vault-less until next restart.
  */
-function provisionVaultInBackground(character: Character): void {
-  ensureCharacterVault(character).catch((err) => {
-    logger.warn('[Characters v1] Background vault provisioning failed', {
+async function provisionVault(character: Character): Promise<void> {
+  try {
+    await ensureCharacterVault(character);
+  } catch (err) {
+    logger.warn('[Characters v1] Vault provisioning failed; will retry on next startup', {
       characterId: character.id,
       error: err instanceof Error ? err.message : String(err),
     });
-  });
+  }
 }
 
 const CHARACTERS_POST_ACTIONS = ['ai-wizard', 'ai-wizard-stream', 'import', 'quick-create', 'reset-builtins'] as const;
@@ -462,7 +468,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     npc: character.npc,
   });
 
-  provisionVaultInBackground(character);
+  await provisionVault(character);
 
   return NextResponse.json({ character }, { status: 201 });
 }
@@ -504,7 +510,7 @@ async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext
     name: character.name,
   });
 
-  provisionVaultInBackground(character);
+  await provisionVault(character);
 
   return NextResponse.json({ character }, { status: 201 });
 }
@@ -619,7 +625,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
         );
       }
     } else {
-      provisionVaultInBackground(character);
+      await provisionVault(character);
     }
 
     const chats = await repos.chats.findByCharacterId(character.id);

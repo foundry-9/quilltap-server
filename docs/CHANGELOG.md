@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: character vault is provisioned synchronously on create
+
+`POST /api/v1/characters`, `?action=quick-create`, and the JSON branch of `?action=import` previously called a `provisionVaultInBackground` helper that started `ensureCharacterVault` as a dangling promise and returned the 201 response immediately. In a Next.js route, work begun after `return NextResponse.json(...)` is unreliable — the request context can be torn down before the promise settles — so the vault often did not appear until the next server startup, when the `backfill-character-vaults` sweep retried. All three handlers now `await provisionVault(character)` (a thin wrapper that catches and logs but does not fail the request) so the vault is ready before the API returns. The PNG branch of `?action=import` already awaited `ensureCharacterVault` for portrait persistence and is unchanged. Startup backfill remains as the safety net for the catch-and-continue case.
+
 #### Fix: Document Mode flushes pending edits when leaving source mode
 
 `DocumentPane.toggleSourceMode` previously just flipped the `showSource` flag. Edits made in the source textarea flow to parent state but only autosave after a 30s debounce, so toggling back to the Lexical editor — which calls `setMarkdown(input)` and remounts the editor — happened before the raw bytes were persisted. The toggle now calls `documentModeHook.flushSave` when leaving source mode, so any dirty markdown is written to disk before Lexical re-parses it. Lexical → Source is unchanged.
