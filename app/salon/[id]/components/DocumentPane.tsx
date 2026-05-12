@@ -143,6 +143,7 @@ function DocumentEditorPlugins({
         input={content}
         setInput={onContentChange}
         initialMarkdown={content}
+        preserveAsterisks
       />
       <FormattingCommandPlugin />
       <DocumentChangeTracker

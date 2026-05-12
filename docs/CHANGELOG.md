@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Document Mode no longer escapes literal asterisks
+
+Lexical's markdown exporter unconditionally escapes `*`, `_`, `` ` ``, and `~` in plain text via `exportTextFormat`. `COMPOSER_TRANSFORMERS` excludes `ITALIC_STAR` and `BOLD_ITALIC_STAR` so single asterisks are deliberately literal — meaning the `\*` escape is unnecessary and was leaking into saved document bytes and the source-view textarea. `MarkdownBridgePlugin` gains an opt-in `preserveAsterisks` prop that strips `\*` → `*` after `$convertToMarkdownString`. `DocumentPane` passes it; chat composer and `MarkdownLexicalEditor` (scenarios) are unchanged. Underscore, backtick, and tilde escapes remain because those characters are still active formatting tags.
+
 #### Feature: Insert Announcement composer button
 
 New composer-gutter button (above the existing Generate Image button) opens a dialog for posting an ad-hoc announcement bubble. The operator picks a sender (one of the eight Staff members, an off-scene workspace character, or a free-text custom name), composes a body in a `MarkdownLexicalEditor`, and posts. The result is persisted to `chat_messages` as a public broadcast (`targetParticipantIds: null`), indistinguishable in behavior from automated Staff announcements: visible to every participant, included in every character's LLM transcript, and round-tripped through `.qtap` export/import.
