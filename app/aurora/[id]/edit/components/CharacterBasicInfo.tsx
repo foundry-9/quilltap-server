@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { TagEditor } from '@/components/tags/tag-editor'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { CharacterFormData, CharacterScenario } from '../types'
 
 interface CharacterBasicInfoProps {
@@ -88,6 +89,15 @@ export function CharacterBasicInfo({
   // repository's write overlay routes those edits to vault files instead of
   // the database row, keeping the form and vault in step automatically.
   const toggleDisabled = !hasLinkedVault && !overlayOn
+
+  // Adapter so MarkdownLexicalEditor's (value: string) => void onChange feeds
+  // the parent's event-based handleChange (same synthetic-event shape used by
+  // the AI wizard's apply flow).
+  const handleMarkdownFieldChange = (name: string) => (value: string) => {
+    onChange({
+      target: { name, value },
+    } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+  }
 
   return (
     <div className="space-y-6">
@@ -357,14 +367,15 @@ export function CharacterBasicInfo({
         <label htmlFor="identity" className="block qt-text-label mb-2">
           Identity (Optional)
         </label>
-        <textarea
-          id="identity"
-          name="identity"
+        <p className="text-xs qt-text-secondary mb-2">
+          What strangers know about the character on sight or by reputation &mdash; name, station, occupation, public reputation. The shallow first impression.
+        </p>
+        <MarkdownLexicalEditor
           value={formData.identity}
-          onChange={onChange}
-          rows={3}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="What strangers know about the character on sight or by reputation — name, station, occupation, public reputation. The shallow first impression."
+          onChange={handleMarkdownFieldChange('identity')}
+          namespace="CharacterBasicInfo.identity"
+          ariaLabel="Identity"
+          minHeight="6rem"
         />
       </div>
 
@@ -373,14 +384,15 @@ export function CharacterBasicInfo({
         <label htmlFor="description" className="block qt-text-label mb-2">
           Description (Optional)
         </label>
-        <textarea
-          id="description"
-          name="description"
+        <p className="text-xs qt-text-secondary mb-2">
+          How acquaintances perceive the character &mdash; behaviour, mannerisms, verbal patterns. Not physical appearance.
+        </p>
+        <MarkdownLexicalEditor
           value={formData.description}
-          onChange={onChange}
-          rows={4}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="How acquaintances perceive the character — behaviour, mannerisms, verbal patterns. Not physical appearance."
+          onChange={handleMarkdownFieldChange('description')}
+          namespace="CharacterBasicInfo.description"
+          ariaLabel="Description"
+          minHeight="8rem"
         />
       </div>
 
@@ -389,14 +401,15 @@ export function CharacterBasicInfo({
         <label htmlFor="manifesto" className="block qt-text-label mb-2">
           Manifesto (Optional)
         </label>
-        <textarea
-          id="manifesto"
-          name="manifesto"
+        <p className="text-xs qt-text-secondary mb-2">
+          The foundational tenets of this character &mdash; the basic truths that anchor everything else. What this character is, at root.
+        </p>
+        <MarkdownLexicalEditor
           value={formData.manifesto}
-          onChange={onChange}
-          rows={4}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="The foundational tenets of this character — the basic truths that anchor everything else. What this character is, at root."
+          onChange={handleMarkdownFieldChange('manifesto')}
+          namespace="CharacterBasicInfo.manifesto"
+          ariaLabel="Manifesto"
+          minHeight="8rem"
         />
       </div>
 
@@ -405,14 +418,15 @@ export function CharacterBasicInfo({
         <label htmlFor="personality" className="block qt-text-label mb-2">
           Personality (Optional)
         </label>
-        <textarea
-          id="personality"
-          name="personality"
+        <p className="text-xs qt-text-secondary mb-2">
+          What the character knows about themselves. The internal driver of speech and behaviour. Other characters don&rsquo;t see it unless shared.
+        </p>
+        <MarkdownLexicalEditor
           value={formData.personality}
-          onChange={onChange}
-          rows={4}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="What the character knows about themselves. The internal driver of speech and behaviour. Other characters don't see it unless shared."
+          onChange={handleMarkdownFieldChange('personality')}
+          namespace="CharacterBasicInfo.personality"
+          ariaLabel="Personality"
+          minHeight="8rem"
         />
       </div>
 
@@ -500,19 +514,20 @@ export function CharacterBasicInfo({
                     </svg>
                   </button>
                 </div>
-                <textarea
+                <MarkdownLexicalEditor
                   value={scenario.content}
-                  onChange={(e) => {
+                  onChange={(value) => {
                     const updated = formData.scenarios.map((s, i) =>
                       i === index
-                        ? { ...s, content: e.target.value, updatedAt: new Date().toISOString() }
+                        ? { ...s, content: value, updatedAt: new Date().toISOString() }
                         : s
                     )
                     onScenariosChange(updated)
                   }}
-                  rows={3}
-                  placeholder="Describe the setting and context for this scenario"
-                  className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                  remountKey={scenario.id}
+                  namespace={`CharacterBasicInfo.scenario.${scenario.id}`}
+                  ariaLabel="Scenario content"
+                  minHeight="6rem"
                 />
               </div>
             ))}
@@ -525,14 +540,15 @@ export function CharacterBasicInfo({
         <label htmlFor="firstMessage" className="block qt-text-label mb-2">
           First Message (Optional)
         </label>
-        <textarea
-          id="firstMessage"
-          name="firstMessage"
+        <p className="text-xs qt-text-secondary mb-2">
+          The character&rsquo;s opening message to start conversations.
+        </p>
+        <MarkdownLexicalEditor
           value={formData.firstMessage}
-          onChange={onChange}
-          rows={3}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="The character's opening message to start conversations"
+          onChange={handleMarkdownFieldChange('firstMessage')}
+          namespace="CharacterBasicInfo.firstMessage"
+          ariaLabel="First message"
+          minHeight="6rem"
         />
       </div>
 
@@ -541,14 +557,15 @@ export function CharacterBasicInfo({
         <label htmlFor="exampleDialogues" className="block qt-text-label mb-2">
           Example Dialogues (Optional)
         </label>
-        <textarea
-          id="exampleDialogues"
-          name="exampleDialogues"
+        <p className="text-xs qt-text-secondary mb-2">
+          Example conversations to guide the AI&rsquo;s responses.
+        </p>
+        <MarkdownLexicalEditor
           value={formData.exampleDialogues}
-          onChange={onChange}
-          rows={6}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="Example conversations to guide the AI's responses"
+          onChange={handleMarkdownFieldChange('exampleDialogues')}
+          namespace="CharacterBasicInfo.exampleDialogues"
+          ariaLabel="Example dialogues"
+          minHeight="12rem"
         />
       </div>
 
@@ -557,14 +574,15 @@ export function CharacterBasicInfo({
         <label htmlFor="systemPrompt" className="block qt-text-label mb-2">
           System Prompt (Optional)
         </label>
-        <textarea
-          id="systemPrompt"
-          name="systemPrompt"
+        <p className="text-xs qt-text-secondary mb-2">
+          Custom system instructions (will be combined with auto-generated prompt).
+        </p>
+        <MarkdownLexicalEditor
           value={formData.systemPrompt}
-          onChange={onChange}
-          rows={4}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder="Custom system instructions (will be combined with auto-generated prompt)"
+          onChange={handleMarkdownFieldChange('systemPrompt')}
+          namespace="CharacterBasicInfo.systemPrompt"
+          ariaLabel="System prompt"
+          minHeight="8rem"
         />
       </div>
 

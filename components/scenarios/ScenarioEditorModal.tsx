@@ -221,7 +221,6 @@ export function ScenarioEditorModal({
             remountKey={remountKey}
             namespace="ScenarioEditor"
             ariaLabel="Scenario body"
-            className="qt-bg-input qt-border rounded"
           />
         </div>
 
