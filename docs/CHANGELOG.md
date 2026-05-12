@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Document Mode flushes pending edits when leaving source mode
+
+`DocumentPane.toggleSourceMode` previously just flipped the `showSource` flag. Edits made in the source textarea flow to parent state but only autosave after a 30s debounce, so toggling back to the Lexical editor — which calls `setMarkdown(input)` and remounts the editor — happened before the raw bytes were persisted. The toggle now calls `documentModeHook.flushSave` when leaving source mode, so any dirty markdown is written to disk before Lexical re-parses it. Lexical → Source is unchanged.
+
 #### Fix: context-summary chaining test now mocks the right delegate
 
 `__tests__/unit/background-jobs/context-summary-chaining.test.ts` had been failing on `main` since 8957382f rewrote the background handler to delegate to `generateContextSummary` instead of calling `updateContextSummary` directly. The test still mocked `updateContextSummary`, which the new handler never calls — so the real `foldChatSummary` ran inside `generateContextSummary`, failed without an LLM, and the handler short-circuited before the danger-classification chain. Three of the four cases failed. Test now mocks `generateContextSummary` directly with a `{ success: true, wasGenerated: true, summary }` return; the chain assertions fire as intended. No production code changes.

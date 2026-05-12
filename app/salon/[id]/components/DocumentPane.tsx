@@ -54,6 +54,7 @@ interface DocumentPaneProps {
   setScrollPosition: (filePath: string, pos: number) => void
   onContentChange: (content: string) => void
   onBlur: () => void
+  onFlushSave: () => void
   onToggleFocusMode: () => void
   onCloseDocument: () => void
   onDeleteDocument: () => void
@@ -211,6 +212,7 @@ export default function DocumentPane({
   setScrollPosition,
   onContentChange,
   onBlur,
+  onFlushSave,
   onToggleFocusMode,
   onCloseDocument,
   onDeleteDocument,
@@ -277,8 +279,13 @@ export default function DocumentPane({
   }, [isEditingTitle])
 
   const toggleSourceMode = useCallback(() => {
-    setShowSource((prev) => !prev)
-  }, [])
+    setShowSource((prev) => {
+      // Leaving source mode: flush any pending edits before Lexical re-parses
+      // the markdown, so raw source bytes are persisted before serialization.
+      if (prev) onFlushSave()
+      return !prev
+    })
+  }, [onFlushSave])
 
   // Throttled scroll handler — saves position ~100ms after last scroll event
   const handleScroll = useCallback(() => {
