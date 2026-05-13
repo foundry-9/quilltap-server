@@ -8,7 +8,7 @@ There are occasions, you will find, when the proceedings demand a public proclam
 
 ## What it does
 
-A single click summons a tidy dialog. There you choose who is speaking: a member of the Staff, a workspace character who is not presently in this chat, or — should neither suit — an arbitrary name of your own invention. You compose the message in a small Lexical editor, mark it up with whatever bold and italic flourishes the moment requires, and post.
+A single click summons a tidy floating panel — drag it about by its title bar, tug its lower-right corner to whatever proportions suit you, and rest assured it will remember where it last stood the next time you call upon it. Because it does not draw a curtain across the Salon behind it, you remain free to scroll the conversation, select a passage, and copy a turn of phrase to quote in the announcement you are presently composing. There you choose who is speaking: a member of the Staff, a workspace character who is not presently in this chat, or — should neither suit — an arbitrary name of your own invention. You compose the message in a small Lexical editor, mark it up with whatever bold and italic flourishes the moment requires, and post.
 
 The result lands in the conversation as a public bubble, indistinguishable in deportment from the Salon's automated announcements: every participant present (and silent participants too) sees it, every character's LLM receives it as part of their transcript, and the database keeps it forever. It is not a whisper. It is not a private aside. It is, in the strictest sense, *announced.*
 

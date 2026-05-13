@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Change: Insert Announcement uses the floating, draggable dialog
+
+`InsertAnnouncementDialog` now renders inside `FloatingDialog` (the same portal-rendered, movable, resizable container that hosts the Help dialog) instead of the full-screen `qt-dialog-overlay` modal. Operators can drag the dialog by its title bar, resize it from the bottom-right corner, and — because there is no overlay over the rest of the page — scroll, select, and copy text from the chat behind it while composing an announcement. Position and size persist to `localStorage` under `quilltap:insert-announcement-geometry`. The dialog opens at 640×560 by default, with min 420×420. The internal layout switches to a flex column whose form body scrolls and whose Cancel/Post footer stays pinned to the bottom. While a post is in flight (`isPosting`), the close handler is short-circuited to a no-op so the operator can't lose the in-progress submission by hitting Escape or the close X.
+
+#### Fix: Insert Announcement dialog clears between sends
+
+After successfully posting an announcement, reopening the Insert Announcement dialog showed the previous body text. The dialog assumed its own `if (!isOpen) return null` would unmount it and reset its `useState` values, but returning `null` from a component does not unmount it — React keeps the instance and its state in the tree. `ChatModals.tsx` now conditionally renders `<InsertAnnouncementDialog />` only when `insertAnnouncementOpen` is true, so each open is a fresh mount with empty content, sender, and custom-name state. Updated the comment in the dialog to reflect that the parent owns the mount/unmount lifecycle.
+
 #### Feature: Project, scenario, prompt, memory, physical, and wardrobe editors use MarkdownLexicalEditor
 
 Continues the textarea → `MarkdownLexicalEditor` migration across the remaining narrative-bearing forms. Converted callsites:

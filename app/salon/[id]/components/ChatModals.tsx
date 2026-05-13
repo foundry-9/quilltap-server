@@ -335,18 +335,20 @@ export function ChatModals({
         onCharacterAdded={onCharacterAdded}
       />
 
-      <InsertAnnouncementDialog
-        isOpen={insertAnnouncementOpen}
-        onClose={closeInsertAnnouncement}
-        chatId={chatId}
-        participantCharacterIds={chat?.participants
-          .filter(p => p.type === 'CHARACTER' && !p.removedAt)
-          .map(p => p.character?.id)
-          .filter((id): id is string => id !== null && id !== undefined) || []}
-        onPosted={() => {
-          fetchChat()
-        }}
-      />
+      {insertAnnouncementOpen && (
+        <InsertAnnouncementDialog
+          isOpen={insertAnnouncementOpen}
+          onClose={closeInsertAnnouncement}
+          chatId={chatId}
+          participantCharacterIds={chat?.participants
+            .filter(p => p.type === 'CHARACTER' && !p.removedAt)
+            .map(p => p.character?.id)
+            .filter((id): id is string => id !== null && id !== undefined) || []}
+          onPosted={() => {
+            fetchChat()
+          }}
+        />
+      )}
 
       {reattributeDialogState && chat && (
         <ReattributeMessageDialog

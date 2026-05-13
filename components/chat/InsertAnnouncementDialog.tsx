@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { FloatingDialog } from '@/components/ui/FloatingDialog'
 
 type StaffId =
   | 'lantern'
@@ -60,8 +61,10 @@ export default function InsertAnnouncementDialog({
   const [charSearch, setCharSearch] = useState('')
   const [isPosting, setIsPosting] = useState(false)
 
-  // Note: state resets naturally on each open because `if (!isOpen) return null`
-  // unmounts the component, so a fresh useState() initializer fires next time.
+  // Note: state resets naturally on each open because the parent conditionally
+  // renders this component (`{insertAnnouncementOpen && <... />}`), so each
+  // open is a fresh mount and useState() initializers fire again. Returning
+  // null from a component does not by itself unmount it.
 
   const loadCharactersIfNeeded = useCallback(() => {
     if (characters.length > 0 || charsLoading) return
@@ -145,28 +148,19 @@ export default function InsertAnnouncementDialog({
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="qt-dialog-overlay p-4">
-      <div className="qt-dialog max-w-3xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="qt-dialog-header flex items-center justify-between">
-          <h2 className="qt-dialog-title">Insert Announcement</h2>
-          <button
-            onClick={onClose}
-            className="qt-button qt-button-ghost p-2"
-            disabled={isPosting}
-            aria-label="Close"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
+    <FloatingDialog
+      isOpen={isOpen}
+      onClose={isPosting ? () => {} : onClose}
+      title="Insert Announcement"
+      storageKey="quilltap:insert-announcement-geometry"
+      initialGeometry={{ width: 640, height: 560 }}
+      minWidth={420}
+      minHeight={420}
+    >
+      <div className="flex flex-col h-full">
         {/* Body */}
-        <div className="qt-dialog-body flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto p-4">
           {/* Mode selector */}
           <div className="mb-4">
             <label className="block text-sm qt-text-primary mb-2">Sender</label>
@@ -317,7 +311,7 @@ export default function InsertAnnouncementDialog({
         </div>
 
         {/* Footer */}
-        <div className="qt-dialog-footer flex items-center justify-end gap-3">
+        <div className="flex-shrink-0 border-t qt-border-default px-4 py-3 flex items-center justify-end gap-3">
           <button onClick={onClose} className="qt-button qt-button-secondary" disabled={isPosting}>
             Cancel
           </button>
@@ -330,6 +324,6 @@ export default function InsertAnnouncementDialog({
           </button>
         </div>
       </div>
-    </div>
+    </FloatingDialog>
   )
 }
