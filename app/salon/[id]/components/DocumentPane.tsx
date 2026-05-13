@@ -280,13 +280,13 @@ export default function DocumentPane({
   }, [isEditingTitle])
 
   const toggleSourceMode = useCallback(() => {
-    setShowSource((prev) => {
-      // Leaving source mode: flush any pending edits before Lexical re-parses
-      // the markdown, so raw source bytes are persisted before serialization.
-      if (prev) onFlushSave()
-      return !prev
-    })
-  }, [onFlushSave])
+    // Leaving source mode: flush any pending edits before Lexical re-parses
+    // the markdown, so raw source bytes are persisted before serialization.
+    // The flush must run outside the state updater — updaters are pure and
+    // may execute during render, which would setState on the parent mid-render.
+    if (showSource) onFlushSave()
+    setShowSource((prev) => !prev)
+  }, [showSource, onFlushSave])
 
   // Throttled scroll handler — saves position ~100ms after last scroll event
   const handleScroll = useCallback(() => {

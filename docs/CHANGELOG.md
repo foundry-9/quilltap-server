@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Document Mode source-toggle no longer setStates the parent during render
+
+`DocumentPane.toggleSourceMode` called `onFlushSave()` from inside the `setShowSource` updater function. React may execute updater functions during the render phase (strict/concurrent mode), so the embedded flush triggered `saveDocument` → `setIsSaving(true)` on `ChatPage` mid-render and produced a "Cannot update a component while rendering a different component" warning. The toggle now reads `showSource` from the closure, calls `onFlushSave()` outside the updater, and the updater itself is pure (`(prev) => !prev`).
+
 #### Feature: Insert Announcement can rewrite the seed in the character's voice
 
 The off-scene character branch of `InsertAnnouncementDialog` now optionally routes the operator's seed text through the chosen character's connection profile so the character "says" the announcement in their own voice before it's posted. Two new pickers appear when a character is selected: a connection-profile dropdown (top option is "Use as-is, do not process in-character"; defaults to the character's `defaultConnectionProfileId` for LLM-controlled characters, the system `isDefault` profile as fallback, or `as-is` for user-controlled characters) and a system-prompt dropdown (only when the character has more than one system prompt; defaults via the same resolution the chat path uses — `defaultSystemPromptId` → `isDefault` flag → first). When a profile is selected, the primary button becomes **Preview in character** and a new `?action=announcement-preview` POST hits the chat. The dialog enters a `generating` stage with a `<QuillAnimation size="lg" />` placeholder in a second editor pane labelled "What {{character}} will say"; on success the pane becomes editable with the LLM's draft and the operator can edit, **Regenerate**, **Edit seed** (which unlocks the seed editor and returns to `compose`), or **Post Announcement**. Posting still uses the existing `?action=announcement` endpoint with `sender: { kind: 'character', characterId }`; only the (possibly hand-edited) rewrite is persisted.
