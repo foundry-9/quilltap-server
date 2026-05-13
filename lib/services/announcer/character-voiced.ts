@@ -138,13 +138,13 @@ export async function generateCharacterVoicedAnnouncement(
     if (recallText) {
       userParts.push(recallText)
     }
-    if (roster) {
-      userParts.push(`You are not in the chat. The following people are present:\n${roster}\n\nSpeaking in character to those people, say what you would say in response to:`)
-    } else {
-      userParts.push('You are not in the chat. Speaking in character to the people in the chat, say what you would say in response to:')
-    }
+    const presenceLine = roster
+      ? `You want to say something to the people in the chat. The following people are present:\n${roster}`
+      : 'You want to say something to the people in the chat.'
+    userParts.push(
+      `${presenceLine}\n\nBelow is your own rough draft — the meaning and substance of what you want to convey. Rewrite it in your own voice, the way you would actually say it given your personality, manner of speech, and current circumstances. Keep the meaning, the addressees, and any specific facts; refine the voice and phrasing. Narration, action, and stage directions are welcome where they fit your voice. Do not respond to the draft — it is yours.\n\nDraft:`,
+    )
     userParts.push(seedTrimmed)
-    userParts.push('Keep your reply to what you would actually say aloud. Do not narrate actions, scene, or stage directions.')
 
     const messages: LLMMessage[] = [
       { role: 'system', content: systemPrompt },

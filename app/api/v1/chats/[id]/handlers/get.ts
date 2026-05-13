@@ -14,7 +14,7 @@ import { getFilePath } from '@/lib/api/middleware/file-path';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { exportSTChatAsJSONL } from '@/lib/sillytavern/chat';
 import { getChatCostBreakdown, getDetailedChatCostBreakdown } from '@/lib/services/cost-estimation.service';
-import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
+import { enrichParticipantDetail, getCharacterDetail } from '@/lib/services/chat-enrichment.service';
 import { renderMarkdownToHtml, canPreRenderMessage } from '@/lib/services/markdown-renderer.service';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
@@ -339,13 +339,16 @@ export async function handleGet(
     const offSceneCharacters: Array<{ id: string; name: string; title: string | null; avatarUrl: string | null }> = [];
     for (const charId of offSceneCharacterIds) {
       try {
-        const c = await repos.characters.findById(charId);
-        if (c) {
+        // Use getCharacterDetail so avatarUrl resolves through avatarOverrides /
+        // defaultImageId — characters whose avatar is stored as a defaultImage
+        // (not a raw avatarUrl) still render correctly in announcement bubbles.
+        const detail = await getCharacterDetail(charId, repos, chatId);
+        if (detail) {
           offSceneCharacters.push({
-            id: c.id,
-            name: c.name,
-            title: c.title ?? null,
-            avatarUrl: c.avatarUrl ?? null,
+            id: detail.id,
+            name: detail.name,
+            title: detail.title,
+            avatarUrl: detail.avatarUrl,
           });
         }
       } catch {

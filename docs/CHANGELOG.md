@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Fix: Off-scene character announcements now render the character's avatar
+
+`InsertAnnouncementDialog` posts character-voiced announcements as `customAnnouncer.kind === 'character'` bubbles, and the Salon page resolves the avatar from `chat.offSceneCharacters` (a side-array the chat GET handler builds for characters referenced by announcement bubbles but not present as participants). That resolver in `app/api/v1/chats/[id]/handlers/get.ts` was reading `c.avatarUrl` straight off the row, which is null for characters whose avatar is stored as a `defaultImageId` file reference (the common case). The bubble fell back to the placeholder initial. Switched the off-scene loop to `getCharacterDetail(charId, repos, chatId)` so it goes through the same resolution as participants — `avatarOverrides` (wardrobe-generated chat-specific avatars) → `defaultImage` → `avatarUrl` — producing `/api/v1/files/<id>` when only `defaultImageId` is set.
+
+#### Change: Character-voiced announcement prompt treats the seed as the character's draft
+
+The user-role message in `lib/services/announcer/character-voiced.ts` framed the seed text as something to respond to ("say what you would say in response to:"). When the operator typed text already in the character's voice, the LLM read it as someone else's input and produced a defensive reply. Rewritten to frame the seed as the character's own rough draft and ask the model to refine it in the character's voice without responding: "Below is your own rough draft — the meaning and substance of what you want to convey. Rewrite it in your own voice [...] Do not respond to the draft — it is yours." Narration, action, and stage directions are now explicitly permitted; the prior "Do not narrate actions, scene, or stage directions" instruction is gone. Roster block (present participants) is unchanged.
+
 #### Fix: Document Mode source-toggle no longer setStates the parent during render
 
 `DocumentPane.toggleSourceMode` called `onFlushSave()` from inside the `setShowSource` updater function. React may execute updater functions during the render phase (strict/concurrent mode), so the embedded flush triggered `saveDocument` → `setIsSaving(true)` on `ChatPage` mid-render and produced a "Cannot update a component while rendering a different component" warning. The toggle now reads `showSource` from the closure, calls `onFlushSave()` outside the updater, and the updater itself is pure (`(prev) => !prev`).
