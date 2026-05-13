@@ -177,6 +177,7 @@ export function ProfileModal({
   }, [getSelectedModelInfo])
 
   const reqs = operations.getProviderRequirements(form.formData.provider)
+  const isCourier = form.formData.transport === 'courier'
   const isValid = form.formData.name.trim() && form.formData.modelName.trim()
 
   // Handle provider change - auto-fill base URL for providers that have defaults
@@ -230,8 +231,30 @@ export function ProfileModal({
       footer={footer}
     >
       <div className="space-y-4">
+            {/* Transport selector */}
+            <div>
+              <label htmlFor="transport" className="block qt-text-label mb-2">
+                Transport *
+              </label>
+              <select
+                id="transport"
+                name="transport"
+                value={form.formData.transport}
+                onChange={(e) => form.setField('transport', e.target.value as 'api' | 'courier')}
+                className="qt-select"
+              >
+                <option value="api">API (provider-backed)</option>
+                <option value="courier">The Courier (manual / clipboard)</option>
+              </select>
+              <p className="qt-text-xs mt-1">
+                {isCourier
+                  ? 'Manual / clipboard mode. Quilltap will render each LLM call as Markdown for you to carry by hand to an external LLM. No API key, no tools — just copy out and paste back.'
+                  : 'Standard provider-backed mode. Quilltap calls the LLM directly using the API key and base URL you configure below.'}
+              </p>
+            </div>
+
             {/* Name and Provider Row */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className={isCourier ? '' : 'grid grid-cols-2 gap-4'}>
               <div>
                 <label htmlFor="name" className="block qt-text-label mb-2">
                   Name *
@@ -242,51 +265,125 @@ export function ProfileModal({
                   name="name"
                   value={form.formData.name}
                   onChange={(e) => form.setField('name', e.target.value)}
-                  placeholder="e.g., My GPT-4 Profile"
+                  placeholder={isCourier ? 'e.g., Claude desktop courier' : 'e.g., My GPT-4 Profile'}
                   className="qt-input"
                   autoFocus
                 />
               </div>
 
-              <div>
-                <label htmlFor="provider" className="block qt-text-label mb-2">
-                  Provider *
-                </label>
-                <select
-                  id="provider"
-                  name="provider"
-                  value={form.formData.provider}
-                  onChange={(e) => handleProviderChange(e.target.value)}
-                  className="qt-select"
-                >
-                  {providers.length > 0 ? (
-                    providers
-                      .filter((p) => p.capabilities?.chat)
-                      .map((p) => (
-                        <option key={p.name} value={p.name}>
-                          {p.displayName}
-                        </option>
-                      ))
-                  ) : (
-                    <>
-                      <option value="OPENAI">OpenAI</option>
-                      <option value="ANTHROPIC">Anthropic</option>
-                      <option value="GOOGLE">Google</option>
-                      <option value="GROK">Grok</option>
-                      <option value="OLLAMA">Ollama</option>
-                      <option value="OPENROUTER">OpenRouter</option>
-                      <option value="OPENAI_COMPATIBLE">OpenAI Compatible</option>
-                    </>
-                  )}
-                </select>
-                <p className="qt-text-xs mt-1">
-                  Non-image attachments: {getAttachmentSupportDescription(form.formData.provider as any, form.formData.baseUrl || undefined)}
-                </p>
-              </div>
+              {!isCourier && (
+                <div>
+                  <label htmlFor="provider" className="block qt-text-label mb-2">
+                    Provider *
+                  </label>
+                  <select
+                    id="provider"
+                    name="provider"
+                    value={form.formData.provider}
+                    onChange={(e) => handleProviderChange(e.target.value)}
+                    className="qt-select"
+                  >
+                    {providers.length > 0 ? (
+                      providers
+                        .filter((p) => p.capabilities?.chat)
+                        .map((p) => (
+                          <option key={p.name} value={p.name}>
+                            {p.displayName}
+                          </option>
+                        ))
+                    ) : (
+                      <>
+                        <option value="OPENAI">OpenAI</option>
+                        <option value="ANTHROPIC">Anthropic</option>
+                        <option value="GOOGLE">Google</option>
+                        <option value="GROK">Grok</option>
+                        <option value="OLLAMA">Ollama</option>
+                        <option value="OPENROUTER">OpenRouter</option>
+                        <option value="OPENAI_COMPATIBLE">OpenAI Compatible</option>
+                      </>
+                    )}
+                  </select>
+                  <p className="qt-text-xs mt-1">
+                    Non-image attachments: {getAttachmentSupportDescription(form.formData.provider as any, form.formData.baseUrl || undefined)}
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* API Key and Base URL Fields */}
-            {(() => {
+            {isCourier && (
+              <>
+                <div>
+                  <label htmlFor="courierModelNameModal" className="block qt-text-label mb-2">
+                    Which LLM will you carry to? (informational)
+                  </label>
+                  <input
+                    type="text"
+                    id="courierModelNameModal"
+                    name="modelName"
+                    value={form.formData.modelName}
+                    onChange={(e) => form.setField('modelName', e.target.value)}
+                    placeholder="e.g., Claude Opus 4.7, ChatGPT o3, Local Llama via LM Studio"
+                    className="qt-input"
+                  />
+                  <p className="qt-text-xs mt-1">
+                    Free text — appears on the placeholder bubble so you remember which LLM to paste into. Quilltap does not validate or call it.
+                  </p>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="courierIsDefaultModal"
+                      checked={form.formData.isDefault}
+                      onChange={(e) => form.setField('isDefault', e.target.checked)}
+                      className="w-4 h-4 rounded"
+                    />
+                    <label htmlFor="courierIsDefaultModal" className="text-sm">
+                      Set as default profile
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="courierIsCheapModal"
+                      checked={form.formData.isCheap}
+                      onChange={(e) => form.setField('isCheap', e.target.checked)}
+                      className="w-4 h-4 rounded"
+                    />
+                    <label htmlFor="courierIsCheapModal" className="text-sm">
+                      Mark as cheap LLM (memory extraction, danger classification, etc.)
+                    </label>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      id="courierDeltaModeModal"
+                      checked={form.formData.courierDeltaMode}
+                      onChange={(e) => form.setField('courierDeltaMode', e.target.checked)}
+                      className="w-4 h-4 rounded mt-0.5"
+                    />
+                    <label htmlFor="courierDeltaModeModal" className="text-sm">
+                      <span className="block">Delta mode after first turn</span>
+                      <span className="qt-text-xs">After the character&apos;s first paste-back in a chat, render only what&apos;s new since the last reply — the desktop LLM remembers the rest. The bubble still keeps a full-context fallback you can swap to if your destination LLM has lost the conversation.</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="qt-text-xs">
+                  The Courier does not expose tools, web search, or image uploads. Memories, character manifestos, scene state, and wardrobe context are all still bundled into the prompt as normal — the external LLM just doesn&apos;t have any way to call back into Quilltap.
+                </div>
+
+                {profile?.id && (
+                  <div className="pt-4">
+                    <TagEditor entityType="profile" entityId={profile.id} />
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* API Key and Base URL Fields — API transport only */}
+            {!isCourier && (() => {
               const showApiKey = reqs.requiresApiKey
               const showBaseUrl = reqs.requiresBaseUrl
               const showBoth = showApiKey && showBaseUrl
@@ -337,7 +434,8 @@ export function ProfileModal({
               )
             })()}
 
-            {/* Connection Testing Section */}
+            {/* Connection Testing Section — API transport only */}
+            {!isCourier && (
             <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
               <h4 className="font-medium text-sm mb-3">Connection Testing</h4>
 
@@ -419,8 +517,10 @@ export function ProfileModal({
                 1. Click Connect to test the connection • 2. Fetch Models • 3. Test Message to verify
               </p>
             </div>
+            )}
 
-            {/* Model Selection */}
+            {/* Model Selection — API transport only */}
+            {!isCourier && (
             <div>
               <label htmlFor="modelName" className="block qt-text-label mb-2">
                 Model *
@@ -475,8 +575,10 @@ export function ProfileModal({
                 </>
               )}
             </div>
+            )}
 
-            {/* Model Parameters */}
+            {/* Model Parameters — API transport only */}
+            {!isCourier && (
             <div className="border-t qt-border-default pt-4">
               <h4 className="font-medium text-sm mb-3">Model Parameters (Optional)</h4>
               <div className="grid grid-cols-3 gap-4">
@@ -535,8 +637,10 @@ export function ProfileModal({
                 </div>
               </div>
             </div>
+            )}
 
-            {/* Checkboxes */}
+            {/* Checkboxes — API transport only (Courier has its own minimal pair above) */}
+            {!isCourier && (
             <div className="space-y-2 pt-2">
               <div className="flex items-center gap-2">
                 <input
@@ -625,8 +729,10 @@ export function ProfileModal({
                 </div>
               )}
             </div>
+            )}
 
-            {/* Model Class and Max Context */}
+            {/* Model Class and Max Context — API transport only */}
+            {!isCourier && (
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="modelClass" className="block qt-text-label mb-2">
@@ -675,24 +781,23 @@ export function ProfileModal({
                 </p>
               </div>
             </div>
+            )}
 
-            {/* OpenRouter-specific options */}
-            {form.formData.provider === 'OPENROUTER' && (
+            {/* Provider-specific options — API transport only */}
+            {!isCourier && form.formData.provider === 'OPENROUTER' && (
               <OpenRouterOptions formData={form.formData} fetchedModels={fetchedModels} onSetField={form.setField} />
             )}
 
-            {/* Anthropic-specific options */}
-            {form.formData.provider === 'ANTHROPIC' && (
+            {!isCourier && form.formData.provider === 'ANTHROPIC' && (
               <AnthropicOptions formData={form.formData} onSetField={form.setField} />
             )}
 
-            {/* OpenAI-specific options */}
-            {form.formData.provider === 'OPENAI' && (
+            {!isCourier && form.formData.provider === 'OPENAI' && (
               <OpenAIOptions formData={form.formData} onSetField={form.setField} />
             )}
 
-            {/* Tag Editor (only show when editing) */}
-            {profile?.id && (
+            {/* Tag Editor (only show when editing) — API path. Courier path renders its own above. */}
+            {!isCourier && profile?.id && (
               <div className="pt-4">
                 <TagEditor entityType="profile" entityId={profile.id} />
               </div>

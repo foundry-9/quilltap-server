@@ -10,6 +10,7 @@ import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
 import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-message-labels'
+import { CourierBubble } from './CourierBubble'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -98,6 +99,8 @@ interface MessageRowProps {
   isSystemMessageCollapsed?: boolean
   /** Toggle the collapsed state of a system-authored message */
   onToggleSystemMessageExpanded?: (messageId: string) => void
+  /** Callback fired after a Courier placeholder is resolved or cancelled — triggers a chat refetch. */
+  onCourierTurnSettled?: () => void
 }
 
 function getImageAttachments(message: Message) {
@@ -154,6 +157,7 @@ function MessageRowInner({
   isOverheardWhisper = false,
   isDangerousChat = false,
   isSystemMessageCollapsed = false,
+  onCourierTurnSettled,
   onToggleSystemMessageExpanded,
 }: MessageRowProps) {
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
@@ -175,6 +179,48 @@ function MessageRowInner({
     ? dangerousContentSettings.displayMode
     : 'SHOW'
   const showDangerBadges = hasDangerFlags && dangerousContentSettings?.showWarningBadges !== false
+
+  // The Courier: pending placeholder for a manual / clipboard turn. Render
+  // a special bubble with the Markdown blob, copy button, attachment links,
+  // and a paste-back textarea. Skip the normal action bar, edit, source-view,
+  // and danger-flag chrome.
+  if (message.pendingExternalPrompt) {
+    const courierName = messageAvatar?.name || 'this character'
+    return (
+      <div
+        id={`message-${message.id}`}
+        data-message-id={message.id}
+        key={message.id}
+        className={messageRowClasses.concat(['qt-chat-message-row-courier']).join(' ')}
+      >
+        {message.role === 'ASSISTANT' && shouldShowAvatars && messageAvatar && (
+          <div className={`flex-shrink-0 qt-chat-desktop-avatar${isDangerousChat ? ' qt-chat-avatar-dangerous' : ''}`}>
+            <Avatar
+              name={messageAvatar.name}
+              title={messageAvatar.title}
+              src={messageAvatar}
+              size="chat"
+              showName
+              showTitle
+              className="flex flex-col items-center w-32 gap-1"
+            />
+            <ProviderModelBadge provider={message.provider} modelName={message.modelName} size="xs" />
+          </div>
+        )}
+        <div className="qt-chat-message-body group">
+          <div className="chat-message qt-chat-message-assistant">
+            <CourierBubble
+              chatId={chatId || ''}
+              message={message}
+              characterName={courierName}
+              onResolved={() => onCourierTurnSettled?.()}
+              onCancelled={() => onCourierTurnSettled?.()}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (isSystemMessageCollapsed && message.systemSender && onToggleSystemMessageExpanded) {
     const senderName = getSystemSenderDisplayName(message.systemSender)

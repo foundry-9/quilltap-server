@@ -103,6 +103,8 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       const body = await req.json();
       const {
         name,
+        transport,
+        courierDeltaMode,
         provider,
         apiKeyId,
         baseUrl,
@@ -123,6 +125,37 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       // Build update data
       const updateData: Record<string, unknown> = {};
 
+      if (transport !== undefined) {
+        if (transport !== 'api' && transport !== 'courier') {
+          return badRequest('Transport must be "api" or "courier"');
+        }
+        updateData.transport = transport;
+      }
+
+      if (courierDeltaMode !== undefined) {
+        if (typeof courierDeltaMode !== 'boolean') {
+          return badRequest('courierDeltaMode must be a boolean');
+        }
+        updateData.courierDeltaMode = courierDeltaMode;
+      }
+
+      // Effective transport for this update — newly-set value if present,
+      // otherwise the existing row's setting. Courier-mode validation gates
+      // (no API key, no tools, etc.) hinge on this.
+      const effectiveTransport =
+        (updateData.transport as 'api' | 'courier' | undefined) ??
+        ((existingProfile as { transport?: 'api' | 'courier' }).transport ?? 'api');
+      const isCourier = effectiveTransport === 'courier';
+      if (isCourier) {
+        updateData.apiKeyId = null;
+        updateData.baseUrl = null;
+        updateData.allowToolUse = false;
+        updateData.allowWebSearch = false;
+        updateData.useNativeWebSearch = false;
+        updateData.supportsImageUpload = false;
+        updateData.isDangerousCompatible = false;
+      }
+
       if (name !== undefined) {
         if (typeof name !== 'string' || name.trim().length === 0) {
           return badRequest('Name must be a non-empty string');
@@ -137,7 +170,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         updateData.provider = provider;
       }
 
-      if (apiKeyId !== undefined) {
+      if (apiKeyId !== undefined && !isCourier) {
         if (apiKeyId === null) {
           updateData.apiKeyId = null;
         } else {
@@ -156,7 +189,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         }
       }
 
-      if (baseUrl !== undefined) {
+      if (baseUrl !== undefined && !isCourier) {
         updateData.baseUrl = baseUrl || null;
       }
 
@@ -199,28 +232,28 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         updateData.isCheap = isCheap;
       }
 
-      if (isDangerousCompatible !== undefined) {
+      if (isDangerousCompatible !== undefined && !isCourier) {
         if (typeof isDangerousCompatible !== 'boolean') {
           return badRequest('isDangerousCompatible must be a boolean');
         }
         updateData.isDangerousCompatible = isDangerousCompatible;
       }
 
-      if (allowWebSearch !== undefined) {
+      if (allowWebSearch !== undefined && !isCourier) {
         if (typeof allowWebSearch !== 'boolean') {
           return badRequest('allowWebSearch must be a boolean');
         }
         updateData.allowWebSearch = allowWebSearch;
       }
 
-      if (useNativeWebSearch !== undefined) {
+      if (useNativeWebSearch !== undefined && !isCourier) {
         if (typeof useNativeWebSearch !== 'boolean') {
           return badRequest('useNativeWebSearch must be a boolean');
         }
         updateData.useNativeWebSearch = useNativeWebSearch;
       }
 
-      if (allowToolUse !== undefined) {
+      if (allowToolUse !== undefined && !isCourier) {
         if (typeof allowToolUse !== 'boolean') {
           return badRequest('allowToolUse must be a boolean');
         }
@@ -257,7 +290,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         updateData.sortIndex = sortIndex;
       }
 
-      if (supportsImageUpload !== undefined) {
+      if (supportsImageUpload !== undefined && !isCourier) {
         if (typeof supportsImageUpload !== 'boolean') {
           return badRequest('supportsImageUpload must be a boolean');
         }

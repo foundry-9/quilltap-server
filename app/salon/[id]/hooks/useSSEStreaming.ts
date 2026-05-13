@@ -70,6 +70,8 @@ interface SSEEvent {
   nextSpeakerId?: string | null
   reason?: string
   isSilentMessage?: boolean
+  // The Courier: { pendingExternalTurn: true, messageId, participantId, characterName }
+  pendingExternalTurn?: boolean
 }
 
 /**
@@ -286,6 +288,13 @@ export function useSSEStreaming({
           }
         }
 
+        // The Courier: server placed a placeholder for a manual / clipboard
+        // turn. Refetch so the bubble appears with the Markdown blob + paste
+        // textarea. The accompanying `done` event closes the stream.
+        if (data.pendingExternalTurn) {
+          await fetchChat()
+        }
+
         // Handle turn start (chained character about to respond)
         // Server sends flat: { turnStart: true, participantId, characterName, chainDepth }
         if (data.turnStart) {
@@ -328,7 +337,7 @@ export function useSSEStreaming({
     }
 
     return fullContent
-  }, [scheduleStreamingContent, resetStreamingContent])
+  }, [scheduleStreamingContent, resetStreamingContent, fetchChat])
 
   // Handle common error extraction
   const extractErrorMessage = useCallback((err: unknown): string => {
@@ -538,6 +547,21 @@ export function useSSEStreaming({
             setWaitingForResponse(false)
             setSending(false)
             setRespondingParticipantId(null)
+            return
+          }
+
+          // The Courier: the server parked a placeholder for a manual /
+          // clipboard turn and already pushed an SSE pendingExternalTurn that
+          // triggered fetchChat. The placeholder is now in the messages list
+          // via that refresh — pushing another optimistic copy here would
+          // create a duplicate React key.
+          if (data.pendingExternalTurn) {
+            resetStreamingContent()
+            setStreaming(false)
+            setWaitingForResponse(false)
+            setRespondingParticipantId(null)
+            scrollOnStreamComplete()
+            await fetchChat()
             return
           }
 

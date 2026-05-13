@@ -42,6 +42,8 @@ export function useProfileForm(providers: ProviderConfig[]) {
     (profile: ConnectionProfile) => {
       form.setFormData({
         name: profile.name,
+        transport: (profile as { transport?: 'api' | 'courier' }).transport ?? 'api',
+        courierDeltaMode: (profile as { courierDeltaMode?: boolean }).courierDeltaMode ?? true,
         provider: profile.provider,
         apiKeyId: profile.apiKeyId || '',
         baseUrl: profile.baseUrl || '',
@@ -76,6 +78,33 @@ export function useProfileForm(providers: ProviderConfig[]) {
   )
 
   const buildRequestBody = useCallback(() => {
+    // The Courier transport: minimal request body. provider/apiKey/baseUrl
+    // are not used by the server in this mode; modelName is free-form
+    // informational text the user enters to identify which external LLM they
+    // intend to copy the prompt to.
+    if (form.formData.transport === 'courier') {
+      return {
+        name: form.formData.name,
+        transport: 'courier',
+        courierDeltaMode: form.formData.courierDeltaMode !== false,
+        // Free-text label preserved as the provider field for display in
+        // lists/badges; the server treats it as informational only.
+        provider: form.formData.provider || 'COURIER',
+        modelName: form.formData.modelName || 'Manual (clipboard)',
+        apiKeyId: null,
+        isDefault: form.formData.isDefault,
+        isCheap: form.formData.isCheap,
+        isDangerousCompatible: false,
+        allowToolUse: false,
+        supportsImageUpload: false,
+        allowWebSearch: false,
+        useNativeWebSearch: false,
+        modelClass: null,
+        maxContext: null,
+        parameters: {},
+      }
+    }
+
     // Start with base parameters
     const parameters: Record<string, any> = {
       temperature: parseFloat(String(form.formData.temperature)),
@@ -125,6 +154,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
 
     const requestBody: any = {
       name: form.formData.name,
+      transport: 'api',
       provider: form.formData.provider,
       modelName: form.formData.modelName,
       isDefault: form.formData.isDefault,

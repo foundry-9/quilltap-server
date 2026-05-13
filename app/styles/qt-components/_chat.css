@@ -195,6 +195,125 @@
   }
 
   /**
+   * The Courier — manual / clipboard transport placeholder bubble.
+   * Stands in for an assistant message that is awaiting a pasted reply
+   * from an external LLM. Wider than a normal message, with a stacked
+   * layout: instructions, copyable Markdown blob, attachment list,
+   * paste textarea, action row.
+   */
+  .qt-courier-bubble {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .qt-courier-bubble-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .qt-courier-bubble-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .qt-courier-bubble-mode-badge {
+    display: inline-block;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.0625rem 0.375rem;
+    border-radius: var(--radius-sm, 0.25rem);
+    border: 1px solid var(--qt-border-default, currentColor);
+    opacity: 0.75;
+  }
+
+  .qt-courier-bubble-hint {
+    font-size: 0.8125rem;
+    opacity: 0.75;
+  }
+
+  .qt-courier-bubble-prompt {
+    position: relative;
+    border: 1px solid var(--qt-border-default, currentColor);
+    border-radius: var(--radius-sm, 0.25rem);
+    background: var(--qt-chat-system-bar-bg, transparent);
+  }
+
+  .qt-courier-bubble-prompt-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    border-bottom: 1px solid var(--qt-border-default, currentColor);
+  }
+
+  .qt-courier-bubble-prompt-body {
+    margin: 0;
+    padding: 0.75rem 0.875rem;
+    max-height: 24rem;
+    overflow: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .qt-courier-bubble-attachments-label {
+    font-size: 0.8125rem;
+    opacity: 0.85;
+    margin-bottom: 0.375rem;
+  }
+
+  .qt-courier-bubble-attachments-list {
+    list-style: disc;
+    padding-left: 1.25rem;
+    margin: 0;
+    font-size: 0.8125rem;
+  }
+
+  .qt-courier-bubble-attachments-list li {
+    margin-bottom: 0.125rem;
+  }
+
+  .qt-courier-bubble-attachment-meta {
+    margin-left: 0.5rem;
+    opacity: 0.65;
+  }
+
+  .qt-courier-bubble-paste-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    margin-bottom: 0.375rem;
+  }
+
+  .qt-courier-bubble-textarea {
+    width: 100%;
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+
+  .qt-courier-bubble-error {
+    color: var(--qt-status-danger, #b91c1c);
+    font-size: 0.8125rem;
+  }
+
+  .qt-courier-bubble-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  /**
    * Message header - avatar, name, timestamp
    */
   .qt-chat-message-header {

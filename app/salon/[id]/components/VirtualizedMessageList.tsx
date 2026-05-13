@@ -291,6 +291,7 @@ export function VirtualizedMessageList({
                   onReattribute={onReattribute}
                   hasLLMLogs={messagesWithLogs.has(message.id)}
                   onViewLLMLogs={onViewLLMLogs}
+                  onCourierTurnSettled={fetchChat}
                   participantNames={participantNames}
                   isOverheardWhisper={
                     !!(message.targetParticipantIds?.length) &&

@@ -332,7 +332,8 @@ CREATE TABLE "chats" (
   "activeTerminalSessionId" TEXT DEFAULT NULL,
   "rightPaneVerticalSplit" INTEGER DEFAULT 50,
   "allowCrossCharacterVaultReads" INTEGER DEFAULT 0,
-  "compiledIdentityStacks" TEXT DEFAULT NULL
+  "compiledIdentityStacks" TEXT DEFAULT NULL,
+  "courierCheckpoints" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");
@@ -490,7 +491,10 @@ CREATE TABLE "chat_messages" (
   "hostEvent" TEXT DEFAULT NULL,
   "systemKind" TEXT DEFAULT NULL,
   "summaryAnchor" TEXT DEFAULT NULL,
-  "customAnnouncer" TEXT DEFAULT NULL
+  "customAnnouncer" TEXT DEFAULT NULL,
+  "pendingExternalPrompt" TEXT DEFAULT NULL,
+  "pendingExternalAttachments" TEXT DEFAULT NULL,
+  "pendingExternalPromptFull" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");
@@ -564,7 +568,9 @@ CREATE TABLE "connection_profiles" (
   "modelClass" TEXT DEFAULT NULL,
   "maxContext" INTEGER DEFAULT NULL,
   "maxTokens" INTEGER DEFAULT NULL,
-  "supportsImageUpload" INTEGER DEFAULT 0
+  "supportsImageUpload" INTEGER DEFAULT 0,
+  "transport" TEXT NOT NULL DEFAULT 'api',
+  "courierDeltaMode" INTEGER DEFAULT 1
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);

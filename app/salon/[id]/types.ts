@@ -52,6 +52,25 @@ export interface Message {
     reroutedProvider?: string | null
     reroutedModel?: string | null
   }>
+  /** The Courier: when non-null, this is a placeholder assistant message
+   * awaiting a manually pasted reply. The string is the Markdown blob the
+   * user must copy out, carry to an external LLM, and paste back. In delta
+   * mode this is the *delta* bundle; otherwise it is the full bundle. */
+  pendingExternalPrompt?: string | null
+  /** Full-context fallback bundle, present alongside `pendingExternalPrompt`
+   * when delta mode rendered a delta. Lets the bubble offer a "Use full
+   * context" toggle for when the destination LLM has lost its conversation. */
+  pendingExternalPromptFull?: string | null
+  /** Attachments referenced by a pending Courier turn — surfaced as
+   * download links so the user can re-upload them in their destination
+   * client. Cleared when the paste resolves. */
+  pendingExternalAttachments?: Array<{
+    fileId: string
+    filename: string
+    mimeType: string
+    sizeBytes: number
+    downloadUrl: string
+  }> | null
 }
 
 export interface CharacterData {

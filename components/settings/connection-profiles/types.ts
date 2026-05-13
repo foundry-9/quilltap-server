@@ -36,6 +36,10 @@ export interface ProviderConfig {
 export interface ConnectionProfile {
   id: string
   name: string
+  /** Transport — 'api' (default) or 'courier' for manual / clipboard. */
+  transport?: 'api' | 'courier'
+  /** The Courier — delta-mode flag (default true). */
+  courierDeltaMode?: boolean
   provider: string
   apiKeyId?: string
   baseUrl?: string
@@ -61,6 +65,22 @@ export interface ConnectionProfile {
 
 export interface ProfileFormData {
   name: string
+  /**
+   * Transport. 'api' = standard plugin-dispatched API call. 'courier' = manual
+   * clipboard transport: the assembled request is rendered as Markdown for the
+   * user to carry by hand to an external LLM and paste back. When 'courier',
+   * provider/apiKeyId/baseUrl are ignored, all tool/web-search flags are
+   * forced off server-side, and `modelName` is free-form informational text.
+   */
+  transport: 'api' | 'courier'
+  /**
+   * The Courier — delta mode. When true (default), after a character's first
+   * successful Courier turn in a chat, subsequent placeholders render only
+   * the delta since the last paste instead of the full context. The Salon
+   * bubble keeps a full-context fallback alongside the delta. Ignored when
+   * `transport === 'api'`.
+   */
+  courierDeltaMode: boolean
   provider: string
   apiKeyId: string
   baseUrl: string
@@ -93,6 +113,8 @@ export interface ProfileFormData {
 
 export const initialFormState: ProfileFormData = {
   name: '',
+  transport: 'api',
+  courierDeltaMode: true,
   provider: 'OPENAI',
   apiKeyId: '',
   baseUrl: '',

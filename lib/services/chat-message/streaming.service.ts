@@ -480,6 +480,10 @@ export function encodeDoneEvent(
     provider?: string
     modelName?: string
     isSilentMessage?: boolean
+    /** The Courier: signals that this done event closes a parked placeholder turn,
+     * not an actual streamed response. The Salon should skip its optimistic
+     * assistant-message push and rely on the prior fetchChat() refresh. */
+    pendingExternalTurn?: boolean
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)
@@ -519,6 +523,17 @@ export function encodeStatusEvent(
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ status })}\n\n`)
+}
+
+/**
+ * Encode a Courier "pending external turn" event. The Salon uses this to
+ * surface the placeholder bubble with a copy-out / paste-back affordance.
+ */
+export function encodePendingExternalTurnEvent(
+  encoder: TextEncoder,
+  data: { messageId: string; participantId: string; characterName: string }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ pendingExternalTurn: true, ...data })}\n\n`)
 }
 
 /**

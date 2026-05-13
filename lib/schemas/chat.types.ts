@@ -183,6 +183,38 @@ export const MessageEventSchema = z.object({
     characterId: UUIDSchema.nullable().optional(),
     displayName: z.string().nullable().optional(),
   }).nullable().optional(),
+  /**
+   * The Courier: when non-null, this message is a placeholder for a manual /
+   * clipboard turn awaiting a pasted reply. The string is the Markdown blob
+   * the user must copy out, carry to an external LLM, and paste the reply
+   * back in. When delta mode is active, this is the *delta* bundle; the full
+   * fallback lives in `pendingExternalPromptFull`. `content` is empty until
+   * the paste resolves; on resolve, all pending fields are cleared and
+   * `content` carries the reply.
+   */
+  pendingExternalPrompt: z.string().nullable().optional(),
+  /**
+   * The Courier — full-context fallback bundle. Populated alongside
+   * `pendingExternalPrompt` when delta mode rendered a delta, so the Salon
+   * bubble can offer a "Use full context" toggle (e.g. if the user switched
+   * LLM clients or cleared their desktop conversation and needs to
+   * re-establish). Null when delta mode wasn't applicable.
+   */
+  pendingExternalPromptFull: z.string().nullable().optional(),
+  /**
+   * Attachments referenced by a pending Courier turn — surfaced as download
+   * links in the Salon bubble so the user can re-upload them in their
+   * destination client. Cleared when the paste resolves. When both delta
+   * and full bundles are present, this is the union (so the user has access
+   * to every file regardless of which bundle they paste).
+   */
+  pendingExternalAttachments: z.array(z.object({
+    fileId: UUIDSchema,
+    filename: z.string(),
+    mimeType: z.string(),
+    sizeBytes: z.number(),
+    downloadUrl: z.string(),
+  })).nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;
@@ -549,6 +581,19 @@ export const ChatMetadataSchema = z.object({
    */
   compiledIdentityStacks: JsonSchema.nullable().optional(),
 
+  /**
+   * The Courier — per-character delta-mode checkpoints. JSON shape:
+   *   { [characterId]: { lastResolvedMessageId: UUID, resolvedAt: ISOString } }
+   * Set on every successful `resolve-external-turn`. The orchestrator consults
+   * this when the responding character's profile has `courierDeltaMode` on:
+   * a checkpoint present for the character means the next Courier turn for
+   * that character renders only messages newer than `resolvedAt`, on the
+   * assumption that the external LLM client still remembers everything up
+   * through the last paste. Null on chats that have never used a Courier
+   * profile.
+   */
+  courierCheckpoints: JsonSchema.nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -716,6 +761,9 @@ export const ChatMetadataBaseSchema = z.object({
    * fresh and uses it without persisting (read-through fallback).
    */
   compiledIdentityStacks: JsonSchema.nullable().optional(),
+
+  /** The Courier — per-character delta-mode checkpoints. See ChatMetadataSchema for the contract. */
+  courierCheckpoints: JsonSchema.nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

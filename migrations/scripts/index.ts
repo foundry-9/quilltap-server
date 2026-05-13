@@ -263,6 +263,10 @@ import { migrateRemainingGeneralToUploadsMigration } from './migrate-remaining-g
 import { provisionGeneralMountMigration } from './provision-general-mount';
 // Add customAnnouncer column to chat_messages (Insert Announcement composer button)
 import { addCustomAnnouncerFieldMigration } from './add-custom-announcer-field';
+// Add transport column to connection_profiles + pendingExternalPrompt/Attachments columns to chat_messages (The Courier)
+import { addCourierTransportFieldsMigration } from './add-courier-transport-fields';
+// Add Courier delta-mode column to connection_profiles + courierCheckpoints to chats + pendingExternalPromptFull to chat_messages
+import { addCourierDeltaFieldsMigration } from './add-courier-delta-fields';
 
 /**
  * All available migrations.
@@ -521,6 +525,10 @@ export const migrations: Migration[] = [
   provisionGeneralMountMigration,
   // Add customAnnouncer column to chat_messages (Insert Announcement composer button)
   addCustomAnnouncerFieldMigration,
+  // Add transport column to connection_profiles + pendingExternalPrompt/Attachments to chat_messages (The Courier)
+  addCourierTransportFieldsMigration,
+  // Add Courier delta-mode column to connection_profiles + courierCheckpoints to chats + pendingExternalPromptFull to chat_messages
+  addCourierDeltaFieldsMigration,
 ];
 
 export {
@@ -764,5 +772,9 @@ export {
   provisionGeneralMountMigration,
   // Add customAnnouncer column to chat_messages (Insert Announcement composer button)
   addCustomAnnouncerFieldMigration,
+  // Add transport column to connection_profiles + pendingExternalPrompt/Attachments to chat_messages (The Courier)
+  addCourierTransportFieldsMigration,
+  // Add Courier delta-mode column to connection_profiles + courierCheckpoints to chats + pendingExternalPromptFull to chat_messages
+  addCourierDeltaFieldsMigration,
 };
 

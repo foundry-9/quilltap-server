@@ -44,6 +44,28 @@ export const ConnectionProfileSchema = z.object({
   userId: UUIDSchema,
   name: z.string(),
   provider: ProviderEnum,
+  /**
+   * How requests for this profile are delivered.
+   * - 'api': the normal plugin-dispatched API path (default for all
+   *   pre-existing profiles).
+   * - 'courier': the manual / clipboard transport. Quilltap renders the
+   *   assembled request as Markdown for the human user to carry by hand to
+   *   an external LLM and paste the reply back in. No API key, base URL, or
+   *   tools are used; `provider` is informational only ("OpenAI",
+   *   "Anthropic in claude.ai", etc.).
+   */
+  transport: z.enum(['api', 'courier']).default('api'),
+  /**
+   * The Courier — delta mode. When true (default), after a character's first
+   * successful Courier turn in a given chat, subsequent placeholders render
+   * only the delta since the last paste. Desktop LLM clients (Claude desktop,
+   * ChatGPT web, etc.) hold the prior conversation themselves, so the full
+   * system prompt and earlier history needn't be re-established every turn.
+   * The Salon bubble still keeps a full-context fallback alongside the delta
+   * for when the user has switched clients or cleared their conversation.
+   * Ignored when `transport === 'api'`.
+   */
+  courierDeltaMode: z.boolean().default(true),
   apiKeyId: UUIDSchema.nullable().optional(),
   baseUrl: z.string().nullable().optional(),
   modelName: z.string(),

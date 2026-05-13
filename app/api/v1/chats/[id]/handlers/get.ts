@@ -316,6 +316,9 @@ export async function handleGet(
             systemSender: event.systemSender || null,
             systemKind: event.systemKind || null,
             customAnnouncer: event.customAnnouncer || null,
+            pendingExternalPrompt: event.pendingExternalPrompt || null,
+            pendingExternalPromptFull: event.pendingExternalPromptFull || null,
+            pendingExternalAttachments: event.pendingExternalAttachments || null,
           };
         })
     ).then((results) => results.filter(Boolean));

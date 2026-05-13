@@ -69,6 +69,19 @@ export const ChatMessageRowSchema = z.object({
     characterId: UUIDSchema.nullable().optional(),
     displayName: z.string().nullable().optional(),
   }).nullable().optional(),
+  // The Courier: when non-null, this row is a placeholder for a manual /
+  // clipboard turn awaiting a pasted reply. Cleared on resolve.
+  pendingExternalPrompt: z.string().nullable().optional(),
+  // Full-context fallback alongside `pendingExternalPrompt` when delta mode
+  // rendered a delta. Lets the bubble toggle to the full version.
+  pendingExternalPromptFull: z.string().nullable().optional(),
+  pendingExternalAttachments: z.array(z.object({
+    fileId: UUIDSchema,
+    filename: z.string(),
+    mimeType: z.string(),
+    sizeBytes: z.number(),
+    downloadUrl: z.string(),
+  })).nullable().optional(),
   // Phase 3c: anchor tying a Staff-authored whisper to the compaction
   // generation under which it was produced. Set on per-character Librarian
   // summary whispers; null on every other message.

@@ -145,6 +145,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-connection-profile-model-class-field-v1': 'Adding model-class to connection profiles',
   'add-connection-profile-max-tokens-field-v1': 'Adding max-tokens to connection profiles',
   'add-connection-profile-sort-index-v1': 'Adding sort order to connection profiles',
+  'add-courier-transport-fields-v1': "Dispatching the Courier's carriage",
+  'add-courier-delta-fields-v1': "Teaching the Courier to travel light",
 
   // Embedding + vector
   'normalize-vector-storage-v1': 'Normalising vector storage to Float32 BLOBs',

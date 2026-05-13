@@ -146,6 +146,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     const body = await req.json();
     const {
       name,
+      transport = 'api',
+      courierDeltaMode = true,
       provider,
       apiKeyId,
       baseUrl,
@@ -161,6 +163,11 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       maxContext = null,
       supportsImageUpload,
     } = body;
+
+    if (transport !== 'api' && transport !== 'courier') {
+      return badRequest('Transport must be "api" or "courier"');
+    }
+    const isCourier = transport === 'courier';
 
     // Default supportsImageUpload from the historic per-provider capability map
     // so clients that don't send the field keep their current behavior on providers
@@ -183,8 +190,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       return badRequest('Model name is required');
     }
 
-    // Validate apiKeyId if provided
-    if (apiKeyId) {
+    // Validate apiKeyId if provided. Courier profiles never carry an apiKey.
+    if (apiKeyId && !isCourier) {
       const apiKey = await repos.connections.findApiKeyById(apiKeyId);
 
       if (!apiKey) {
@@ -211,8 +218,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       }
     }
 
-    // Validate baseUrl for providers that need it
-    if (requiresBaseUrl(provider) && !baseUrl) {
+    // Validate baseUrl for providers that need it. Courier never needs a base URL.
+    if (!isCourier && requiresBaseUrl(provider) && !baseUrl) {
       return badRequest(`Base URL is required for ${provider}`);
     }
 
@@ -232,24 +239,27 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       -1
     );
 
-    // Create profile
+    // Create profile. Courier profiles force tool/web-search/vision flags off
+    // regardless of what the client sent — the external LLM can't reach them.
     const profile = await repos.connections.create({
       userId: user.id,
       name: name.trim(),
+      transport,
+      courierDeltaMode: isCourier ? courierDeltaMode !== false : true,
       provider: provider,
-      apiKeyId: apiKeyId || null,
-      baseUrl: baseUrl || null,
+      apiKeyId: isCourier ? null : (apiKeyId || null),
+      baseUrl: isCourier ? null : (baseUrl || null),
       modelName: modelName.trim(),
       parameters: parameters,
       isDefault,
       isCheap,
-      isDangerousCompatible,
-      allowWebSearch,
-      useNativeWebSearch,
-      allowToolUse,
+      isDangerousCompatible: isCourier ? false : isDangerousCompatible,
+      allowWebSearch: isCourier ? false : allowWebSearch,
+      useNativeWebSearch: isCourier ? false : useNativeWebSearch,
+      allowToolUse: isCourier ? false : allowToolUse,
       modelClass: modelClass || null,
       maxContext: maxContext ? (typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext) : null,
-      supportsImageUpload: resolvedSupportsImageUpload,
+      supportsImageUpload: isCourier ? false : resolvedSupportsImageUpload,
       tags: [],
       sortIndex: maxSortIndex + 1,
       totalTokens: 0,
