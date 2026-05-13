@@ -267,6 +267,8 @@ import { addCustomAnnouncerFieldMigration } from './add-custom-announcer-field';
 import { addCourierTransportFieldsMigration } from './add-courier-transport-fields';
 // Add Courier delta-mode column to connection_profiles + courierCheckpoints to chats + pendingExternalPromptFull to chat_messages
 import { addCourierDeltaFieldsMigration } from './add-courier-delta-fields';
+// Add commonplaceSceneCache column to chats for per-target scene-state diffing
+import { addCommonplaceSceneCacheMigration } from './add-commonplace-scene-cache';
 
 /**
  * All available migrations.
@@ -529,6 +531,8 @@ export const migrations: Migration[] = [
   addCourierTransportFieldsMigration,
   // Add Courier delta-mode column to connection_profiles + courierCheckpoints to chats + pendingExternalPromptFull to chat_messages
   addCourierDeltaFieldsMigration,
+  // Add commonplaceSceneCache column to chats for per-target scene-state diffing
+  addCommonplaceSceneCacheMigration,
 ];
 
 export {
@@ -776,5 +780,7 @@ export {
   addCourierTransportFieldsMigration,
   // Add Courier delta-mode column to connection_profiles + courierCheckpoints to chats + pendingExternalPromptFull to chat_messages
   addCourierDeltaFieldsMigration,
+  // Add commonplaceSceneCache column to chats for per-target scene-state diffing
+  addCommonplaceSceneCacheMigration,
 };
 

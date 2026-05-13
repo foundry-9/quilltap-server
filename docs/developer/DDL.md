@@ -333,7 +333,8 @@ CREATE TABLE "chats" (
   "rightPaneVerticalSplit" INTEGER DEFAULT 50,
   "allowCrossCharacterVaultReads" INTEGER DEFAULT 0,
   "compiledIdentityStacks" TEXT DEFAULT NULL,
-  "courierCheckpoints" TEXT DEFAULT NULL
+  "courierCheckpoints" TEXT DEFAULT NULL,
+  "commonplaceSceneCache" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");

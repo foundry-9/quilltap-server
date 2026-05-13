@@ -45,6 +45,7 @@ import {
   DYNAMIC_HEAD_DEFAULT_SIZE,
   type DebugMemoryInfo,
   type DebugInterCharacterMemoryInfo,
+  type SceneStateEmissionEntry,
 } from './context/memory-injector'
 import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
 import { describeOutfit } from '@/lib/wardrobe/outfit-description'
@@ -922,8 +923,28 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // section that prefaces the Commonplace Book whisper. Time is included only
   // when the chat would also announce it via the Host (matches the gate at
   // postHostTimestampAnnouncement below).
+  //
+  // The Commonplace Book scene-state cache keys per recipient: a participant
+  // ID in multi-character chats, the sentinel `__public__` for single-char
+  // chats (which post untargeted whispers). When the same target sees the
+  // same character with the same action+clothing two turns in a row, the
+  // character's block collapses to `### Name — _unchanged_` to keep the
+  // whisper from re-establishing several hundred tokens of unchanged
+  // wardrobe prose every turn.
+  const cacheTargetKey: string =
+    isMultiCharacter && respondingParticipant
+      ? respondingParticipant.id
+      : '__public__'
+  const priorCache = chat.commonplaceSceneCache as
+    | Record<string, Record<string, SceneStateEmissionEntry>>
+    | null
+    | undefined
+  const priorEmissionByCharacter = new Map<string, SceneStateEmissionEntry>(
+    Object.entries(priorCache?.[cacheTargetKey] ?? {}),
+  )
   let currentStateContent = ''
   let currentStateTokens = 0
+  let emittedSceneStateByCharacter: Map<string, SceneStateEmissionEntry> | null = null
   try {
     const rawScene = (chat as { sceneState?: unknown }).sceneState
     let parsedScene: SceneState | null = null
@@ -977,9 +998,16 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       }))
     }
 
-    const formatted = formatCurrentSceneState(parsedScene, sceneTime, provider, liveClothingByCharacterId)
+    const formatted = formatCurrentSceneState(
+      parsedScene,
+      sceneTime,
+      provider,
+      liveClothingByCharacterId,
+      priorEmissionByCharacter,
+    )
     currentStateContent = formatted.content
     currentStateTokens = formatted.tokenCount
+    emittedSceneStateByCharacter = formatted.emittedByCharacter
   } catch (error) {
     warnings.push(`Failed to format current scene state: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
@@ -1419,6 +1447,32 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // them after the new one is durably posted (so a write failure on the
     // new one cannot orphan the character with no whisper at all).
     if (posted) {
+      // Persist the per-target scene-state emission cache so the NEXT
+      // whisper for the same recipient can short-circuit unchanged
+      // character sections. Fire-and-forget — a cache-write failure is
+      // benign (next turn will re-emit full and reset the cache anyway).
+      if (emittedSceneStateByCharacter && emittedSceneStateByCharacter.size > 0) {
+        try {
+          const slice: Record<string, SceneStateEmissionEntry> = {}
+          for (const [characterId, entry] of emittedSceneStateByCharacter) {
+            slice[characterId] = entry
+          }
+          const nextCache: Record<string, Record<string, SceneStateEmissionEntry>> = {
+            ...(priorCache ?? {}),
+            [cacheTargetKey]: slice,
+          }
+          await getRepositories().chats.update(chat.id, {
+            commonplaceSceneCache: nextCache,
+          } as Partial<typeof chat>)
+        } catch (cacheError) {
+          logger.warn('[CommonplaceWhisper] Failed to persist scene-state cache', {
+            chatId: chat.id,
+            targetKey: cacheTargetKey,
+            error: getErrorMessage(cacheError),
+          })
+        }
+      }
+
       try {
         const refreshed = await getRepositories().chats.getMessages(chat.id)
         const stale = refreshed

@@ -194,12 +194,16 @@ describe('memory-injector: formatCurrentSceneState', () => {
 
   it('returns empty content when scene state is null', () => {
     const r = formatCurrentSceneState(null, null, provider)
-    expect(r).toEqual({ content: '', tokenCount: 0 })
+    expect(r.content).toBe('')
+    expect(r.tokenCount).toBe(0)
+    expect(r.emittedByCharacter.size).toBe(0)
   })
 
   it('returns empty content when scene state is undefined', () => {
     const r = formatCurrentSceneState(undefined, null, provider)
-    expect(r).toEqual({ content: '', tokenCount: 0 })
+    expect(r.content).toBe('')
+    expect(r.tokenCount).toBe(0)
+    expect(r.emittedByCharacter.size).toBe(0)
   })
 
   it('renders the canonical Current State block with all fields', () => {
@@ -298,5 +302,64 @@ describe('memory-injector: formatCurrentSceneState', () => {
     ])
     const r = formatCurrentSceneState(scene(), null, provider, live)
     expect(r.content).toContain('Charcoal Sweater, Charcoal Cigarette Trousers, barefoot')
+  })
+
+  it('collapses a character section to "_unchanged_" when prior emission hashes match', () => {
+    // First emission — full content, populates emittedByCharacter.
+    const first = formatCurrentSceneState(scene(), null, provider)
+    expect(first.content).toContain('### Friday\n')
+    expect(first.content).toContain('#### Action')
+    expect(first.emittedByCharacter.size).toBe(2)
+
+    // Second emission with the same scene state and the prior emission map
+    // as the cache — both characters' sections should collapse.
+    const second = formatCurrentSceneState(scene(), null, provider, undefined, first.emittedByCharacter)
+    expect(second.content).toContain('### Friday — _unchanged_')
+    expect(second.content).toContain('### Amy — _unchanged_')
+    expect(second.content).not.toContain('Charcoal Sweater')
+    expect(second.content).not.toContain('Forest Green Long Writing Cardigan')
+    expect(second.tokenCount).toBeLessThan(first.tokenCount)
+
+    // emittedAt is carried forward unchanged when nothing changes.
+    const fridayFirst = first.emittedByCharacter.get('00000000-0000-0000-0000-000000000001')!
+    const fridaySecond = second.emittedByCharacter.get('00000000-0000-0000-0000-000000000001')!
+    expect(fridaySecond.emittedAt).toBe(fridayFirst.emittedAt)
+    expect(fridaySecond.actionHash).toBe(fridayFirst.actionHash)
+    expect(fridaySecond.clothingHash).toBe(fridayFirst.clothingHash)
+  })
+
+  it('emits full content for a character whose clothing changed since the prior emission', () => {
+    const first = formatCurrentSceneState(scene(), null, provider)
+    // Friday changes clothes; Amy is unchanged.
+    const liveClothing = new Map<string, string>([
+      ['00000000-0000-0000-0000-000000000001', 'Velvet Smoking Jacket and silk pajamas'],
+    ])
+    const second = formatCurrentSceneState(scene(), null, provider, liveClothing, first.emittedByCharacter)
+
+    expect(second.content).toContain('### Friday\n')
+    expect(second.content).toContain('Velvet Smoking Jacket and silk pajamas')
+    expect(second.content).toContain('### Amy — _unchanged_')
+
+    // Friday's stamp advances; Amy's is preserved.
+    const fridayFirst = first.emittedByCharacter.get('00000000-0000-0000-0000-000000000001')!
+    const fridaySecond = second.emittedByCharacter.get('00000000-0000-0000-0000-000000000001')!
+    expect(fridaySecond.actionHash).toBe(fridayFirst.actionHash)
+    expect(fridaySecond.clothingHash).not.toBe(fridayFirst.clothingHash)
+
+    const amyFirst = first.emittedByCharacter.get('00000000-0000-0000-0000-000000000002')!
+    const amySecond = second.emittedByCharacter.get('00000000-0000-0000-0000-000000000002')!
+    expect(amySecond.emittedAt).toBe(amyFirst.emittedAt)
+  })
+
+  it('emits full content for a character with no prior emission in the cache', () => {
+    // Prior cache only knows about Friday; Amy must render full this turn.
+    const priorFridayOnly = new Map<string, { actionHash: string; clothingHash: string; emittedAt: string }>()
+    const seed = formatCurrentSceneState(scene(), null, provider)
+    priorFridayOnly.set('00000000-0000-0000-0000-000000000001', seed.emittedByCharacter.get('00000000-0000-0000-0000-000000000001')!)
+
+    const next = formatCurrentSceneState(scene(), null, provider, undefined, priorFridayOnly)
+    expect(next.content).toContain('### Friday — _unchanged_')
+    expect(next.content).toContain('### Amy\n')
+    expect(next.content).toContain('Forest Green Long Writing Cardigan')
   })
 })

@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Feature: Commonplace Book scene-state caching
+
+The Commonplace Book emits a per-turn whisper that opens with a `Current State` block — location, time, and every present character's action + clothing in full prose. In long scenes the clothing prose almost never changes between turns but cost several hundred tokens per character on every LLM call, API or Courier alike.
+
+New per-target cache (`chats.commonplaceSceneCache` JSON, keyed by recipient participant ID or `__public__` for untargeted single-char whispers) tracks short SHA-256 hashes of each character's last-emitted action and clothing strings. When `formatCurrentSceneState` (`lib/chat/context/memory-injector.ts`) sees both hashes match the prior emission for the same target, the character's section collapses to `### Name — _unchanged_` instead of repeating the full Action + Clothing prose. Token savings compound with character count and scene length — a 5-character lodge scene where nobody changes outfits drops the per-turn whisper from ~2500 tokens to ~250.
+
+`context-manager.ts` reads `chat.commonplaceSceneCache[targetKey]` before calling the formatter, threads the prior emission map in, captures the returned `emittedByCharacter`, and writes the updated slice back after `postCommonplaceWhisper` succeeds. Failed cache writes are logged and ignored — the next turn re-emits in full and resets the cache. The cache stamp's `emittedAt` is preserved across compact emissions, so it always points at the last time the section was actually re-rendered. Migration `add-commonplace-scene-cache-v1`.
+
 #### Feature: The Courier — delta mode
 
 After a character's first successful Courier paste-back in a chat, subsequent placeholders for that character render only what's new since the last paste — the desktop LLM client is assumed to remember the prior conversation itself. Default-on per Courier profile (`connection_profiles.courierDeltaMode` defaults to 1). Disable via the new "Delta mode after first turn" checkbox in the Courier-only section of the connection-profile form.

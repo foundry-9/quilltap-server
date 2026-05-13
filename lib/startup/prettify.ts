@@ -147,6 +147,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-connection-profile-sort-index-v1': 'Adding sort order to connection profiles',
   'add-courier-transport-fields-v1': "Dispatching the Courier's carriage",
   'add-courier-delta-fields-v1': "Teaching the Courier to travel light",
+  'add-commonplace-scene-cache-v1': "Marking the Commonplace Book's bookmarks",
 
   // Embedding + vector
   'normalize-vector-storage-v1': 'Normalising vector storage to Float32 BLOBs',

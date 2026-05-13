@@ -594,6 +594,22 @@ export const ChatMetadataSchema = z.object({
    */
   courierCheckpoints: JsonSchema.nullable().optional(),
 
+  /**
+   * The Commonplace Book — per-target scene-state emission cache. JSON shape:
+   *   { [targetKey]: { [characterId]: { actionHash, clothingHash, emittedAt } } }
+   * where `targetKey` is the recipient participant ID (or the sentinel
+   * `"__public__"` for untargeted whispers in single-character chats).
+   * `formatCurrentSceneState` consults this map per target before emitting
+   * the `Current State` block; when a character's action+clothing hash
+   * matches what was last sent to the same target, the character's section
+   * collapses to a single `### Name — _unchanged_` line so the LLM (or the
+   * Courier delta) doesn't carry the same several-hundred-token wardrobe
+   * prose every turn. The cache is updated only after the new whisper has
+   * been durably posted. Null on chats that have not yet emitted a
+   * Commonplace Book whisper.
+   */
+  commonplaceSceneCache: JsonSchema.nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -764,6 +780,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** The Courier — per-character delta-mode checkpoints. See ChatMetadataSchema for the contract. */
   courierCheckpoints: JsonSchema.nullable().optional(),
+
+  /** The Commonplace Book — per-target scene-state emission cache. See ChatMetadataSchema for the contract. */
+  commonplaceSceneCache: JsonSchema.nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
