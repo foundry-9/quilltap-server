@@ -41,3 +41,4 @@ export {
   handleDeleteDocument,
 } from './documents';
 export { handleInsertAnnouncement } from './announcement';
+export { handleAnnouncementPreview } from './announcement-preview';

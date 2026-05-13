@@ -22,6 +22,14 @@ The dialog offers three tabs.
 
 **Custom** is the catch-all: a single text field for whatever name you please. *The Narrator.* *A Distant Bell.* *Someone from the kitchen.* The bubble renders with that name and a placeholder avatar. Useful for narration that doesn't belong to any specific character or member of Staff.
 
+## Letting a character speak in their own voice
+
+When you choose an off-scene character, two further pickers reveal themselves. The first asks *how* they should say it — either verbatim (the polite default the system reaches for whenever the speaker happens to be user-controlled, lest a hand-written line be rephrased against your wishes) or routed through one of your connection profiles for a proper in-character rewrite. The second appears only when the character keeps more than one system prompt on file, and lets you pick which prompt should guide them. Both pickers begin with the character's own preferences (their default profile, their default system prompt) so that selecting the character is, ordinarily, the only choice you need to make.
+
+When a profile is selected, the **Preview in character** button takes the place of Post. Click it and the dialog hands your seed text to the character — only your seed text, and only what the character knows: their identity stack, a fresh Commonplace Book recall against the seed, and a list of who is presently in the chat as audience. Crucially, the character is not told that they are announcing anything. They are told that they stand outside the conversation and may speak to the people inside it; the rest is their own voice. The quill rocks while they compose, and a moment later the proposed line appears below your seed, ready for your review.
+
+From there: post it as it stands, polish it with a small edit, click **Regenerate** to try the recall again, or click **Edit seed** to unlock your original prompt and start over. Nothing is posted to the chat until you click **Post Announcement** — the preview is a private rehearsal between you and the character.
+
 ## What characters see
 
 The bubble's *content* — the Markdown body you typed — is exactly what every character's LLM receives. The avatar and name on the bubble are for the human audience; the LLM reads the prose. As with the Salon's automated Staff messages, this means the announcement's content should carry whatever attribution the conversation needs. *"The Host raises a glass and says…"* will read clearly to any character; bare prose with no speaker indicated may leave them guessing.

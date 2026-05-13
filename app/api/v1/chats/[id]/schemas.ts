@@ -150,3 +150,10 @@ export const insertAnnouncementSchema = z.object({
     z.object({ kind: z.literal('custom'), displayName: z.string().min(1).max(120) }),
   ]),
 });
+
+export const insertAnnouncementPreviewSchema = z.object({
+  seedMarkdown: z.string().min(1),
+  characterId: z.uuid(),
+  connectionProfileId: z.uuid(),
+  systemPromptId: z.uuid().optional(),
+});
