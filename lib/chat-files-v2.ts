@@ -196,15 +196,34 @@ export async function uploadChatFile(
           : (filenameDuplicate || contentDuplicate);
 
         if (existingFile) {
+          // Link the existing file to this chat (and optional message) so the
+          // LLM context loader can find it via findByLinkedTo(chatId). Without
+          // this, the message saves with the fileId in its attachments array
+          // but the bytes never reach the provider.
+          let linked = existingFile;
+          for (const entityId of linkedTo) {
+            const updated = await repos.files.addLink(linked.id, entityId);
+            if (updated) {
+              linked = updated;
+            }
+          }
+          logger.debug('Skip-duplicate resolution linked existing file to chat', {
+            module: 'chat-files-v2',
+            fileId: linked.id,
+            chatId,
+            messageId: messageId ?? null,
+            previousLinkedCount: existingFile.linkedTo.length,
+            updatedLinkedCount: linked.linkedTo.length,
+          });
           return {
-            id: existingFile.id,
-            filename: existingFile.originalFilename,
-            filepath: getFileApiPath(existingFile.id),
-            mimeType: existingFile.mimeType,
-            size: existingFile.size,
-            sha256: existingFile.sha256,
-            width: existingFile.width || undefined,
-            height: existingFile.height || undefined,
+            id: linked.id,
+            filename: linked.originalFilename,
+            filepath: getFileApiPath(linked.id),
+            mimeType: linked.mimeType,
+            size: linked.size,
+            sha256: linked.sha256,
+            width: linked.width || undefined,
+            height: linked.height || undefined,
           };
         }
       }

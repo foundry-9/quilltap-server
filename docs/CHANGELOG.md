@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Skip-duplicate file attach now links existing file to the chat
+
+When a user attached a file that already existed in the project (SHA256 or filename match) and resolved the conflict with "skip / use existing", `uploadChatFile` in `lib/chat-files-v2.ts` returned the existing file's metadata to the client without ever calling `addLink(fileId, chatId)`. The chat message saved with the fileId in its `attachments` array, but the file's own `linkedTo` did not include the new chat. Downstream, `loadAndProcessFiles` in `lib/services/chat-message/context-builder.service.ts` loads attachments via `repos.files.findByLinkedTo(chatId)` then filters by the message's fileIds — so the file was silently dropped and the LLM payload contained no image bytes. Reproduced in a Friday-instance chat where Claude Sonnet 4.6 and gpt-5.5 both received the user message text but no `image_url`/base64 content. The skip branch now walks the `linkedTo` array (chatId plus optional messageId) and calls `repos.files.addLink` for each, with a debug log of before/after link count. Replace/keepBoth paths were already correct (they re-upload through `uploadFileToProject` with `linkedTo: [chatId, messageId?]`).
+
 #### Fix: Off-scene character announcements now render the character's avatar
 
 `InsertAnnouncementDialog` posts character-voiced announcements as `customAnnouncer.kind === 'character'` bubbles, and the Salon page resolves the avatar from `chat.offSceneCharacters` (a side-array the chat GET handler builds for characters referenced by announcement bubbles but not present as participants). That resolver in `app/api/v1/chats/[id]/handlers/get.ts` was reading `c.avatarUrl` straight off the row, which is null for characters whose avatar is stored as a `defaultImageId` file reference (the common case). The bubble fell back to the placeholder initial. Switched the off-scene loop to `getCharacterDetail(charId, repos, chatId)` so it goes through the same resolution as participants — `avatarOverrides` (wardrobe-generated chat-specific avatars) → `defaultImage` → `avatarUrl` — producing `/api/v1/files/<id>` when only `defaultImageId` is set.
