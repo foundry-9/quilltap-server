@@ -16,7 +16,7 @@ import { z } from 'zod'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ConnectionProfile } from '@/lib/schemas/types'
 
-import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState, ToolProcessingResult } from './types'
+import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState } from './types'
 
 import {
   resolveRespondingParticipant,
@@ -34,17 +34,13 @@ import {
   postProsperoGeneralContextAnnouncement,
 } from '@/lib/services/prospero-notifications/writer'
 import {
-  processToolCalls,
   saveToolMessages,
-  detectToolCallsInResponse,
   createToolContext,
 } from './tool-execution.service'
 import {
   buildTools,
-  streamMessage,
   encodeDebugInfo,
   encodeFallbackInfo,
-  encodeContentChunk,
   encodeDoneEvent,
   encodeErrorEvent,
   encodeStatusEvent,
@@ -77,6 +73,7 @@ import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { runPreContextPreCompute } from './pre-compute.service'
 import { runTextToolPass } from './text-tool-loop.service'
 import { findPreviousResponseId, makePreservePartialOnError, runPrimaryStream } from './primary-stream.service'
+import { runNativeToolLoop } from './native-tool-loop.service'
 import {
   detectAndConvertRngPatterns,
   type RngToolCall,
@@ -88,8 +85,6 @@ import {
 import {
   resolveAgentModeSetting,
   buildAgentModeInstructions,
-  buildForceFinalMessage,
-  generateIterationSummary,
   type ResolvedAgentMode,
 } from './agent-mode-resolver.service'
 import { resolveUserIdentity } from './user-identity-resolver.service'
@@ -1054,291 +1049,30 @@ async function processMessage(
     return primaryStreamResult.earlyReturn
   }
 
-  // Process tool calls
-  let toolMessages: ToolMessage[] = []
-  let generatedImagePaths: GeneratedImage[] = []
-  let currentMessages = [...formattedMessages]
-  let currentResponse = streamingState.fullResponse
-  let currentRawResponse = streamingState.rawResponse
-  // Use agent mode max turns if enabled, otherwise default to 5
-  const effectiveMaxTurns = agentMode.enabled ? agentMode.maxTurns : 5
-  let toolIterations = 0
-  let agentModeCompleted = false
-  let agentFinalResponse: string | undefined
-
-  // Tool call loop
-  while (currentRawResponse && toolIterations < effectiveMaxTurns) {
-    const toolCalls = detectToolCallsInResponse(currentRawResponse, streamingState.effectiveProfile.provider)
-
-    if (toolCalls.length === 0) break
-
-    // Check if this is the submit_final_response tool in agent mode
-    const submitFinalCall = agentMode.enabled
-      ? toolCalls.find(tc => tc.name === 'submit_final_response')
-      : undefined
-
-    // Guardrail: if the model calls submit_final_response on iteration 0, as the only
-    // tool, and with no accompanying prose, it is almost always ghost-wrapping work from
-    // a previous (already-concluded) turn rather than responding to the current user
-    // message. Reject it, synthesize a failure tool-result, and let the loop re-prompt
-    // for a conversational reply.
-    const isGhostWrapUp =
-      !!submitFinalCall &&
-      toolIterations === 0 &&
-      toolCalls.length === 1 &&
-      !(currentResponse && currentResponse.trim().length > 0)
-
-    if (submitFinalCall && !isGhostWrapUp) {
-      // Agent mode completion - extract final response
-      const args = submitFinalCall.arguments as { response?: string; summary?: string; confidence?: number }
-      agentFinalResponse = args.response || currentResponse
-      agentModeCompleted = true
-
-      // Send agent completion event
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'agent_completed',
-        message: 'Agent completed task',
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      logger.info('Agent mode completed via submit_final_response', {
-        chatId,
-        iterations: toolIterations,
-        responseLength: agentFinalResponse?.length,
-        summary: args.summary,
-        confidence: args.confidence,
-      })
-
-      // Use the final response as the full response
-      streamingState.fullResponse = agentFinalResponse
-      break
-    }
-
-    toolIterations++
-
-    // Send agent iteration event if in agent mode
-    if (agentMode.enabled) {
-      const toolNames = toolCalls.map(tc => tc.name)
-      const iterationSummary = generateIterationSummary(toolIterations, toolNames, currentResponse)
-
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'agent_iteration',
-        message: iterationSummary,
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      // Update agent turn count in database
-      await repos.chats.update(chatId, { agentTurnCount: toolIterations })
-    }
-
-    let results: ToolProcessingResult
-    if (isGhostWrapUp && submitFinalCall) {
-      logger.info('[AgentMode] Rejecting iteration-0 submit_final_response with no prior work this turn', {
-        chatId,
-        rejectedResponseLength: (submitFinalCall.arguments as { response?: string }).response?.length,
-      })
-      results = {
-        toolMessages: [{
-          toolName: 'submit_final_response',
-          success: false,
-          content: "Rejected: submit_final_response was called on the first iteration without any accompanying task work or conversational prose this turn. The previous turn already concluded — do not re-wrap completed work. Respond to the user's current message directly, in character, as natural prose. You may use memory or other tools first if helpful, but only call submit_final_response after completing fresh agentic work that warrants a structured summary.",
-          callId: submitFinalCall.callId,
-          arguments: submitFinalCall.arguments,
-        }],
-        generatedImagePaths: [],
-      }
-    } else {
-      // Per-tool status updates are now emitted inside processToolCalls
-      results = await processToolCalls(toolCalls, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
-    }
-    toolMessages = [...toolMessages, ...results.toolMessages]
-    generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
-
-    // Add assistant message with tool call to conversation
-    // Include toolCalls metadata so providers can reconstruct the native assistant turn
-    const hasCallIds = toolCalls.some(tc => tc.callId)
-    const assistantToolCalls = hasCallIds
-      ? toolCalls.filter(tc => tc.callId).map(tc => ({
-          id: tc.callId!,
-          type: 'function' as const,
-          function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
-        }))
-      : undefined
-
-    if (currentResponse && currentResponse.trim().length > 0) {
-      currentMessages = [
-        ...currentMessages,
-        { role: 'assistant' as const, content: currentResponse, thoughtSignature: streamingState.thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
-      ]
-    } else {
-      currentMessages = [
-        ...currentMessages,
-        { role: 'assistant' as const, content: '', thoughtSignature: streamingState.thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
-      ]
-    }
-
-    // Add tool results — use native 'tool' role when callId is available, text fallback otherwise
-    for (const toolMsg of results.toolMessages) {
-      if (toolMsg.callId) {
-        currentMessages = [
-          ...currentMessages,
-          { role: 'tool' as const, content: toolMsg.content, toolCallId: toolMsg.callId, name: toolMsg.toolName, thoughtSignature: undefined }
-        ]
-      } else {
-        currentMessages = [
-          ...currentMessages,
-          { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, name: undefined }
-        ]
-      }
-    }
-
-    // Update status after tool processing — prevents "Running X..." from
-    // lingering through message assembly and the follow-up LLM call
-    safeEnqueue(controller, encodeStatusEvent(encoder, {
-      stage: 'sending',
-      message: `Sending to ${character.name}...`,
-      characterName: character.name,
-      characterId: character.id,
-    }))
-
-    // Continue conversation with tool results
-    currentResponse = ''
-    currentRawResponse = null
-
-    let emittedStreamingStatus = false
-    try {
-      for await (const chunk of streamMessage({
-        messages: currentMessages,
-        connectionProfile: streamingState.effectiveProfile,
-        apiKey: streamingState.effectiveApiKey,
-        modelParams,
-        tools: actualTools,
-        useNativeWebSearch,
-        userId,
-        messageId: preGeneratedAssistantMessageId,
-        chatId,
-        characterId: character.id,
-      })) {
-        if (chunk.content) {
-          // Emit streaming status on first content in this tool iteration
-          if (!emittedStreamingStatus) {
-            emittedStreamingStatus = true
-            safeEnqueue(controller, encodeStatusEvent(encoder, {
-              stage: 'streaming',
-              message: `${character.name} is responding...`,
-              characterName: character.name,
-              characterId: character.id,
-            }))
-          }
-          currentResponse += chunk.content
-          streamingState.fullResponse += chunk.content
-          controller.enqueue(encodeContentChunk(encoder, chunk.content))
-        }
-
-        if (chunk.done) {
-          streamingState.usage = chunk.usage || null
-          streamingState.cacheUsage = chunk.cacheUsage || null
-          streamingState.attachmentResults = chunk.attachmentResults || null
-          currentRawResponse = chunk.rawResponse
-          streamingState.rawResponse = chunk.rawResponse
-          if (chunk.thoughtSignature) {
-            streamingState.thoughtSignature = chunk.thoughtSignature
-          }
-        }
-      }
-    } catch (toolLoopStreamError) {
-      await preservePartialOnError(toolLoopStreamError)
-      throw toolLoopStreamError
-    }
-
-    // If the LLM returned tool calls without any content (silent tool use),
-    // emit a processing status so the user knows something is happening
-    if (!emittedStreamingStatus && currentRawResponse) {
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'processing_tools',
-        message: `${character.name} is using tools...`,
-        characterName: character.name,
-        characterId: character.id,
-      }))
-    }
-  }
-
-  // Handle max iterations reached
-  if (toolIterations >= effectiveMaxTurns && !agentModeCompleted) {
-    if (agentMode.enabled) {
-      // Force final response in agent mode
-      logger.info('Agent mode max turns reached, forcing final response', {
-        chatId,
-        iterations: toolIterations,
-        maxTurns: effectiveMaxTurns,
-      })
-
-      // Send force final event
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'agent_force_final',
-        message: 'Requesting final response...',
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      // Add force final message and make one more LLM call
-      const forceFinalMessage = buildForceFinalMessage()
-      currentMessages = [
-        ...currentMessages,
-        { role: 'assistant' as const, content: currentResponse, thoughtSignature: streamingState.thoughtSignature, name: undefined },
-        { role: 'user' as const, content: forceFinalMessage, thoughtSignature: undefined, name: undefined }
-      ]
-
-      // Make one final call with force message
-      try {
-        for await (const chunk of streamMessage({
-          messages: currentMessages,
-          connectionProfile: streamingState.effectiveProfile,
-          apiKey: streamingState.effectiveApiKey,
-          modelParams,
-          tools: actualTools,
-          useNativeWebSearch,
-          userId,
-          messageId: preGeneratedAssistantMessageId,
-          chatId,
-        })) {
-          if (chunk.content) {
-            streamingState.fullResponse += chunk.content
-            controller.enqueue(encodeContentChunk(encoder, chunk.content))
-          }
-
-          if (chunk.done) {
-            streamingState.usage = chunk.usage || null
-            streamingState.cacheUsage = chunk.cacheUsage || null
-            streamingState.attachmentResults = chunk.attachmentResults || null
-            streamingState.rawResponse = chunk.rawResponse
-            if (chunk.thoughtSignature) {
-              streamingState.thoughtSignature = chunk.thoughtSignature
-            }
-
-            // Check if the final call includes submit_final_response
-            if (chunk.rawResponse) {
-              const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, streamingState.effectiveProfile.provider)
-              const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
-              if (submitCall) {
-                const args = submitCall.arguments as { response?: string }
-                if (args.response) {
-                  streamingState.fullResponse = args.response
-                }
-              }
-            }
-          }
-        }
-      } catch (forceFinalStreamError) {
-        await preservePartialOnError(forceFinalStreamError)
-        throw forceFinalStreamError
-      }
-    } else {
-      logger.warn('Max tool iterations reached', { iterations: toolIterations, chatId })
-    }
-  }
+  // Process tool calls (native function-calling loop, agent-mode submit_final_response,
+  // ghost-wrap guardrail, max-turns force-final pass all live in the sibling service).
+  const toolMessages: ToolMessage[] = []
+  const generatedImagePaths: GeneratedImage[] = []
+  await runNativeToolLoop({
+    repos,
+    chatId,
+    userId,
+    character,
+    characterParticipant,
+    preGeneratedAssistantMessageId,
+    agentMode,
+    formattedMessages,
+    modelParams,
+    actualTools,
+    useNativeWebSearch,
+    toolContext,
+    streaming: streamingState,
+    toolMessages,
+    generatedImagePaths,
+    controller,
+    encoder,
+    preservePartialOnError,
+  })
 
   // Phase 19: provider-native text tool markers (catches spontaneous XML
   // emissions like DeepSeek's <function_calls> or Gemini's <tool_use>). Each
