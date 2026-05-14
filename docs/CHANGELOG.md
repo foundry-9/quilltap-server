@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Chore: dependency refresh (npm-update-deps)
+
+Refreshed dependencies across the root project, the publishable packages, and the bundled plugins. Notable root bumps: next 16.2.4 → 16.2.6, react / react-dom 19.2.5 → 19.2.6, openai 6.35 → 6.37, @openrouter/sdk 0.12.25 → 0.12.35, @playwright/test 1.59.1 → 1.60.0, jest 30.3 → 30.4.2, tar 7.5.13 → 7.5.15, semver 7.7.4 → 7.8.0, yaml 2.8.4 → 2.9.0, plus assorted minor/patch updates. Published packages: @quilltap/plugin-types 2.3.1 → 2.3.2 (@types/node), @quilltap/plugin-utils 2.2.6 → 2.2.7 (openai 6.37 + plugin-types pin), @quilltap/theme-storybook 1.0.33 → 1.0.34 (storybook 10.4), create-quilltap-theme 2.0.8 → 2.0.9 (@types/node). Plugins rebuilt with the new bundled deps: qtap-plugin-google 1.1.27 → 1.1.28 (@google/genai 1.51 → 1.52), qtap-plugin-grok 1.0.31 → 1.0.32, qtap-plugin-openai 1.0.37 → 1.0.38, qtap-plugin-openai-compatible 1.0.25 → 1.0.26 (openai 6.37 across all three), qtap-plugin-openrouter 1.0.35 → 1.0.36 (@openrouter/sdk 0.12.35). Lint, typecheck, and unit tests all green.
+
 #### Fix: Expanded Staff messages now have a prominent re-collapse target
 
 Staff-authored Salon messages (Host, Lantern, Aurora, Librarian, Concierge, Prospero, Commonplace Book, Ariel) shipped in collapsed-bar form by default and could be expanded by clicking the bar. The action-bar chevron at the bottom of the expanded body was the only way to collapse them again, and it was easy to miss among the copy/source/delete/regenerate icons. The expanded view now renders the same `qt-chat-system-bar` at the top of the message body — same sender · kind · timestamp layout, chevron pointing down — so clicking it collapses back to the bar. The action-bar chevron is preserved as a secondary path and now carries an explicit `type="button"`.
