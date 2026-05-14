@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: Log rotation produces stable filenames and sweeps stray copies on startup
+
+`FileTransport` (`lib/logging/transports/file.ts`) previously rotated `combined.log` and `error.log` into `combined.log.<N>` / `error.log.<N>`. On iCloud-synced instances that pattern collided with Apple's conflict-resolution naming, leaving the logs directory littered with `combined 2.log`, `combined(2).log`, `combined.log.6 2`, `combined.log(1).3`, etc., and surviving runs of an older rotator made things worse.
+
+Rotation now emits `combined.<N>.log` / `error.<N>.log` with `N` running from `0` (newest backup) to `maxFiles - 1` (oldest), and the default `maxFiles` is now 10. On initialization the transport scans the log directory and deletes any file whose name belongs to the `combined` or `error` family but doesn't exactly match the active or rotated name — so the strays from the old rotator and from sync conflicts get cleaned up the next time the server starts. Unrelated files (`quilltap-stdout.log`, `quilltap-stderr.log`, `startup.log`, `embedded-server.log`, `terminals/`, anything that doesn't begin with `combined` / `error` followed by a non-alphanumeric character) are left untouched. `errors.log` and similar are explicitly preserved because the next character after the stem is alphanumeric.
+
 #### Feature: Commonplace Book scene-state caching
 
 The Commonplace Book emits a per-turn whisper that opens with a `Current State` block — location, time, and every present character's action + clothing in full prose. In long scenes the clothing prose almost never changes between turns but cost several hundred tokens per character on every LLM call, API or Courier alike.

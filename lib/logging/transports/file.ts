@@ -1,7 +1,16 @@
 /**
  * File transport for persistent logging with rotation
- * Writes logs to files on disk with automatic rotation when files exceed maxFileSize
- * Maintains separate logs for all entries and error-only entries
+ *
+ * Writes JSON log entries to combined.log (everything) and error.log
+ * (errors only). When a file exceeds maxFileSize it rotates into
+ * `<stem>.0.log` (newest backup) through `<stem>.<maxFiles-1>.log` (oldest).
+ *
+ * On initialization, sweeps the log directory of any stray files in the
+ * combined/error family that don't match the active or rotated name —
+ * leftovers from older `<stem>.log.<N>` rotations, iCloud sync conflicts
+ * (`combined 2.log`, `combined.log.9 2`), and Finder duplicates
+ * (`combined(2).log`). User-owned files (terminal transcripts,
+ * quilltap-stdout/stderr, embedded-server, startup, etc.) are left alone.
  */
 
 import { promises as fs } from 'fs';
@@ -9,77 +18,69 @@ import { join } from 'path';
 import { LogLevel } from '@/lib/logger';
 import { LogTransport, LogData } from './base';
 
-/**
- * Build a rotated log file path
- * Extracted to a separate function to prevent Turbopack from analyzing
- * the path pattern as a potential dynamic import
- */
-function buildRotatedLogPath(logDir: string, filename: string, rotation: number): string {
-  const rotatedName = [filename, String(rotation)].join('.');
-  return join(logDir, rotatedName);
+const STEMS = ['combined', 'error'] as const;
+type Stem = (typeof STEMS)[number];
+
+function activeLogName(stem: Stem): string {
+  return `${stem}.log`;
+}
+
+function rotatedLogName(stem: Stem, rotation: number): string {
+  return `${stem}.${rotation}.log`;
 }
 
 /**
- * File transport implementation
- * Handles writing log entries to disk with automatic file rotation
- * Features:
- * - Writes all logs to combined.log
- * - Writes errors only to error.log
- * - Automatic rotation when files exceed maxFileSize
- * - Configurable retention (maxFiles)
- * - Graceful error handling (falls back to console.error if disk write fails)
+ * True if `entry` looks like it belongs to a log stem's family — either an
+ * exact match for the stem (`combined`), or the stem followed by a
+ * non-alphanumeric separator (`.`, ` `, `(`, `-`). Returning true here means
+ * the file is a candidate for the allowlist check; words like `errors.log`
+ * or `embedded-server.log` fall through and are never touched.
  */
+function belongsToStemFamily(entry: string): boolean {
+  for (const stem of STEMS) {
+    if (!entry.startsWith(stem)) continue;
+    if (entry.length === stem.length) return true;
+    const next = entry[stem.length];
+    if (!/[a-zA-Z0-9]/.test(next)) return true;
+  }
+  return false;
+}
+
 export class FileTransport implements LogTransport {
   private logDir: string;
   private maxFileSize: number;
   private maxFiles: number;
-  private fileSizes: Map<string, number> = new Map();
+  private fileSizes: Map<Stem, number> = new Map();
   private initPromise: Promise<void>;
 
   /**
-   * Create a new FileTransport instance
    * @param logDir Directory where log files will be stored
-   * @param maxFileSize Maximum size of a log file in bytes (default: 10MB)
-   * @param maxFiles Maximum number of rotated files to keep (default: 5)
+   * @param maxFileSize Maximum size of an active log file in bytes (default: 10MB)
+   * @param maxFiles Number of rotated backups to keep per stem (default: 10 → `.0.log` through `.9.log`)
    */
   constructor(
     logDir: string,
-    maxFileSize: number = 10485760, // 10MB default
-    maxFiles: number = 5
+    maxFileSize: number = 10485760,
+    maxFiles: number = 10
   ) {
     this.logDir = logDir;
     this.maxFileSize = maxFileSize;
     this.maxFiles = maxFiles;
-
-    // Initialize directory and size tracking - store promise for later awaiting
     this.initPromise = this.initializeDirectory();
   }
 
-  /**
-   * Initialize the log directory and track existing file sizes
-   */
   private async initializeDirectory(): Promise<void> {
     try {
       await fs.mkdir(this.logDir, { recursive: true });
+      await this.purgeStrayLogs();
 
-      // Track existing file sizes
-      const combinedLogPath = join(this.logDir, 'combined.log');
-      const errorLogPath = join(this.logDir, 'error.log');
-
-      try {
-        const combinedStats = await fs.stat(combinedLogPath);
-        this.fileSizes.set('combined.log', combinedStats.size);
-      } catch {
-        // File doesn't exist yet, start at 0
-        this.fileSizes.set('combined.log', 0);
-      }
-
-      try {
-        const errorStats = await fs.stat(errorLogPath);
-        this.fileSizes.set('error.log', errorStats.size);
-      } catch {
-        // File doesn't exist yet, start at 0
-        this.fileSizes.set('error.log', 0);
+      for (const stem of STEMS) {
+        try {
+          const stats = await fs.stat(join(this.logDir, activeLogName(stem)));
+          this.fileSizes.set(stem, stats.size);
+        } catch {
+          this.fileSizes.set(stem, 0);
+        }
       }
     } catch (error) {
       console.error(
@@ -89,103 +90,103 @@ export class FileTransport implements LogTransport {
     }
   }
 
-  /**
-   * Write a log entry to the appropriate file(s)
-   * @param logData The structured log data to write
-   */
+  private async purgeStrayLogs(): Promise<void> {
+    const allowed = new Set<string>();
+    for (const stem of STEMS) {
+      allowed.add(activeLogName(stem));
+      for (let i = 0; i < this.maxFiles; i++) {
+        allowed.add(rotatedLogName(stem, i));
+      }
+    }
+
+    let entries: string[];
+    try {
+      entries = await fs.readdir(this.logDir);
+    } catch {
+      return;
+    }
+
+    await Promise.all(
+      entries.map(async (entry) => {
+        if (allowed.has(entry)) return;
+        if (!belongsToStemFamily(entry)) return;
+        try {
+          await fs.unlink(join(this.logDir, entry));
+        } catch {
+          // best effort — sync-locked or already gone is fine
+        }
+      })
+    );
+  }
+
   async write(logData: LogData): Promise<void> {
-    // Ensure directory is initialized before writing
     await this.initPromise;
+    const line = JSON.stringify(logData) + '\n';
 
-    const logString = JSON.stringify(logData);
-    const lineWithNewline = logString + '\n';
-
-    // Write to combined log
-    await this.writeToFile('combined.log', lineWithNewline);
-
-    // Write to error log if this is an error
+    await this.writeToFile('combined', line);
     if (logData.level === LogLevel.ERROR) {
-      await this.writeToFile('error.log', lineWithNewline);
+      await this.writeToFile('error', line);
     }
   }
 
-  /**
-   * Write a line to a specific log file with rotation support
-   * @param filename The log filename (combined.log or error.log)
-   * @param content The log line to write
-   */
-  private async writeToFile(
-    filename: string,
-    content: string
-  ): Promise<void> {
+  private async writeToFile(stem: Stem, content: string): Promise<void> {
     try {
-      const filePath = join(this.logDir, filename);
+      const filePath = join(this.logDir, activeLogName(stem));
       const contentSize = Buffer.byteLength(content, 'utf-8');
 
-      // Check if rotation is needed
-      const currentSize = this.fileSizes.get(filename) || 0;
+      const currentSize = this.fileSizes.get(stem) ?? 0;
       if (currentSize + contentSize > this.maxFileSize) {
-        await this.rotateFile(filename);
+        await this.rotateFile(stem);
       }
 
-      // Append to the current file
       await fs.appendFile(filePath, content, 'utf-8');
-
-      // Update tracked size
-      const newSize = (this.fileSizes.get(filename) || 0) + contentSize;
-      this.fileSizes.set(filename, newSize);
+      this.fileSizes.set(stem, (this.fileSizes.get(stem) ?? 0) + contentSize);
     } catch (error) {
-      // Graceful fallback to console on disk write failure
       console.error(
-        `Failed to write to ${filename}:`,
+        `Failed to write to ${activeLogName(stem)}:`,
         error instanceof Error ? error.message : String(error)
       );
     }
   }
 
   /**
-   * Rotate a log file when it exceeds maxFileSize
-   * Renames existing rotated files and starts fresh
-   * Old rotations beyond maxFiles are deleted
-   * @param filename The log filename to rotate
+   * Rotate a stem: drop the oldest backup, shift each existing backup one
+   * slot older (.0 → .1, .1 → .2, …), then rename the active file to .0.
    */
-  private async rotateFile(filename: string): Promise<void> {
+  private async rotateFile(stem: Stem): Promise<void> {
     try {
-      const basePath = join(this.logDir, filename);
-
-      // Remove oldest file if we're at max capacity
-      const oldestPath = buildRotatedLogPath(this.logDir, filename, this.maxFiles);
+      const oldestPath = join(
+        this.logDir,
+        rotatedLogName(stem, this.maxFiles - 1)
+      );
       try {
         await fs.unlink(oldestPath);
       } catch {
-        // File doesn't exist, that's fine
+        // not present is fine
       }
 
-      // Shift existing rotations: combined.log.2 -> combined.log.3, etc.
-      for (let i = this.maxFiles - 1; i >= 1; i--) {
-        const oldPath = buildRotatedLogPath(this.logDir, filename, i);
-        const newPath = buildRotatedLogPath(this.logDir, filename, i + 1);
-
+      for (let i = this.maxFiles - 2; i >= 0; i--) {
+        const oldPath = join(this.logDir, rotatedLogName(stem, i));
+        const newPath = join(this.logDir, rotatedLogName(stem, i + 1));
         try {
           await fs.rename(oldPath, newPath);
         } catch {
-          // File doesn't exist yet, that's fine
+          // not present is fine
         }
       }
 
-      // Rename current log to .1
-      const rotatedPath = buildRotatedLogPath(this.logDir, filename, 1);
+      const activePath = join(this.logDir, activeLogName(stem));
+      const firstBackup = join(this.logDir, rotatedLogName(stem, 0));
       try {
-        await fs.rename(basePath, rotatedPath);
+        await fs.rename(activePath, firstBackup);
       } catch {
-        // File might not exist, that's fine
+        // not present is fine
       }
 
-      // Reset size tracker for the current file
-      this.fileSizes.set(filename, 0);
+      this.fileSizes.set(stem, 0);
     } catch (error) {
       console.error(
-        `Failed to rotate ${filename}:`,
+        `Failed to rotate ${activeLogName(stem)}:`,
         error instanceof Error ? error.message : String(error)
       );
     }
