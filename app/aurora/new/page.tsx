@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
@@ -8,18 +8,14 @@ import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescr
 import { ImportModal } from '@/components/characters/system-prompts-editor/ImportModal'
 import type { PromptTemplate } from '@/components/characters/system-prompts-editor/types'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../shared/wizard-text-fields'
-
-interface ConnectionProfile {
-  id: string
-  name: string
-}
 
 export default function NewCharacterPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
+  const { profiles } = useConnectionProfiles()
   const [showWizard, setShowWizard] = useState(false)
   const [showTemplateImport, setShowTemplateImport] = useState(false)
   const [templates, setTemplates] = useState<PromptTemplate[]>([])
@@ -98,21 +94,6 @@ export default function NewCharacterPage() {
     setExternalUpdateCount((n) => n + 1)
     setShowTemplateImport(false)
   }
-
-  useEffect(() => {
-    const fetchProfiles = async () => {
-      try {
-        const res = await fetch('/api/v1/connection-profiles')
-        if (res.ok) {
-          const data = await res.json()
-          setProfiles(data.profiles || [])
-        }
-      } catch (err) {
-        console.error('Failed to fetch profiles', { error: err instanceof Error ? err.message : String(err) })
-      }
-    }
-    fetchProfiles()
-  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

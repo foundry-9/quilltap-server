@@ -100,7 +100,14 @@ Mostly straightforward but have real logic differences to reconcile.
 
 ## Phase 4 — Investigate first
 
-- [ ] **`fetchProfiles` / `fetchProviders` / `fetchModels` reimplemented despite hooks existing.** Canonical: `hooks/useConnectionProfiles.ts:15`, `hooks/useProviders.ts:18` (both with caching + dedup). Reimplemented across 8+ components. **Before touching:** find out *why*. Circular import? Render-order? Or just discovery failure? Sites: `app/aurora/new/page.tsx:103`, `components/characters/ai-wizard/hooks/useAIWizard.ts:74`, `components/chat/SelectLLMProfileDialog.tsx:60`, `components/image-profiles/{ImageProfilePicker.tsx:43, ImageProfileForm.tsx:97,131}`, `components/settings/api-keys/ApiKeyModal.tsx:54`, `components/settings/ai-import/hooks/useAIImport.ts:74`, `components/settings/connection-profiles/ProfileModal.tsx:72` (`fetchModelsForEdit`), `components/setup-wizard/wizard-api.ts:15,76`.
+**Status: investigated (2026-05-14).** Read each of the 10 reimplementation sites; the "8+ duplicates" turned out to be one real duplicate plus nine legitimate non-duplicates. The reduced-shape canonical hooks (`useConnectionProfiles` exposes `{id, name, provider, modelName}`; `useProviders` exposes `{id, name, displayName, abbreviation, icon, type}`) don't fit the rest by design.
+
+- [x] **`fetchProfiles` / `fetchProviders` / `fetchModels` reimplemented despite hooks existing.** Canonical: `hooks/useConnectionProfiles.ts:15`, `hooks/useProviders.ts:18` (both with caching + dedup).
+  - **Migrated (1 site):** `app/aurora/new/page.tsx` — only needed `{id, name}`; swapped local `useEffect` fetch + `useState<ConnectionProfile[]>` for `const { profiles } = useConnectionProfiles()`.
+  - **Skip — needs full `ConnectionProfile`** (3 sites): `components/characters/ai-wizard/hooks/useAIWizard.ts:74` (reads `isDefault`, plus `filterProfilesBySupportedMimeType` on full profile shape), `components/chat/SelectLLMProfileDialog.tsx:60` (full shape + intentional re-fetch on every `isOpen` open, defeating the module cache), `components/settings/ai-import/hooks/useAIImport.ts:74` (full shape + `isDefault`). Adopting these would require a hook-shape redesign (full ConnectionProfile + opt-out cache) larger than this consolidation phase scopes for.
+  - **Skip — needs `configRequirements`** (1 site): `components/settings/api-keys/ApiKeyModal.tsx:54` reads `p.configRequirements?.requiresApiKey`, which canonical `useProviders` maps away.
+  - **Skip — different entity** (3 sites): `components/image-profiles/{ImageProfilePicker.tsx:43, ImageProfileForm.tsx:97, ImageProfileForm.tsx:131}` hit `/api/v1/image-profiles*`, not `/api/v1/connection-profiles` or `/api/v1/providers`. Not duplicates of the canonical hooks.
+  - **Skip — must be live** (2 sites): `components/settings/connection-profiles/ProfileModal.tsx:72` (`fetchModelsForEdit`) hits `/api/v1/models` keyed per `(provider, apiKeyId, baseUrl)` — caching would surface stale models per key. `components/setup-wizard/wizard-api.ts:15,76` is a deliberate non-React thin-wrapper layer for one-shot wizard flows and filters providers to `type === 'llm'`.
 
 ---
 

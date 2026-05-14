@@ -4,6 +4,19 @@
 
 ### 4.4-dev
 
+#### Chore: Refactor 4.4 Phase 4 — investigated fetch-hook reimplementations
+
+Fourth pass of the duplicate-function consolidation tracked in `docs/developer/features/REFACTOR_4_4.md`. Phase 4 is "investigate first" — read each of the 10 sites named in the plan that reimplement `fetchProfiles` / `fetchProviders` / `fetchModels` despite the canonical `hooks/useConnectionProfiles.ts` and `hooks/useProviders.ts` existing. The "8+ duplicates" turned out to be one real duplicate plus nine legitimate non-duplicates:
+
+- **Migrated:** `app/aurora/new/page.tsx` only needed `{id, name}` from each profile. Replaced its local `useEffect` fetch + `useState<ConnectionProfile[]>` with `const { profiles } = useConnectionProfiles()`. Removed the dangling `useEffect` import and local `ConnectionProfile` interface.
+- **Not duplicates** (documented in `docs/developer/features/REFACTOR_4_4.md`):
+  - **Needs full `ConnectionProfile`** (3 sites): `components/characters/ai-wizard/hooks/useAIWizard.ts`, `components/chat/SelectLLMProfileDialog.tsx`, `components/settings/ai-import/hooks/useAIImport.ts`. Canonical hook maps profiles down to a 4-field shape and provides no cache-invalidation hook for the modal-open re-fetch pattern `SelectLLMProfileDialog` relies on. Adopting these would require a hook-shape redesign, not a consolidation.
+  - **Needs `configRequirements`** (1 site): `components/settings/api-keys/ApiKeyModal.tsx` filters providers by `p.configRequirements?.requiresApiKey`, which canonical `useProviders` strips.
+  - **Different entity** (3 sites): `components/image-profiles/{ImageProfilePicker,ImageProfileForm,ImageProfileForm}.tsx` hit `/api/v1/image-profiles*`, not `/api/v1/connection-profiles` or `/api/v1/providers`.
+  - **Must be live** (2 sites): `components/settings/connection-profiles/ProfileModal.tsx:fetchModelsForEdit` is keyed per `(provider, apiKeyId, baseUrl)` and must hit the live provider API. `components/setup-wizard/wizard-api.ts` is a deliberate non-React thin-wrapper layer for one-shot wizard flows and filters providers to `type === 'llm'`.
+
+`npx tsc --noEmit` clean, `npm run lint` clean, full unit suite (322 files, 5,907 tests) green.
+
 #### Chore: Refactor 4.4 Phase 3 — registry base completion, repo overrides, API-key service
 
 Third pass of the duplicate-function consolidation tracked in `docs/developer/features/REFACTOR_4_4.md`. Five medium-effort clusters resolved:
