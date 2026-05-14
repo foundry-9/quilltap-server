@@ -77,6 +77,7 @@ import { attemptRequestLimitRecovery } from './recovery.service'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { runPreContextPreCompute } from './pre-compute.service'
+import { runTextToolPass } from './text-tool-loop.service'
 import {
   detectAndConvertRngPatterns,
   type RngToolCall,
@@ -1540,184 +1541,67 @@ async function processMessage(
     }
   }
 
-  // Process text tool calls via provider plugin (catches spontaneous XML emissions)
-  // Each plugin knows which formats its models emit (e.g., DeepSeek <function_calls>, Gemini <tool_use>)
+  // Phase 19: provider-native text tool markers (catches spontaneous XML
+  // emissions like DeepSeek's <function_calls> or Gemini's <tool_use>). Each
+  // plugin knows which formats its models emit; no-op when the plugin
+  // doesn't implement the detector or the response is empty.
   const providerPlugin = getProvider(streamingState.effectiveProfile.provider)
-  if (streamingState.fullResponse && providerPlugin?.hasTextToolMarkers?.(streamingState.fullResponse)) {
-    const textToolCallRequests = providerPlugin.parseTextToolCalls?.(streamingState.fullResponse) ?? []
-
-    if (textToolCallRequests.length > 0) {
-      logger.info('Detected text tool calls in response (via plugin)', {
-        count: textToolCallRequests.length,
-        tools: textToolCallRequests.map(tc => tc.name),
-        provider: streamingState.effectiveProfile.provider,
-      })
-
-      // Per-tool status updates are now emitted inside processToolCalls
-      const results = await processToolCalls(textToolCallRequests, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
-      toolMessages = [...toolMessages, ...results.toolMessages]
-      generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
-
-      const strippedResponse = providerPlugin.stripTextToolMarkers?.(streamingState.fullResponse) ?? streamingState.fullResponse
-
-      // Add stripped response and tool results to conversation
-      currentMessages = [...formattedMessages]
-      if (strippedResponse.trim()) {
-        currentMessages.push({
-          role: 'assistant' as const,
-          content: strippedResponse,
-          thoughtSignature: streamingState.thoughtSignature,
-          name: undefined,
-        })
-      }
-
-      for (const toolMsg of results.toolMessages) {
-        currentMessages.push({
-          role: 'user' as const,
-          content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`,
-          thoughtSignature: undefined,
-          name: undefined,
-        })
-      }
-
-      // Update status after tool processing
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'sending',
-        message: `Sending to ${character.name}...`,
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      // Continue conversation with tool results
-      let continuationResponse = ''
-      try {
-        for await (const chunk of streamMessage({
-          messages: currentMessages,
-          connectionProfile: streamingState.effectiveProfile,
-          apiKey: streamingState.effectiveApiKey,
-          modelParams,
-          tools: actualTools,
-          useNativeWebSearch,
-          userId,
-          messageId: preGeneratedAssistantMessageId,
-          chatId,
-        })) {
-          if (chunk.content) {
-            continuationResponse += chunk.content
-            controller.enqueue(encodeContentChunk(encoder, chunk.content))
-          }
-
-          if (chunk.done) {
-            streamingState.usage = chunk.usage || null
-            streamingState.cacheUsage = chunk.cacheUsage || null
-            streamingState.rawResponse = chunk.rawResponse
-            if (chunk.thoughtSignature) {
-              streamingState.thoughtSignature = chunk.thoughtSignature
-            }
-          }
-        }
-      } catch (textToolContinuationError) {
-        // Reconstruct combined response so the preserved message reflects what
-        // the user actually saw streamed (stripped initial + partial continuation).
-        streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-        await preservePartialOnError(textToolContinuationError)
-        throw textToolContinuationError
-      }
-
-      streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-      // Strip any remaining text tool markers from the continuation
-      if (providerPlugin.stripTextToolMarkers) {
-        streamingState.fullResponse = providerPlugin.stripTextToolMarkers(streamingState.fullResponse)
-      }
-    }
+  if (providerPlugin?.hasTextToolMarkers && providerPlugin.parseTextToolCalls && providerPlugin.stripTextToolMarkers) {
+    const pluginHasMarkers = providerPlugin.hasTextToolMarkers
+    const pluginParse = providerPlugin.parseTextToolCalls
+    const pluginStrip = providerPlugin.stripTextToolMarkers
+    await runTextToolPass({
+      chatId,
+      userId,
+      character,
+      preGeneratedAssistantMessageId,
+      strategy: {
+        name: 'provider-text-markers',
+        hasMarkers: pluginHasMarkers,
+        parse: pluginParse,
+        strip: pluginStrip,
+      },
+      formattedMessages,
+      modelParams,
+      continuationTools: actualTools,
+      continuationUseNativeWebSearch: useNativeWebSearch,
+      toolContext,
+      streaming: streamingState,
+      toolMessages,
+      generatedImagePaths,
+      controller,
+      encoder,
+      preservePartialOnError,
+    })
   }
 
-  // Process text-block tool calls (runs for ALL providers, like XML parsing)
-  // Text-block format: [[TOOL_NAME param="value"]]content[[/TOOL_NAME]]
-  if (streamingState.fullResponse && hasTextBlockMarkers(streamingState.fullResponse)) {
-    const textBlockToolCalls = parseTextBlocksFromResponse(streamingState.fullResponse)
-
-    if (textBlockToolCalls.length > 0) {
-      logger.info('Detected text-block tool calls in response', {
-        count: textBlockToolCalls.length,
-        tools: textBlockToolCalls.map(tc => tc.name),
-      })
-
-      // Per-tool status updates are now emitted inside processToolCalls
-      const results = await processToolCalls(textBlockToolCalls, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
-      toolMessages = [...toolMessages, ...results.toolMessages]
-      generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
-
-      const strippedResponse = stripTextBlockMarkersFromResponse(streamingState.fullResponse)
-
-      // Add stripped response and tool results to conversation
-      currentMessages = [...formattedMessages]
-      if (strippedResponse.trim()) {
-        currentMessages.push({
-          role: 'assistant' as const,
-          content: strippedResponse,
-          thoughtSignature: streamingState.thoughtSignature,
-          name: undefined,
-        })
-      }
-
-      for (const toolMsg of results.toolMessages) {
-        currentMessages.push({
-          role: 'user' as const,
-          content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`,
-          thoughtSignature: undefined,
-          name: undefined,
-        })
-      }
-
-      // Update status after tool processing
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'sending',
-        message: `Sending to ${character.name}...`,
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      // Continue conversation with tool results
-      let continuationResponse = ''
-      try {
-        for await (const chunk of streamMessage({
-          messages: currentMessages,
-          connectionProfile: streamingState.effectiveProfile,
-          apiKey: streamingState.effectiveApiKey,
-          modelParams,
-          tools: useTextBlockTools ? [] : actualTools,
-          useNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
-          userId,
-          messageId: preGeneratedAssistantMessageId,
-          chatId,
-        })) {
-          if (chunk.content) {
-            continuationResponse += chunk.content
-            controller.enqueue(encodeContentChunk(encoder, chunk.content))
-          }
-
-          if (chunk.done) {
-            streamingState.usage = chunk.usage || null
-            streamingState.cacheUsage = chunk.cacheUsage || null
-            streamingState.rawResponse = chunk.rawResponse
-            if (chunk.thoughtSignature) {
-              streamingState.thoughtSignature = chunk.thoughtSignature
-            }
-          }
-        }
-      } catch (textBlockContinuationError) {
-        streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-        streamingState.fullResponse = stripTextBlockMarkersFromResponse(streamingState.fullResponse)
-        await preservePartialOnError(textBlockContinuationError)
-        throw textBlockContinuationError
-      }
-
-      streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-      // Strip any remaining text-block markers from the continuation
-      streamingState.fullResponse = stripTextBlockMarkersFromResponse(streamingState.fullResponse)
-    }
-  }
+  // Phase 20: text-block tool calls (`[[TOOL_NAME ...]]content[[/TOOL_NAME]]`),
+  // runs for ALL providers. When useTextBlockTools is on, the continuation
+  // suppresses native tools and web search so the model can't re-emit the
+  // markers it just had stripped.
+  await runTextToolPass({
+    chatId,
+    userId,
+    character,
+    preGeneratedAssistantMessageId,
+    strategy: {
+      name: 'text-block',
+      hasMarkers: hasTextBlockMarkers,
+      parse: parseTextBlocksFromResponse,
+      strip: stripTextBlockMarkersFromResponse,
+    },
+    formattedMessages,
+    modelParams,
+    continuationTools: useTextBlockTools ? [] : actualTools,
+    continuationUseNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
+    toolContext,
+    streaming: streamingState,
+    toolMessages,
+    generatedImagePaths,
+    controller,
+    encoder,
+    preservePartialOnError,
+  })
 
   const contentWasFlaggedDangerous = !!(dangerFlags && dangerFlags.length > 0)
   const { uncensoredRetryAttempted, sameProviderRetryAttempted } = await attemptEmptyResponseRecovery({
