@@ -113,7 +113,20 @@ Mostly straightforward but have real logic differences to reconcile.
 
 ## Phase 5 — Big mechanical refactor (do when touching adjacent code)
 
-- [ ] **Shared icon module.** 20+ inline SVG duplicates: `FolderIcon` × 7, `CloseIcon` × 4, `ImageIcon` × 4, `TrashIcon` × 3, `CheckIcon` × 3, `ChatIcon` × 3, plus `DatabaseIcon`/`PencilIcon`/`RefreshIcon`/`ChevronUpIcon` × 2. No shared icon module exists (only `components/ui/ChevronIcon.tsx`). Build `components/ui/icons/`. **High UI-regression surface** — a few `FolderIcon`s differ in `fill` defaults (`'none'` vs `'currentColor'`). Do it when there's an icon-touching reason; visually QA each site.
+**Status: complete (2026-05-14).** Audited every named icon site. The "20+ duplicates" estimate over-counted — many icon *names* sit atop two or three distinct visual designs that happen to share a label. Built `components/ui/icons/index.tsx` with 5 icons; migrated 12 sites whose path geometry is byte-identical. Left 4 icon names inline because each is really 2+ different drawings.
+
+- [x] **Shared icon module.** New module at `components/ui/icons/index.tsx` exports `CloseIcon`, `PencilIcon`, `RefreshIcon`, `CheckIcon`, `ChatIcon`. Migrated:
+  - **CloseIcon** (4 sites, all byte-identical): `components/chat/ChatCard.tsx`, `app/prospero/[id]/components/{ChatsTab,CharactersTab,CharactersCard}.tsx`.
+  - **PencilIcon** (2 sites): `app/scriptorium/[id]/page.tsx`, `app/scriptorium/components/DocumentStoreCard.tsx`.
+  - **RefreshIcon** (2 sites): same pair as PencilIcon.
+  - **CheckIcon** (2 of 3 sites): `components/profile/{ProfileInfoSection,DataDirectorySection}.tsx`. `components/characters/optimizer/CharacterOptimizerModal.tsx` uses a different polyline (`M5 13l4 4L19 7` vs `20 6 9 17 4 12`) — left inline.
+  - **ChatIcon** (2 of 3 sites): `components/layout/left-sidebar/collapsed-nav.tsx`, `app/settings/page.tsx`. `components/homepage/QuickActionsRow.tsx` has extra inner-line geometry — left inline. The settings call site now passes `className="w-4 h-4"` explicitly instead of the previous no-arg hardcoded size.
+- **Left inline — genuinely different drawings, not duplicates:**
+  - **FolderIcon** (7 sites): two distinct geometries — tall-tab outline (4 sites) vs. wide-mouth outline (3 sites). `ProjectItem` and `ChatCard` additionally accept a `color` prop for solid/outline override per active-state UX.
+  - **ImageIcon** (4 sites): two designs — photo-with-dots (`QuickActionsRow`) vs. landscape-geometric (`FilesTab`/`FilesCard`/`ImageGenerationCard`).
+  - **TrashIcon** (3 sites): two designs — solid `viewBox 0 0 20 20` with `fill="currentColor"` (`ChatCard`) vs. outline `viewBox 0 0 24 24` (`ProjectCard`/`DocumentStoreCard`).
+  - **DatabaseIcon** (2 sites): two designs — single-path stylized cylinder (`DocumentStoresCard`) vs. ellipse + side-rails (`DocumentStoreCard`).
+  - **ChevronUpIcon** (2 sites): polylines with different coordinates and widths (`M18 15 12 9 6 15` vs `M5 15l7-7 7 7`).
 
 ---
 

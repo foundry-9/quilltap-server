@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Chore: Refactor 4.4 Phase 5 — shared icon module
+
+Fifth pass of the duplicate-function consolidation tracked in `docs/developer/features/REFACTOR_4_4.md`. New shared icon module at `components/ui/icons/index.tsx` exporting five icons (`CloseIcon`, `PencilIcon`, `RefreshIcon`, `CheckIcon`, `ChatIcon`); 12 inline definitions removed across `components/chat/ChatCard.tsx`, `app/prospero/[id]/components/{ChatsTab,CharactersTab,CharactersCard}.tsx`, `app/scriptorium/[id]/page.tsx`, `app/scriptorium/components/DocumentStoreCard.tsx`, `components/profile/{ProfileInfoSection,DataDirectorySection}.tsx`, `components/layout/left-sidebar/collapsed-nav.tsx`, and `app/settings/page.tsx`.
+
+Four icon names in the plan stay inline because they're really two distinct drawings under one label (FolderIcon: tall-tab vs wide-mouth outline; ImageIcon: photo-with-dots vs landscape-geometric; TrashIcon: solid 20-unit viewBox vs outline 24-unit viewBox; DatabaseIcon: single-path stylized cylinder vs ellipse + side-rails) plus ChevronUpIcon's two sites use polylines with different coordinates and widths. Two more sites are mostly-identical-but-different (CheckIcon at `CharacterOptimizerModal` uses a different polyline; ChatIcon at `QuickActionsRow` adds inner-line geometry) and stay inline. `app/settings/page.tsx`'s ChatIcon call site now passes `className="w-4 h-4"` explicitly instead of the previous no-arg hardcoded size.
+
+`npx tsc --noEmit` clean, `npm run lint` clean, full unit suite (322 files, 5,907 tests) green.
+
 #### Chore: Refactor 4.4 Phase 4 — investigated fetch-hook reimplementations
 
 Fourth pass of the duplicate-function consolidation tracked in `docs/developer/features/REFACTOR_4_4.md`. Phase 4 is "investigate first" — read each of the 10 sites named in the plan that reimplement `fetchProfiles` / `fetchProviders` / `fetchModels` despite the canonical `hooks/useConnectionProfiles.ts` and `hooks/useProviders.ts` existing. The "8+ duplicates" turned out to be one real duplicate plus nine legitimate non-duplicates:
