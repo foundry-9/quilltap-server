@@ -195,6 +195,15 @@
   }
 
   /**
+   * Variant rendered at the top of an *expanded* Staff-authored message,
+   * giving the user a prominent click target to re-collapse. Keeps the
+   * collapsed-bar look so the affordance is visually consistent.
+   */
+  .qt-chat-system-bar-expanded {
+    margin-bottom: 0.25rem;
+  }
+
+  /**
    * The Courier — manual / clipboard transport placeholder bubble.
    * Stands in for an assistant message that is awaiting a pasted reply
    * from an external LLM. Wider than a normal message, with a stacked

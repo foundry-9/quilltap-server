@@ -279,6 +279,32 @@ function MessageRowInner({
         </div>
       )}
       <div className="qt-chat-message-body group">
+        {message.systemSender && !isEditing && onToggleSystemMessageExpanded && (() => {
+          const senderName = getSystemSenderDisplayName(message.systemSender)
+          const kindLabel = getSystemKindDisplayLabel(message)
+          return (
+            <button
+              type="button"
+              onClick={() => onToggleSystemMessageExpanded(message.id)}
+              className="qt-chat-system-bar qt-chat-system-bar-expanded"
+              aria-expanded={true}
+              aria-label={`Collapse ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
+            >
+              <span className="qt-chat-system-bar-sender">{senderName}</span>
+              {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
+              <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
+              <svg
+                className="qt-chat-system-bar-chevron qt-chat-system-bar-chevron-down"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )
+        })()}
         <div
           className={`chat-message ${
             message.role === 'USER'
@@ -384,6 +410,7 @@ function MessageRowInner({
                   {/* Collapse (Staff-authored messages only) */}
                   {message.systemSender && onToggleSystemMessageExpanded && (
                     <button
+                      type="button"
                       onClick={() => onToggleSystemMessageExpanded(message.id)}
                       className="qt-chat-message-action-icon"
                       title="Collapse this message"

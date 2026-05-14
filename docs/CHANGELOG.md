@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Expanded Staff messages now have a prominent re-collapse target
+
+Staff-authored Salon messages (Host, Lantern, Aurora, Librarian, Concierge, Prospero, Commonplace Book, Ariel) shipped in collapsed-bar form by default and could be expanded by clicking the bar. The action-bar chevron at the bottom of the expanded body was the only way to collapse them again, and it was easy to miss among the copy/source/delete/regenerate icons. The expanded view now renders the same `qt-chat-system-bar` at the top of the message body — same sender · kind · timestamp layout, chevron pointing down — so clicking it collapses back to the bar. The action-bar chevron is preserved as a secondary path and now carries an explicit `type="button"`.
+
 #### Fix: Vault-overlay wardrobe reads silently strip shared archetype components
 
 When a character has `readPropertiesFromDocumentStore=true`, `readCharacterVaultWardrobe` (`lib/database/repositories/character-properties-overlay.ts`) built its `itemById` / `itemBySlug` resolution maps only from items in the character's own `Wardrobe/` folder. A personal outfit that bundled a shared archetype (e.g. a "Naked Social" outfit whose only component is the shared Fitbit) wrote the archetype's UUID into the bundle's `componentItems:` frontmatter at sync time, but every subsequent overlay read dropped that UUID as unknown, leaving the bundle effectively empty. The reader now additionally seeds shared archetypes from `repos.wardrobe.findArchetypes(true)` into the resolution maps (UUID-keyed, with slug-keyed fallback that personal items win on collision), but only when at least one vault item declares `componentItemIds`. Bundles with shared components now survive the round-trip, and the `"Wardrobe item references unknown component; dropping ref"` warning storm stops for that case.
