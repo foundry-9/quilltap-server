@@ -206,9 +206,15 @@ export function NewChatForm({
   const characterIdForImage = singleCharacterId || selectedCharacters[0]?.character.id || undefined
 
   const outfitCharacters = useMemo(() => {
-    const list = llmSelected.map((sc) => ({ id: sc.character.id, name: sc.character.name }))
+    const list = llmSelected.map((sc) => ({
+      id: sc.character.id,
+      name: sc.character.name,
+      isUserControlled: false,
+    }))
     const userChar = userControlledCharacters.find((c) => c.id === state.selectedUserCharacterId)
-    if (userChar) list.push({ id: userChar.id, name: userChar.name })
+    if (userChar) {
+      list.push({ id: userChar.id, name: userChar.name, isUserControlled: true })
+    }
     return list
   }, [llmSelected, userControlledCharacters, state.selectedUserCharacterId])
 

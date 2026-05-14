@@ -23,6 +23,11 @@ import type {
 import { EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
 import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
+import type { EquippedBundle } from '@/lib/wardrobe/group-equipped'
+import {
+  breakApartBundleInSlots,
+  takeOffBundleFromSlots,
+} from '@/lib/wardrobe/bundle-mutations'
 import { OutfitComposer } from './outfit-composer'
 
 // ============================================================================
@@ -38,6 +43,12 @@ export interface OutfitSelection {
 export interface OutfitSelectorCharacter {
   id: string
   name: string
+  /**
+   * Whether this character is controlled by the human operator (as opposed
+   * to an LLM). User-controlled characters don't get the `Let character
+   * choose` mode — for them, this dialog *is* the choosing.
+   */
+  isUserControlled?: boolean
 }
 
 /**
@@ -190,6 +201,37 @@ function CharacterOutfitSection({
     [character.id, selection.slots, onChange],
   )
 
+  const itemsById = useMemo(
+    () => new Map(wardrobeItems.map((i) => [i.id, i])),
+    [wardrobeItems],
+  )
+
+  const handleTakeOffBundle = useCallback(
+    (bundle: EquippedBundle) => {
+      const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
+      const next = takeOffBundleFromSlots(currentSlots, bundle)
+      onChange({ characterId: character.id, mode: 'manual', slots: next })
+    },
+    [character.id, selection.slots, onChange],
+  )
+
+  const handleBreakApartBundle = useCallback(
+    (bundle: EquippedBundle) => {
+      const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
+      const next = breakApartBundleInSlots(currentSlots, bundle, itemsById)
+      onChange({ characterId: character.id, mode: 'manual', slots: next })
+    },
+    [character.id, selection.slots, itemsById, onChange],
+  )
+
+  const handleClearAll = useCallback(() => {
+    onChange({
+      characterId: character.id,
+      mode: 'manual',
+      slots: { ...EMPTY_EQUIPPED_SLOTS },
+    })
+  }, [character.id, onChange])
+
   const modeOptions: Array<{
     value: OutfitSelectionMode
     label: string
@@ -215,11 +257,15 @@ function CharacterOutfitSection({
       label: 'Compose outfit',
       description: 'Pick the starting outfit slot by slot.',
     },
-    {
-      value: 'llm_choose',
-      label: 'Let character choose',
-      description: 'The character picks based on the scenario.',
-    },
+    ...(character.isUserControlled
+      ? []
+      : [
+          {
+            value: 'llm_choose' as OutfitSelectionMode,
+            label: 'Let character choose',
+            description: 'The character picks based on the scenario.',
+          },
+        ]),
     {
       value: 'none',
       label: 'Start undressed',
@@ -307,7 +353,9 @@ function CharacterOutfitSection({
             ))}
           </div>
 
-          {/* Compose outfit — embedded composer, no take-off / break-apart */}
+          {/* Compose outfit — embedded composer, with bundle actions and a
+              `Clear all` escape hatch so the user isn't stuck with whatever
+              the defaults seeded (e.g. a `Work` bundle they want to replace). */}
           {internalMode === 'manual' && (
             <div className="mt-3 pl-6">
               {loadingWardrobe ? (
@@ -317,14 +365,29 @@ function CharacterOutfitSection({
                   No wardrobe items found. Add items in the character&apos;s wardrobe tab.
                 </p>
               ) : (
-                <OutfitComposer
-                  items={wardrobeItems}
-                  slots={stagedSlots}
-                  onAddToSlot={handleAddToSlot}
-                  onRemoveFromSlot={handleRemoveFromSlot}
-                  onClearSlot={handleClearSlot}
-                  showBundleActions={false}
-                />
+                <>
+                  <div className="flex justify-end mb-2">
+                    <button
+                      type="button"
+                      onClick={handleClearAll}
+                      disabled={disabled}
+                      className="qt-button-ghost qt-button-sm"
+                      title="Empty every slot and start from scratch"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                  <OutfitComposer
+                    items={wardrobeItems}
+                    slots={stagedSlots}
+                    onAddToSlot={handleAddToSlot}
+                    onRemoveFromSlot={handleRemoveFromSlot}
+                    onClearSlot={handleClearSlot}
+                    showBundleActions
+                    onTakeOffBundle={handleTakeOffBundle}
+                    onBreakApartBundle={handleBreakApartBundle}
+                  />
+                </>
               )}
             </div>
           )}

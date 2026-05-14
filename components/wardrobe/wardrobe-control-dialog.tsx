@@ -30,60 +30,17 @@ import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrob
 import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { useOutfit } from '@/lib/hooks/use-outfit'
 import { type EquippedBundle } from '@/lib/wardrobe/group-equipped'
+import {
+  breakApartBundleInSlots,
+  cloneSlots,
+  takeOffBundleFromSlots,
+} from '@/lib/wardrobe/bundle-mutations'
 import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
 import { WardrobeItemEditor } from './wardrobe-item-editor'
 import { WardrobeItemRow } from './wardrobe-item-row'
 import { OutfitComposer } from './outfit-composer'
 import { ImportFromImageModal } from './import-from-image-modal'
-
-/** Deep-copy a slot snapshot (so callers can mutate without aliasing). */
-function cloneSlots(slots: EquippedSlots): EquippedSlots {
-  return {
-    top: [...slots.top],
-    bottom: [...slots.bottom],
-    footwear: [...slots.footwear],
-    accessories: [...slots.accessories],
-  }
-}
-
-/**
- * Remove a bundle's composite id from every slot it occupies.
- */
-function takeOffBundleFromSlots(
-  slots: EquippedSlots,
-  bundle: EquippedBundle,
-): EquippedSlots {
-  const next = cloneSlots(slots)
-  for (const slot of bundle.occupiedSlots) {
-    next[slot] = next[slot].filter((id) => id !== bundle.compositeId)
-  }
-  return next
-}
-
-/**
- * Replace a bundle's composite id with its direct component ids in every slot
- * it occupies. Multi-slot leaves go into all slots they cover.
- */
-function breakApartBundleInSlots(
-  slots: EquippedSlots,
-  bundle: EquippedBundle,
-  itemsById: Map<string, WardrobeItem>,
-): EquippedSlots {
-  const composite = itemsById.get(bundle.compositeId)
-  if (!composite) return slots
-  const next = cloneSlots(slots)
-  for (const slot of bundle.occupiedSlots) {
-    const replacementIds = composite.componentItemIds.filter((leafId) => {
-      const leaf = itemsById.get(leafId)
-      return leaf?.types.includes(slot) ?? false
-    })
-    next[slot] = next[slot].flatMap((id) =>
-      id === bundle.compositeId ? replacementIds : [id],
-    )
-  }
-  return next
-}
 
 interface CharacterSummary {
   id: string

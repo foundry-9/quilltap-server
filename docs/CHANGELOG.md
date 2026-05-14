@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Fix: Chat-start "Compose outfit" mode can clear seeded bundles
+
+The chat-start outfit composer (the per-character "Compose outfit" radio in the new-chat form) seeds the four slots from the character's default-outfit items, then renders any composite that occupies ≥ 2 slots as a bundle card. The wardrobe Outfit Builder shows `Take off bundle` / `Break apart` actions on those cards; the chat-start composer was rendering them with `showBundleActions={false}`, so if a character's defaults included a multi-slot bundle (e.g. a "Work" outfit covering top/bottom/footwear/accessories), the operator had no way to remove it before chat start — every slot row read `Empty` while the bundle remained stuck above. Bundle actions now match the Outfit Builder, plus a new `Clear all` button next to the composer empties every slot in one click. The two slot-mutation helpers (`takeOffBundleFromSlots`, `breakApartBundleInSlots`, plus `cloneSlots`) moved out of `components/wardrobe/wardrobe-control-dialog.tsx` into `lib/wardrobe/bundle-mutations.ts` so both surfaces share one implementation.
+
+#### Fix: Hide "Let character choose" outfit mode for user-controlled characters
+
+The chat-start outfit selector exposed all four modes (Use defaults / Compose outfit / Let character choose / Start undressed) for every character in the chat, including the operator's own user-controlled character. For a user-controlled character, "Let character choose" is meaningless — the new-chat dialog *is* the moment of choosing, and there is no LLM to defer to. `OutfitSelectorCharacter` now carries an `isUserControlled` flag (set in `NewChatForm.tsx` when the user character is appended to the outfit list); when true, the `llm_choose` option is omitted from the radio group.
+
 #### Fix: Log rotation produces stable filenames and sweeps stray copies on startup
 
 `FileTransport` (`lib/logging/transports/file.ts`) previously rotated `combined.log` and `error.log` into `combined.log.<N>` / `error.log.<N>`. On iCloud-synced instances that pattern collided with Apple's conflict-resolution naming, leaving the logs directory littered with `combined 2.log`, `combined(2).log`, `combined.log.6 2`, `combined.log(1).3`, etc., and surviving runs of an older rotator made things worse.
