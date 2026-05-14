@@ -1928,6 +1928,9 @@ describe('readCharacterVaultWardrobe — componentItems frontmatter', () => {
         findManyByMountPointsAndPath: jest.fn().mockResolvedValue([]),
         findManyByMountPointsInFolder,
       },
+      wardrobe: {
+        findArchetypes: jest.fn().mockResolvedValue([]),
+      },
     });
     return { findManyByMountPointsInFolder };
   }
@@ -2057,5 +2060,69 @@ describe('readCharacterVaultWardrobe — componentItems frontmatter', () => {
 
     const result = await readCharacterVaultWardrobe('mount-d', 'char-d');
     expect(result!.items[0].componentItemIds).toEqual([]);
+  });
+
+  it('resolves componentItems: UUID refs that point at shared archetypes', async () => {
+    // A character-owned bundle whose only component is a shared archetype
+    // (characterId === null, lives in the DB but not in this character's
+    // vault). Without archetype seeding the ref would be dropped and the
+    // bundle silently emptied.
+    const fitbitId = '4c18725d-70bb-4cd6-a9d3-1f20c4aa8c7d';
+    const bundleId = '11111111-2222-4333-8444-555555555555';
+
+    const findManyByMountPointsInFolder = jest
+      .fn()
+      .mockImplementation((_ids: string[], folder: string) => {
+        if (folder === 'Wardrobe') {
+          return Promise.resolve([
+            vaultDoc(
+              'mount-e',
+              'Naked Social.md',
+              [
+                '---',
+                `id: ${bundleId}`,
+                'title: Naked Social',
+                'types:',
+                '- accessories',
+                'componentItems:',
+                `- ${fitbitId}`,
+                '---',
+                '',
+                '',
+              ].join('\n'),
+            ),
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+    getRepositoriesMock.mockReturnValue({
+      docMountDocuments: {
+        findManyByMountPointsAndPath: jest.fn().mockResolvedValue([]),
+        findManyByMountPointsInFolder,
+      },
+      wardrobe: {
+        findArchetypes: jest.fn().mockResolvedValue([
+          {
+            id: fitbitId,
+            characterId: null,
+            title: 'Fitbit',
+            description: null,
+            types: ['accessories'],
+            appropriateness: null,
+            isDefault: false,
+            componentItemIds: [],
+            archivedAt: null,
+            migratedFromClothingRecordId: null,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ]),
+      },
+    });
+
+    const result = await readCharacterVaultWardrobe('mount-e', 'char-e');
+    const bundle = result!.items.find((i) => i.id === bundleId);
+    expect(bundle).toBeDefined();
+    expect(bundle!.componentItemIds).toEqual([fitbitId]);
   });
 });

@@ -1167,6 +1167,26 @@ export async function readCharacterVaultWardrobe(
       itemBySlug.set(slug, item);
     }
 
+    // Seed shared archetypes into the lookup maps so bundles in this vault can
+    // reference them. Without this, refs to shared items (Fitbit, Apple Watch,
+    // etc.) get stripped on every read of any outfit that bundles them, since
+    // archetypes don't live in the character's vault folder. Personal items
+    // win slug collisions; archetypes are pure fallback.
+    const hasComponentRefs = items.some((item) => item.componentItemIds.length > 0);
+    if (hasComponentRefs) {
+      const archetypes = await repos.wardrobe.findArchetypes(true);
+      for (const arche of archetypes) {
+        if (!itemById.has(arche.id)) {
+          itemById.set(arche.id, arche);
+        }
+        const slug = slugifyWardrobeTitle(arche.title);
+        if (slug.length > 0 && !claimedSlugs.has(slug)) {
+          claimedSlugs.add(slug);
+          itemBySlug.set(slug, arche);
+        }
+      }
+    }
+
     resolveAndCheckComponentItems(items, itemBySlug, itemById, charId, mountPointId);
 
     return { items };
