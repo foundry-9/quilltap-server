@@ -20,20 +20,6 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
   }
 
   /**
-   * Find an image profile by ID
-   */
-  async findById(id: string): Promise<ImageProfile | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all image profiles
-   */
-  async findAll(): Promise<ImageProfile[]> {
-    return this._findAll();
-  }
-
-  /**
    * Find image profiles by name for a user
    */
   async findByName(userId: string, name: string): Promise<ImageProfile | null> {

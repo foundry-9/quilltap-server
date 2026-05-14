@@ -25,23 +25,6 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
   // ============================================================================
 
   /**
-   * Find a folder by ID
-   * @param id The folder ID
-   * @returns Promise<Folder | null> The folder if found, null otherwise
-   */
-  async findById(id: string): Promise<Folder | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all folders
-   * @returns Promise<Folder[]> Array of all folders
-   */
-  async findAll(): Promise<Folder[]> {
-    return this._findAll();
-  }
-
-  /**
    * Create a new folder
    * @param data The folder data (without id, createdAt, updatedAt)
    * @param options Optional CreateOptions to specify ID and createdAt (for sync)

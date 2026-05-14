@@ -31,14 +31,6 @@ export class ConversationAnnotationsRepository extends AbstractBaseRepository<Co
   // Abstract method implementations
   // ============================================================================
 
-  async findById(id: string): Promise<ConversationAnnotation | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<ConversationAnnotation[]> {
-    return this._findAll();
-  }
-
   async create(
     data: Omit<ConversationAnnotation, 'id' | 'createdAt' | 'updatedAt'>,
     options?: import('./base.repository').CreateOptions

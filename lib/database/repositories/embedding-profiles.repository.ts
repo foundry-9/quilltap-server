@@ -24,20 +24,6 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
   // ============================================================================
 
   /**
-   * Find an embedding profile by ID
-   */
-  async findById(id: string): Promise<EmbeddingProfile | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all embedding profiles
-   */
-  async findAll(): Promise<EmbeddingProfile[]> {
-    return this._findAll();
-  }
-
-  /**
    * Find embedding profile by name for a specific user
    */
   async findByName(userId: string, name: string): Promise<EmbeddingProfile | null> {

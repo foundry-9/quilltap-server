@@ -107,14 +107,6 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
   // Abstract method implementations
   // ============================================================================
 
-  async findById(id: string): Promise<DocMountPoint | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<DocMountPoint[]> {
-    return this._findAll();
-  }
-
   async create(
     data: Omit<DocMountPoint, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions

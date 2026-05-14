@@ -5,7 +5,7 @@
 import { createLLMProvider } from '@/lib/llm'
 import type { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { getRepositories } from '@/lib/repositories/factory'
+import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
 import { getErrorMessage } from '@/lib/error-utils'
 import { logger } from '@/lib/logger'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
@@ -61,36 +61,6 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
 }
 
 /**
- * Gets the decrypted API key for a cheap LLM selection
- */
-async function getApiKeyForSelection(
-  selection: CheapLLMSelection,
-  userId: string
-): Promise<string | null> {
-  if (selection.isLocal) {
-    // Local models don't need an API key
-    return ''
-  }
-
-  if (!selection.connectionProfileId) {
-    return null
-  }
-
-  const repos = getRepositories()
-  const profile = await repos.connections.findById(selection.connectionProfileId)
-  if (!profile?.apiKeyId) {
-    return null
-  }
-
-  const apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId)
-  if (!apiKey) {
-    return null
-  }
-
-  return apiKey.key_value
-}
-
-/**
  * Sends messages to a cheap LLM provider with temperature handling and logging
  * Extracted from executeCheapLLMTask to avoid tripling the code for each temperature path
  */
@@ -104,7 +74,7 @@ async function sendToProvider(
   maxTokens?: number,
   characterId?: string
 ): Promise<ProviderResponse> {
-  const apiKey = await getApiKeyForSelection(selection, userId)
+  const apiKey = await getApiKeyForCheapLLMSelection(selection, userId)
   if (apiKey === null) {
     throw new Error('No API key available for cheap LLM provider')
   }

@@ -33,14 +33,6 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
   // Abstract method implementations
   // ============================================================================
 
-  async findById(id: string): Promise<ChatDocument | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<ChatDocument[]> {
-    return this._findAll();
-  }
-
   async create(
     data: Omit<ChatDocument, 'id' | 'createdAt' | 'updatedAt'>,
     options?: import('./base.repository').CreateOptions

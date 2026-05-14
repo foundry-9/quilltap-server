@@ -23,20 +23,6 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Find a wardrobe item by ID
-   */
-  async findById(id: string): Promise<WardrobeItem | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all wardrobe items
-   */
-  async findAll(): Promise<WardrobeItem[]> {
-    return this._findAll();
-  }
-
-  /**
    * Find multiple wardrobe items by their IDs in a single query
    * @param ids Array of wardrobe item IDs
    * @returns Promise<WardrobeItem[]> Array of found items (may be shorter than input if some IDs don't exist)

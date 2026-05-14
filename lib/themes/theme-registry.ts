@@ -22,7 +22,7 @@ import { loadInstalledBundles, loadBundledThemesFromDir } from './bundle-loader'
 import type { LoadedBundleTheme } from './bundle-loader';
 import { getBundledThemesDir } from '@/lib/paths';
 import type { ThemePlugin, EmbeddedFont } from '@quilltap/plugin-types';
-import { AbstractRegistry } from '@/lib/plugins/base-registry';
+import { AbstractMapRegistry } from '@/lib/plugins/abstract-map-registry';
 
 // ============================================================================
 // TYPES
@@ -137,7 +137,7 @@ export interface ThemeLoadError {
 export interface ThemeRegistryState {
   initialized: boolean;
   themes: Map<string, LoadedTheme>;
-  errors: ThemeLoadError[];
+  errors: Map<string, ThemeLoadError>;
   lastInitTime: Date | null;
 }
 
@@ -203,7 +203,11 @@ function resolveSubsystemOverrides(
 // THEME REGISTRY CLASS
 // ============================================================================
 
-class ThemeRegistry extends AbstractRegistry<ThemeRegistryState> {
+class ThemeRegistry extends AbstractMapRegistry<
+  LoadedTheme,
+  ThemeRegistryState,
+  ThemeLoadError
+> {
   protected readonly registryName = 'theme-registry';
   protected readonly globalStateKey = '__quilltapThemeRegistryState';
 
@@ -211,9 +215,17 @@ class ThemeRegistry extends AbstractRegistry<ThemeRegistryState> {
     return {
       initialized: false,
       themes: new Map(),
-      errors: [],
+      errors: new Map(),
       lastInitTime: null,
     };
+  }
+
+  protected getItemMap(): Map<string, LoadedTheme> {
+    return this.state.themes;
+  }
+
+  protected getErrorMap(): Map<string, ThemeLoadError> {
+    return this.state.errors;
   }
 
   /**
@@ -222,7 +234,7 @@ class ThemeRegistry extends AbstractRegistry<ThemeRegistryState> {
    */
   async initialize(): Promise<void> {
     // Clear errors but preserve themes registered via registerThemeModule()
-    this.state.errors = [];
+    this.state.errors.clear();
 
     // Register the default theme if not already present
     if (!this.state.themes.has('default')) {
@@ -248,8 +260,9 @@ class ThemeRegistry extends AbstractRegistry<ThemeRegistryState> {
           plugin: plugin.manifest.name,
           error: errorMessage,
         });
-        this.state.errors.push({
-          themeId: this.extractThemeId(plugin.manifest.name),
+        const themeId = this.extractThemeId(plugin.manifest.name);
+        this.state.errors.set(themeId, {
+          themeId,
           pluginName: plugin.manifest.name,
           error: errorMessage,
         });
@@ -619,7 +632,7 @@ class ThemeRegistry extends AbstractRegistry<ThemeRegistryState> {
             themeId: bundle.manifest.id,
             error: errorMessage,
           });
-          this.state.errors.push({
+          this.state.errors.set(bundle.manifest.id, {
             themeId: bundle.manifest.id,
             pluginName: `bundle:${bundle.manifest.id}`,
             error: errorMessage,
@@ -831,7 +844,7 @@ class ThemeRegistry extends AbstractRegistry<ThemeRegistryState> {
       total: themes.length,
       withDarkMode: themes.filter(t => t.supportsDarkMode).length,
       withCssOverrides: themes.filter(t => t.cssOverrides).length,
-      errors: this.state.errors.length,
+      errors: this.state.errors.size,
       initialized: this.state.initialized,
       lastInitTime: this.state.lastInitTime?.toISOString() || null,
     };
@@ -841,7 +854,7 @@ class ThemeRegistry extends AbstractRegistry<ThemeRegistryState> {
    * Get all loading errors
    */
   getErrors(): ThemeLoadError[] {
-    return [...this.state.errors];
+    return Array.from(this.state.errors.values());
   }
 
   /**
@@ -864,7 +877,7 @@ class ThemeRegistry extends AbstractRegistry<ThemeRegistryState> {
         source: theme.source,
         deprecated: theme.deprecated || false,
       })),
-      errors: this.state.errors,
+      errors: this.getErrors(),
       stats: this.getStats(),
     };
   }

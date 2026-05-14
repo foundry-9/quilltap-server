@@ -49,14 +49,6 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
   // Abstract method implementations
   // ============================================================================
 
-  async findById(id: string): Promise<ConversationChunk | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<ConversationChunk[]> {
-    return this._findAll();
-  }
-
   async create(
     data: Omit<ConversationChunk, 'id' | 'createdAt' | 'updatedAt'>,
     options?: import('./base.repository').CreateOptions

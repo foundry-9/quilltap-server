@@ -20,20 +20,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   }
 
   /**
-   * Find file by ID
-   */
-  async findById(id: string): Promise<FileEntry | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all files
-   */
-  async findAll(): Promise<FileEntry[]> {
-    return this._findAll();
-  }
-
-  /**
    * Find multiple files by their IDs in a single query
    * @param ids Array of file IDs
    * @returns Promise<FileEntry[]> Array of found files (may be shorter than input if some IDs don't exist)

@@ -20,7 +20,6 @@
  */
 
 import path from 'path';
-import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
@@ -28,6 +27,11 @@ import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { emitDocumentWritten } from '@/lib/mount-index/db-store-events';
 import { pickPrimaryProjectStore } from '@/lib/mount-index/project-store-naming';
 import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
+import {
+  UNSAFE_LEAF_CHARS,
+  sanitizeLeafName,
+  resolveUniqueRelativePath,
+} from './bridge-path-helpers';
 
 const STORAGE_KEY_PREFIX = 'mount-blob:';
 
@@ -264,15 +268,6 @@ export async function deleteMountBlob(storageKey: string): Promise<void> {
 // Internal helpers
 // ============================================================================
 
-const UNSAFE_LEAF_CHARS = /[\/\\:*?"<>|\x00-\x1f\x7f]/g;
-
-function sanitizeLeafName(filename: string): string {
-  const basename = filename.split(/[\\/]/).pop() ?? filename;
-  let safe = basename.replace(UNSAFE_LEAF_CHARS, '_').replace(/_{2,}/g, '_');
-  safe = safe.replace(/^[_.]+/, '').replace(/[_.]+$/, '');
-  return safe || 'unnamed';
-}
-
 function normaliseFolderDir(folderPath?: string | null): string {
   if (!folderPath) return '';
   const trimmed = folderPath.replace(/^\/+|\/+$/g, '').replace(/\\+/g, '/');
@@ -289,27 +284,4 @@ function detectMirrorFileType(relativePath: string): 'pdf' | 'docx' | 'blob' {
   if (ext === '.pdf') return 'pdf';
   if (ext === '.docx') return 'docx';
   return 'blob';
-}
-
-async function resolveUniqueRelativePath(
-  mountPointId: string,
-  desired: string
-): Promise<string> {
-  const repos = getRepositories();
-  const existing = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, desired);
-  if (!existing) return desired;
-
-  const dir = path.posix.dirname(desired);
-  const ext = path.extname(desired);
-  const stem = path.posix.basename(desired, ext);
-  const prefix = dir === '.' || dir === '' ? '' : `${dir}/`;
-
-  for (let attempt = 2; attempt <= 999; attempt++) {
-    const candidate = `${prefix}${stem} (${attempt})${ext}`;
-    const collision = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, candidate);
-    if (!collision) return candidate;
-  }
-  // Extraordinarily unlikely; fall back to a sha-tagged name.
-  const hash = createHash('sha1').update(`${desired}:${Date.now()}`).digest('hex').slice(0, 8);
-  return `${prefix}${stem}-${hash}${ext}`;
 }

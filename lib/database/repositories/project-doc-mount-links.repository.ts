@@ -84,14 +84,6 @@ export class ProjectDocMountLinksRepository extends AbstractBaseRepository<Proje
   // Abstract method implementations
   // ============================================================================
 
-  async findById(id: string): Promise<ProjectDocMountLink | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<ProjectDocMountLink[]> {
-    return this._findAll();
-  }
-
   async create(
     data: Omit<ProjectDocMountLink, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions

@@ -527,19 +527,6 @@ describe('User-Scoped Repositories', () => {
     });
   });
 
-  describe('UserScopedTagsRepository', () => {
-    it('findByName scopes to user', async () => {
-      const tag = makeTag();
-      mockFactoryRepos.tags.findByName.mockResolvedValue(tag);
-      
-      const repos = userScoped.getUserRepositories(TEST_USER_ID);
-      const result = await repos.tags.findByName('Test Tag');
-      
-      expect(mockFactoryRepos.tags.findByName).toHaveBeenCalledWith(TEST_USER_ID, 'Test Tag');
-      expect(result).toEqual(tag);
-    });
-  });
-
   describe('UserScopedConnectionsRepository', () => {
     it('findDefault scopes to user', async () => {
       const connection = {} as ConnectionProfile;

@@ -21,20 +21,6 @@ export class CharacterPluginDataRepository extends AbstractBaseRepository<Charac
   }
 
   /**
-   * Find a plugin data entry by ID
-   */
-  async findById(id: string): Promise<CharacterPluginData | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all plugin data entries
-   */
-  async findAll(): Promise<CharacterPluginData[]> {
-    return this._findAll();
-  }
-
-  /**
    * Find all plugin data for a specific character
    * @param characterId The character ID
    * @returns All plugin data entries for this character

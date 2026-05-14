@@ -96,14 +96,6 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   // Abstract method implementations
   // ============================================================================
 
-  async findById(id: string): Promise<DocMountChunk | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<DocMountChunk[]> {
-    return this._findAll();
-  }
-
   async create(
     data: Omit<DocMountChunk, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions

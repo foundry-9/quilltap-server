@@ -26,14 +26,6 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
   // Abstract method implementations
   // ============================================================================
 
-  async findById(id: string): Promise<TerminalSession | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<TerminalSession[]> {
-    return this._findAll();
-  }
-
   async create(
     data: Omit<TerminalSession, 'id'>,
     options?: CreateOptions

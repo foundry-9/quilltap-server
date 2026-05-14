@@ -47,9 +47,11 @@ import type {
 
 /**
  * Base class for user-scoped repositories.
- * Provides common CRUD operations with automatic user scoping.
+ * Provides common CRUD operations with automatic user scoping. Concrete
+ * (instantiated directly for Tags, ImageProfiles, EmbeddingProfiles where
+ * the user-scoping helpers on top of CRUD aren't actually consumed).
  */
-abstract class UserScopedRepository<
+class UserScopedRepository<
   T extends { userId?: string; id: string },
   R extends {
     findById(id: string): Promise<T | null>;
@@ -252,15 +254,6 @@ class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadat
 }
 
 /**
- * User-scoped Tags Repository
- */
-class UserScopedTagsRepository extends UserScopedRepository<Tag, TagsRepository> {
-  async findByName(name: string): Promise<Tag | null> {
-    return this.baseRepo.findByName(this.userId, name);
-  }
-}
-
-/**
  * User-scoped Connection Profiles Repository (includes API keys)
  */
 class UserScopedConnectionsRepository extends UserScopedTaggableRepository<ConnectionProfile, ConnectionProfilesRepository> {
@@ -298,24 +291,6 @@ class UserScopedConnectionsRepository extends UserScopedTaggableRepository<Conne
     const apiKey = await this.findApiKeyById(id);
     if (!apiKey) return null;
     return this.baseRepo.recordApiKeyUsage(id);
-  }
-}
-
-/**
- * User-scoped Image Profiles Repository
- */
-class UserScopedImageProfilesRepository extends UserScopedRepository<ImageProfile, ImageProfilesRepository> {
-  async findDefault(): Promise<ImageProfile | null> {
-    return this.baseRepo.findDefault(this.userId);
-  }
-}
-
-/**
- * User-scoped Embedding Profiles Repository
- */
-class UserScopedEmbeddingProfilesRepository extends UserScopedRepository<EmbeddingProfile, EmbeddingProfilesRepository> {
-  async findDefault(): Promise<EmbeddingProfile | null> {
-    return this.baseRepo.findDefault(this.userId);
   }
 }
 
@@ -532,13 +507,13 @@ export interface UserScopedRepositoryContainer {
   /** Chats repository - only returns user's chats */
   chats: UserScopedChatsRepository;
   /** Tags repository - only returns user's tags */
-  tags: UserScopedTagsRepository;
+  tags: UserScopedRepository<Tag, TagsRepository>;
   /** Connection profiles & API keys repository - only returns user's profiles/keys */
   connections: UserScopedConnectionsRepository;
   /** Image profiles repository - only returns user's image profiles */
-  imageProfiles: UserScopedImageProfilesRepository;
+  imageProfiles: UserScopedRepository<ImageProfile, ImageProfilesRepository>;
   /** Embedding profiles repository - only returns user's embedding profiles */
-  embeddingProfiles: UserScopedEmbeddingProfilesRepository;
+  embeddingProfiles: UserScopedRepository<EmbeddingProfile, EmbeddingProfilesRepository>;
   /** Memories repository - only returns memories for user's characters */
   memories: UserScopedMemoriesRepository;
   /** Files repository - only returns user's files */
@@ -589,10 +564,10 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
   // Create user-scoped wrappers
   const characters = new UserScopedCharactersRepository(userId, baseRepos.characters);
   const chats = new UserScopedChatsRepository(userId, baseRepos.chats);
-  const tags = new UserScopedTagsRepository(userId, baseRepos.tags);
+  const tags = new UserScopedRepository<Tag, TagsRepository>(userId, baseRepos.tags);
   const connections = new UserScopedConnectionsRepository(userId, baseRepos.connections);
-  const imageProfiles = new UserScopedImageProfilesRepository(userId, baseRepos.imageProfiles);
-  const embeddingProfiles = new UserScopedEmbeddingProfilesRepository(userId, baseRepos.embeddingProfiles);
+  const imageProfiles = new UserScopedRepository<ImageProfile, ImageProfilesRepository>(userId, baseRepos.imageProfiles);
+  const embeddingProfiles = new UserScopedRepository<EmbeddingProfile, EmbeddingProfilesRepository>(userId, baseRepos.embeddingProfiles);
   const files = new UserScopedFilesRepository(userId, baseRepos.files);
   const memories = new UserScopedMemoriesRepository(userId, baseRepos.memories, characters);
   const projects = new UserScopedProjectsRepository(userId, baseRepos.projects);

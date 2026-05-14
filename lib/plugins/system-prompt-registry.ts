@@ -13,7 +13,7 @@
 
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
-import { AbstractRegistry } from '@/lib/plugins/base-registry';
+import { AbstractMapRegistry } from '@/lib/plugins/abstract-map-registry';
 
 // ============================================================================
 // TYPES
@@ -84,7 +84,7 @@ export interface SystemPromptLoadError {
 export interface SystemPromptRegistryState {
   initialized: boolean;
   prompts: Map<string, LoadedSystemPrompt>;
-  errors: SystemPromptLoadError[];
+  errors: Map<string, SystemPromptLoadError>;
   lastInitTime: Date | null;
 }
 
@@ -100,7 +100,11 @@ declare global {
 // SYSTEM PROMPT REGISTRY CLASS
 // ============================================================================
 
-class SystemPromptRegistry extends AbstractRegistry<SystemPromptRegistryState> {
+class SystemPromptRegistry extends AbstractMapRegistry<
+  LoadedSystemPrompt,
+  SystemPromptRegistryState,
+  SystemPromptLoadError
+> {
   protected readonly registryName = 'system-prompt-registry';
   protected readonly globalStateKey = '__quilltapSystemPromptRegistryState';
 
@@ -108,9 +112,17 @@ class SystemPromptRegistry extends AbstractRegistry<SystemPromptRegistryState> {
     return {
       initialized: false,
       prompts: new Map(),
-      errors: [],
+      errors: new Map(),
       lastInitTime: null,
     };
+  }
+
+  protected getItemMap(): Map<string, LoadedSystemPrompt> {
+    return this.state.prompts;
+  }
+
+  protected getErrorMap(): Map<string, SystemPromptLoadError> {
+    return this.state.errors;
   }
 
   /**
@@ -119,7 +131,7 @@ class SystemPromptRegistry extends AbstractRegistry<SystemPromptRegistryState> {
   async initialize(plugins: SystemPromptPluginData[]): Promise<void> {
     // Clear existing state
     this.state.prompts.clear();
-    this.state.errors = [];
+    this.state.errors.clear();
 
     for (const plugin of plugins) {
       try {
@@ -135,7 +147,7 @@ class SystemPromptRegistry extends AbstractRegistry<SystemPromptRegistryState> {
           plugin: plugin.metadata.pluginId,
           error: errorMessage,
         });
-        this.state.errors.push({
+        this.state.errors.set(plugin.metadata.pluginId, {
           promptId: plugin.metadata.pluginId,
           pluginName: plugin.metadata.pluginId,
           error: errorMessage,
@@ -149,7 +161,7 @@ class SystemPromptRegistry extends AbstractRegistry<SystemPromptRegistryState> {
     this.registryLogger.info('System prompt registry initialized', {
       totalPrompts: this.state.prompts.size,
       plugins: plugins.length,
-      errors: this.state.errors.length,
+      errors: this.state.errors.size,
     });
   }
 
@@ -177,7 +189,7 @@ class SystemPromptRegistry extends AbstractRegistry<SystemPromptRegistryState> {
       const promptId = `${pluginId}/${prompt.name}`;
 
       if (!prompt.name || !prompt.content) {
-        this.state.errors.push({
+        this.state.errors.set(promptId, {
           promptId,
           pluginName: pluginId,
           error: 'Prompt missing required fields: name, content',
@@ -287,7 +299,7 @@ class SystemPromptRegistry extends AbstractRegistry<SystemPromptRegistryState> {
   getStats() {
     return {
       total: this.state.prompts.size,
-      errors: this.state.errors.length,
+      errors: this.state.errors.size,
       initialized: this.state.initialized,
       lastInitTime: this.state.lastInitTime?.toISOString() || null,
     };
@@ -297,7 +309,7 @@ class SystemPromptRegistry extends AbstractRegistry<SystemPromptRegistryState> {
    * Get all loading errors
    */
   getErrors(): SystemPromptLoadError[] {
-    return [...this.state.errors];
+    return Array.from(this.state.errors.values());
   }
 
   /**
@@ -316,7 +328,7 @@ class SystemPromptRegistry extends AbstractRegistry<SystemPromptRegistryState> {
         version: prompt.version,
         contentLength: prompt.content.length,
       })),
-      errors: this.state.errors,
+      errors: this.getErrors(),
       stats: this.getStats(),
     };
   }

@@ -15,6 +15,7 @@ import { createLLMProvider } from '@/lib/llm'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/repositories/factory'
+import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
 
 import { getErrorMessage } from '@/lib/error-utils'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
@@ -104,35 +105,6 @@ If the content is completely safe and benign, respond:
 
 Be accurate - don't over-flag normal creative writing, worldbuilding, or historical references.
 Only flag content that would genuinely require an uncensored model to handle.`
-
-/**
- * Gets the decrypted API key for a cheap LLM selection
- */
-async function getApiKeyForSelection(
-  selection: CheapLLMSelection,
-  userId: string
-): Promise<string | null> {
-  if (selection.isLocal) {
-    return ''
-  }
-
-  if (!selection.connectionProfileId) {
-    return null
-  }
-
-  const repos = getRepositories()
-  const profile = await repos.connections.findById(selection.connectionProfileId)
-  if (!profile?.apiKeyId) {
-    return null
-  }
-
-  const apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId)
-  if (!apiKey) {
-    return null
-  }
-
-  return apiKey.key_value
-}
 
 /**
  * OpenAI moderation category → Concierge category mapping
@@ -361,7 +333,7 @@ export async function classifyContent(
 
     // Fall back to cheap LLM classification
     // Get API key
-    const apiKey = await getApiKeyForSelection(cheapLLMSelection, userId)
+    const apiKey = await getApiKeyForCheapLLMSelection(cheapLLMSelection, userId)
     if (apiKey === null) {
       logger.warn('[Gatekeeper] No API key available for classification, failing safe')
       return safeFallback

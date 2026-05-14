@@ -4,6 +4,18 @@
 
 ### 4.4-dev
 
+#### Chore: Refactor 4.4 Phase 3 — registry base completion, repo overrides, API-key service
+
+Third pass of the duplicate-function consolidation tracked in `docs/developer/features/REFACTOR_4_4.md`. Five medium-effort clusters resolved:
+
+- `lib/services/api-key.service.ts`: new module with `getApiKeyForConnectionProfile(profileId, userId)` and `getApiKeyForCheapLLMSelection(selection, userId)`. The two byte-identical `getApiKeyForSelection` copies in `lib/memory/cheap-llm-tasks/core-execution.ts` and `lib/services/dangerous-content/gatekeeper.service.ts` both delegate to the new helper. `lib/llm/pricing-fetcher.ts:getApiKeyForProvider`, `lib/embedding/embedding-service.ts:getApiKeyForProfile`, and `lib/services/auto-configure.service.ts:getApiKey` stay specialized — their inputs and policies differ.
+- `lib/repositories/user-scoped.ts`: removed `UserScopedTagsRepository`, `UserScopedImageProfilesRepository`, and `UserScopedEmbeddingProfilesRepository`. Each carried a single user-injection method (`findByName(name)`, `findDefault()`, `findDefault()`); a grep showed only the EmbeddingProfiles `findDefault()` was actually called via the wrapper (one site in `lib/tools/capabilities-report.ts:collectEmbeddingInfo`), which switched to the base repo with explicit `userId`. `UserScopedRepository` is now concrete and instantiated directly for those entities. Dangling Jest test for `repos.tags.findByName(name)` removed.
+- `lib/plugins/abstract-map-registry.ts`: added a third type parameter `TError = string`. `lib/plugins/system-prompt-registry.ts` and `lib/themes/theme-registry.ts` now extend it with `TError = SystemPromptLoadError` / `ThemeLoadError` and their structured error objects preserved. Their `errors` storage flipped from arrays to `Map<string, TError>` keyed by promptId/themeId. `getErrors()` callers see no change; external callers only use `getAll()`.
+- `lib/file-storage/bridge-path-helpers.ts`: new module exporting `sanitizeLeafName`, `resolveUniqueRelativePath`, and the `UNSAFE_LEAF_CHARS` regex. All four mount-write bridges (`character-vault-bridge`, `lantern-store-bridge`, `project-store-bridge`, `user-uploads-bridge`) drop their byte-identical copies and import. No abstract base — the bridges' write methods diverge meaningfully (main/history with overwrite-in-place, upsert against existing mirror row, simple subfolder-append) and a templated base would need hook methods with no offsetting reduction.
+- `lib/database/repositories/base.repository.ts`: `findById` and `findAll` promoted from `abstract` to concrete defaults that call `_findById` / `_findAll`. 21 repos with pure pass-through overrides (tags, projects, files, embedding/image profiles, llm-logs, folders, plugin-config, terminal-sessions, provider-models, help-docs, wardrobe, all six `doc-mount-*` repos, project-doc-mount-links, chat-documents, conversation-annotations, conversation-chunks, character-plugin-data, connection-profiles) drop their copies. `create` / `update` / `delete` stay abstract — most repos override them with `safeQuery` + audit logging, and forcing each new repo to opt in is worth the boilerplate.
+
+`npx tsc --noEmit` clean, `npm run lint` clean, full unit suite (322 files, 5,907 tests) green.
+
 #### Chore: Refactor 4.4 Phase 2 — consolidate duplicate small-effort helpers
 
 Second pass of the duplicate-function consolidation tracked in `docs/developer/features/REFACTOR_4_4.md`. Six clusters with real logic differences reconciled:

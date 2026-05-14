@@ -46,14 +46,6 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
   // Abstract method implementations
   // ============================================================================
 
-  async findById(id: string): Promise<HelpDoc | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<HelpDoc[]> {
-    return this._findAll();
-  }
-
   async create(
     data: Omit<HelpDoc, 'id' | 'createdAt' | 'updatedAt'>,
     options?: import('./base.repository').CreateOptions

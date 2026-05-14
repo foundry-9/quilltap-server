@@ -21,15 +21,6 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
   }
 
   /**
-   * Find plugin config by ID
-   * @param id The plugin config ID
-   * @returns Promise<PluginConfig | null> The config if found, null otherwise
-   */
-  async findById(id: string): Promise<PluginConfig | null> {
-    return this._findById(id);
-  }
-
-  /**
    * Find plugin config by user ID and plugin name
    * @param userId The user ID
    * @param pluginName The plugin name
@@ -54,15 +45,6 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
    */
   async findByUserId(userId: string): Promise<PluginConfig[]> {
     const configs = await this.findByFilter({ userId });
-    return configs;
-  }
-
-  /**
-   * Find all plugin configs
-   * @returns Promise<PluginConfig[]> Array of all plugin configs
-   */
-  async findAll(): Promise<PluginConfig[]> {
-    const configs = await this._findAll();
     return configs;
   }
 

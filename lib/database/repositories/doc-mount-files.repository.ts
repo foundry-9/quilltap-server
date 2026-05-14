@@ -98,14 +98,6 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
   // Abstract method implementations
   // ============================================================================
 
-  async findById(id: string): Promise<DocMountFile | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<DocMountFile[]> {
-    return this._findAll();
-  }
-
   async create(
     data: Omit<DocMountFile, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions

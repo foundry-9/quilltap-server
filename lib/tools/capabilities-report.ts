@@ -560,8 +560,8 @@ async function collectImagePromptLLMInfo(userId: string): Promise<ImagePromptLLM
 async function collectEmbeddingInfo(userId: string): Promise<EmbeddingInfo> {
   moduleLogger.info('Collecting embedding provider configuration', { userId });
 
-  const repos = getUserRepositories(userId);
-  const defaultProfile = await repos.embeddingProfiles.findDefault();
+  const repos = getRepositories();
+  const defaultProfile = await repos.embeddingProfiles.findDefault(userId);
 
   const info: EmbeddingInfo = {};
   if (defaultProfile) {
