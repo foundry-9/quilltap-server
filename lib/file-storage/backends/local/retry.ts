@@ -21,6 +21,7 @@
  */
 
 import { createLogger } from '../../../logging/create-logger';
+import { sleep } from '../../../utils/sleep';
 
 const logger = createLogger('file-storage:local:retry');
 
@@ -69,10 +70,6 @@ function isTransientFsError(err: unknown): boolean {
     return true;
   }
   return false;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export interface FsRetryContext {

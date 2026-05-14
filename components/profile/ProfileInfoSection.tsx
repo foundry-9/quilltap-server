@@ -1,24 +1,15 @@
 'use client'
 
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import { formatDateTime } from '@/lib/format-time'
 import { UserProfile } from './types'
 
 export interface ProfileInfoSectionProps {
   profile: UserProfile
 }
 
-/**
- * Format a date string for display
- */
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Never'
-  return new Date(dateStr).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDateTime(dateStr, { monthStyle: 'long' }) || 'Never'
 }
 
 /**

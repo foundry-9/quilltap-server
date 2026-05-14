@@ -6,6 +6,7 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { getErrorMessage } from '@/lib/error-utils'
 import { formatBytes } from '@/lib/utils/format-bytes'
+import { formatDateTime } from '@/lib/format-time'
 import { CapabilitiesReportDialog } from './capabilities-report-dialog'
 
 interface ReportInfo {
@@ -120,19 +121,7 @@ export function CapabilitiesReportCard() {
     }
   }
 
-  const formatDate = (dateString: string): string => {
-    try {
-      return new Date(dateString).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    } catch {
-      return dateString
-    }
-  }
+  const formatDate = formatDateTime
 
   return (
     <div className="qt-card p-6">

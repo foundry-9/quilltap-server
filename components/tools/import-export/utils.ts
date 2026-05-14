@@ -1,23 +1,6 @@
 import type { ExportEntityType } from '@/lib/export/types'
 
 /**
- * Format date string to localized display format
- */
-export function formatDate(dateString: string): string {
-  try {
-    return new Date(dateString).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return dateString
-  }
-}
-
-/**
  * Map camelCase entity keys from API to kebab-case ExportEntityType
  */
 export function toExportEntityType(key: string): ExportEntityType {

@@ -6,18 +6,18 @@
  * DELETE /api/v1/chats/[id]?action=reset-state - Reset chat state to empty
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { serverError, notFound } from '@/lib/api/responses';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
+import { createResetStateHandler, createSetStateHandler } from '@/lib/api/state-handlers';
 
-/**
- * Schema for set-state request
- */
-const setStateRequestSchema = z.object({
-  state: z.record(z.string(), z.unknown()),
-});
+const STATE_CFG = {
+  entityName: 'Chat',
+  idLogKey: 'chatId',
+  selectRepo: (repos: AuthenticatedContext['repos']) => repos.chats,
+  useOwnershipCheck: false,
+} as const;
 
 /**
  * Merge project state into chat state (chat overrides project)
@@ -70,70 +70,5 @@ export async function handleGetState(
   }
 }
 
-/**
- * Set chat state (replaces entire state object)
- */
-export async function handleSetState(
-  req: NextRequest,
-  chatId: string,
-  { user, repos }: AuthenticatedContext
-): Promise<NextResponse> {
-  const chat = await repos.chats.findById(chatId);
-  if (!chat) {
-    return notFound('Chat');
-  }
-
-  const body = await req.json();
-  const validated = setStateRequestSchema.parse(body);
-
-  // Update state
-  const updatedChat = await repos.chats.update(chatId, {
-    state: validated.state,
-  });
-
-  logger.info('[Chats v1] State updated', {
-    chatId,
-    userId: user.id,
-    stateKeys: Object.keys(validated.state),
-  });
-
-  return NextResponse.json({
-    success: true,
-    state: updatedChat?.state || validated.state,
-  });
-}
-
-/**
- * Reset chat state to empty object
- */
-export async function handleResetState(
-  chatId: string,
-  { user, repos }: AuthenticatedContext
-): Promise<NextResponse> {
-  try {
-    const chat = await repos.chats.findById(chatId);
-    if (!chat) {
-      return notFound('Chat');
-    }
-
-    const previousState = (chat.state || {}) as Record<string, unknown>;
-
-    // Reset to empty object
-    await repos.chats.update(chatId, {
-      state: {},
-    });
-
-    logger.info('[Chats v1] State reset', {
-      chatId,
-      userId: user.id,
-    });
-
-    return NextResponse.json({
-      success: true,
-      previousState,
-    });
-  } catch (error) {
-    logger.error('[Chats v1] Error resetting state', { chatId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to reset state');
-  }
-}
+export const handleSetState = createSetStateHandler(STATE_CFG);
+export const handleResetState = createResetStateHandler(STATE_CFG);

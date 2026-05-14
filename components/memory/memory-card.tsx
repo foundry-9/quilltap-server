@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { TagBadge } from '@/components/tags/tag-badge'
+import { formatDate } from '@/lib/format-time'
 
 interface Tag {
   id: string
@@ -49,14 +50,6 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, isDel
     : memory.importance >= 0.4
       ? 'Medium'
       : 'Low'
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
 
   return (
     <div className="qt-card">

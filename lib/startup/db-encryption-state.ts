@@ -13,6 +13,7 @@
  */
 
 import fs from 'fs';
+import { sleepSync } from '../utils/sleep';
 import { logger as migrationLogger } from '../../migrations/lib/logger';
 
 const log = migrationLogger.child({ context: 'db-encryption-state' });
@@ -42,15 +43,6 @@ function isTransientFsError(err: unknown): boolean {
   return typeof code === 'string' && TRANSIENT_FS_CODES.has(code);
 }
 
-function sleepSync(ms: number): void {
-  // Synchronous sleep — fine here because this runs at startup, off the
-  // request path, and the alternative (making the API async) ripples through
-  // a lot of cold-path code.
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    // busy-wait
-  }
-}
 
 /**
  * Read the first 16 bytes of a file, retrying on transient errors.

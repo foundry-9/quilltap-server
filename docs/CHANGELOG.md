@@ -4,6 +4,19 @@
 
 ### 4.4-dev
 
+#### Chore: Refactor 4.4 Phase 2 — consolidate duplicate small-effort helpers
+
+Second pass of the duplicate-function consolidation tracked in `docs/developer/features/REFACTOR_4_4.md`. Six clusters with real logic differences reconciled:
+
+- `lib/format-time.ts` grew four new exports: `formatDate`, `formatDateTime`, `formatRelativeDate`, and `formatChatListDate`. Ten copies of `formatDate` across `components/characters/LLMLogsSection.tsx`, `components/chat/{ChatCard,FileConflictDialog}.tsx`, `components/memory/memory-card.tsx`, `components/profile/ProfileInfoSection.tsx`, `components/tools/{capabilities-report-card,llm-logs-card}.tsx`, `components/tools/tasks-queue/{index,TaskItem}.tsx`, and `components/tools/import-export/utils.ts` collapse to those four. Profile uses `monthStyle: 'long'`; chat-list keeps its today/yesterday/weekday/date logic.
+- `lib/chat-utils.ts`: new module with `transformSalonChatToCardData`, `transformCharacterChatToCardData`, and `confirmAndDeleteChat`. `app/salon/page.tsx` and `components/character/character-conversations-tab.tsx` drop their local `transformChatToCardData` + `deleteChat` copies; each call site keeps ownership of its own post-delete refresh.
+- `lib/utils/sleep.ts`: shared `sleep` (async) + `sleepSync` (busy-wait); replaces local copies in `lib/database/backends/sqlite/mount-index-client.ts`, `lib/file-storage/backends/local/retry.ts`, and `lib/startup/db-encryption-state.ts`.
+- `lib/utils/semver.ts`: object-return `parseVersion` + `compareVersions`; `lib/plugins/{manifest-loader,version-checker}.ts` and `lib/themes/registry-client.ts` use it (registry-client re-exports so the existing test still imports from there). manifest-loader's `[0,0,0]` fallback survives by mapping null → zero triple.
+- `lib/startup/pepper-crypto.ts`: shared AES-256-GCM + PBKDF2 primitives (`hashPepper`, `encryptPepperWithParams`, `decryptPepperWithParams`). `lib/startup/pepper-vault.ts` (100k iterations, SQLite-backed) and `lib/startup/dbkey.ts` (600k iterations, `.dbkey` file with on-disk params) both call into it. 43 existing crypto-path tests still green.
+- `lib/api/state-handlers.ts`: `createSetStateHandler` + `createResetStateHandler` factories. `app/api/v1/chats/[id]/actions/state.ts` and `app/api/v1/projects/[id]/actions/state.ts` both use them. `handleGetState` stays bespoke per route (chats merges parent project state; projects uses `checkOwnership`).
+
+`npx tsc --noEmit` clean, `npm run lint` clean, full unit suite (322 files, 5,908 tests) green.
+
 #### Chore: Refactor 4.4 Phase 1 — consolidate duplicate utilities
 
 First pass of the duplicate-function consolidation tracked in `docs/developer/features/REFACTOR_4_4.md`. Ten trivial-lift clusters collapsed to single sources of truth:

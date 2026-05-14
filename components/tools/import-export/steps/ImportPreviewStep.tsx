@@ -2,7 +2,8 @@
 
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { ENTITY_TYPE_LABELS } from '../types'
-import { formatDate, toExportEntityType } from '../utils'
+import { toExportEntityType } from '../utils'
+import { formatDateTime } from '@/lib/format-time'
 
 interface EntityPreview {
   id: string
@@ -70,7 +71,7 @@ export function ImportPreviewStep({
         <div>
           <p className="qt-text-small qt-text-secondary">Created</p>
           <p className="font-medium text-foreground">
-            {formatDate(preview.manifest.createdAt)}
+            {formatDateTime(preview.manifest.createdAt)}
           </p>
         </div>
         <div>

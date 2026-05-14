@@ -26,6 +26,12 @@ import fs from 'fs';
 import path from 'path';
 import { logger as migrationLogger } from '../../migrations/lib/logger';
 import { getDataDir } from '@/lib/paths';
+import {
+  type PepperCryptoParams,
+  decryptPepperWithParams,
+  encryptPepperWithParams,
+  hashPepper,
+} from './pepper-crypto';
 
 // ============================================================================
 // Types
@@ -140,98 +146,41 @@ function setCurrentState(state: DbKeyState): void {
 // Crypto Helpers (private)
 // ============================================================================
 
-/**
- * Hash a pepper using SHA-256 for verification purposes.
- *
- * The hash is stored in the .dbkey file so we can verify that a decrypted
- * pepper matches what was originally stored, and that an env-provided pepper
- * matches what we expect.
- *
- * @param pepper - The plaintext pepper to hash
- * @returns 64-character hex-encoded SHA-256 hash
- */
-function hashPepper(pepper: string): string {
-  return crypto.createHash('sha256').update(pepper).digest('hex');
-}
-
-/**
- * Encrypt a pepper with a passphrase using AES-256-GCM with PBKDF2 key derivation.
- *
- * Generates fresh random salt and IV for each encryption operation.
- *
- * @param pepper - The plaintext pepper to encrypt
- * @param passphrase - The passphrase to derive the encryption key from
- * @returns Complete DbKeyFileData structure ready to write to disk
- */
 function encryptPepper(pepper: string, passphrase: string): DbKeyFileData {
-
-  const salt = crypto.randomBytes(SALT_LENGTH);
-  const key = crypto.pbkdf2Sync(
-    passphrase,
-    new Uint8Array(salt),
-    PBKDF2_ITERATIONS,
-    KEY_LENGTH,
-    PBKDF2_DIGEST
-  );
-  const iv = crypto.randomBytes(IV_LENGTH);
-
-  const cipher = crypto.createCipheriv(ALGORITHM, new Uint8Array(key), new Uint8Array(iv));
-  let ciphertext = cipher.update(pepper, 'utf8', 'hex');
-  ciphertext += cipher.final('hex');
-  const authTag = cipher.getAuthTag();
-
+  const bundle = encryptPepperWithParams(pepper, passphrase, {
+    algorithm: ALGORITHM,
+    keyLength: KEY_LENGTH,
+    ivLength: IV_LENGTH,
+    saltLength: SALT_LENGTH,
+    kdfIterations: PBKDF2_ITERATIONS,
+    kdfDigest: PBKDF2_DIGEST,
+  });
   return {
     version: 1,
     algorithm: ALGORITHM,
     kdf: 'pbkdf2',
     kdfIterations: PBKDF2_ITERATIONS,
     kdfDigest: PBKDF2_DIGEST,
-    salt: salt.toString('hex'),
-    iv: iv.toString('hex'),
-    ciphertext,
-    authTag: authTag.toString('hex'),
+    ...bundle,
     pepperHash: hashPepper(pepper),
   };
 }
 
 /**
- * Decrypt the pepper from a .dbkey file using the given passphrase.
- *
- * Uses the cryptographic parameters stored in the file (salt, IV, iterations)
- * to derive the same key and decrypt the ciphertext. The GCM auth tag provides
- * tamper detection — if the passphrase is wrong or the file was modified,
- * decryption will fail.
- *
- * @param data - The parsed .dbkey file data
- * @param passphrase - The passphrase to attempt decryption with
- * @returns The decrypted pepper string, or null if decryption failed
+ * Decrypt the pepper from a .dbkey file using the given passphrase. The
+ * cryptographic params (algorithm, iterations, digest) are read from the
+ * file itself so older files keep decrypting after future param upgrades.
  */
 function decryptPepperFromFile(data: DbKeyFileData, passphrase: string): string | null {
-
-  try {
-    const salt = Buffer.from(data.salt, 'hex');
-    const key = crypto.pbkdf2Sync(
-      passphrase,
-      new Uint8Array(salt),
-      data.kdfIterations,
-      KEY_LENGTH,
-      data.kdfDigest
-    );
-    const iv = Buffer.from(data.iv, 'hex');
-
-    const decipher = crypto.createDecipheriv(
-      data.algorithm as 'aes-256-gcm',
-      new Uint8Array(key),
-      new Uint8Array(iv)
-    );
-    decipher.setAuthTag(new Uint8Array(Buffer.from(data.authTag, 'hex')));
-
-    let plaintext = decipher.update(data.ciphertext, 'hex', 'utf8');
-    plaintext += decipher.final('utf8');
-    return plaintext;
-  } catch (error) {
-    return null;
-  }
+  const params: PepperCryptoParams = {
+    algorithm: data.algorithm,
+    keyLength: KEY_LENGTH,
+    ivLength: IV_LENGTH,
+    saltLength: SALT_LENGTH,
+    kdfIterations: data.kdfIterations,
+    kdfDigest: data.kdfDigest,
+  };
+  return decryptPepperWithParams(data, passphrase, params);
 }
 
 /**

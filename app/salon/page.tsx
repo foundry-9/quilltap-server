@@ -3,90 +3,16 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
-import { showConfirmation } from '@/lib/alert'
-import { showErrorToast } from '@/lib/toast'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
-import { ChatCard, type ChatCardData } from '@/components/chat/ChatCard'
+import { ChatCard } from '@/components/chat/ChatCard'
+import {
+  confirmAndDeleteChat,
+  transformSalonChatToCardData,
+  type SalonChatShape,
+} from '@/lib/chat-utils'
 
-interface ChatParticipant {
-  id: string
-  type: 'CHARACTER'
-  characterId?: string | null
-  connectionProfileId?: string | null
-  imageProfileId?: string | null
-  isActive: boolean
-  displayOrder: number
-  character?: {
-    id: string
-    name: string
-    avatarUrl?: string
-    defaultImageId?: string
-    defaultImage?: {
-      id: string
-      filepath: string
-      url?: string
-    }
-    tags?: string[]
-  }
-}
-
-interface Chat {
-  id: string
-  title: string
-  createdAt: string
-  updatedAt: string
-  participants: ChatParticipant[]
-  tags: Array<{
-    tag: {
-      id: string
-      name: string
-    }
-  }>
-  project: {
-    id: string
-    name: string
-    color: string | null
-  } | null
-  storyBackground: {
-    id: string
-    filepath: string
-  } | null
-  isDangerousChat?: boolean
-  _count: {
-    messages: number
-  }
-}
-
-/**
- * Transform API chat data to ChatCardData format
- */
-function transformChatToCardData(chat: Chat): ChatCardData {
-  // Extract active character participants
-  const characters = chat.participants
-    .filter(p => p.type === 'CHARACTER' && p.isActive && p.character)
-    .sort((a, b) => a.displayOrder - b.displayOrder)
-    .map(p => ({
-      id: p.character!.id,
-      name: p.character!.name,
-      avatarUrl: p.character!.avatarUrl,
-      defaultImageId: p.character!.defaultImageId,
-      defaultImage: p.character!.defaultImage,
-      tags: p.character!.tags,
-    }))
-
-  return {
-    id: chat.id,
-    title: chat.title,
-    messageCount: chat._count.messages,
-    participants: characters,
-    tags: chat.tags,
-    updatedAt: chat.updatedAt,
-    project: chat.project,
-    storyBackgroundUrl: chat.storyBackground?.filepath || null,
-    isDangerousChat: chat.isDangerousChat === true,
-  }
-}
+type Chat = SalonChatShape
 
 export default function ChatsPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
@@ -150,15 +76,8 @@ export default function ChatsPage() {
   }, [highlightedChatId])
 
   const deleteChat = async (id: string) => {
-    const confirmed = await showConfirmation('Are you sure you want to delete this chat?')
-    if (!confirmed) return
-
-    try {
-      const res = await fetch(`/api/v1/chats/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete chat')
+    if (await confirmAndDeleteChat(id)) {
       await mutateChats()
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to delete chat')
     }
   }
 
@@ -234,7 +153,7 @@ export default function ChatsPage() {
           {visibleChats.map((chat) => (
             <ChatCard
               key={chat.id}
-              chat={transformChatToCardData(chat)}
+              chat={transformSalonChatToCardData(chat)}
               showAvatars={true}
               showProject={true}
               actionType="delete"

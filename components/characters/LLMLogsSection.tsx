@@ -4,6 +4,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import type { LLMLog } from '@/lib/schemas/types'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
+import { formatDateTime } from '@/lib/format-time'
 
 interface LLMLogsSectionProps {
   characterId: string
@@ -24,14 +25,8 @@ export default function LLMLogsSection({ characterId }: LLMLogsSectionProps) {
     setIsModalOpen(true)
   }
 
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
+  const formatDate = (dateString: string): string =>
+    formatDateTime(dateString, { includeYear: false })
 
   return (
     <div className="mt-8 border qt-border-default rounded-lg overflow-hidden">

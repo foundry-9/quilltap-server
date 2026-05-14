@@ -17,6 +17,7 @@
  */
 
 import Database, { Database as DatabaseType } from 'better-sqlite3';
+import { sleepSync } from '@/lib/utils/sleep';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { stopMountIndexPeriodicCheckpoints, runMountIndexShutdownCheckpoint } from './mount-index-protection';
@@ -80,13 +81,6 @@ function attemptOpenMountIndex(config: SQLiteConfig): DatabaseType {
     if (!configured) {
       try { db.close(); } catch { /* ignore */ }
     }
-  }
-}
-
-function sleepSync(ms: number): void {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    // busy-wait
   }
 }
 

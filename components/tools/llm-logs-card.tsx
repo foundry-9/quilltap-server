@@ -5,6 +5,7 @@ import { useModalState } from '@/hooks/useModalState'
 import type { LLMLog } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
+import { formatDateTime } from '@/lib/format-time'
 
 export default function LLMLogsCard() {
   const { data, isLoading, error: loadError, mutate: mutateLogs } = useSWR<{ logs: LLMLog[] }>(
@@ -21,18 +22,8 @@ export default function LLMLogsCard() {
 
   const handleViewLog = (log: LLMLog) => openModal(log)
 
-  const formatDate = (dateString: string): string => {
-    try {
-      return new Date(dateString).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    } catch {
-      return dateString
-    }
-  }
+  const formatDate = (dateString: string): string =>
+    formatDateTime(dateString, { includeYear: false })
 
   const getTypeLabel = (type: string): string => {
     const labels: Record<string, string> = {

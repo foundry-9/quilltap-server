@@ -14,6 +14,7 @@ import os from 'node:os';
 import { logger } from '@/lib/logger';
 import { getThemesDir } from '@/lib/paths';
 import { getErrorMessage } from '@/lib/error-utils';
+import { parseVersion } from '@/lib/utils/semver';
 import { installThemeBundle } from '@/lib/themes/bundle-loader';
 import { hashBuffer, verifyRegistryIndex, OFFICIAL_REGISTRY_PUBLIC_KEY, OFFICIAL_REGISTRY_URL } from '@/lib/themes/crypto';
 import {
@@ -65,16 +66,7 @@ function getIndexPath(): string {
 // VERSION COMPARISON
 // ============================================================================
 
-export function parseVersion(version: string): { major: number; minor: number; patch: number } | null {
-  const cleaned = version.replace(/^v/, '');
-  const match = cleaned.match(/^(\d+)\.(\d+)\.(\d+)/);
-  if (!match) return null;
-  return {
-    major: parseInt(match[1], 10),
-    minor: parseInt(match[2], 10),
-    patch: parseInt(match[3], 10),
-  };
-}
+export { parseVersion };
 
 /**
  * Returns true if versionB is newer than versionA.

@@ -15,6 +15,7 @@ import {
 } from '@/lib/schemas/plugin-manifest';
 import { isSitePluginEnabled } from './site-plugins';
 import { getNpmPluginsDir } from '@/lib/paths';
+import { parseVersion } from '@/lib/utils/semver';
 
 // ============================================================================
 // TYPES
@@ -513,18 +514,18 @@ export function isPluginCompatible(
   manifest: PluginManifest,
   quilltapVersion: string
 ): boolean {
-  // Simple semver check - in production, use a proper semver library
-  const parseVersion = (v: string): number[] => {
-    const match = new RegExp(/(\d+)\.(\d+)\.(\d+)/).exec(v);
-    return match ? [Number.parseInt(match[1]), Number.parseInt(match[2]), Number.parseInt(match[3])] : [0, 0, 0];
+  const ZERO = { major: 0, minor: 0, patch: 0 };
+  const toTriple = (v: string): [number, number, number] => {
+    const p = parseVersion(v) ?? ZERO;
+    return [p.major, p.minor, p.patch];
   };
 
-  const current = parseVersion(quilltapVersion);
+  const current = toTriple(quilltapVersion);
   const minMatch = new RegExp(/>=?(.+)/).exec(manifest.compatibility.quilltapVersion);
   const maxMatch = manifest.compatibility.quilltapMaxVersion?.match(/<=?(.+)/);
 
   if (minMatch) {
-    const min = parseVersion(minMatch[1]);
+    const min = toTriple(minMatch[1]);
     for (let i = 0; i < 3; i++) {
       if (current[i] < min[i]) return false;
       if (current[i] > min[i]) break;
@@ -532,7 +533,7 @@ export function isPluginCompatible(
   }
 
   if (maxMatch) {
-    const max = parseVersion(maxMatch[1]);
+    const max = toTriple(maxMatch[1]);
     for (let i = 0; i < 3; i++) {
       if (current[i] > max[i]) return false;
       if (current[i] < max[i]) break;
