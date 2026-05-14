@@ -70,14 +70,13 @@ import {
   triggerSceneStateTracking,
   triggerConversationRender,
 } from './memory-trigger.service'
-import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
 import { flushPendingWardrobeAnnouncements } from '@/lib/tools/handlers/wardrobe-handler-shared'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
-import { attemptRequestLimitRecovery } from './recovery.service'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { runPreContextPreCompute } from './pre-compute.service'
 import { runTextToolPass } from './text-tool-loop.service'
+import { findPreviousResponseId, makePreservePartialOnError, runPrimaryStream } from './primary-stream.service'
 import {
   detectAndConvertRngPatterns,
   type RngToolCall,
@@ -85,9 +84,7 @@ import {
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 import {
   finalizeMessageResponse,
-  saveAssistantMessage,
 } from './message-finalizer.service'
-import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import {
   resolveAgentModeSetting,
   buildAgentModeInstructions,
@@ -1011,248 +1008,50 @@ async function processMessage(
   // Pre-generate assistant message ID so logs can reference it
   const preGeneratedAssistantMessageId = crypto.randomUUID()
 
-  // Shared helper: when any of the six streamMessage callsites in this function
-  // fails mid-stream, preserve whatever accumulated in streamingState.fullResponse
-  // to the DB with an OOC marker before re-throwing. Idempotent: the first call
-  // that finds content writes it; subsequent calls (if the same id was already
-  // written) are swallowed so the original error still propagates.
-  let partialPreserved = false
-  const preservePartialOnError = async (error: unknown): Promise<void> => {
-    if (partialPreserved) return
-    if (!streamingState.hasStartedStreaming || streamingState.fullResponse.length === 0) {
-      return
-    }
-    partialPreserved = true
-    const errorReason = error instanceof Error ? error.message : String(error)
-    const normalizedPartial = normalizeContentBlockFormat(streamingState.fullResponse)
-    const cleanedPartial = stripCharacterNamePrefix(normalizedPartial, character.name, character.aliases)
-    const preservedContent = `${cleanedPartial.trimEnd()}\n\n{{OOC: stream ended abruptly (${errorReason})}}`
+  // Idempotent partial-response preserver shared across every streamMessage
+  // callsite for this turn. First call that finds streamed content writes
+  // it to the DB with an OOC marker; subsequent calls no-op so the original
+  // error still propagates.
+  const preservePartialOnError = makePreservePartialOnError({
+    repos,
+    chatId,
+    character,
+    characterParticipant,
+    streaming: streamingState,
+    preGeneratedAssistantMessageId,
+  })
 
-    try {
-      const preservedMessageId = await saveAssistantMessage(
-        repos,
-        chatId,
-        character,
-        characterParticipant,
-        preservedContent,
-        streamingState.usage,
-        streamingState.rawResponse,
-        streamingState.thoughtSignature,
-        [],
-        [],
-        preGeneratedAssistantMessageId,
-        streamingState.effectiveProfile.provider,
-        streamingState.effectiveProfile.modelName
-      )
-      logger.info('Preserved partial streamed response after upstream error', {
-        chatId,
-        messageId: preservedMessageId,
-        characterId: character.id,
-        characterName: character.name,
-        provider: streamingState.effectiveProfile.provider,
-        model: streamingState.effectiveProfile.modelName,
-        partialLength: streamingState.fullResponse.length,
-        error: errorReason,
-      })
-    } catch (persistError) {
-      logger.error('Failed to persist partial streamed response', {
-        chatId,
-        characterId: character.id,
-        error: persistError instanceof Error ? persistError.message : String(persistError),
-        originalError: errorReason,
-      })
-    }
-  }
+  const previousResponseId = findPreviousResponseId(
+    streamingState.effectiveProfile.provider,
+    existingMessages as MessageEvent[]
+  )
 
-  // Extract previous response ID for conversation chaining (OpenAI Responses API)
-  // This allows OpenAI to use its internal cache, reducing input token costs
-  let previousResponseId: string | undefined
-  if (streamingState.effectiveProfile.provider === 'OPENAI') {
-    // Find the last assistant message with a Responses API ID
-    for (let i = existingMessages.length - 1; i >= 0; i--) {
-      const msg = existingMessages[i]
-      if (msg.type === 'message' && msg.role === 'ASSISTANT' && msg.rawResponse) {
-        const raw = msg.rawResponse as Record<string, unknown>
-        if (typeof raw.id === 'string' && raw.id.startsWith('resp_')) {
-          previousResponseId = raw.id
-          break
-        }
-      }
-    }
-  }
+  const primaryStreamResult = await runPrimaryStream({
+    repos,
+    chatId,
+    userId,
+    chat,
+    character,
+    characterParticipant,
+    userParticipantId,
+    isMultiCharacter,
+    formattedMessages,
+    modelParams,
+    actualTools,
+    useNativeWebSearch,
+    previousResponseId,
+    preGeneratedAssistantMessageId,
+    attachedFiles: fileProcessing.attachedFiles,
+    originalMessage: options.content,
+    connectionProfile,
+    streaming: streamingState,
+    controller,
+    encoder,
+    preservePartialOnError,
+  })
 
-  // Send status update for sending to LLM
-  safeEnqueue(controller, encodeStatusEvent(encoder, {
-    stage: 'sending',
-    message: `Sending to ${character.name}...`,
-    characterName: character.name,
-    characterId: character.id,
-  }))
-
-  // hasStartedStreaming is tracked in streamingState
-
-  try {
-    for await (const chunk of streamMessage({
-      messages: formattedMessages,
-      connectionProfile: streamingState.effectiveProfile,
-      apiKey: streamingState.effectiveApiKey,
-      modelParams,
-      tools: actualTools,
-      useNativeWebSearch,
-      userId,
-      messageId: preGeneratedAssistantMessageId,
-      chatId,
-      characterId: character.id,
-      previousResponseId,
-    })) {
-      if (chunk.content) {
-        // Send streaming status on first content
-        if (!streamingState.hasStartedStreaming) {
-          safeEnqueue(controller, encodeStatusEvent(encoder, {
-            stage: 'streaming',
-            message: `${character.name} is responding...`,
-            characterName: character.name,
-            characterId: character.id,
-          }))
-          streamingState.hasStartedStreaming = true
-        }
-        streamingState.fullResponse += chunk.content
-        controller.enqueue(encodeContentChunk(encoder, chunk.content))
-      }
-
-      if (chunk.done) {
-        streamingState.usage = chunk.usage || null
-        streamingState.cacheUsage = chunk.cacheUsage || null
-        streamingState.attachmentResults = chunk.attachmentResults || null
-        streamingState.rawResponse = chunk.rawResponse
-        if (chunk.thoughtSignature) {
-          streamingState.thoughtSignature = chunk.thoughtSignature
-
-        }
-      }
-    }
-  } catch (streamingError) {
-    // Check if this is a tool-unsupported error (e.g., Gemini 3 doesn't support function calling)
-    // Retry the same request without tools before falling through to other recovery paths
-    if (isToolUnsupportedError(streamingError) && actualTools.length > 0) {
-      logger.warn('Model does not support function calling, retrying without tools', {
-        chatId,
-        provider: streamingState.effectiveProfile.provider,
-        model: streamingState.effectiveProfile.modelName,
-        toolCount: actualTools.length,
-        error: streamingError instanceof Error ? streamingError.message : String(streamingError),
-      })
-
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'sending',
-        message: `Retrying without tools for ${character.name}...`,
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      try {
-        for await (const chunk of streamMessage({
-          messages: formattedMessages,
-          connectionProfile: streamingState.effectiveProfile,
-          apiKey: streamingState.effectiveApiKey,
-          modelParams,
-          tools: [],
-          useNativeWebSearch,
-          userId,
-          messageId: preGeneratedAssistantMessageId,
-          chatId,
-        })) {
-          if (chunk.content) {
-            if (!streamingState.hasStartedStreaming) {
-              safeEnqueue(controller, encodeStatusEvent(encoder, {
-                stage: 'streaming',
-                message: `${character.name} is responding...`,
-                characterName: character.name,
-                characterId: character.id,
-              }))
-              streamingState.hasStartedStreaming = true
-            }
-            streamingState.fullResponse += chunk.content
-            controller.enqueue(encodeContentChunk(encoder, chunk.content))
-          }
-
-          if (chunk.done) {
-            streamingState.usage = chunk.usage || null
-            streamingState.cacheUsage = chunk.cacheUsage || null
-            streamingState.attachmentResults = chunk.attachmentResults || null
-            streamingState.rawResponse = chunk.rawResponse
-            if (chunk.thoughtSignature) {
-              streamingState.thoughtSignature = chunk.thoughtSignature
-            }
-          }
-        }
-
-        logger.info('Tool-unsupported retry succeeded. Consider configuring text-block tools for this model.', {
-          chatId,
-          provider: streamingState.effectiveProfile.provider,
-          model: streamingState.effectiveProfile.modelName,
-          responseLength: streamingState.fullResponse.length,
-        })
-      } catch (retryError) {
-        logger.error('Tool-unsupported retry also failed', {
-          chatId,
-          provider: streamingState.effectiveProfile.provider,
-          model: streamingState.effectiveProfile.modelName,
-          error: retryError instanceof Error ? retryError.message : String(retryError),
-        })
-        await preservePartialOnError(retryError)
-        throw retryError
-      }
-    }
-    // Check if this is a recoverable request error (token limit, PDF pages, etc.)
-    else if (isRecoverableRequestError(streamingError)) {
-      logger.info('Recoverable request error detected, attempting recovery', {
-        chatId,
-        provider: streamingState.effectiveProfile.provider,
-        model: streamingState.effectiveProfile.modelName,
-        attachmentCount: fileProcessing.attachedFiles.length,
-        error: streamingError instanceof Error ? streamingError.message : String(streamingError),
-      })
-
-      const recoveryResult = await attemptRequestLimitRecovery({
-        controller,
-        encoder,
-        character,
-        connectionProfile: streamingState.effectiveProfile,
-        apiKey: streamingState.effectiveApiKey,
-        attachedFiles: fileProcessing.attachedFiles,
-        originalMessage: options.content,
-        error: streamingError,
-        repos,
-        chatId,
-        userId,
-        characterParticipantId: characterParticipant.id,
-      })
-
-      if (recoveryResult.success) {
-        logger.info('Request limit recovery successful', {
-          chatId,
-          messageId: recoveryResult.messageId,
-          isStaticFallback: recoveryResult.isStaticFallback,
-        })
-        // Recovery has handled everything - return without chaining
-        return {
-          isMultiCharacter,
-          hasContent: true,
-          messageId: recoveryResult.messageId || null,
-          userParticipantId,
-          isPaused: chat.isPaused,
-        }
-      }
-
-      // Recovery failed, re-throw the original error
-      logger.warn('Request limit recovery failed, propagating error', { chatId })
-    }
-
-    // Not a recoverable error or recovery failed. Preserve any partial content
-    // streamed before the upstream connection dropped.
-    await preservePartialOnError(streamingError)
-    throw streamingError
+  if (primaryStreamResult.earlyReturn) {
+    return primaryStreamResult.earlyReturn
   }
 
   // Process tool calls
