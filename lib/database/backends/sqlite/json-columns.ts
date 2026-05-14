@@ -291,32 +291,11 @@ export function jsonArrayLength(column: string): string {
 // ============================================================================
 // BLOB Serialization (Float32 embeddings)
 // ============================================================================
+// Implementations live in lib/embedding/float32-conversion.ts and are
+// re-exported here so existing SQLite-backend imports keep working.
 
-/**
- * Convert an embedding to a Float32 BLOB Buffer for compact SQLite storage.
- * Float32 uses 4 bytes per dimension vs ~8-10 bytes per dimension in JSON text.
- * Accepts either number[] (legacy) or Float32Array (preferred).
- */
-export function embeddingToBlob(embedding: ArrayLike<number>): Buffer {
-  const float32 = embedding instanceof Float32Array
-    ? embedding
-    : new Float32Array(Array.from(embedding as ArrayLike<number>));
-  return Buffer.from(float32.buffer, float32.byteOffset, float32.byteLength);
-}
-
-/**
- * Convert a Float32 BLOB Buffer back to a Float32Array embedding.
- * Returns a fresh Float32Array (copy) so it outlives the source Buffer —
- * the Buffer's underlying ArrayBuffer may be pooled/reused by Node.
- */
-export function blobToEmbedding(blob: Buffer): Float32Array {
-  const view = new Float32Array(
-    blob.buffer,
-    blob.byteOffset,
-    blob.byteLength / Float32Array.BYTES_PER_ELEMENT
-  );
-  return new Float32Array(view);
-}
+import { embeddingToBlob, blobToEmbedding } from '@/lib/embedding/float32-conversion';
+export { embeddingToBlob, blobToEmbedding };
 
 // ============================================================================
 // Type Conversion Helpers

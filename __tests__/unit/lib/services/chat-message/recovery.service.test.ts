@@ -342,7 +342,7 @@ describe('Recovery Service', () => {
     it('formats bytes correctly', () => {
       const files = [makeAttachedFile({ size: 500 })]
       const message = buildRecoveryUserMessage(new Error('test'), files)
-      expect(message).toContain('500 bytes')
+      expect(message).toContain('500 B')
     })
 
     it('formats kilobytes correctly', () => {

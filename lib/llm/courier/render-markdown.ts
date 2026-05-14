@@ -12,6 +12,7 @@
  */
 
 import type { LLMMessage } from '@quilltap/plugin-types';
+import { formatBytes } from '@/lib/utils/format-bytes';
 
 export interface CourierAttachmentDescriptor {
   fileId: string;
@@ -41,18 +42,6 @@ const HUMAN_READABLE_ROLES: Record<string, string> = {
   assistant: 'Assistant',
   tool: 'Tool result',
 };
-
-function formatBytes(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let idx = 0;
-  let val = n;
-  while (val >= 1024 && idx < units.length - 1) {
-    val /= 1024;
-    idx += 1;
-  }
-  return `${val.toFixed(val >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
-}
 
 function escapeFilename(name: string): string {
   return name.replace(/[\]\[()]/g, (c) => '\\' + c);

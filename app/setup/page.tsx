@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 
 type DbKeyState = 'resolved' | 'needs-setup' | 'needs-passphrase' | 'needs-vault-storage' | 'loading';
 
@@ -13,7 +14,7 @@ export default function SetupPage() {
   const [generatedPepper, setGeneratedPepper] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   /** Navigate to /setup/profile if no user character exists, then /setup/providers if no profiles, otherwise / */
   const navigateAfterSetup = useCallback(async () => {
@@ -145,15 +146,7 @@ export default function SetupPage() {
     }
   };
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(generatedPepper);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback: select the text
-    }
-  };
+  const handleCopy = () => copy(generatedPepper);
 
   if (pepperState === 'loading') {
     return (

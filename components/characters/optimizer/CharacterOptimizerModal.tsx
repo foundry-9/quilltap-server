@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { createPortal } from 'react-dom';
 import type { CharacterOptimizerModalProps, OptimizerFilterOptions, OptimizerOutputMode } from './types';
 import { useCharacterOptimizer } from './hooks/useCharacterOptimizer';
@@ -94,16 +95,7 @@ export function CharacterOptimizerModal({
   const [beforeDate, setBeforeDate] = useState('');
   const [saveToVault, setSaveToVault] = useState(false);
 
-  // Handle escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !optimizer.loading && !optimizer.applying) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [onClose, optimizer.loading, optimizer.applying]);
+  useEscapeKey(onClose, !optimizer.loading && !optimizer.applying);
 
   const handleClose = () => {
     if (!optimizer.loading && !optimizer.applying) {

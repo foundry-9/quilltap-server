@@ -10,6 +10,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { logger } from '@/lib/logger';
+import { formatBytes } from '@/lib/utils/format-bytes';
 import { getAllPlugins } from '@/lib/plugins/registry';
 import {
   providerRegistry,
@@ -1303,17 +1304,6 @@ export async function generateReportData(userId: string): Promise<CapabilitiesRe
 
   moduleLogger.info('Capabilities report generation complete', { userId });
   return data;
-}
-
-/**
- * Format bytes to human-readable string
- */
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
 }
 
 /**

@@ -8,6 +8,7 @@
  */
 
 import { useEffect } from 'react'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { useAIWizard } from './hooks/useAIWizard'
 import { ProfileSelectionStep } from './steps/ProfileSelectionStep'
 import { DescriptionSourceStep } from './steps/DescriptionSourceStep'
@@ -57,17 +58,7 @@ export function AIWizardModal({
   })
 
 
-  // Handle escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen && !wizard.generating) {
-        onClose()
-      }
-    }
-
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [isOpen, onClose, wizard.generating])
+  useEscapeKey(onClose, isOpen && !wizard.generating)
 
   // Reset wizard when closed
   useEffect(() => {

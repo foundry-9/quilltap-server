@@ -9,7 +9,7 @@
 import type { Character } from '@/lib/schemas/character.types';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { getRepositories } from '@/lib/repositories/factory';
-import { describeOutfit } from '@/lib/wardrobe/outfit-description';
+import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 
 interface BuildPromptOptions {
@@ -67,14 +67,12 @@ export async function buildCharacterAvatarPrompt(
     // the rendered top. We then `omit` bottom/footwear at render time so the
     // image generator doesn't paste shoes/pants onto a cropped torso.
     const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, equippedSlots);
-    const decorate = (items: { title: string; description?: string | null }[]): string[] =>
-      items.map((i) => (i.description ? `${i.title} (${i.description})` : i.title));
 
     outfitText = describeOutfit({
-      top: decorate(resolved.leafItemsBySlot.top),
-      bottom: decorate(resolved.leafItemsBySlot.bottom),
-      footwear: decorate(resolved.leafItemsBySlot.footwear),
-      accessories: decorate(resolved.leafItemsBySlot.accessories),
+      top: decorateOutfitItems(resolved.leafItemsBySlot.top),
+      bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom),
+      footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear),
+      accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories),
     }, { omit: ['bottom', 'footwear'] }).trimEnd();
 
     leafCounts.top = resolved.leafItemsBySlot.top.length;

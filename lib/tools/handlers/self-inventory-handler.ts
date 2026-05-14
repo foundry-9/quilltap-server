@@ -8,6 +8,7 @@
 
 import packageJson from '@/package.json';
 import { logger } from '@/lib/logger';
+import { formatBytes } from '@/lib/utils/format-bytes';
 import { getRepositories } from '@/lib/repositories/factory';
 import { isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { buildSystemPrompt, buildOtherParticipantsInfo } from '@/lib/chat/context/system-prompt-builder';
@@ -53,13 +54,6 @@ function roundPercent(n: number): number {
 
 function formatNumber(n: number): string {
   return n.toLocaleString('en-US');
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 function formatDate(iso: string): string {
@@ -796,7 +790,7 @@ function formatVaultSection(section: SelfInventoryVaultSection): string {
 
   const lines = section.files.map((f) => {
     const date = formatDate(f.lastModified);
-    return `- ${f.relativePath}  [${f.fileType}, ${formatSize(f.fileSizeBytes)}, modified ${date}]`;
+    return `- ${f.relativePath}  [${f.fileType}, ${formatBytes(f.fileSizeBytes)}, modified ${date}]`;
   });
   const footer = `(To read a file: doc_read_file with scope='document_store', mount_point='${section.mountPointName}', path='<relativePath>')`;
   return `${header}\n${lines.join('\n')}\n${footer}`;

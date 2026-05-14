@@ -29,7 +29,7 @@ import {
 } from '@/lib/mount-index/project-scenarios';
 import {
   buildScenarioFileContent,
-  resolveScenarioPath as resolveScenarioPathCommon,
+  resolveScenarioPath,
 } from '@/lib/mount-index/scenarios-common';
 import {
   writeDatabaseDocument,
@@ -56,10 +56,6 @@ const renameScenarioSchema = z.object({
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function resolveScenarioPath(scenarioPath: string): { ok: true; path: string } | { ok: false; error: string } {
-  return resolveScenarioPathCommon(scenarioPath, PROJECT_SCENARIOS_FOLDER);
-}
 
 async function loadProjectAndStore(
   projectId: string,
@@ -88,7 +84,7 @@ async function loadProjectAndStore(
 export const GET = createAuthenticatedParamsHandler<{ id: string; scenarioPath: string }>(
   async (_req: NextRequest, { repos }: RequestContext, { id, scenarioPath }) => {
     try {
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, PROJECT_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadProjectAndStore(id, repos);
@@ -116,7 +112,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; scenarioPath: 
 export const PUT = createAuthenticatedParamsHandler<{ id: string; scenarioPath: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id, scenarioPath }) => {
     try {
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, PROJECT_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadProjectAndStore(id, repos);
@@ -183,7 +179,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string; scenarioPath:
         return badRequest('Unknown action — supported: rename');
       }
 
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, PROJECT_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadProjectAndStore(id, repos);
@@ -250,7 +246,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string; scenarioPath:
 export const DELETE = createAuthenticatedParamsHandler<{ id: string; scenarioPath: string }>(
   async (_req: NextRequest, { user, repos }: RequestContext, { id, scenarioPath }) => {
     try {
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, PROJECT_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadProjectAndStore(id, repos);

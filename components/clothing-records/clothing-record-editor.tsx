@@ -4,6 +4,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
+import { charCountClass } from '@/lib/utils/char-count'
 import FormActions from '@/components/ui/FormActions'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import type { ClothingRecord } from './clothing-record-card'
@@ -66,12 +67,6 @@ export function ClothingRecordEditor({
       showSuccessToast(isEditing ? 'Clothing record updated' : 'Clothing record created')
       onSave()
     })
-  }
-
-  const charCountClass = (current: number, max: number) => {
-    if (current > max) return 'qt-text-destructive'
-    if (current > max * 0.9) return 'qt-text-warning'
-    return 'qt-text-secondary'
   }
 
   return (

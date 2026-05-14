@@ -25,6 +25,17 @@ export interface OutfitSlotValues {
 
 export type OutfitSlotName = keyof OutfitSlotValues
 
+/**
+ * Format resolved wardrobe leaf items as the title/description strings that
+ * {@link describeOutfit} expects. Each item collapses to `"title"` or
+ * `"title (description)"` depending on whether a description is present.
+ */
+export function decorateOutfitItems(
+  items: ReadonlyArray<{ title: string; description?: string | null }>,
+): string[] {
+  return items.map(i => (i.description ? `${i.title} (${i.description})` : i.title))
+}
+
 export interface DescribeOutfitOptions {
   /**
    * Slots to leave out of the rendered description entirely. Omitted slots

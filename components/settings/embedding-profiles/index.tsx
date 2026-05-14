@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { SectionHeader } from '@/components/ui/SectionHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
+import { useModalState } from '@/hooks/useModalState'
 import { useEmbeddingProfiles } from './hooks/useEmbeddingProfiles'
 import { ProfileModal } from './ProfileModal'
 import { ProfileList } from './ProfileList'
@@ -29,10 +30,6 @@ export { ProviderBadge } from './ProviderBadge'
  * Main embedding profiles settings tab component
  */
 export default function EmbeddingProfilesTab() {
-  // UI states
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingProfile, setEditingProfile] = useState<EmbeddingProfile | null>(null)
-
   // Data hook
   const {
     profiles,
@@ -46,6 +43,14 @@ export default function EmbeddingProfilesTab() {
     triggerAutoAssociate,
   } = useEmbeddingProfiles()
 
+  const {
+    isOpen: isModalOpen,
+    payload: editingProfile,
+    openModal,
+    closeModal: handleCloseModal,
+    handleSuccess: handleModalSuccess,
+  } = useModalState<EmbeddingProfile>(() => fetchProfiles())
+
   // Trigger auto-association on mount (fire and forget)
   useEffect(() => {
     triggerAutoAssociate()
@@ -58,24 +63,8 @@ export default function EmbeddingProfilesTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // loadData is stable
 
-  const handleEdit = (profile: EmbeddingProfile) => {
-    setEditingProfile(profile)
-    setIsModalOpen(true)
-  }
-
-  const handleOpenModal = () => {
-    setEditingProfile(null)
-    setIsModalOpen(true)
-  }
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false)
-    setEditingProfile(null)
-  }
-
-  const handleModalSuccess = async () => {
-    await fetchProfiles()
-  }
+  const handleEdit = (profile: EmbeddingProfile) => openModal(profile)
+  const handleOpenModal = () => openModal()
 
   // Show loading state during initial load
   if (initialLoading) {

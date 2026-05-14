@@ -8,10 +8,7 @@
  */
 
 import type { Character } from '@/lib/schemas/types'
-
-function escapeRegex(input: string): string {
-  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
+import { escapeRegex } from '@/lib/utils/regex'
 
 /**
  * Build a single case-insensitive, word-boundary regex that matches the names

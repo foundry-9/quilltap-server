@@ -7,6 +7,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { formatBytes } from '@/lib/utils/format-bytes'
 import { streamMessage, encodeContentChunk, encodeDoneEvent } from './streaming.service'
 import {
   parseTokenLimitError,
@@ -47,15 +48,6 @@ export interface RecoveryResult {
   response?: string
   messageId?: string
   isStaticFallback: boolean
-}
-
-/**
- * Format file size in human-readable format
- */
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} bytes`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 /**
@@ -138,7 +130,7 @@ export function buildRecoveryUserMessage(
     for (const file of attachedFiles) {
       parts.push(`- Filename: ${file.filename}`)
       parts.push(`  Type: ${file.mimeType}`)
-      parts.push(`  Size: ${formatFileSize(file.size)}`)
+      parts.push(`  Size: ${formatBytes(file.size)}`)
     }
     parts.push('')
   } else if (errorType === 'token_limit') {
@@ -219,7 +211,7 @@ export function buildStaticFallbackMessage(
     parts.push('')
     parts.push(`You attached ${attachedFiles.length} file(s):`)
     for (const file of attachedFiles) {
-      parts.push(`- ${file.filename} (${formatFileSize(file.size)})`)
+      parts.push(`- ${file.filename} (${formatBytes(file.size)})`)
     }
     parts.push('')
     parts.push('Please try one of the following:')

@@ -27,7 +27,7 @@ import {
 } from '@/lib/mount-index/general-scenarios';
 import {
   buildScenarioFileContent,
-  resolveScenarioPath as resolveScenarioPathCommon,
+  resolveScenarioPath,
 } from '@/lib/mount-index/scenarios-common';
 import {
   writeDatabaseDocument,
@@ -55,12 +55,6 @@ const renameScenarioSchema = z.object({
 // Helpers
 // ============================================================================
 
-function resolveScenarioPath(
-  scenarioPath: string,
-): { ok: true; path: string } | { ok: false; error: string } {
-  return resolveScenarioPathCommon(scenarioPath, GENERAL_SCENARIOS_FOLDER);
-}
-
 async function loadGeneralStore(): Promise<
   | { ok: true; mountPointId: string }
   | { ok: false; response: NextResponse }
@@ -82,7 +76,7 @@ async function loadGeneralStore(): Promise<
 export const GET = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
   async (_req: NextRequest, _ctx: RequestContext, { scenarioPath }) => {
     try {
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, GENERAL_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadGeneralStore();
@@ -110,7 +104,7 @@ export const GET = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
 export const PUT = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { scenarioPath }) => {
     try {
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, GENERAL_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadGeneralStore();
@@ -175,7 +169,7 @@ export const POST = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
         return badRequest('Unknown action — supported: rename');
       }
 
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, GENERAL_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadGeneralStore();
@@ -240,7 +234,7 @@ export const POST = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
 export const DELETE = createAuthenticatedParamsHandler<{ scenarioPath: string }>(
   async (_req: NextRequest, { user }: RequestContext, { scenarioPath }) => {
     try {
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, GENERAL_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadGeneralStore();

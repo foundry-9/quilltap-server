@@ -16,8 +16,8 @@
  */
 
 import path from 'path';
-import { createHash } from 'crypto';
 import { createServiceLogger } from '@/lib/logging/create-logger';
+import { sha256OfString } from '@/lib/utils/sha256';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { DocMountFile, DocMountPoint } from '@/lib/schemas/mount-index.types';
 import {
@@ -46,10 +46,6 @@ function detectDatabaseFileType(relativePath: string): SupportedFileType | null 
     default:
       return null;
   }
-}
-
-function sha256OfString(content: string): string {
-  return createHash('sha256').update(content, 'utf-8').digest('hex');
 }
 
 function normaliseRelativePath(relativePath: string): string {

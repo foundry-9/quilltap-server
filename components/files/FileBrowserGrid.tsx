@@ -8,7 +8,8 @@
 
 import { useEffect } from 'react'
 import FileThumbnail from './FileThumbnail'
-import { FileInfo, FolderInfo, formatFileSize } from './types'
+import { FileInfo, FolderInfo } from './types'
+import { formatBytes } from '@/lib/utils/format-bytes'
 
 interface FileBrowserGridProps {
   /** Files to display */
@@ -123,7 +124,7 @@ export default function FileBrowserGrid({
                 {file.originalFilename || file.filename}
               </span>
               <span className="qt-text-xs qt-text-secondary block">
-                {formatFileSize(file.size)}
+                {formatBytes(file.size)}
               </span>
               {file.fileStatus === 'orphaned' && (
                 <span className="qt-text-xs qt-text-warning block" title="Untracked file found on disk">

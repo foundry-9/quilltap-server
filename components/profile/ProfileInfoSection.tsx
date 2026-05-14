@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { UserProfile } from './types'
 
 export interface ProfileInfoSectionProps {
@@ -72,17 +72,8 @@ function InfoField({
   value: string
   copyable?: boolean
 }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy to clipboard', { error: err })
-    }
-  }
+  const { copied, copy } = useCopyToClipboard()
+  const handleCopy = () => copy(value)
 
   return (
     <div className="flex items-center justify-between py-3 border-b qt-border-default last:border-b-0">

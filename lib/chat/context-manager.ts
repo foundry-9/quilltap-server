@@ -48,7 +48,7 @@ import {
   type SceneStateEmissionEntry,
 } from './context/memory-injector'
 import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
-import { describeOutfit } from '@/lib/wardrobe/outfit-description'
+import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
 import type { MessageEvent } from '@/lib/schemas/types'
 import { getOrComputeFrozenArchive } from '@/lib/memory/frozen-archive-cache'
@@ -979,13 +979,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chat.id, c.characterId)
           if (!equippedSlots) return
           const resolved = await resolveEquippedOutfitForCharacter(repos, c.characterId, equippedSlots)
-          const decorate = (items: { title: string; description?: string | null }[]): string[] =>
-            items.map(i => i.description ? `${i.title} (${i.description})` : i.title)
           const description = describeOutfit({
-            top: decorate(resolved.leafItemsBySlot.top),
-            bottom: decorate(resolved.leafItemsBySlot.bottom),
-            footwear: decorate(resolved.leafItemsBySlot.footwear),
-            accessories: decorate(resolved.leafItemsBySlot.accessories),
+            top: decorateOutfitItems(resolved.leafItemsBySlot.top),
+            bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom),
+            footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear),
+            accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories),
           })
           if (description) liveClothingByCharacterId.set(c.characterId, description)
         } catch (error) {

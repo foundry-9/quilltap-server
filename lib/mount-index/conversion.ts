@@ -16,8 +16,8 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { createHash } from 'crypto';
 import { createServiceLogger } from '@/lib/logging/create-logger';
+import { sha256OfBuffer, sha256OfString } from '@/lib/utils/sha256';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { DocMountPoint, DocMountFile } from '@/lib/schemas/mount-index.types';
 
@@ -59,14 +59,6 @@ function mimeTypeForFileType(fileType: DocMountFile['fileType']): string {
       // the true type should consult doc_mount_blobs.storedMimeType instead.
       return 'application/octet-stream';
   }
-}
-
-function sha256OfBuffer(buffer: Buffer): string {
-  return createHash('sha256').update(buffer).digest('hex');
-}
-
-function sha256OfString(content: string): string {
-  return createHash('sha256').update(content, 'utf-8').digest('hex');
 }
 
 // ============================================================================

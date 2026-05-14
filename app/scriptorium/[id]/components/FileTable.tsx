@@ -12,6 +12,7 @@
  */
 
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
+import { formatBytes } from '@/lib/utils/format-bytes'
 import type { DocumentStoreFile, DocumentStoreBlob } from '../../types'
 
 interface FileTableProps {
@@ -20,14 +21,6 @@ interface FileTableProps {
   mountPointId: string
   mountType: 'filesystem' | 'obsidian' | 'database'
   onRefresh: () => void | Promise<void>
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
 function FileTypeBadge({ type }: { type: string }) {

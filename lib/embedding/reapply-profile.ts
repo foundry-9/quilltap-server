@@ -36,6 +36,7 @@ import { getRawDatabase } from '@/lib/database/backends/sqlite/client'
 import { getMountIndexDatabasePath, getSQLiteDatabasePath } from '@/lib/paths'
 import { invalidateAll as invalidateMountChunkCacheAll } from '@/lib/mount-index/mount-chunk-cache'
 import { getVectorStoreManager } from '@/lib/embedding/vector-store'
+import { blobToFloat32, float32ToBlob } from '@/lib/embedding/float32-conversion'
 import type { EmbeddingProfile } from '@/lib/schemas/types'
 
 const FLUSH_BATCH = 500
@@ -85,20 +86,6 @@ export interface ReapplyEmbeddingProfileResult {
   durationMs: number
   backupPath: string | null
   mountBackupPath: string | null
-}
-
-function blobToFloat32(blob: Buffer): Float32Array {
-  // Aliased view first, then a fresh copy so we don't mutate the SQLite buffer.
-  const view = new Float32Array(
-    blob.buffer,
-    blob.byteOffset,
-    blob.byteLength / BYTES_PER_FLOAT,
-  )
-  return new Float32Array(view)
-}
-
-function float32ToBlob(v: Float32Array): Buffer {
-  return Buffer.from(v.buffer, v.byteOffset, v.byteLength)
 }
 
 /**

@@ -10,6 +10,7 @@ import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalE
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { unionTypes } from '@/lib/wardrobe/composite-types'
+import { charCountClass } from '@/lib/utils/char-count'
 
 type EditorMode = 'single' | 'bundle'
 
@@ -366,12 +367,6 @@ export function WardrobeItemEditor({
       showSuccessToast(isEditing ? 'Wardrobe item updated' : 'Wardrobe item created')
       onSave()
     })
-  }
-
-  const charCountClass = (current: number, max: number): string => {
-    if (current > max) return 'qt-text-destructive'
-    if (current > max * 0.9) return 'qt-text-warning'
-    return 'qt-text-secondary'
   }
 
   const selectedComponents = useMemo(() => {

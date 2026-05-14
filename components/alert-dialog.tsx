@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 
 interface AlertDialogProps {
   message: string
@@ -10,26 +11,10 @@ interface AlertDialogProps {
 }
 
 export function AlertDialog({ message, onClose, buttons, showCopy = true }: AlertDialogProps) {
-  // Close on Escape key and prevent body scroll
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [onClose])
+  useEscapeKey(() => onClose())
 
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(message)
-      // Optional: You could add a visual feedback here
-    } catch (err) {
-      console.error('Failed to copy to clipboard:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }
+  const { copy } = useCopyToClipboard()
+  const handleCopy = () => copy(message)
 
   // Default to single close button if no buttons provided
   const dialogButtons = buttons && buttons.length > 0 ? buttons : ['Close']

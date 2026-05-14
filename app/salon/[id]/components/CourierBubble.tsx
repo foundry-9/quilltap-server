@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import { formatBytes } from '@/lib/utils/format-bytes'
 import type { Message } from '../types'
 
 interface CourierBubbleProps {
@@ -9,18 +10,6 @@ interface CourierBubbleProps {
   characterName: string
   onResolved?: (messageId: string) => void
   onCancelled?: (messageId: string) => void
-}
-
-function formatBytes(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let idx = 0
-  let val = n
-  while (val >= 1024 && idx < units.length - 1) {
-    val /= 1024
-    idx += 1
-  }
-  return `${val.toFixed(val >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`
 }
 
 export function CourierBubble({ chatId, message, characterName, onResolved, onCancelled }: CourierBubbleProps) {

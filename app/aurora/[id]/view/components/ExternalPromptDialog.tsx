@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 
 interface SystemPrompt {
   id: string
@@ -114,16 +115,7 @@ export function ExternalPromptDialog({
     }
   }, [systemPrompts, systemPromptId])
 
-  // Escape key handler
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !generating) {
-        onCancel()
-      }
-    }
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [onCancel, generating])
+  useEscapeKey(onCancel, !generating)
 
   const handleGenerate = async () => {
     if (!connectionProfileId || !systemPromptId) return

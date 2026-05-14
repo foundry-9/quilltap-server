@@ -15,6 +15,7 @@
 
 import { logger } from '@/lib/logger'
 import { fileStorageManager } from '@/lib/file-storage/manager'
+import { formatBytes } from '@/lib/utils/format-bytes'
 import type { FileEntry } from '@/lib/schemas/types'
 
 /**
@@ -395,12 +396,3 @@ export async function extractMultipleFileContents(
   return results
 }
 
-/**
- * Format bytes to human-readable string
- */
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-}

@@ -1,7 +1,7 @@
 'use client'
 
 import { RefObject } from 'react'
-import { formatFileSize } from '../utils'
+import { formatBytes } from '@/lib/utils/format-bytes'
 
 interface ImportFileStepProps {
   selectedFile: File | null
@@ -79,7 +79,7 @@ export function ImportFileStep({
             {selectedFile.name}
           </p>
           <p className="qt-text-small qt-text-secondary mt-1">
-            {formatFileSize(selectedFile.size)}
+            {formatBytes(selectedFile.size)}
           </p>
         </div>
       )}

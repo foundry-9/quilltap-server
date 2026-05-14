@@ -16,7 +16,7 @@ import { resolveDangerousContentSettings } from '@/lib/services/dangerous-conten
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { SceneStateTrackingPayload } from '../queue-service';
-import { describeOutfit } from '@/lib/wardrobe/outfit-description';
+import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 
 const logger = createServiceLogger('SceneStateTrackingHandler');
@@ -181,13 +181,11 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       if (equippedSlots) {
         const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots);
-        const decorate = (items: { title: string; description?: string | null }[]): string[] =>
-          items.map(i => i.description ? `${i.title} (${i.description})` : i.title);
         clothingDescription = describeOutfit({
-          top: decorate(resolved.leafItemsBySlot.top),
-          bottom: decorate(resolved.leafItemsBySlot.bottom),
-          footwear: decorate(resolved.leafItemsBySlot.footwear),
-          accessories: decorate(resolved.leafItemsBySlot.accessories),
+          top: decorateOutfitItems(resolved.leafItemsBySlot.top),
+          bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom),
+          footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear),
+          accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories),
         });
       }
     } catch (error) {

@@ -10,6 +10,7 @@
  * apply identical rules.
  */
 import type { Character } from '@/lib/schemas/types'
+import { escapeRegex } from '@/lib/utils/regex'
 
 /**
  * Generic aliases that cheap-LLM extraction prompts use for the human user.
@@ -40,10 +41,6 @@ export function namesForHolder(character: Pick<Character, 'name' | 'aliases'>): 
   return [character.name, ...(character.aliases ?? [])].filter(
     n => typeof n === 'string' && n.trim().length > 0,
   )
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function buildNameRegex(name: string, flags: string): RegExp {

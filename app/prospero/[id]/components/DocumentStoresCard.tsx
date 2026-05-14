@@ -8,6 +8,7 @@
  */
 
 import { useState } from 'react'
+import { formatBytes } from '@/lib/utils/format-bytes'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
 import type { DocumentStore } from '@/app/scriptorium/types'
 
@@ -39,12 +40,6 @@ function XIcon({ className }: { className?: string }) {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
     </svg>
   )
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export function DocumentStoresCard({

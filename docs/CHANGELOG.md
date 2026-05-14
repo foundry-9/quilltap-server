@@ -4,6 +4,23 @@
 
 ### 4.4-dev
 
+#### Chore: Refactor 4.4 Phase 1 — consolidate duplicate utilities
+
+First pass of the duplicate-function consolidation tracked in `docs/developer/features/REFACTOR_4_4.md`. Ten trivial-lift clusters collapsed to single sources of truth:
+
+- Byte formatter: 18 planned sites + 2 bonus catches (20 total) now route through `lib/utils/format-bytes.ts`. Touched `formatBytes`/`formatFileSize`/`formatSize` copies across `app/prospero/*`, `app/salon/*`, `app/scriptorium/*`, `components/files/*`, `components/chat/FileConflictDialog.tsx`, `components/import/import-wizard.tsx`, `components/settings/ai-import/AIImportWizard.tsx`, `components/tools/{capabilities-report-card,import-export/utils,import-export/steps/ImportFileStep}.tsx`, plus backend `lib/llm/courier/render-markdown.ts`, `lib/services/file-content-extractor.ts`, `lib/services/chat-message/recovery.service.ts`, `lib/tools/capabilities-report.ts`, `lib/tools/handlers/self-inventory-handler.ts`. Unit label normalised to single-letter ("B"/"KB"/"MB"/"GB"/"TB"), 1-decimal precision, full scale through TB.
+- `hooks/useEscapeKey.ts`: 7 dialog/modal sites swap their `useEffect`+`keydown` boilerplate for the hook. One site passes the existing `!generating` guard via the `enabled` arg.
+- `hooks/useModalState.ts`: settings-tab `handleOpenModal`/`handleCloseModal`/`handleModalSuccess` triplets in `api-keys-tab`, `embedding-profiles`, `image-profiles-tab`, and `llm-logs-card` collapse to the hook. Generic `T` payload supports edit-with-existing and view-with-payload variants alongside the plain open/close case.
+- `hooks/useCopyToClipboard.ts`: 4 text-copy sites adopt the hook (returns `{copied, copy}` with a textarea fallback for older browsers). Two image-blob `…ToClipboard` variants intentionally left alone.
+- `lib/utils/regex.ts`: 5 `escapeRegex` copies (4 found by the cluster pass + `components/characters/TemplateHighlighter.tsx`) point at one impl. `base.repository.ts` keeps its `protected escapeRegex` shim as a one-line delegation so subclass callers and the existing unit test stay untouched.
+- `lib/utils/sha256.ts`: `sha256OfString` / `sha256OfBuffer` extracted; `lib/mount-index/{conversion,database-store}.ts` import them.
+- `lib/embedding/float32-conversion.ts`: `blobToFloat32` / `float32ToBlob` plus `blobToEmbedding` / `embeddingToBlob` aliases. `json-columns.ts` re-exports for backward compat; `reapply-profile.ts` and the previously-missed `lib/startup/repair-text-embeddings.ts` adopt the shared impl.
+- `lib/utils/char-count.ts`: identical `charCountClass` helper from `clothing-record-editor`, `physical-description-editor`, and `wardrobe-item-editor`.
+- `decorateOutfitItems` exported from `lib/wardrobe/outfit-description.ts` (sibling of `describeOutfit`); replaces inline `decorate` closures in `scene-state-tracking`, `context-manager`, and `avatar-prompt`.
+- `resolveScenarioPath` wrappers in the project-scenarios and general-scenarios routes deleted; callers now invoke `resolveScenarioPath(scenarioPath, FOLDER_CONSTANT)` directly.
+
+Net: ~330 lines of duplicated helper code removed, 7 new shared modules. `npx tsc --noEmit` clean. No behavior changes intended; the byte formatter's unit string and precision shift slightly in a few UIs that previously used the verbose "0 Bytes" / 2-decimal forms.
+
 #### Chore: extract native-tool loop from chat-message orchestrator
 
 Phase 18 of `processMessage` — the bounded native-tool-call loop, agent-mode `submit_final_response` extraction, the iteration-0 ghost-wrap guardrail, the agent-iteration status events, and the post-loop max-turns force-final pass — moved into a new `lib/services/chat-message/native-tool-loop.service.ts` (360 lines). The orchestrator now calls `runNativeToolLoop({ ... })` with mutable `streaming`, `toolMessages`, and `generatedImagePaths` bags; `toolMessages` and `generatedImagePaths` array bindings (previously rebound via `= [...x, ...]`) switch to in-place `.push(...)` so the service can share the orchestrator's arrays by reference. With all five planned extractions landed, the orchestrator file is down from 2,307 lines (pre-refactor) to 1,300 lines — a 1,007-line / 44% reduction. 13 new service-level tests cover: zero tool calls, single-iteration with native callIds, text-fallback (no callId), agent submit_final_response on iteration ≥ 1, ghost-wrap rejection on iteration 0, ghost-wrap negative cases (multiple tool calls / present prose), max-turns force-final with and without submit_final_response in the force response, non-agent-mode max-turns warning path, and follow-up + force-final stream-error preservation. Full chat-message suite (20 files, 283 tests) and full unit suite (322 files, 5,908 tests) green. tsc and lint clean.

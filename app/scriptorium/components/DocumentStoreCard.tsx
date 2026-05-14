@@ -6,6 +6,7 @@
  * Displays a single document store with status and actions.
  */
 
+import { formatBytes } from '@/lib/utils/format-bytes'
 import type { DocumentStore } from '../types'
 
 interface DocumentStoreCardProps {
@@ -67,14 +68,6 @@ function UploadIcon({ className }: { className?: string }) {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5 5 5M12 5v12" />
     </svg>
   )
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
 function ScanStatusBadge({ status, error }: { status: string; error: string | null }) {
