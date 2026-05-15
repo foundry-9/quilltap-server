@@ -157,7 +157,7 @@ CREATE TABLE "characters" (
   "exampleDialogues" TEXT,
   "systemPrompts" TEXT DEFAULT '[]',
   "avatarUrl" TEXT,
-  "defaultImageId" TEXT,
+  "defaultImageId" TEXT,                  -- Vault link id (doc_mount_file_links.id) of the character's portrait. Pre-photos-Phase-3 this was a legacy files.id; the photo-gallery cutover translates every value to the matching vault link id by sha256.
   "defaultConnectionProfileId" TEXT,
   "defaultPartnerId" TEXT,
   "defaultRoleplayTemplateId" TEXT,
@@ -168,7 +168,7 @@ CREATE TABLE "characters" (
   "controlledBy" TEXT DEFAULT 'llm',
   "partnerLinks" TEXT DEFAULT '[]',
   "tags" TEXT DEFAULT '[]',
-  "avatarOverrides" TEXT DEFAULT '[]',
+  "avatarOverrides" TEXT DEFAULT '[]',    -- JSON array of { chatId, imageId } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
   "physicalDescriptions" TEXT DEFAULT '[]',
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL,
@@ -320,7 +320,7 @@ CREATE TABLE "chats" (
   "renderedMarkdown" TEXT DEFAULT NULL,
   "equippedOutfit" TEXT DEFAULT NULL,
   "pendingOutfitNotifications" TEXT DEFAULT NULL,
-  "characterAvatars" TEXT DEFAULT NULL,
+  "characterAvatars" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { imageId, generatedAt, afterMessageCount } } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
   "avatarGenerationEnabled" INTEGER DEFAULT NULL,
   "alertCharactersOfLanternImages" INTEGER DEFAULT NULL,
   "chatType" TEXT DEFAULT 'salon',

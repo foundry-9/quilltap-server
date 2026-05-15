@@ -4,7 +4,21 @@
 
 ### 4.4-dev
 
-#### Feat: Library file picker — My Gallery + every document store
+#### Feat: Photo albums Phase 3 (part 1/3) — one-time migration into character vault `photos/`
+
+The Aurora gallery is moving off legacy CHARACTER tags on `files` rows and onto each character's vault `photos/` folder. This commit ships the one-time data migration; the backend resolver swap and the Aurora UI swap follow in two subsequent commits.
+
+- **New migration `migrate-character-photos-to-vault-v1`** (`migrations/scripts/migrate-character-photos-to-vault.ts`):
+  - **Phase A** — for every character with a database-backed vault, walk every `files` row whose `tags[]` contains the character's id and mirror it into the vault's `photos/` folder. Bytes are deduped by sha256 (one `doc_mount_files`/`doc_mount_blobs` row per unique content; N `doc_mount_file_links` rows for N character vaults that tagged the same image). The link's `extractedText` is the same kept-image Markdown the runtime `keep_image` tool writes (frontmatter + original prompt + character attribution), built by `buildKeptImageMarkdown` with `sceneState: null` and `tags: []` since the bulk import has no chat context. Chunks are written inline so the next embedding pass picks the photos up. Skips on `(mountPointId, photos/<sha>)` sha collision so re-runs are idempotent; also skips when the source bytes can't be read (file missing on disk or no matching `doc_mount_blobs` row when `storageKey` is a `mount-blob:` shim) with a warning.
+  - **Phase B** — translate every `characters.defaultImageId` and every `characters.avatarOverrides[].imageId` from a legacy `files.id` to a `doc_mount_file_links.id`. Resolution is by sha256 (look up the legacy file, find a vault link in this character's vault that points at content with matching sha256, prefer one in `photos/`). Broken pointers are nulled (`defaultImageId`) or dropped (`avatarOverrides`) with warnings.
+  - **Phase C** — translate `chats.characterAvatars` (JSON map of `{ [characterId]: { imageId, generatedAt, afterMessageCount } }` written by the wardrobe auto-avatar job) using the same lookup.
+  - **Phase D** — strip every character-id entry from `files.tags[]`. Non-character tag ids (THEME / CHAT / future tag types) are left in place.
+  - **Phase E** — GC the leftover `files` row for any `IMAGE`/`AVATAR` entry that ends up with `tags[] = []` AND is not referenced by any `chat_messages.attachments[]` AND is not the new value of any `defaultImageId` / `avatarOverrides` / `characterAvatars` (post-translation these all hold link ids, so the check is defensive). Only the row is deleted; we deliberately do not touch the underlying disk file or the `doc_mount_blobs` row — both are owned by the vault link now, or by a separate disk-file GC sweep.
+- **Pretty label** in `lib/startup/prettify.ts`: `"Hanging each character's photographs in their own vault"`.
+- **Progress reporting** with `reportProgress(i, totalPhotos, 'photos')` during Phase A; the other phases are quick column scans.
+- **DDL.md** — annotated `characters.defaultImageId`, `characters.avatarOverrides`, and `chats.characterAvatars` with the post-Phase-3 semantics (vault link id) and the migration that performs the change.
+
+Backend consumers of `characters.defaultImageId` and friends still read it as if it were a legacy `files.id` after this commit. The next commit adds the resolver and updates every consumer; until then, freshly-migrated instances will render broken avatars in the Aurora and Salon UIs. This is intentional — the commit chain is sequenced so the data migration lands first and the resolver / UI swaps follow — but it does mean **the dev server should not be restarted between this commit and the next.**
 
 Extended the Salon composer's "attach from library" modal (`LibraryFilePickerModal`) to cover the user's photo gallery and every database-backed document store, not just General + project files.
 

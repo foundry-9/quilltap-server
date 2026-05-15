@@ -181,6 +181,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'relink-files-to-mount-blobs-v1': 'Re-linking files to their mount-blob shims',
   'add-doc-mount-file-links-v1': 'Reorganising the document index so a single file may inhabit several shelves at once',
   'add-uncensored-image-description-profile-field-v1': 'Making room for a more candid set of eyes when describing photographs',
+  'migrate-character-photos-to-vault-v1': "Hanging each character's photographs in their own vault",
   'provision-lantern-backgrounds-mount-v1': "Provisioning the Lantern's backgrounds mount",
   'migrate-general-story-backgrounds-to-mount-v1': "Moving story backgrounds into the Lantern's gallery",
   'migrate-character-avatars-to-vaults-v1': "Moving character avatars into each character's vault",

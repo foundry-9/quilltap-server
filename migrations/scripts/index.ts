@@ -273,6 +273,8 @@ import { addCommonplaceSceneCacheMigration } from './add-commonplace-scene-cache
 import { addDocMountFileLinksMigration } from './add-doc-mount-file-links';
 // Add uncensoredImageDescriptionProfileId column to chat_settings (Phase 2 photos)
 import { addUncensoredImageDescriptionProfileFieldMigration } from './add-uncensored-image-description-profile-field';
+// Photo gallery Phase 3: mirror CHARACTER-tagged images into each character's vault photos/ folder + atomic cutover
+import { migrateCharacterPhotosToVaultMigration } from './migrate-character-photos-to-vault';
 
 /**
  * All available migrations.
@@ -541,6 +543,8 @@ export const migrations: Migration[] = [
   addDocMountFileLinksMigration,
   // Add uncensoredImageDescriptionProfileId column to chat_settings (Phase 2 photos)
   addUncensoredImageDescriptionProfileFieldMigration,
+  // Photo gallery Phase 3: mirror CHARACTER-tagged images into vault photos/ + atomic cutover
+  migrateCharacterPhotosToVaultMigration,
 ];
 
 export {
@@ -794,5 +798,7 @@ export {
   addDocMountFileLinksMigration,
   // Add uncensoredImageDescriptionProfileId column to chat_settings (Phase 2 photos)
   addUncensoredImageDescriptionProfileFieldMigration,
+  // Photo gallery Phase 3: mirror CHARACTER-tagged images into vault photos/ + atomic cutover
+  migrateCharacterPhotosToVaultMigration,
 };
 
