@@ -45,7 +45,8 @@ export type UserUploadsSubfolder =
   | 'images'
   | 'diagnostics'
   | 'restored'
-  | 'uploads';
+  | 'uploads'
+  | 'photos';
 
 /**
  * Look up the global Quilltap Uploads mount, if provisioned. Returns null

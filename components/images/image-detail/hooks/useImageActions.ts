@@ -14,6 +14,8 @@ interface UseImageActionsReturn {
   setAsAvatar: (entityType: EntityType, entityId: string) => Promise<void>
   handleDownload: () => Promise<void>
   handleCopyToClipboard: () => Promise<void>
+  handleSaveToGallery: () => Promise<void>
+  savingToGallery: boolean
   updateTaggedCharacters: (charIds: Set<string>) => void
   setCharacters: (characters: Character[]) => void
 }
@@ -29,6 +31,7 @@ export function useImageActions(
   const [taggingInProgress, setTaggingInProgress] = useState<Set<string>>(new Set())
   const [settingAvatar, setSettingAvatar] = useState<Set<string>>(new Set())
   const [internalCharacters, setInternalCharacters] = useState<Character[]>(characters)
+  const [savingToGallery, setSavingToGallery] = useState(false)
 
   const updateTaggedCharacters = useCallback((charIds: Set<string>) => {
     setTaggedCharacterIds(charIds)
@@ -153,6 +156,28 @@ export function useImageActions(
     }
   }, [image.id, image.filename, image.url, image.filepath])
 
+  const handleSaveToGallery = useCallback(async () => {
+    setSavingToGallery(true)
+    try {
+      const response = await fetch('/api/v1/photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId: image.id }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to save to gallery')
+      }
+      showSuccessToast('Saved to your gallery')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save to gallery'
+      console.error('Save to gallery failed', { imageId: image.id, error: message })
+      showErrorToast(message)
+    } finally {
+      setSavingToGallery(false)
+    }
+  }, [image.id])
+
   const handleCopyToClipboard = useCallback(async () => {
     try {
       const filepath = image.url || image.filepath
@@ -174,6 +199,8 @@ export function useImageActions(
     setAsAvatar,
     handleDownload,
     handleCopyToClipboard,
+    handleSaveToGallery,
+    savingToGallery,
     updateTaggedCharacters,
     setCharacters: setInternalCharacters,
   }

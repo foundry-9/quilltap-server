@@ -4,6 +4,19 @@
 
 ### 4.4-dev
 
+#### Feat: Photo albums Phase 2c — user-facing photo gallery
+
+A parallel album for the human user, rooted in the Quilltap Uploads mount under a new `photos/` subfolder. Saved images are hard-linked by sha256 (no byte duplication) and share the same content with character vault albums, chat attachments, or any other link to the same image.
+
+- **Mount layout:** `'photos'` added to `UserUploadsSubfolder`. The folder is created lazily by `ensureFolderPath` on first save — no migration required for already-provisioned instances.
+- **Service:** new `lib/photos/user-gallery-service.ts` exposing `saveToUserGallery`, `listUserGallery`, `removeFromUserGallery`, and `getUserGalleryEntry`. Save writes the same kept-image Markdown the character album uses (with `linkedBy: "You"` and `linkedById: <userId>`), then chunks and enqueues embedding so semantic search works over prompt + scene + caption + tags. List supports `?q=` semantic search constrained to `photos/`, plus optional `tag` filters and pagination. Re-save of an already-saved image is refused with a clear error. Remove uses `deleteWithGC` so the last link drops the file row and its blob.
+- **REST endpoints:** `POST /api/v1/photos` (save), `GET /api/v1/photos` (list with `q`, `tag`, `limit`, `offset`), `GET /api/v1/photos/[id]` (single entry), `DELETE /api/v1/photos/[id]` (remove). All authenticated via the standard middleware.
+- **UI:** new `/photos` route renders a thumbnail grid with link-count badges, a search bar wired to the semantic-search backend, a detail modal showing the original generation prompt excerpt, tags, every other place the bytes are hard-linked (mount name, linker name from frontmatter, relative path), the sha256 and linkId for debugging, and a Remove button.
+- **Salon affordance:** the existing `ImageDetailModal` (opened by clicking any chat image) gains a bookmark-shaped "Save to my gallery" button next to Copy/Download. It hits `POST /api/v1/photos` and toasts on success/error. Available for every image-v2 attachment in the chat — generated, uploaded, avatar, story background.
+- **Navigation:** new "My Photos" entry in the collapsed left sidebar with a small framed-picture icon, sitting between Characters and Scenarios.
+- **Help:** new `help/photo-gallery.md` covering the workflow.
+- **Tests:** 11 cases for `user-gallery-service` covering provisioning guard, ownership guard, non-image guard, re-save guard, the happy-path save call shape, list ordering, and remove guards.
+
 #### Feat: Photo albums Phase 2 — link summaries on chat images and auto-describe uploads
 
 Phase 2 of the photo album work. Every image surfaced to the chat or the avatar/background actions now carries a `sha256` and `linkSummary` so the UI can show "kept in N places" and offer save-to-gallery affordances. Manually uploaded chat images get an automatic vision-LLM description, with an optional uncensored fallback when the primary refuses.

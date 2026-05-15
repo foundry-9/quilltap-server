@@ -116,6 +116,27 @@ function ScriptoriumIcon({ className }: { className?: string }) {
 }
 
 /**
+ * Photos icon (framed picture — for the user's photo gallery)
+ */
+function PhotosIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8.5" cy="10.5" r="1.5" />
+      <path d="M21 17l-5.5-5.5L9 18" />
+    </svg>
+  )
+}
+
+/**
  * Scenarios icon (clipboard with a checkmark — for the general scenarios page)
  */
 function ScenariosNavIcon({ className }: { className?: string }) {
@@ -147,6 +168,7 @@ const navItems: NavItem[] = [
   { id: 'files', label: 'Files', tooltip: 'View all files', href: '/files', icon: FileIcon },
   { id: 'scriptorium', label: 'The Scriptorium', tooltip: 'View document stores', href: '/scriptorium', icon: ScriptoriumIcon },
   { id: 'characters', label: 'Characters', tooltip: 'View all characters', href: '/aurora', icon: CharacterIcon },
+  { id: 'photos', label: 'My Photos', tooltip: "Your saved photo gallery", href: '/photos', icon: PhotosIcon },
   { id: 'scenarios', label: 'Scenarios', tooltip: 'Manage general scenarios', href: '/scenarios', icon: ScenariosNavIcon },
   { id: 'chats', label: 'Chats', tooltip: 'View all chats', href: '/salon', icon: ChatIcon },
 ]

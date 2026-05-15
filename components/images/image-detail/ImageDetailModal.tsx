@@ -28,6 +28,8 @@ export default function ImageDetailModal({
     setAsAvatar,
     handleDownload,
     handleCopyToClipboard,
+    handleSaveToGallery,
+    savingToGallery,
     updateTaggedCharacters,
   } = useImageActions(image, characters, onAvatarSet)
 
@@ -95,6 +97,8 @@ export default function ImageDetailModal({
       <ImageActions
         handleDownload={handleDownload}
         handleCopyToClipboard={handleCopyToClipboard}
+        handleSaveToGallery={handleSaveToGallery}
+        savingToGallery={savingToGallery}
         onClose={onClose}
         onPrev={onPrev}
         onNext={onNext}
