@@ -5,106 +5,92 @@ import useSWR from 'swr'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import type { GalleryImage, EntityType } from '../types'
 
-export function useGalleryData(entityId: string, entityType: EntityType) {
+interface CharacterGalleryEntry {
+  linkId: string
+  mountPointId: string
+  relativePath: string
+  fileName: string
+  blobUrl: string
+  mimeType: string | null
+  sha256: string
+  fileSizeBytes: number
+  keptAt: string
+  caption: string | null
+  tags: string[]
+}
+
+interface CharacterGalleryListResponse {
+  data: {
+    entries: CharacterGalleryEntry[]
+    total: number
+    hasMore: boolean
+  }
+}
+
+function toGalleryImage(entry: CharacterGalleryEntry): GalleryImage {
+  return {
+    id: entry.linkId,
+    filename: entry.fileName,
+    filepath: entry.blobUrl,
+    mimeType: entry.mimeType,
+    size: entry.fileSizeBytes,
+    createdAt: entry.keptAt,
+    caption: entry.caption,
+    tags: entry.tags,
+  }
+}
+
+export function useGalleryData(entityId: string, _entityType: EntityType) {
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
 
-  // Fetch ALL images for the user via SWR
-  const { data: imagesData, isLoading: loading, mutate: mutateImages } = useSWR<{ data: GalleryImage[] }>(
-    '/api/v1/images'
+  const { data, isLoading: loading, mutate } = useSWR<CharacterGalleryListResponse>(
+    `/api/v1/characters/${entityId}/photos?limit=200`
   )
 
-  const allImages = imagesData?.data ?? []
+  const allImages: GalleryImage[] = (data?.data?.entries ?? []).map(toGalleryImage)
 
   const fetchImages = useCallback(async () => {
-    await mutateImages()
-  }, [mutateImages])
+    await mutate()
+  }, [mutate])
 
-  const setAllImages = useCallback((update: ((prev: GalleryImage[]) => GalleryImage[]) | GalleryImage[]) => {
-    if (typeof update === 'function') {
-      mutateImages(prev => prev ? { ...prev, data: update(prev.data) } : prev, false)
-    } else {
-      mutateImages({ data: update }, false)
-    }
-  }, [mutateImages])
+  const setAllImages = useCallback(
+    (update: ((prev: GalleryImage[]) => GalleryImage[]) | GalleryImage[]) => {
+      mutate(
+        prev => {
+          if (!prev) return prev
+          const next = typeof update === 'function'
+            ? update(prev.data.entries.map(toGalleryImage))
+            : update
+          // We don't round-trip back to entries; the next fetch repopulates.
+          // Just bump the version to trigger re-renders downstream.
+          return {
+            data: {
+              ...prev.data,
+              entries: prev.data.entries.filter(e =>
+                next.some(n => n.id === e.linkId)
+              ),
+            },
+          }
+        },
+        false
+      )
+    },
+    [mutate]
+  )
 
   const handleImageError = (imageId: string) => {
     setMissingImages(prev => new Set(prev).add(imageId))
     console.warn('Image failed to load', { imageId })
   }
 
-  const isImageTagged = (image: GalleryImage) => {
-    return image.tags?.some(tag =>
-      tag.tagId === entityId && tag.tagType === 'CHARACTER'
-    ) ?? false
-  }
-
-  const handleToggleTag = async (image: GalleryImage, entityName: string) => {
-    // Find existing tag for this entity
-    const existingTag = image.tags?.find(tag =>
-      tag.tagId === entityId && tag.tagType === 'CHARACTER'
-    )
-    const isTagged = !!existingTag
-
-    try {
-      if (isTagged && existingTag) {
-        // Remove the existing tag using action dispatch
-        const res = await fetch(`/api/v1/images/${image.id}?action=remove-tag`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tagId: entityId }),
-        })
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          throw new Error(data.error || 'Failed to remove tag')
-        }
-        showSuccessToast(`Removed from ${entityName}`)
-      } else {
-        // Add new tag - always use CHARACTER for new tags
-        const tagType = 'CHARACTER'
-        const res = await fetch(`/api/v1/images/${image.id}?action=add-tag`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tagType, tagId: entityId }),
-        })
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          throw new Error(data.error || 'Failed to add tag')
-        }
-        showSuccessToast(`Tagged to ${entityName}`)
-      }
-
-      // Update local state
-      await mutateImages(
-        prev => prev ? {
-          ...prev,
-          data: prev.data.map(img => {
-            if (img.id !== image.id) return img
-            const currentTags = img.tags || []
-            const newTag = { tagId: entityId, tagType: 'CHARACTER' }
-            return {
-              ...img,
-              tags: isTagged
-                ? currentTags.filter(t => t.tagId !== entityId || t.tagType !== 'CHARACTER')
-                : [...currentTags, newTag]
-            }
-          })
-        } : prev,
-        false
-      )
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      showErrorToast(message || 'Failed to update tag')
-      console.error('Error toggling tag:', { error: message, entityId, imageId: image.id })
-    }
-  }
-
-  const handleSetAvatar = async (image: GalleryImage, currentAvatarId: string | undefined, onAvatarChange?: (imageId: string | null) => void) => {
+  const handleSetAvatar = async (
+    image: GalleryImage,
+    _currentAvatarId: string | undefined,
+    onAvatarChange?: (imageId: string | null) => void
+  ) => {
     if (!onAvatarChange) return
     try {
-      // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-      const endpoint = `/api/v1/characters/${entityId}?action=avatar`
-
-      const res = await fetch(endpoint, {
+      const res = await fetch(`/api/v1/characters/${entityId}?action=avatar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: image.id }),
@@ -124,14 +110,14 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
     }
   }
 
-  const handleClearAvatar = async (currentAvatarId: string | undefined, onAvatarChange?: (imageId: string | null) => void) => {
+  const handleClearAvatar = async (
+    currentAvatarId: string | undefined,
+    onAvatarChange?: (imageId: string | null) => void
+  ) => {
     if (!currentAvatarId || !onAvatarChange) return
 
     try {
-      // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-      const endpoint = `/api/v1/characters/${entityId}?action=avatar`
-
-      const res = await fetch(endpoint, {
+      const res = await fetch(`/api/v1/characters/${entityId}?action=avatar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: null }),
@@ -151,44 +137,67 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
     }
   }
 
-  const handleDeleteImage = async (image: GalleryImage, currentAvatarId: string | undefined, onAvatarChange?: (imageId: string | null) => void) => {
+  const handleDeleteImage = async (
+    image: GalleryImage,
+    currentAvatarId: string | undefined,
+    onAvatarChange?: (imageId: string | null) => void
+  ) => {
     try {
-      // If this is the current avatar (especially for missing images), clear it first
       const isCurrentAvatar = currentAvatarId === image.id
-      if (isCurrentAvatar && onAvatarChange) {
-        // All entities are now characters (personas migrated to characters with controlledBy: 'user')
-        const endpoint = `/api/v1/characters/${entityId}?action=avatar`
-
-        const clearRes = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageId: null }),
-        })
-
-        if (!clearRes.ok) {
-          throw new Error('Failed to clear avatar before deletion')
-        }
-        onAvatarChange(null)
-      }
-
-      const res = await fetch(`/api/v1/images/${image.id}`, {
+      const res = await fetch(`/api/v1/characters/${entityId}/photos/${image.id}`, {
         method: 'DELETE',
       })
 
       if (!res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to delete image')
       }
 
-      // Remove from local state
-      await mutateImages(
-        prev => prev ? { ...prev, data: prev.data.filter(img => img.id !== image.id) } : prev,
-        false
-      )
+      // Server has already nulled defaultImageId / avatarOverrides when the
+      // deleted link was the current avatar; reflect that locally.
+      if (isCurrentAvatar && onAvatarChange) {
+        onAvatarChange(null)
+      }
+
+      await mutate()
       showSuccessToast('Image deleted')
     } catch (error) {
       showErrorToast(error instanceof Error ? error.message : 'Failed to delete image')
-      console.error('Error deleting image:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Error deleting image:', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const handleUpload = async (
+    file: File,
+    options?: { caption?: string | null; tags?: string[] }
+  ): Promise<boolean> => {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      if (options?.caption) formData.append('caption', options.caption)
+      for (const tag of options?.tags ?? []) formData.append('tags', tag)
+
+      const res = await fetch(`/api/v1/characters/${entityId}/photos`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `Upload failed (${res.status})`)
+      }
+
+      await mutate()
+      showSuccessToast('Image uploaded')
+      return true
+    } catch (error) {
+      showErrorToast(error instanceof Error ? error.message : 'Failed to upload image')
+      console.error('Error uploading image:', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return false
     }
   }
 
@@ -200,10 +209,9 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
     setMissingImages,
     fetchImages,
     handleImageError,
-    isImageTagged,
-    handleToggleTag,
     handleSetAvatar,
     handleClearAvatar,
-    handleDeleteImage
+    handleDeleteImage,
+    handleUpload,
   }
 }

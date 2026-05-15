@@ -4,6 +4,26 @@
 
 ### 4.4-dev
 
+#### Feat: Photo albums Phase 3 (part 3/3) — Aurora gallery sourced from vault `photos/`
+
+The Aurora tab's character gallery is now backed by the character's vault `photos/` folder (plus the legacy `images/avatar.webp` + `images/history/` carryover) instead of a workspace-wide search for CHARACTER-tagged images. With this commit the photo-albums Phase 3 chain ends; the data, backend, and UI are all on the same source of truth.
+
+- **New REST surface** under `/api/v1/characters/[id]/photos`:
+  - `GET` — paginated list of every photo in the character's vault `photos/` folder, plus the historic avatar locations. Each entry carries `linkId`, `blobUrl`, `mimeType`, `sha256`, `caption`, `tags`, and a reverse-index `linkSummary` so the UI can show "kept in N places" without a second round-trip.
+  - `POST` — multipart upload (`file`, optional `caption`, optional `tags`) that lands the bytes directly in `<vault>/photos/`. Same kept-image Markdown contract `keep_image` uses; sha256 dedup refuses a re-upload of identical bytes into the same character's vault.
+  - `DELETE /api/v1/characters/[id]/photos/[linkId]` — removes the link; if the deleted link was the character's current `defaultImageId` (or appeared in any `avatarOverrides[]`), those pointers are nulled too. Cascades to chunks via FK; `deleteWithGC` reclaims the underlying file row and blob when this was the last hard link.
+- **New service** `lib/photos/character-gallery-service.ts` — sibling of `user-gallery-service.ts`. `saveToCharacterGallery`, `listCharacterGallery`, `removeFromCharacterGallery`. Chunks the kept-image Markdown inline so vault search picks the upload up; embedding queued asynchronously.
+- **`EmbeddedPhotoGallery`** rewritten:
+  - The gallery reads `/api/v1/characters/[id]/photos`; the legacy `/api/v1/images` + CHARACTER-tag filter is gone.
+  - The tag/untag button is gone (every visible photo IS in the gallery by definition; the legacy `image.tags` array no longer drives membership).
+  - The "Show only tagged" filter is gone.
+  - Upload is a plain file input + `POST /api/v1/characters/[id]/photos` (no `ImageUploadDialog` import/modal here anymore).
+  - Set Avatar, Clear Avatar, Delete still work — set/clear go through `POST /api/v1/characters/[id]?action=avatar` (body still `{ imageId }`, now interpreted as a vault link id by the resolver from commit 2). Delete goes through the new `/api/v1/characters/[id]/photos/[linkId]` endpoint.
+  - `GalleryControls` no longer takes `taggedCount` / `showOnlyTagged` / `onFilterToggle`. `GalleryGrid` / `GalleryImage` dropped their `isTagged` props. `GalleryEmpty` shows a single message keyed on the character name.
+- **`/api/v1/images/[id]?action=add-tag/remove-tag`** no longer accepts `tagType: 'CHARACTER'`. Only `CHAT` and `THEME` are valid going forward — character galleries live in the vault now. The schema and the `verifyTaggedEntity` helper are tightened to match.
+- **Help docs**: new `help/character-gallery.md` describes the Aurora gallery; existing `help/keep-image-tools.md` and `help/photo-gallery.md` continue to apply unchanged.
+- **Migration assumption**: this UI now expects `character.defaultImageId` to be a vault link id and the vault `photos/` folder to exist. Both are produced by the Phase 3 part-1 migration; running this commit on a pre-migrated database will show empty galleries until the next startup runs the migration.
+
 #### Feat: Photo albums Phase 3 (part 2/3) — avatar resolver + backend swap
 
 After commit 1's migration translates every `defaultImageId` / `avatarOverrides[].imageId` / `chats.characterAvatars[].imageId` from a legacy `files.id` to a `doc_mount_file_links.id`, the backend has to learn the new shape. This commit centralizes that knowledge in one resolver and rewires every consumer that touches a character avatar.
