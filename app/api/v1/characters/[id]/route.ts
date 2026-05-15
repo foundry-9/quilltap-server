@@ -31,7 +31,7 @@ import { createAuthenticatedParamsHandler, checkOwnership, enrichWithDefaultImag
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
-import { readImageBuffer } from '@/lib/images-v2';
+import { readCharacterAvatarBuffer } from '@/lib/photos/resolve-character-avatar';
 import { z } from 'zod';
 import { PronounsSchema } from '@/lib/schemas/character.types';
 import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
@@ -189,9 +189,10 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         if (format === 'png') {
           let avatarBuffer: Buffer | undefined;
           if (character.defaultImageId) {
-            try {
-              avatarBuffer = await readImageBuffer(character.defaultImageId);
-            } catch (error) {
+            const bytes = await readCharacterAvatarBuffer(character.defaultImageId, repos);
+            if (bytes) {
+              avatarBuffer = bytes;
+            } else {
               logger.warn('[Characters v1] Could not read avatar for PNG export, using placeholder', {
                 characterId: id,
                 imageId: character.defaultImageId,

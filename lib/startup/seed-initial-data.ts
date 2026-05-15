@@ -12,8 +12,6 @@
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/database/repositories';
 import { SINGLE_USER_ID } from '@/lib/auth/single-user';
-import { createHash } from 'crypto';
-import { randomUUID } from 'crypto';
 import {
   getSeedCharacters,
   prepareSeedCharacter,
@@ -287,9 +285,6 @@ async function seedAvatars(
           }
         }
 
-        // Calculate SHA256 hash for the image
-        const sha256 = createHash('sha256').update(avatar.content).digest('hex');
-
         // Seed characters created during first-startup do not auto-provision a
         // vault the way API-created ones do, so ensure one exists here.
         // ensureCharacterVault is idempotent and reads the current DB row, so
@@ -311,43 +306,19 @@ async function seedAvatars(
           content: avatar.content,
           contentType: avatar.mimeType,
         });
-        const storageKey = written.storageKey;
-        const fileFolderPath: string | null = null;
 
-        // Create the file entry in the database
-        const fileId = randomUUID();
-        const fileEntry = await repos.files.create({
-          userId: SINGLE_USER_ID,
-          sha256,
-          originalFilename: avatar.filename,
-          mimeType: avatar.mimeType,
-          size: avatar.content.length,
-          width: null,
-          height: null,
-          linkedTo: [character.id],
-          source: 'SYSTEM',
-          category: 'AVATAR',
-          storageKey,
-          generationPrompt: null,
-          generationModel: null,
-          generationRevisedPrompt: null,
-          description: null,
-          tags: [],
-          folderPath: fileFolderPath,
-          projectId: null,
-        }, { id: fileId });
-
-        // Update the character's defaultImageId
+        // Post-Phase-3: defaultImageId is a doc_mount_file_links id pointing
+        // at the avatar in the character's vault. No legacy `files` row.
         await repos.characters.update(character.id, {
-          defaultImageId: fileEntry.id,
+          defaultImageId: written.linkId,
         });
 
         logger.info('Seeded avatar for character', {
           context,
           characterName: character.name,
           characterId: character.id,
-          fileId: fileEntry.id,
-          storageKey,
+          linkId: written.linkId,
+          storageKey: written.storageKey,
           size: avatar.content.length,
         });
       } catch (avatarError) {

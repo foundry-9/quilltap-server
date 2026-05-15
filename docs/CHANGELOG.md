@@ -4,6 +4,21 @@
 
 ### 4.4-dev
 
+#### Feat: Photo albums Phase 3 (part 2/3) — avatar resolver + backend swap
+
+After commit 1's migration translates every `defaultImageId` / `avatarOverrides[].imageId` / `chats.characterAvatars[].imageId` from a legacy `files.id` to a `doc_mount_file_links.id`, the backend has to learn the new shape. This commit centralizes that knowledge in one resolver and rewires every consumer that touches a character avatar.
+
+- **New `lib/photos/resolve-character-avatar.ts`** — `resolveCharacterAvatar(id, repos)` returns `{ id, kind: 'vault-link' | 'legacy-file', url, mimeType, sha256, mountPointId, relativePath }`. The resolver tries `docMountFileLinks.findByIdWithContent(id)` first and falls back to `files.findById(id)` so old archives, fresh imports, and any half-migrated state keep working. URL builders (`buildMountFileUrl`, `buildLegacyFileUrl`) and a bytes reader (`readCharacterAvatarBuffer`) live alongside it. 10 new test cases.
+- **`enrichWithDefaultImage`** in `lib/api/middleware/enrichment.ts` now delegates to the resolver. Every API route that calls `enrichWithDefaultImage` (character list, character detail, project chat list, project CRUD, chat helpers, chat-by-id `?action=update`) picks up the new shape transparently.
+- **`getCharacterDetail`** + **`getCharacterSummary`** in `lib/services/chat-enrichment.service.ts` rewritten against the resolver. The batched-list path gains a `docMountFileLinks: Map<string, DocMountFileLinkWithContent>` in `ChatListPreloaded` so the chat-roster hot path stays one map lookup. New `findByIdsWithContent` repository helper feeds it.
+- **`POST /api/v1/chats/[id]?action=avatars`** (get/set avatar overrides) now goes through the resolver — the `imageId` body field accepts a vault link id, the returned `image.filepath` is the mount-blob URL.
+- **`GET /api/v1/characters/[id]?action=export&format=png`** (SillyTavern card export) reads avatar bytes via the new `readCharacterAvatarBuffer` helper, which understands both vault-link and legacy-file ids.
+- **`writeCharacterAvatarToVault`** now returns `linkId` alongside the existing `storageKey` / `blobId`. Three callers — SillyTavern import in `POST /api/v1/characters?action=import`, the seed flow in `lib/startup/seed-initial-data.ts`, and the wardrobe preview / wardrobe character-avatar background job pipelines — can now assign `defaultImageId` directly to the link id. The SillyTavern import and seed-initial-data flows drop their redundant `files.create(...)` call now that the gallery is sourced from the vault rather than CHARACTER tags. Wardrobe preview + wardrobe character-avatar background job are intentionally left unchanged; the resolver fallback handles them and the next startup migration sweeps any stale `files` rows they create into the vault.
+- **`jest.setup.ts`** mock for `writeCharacterAvatarToVault` carries a `linkId` so the touched routes / services still type-check under test.
+- No DDL changes (column meanings shifted in commit 1's update; no schema motion this commit).
+
+After this commit a freshly-migrated instance renders avatars correctly through every backend path — the chat handler GET, the Salon avatar override action, the SillyTavern PNG export, and the chat list. The Aurora gallery UI still reads `/api/v1/images` and the legacy CHARACTER-tag filter; that swap is commit 3.
+
 #### Feat: Photo albums Phase 3 (part 1/3) — one-time migration into character vault `photos/`
 
 The Aurora gallery is moving off legacy CHARACTER tags on `files` rows and onto each character's vault `photos/` folder. This commit ships the one-time data migration; the backend resolver swap and the Aurora UI swap follow in two subsequent commits.

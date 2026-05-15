@@ -265,6 +265,26 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
   }
 
   /**
+   * Batched variant of {@link findByIdWithContent}. Returns one query result
+   * per unique id — duplicates and missing ids are squashed. Used by the
+   * chat-list enrichment hot path so we don't fan out per-character avatar
+   * lookups across hundreds of chats.
+   */
+  async findByIdsWithContent(ids: string[]): Promise<DocMountFileLinkWithContent[]> {
+    if (ids.length === 0) return [];
+    const unique = Array.from(new Set(ids));
+    return this.safeQuery(
+      async () => {
+        const placeholders = unique.map(() => '?').join(',');
+        return this.queryJoined(`WHERE l.id IN (${placeholders})`, unique);
+      },
+      'Error finding file links by ids',
+      { count: unique.length },
+      []
+    );
+  }
+
+  /**
    * Count links pointing at a file. Used by GC to decide whether to
    * tombstone the file row after a link delete.
    */

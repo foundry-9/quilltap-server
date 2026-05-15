@@ -10,7 +10,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createHash, randomUUID } from 'node:crypto';
 import { createAuthenticatedHandler, AuthenticatedContext, enrichWithDefaultImage } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/character';
@@ -593,28 +592,11 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
           content: pngAvatarBytes,
           contentType: 'image/png',
         });
-        const fileEntry = await repos.files.create({
-          userId: user.id,
-          sha256: createHash('sha256').update(pngAvatarBytes).digest('hex'),
-          originalFilename: filename,
-          mimeType: 'image/png',
-          size: pngAvatarBytes.length,
-          width: null,
-          height: null,
-          linkedTo: [character.id],
-          source: 'IMPORTED',
-          category: 'AVATAR',
-          storageKey: written.storageKey,
-          generationPrompt: null,
-          generationModel: null,
-          generationRevisedPrompt: null,
-          description: null,
-          tags: [character.id],
-          folderPath: null,
-          projectId: null,
-        }, { id: randomUUID() });
-        await repos.characters.update(character.id, { defaultImageId: fileEntry.id });
-        defaultImageId = fileEntry.id;
+        // Post-Phase-3: defaultImageId is a doc_mount_file_links id pointing
+        // at the avatar in the character's vault. The legacy `files` row
+        // (and its CHARACTER tag) is no longer created.
+        await repos.characters.update(character.id, { defaultImageId: written.linkId });
+        defaultImageId = written.linkId;
       } catch (avatarError) {
         logger.error(
           '[Characters v1] Failed to persist imported SillyTavern avatar; character kept without portrait',

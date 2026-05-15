@@ -336,6 +336,7 @@ jest.mock('@/lib/file-storage/character-vault-bridge', () => ({
     storageKey: 'mount-blob:mock-vault-mount:mock-blob-id',
     mountPointId: 'mock-vault-mount',
     blobId: 'mock-blob-id',
+    linkId: 'mock-link-id',
     relativePath: 'images/avatar.webp',
     storedMimeType: 'image/webp',
     sizeBytes: 1024,

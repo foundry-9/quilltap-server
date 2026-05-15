@@ -98,6 +98,12 @@ interface WriteAvatarResult {
   storageKey: string;
   mountPointId: string;
   blobId: string;
+  /**
+   * `doc_mount_file_links.id` of the freshly-written link. Post-Phase-3
+   * this is what `character.defaultImageId` / `avatarOverrides[].imageId`
+   * should be set to instead of a legacy `files.id`.
+   */
+  linkId: string;
   relativePath: string;
   storedMimeType: string;
   sizeBytes: number;
@@ -156,7 +162,7 @@ export async function writeCharacterAvatarToVault(
   }
 
   const safeOriginalName = sanitizeLeafName(input.filename);
-  const { blobId } = await repos.docMountFileLinks.linkBlobContent({
+  const { link, blobId } = await repos.docMountFileLinks.linkBlobContent({
     mountPointId: target.mountPointId,
     relativePath,
     fileName: path.posix.basename(relativePath),
@@ -176,6 +182,7 @@ export async function writeCharacterAvatarToVault(
     storageKey: buildMountBlobStorageKey(target.mountPointId, blobId),
     mountPointId: target.mountPointId,
     blobId,
+    linkId: link.id,
     relativePath,
     storedMimeType: transcoded.storedMimeType,
     sizeBytes: transcoded.data.length,

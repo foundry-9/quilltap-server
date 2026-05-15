@@ -8,7 +8,7 @@
 
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { Tag } from '@/lib/schemas/types';
-import { getFilePath } from './file-path';
+import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 
 /**
  * Enriched API key info for responses
@@ -144,15 +144,18 @@ export async function enrichWithDefaultImage(
     return null;
   }
 
-  const fileEntry = await repos.files.findById(imageId);
+  // Post-Phase-3 the id is a doc_mount_file_links id. resolveCharacterAvatar
+  // tries the link table first and falls back to the legacy files table,
+  // so this stays correct for fresh imports / pre-migration data.
+  const resolved = await resolveCharacterAvatar(imageId, repos);
 
-  if (!fileEntry) {
+  if (!resolved) {
     return null;
   }
 
   return {
-    id: fileEntry.id,
-    filepath: getFilePath(fileEntry),
+    id: resolved.id,
+    filepath: resolved.url,
     url: null,
   };
 }
