@@ -12,7 +12,7 @@ import { enqueueMemoryExtractionBatch, ensureProcessorRunning } from '@/lib/back
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { SpeakerMapping } from '@/lib/sillytavern/multi-char-parser'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
-import { getFilePath } from '@/lib/api/middleware/file-path'
+import { enrichWithDefaultImage } from '@/lib/api/middleware/enrichment'
 
 const importLogger = logger.child({ module: 'sillytavern-import' })
 
@@ -684,17 +684,7 @@ async function buildImportResponse(
     participants.map(async p => {
       if (p.type === 'CHARACTER' && p.characterId) {
         const character = await repos.characters.findById(p.characterId)
-        let defaultImage: DefaultImageData | null = null
-        if (character?.defaultImageId) {
-          const fileEntry = await repos.files.findById(character.defaultImageId)
-          if (fileEntry) {
-            defaultImage = {
-              id: fileEntry.id,
-              filepath: getFilePath(fileEntry),
-              url: null,
-            }
-          }
-        }
+        const defaultImage = await enrichWithDefaultImage(character?.defaultImageId, repos)
         return {
           ...p,
           character: character ? { ...character, defaultImage } : null,
@@ -744,17 +734,7 @@ async function buildLegacyImportResponse(
   const messages = await repos.chats.getMessages(chat.id)
   const messageEvents = messages.filter(m => m.type === 'message')
 
-  let defaultImage: DefaultImageData | null = null
-  if (character.defaultImageId) {
-    const fileEntry = await repos.files.findById(character.defaultImageId)
-    if (fileEntry) {
-      defaultImage = {
-        id: fileEntry.id,
-        filepath: getFilePath(fileEntry),
-        url: null,
-      }
-    }
-  }
+  const defaultImage = await enrichWithDefaultImage(character.defaultImageId, repos)
 
   const allTags = await repos.tags.findAll()
   const chatTagsData = allTags

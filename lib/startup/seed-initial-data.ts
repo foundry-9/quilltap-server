@@ -26,6 +26,7 @@ import {
   writeCharacterAvatarToVault,
 } from '@/lib/file-storage/character-vault-bridge';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
+import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 
 /**
  * Seed initial data if the database is empty
@@ -277,10 +278,12 @@ async function seedAvatars(
           continue;
         }
 
-        // Skip if the character already has a valid avatar file
+        // Skip if the character already has a valid avatar. Post-Phase-3 the
+        // id is a doc_mount_file_links id; the resolver also covers legacy
+        // pre-migration files.id values.
         if (character.defaultImageId) {
-          const existingFile = await repos.files.findById(character.defaultImageId);
-          if (existingFile) {
+          const resolved = await resolveCharacterAvatar(character.defaultImageId, repos);
+          if (resolved) {
             continue;
           }
         }

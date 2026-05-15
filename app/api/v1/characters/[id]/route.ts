@@ -31,7 +31,7 @@ import { createAuthenticatedParamsHandler, checkOwnership, enrichWithDefaultImag
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
-import { readCharacterAvatarBuffer } from '@/lib/photos/resolve-character-avatar';
+import { readCharacterAvatarBuffer, resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 import { z } from 'zod';
 import { PronounsSchema } from '@/lib/schemas/character.types';
 import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
@@ -587,16 +587,18 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       const body = await req.json();
       const { imageId } = avatarSchema.parse(body);
 
-      // Validate image if provided
+      // Validate image if provided. Post-Phase-3 imageId is a doc_mount_file_links
+      // id pointing into the character's vault `photos/`; the resolver falls back
+      // to a legacy `files.id` for pre-migration imports.
       if (imageId) {
-        const fileEntry = await repos.files.findById(imageId);
+        const resolved = await resolveCharacterAvatar(imageId, repos);
 
-        if (!fileEntry) {
+        if (!resolved) {
           return notFound('Image file');
         }
 
-        if (fileEntry.category !== 'IMAGE' && fileEntry.category !== 'AVATAR') {
-          return badRequest(`Invalid file type. Expected IMAGE or AVATAR, got ${fileEntry.category}`);
+        if (resolved.mimeType && !resolved.mimeType.startsWith('image/')) {
+          return badRequest(`Invalid file type. Expected an image, got ${resolved.mimeType}`);
         }
       }
 
