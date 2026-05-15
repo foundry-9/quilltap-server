@@ -4,6 +4,15 @@
 
 ### 4.4-dev
 
+#### Fix: Photo migration robustness against stale character vault references
+
+First run of `migrate-character-photos-to-vault-v1` on a real instance moved 478/479 photos and all 16/226/193 pointer translations, but failed when one character carried a `characterDocumentMountPointId` pointing at a `doc_mount_points` row that no longer existed. The link insert tripped the FK constraint; the per-row catch recovered, but the strict `success: errors === 0` criterion flipped the whole migration to failed, which would have made the runner retry it on every startup.
+
+- **Pre-check for stale vault references** in Phase A: each character's `characterDocumentMountPointId` is verified against `doc_mount_points` before queueing any photo mirroring work. Stale references emit a clean `Character vault id does not exist in doc_mount_points; skipping photo mirror` warning instead of an FK violation.
+- **Phase B and C skip stale-vault characters** entirely. Their legacy `defaultImageId` / `avatarOverrides[].imageId` / `chats.characterAvatars[].imageId` pointers are left as the original `files.id` values — the avatar resolver from commit 2's part-2 still serves those through the legacy-file fallback, so a stale vault never nulls a working portrait.
+- **`success: true` once Phase A–E all complete.** Per-row errors stay captured in the summary message (`errors N`) and the underlying per-row warn/error logs, but they no longer fail the migration as a whole. A hard exception bubbling out of `run()` is still fatal (handled by the outer try/catch).
+- Skip summary in the final message now includes `(stale vault) N` alongside `(collision) N` and `(missing bytes) N`.
+
 #### Feat: Photo albums Phase 3 (part 3/3) — Aurora gallery sourced from vault `photos/`
 
 The Aurora tab's character gallery is now backed by the character's vault `photos/` folder (plus the legacy `images/avatar.webp` + `images/history/` carryover) instead of a workspace-wide search for CHARACTER-tagged images. With this commit the photo-albums Phase 3 chain ends; the data, backend, and UI are all on the same source of truth.

@@ -482,6 +482,23 @@ export const migrateCharacterPhotosToVaultMigration: Migration = {
       // ============================================================================
       const taggedFiles = listImageFilesWithCharacterTags(characterIds);
 
+      // Defensive check: a character row may carry a
+      // `characterDocumentMountPointId` that no longer exists in
+      // `doc_mount_points` (e.g. the vault was deleted out from under it).
+      // Mirroring into such a stale vault id trips the
+      // `doc_mount_file_links.mountPointId FK` constraint mid-insert and the
+      // row error survives via try/catch but pollutes the log. Find which
+      // vaults actually exist up front so we can warn + skip cleanly.
+      const validVaultIds = new Set<string>();
+      const lookupVault = mountConn.prepare(
+        `SELECT 1 FROM "doc_mount_points" WHERE id = ?`
+      );
+      for (const c of characters) {
+        const hit = lookupVault.get(c.vaultId) as { 1: number } | undefined;
+        if (hit) validVaultIds.add(c.vaultId);
+      }
+
+      const skippedStaleVaultCharacters = new Set<string>();
       // Build an iteration list of (character, file) pairs so the progress
       // tier reads naturally as "k/n photos".
       const work: Array<{ character: CharacterRow; file: FileRow }> = [];
@@ -490,6 +507,18 @@ export const migrateCharacterPhotosToVaultMigration: Migration = {
         for (const tagId of tags) {
           const character = characterById.get(tagId);
           if (!character) continue;
+          if (!validVaultIds.has(character.vaultId)) {
+            if (!skippedStaleVaultCharacters.has(character.id)) {
+              skippedStaleVaultCharacters.add(character.id);
+              logger.warn('Character vault id does not exist in doc_mount_points; skipping photo mirror', {
+                context: `migration.${MIGRATION_ID}`,
+                characterId: character.id,
+                characterName: character.name,
+                staleVaultId: character.vaultId,
+              });
+            }
+            continue;
+          }
           work.push({ character, file });
         }
       }
@@ -680,6 +709,15 @@ export const migrateCharacterPhotosToVaultMigration: Migration = {
       for (const character of characters) {
         bIdx++;
         reportProgress(bIdx, characters.length, 'character pointers');
+
+        // Stale-vault characters keep their legacy pointers — there's no
+        // vault to translate into, and the resolver fallback in commit 2
+        // serves their avatars from `files` just fine. Nulling the pointer
+        // would needlessly break a working avatar.
+        if (!validVaultIds.has(character.vaultId)) {
+          continue;
+        }
+
         let newDefault: string | null = null;
         if (character.defaultImageId) {
           const legacy = fileById.get(character.defaultImageId);
@@ -799,6 +837,12 @@ export const migrateCharacterPhotosToVaultMigration: Migration = {
                 characterAvatarsDropped++;
                 continue;
               }
+              // Stale-vault characters keep their legacy imageId — same
+              // reasoning as Phase B: the resolver fallback serves them.
+              if (!validVaultIds.has(character.vaultId)) {
+                out[characterId] = entry;
+                continue;
+              }
               const link = findVaultLinkBySha(mountConn, character.vaultId, legacy.sha256);
               if (link) {
                 out[characterId] = { ...entry, imageId: link.linkId };
@@ -902,14 +946,23 @@ export const migrateCharacterPhotosToVaultMigration: Migration = {
         `translated ${defaultImageTranslated} defaultImageId / ${overridesTranslated} avatarOverrides / ${characterAvatarsTranslated} chat characterAvatars; ` +
         `stripped CHARACTER tags from ${tagsStripped} file(s); ` +
         `garbage-collected ${filesGced} unreferenced files row(s); ` +
-        `skipped (collision) ${mirrorSkippedCollision}, (missing bytes) ${mirrorSkippedMissingBytes}; ` +
+        `skipped (collision) ${mirrorSkippedCollision}, (missing bytes) ${mirrorSkippedMissingBytes}, (stale vault) ${skippedStaleVaultCharacters.size}; ` +
         `nulled ${defaultImageNulled} defaultImageId, dropped ${overridesDropped} overrides, ${characterAvatarsDropped} chat-avatar entries; ` +
         `errors ${errors}`;
       logger.info(message, { context: `migration.${MIGRATION_ID}` });
 
+      // Per-row Phase A errors (FK violation on a stale `mountPointId`, a
+      // sharp/codec failure on one image, etc.) are captured in the `errors`
+      // counter and logged in detail above. Treat them as soft so the
+      // migration runner doesn't loop the whole thing on the next startup
+      // looking for the work that's already been done — Phase A's
+      // collision-skip and Phase D/E's empty-tags predicate make subsequent
+      // runs no-ops, but the migration framework would still keep re-firing
+      // it as long as `success` is false. A hard exception out of `run()`
+      // stays fatal; that's handled by the outer catch.
       return {
         id: MIGRATION_ID,
-        success: errors === 0,
+        success: true,
         itemsAffected:
           mirrored + defaultImageTranslated + overridesTranslated +
           characterAvatarsTranslated + tagsStripped + filesGced,
