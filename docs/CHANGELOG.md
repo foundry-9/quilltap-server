@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Homepage character avatars used the pre-Phase-3 lookup
+
+`app/page.tsx` still called `repos.files.findById(char.defaultImageId)` and a `findByLinkedTo` + `tag=avatar` fallback when building the homepage character cards. After Phase 3, `defaultImageId` holds a `doc_mount_file_links.id`, so the direct lookup missed every character and the fallback grabbed the first `linkedTo` file it found. For characters whose first linked file was a non-image (e.g. a sidecar markdown file with a tag UUID equal to the character id), the card rendered a broken `<img>`. Swapped the block for `enrichWithDefaultImage(char.defaultImageId, repos)` — the same helper `/api/v1/characters` uses, which routes through `resolveCharacterAvatar` (vault link → legacy file fallback).
+
 #### Fix: Photo gallery clients unwrapped a non-existent `data` envelope
 
 `/api/v1/photos` and `/api/v1/characters/[id]/photos` return `{ entries, total, hasMore }` flat (via `successResponse`, which does not wrap). Three consumers landed in Phase 3 typed against a `{ data: { entries, ... } }` shape and read `data.data.entries`, which was always `undefined` — so the Aurora character gallery, the standalone `/photos` page, and the Salon library picker's "My Gallery" tab all rendered empty against a populated server. Dropped the wrapper from `CharacterGalleryListResponse` (`useGalleryData.ts`), `ListResponse` (`app/photos/page.tsx`), and `GalleryResponse` (`LibraryFilePickerModal.tsx`), and updated the readers to match. Server side and avatar pointers were always correct.

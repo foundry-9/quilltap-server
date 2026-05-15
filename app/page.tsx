@@ -1,6 +1,6 @@
 import { getServerSession } from "@/lib/auth/session";
 import { getRepositories } from "@/lib/repositories/factory";
-import { getFilePath } from "@/lib/api/middleware/file-path";
+import { enrichWithDefaultImage } from "@/lib/api/middleware";
 import {
   WelcomeSection,
   QuickActionsRow,
@@ -9,7 +9,6 @@ import {
   CharactersSection,
 } from "@/components/homepage";
 import { enrichChatsForList, cleanEnrichedChats } from "@/lib/services/chat-enrichment.service";
-import type { FileEntry } from "@/lib/schemas/types";
 import type {
   RecentChat,
   HomepageProject,
@@ -213,39 +212,14 @@ export default async function Home() {
   // Add default images to sorted characters
   const homepageCharacters: HomepageCharacter[] = await Promise.all(
     sortedCharacters.map(async (char) => {
-      // Get the default image for this character
-      let defaultImage = null;
-      let defaultImageId = null;
-
-      // First, try to get the character's default image directly by ID
-      let defaultImg: FileEntry | null = null;
-      if (char.defaultImageId) {
-        defaultImg = await repos.files.findById(char.defaultImageId);
-      }
-
-      // Fallback: search by linkedTo (for avatar tagged images)
-      if (!defaultImg) {
-        const images = await repos.files.findByLinkedTo(char.id);
-        defaultImg = images.find((img: FileEntry) => img.tags?.includes('avatar'))
-          || images[0]
-          || null;
-      }
-
-      if (defaultImg) {
-        defaultImageId = defaultImg.id;
-        defaultImage = {
-          id: defaultImg.id,
-          filepath: getFilePath(defaultImg),
-          url: null,
-        };
-      }
+      const defaultImage = await enrichWithDefaultImage(char.defaultImageId, repos);
 
       return {
         id: char.id,
         name: char.name,
         title: char.title || null,
         avatarUrl: char.avatarUrl || null,
-        defaultImageId,
+        defaultImageId: defaultImage?.id ?? null,
         defaultImage,
         tags: char.tags || [],
         isFavorite: char.isFavorite ?? false,
