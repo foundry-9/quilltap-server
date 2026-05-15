@@ -28,6 +28,7 @@ export function ChatTabContent() {
     handleContextCompressionUpdate,
     handleMemoryCascadeUpdate,
     handleImageDescriptionProfileChange,
+    handleUncensoredImageDescriptionProfileChange,
     handleAutoDetectRngChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
@@ -91,6 +92,7 @@ export function ChatTabContent() {
             loadingProfiles={loadingProfiles}
             connectionProfiles={connectionProfiles}
             onProfileChange={handleImageDescriptionProfileChange}
+            onUncensoredProfileChange={handleUncensoredImageDescriptionProfileChange}
           />
         </CollapsibleCard>
 

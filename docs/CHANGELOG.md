@@ -4,6 +4,17 @@
 
 ### 4.4-dev
 
+#### Feat: Photo albums Phase 2 — link summaries on chat images and auto-describe uploads
+
+Phase 2 of the photo album work. Every image surfaced to the chat or the avatar/background actions now carries a `sha256` and `linkSummary` so the UI can show "kept in N places" and offer save-to-gallery affordances. Manually uploaded chat images get an automatic vision-LLM description, with an optional uncensored fallback when the primary refuses.
+
+- **Link summary helper:** new `lib/photos/photo-link-summary.ts` exposes `getPhotoLinkSummaryBySha256` and `getPhotoLinkSummaryByFileId`. Returns the list of `doc_mount_file_links` rows that hard-link the same bytes, the mount each link lives in (with `storeType` so the UI can distinguish character vaults from documents), whether the link is a `photos/` album entry, and (for kept images) the `linkedBy` / `linkedById` / caption / tags from the frontmatter.
+- **Chat GET surfacing:** `app/api/v1/chats/[id]/handlers/get.ts` and `app/api/v1/chats/[id]/actions/avatars.ts` now include `sha256` and `linkSummary` on every image attachment, every Scriptorium image attachment, every avatar override, and the story background payload. Non-image attachments are unchanged.
+- **Uncensored fallback profile:** new `uncensoredImageDescriptionProfileId` on `ChatSettings`. Migration `add-uncensored-image-description-profile-field-v1` adds the `TEXT` column to `chat_settings`. Settings UI at `/settings?tab=chat` gains a second profile selector under "Image Description Profiles". Restore-service remaps the new field across instance imports. Schema mirrored in `migrations/lib/json-store/schemas/types.ts` and `lib/schemas/settings.types.ts`.
+- **Vision describe with fallback:** `generateImageDescription` in `lib/chat/file-attachment-fallback.ts` was split into a per-profile `describeImageWithProfile` helper plus an orchestrator that retries the configured uncensored profile when the primary returns `unsupported` (refusal, empty response, error-flavored text). `FallbackResult.processingMetadata.usedUncensoredFallback` flags which profile produced the description.
+- **Auto-describe on upload:** new `lib/photos/auto-describe-attachment.ts` runs the vision pipeline asynchronously after every image upload in `lib/chat-files-v2.ts`. On success it writes the description to `FileEntry.description`, copies it into every "blank" hard link's `description` and `extractedText` (kept-image links with Markdown frontmatter are skipped), chunks the text via `chunkAndInsertExtractedText`, and queues embedding jobs through `enqueueEmbeddingJobsForMountPoint` so the description becomes searchable. Fire-and-forget; failures log a warning but don't fail the upload.
+- **Tests:** new `__tests__/unit/lib/photos/photo-link-summary.test.ts` (9 cases) and `__tests__/unit/lib/photos/auto-describe-attachment.test.ts` (5 cases). The existing `file-attachment-fallback.test.ts` gains four cases covering the fallback retry, the no-fallback short-circuit, the same-profile guard, and the both-failed error annotation.
+
 #### Remove: Shell interactivity tools (chdir / exec_sync / exec_async / async_result / sudo_sync / cp_host)
 
 Deleted the LLM shell-interactivity tool suite that let characters run shell commands inside a Lima VM / Docker workspace, along with its supporting workspace-acknowledgement and sudo-approval flow.

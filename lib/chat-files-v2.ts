@@ -14,6 +14,7 @@ import type { FileEntry, FileCategory, Provider } from './schemas/types';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from './files/tag-inheritance';
 import { resizeImageForProvider, canResizeImage, calculateBase64Size, getProviderMaxBase64Size } from './files/image-processing';
+import { autoDescribeChatImageAttachment } from './photos/auto-describe-attachment';
 
 export interface ChatFileUploadResult {
   id: string;
@@ -386,6 +387,21 @@ async function uploadFileToProject(
     folderPath: fileFolderPath,
     storageKey,
   }, { id: fileId });
+
+  // Fire-and-forget vision-describe for image uploads. The describe call
+  // takes 5-15s; running it inline would block the upload response. Failures
+  // are logged inside the orchestrator — the upload still succeeds.
+  if (category === 'IMAGE') {
+    void autoDescribeChatImageAttachment({ fileEntryId: fileEntry.id, userId, repos })
+      .catch(err => {
+        logger.warn('Auto-describe failed for chat image upload', {
+          module: 'chat-files-v2',
+          fileId: fileEntry.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+  }
+
   return {
     id: fileEntry.id,
     filename: fileEntry.originalFilename,

@@ -289,6 +289,12 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Profile ID to use for image description fallback (when provider doesn't support images) */
   imageDescriptionProfileId: UUIDSchema.nullable().optional(),
+  /**
+   * Profile ID to use as a candid fallback when `imageDescriptionProfileId`
+   * refuses or returns an unusable response. Typically an uncensored
+   * vision-capable model that can describe images the primary refuses to.
+   */
+  uncensoredImageDescriptionProfileId: UUIDSchema.nullable().optional(),
   /** Default roleplay template ID for all new chats */
   defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),
   /** Theme preference settings */

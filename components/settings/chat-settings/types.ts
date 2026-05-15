@@ -66,6 +66,7 @@ export interface ChatSettings {
   avatarDisplayStyle: AvatarDisplayStyle
   cheapLLMSettings: CheapLLMSettings
   imageDescriptionProfileId?: string | null
+  uncensoredImageDescriptionProfileId?: string | null
   defaultTimestampConfig?: TimestampConfig
   memoryCascadePreferences?: MemoryCascadePreferences
   tokenDisplaySettings?: TokenDisplaySettings

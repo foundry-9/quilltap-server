@@ -271,6 +271,8 @@ import { addCourierDeltaFieldsMigration } from './add-courier-delta-fields';
 import { addCommonplaceSceneCacheMigration } from './add-commonplace-scene-cache';
 // Split doc_mount_files into content + link rows; rekey chunks to linkId
 import { addDocMountFileLinksMigration } from './add-doc-mount-file-links';
+// Add uncensoredImageDescriptionProfileId column to chat_settings (Phase 2 photos)
+import { addUncensoredImageDescriptionProfileFieldMigration } from './add-uncensored-image-description-profile-field';
 
 /**
  * All available migrations.
@@ -537,6 +539,8 @@ export const migrations: Migration[] = [
   addCommonplaceSceneCacheMigration,
   // Split doc_mount_files into content + link rows; rekey chunks to linkId
   addDocMountFileLinksMigration,
+  // Add uncensoredImageDescriptionProfileId column to chat_settings (Phase 2 photos)
+  addUncensoredImageDescriptionProfileFieldMigration,
 ];
 
 export {
@@ -788,5 +792,7 @@ export {
   addCommonplaceSceneCacheMigration,
   // Split doc_mount_files into content + link rows; rekey chunks to linkId
   addDocMountFileLinksMigration,
+  // Add uncensoredImageDescriptionProfileId column to chat_settings (Phase 2 photos)
+  addUncensoredImageDescriptionProfileFieldMigration,
 };
 

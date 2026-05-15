@@ -21,6 +21,10 @@ import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
 import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary } from '../actions';
+import {
+  getPhotoLinkSummaryBySha256,
+  type PhotoLinkSummary,
+} from '@/lib/photos/photo-link-summary';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 
@@ -123,7 +127,7 @@ export async function handleGet(
 
       // Check if the chat has a story background image
       if (!chat.storyBackgroundImageId) {
-        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null });
+        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
       }
 
       // Get the file info to build the URL
@@ -133,14 +137,19 @@ export async function handleGet(
           chatId,
           storyBackgroundImageId: chat.storyBackgroundImageId,
         });
-        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null });
+        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
       }
 
       const backgroundUrl = getFilePath(file);
+      const linkSummary = file.sha256
+        ? await getPhotoLinkSummaryBySha256(file.sha256, repos)
+        : null;
       return NextResponse.json({
         backgroundUrl,
         fileId: file.id,
         filename: file.originalFilename,
+        sha256: file.sha256,
+        linkSummary,
       });
     } catch (error) {
       logger.error('[Chats v1] Failed to get story background', { chatId }, error instanceof Error ? error : undefined);
@@ -233,12 +242,33 @@ export async function handleGet(
           if (event.type !== 'message') return null;
 
           const linkedFiles = await repos.files.findByLinkedTo(event.id);
-          const attachments: Array<{ id: string; filename: string; filepath: string; mimeType: string }> = linkedFiles.map((file) => ({
-            id: file.id,
-            filename: file.originalFilename,
-            filepath: getFilePath(file),
-            mimeType: file.mimeType,
-          }));
+          // Surface sha256 + linkSummary for every image attachment so the
+          // Salon UI can offer "save to my gallery" affordances and show
+          // a count of where the bytes are hard-linked elsewhere. Non-image
+          // attachments skip the summary lookup to keep the response light.
+          const attachments: Array<{
+            id: string;
+            filename: string;
+            filepath: string;
+            mimeType: string;
+            sha256?: string;
+            linkSummary?: PhotoLinkSummary;
+          }> = await Promise.all(
+            linkedFiles.map(async (file) => {
+              const base = {
+                id: file.id,
+                filename: file.originalFilename,
+                filepath: getFilePath(file),
+                mimeType: file.mimeType,
+              };
+              if (!file.mimeType.startsWith('image/')) return base;
+              return {
+                ...base,
+                sha256: file.sha256,
+                linkSummary: await getPhotoLinkSummaryBySha256(file.sha256, repos),
+              };
+            })
+          );
 
           // Mount-file attachments (Scriptorium documents pinned to a chat
           // via a Librarian announcement) live entirely in event.attachments
@@ -258,11 +288,18 @@ export async function handleGet(
               const blob = await repos.docMountBlobs.findByFileId(mountLink.fileId);
               if (!blob) continue;
               const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
+              const isImage = blob.storedMimeType.startsWith('image/');
               attachments.push({
                 id: mountLink.id,
                 filename: mountLink.originalFileName ?? mountLink.fileName,
                 filepath: url,
                 mimeType: blob.storedMimeType,
+                ...(isImage && mountLink.sha256
+                  ? {
+                      sha256: mountLink.sha256,
+                      linkSummary: await getPhotoLinkSummaryBySha256(mountLink.sha256, repos),
+                    }
+                  : {}),
               });
               alreadyResolved.add(mountLink.id);
             } catch (err) {

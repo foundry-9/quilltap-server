@@ -1048,7 +1048,7 @@ function remapBackupData(
   // Remap chat settings
   const remappedChatSettings = (data.chatSettings || []).map((settings) => {
     const remapped = {
-      ...remapper.remapFields(settings, ['id', 'imageDescriptionProfileId', 'defaultRoleplayTemplateId']),
+      ...remapper.remapFields(settings, ['id', 'imageDescriptionProfileId', 'uncensoredImageDescriptionProfileId', 'defaultRoleplayTemplateId']),
       userId: targetUserId,
     };
     // Remap nested cheapLLMSettings UUID fields

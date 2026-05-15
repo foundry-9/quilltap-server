@@ -25,6 +25,7 @@ async function updateChatSettings(
   tagStyles?: unknown,
   cheapLLMSettings?: unknown,
   imageDescriptionProfileId?: string | null,
+  uncensoredImageDescriptionProfileId?: string | null,
   themePreference?: unknown,
   defaultRoleplayTemplateId?: string | null,
   sidebarWidth?: number,
@@ -80,6 +81,9 @@ async function updateChatSettings(
   }
   if (typeof imageDescriptionProfileId !== 'undefined') {
     updateData.imageDescriptionProfileId = imageDescriptionProfileId
+  }
+  if (typeof uncensoredImageDescriptionProfileId !== 'undefined') {
+    updateData.uncensoredImageDescriptionProfileId = uncensoredImageDescriptionProfileId
   }
   if (typeof themePreference !== 'undefined') {
     const validatedThemePreference = ThemePreferenceSchema.parse(themePreference)
@@ -213,6 +217,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       tagStyles,
       cheapLLMSettings,
       imageDescriptionProfileId,
+      uncensoredImageDescriptionProfileId,
       themePreference,
       defaultRoleplayTemplateId,
       sidebarWidth,
@@ -236,6 +241,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       tagStyles,
       cheapLLMSettings,
       imageDescriptionProfileId,
+      uncensoredImageDescriptionProfileId,
       themePreference,
       defaultRoleplayTemplateId,
       sidebarWidth,

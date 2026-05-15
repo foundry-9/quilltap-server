@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
 import { getFilePath } from '@/lib/api/middleware/file-path';
+import { getPhotoLinkSummaryBySha256 } from '@/lib/photos/photo-link-summary';
 import { avatarOverrideSchema, removeAvatarSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -35,6 +36,9 @@ export async function handleGetAvatars(
           .filter(override => override.chatId === chatId)
           .map(async (override) => {
             const fileEntry = await repos.files.findById(override.imageId);
+            const linkSummary = fileEntry?.sha256
+              ? await getPhotoLinkSummaryBySha256(fileEntry.sha256, repos)
+              : null;
             return {
               chatId,
               characterId: character.id,
@@ -44,6 +48,8 @@ export async function handleGetAvatars(
                 id: fileEntry.id,
                 filepath: getFilePath(fileEntry),
                 url: null,
+                sha256: fileEntry.sha256,
+                linkSummary,
               } : null,
             };
           })
@@ -96,6 +102,9 @@ export async function handleSetAvatar(
 
   await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
 
+  const linkSummary = fileEntry.sha256
+    ? await getPhotoLinkSummaryBySha256(fileEntry.sha256, repos)
+    : null;
   const override = {
     chatId,
     characterId,
@@ -105,6 +114,8 @@ export async function handleSetAvatar(
       id: fileEntry.id,
       filepath: getFilePath(fileEntry),
       url: null,
+      sha256: fileEntry.sha256,
+      linkSummary,
     },
   };
 
