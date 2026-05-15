@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Photo gallery clients unwrapped a non-existent `data` envelope
+
+`/api/v1/photos` and `/api/v1/characters/[id]/photos` return `{ entries, total, hasMore }` flat (via `successResponse`, which does not wrap). Three consumers landed in Phase 3 typed against a `{ data: { entries, ... } }` shape and read `data.data.entries`, which was always `undefined` — so the Aurora character gallery, the standalone `/photos` page, and the Salon library picker's "My Gallery" tab all rendered empty against a populated server. Dropped the wrapper from `CharacterGalleryListResponse` (`useGalleryData.ts`), `ListResponse` (`app/photos/page.tsx`), and `GalleryResponse` (`LibraryFilePickerModal.tsx`), and updated the readers to match. Server side and avatar pointers were always correct.
+
 #### Fix: Photo migration robustness against stale character vault references
 
 First run of `migrate-character-photos-to-vault-v1` on a real instance moved 478/479 photos and all 16/226/193 pointer translations, but failed when one character carried a `characterDocumentMountPointId` pointing at a `doc_mount_points` row that no longer existed. The link insert tripped the FK constraint; the per-row catch recovered, but the strict `success: errors === 0` criterion flipped the whole migration to failed, which would have made the runner retry it on every startup.

@@ -79,11 +79,9 @@ interface GalleryEntry {
 }
 
 interface GalleryResponse {
-  data: {
-    entries: GalleryEntry[]
-    total: number
-    hasMore: boolean
-  }
+  entries: GalleryEntry[]
+  total: number
+  hasMore: boolean
 }
 
 type Step = 'scope' | 'browse-project' | 'browse-gallery' | 'browse-mount'
@@ -465,7 +463,7 @@ function GalleryPanel({
   linking: boolean
 }) {
   const { data, isLoading, error } = useSWR<GalleryResponse>('/api/v1/photos?limit=200')
-  const entries = data?.data?.entries ?? []
+  const entries = data?.entries ?? []
 
   if (isLoading) {
     return <p className="qt-text-secondary py-8 text-center">Loading your gallery…</p>

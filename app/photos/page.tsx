@@ -48,11 +48,9 @@ interface GalleryEntry {
 }
 
 interface ListResponse {
-  data: {
-    entries: GalleryEntry[];
-    total: number;
-    hasMore: boolean;
-  };
+  entries: GalleryEntry[];
+  total: number;
+  hasMore: boolean;
 }
 
 export default function PhotosPage() {
@@ -79,7 +77,7 @@ export default function PhotosPage() {
         }
         const json: ListResponse = await res.json();
         if (cancelled) return;
-        setEntries(json.data?.entries ?? []);
+        setEntries(json.entries ?? []);
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load gallery');

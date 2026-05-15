@@ -20,11 +20,9 @@ interface CharacterGalleryEntry {
 }
 
 interface CharacterGalleryListResponse {
-  data: {
-    entries: CharacterGalleryEntry[]
-    total: number
-    hasMore: boolean
-  }
+  entries: CharacterGalleryEntry[]
+  total: number
+  hasMore: boolean
 }
 
 function toGalleryImage(entry: CharacterGalleryEntry): GalleryImage {
@@ -47,7 +45,7 @@ export function useGalleryData(entityId: string, _entityType: EntityType) {
     `/api/v1/characters/${entityId}/photos?limit=200`
   )
 
-  const allImages: GalleryImage[] = (data?.data?.entries ?? []).map(toGalleryImage)
+  const allImages: GalleryImage[] = (data?.entries ?? []).map(toGalleryImage)
 
   const fetchImages = useCallback(async () => {
     await mutate()
@@ -59,17 +57,15 @@ export function useGalleryData(entityId: string, _entityType: EntityType) {
         prev => {
           if (!prev) return prev
           const next = typeof update === 'function'
-            ? update(prev.data.entries.map(toGalleryImage))
+            ? update(prev.entries.map(toGalleryImage))
             : update
           // We don't round-trip back to entries; the next fetch repopulates.
           // Just bump the version to trigger re-renders downstream.
           return {
-            data: {
-              ...prev.data,
-              entries: prev.data.entries.filter(e =>
-                next.some(n => n.id === e.linkId)
-              ),
-            },
+            ...prev,
+            entries: prev.entries.filter(e =>
+              next.some(n => n.id === e.linkId)
+            ),
           }
         },
         false
