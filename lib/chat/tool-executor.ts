@@ -1006,6 +1006,19 @@ export async function executeToolCallWithContext(
 
       const result = await executeDocEditTool(toolCall.name, toolCall.arguments, docEditContext);
 
+      // attach_image returns an array of image descriptors (mirroring
+      // generate_image) so processToolCalls' generated-image collector
+      // picks them up. Pass the array through unchanged rather than
+      // spreading it into a Record like the rest of the doc-edit tools.
+      if (toolCall.name === 'attach_image') {
+        return {
+          toolName: toolCall.name,
+          success: result.success,
+          result: result.success ? (result.result ?? null) : null,
+          error: result.success ? undefined : result.error,
+        };
+      }
+
       return {
         toolName: toolCall.name,
         success: result.success,

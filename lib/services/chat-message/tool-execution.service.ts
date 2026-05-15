@@ -146,6 +146,8 @@ export async function processToolCalls(
       resultText = `Error: ${toolResult.error || 'Unknown error'}${toolResult.message ? ` - ${toolResult.message}` : ''}`
     } else if (toolResult.toolName === 'generate_image') {
       resultText = `Generated ${(toolResult.result as unknown[])?.length || 1} image(s)`
+    } else if (toolResult.toolName === 'attach_image') {
+      resultText = `Attached ${(toolResult.result as unknown[])?.length || 1} kept image(s)`
     } else {
       resultText = JSON.stringify(toolResult.result, null, 2)
     }
@@ -196,8 +198,10 @@ export async function saveToolMessages(
 
   for (const toolMsg of toolMessages) {
     const toolMessageId = crypto.randomUUID()
-    // Include image IDs as attachments on the tool message
-    const toolAttachments = toolMsg.toolName === 'generate_image'
+    // Include image IDs as attachments on the tool message. attach_image
+    // resurfaces previously-kept images via the same generatedImagePaths
+    // pipeline as generate_image, so its descriptors get attached too.
+    const toolAttachments = (toolMsg.toolName === 'generate_image' || toolMsg.toolName === 'attach_image')
       ? generatedImageIds
       : []
 

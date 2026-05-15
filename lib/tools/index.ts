@@ -387,6 +387,11 @@ export { docReadBlobTool, validateDocReadBlobInput, type DocReadBlobInput, type 
 export { docListBlobsTool, validateDocListBlobsInput, type DocListBlobsInput, type DocListBlobsOutput, type DocBlobSummary } from './doc-list-blobs-tool';
 export { docDeleteBlobTool, validateDocDeleteBlobInput, type DocDeleteBlobInput, type DocDeleteBlobOutput } from './doc-delete-blob-tool';
 
+// Photo Album Tools (character vault photos/ folder)
+export { keepImageTool, validateKeepImageInput, type KeepImageInput, type KeepImageOutput } from './keep-image-tool';
+export { listImagesTool, validateListImagesInput, type ListImagesInput, type ListImagesOutput, type ListedImage } from './list-images-tool';
+export { attachImageTool, validateAttachImageInput, type AttachImageInput, type AttachedImageDescriptor } from './attach-image-tool';
+
 // Document UI Tools (Scriptorium Phase 3.5)
 export { docOpenDocumentTool, validateDocOpenDocumentInput, type DocOpenDocumentInput, type DocOpenDocumentOutput } from './doc-open-document-tool';
 export { docCloseDocumentTool, validateDocCloseDocumentInput, type DocCloseDocumentInput, type DocCloseDocumentOutput } from './doc-close-document-tool';

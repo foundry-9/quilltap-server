@@ -355,6 +355,29 @@ const BUILT_IN_TOOLS = [
     source: 'built-in' as const,
     category: 'documents',
   },
+  // Photo album tools — keep, list, and re-attach images saved to a
+  // character's vault under photos/. Same gate as the doc-edit family.
+  {
+    id: 'keep_image',
+    name: 'Keep Image',
+    description: "Save a generated image to the character's photo album with optional caption and tags",
+    source: 'built-in' as const,
+    category: 'photos',
+  },
+  {
+    id: 'list_images',
+    name: 'List Kept Images',
+    description: 'Search or list images previously saved to the photo album',
+    source: 'built-in' as const,
+    category: 'photos',
+  },
+  {
+    id: 'attach_image',
+    name: 'Attach Kept Image',
+    description: 'Re-attach a previously kept image to the current chat message',
+    source: 'built-in' as const,
+    category: 'photos',
+  },
   // Note: request_full_context and submit_final_response are intentionally excluded
   // - request_full_context is a safety valve that should always be available
   // - submit_final_response is an agent-mode internal tool

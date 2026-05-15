@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Feat: Photo albums via character vault (keep_image / list_images / attach_image)
+
+Three new LLM tools let a character save generated images to a persistent photo album, list them, and re-attach them to chat messages.
+
+- **`keep_image(uuid, caption?, tags?)`** creates a hard link to an existing image binary inside the calling character's vault under `photos/`. The link's `extractedText` carries a Markdown document with YAML frontmatter (tags, `linkedBy`, `linkedById`, `generationModel`), the original generation prompt (and revised prompt if different), a snapshot of `chat.sceneState` at keep-time, and a footer line attributing the save to the character with the optional caption. The Markdown is chunked + embedded inline so the standard character-vault search picks the photo up automatically. Re-keeping the same image returns an "already kept" error.
+- **`list_images(query?, tags?, saved_by?, limit?, offset?)`** lists the calling character's `photos/` folder (and visible peers' albums when Shared Vaults + `systemTransparency` is on). With a `query`, it routes through `searchDocumentChunks` with `pathPrefix: 'photos/'` and dedupes hits per link.
+- **`attach_image(uuid)`** resurfaces a previously kept image on the current outgoing message. The image's link UUID rides through the same `generatedImagePaths` pipeline as `generate_image`. Cross-vault attachment is refused — keep the image into your own album first.
+
+No schema changes: the feature rides on the mount-index content/link split shipped earlier in 4.4-dev. The image binary is shared across every link to it (chat-scoped link, photos/ link, future group links), and last-link-wins GC takes care of cleanup. Filename format inside `photos/` is `<ISO-timestamp>-<slug>.<ext>` where the slug is derived from the caption or the first words of the generation prompt. The three tools register through the existing `documentEditing` gate in `plugin-tool-builder.ts`. Helpers live under `lib/photos/` (pure Markdown builder + parser, photos-path constants, shared chunk-extracted-text routine). `tool-executor.ts` and `tool-execution.service.ts` pick up `attach_image` so its descriptors land in `message.attachments` just like generated images.
+
 #### Feat: Hard-linkable files in the mount-index DB
 
 Split `doc_mount_files` so a single underlying file can be hard-linked from multiple mount points. The file row is now content-addressable (id, sha256, fileSizeBytes, fileType, source); a new `doc_mount_file_links` table carries per-mount metadata (relativePath, fileName, folderId, conversion lifecycle, extracted text, chunk count). `doc_mount_chunks.fileId` becomes `linkId` so each link owns its own chunks and embeddings. `doc_mount_documents` and `doc_mount_blobs` are now keyed by `fileId` (UNIQUE), so the bytes are shared across all hard links to the same file.

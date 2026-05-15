@@ -73,6 +73,9 @@ import { docDeleteFolderTool } from '@/lib/tools/doc-delete-folder-tool';
 import { docOpenDocumentTool } from '@/lib/tools/doc-open-document-tool';
 import { docCloseDocumentTool } from '@/lib/tools/doc-close-document-tool';
 import { docFocusTool } from '@/lib/tools/doc-focus-tool';
+import { keepImageTool } from '@/lib/tools/keep-image-tool';
+import { listImagesTool } from '@/lib/tools/list-images-tool';
+import { attachImageTool } from '@/lib/tools/attach-image-tool';
 import {
   terminalReadToolDefinition,
 } from '@/lib/tools/terminal-read-tool';
@@ -387,6 +390,11 @@ export async function buildToolsForProvider(
     universalTools.push(docOpenDocumentTool as UniversalTool);
     universalTools.push(docCloseDocumentTool as UniversalTool);
     universalTools.push(docFocusTool as UniversalTool);
+    // Photo album tools — same gate as the doc-edit family; they write into
+    // the calling character's vault under photos/.
+    universalTools.push(keepImageTool as UniversalTool);
+    universalTools.push(listImagesTool as UniversalTool);
+    universalTools.push(attachImageTool as UniversalTool);
   }
 
   // Add shell interactivity tools if enabled (only in VM/Docker environments)
