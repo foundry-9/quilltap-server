@@ -20,7 +20,6 @@ import { successResponse, serverError } from '@/lib/api/responses';
 import { toolRegistry } from '@/lib/plugins/tool-registry';
 import type { UniversalTool } from '@/lib/plugins/interfaces/tool-plugin';
 import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler';
-import { isShellEnvironment } from '@/lib/paths';
 import {
   imageGenerationToolDefinition,
   webSearchToolDefinition,
@@ -35,12 +34,6 @@ import {
   wardrobeListToolDefinition,
   wardrobeUpdateOutfitToolDefinition,
   wardrobeCreateItemToolDefinition,
-  shellChdirToolDefinition,
-  shellExecSyncToolDefinition,
-  shellExecAsyncToolDefinition,
-  shellAsyncResultToolDefinition,
-  shellSudoSyncToolDefinition,
-  shellCpHostToolDefinition,
 } from '@/lib/tools';
 import {
   searchScriptoriumToolDefinition,
@@ -78,12 +71,6 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   state: stateToolDefinition,
   self_inventory: selfInventoryToolDefinition,
   whisper: whisperToolDefinition,
-  chdir: shellChdirToolDefinition,
-  exec_sync: shellExecSyncToolDefinition,
-  exec_async: shellExecAsyncToolDefinition,
-  async_result: shellAsyncResultToolDefinition,
-  sudo_sync: shellSudoSyncToolDefinition,
-  cp_host: shellCpHostToolDefinition,
   list_wardrobe: wardrobeListToolDefinition,
   update_outfit_item: wardrobeUpdateOutfitToolDefinition,
   create_wardrobe_item: wardrobeCreateItemToolDefinition,
@@ -184,48 +171,6 @@ const BUILT_IN_TOOLS = [
     description: 'Send a private message to a specific character in a multi-character chat',
     source: 'built-in' as const,
     category: 'utility',
-  },
-  {
-    id: 'chdir',
-    name: 'Change Directory',
-    description: 'Change the working directory for shell commands in the chat session',
-    source: 'built-in' as const,
-    category: 'shell',
-  },
-  {
-    id: 'exec_sync',
-    name: 'Execute Command',
-    description: 'Execute a shell command synchronously and wait for completion',
-    source: 'built-in' as const,
-    category: 'shell',
-  },
-  {
-    id: 'exec_async',
-    name: 'Execute Async',
-    description: 'Execute a shell command asynchronously in the background',
-    source: 'built-in' as const,
-    category: 'shell',
-  },
-  {
-    id: 'async_result',
-    name: 'Async Result',
-    description: 'Check status and retrieve output of an async command',
-    source: 'built-in' as const,
-    category: 'shell',
-  },
-  {
-    id: 'sudo_sync',
-    name: 'Sudo Execute',
-    description: 'Execute a shell command with elevated privileges (requires approval)',
-    source: 'built-in' as const,
-    category: 'shell',
-  },
-  {
-    id: 'cp_host',
-    name: 'Copy to/from Host',
-    description: 'Copy files between the workspace and Files storage',
-    source: 'built-in' as const,
-    category: 'shell',
   },
   {
     id: 'list_wardrobe',
@@ -689,17 +634,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
             } else if (!chatContext.hasDocumentStores) {
               tool.available = false;
               tool.unavailableReason = 'Project must have linked document stores (configure in Project > The Scriptorium)';
-            }
-            break;
-          case 'chdir':
-          case 'exec_sync':
-          case 'exec_async':
-          case 'async_result':
-          case 'sudo_sync':
-          case 'cp_host':
-            if (!isShellEnvironment()) {
-              tool.available = false;
-              tool.unavailableReason = 'Shell tools are only available in Lima VM or Docker environments';
             }
             break;
         }

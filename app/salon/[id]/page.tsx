@@ -380,8 +380,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     scrollOnStreamComplete: () => scrollOnStreamComplete(),
     setAttachedFiles,
     inputRef: inputRef as React.RefObject<ComposerEditorHandle>,
-    setSudoApprovalState: modals.setSudoApprovalState,
-    setWorkspaceAcknowledgementState: modals.setWorkspaceAcknowledgementState,
     getFirstCharacterParticipant: participantsWithImpersonation.getFirstCharacterParticipant,
     setPauseState: chatControls.setPauseState,
     onToolResult: (name, success, result) => {
@@ -1477,10 +1475,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}
           reattributeDialogState={modals.reattributeDialogState}
           setReattributeDialogState={modals.setReattributeDialogState}
-          sudoApprovalState={modals.sudoApprovalState}
-          setSudoApprovalState={modals.setSudoApprovalState}
-          workspaceAcknowledgementState={modals.workspaceAcknowledgementState}
-          setWorkspaceAcknowledgementState={modals.setWorkspaceAcknowledgementState}
           selectLLMProfileDialogState={modals.selectLLMProfileDialogState}
           setSelectLLMProfileDialogState={modals.setSelectLLMProfileDialogState}
           isConflictDialogOpen={isConflictDialogOpen}
@@ -1501,7 +1495,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           handleAllLLMContinue={handleAllLLMContinue}
           handleAllLLMStop={handleAllLLMStop}
           handleAllLLMTakeOver={handleAllLLMTakeOver}
-          triggerContinueMode={sseStreaming.triggerContinueMode}
         />
       </div>
 

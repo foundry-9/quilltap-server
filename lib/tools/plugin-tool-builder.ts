@@ -29,7 +29,6 @@ import {
   stateToolDefinition,
   selfInventoryToolDefinition,
   whisperToolDefinition,
-  getAllShellToolDefinitions,
 } from '@/lib/tools';
 import {
   readConversationToolDefinition,
@@ -211,9 +210,6 @@ export interface BuildToolsOptions {
   /** Whether to enable submit_final_response tool (for agent mode) */
   agentMode?: boolean;
 
-  /** Whether to enable shell interactivity tools (only in VM/Docker environments) */
-  shellInteractivity?: boolean;
-
   /** Whether to enable document editing tools (Scriptorium Phase 3.3) */
   documentEditing?: boolean;
 
@@ -272,7 +268,6 @@ export async function buildToolsForProvider(
       wardrobeUpdateOutfit: options.wardrobeUpdateOutfit,
       wardrobeChangeItem: options.wardrobeChangeItem,
       wardrobeCreateItem: options.wardrobeCreateItem,
-      shellInteractivity: options.shellInteractivity,
       documentEditing: options.documentEditing,
       includePluginTools: options.includePluginTools,
     },
@@ -395,12 +390,6 @@ export async function buildToolsForProvider(
     universalTools.push(keepImageTool as UniversalTool);
     universalTools.push(listImagesTool as UniversalTool);
     universalTools.push(attachImageTool as UniversalTool);
-  }
-
-  // Add shell interactivity tools if enabled (only in VM/Docker environments)
-  if (options.shellInteractivity) {
-    const shellTools = getAllShellToolDefinitions();
-    universalTools.push(...(shellTools as UniversalTool[]));
   }
 
   // Add plugin tools if enabled (defaults to true when not specified)

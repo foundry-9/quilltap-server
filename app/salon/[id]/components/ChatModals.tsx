@@ -18,15 +18,12 @@ import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
 import FileConflictDialog from '@/components/chat/FileConflictDialog'
 import SelectLLMProfileDialog from '@/components/chat/SelectLLMProfileDialog'
 import { MemoryCascadeDialog } from '@/components/ui/MemoryCascadeDialog'
-import { showInfoToast } from '@/lib/toast'
 import { getNextPauseThreshold } from '@/lib/chat/turn-manager'
 import type { Chat, Message } from '../types'
-import SudoApprovalModal from '@/components/chat/SudoApprovalModal'
-import WorkspaceAcknowledgementModal from '@/components/chat/WorkspaceAcknowledgementModal'
 import LibraryFilePickerModal from '@/components/chat/LibraryFilePickerModal'
 import StandaloneGenerateImageDialog from '@/components/chat/StandaloneGenerateImageDialog'
 import InsertAnnouncementDialog from '@/components/chat/InsertAnnouncementDialog'
-import type { ReattributeDialogState, SudoApprovalState, WorkspaceAcknowledgementState, SelectLLMProfileDialogState } from '../hooks/useModalState'
+import type { ReattributeDialogState, SelectLLMProfileDialogState } from '../hooks/useModalState'
 
 interface ChatModalsProps {
   chatId: string
@@ -73,10 +70,6 @@ interface ChatModalsProps {
   // Complex modal states
   reattributeDialogState: ReattributeDialogState | null
   setReattributeDialogState: (state: ReattributeDialogState | null) => void
-  sudoApprovalState: SudoApprovalState | null
-  setSudoApprovalState: (state: SudoApprovalState | null) => void
-  workspaceAcknowledgementState: WorkspaceAcknowledgementState | null
-  setWorkspaceAcknowledgementState: (state: WorkspaceAcknowledgementState | null) => void
   selectLLMProfileDialogState: SelectLLMProfileDialogState | null
   setSelectLLMProfileDialogState: (state: SelectLLMProfileDialogState | null) => void
   // File conflict
@@ -102,8 +95,6 @@ interface ChatModalsProps {
   handleAllLLMContinue: () => void
   handleAllLLMStop: () => void
   handleAllLLMTakeOver: (participantId: string) => Promise<void>
-  // Trigger continue after file write
-  triggerContinueMode: (participantId: string) => Promise<void>
 }
 
 export function ChatModals({
@@ -134,8 +125,6 @@ export function ChatModals({
   allLLMPauseModalOpen, setAllLLMPauseModalOpen,
   // Complex
   reattributeDialogState, setReattributeDialogState,
-  sudoApprovalState, setSudoApprovalState,
-  workspaceAcknowledgementState, setWorkspaceAcknowledgementState,
   selectLLMProfileDialogState, setSelectLLMProfileDialogState,
   // File conflict
   isConflictDialogOpen, cancelConflict, conflictInfo, handleConflictResolution, resolvingConflict,
@@ -148,7 +137,6 @@ export function ChatModals({
   // All-LLM pause
   allLLMPauseTurnCount, llmParticipants,
   handleAllLLMContinue, handleAllLLMStop, handleAllLLMTakeOver,
-  triggerContinueMode,
 }: ChatModalsProps) {
   const firstCharacter = getFirstCharacter()
   const firstUserCharacter = getFirstUserCharacter()
@@ -433,65 +421,6 @@ export function ChatModals({
         onStop={handleAllLLMStop}
         onTakeOver={handleAllLLMTakeOver}
       />
-
-      {sudoApprovalState && (
-        <SudoApprovalModal
-          isOpen={sudoApprovalState.isOpen}
-          onClose={() => setSudoApprovalState(null)}
-          chatId={chatId}
-          pendingSudoCommand={sudoApprovalState.pendingSudoCommand}
-          onApprove={async () => {
-            const participantToTrigger = sudoApprovalState?.respondingParticipantId
-            setSudoApprovalState(null)
-            await fetchChat()
-            if (participantToTrigger) {
-              setTimeout(() => {
-                triggerContinueMode(participantToTrigger)
-              }, 500)
-            }
-          }}
-          onDeny={async () => {
-            const participantToTrigger = sudoApprovalState?.respondingParticipantId
-            setSudoApprovalState(null)
-            showInfoToast('Sudo command denied.')
-            await fetchChat()
-            if (participantToTrigger) {
-              setTimeout(() => {
-                triggerContinueMode(participantToTrigger)
-              }, 500)
-            }
-          }}
-        />
-      )}
-
-      {workspaceAcknowledgementState && (
-        <WorkspaceAcknowledgementModal
-          isOpen={workspaceAcknowledgementState.isOpen}
-          onClose={() => setWorkspaceAcknowledgementState(null)}
-          chatId={chatId}
-          onAcknowledge={async () => {
-            const participantToTrigger = workspaceAcknowledgementState?.respondingParticipantId
-            setWorkspaceAcknowledgementState(null)
-            await fetchChat()
-            if (participantToTrigger) {
-              setTimeout(() => {
-                triggerContinueMode(participantToTrigger)
-              }, 500)
-            }
-          }}
-          onDismiss={async () => {
-            const participantToTrigger = workspaceAcknowledgementState?.respondingParticipantId
-            setWorkspaceAcknowledgementState(null)
-            showInfoToast('Shell tools will remain unavailable until workspace is acknowledged.')
-            await fetchChat()
-            if (participantToTrigger) {
-              setTimeout(() => {
-                triggerContinueMode(participantToTrigger)
-              }, 500)
-            }
-          }}
-        />
-      )}
 
       <FileConflictDialog
         isOpen={isConflictDialogOpen}

@@ -4,6 +4,21 @@
 
 ### 4.4-dev
 
+#### Remove: Shell interactivity tools (chdir / exec_sync / exec_async / async_result / sudo_sync / cp_host)
+
+Deleted the LLM shell-interactivity tool suite that let characters run shell commands inside a Lima VM / Docker workspace, along with its supporting workspace-acknowledgement and sudo-approval flow.
+
+- **Removed:** `lib/tools/shell/` (tools, handler, registry, command warnings, binary detector), the matching `__tests__/unit/shell/` suite, `app/api/v1/shell/` routes (`sudo-approval`, `workspace-acknowledgement`), and the React modals `components/chat/SudoApprovalModal.tsx` and `components/chat/WorkspaceAcknowledgementModal.tsx`.
+- **Tools API:** `app/api/v1/tools/route.ts` no longer surfaces `chdir`, `exec_sync`, `exec_async`, `async_result`, `sudo_sync`, or `cp_host`. The per-chat tool toggles UI loses the "shell" category.
+- **plugin-tool-builder:** dropped the `shellInteractivity` option and the call to `getAllShellToolDefinitions()`. `streaming.service.ts` no longer passes `shellInteractivity: isShellEnvironment()`.
+- **tool-executor / tool-execution.service:** the `isShellTool(...)` branch is gone, and `ToolResult` no longer carries `requiresSudoApproval`, `pendingSudoCommand`, or `requiresWorkspaceAcknowledgement`. The SSE pipeline no longer emits pending-approval/pending-acknowledgement events.
+- **Salon UI:** `useModalState` drops `SudoApprovalState`/`WorkspaceAcknowledgementState`, `useSSEStreaming` no longer reads sudo/workspace fields from tool results, and `ChatModals.tsx` / `page.tsx` are trimmed of the modal wiring and the `triggerContinueMode` prop that only the approval flow used.
+- **paths.ts:** removed `getWorkspaceDir`, `getWorkspaceChatDir`, `getWorkspaceProjectDir`, `isShellEnvironment`, and the `workspace/` entry in `ensureDataDirectoriesExist`. Existing `<base>/workspace/` directories on disk are left untouched.
+- **user-uploads-bridge:** dropped `'shell'` from the `UserUploadsSubfolder` union and the comment describing the shell-tool copy-out path; the migration's `SUBFOLDERS` list still creates the folder for backwards compatibility with already-provisioned instances.
+- **Help:** deleted `help/shell-tools.md`.
+
+The Ariel terminal-read tools (`terminal_read`, `terminal_list`) are unaffected — those inspect open PTY sessions and have no link to the deleted workspace flow.
+
 #### Feat: Photo albums via character vault (keep_image / list_images / attach_image)
 
 Three new LLM tools let a character save generated images to a persistent photo album, list them, and re-attach them to chat messages.

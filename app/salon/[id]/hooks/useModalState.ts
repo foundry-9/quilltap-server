@@ -8,25 +8,6 @@ export interface ReattributeDialogState {
   currentParticipantId: string | null
 }
 
-export interface SudoApprovalState {
-  isOpen: boolean
-  pendingSudoCommand: {
-    command: string
-    parameters?: string[]
-    timeout_ms?: number
-  }
-  /** The participant ID that made the sudo request, so we can trigger them to continue */
-  respondingParticipantId?: string
-}
-
-export interface WorkspaceAcknowledgementState {
-  isOpen: boolean
-  /** The tool name that triggered the acknowledgement requirement */
-  toolName?: string
-  /** The participant ID, so we can trigger them to continue */
-  respondingParticipantId?: string
-}
-
 export interface SelectLLMProfileDialogState {
   isOpen: boolean
   participantId: string
@@ -65,8 +46,6 @@ export function useModalState() {
   const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
   const [reattributeDialogState, setReattributeDialogState] = useState<ReattributeDialogState | null>(null)
   const [selectLLMProfileDialogState, setSelectLLMProfileDialogState] = useState<SelectLLMProfileDialogState | null>(null)
-  const [sudoApprovalState, setSudoApprovalState] = useState<SudoApprovalState | null>(null)
-  const [workspaceAcknowledgementState, setWorkspaceAcknowledgementState] = useState<WorkspaceAcknowledgementState | null>(null)
 
 
   // Convenience open/close helpers
@@ -124,8 +103,6 @@ export function useModalState() {
     modalImage, setModalImage,
     reattributeDialogState, setReattributeDialogState,
     selectLLMProfileDialogState, setSelectLLMProfileDialogState,
-    sudoApprovalState, setSudoApprovalState,
-    workspaceAcknowledgementState, setWorkspaceAcknowledgementState,
 
     // Convenience helpers
     openGallery, closeGallery,

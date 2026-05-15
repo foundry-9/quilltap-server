@@ -68,12 +68,6 @@ import {
   type WhisperToolContext,
 } from '@/lib/tools/handlers/whisper-handler';
 import {
-  executeShellTool,
-  formatShellResults,
-  isShellTool,
-  type ShellToolContext,
-} from '@/lib/tools/shell';
-import {
   executeDocEditTool,
   formatDocEditResults,
   isDocEditTool,
@@ -143,16 +137,6 @@ export interface ToolResult {
   error?: string;
   /** Human-readable error message with more details than the error code */
   message?: string;
-  /** For sudo_sync: indicates user approval is required */
-  requiresSudoApproval?: boolean;
-  /** For sudo_sync: the pending command details */
-  pendingSudoCommand?: {
-    command: string;
-    parameters?: string[];
-    timeout_ms?: number;
-  };
-  /** For shell tools: indicates workspace acknowledgement is required */
-  requiresWorkspaceAcknowledgement?: boolean;
   metadata?: {
     provider?: string;
     model?: string;
@@ -248,13 +232,6 @@ const BUILT_IN_TOOLS = new Set<string>([
   'wardrobe_set_outfit',
   'wardrobe_change_item',
   'create_wardrobe_item',
-  // Shell interactivity tools
-  'chdir',
-  'exec_sync',
-  'exec_async',
-  'async_result',
-  'sudo_sync',
-  'cp_host',
   // Document editing / management / UI tools — Scriptorium Phase 3.3+
   ...DOC_EDIT_TOOL_NAMES,
   // Terminal tools — Prospero Phase 2
@@ -945,51 +922,6 @@ export async function executeToolCallWithContext(
           formattedText: formattedResult,
           targetName: result.targetName,
           targetParticipantId: result.targetParticipantId,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle shell interactivity tools
-    if (isShellTool(toolCall.name)) {
-      const shellContext: ShellToolContext = {
-        userId,
-        chatId,
-        projectId: context.projectId,
-        characterId,
-      };
-
-      const result = await executeShellTool(toolCall.name, toolCall.arguments, shellContext);
-
-      // Handle sudo approval requirement
-      if (result.requiresSudoApproval) {
-        return {
-          toolName: toolCall.name,
-          success: false,
-          result: null,
-          error: 'Sudo command requires user approval',
-          requiresSudoApproval: true,
-          pendingSudoCommand: result.pendingSudoCommand,
-        };
-      }
-
-      // Handle workspace acknowledgement requirement
-      if (result.requiresWorkspaceAcknowledgement) {
-        return {
-          toolName: toolCall.name,
-          success: false,
-          result: null,
-          error: 'Workspace acknowledgement required',
-          requiresWorkspaceAcknowledgement: true,
-        };
-      }
-
-      return {
-        toolName: toolCall.name,
-        success: result.success,
-        result: result.success ? {
-          formattedText: formatShellResults(result),
-          ...result.result,
         } : null,
         error: result.success ? undefined : result.error,
       };

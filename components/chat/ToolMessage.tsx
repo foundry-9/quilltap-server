@@ -267,36 +267,6 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🧭',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
-    chdir: {
-      displayName: 'Change Directory',
-      icon: '📂',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    exec_sync: {
-      displayName: 'Shell Command',
-      icon: '🔧',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    exec_async: {
-      displayName: 'Background Command',
-      icon: '🔧',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    async_result: {
-      displayName: 'Process Status',
-      icon: '🔧',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    sudo_sync: {
-      displayName: 'Sudo Command',
-      icon: '🔐',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    cp_host: {
-      displayName: 'File Transfer',
-      icon: '📋',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
     list_wardrobe: {
       displayName: 'Wardrobe',
       icon: '👗',

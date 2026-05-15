@@ -3,10 +3,10 @@
  *
  * Holds the singleton global "Quilltap Uploads" database-backed document
  * store — the home for files produced outside of any project context:
- * chat attachments in project-less chats, pasted/drag-dropped images, the
- * shell-tool's workspace→Files copy, capabilities reports, and restored
- * backup files whose original `projectId` was null. Replaces the legacy
- * `<filesDir>/_general/` catch-all on disk.
+ * chat attachments in project-less chats, pasted/drag-dropped images,
+ * capabilities reports, and restored backup files whose original
+ * `projectId` was null. Replaces the legacy `<filesDir>/_general/`
+ * catch-all on disk.
  *
  * The mount-point id is persisted in `instance_settings.userUploadsMountPointId`
  * (provisioned by `provision-user-uploads-mount-v1`); callers should not look
@@ -16,7 +16,6 @@
  *
  *   chat/<safeFilename>           — attachments uploaded into a chat with no project
  *   images/<safeFilename>         — paste/drag-drop image uploads outside a project
- *   shell/<safeFilename>          — shell-tool "copy workspace → Files" with no project
  *   diagnostics/<safeFilename>    — capabilities-report exports
  *   restored/<safeFilename>       — backup-restore replay of project-less files
  *
@@ -44,7 +43,6 @@ interface UserUploadsTarget {
 export type UserUploadsSubfolder =
   | 'chat'
   | 'images'
-  | 'shell'
   | 'diagnostics'
   | 'restored'
   | 'uploads';

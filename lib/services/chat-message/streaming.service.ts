@@ -8,7 +8,6 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
 import { buildToolsForProvider, checkModelSupportsTools } from '@/lib/tools'
-import { isShellEnvironment } from '@/lib/paths'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
@@ -212,7 +211,6 @@ export async function buildTools(
     wardrobeChangeItem: canDressThemselves !== false,
     wardrobeCreateItem: canCreateOutfits !== false,
     whisper: !!isMultiCharacter,
-    shellInteractivity: isShellEnvironment(),
     documentEditing: !!documentEditingEnabled,
     toolConfigs,
   })
