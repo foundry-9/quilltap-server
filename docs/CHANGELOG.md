@@ -4,6 +4,15 @@
 
 ### 4.4-dev
 
+#### Feat: Library file picker — My Gallery + every document store
+
+Extended the Salon composer's "attach from library" modal (`LibraryFilePickerModal`) to cover the user's photo gallery and every database-backed document store, not just General + project files.
+
+- **Scope step** now lists four groups: General, My Gallery, Projects, and Document Stores. The Document Stores group is populated from `GET /api/v1/mount-points` filtered to enabled database mounts that aren't character vaults (`storeType !== 'character'`) — character vaults stay private to the character-side flows.
+- **My Gallery view** renders a thumbnail grid backed by `GET /api/v1/photos?limit=200`. Clicking a photo dispatches the existing `POST /api/v1/chats/[id]/files?action=attach-mount-file` with the photo's `mountPointId` + `relativePath`, so gallery photos ride the same Librarian-announcement attach pathway the project document stores already use.
+- **Document store view** delegates to `FileBrowser` with an explicit `mountPoint` prop (already supported by FileBrowser for the database-mount case), so the user can pick any image, PDF, or markdown file out of the Lantern backgrounds mount, the Quilltap Uploads mount, the general scenarios mount, or any user-created store.
+- **Back button** routes back to the scope step from any of the three browse steps. No new endpoints.
+
 #### Chore: DDL.md catch-up for chat_settings.uncensoredImageDescriptionProfileId
 
 Added the new column to the `chat_settings` block in `docs/developer/DDL.md` with a comment pointing at the migration that introduces it.
