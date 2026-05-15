@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Chore: DDL.md catch-up for chat_settings.uncensoredImageDescriptionProfileId
+
+Added the new column to the `chat_settings` block in `docs/developer/DDL.md` with a comment pointing at the migration that introduces it.
+
 #### Feat: Photo albums Phase 2c — user-facing photo gallery
 
 A parallel album for the human user, rooted in the Quilltap Uploads mount under a new `photos/` subfolder. Saved images are hard-linked by sha256 (no byte duplication) and share the same content with character vault albums, chat attachments, or any other link to the same image.

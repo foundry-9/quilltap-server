@@ -514,6 +514,7 @@ CREATE TABLE "chat_settings" (
   "tagStyles" TEXT DEFAULT '{}',
   "cheapLLMSettings" TEXT DEFAULT '{}',
   "imageDescriptionProfileId" TEXT,
+  "uncensoredImageDescriptionProfileId" TEXT, -- added in 4.4 (add-uncensored-image-description-profile-field-v1): vision-LLM fallback used when the primary refuses
   "defaultRoleplayTemplateId" TEXT,
   "themePreference" TEXT DEFAULT '{}',
   "sidebarWidth" INTEGER DEFAULT 256,
