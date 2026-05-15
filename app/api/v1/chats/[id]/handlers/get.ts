@@ -249,21 +249,22 @@ export async function handleGet(
           for (const attachmentId of eventAttachmentIds) {
             if (alreadyResolved.has(attachmentId)) continue;
             try {
-              const mountFile = await repos.docMountFiles.findById(attachmentId);
-              if (!mountFile) continue;
-              const blob = await repos.docMountBlobs.findByMountPointAndPath(
-                mountFile.mountPointId,
-                mountFile.relativePath,
-              );
+              let mountLink = await repos.docMountFileLinks.findByIdWithContent(attachmentId);
+              if (!mountLink) {
+                const links = await repos.docMountFileLinks.findByFileId(attachmentId);
+                mountLink = links[0] ?? null;
+              }
+              if (!mountLink) continue;
+              const blob = await repos.docMountBlobs.findByFileId(mountLink.fileId);
               if (!blob) continue;
-              const url = `/api/v1/mount-points/${mountFile.mountPointId}/blobs/${encodeURI(mountFile.relativePath)}`;
+              const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
               attachments.push({
-                id: mountFile.id,
-                filename: blob.originalFileName || mountFile.fileName,
+                id: mountLink.id,
+                filename: mountLink.originalFileName ?? mountLink.fileName,
                 filepath: url,
                 mimeType: blob.storedMimeType,
               });
-              alreadyResolved.add(mountFile.id);
+              alreadyResolved.add(mountLink.id);
             } catch (err) {
               logger.warn('[Chats v1] Failed to resolve mount-file attachment', {
                 messageId: event.id,

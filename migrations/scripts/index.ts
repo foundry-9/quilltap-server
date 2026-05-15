@@ -269,6 +269,8 @@ import { addCourierTransportFieldsMigration } from './add-courier-transport-fiel
 import { addCourierDeltaFieldsMigration } from './add-courier-delta-fields';
 // Add commonplaceSceneCache column to chats for per-target scene-state diffing
 import { addCommonplaceSceneCacheMigration } from './add-commonplace-scene-cache';
+// Split doc_mount_files into content + link rows; rekey chunks to linkId
+import { addDocMountFileLinksMigration } from './add-doc-mount-file-links';
 
 /**
  * All available migrations.
@@ -533,6 +535,8 @@ export const migrations: Migration[] = [
   addCourierDeltaFieldsMigration,
   // Add commonplaceSceneCache column to chats for per-target scene-state diffing
   addCommonplaceSceneCacheMigration,
+  // Split doc_mount_files into content + link rows; rekey chunks to linkId
+  addDocMountFileLinksMigration,
 ];
 
 export {
@@ -782,5 +786,7 @@ export {
   addCourierDeltaFieldsMigration,
   // Add commonplaceSceneCache column to chats for per-target scene-state diffing
   addCommonplaceSceneCacheMigration,
+  // Split doc_mount_files into content + link rows; rekey chunks to linkId
+  addDocMountFileLinksMigration,
 };
 

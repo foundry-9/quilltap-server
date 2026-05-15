@@ -165,7 +165,7 @@ export async function processMountFile(
   if (!fileType) return { status: 'unsupported' };
 
   const sha256 = await computeSha256(absolutePath);
-  const existing = await repos.docMountFiles.findByMountPointAndPath(
+  const existing = await repos.docMountFileLinks.findByMountPointAndPath(
     mountPoint.id,
     relativePath
   );
@@ -183,51 +183,32 @@ export async function processMountFile(
 
   const chunks = chunkDocument(plainText);
 
-  let fileId: string;
-  let outcome: 'new' | 'modified';
-
   if (existing) {
-    await repos.docMountChunks.deleteByFileId(existing.id);
-    await repos.docMountFiles.update(existing.id, {
-      sha256,
-      fileSizeBytes: stat.size,
-      lastModified: stat.mtime.toISOString(),
-      conversionStatus: 'converted',
-      conversionError: null,
-      plainTextLength: plainText.length,
-      chunkCount: chunks.length,
-    });
-    fileId = existing.id;
-    outcome = 'modified';
-  } else {
-    await repos.docMountFiles.create({
-      mountPointId: mountPoint.id,
-      relativePath,
-      fileName: path.basename(relativePath),
-      fileType,
-      sha256,
-      fileSizeBytes: stat.size,
-      lastModified: stat.mtime.toISOString(),
-      source: 'filesystem',
-      conversionStatus: 'converted',
-      plainTextLength: plainText.length,
-      chunkCount: chunks.length,
-    });
-    const created = await repos.docMountFiles.findByMountPointAndPath(
-      mountPoint.id,
-      relativePath
-    );
-    if (!created) {
-      throw new Error(`Could not retrieve file record after create: ${relativePath}`);
-    }
-    fileId = created.id;
-    outcome = 'new';
+    await repos.docMountChunks.deleteByLinkId(existing.id);
   }
+
+  // Upsert the (file, link) pair. linkFilesystemFile finds-or-creates the
+  // content row by sha (keeping its UUID stable across rewrites) and
+  // (re)points the link at the new content.
+  const link = await repos.docMountFileLinks.linkFilesystemFile({
+    mountPointId: mountPoint.id,
+    relativePath,
+    fileName: path.basename(relativePath),
+    fileType,
+    sha256,
+    fileSizeBytes: stat.size,
+    lastModified: stat.mtime.toISOString(),
+    conversionStatus: 'converted',
+    plainTextLength: plainText.length,
+    chunkCount: chunks.length,
+  });
+
+  const outcome: 'new' | 'modified' = existing ? 'modified' : 'new';
 
   if (chunks.length > 0) {
     await repos.docMountChunks.bulkInsert(
       chunks.map(chunk => ({
-        fileId,
+        linkId: link.id,
         mountPointId: mountPoint.id,
         chunkIndex: chunk.chunkIndex,
         content: chunk.content,
@@ -254,14 +235,13 @@ export async function removeMountFile(
 ): Promise<boolean> {
   const repos = getRepositories();
 
-  const existing = await repos.docMountFiles.findByMountPointAndPath(
+  const existing = await repos.docMountFileLinks.findByMountPointAndPath(
     mountPointId,
     relativePath
   );
   if (!existing) return false;
 
-  await repos.docMountChunks.deleteByFileId(existing.id);
-  await repos.docMountFiles.delete(existing.id);
+  await repos.docMountFileLinks.deleteWithGC(existing.id);
   return true;
 }
 
@@ -384,10 +364,10 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
         });
         result.errors.push(`${relativePath}: ${errorMsg}`);
 
-        // Try to mark the file as failed if it exists in DB
+        // Try to mark the link as failed if it exists in DB.
         const existing = existingByPath.get(relativePath);
         if (existing) {
-          await repos.docMountFiles.update(existing.id, {
+          await repos.docMountFileLinks.update(existing.id, {
             conversionStatus: 'failed',
             conversionError: errorMsg,
           }).catch(() => {});

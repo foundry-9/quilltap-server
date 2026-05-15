@@ -493,20 +493,24 @@ async function loadMountFileAsAttachment(
   const { provider, autoResize = true } = options;
   const repos = getRepositories();
 
-  const mountFile = await repos.docMountFiles.findById(mountFileId);
-  if (!mountFile) {
+  // The chat attachment id can be either a file id or a link id depending
+  // on when the chat was created. Try as a link id first (the modern path);
+  // fall back to looking up by file id.
+  let mountLink = await repos.docMountFileLinks.findByIdWithContent(mountFileId);
+  if (!mountLink) {
+    const links = await repos.docMountFileLinks.findByFileId(mountFileId);
+    mountLink = links[0] ?? null;
+  }
+  if (!mountLink) {
     return null;
   }
 
-  const blob = await repos.docMountBlobs.findByMountPointAndPath(
-    mountFile.mountPointId,
-    mountFile.relativePath
-  );
+  const blob = await repos.docMountBlobs.findByFileId(mountLink.fileId);
   if (!blob) {
     logger.warn('[chat-files-v2] Mount file has no blob row', {
       mountFileId,
-      mountPointId: mountFile.mountPointId,
-      relativePath: mountFile.relativePath,
+      mountPointId: mountLink.mountPointId,
+      relativePath: mountLink.relativePath,
     });
     return null;
   }
@@ -538,7 +542,7 @@ async function loadMountFileAsAttachment(
         provider,
         buffer,
         mimeType: outputMimeType,
-        filename: blob.originalFileName,
+        filename: mountLink.originalFileName ?? mountLink.fileName,
       });
       if (resizeResult.wasResized) {
         buffer = resizeResult.buffer;
@@ -547,12 +551,12 @@ async function loadMountFileAsAttachment(
     }
   }
 
-  const url = `/api/v1/mount-points/${mountFile.mountPointId}/blobs/${encodeURI(mountFile.relativePath)}`;
+  const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
 
   return {
-    id: mountFile.id,
+    id: mountLink.id,
     filepath: url,
-    filename: blob.originalFileName || mountFile.fileName,
+    filename: mountLink.originalFileName ?? mountLink.fileName,
     mimeType: outputMimeType,
     size: buffer.length,
     data: buffer.toString('base64'),

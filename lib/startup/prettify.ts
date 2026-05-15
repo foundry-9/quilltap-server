@@ -179,6 +179,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'convert-project-files-to-document-stores-v1': "Moving each project's files into a document store",
   'reabsorb-leftover-project-files-v1': "Re-absorbing leftover project files",
   'relink-files-to-mount-blobs-v1': 'Re-linking files to their mount-blob shims',
+  'add-doc-mount-file-links-v1': 'Reorganising the document index so a single file may inhabit several shelves at once',
   'provision-lantern-backgrounds-mount-v1': "Provisioning the Lantern's backgrounds mount",
   'migrate-general-story-backgrounds-to-mount-v1': "Moving story backgrounds into the Lantern's gallery",
   'migrate-character-avatars-to-vaults-v1': "Moving character avatars into each character's vault",

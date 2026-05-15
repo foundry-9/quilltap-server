@@ -183,15 +183,11 @@ export async function folderHasContents(
     return true;
   }
 
-  // Check for documents with this folderId
-  const documents = await repos.docMountDocuments.findByMountPointId(mountPointId);
-  if (documents.some(d => d.folderId === folderId)) {
-    return true;
-  }
-
-  // Check for files with this folderId
-  const files = await repos.docMountFiles.findByMountPointId(mountPointId);
-  if (files.some(f => f.folderId === folderId)) {
+  // Check for any link (file or document) under this folder. Post-refactor
+  // folder membership lives on the link row, not on doc_mount_files /
+  // doc_mount_documents.
+  const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
+  if (links.some(l => l.folderId === folderId)) {
     return true;
   }
 

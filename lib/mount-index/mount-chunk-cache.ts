@@ -22,7 +22,7 @@ import { logger } from '@/lib/logger'
 export interface CachedMountChunk {
   id: string
   mountPointId: string
-  fileId: string
+  linkId: string
   chunkIndex: number
   headingContext: string | null
   content: string
@@ -47,7 +47,7 @@ async function loadMountPoint(mountPointId: string): Promise<CachedMountChunk[]>
   const cached: CachedMountChunk[] = chunks.map(chunk => ({
     id: chunk.id,
     mountPointId: chunk.mountPointId,
-    fileId: chunk.fileId,
+    linkId: chunk.linkId,
     chunkIndex: chunk.chunkIndex,
     headingContext: chunk.headingContext ?? null,
     content: chunk.content,

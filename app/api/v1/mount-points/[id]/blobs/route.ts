@@ -227,47 +227,26 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         }
       }
 
-      // Mirror into doc_mount_files so the tree, search, and chunking layers
-      // see this blob alongside native-text documents. For 'blob' type the
-      // record exists purely so the tree can show it — no chunks, no
-      // conversion status beyond 'skipped'.
+      // Tree/search visibility for the blob is handled by the file +
+      // link rows that docMountBlobs.create above already produced via
+      // linkBlobContent. The conversion lifecycle on the link still needs
+      // a refresh once extractedText / extractionStatus have been
+      // recomputed, so we sync those fields back to the link below.
       const hasExtractedText =
         blob.extractionStatus === 'converted' && !!blob.extractedText;
-      const now = new Date().toISOString();
-      const existingFile = await repos.docMountFiles.findByMountPointAndPath(id, finalPath);
-
-      if (existingFile) {
-        // Clear any stale chunks from a prior extraction; reindex will
-        // recreate them below if the new blob has extractedText.
-        await repos.docMountChunks.deleteByFileId(existingFile.id);
-        await repos.docMountFiles.update(existingFile.id, {
-          sha256: blob.sha256,
-          fileSizeBytes: blob.sizeBytes,
-          lastModified: now,
-          source: 'database',
-          fileType: mirrorFileType,
-          folderId,
-          conversionStatus: hasExtractedText ? 'converted' : 'skipped',
-          conversionError: blob.extractionError ?? null,
-          plainTextLength: blob.extractedText?.length ?? null,
-          chunkCount: 0,
-        } as Partial<DocMountFile>);
-      } else {
-        await repos.docMountFiles.create({
-          mountPointId: id,
-          relativePath: finalPath,
-          fileName: path.basename(finalPath),
-          fileType: mirrorFileType,
-          sha256: blob.sha256,
-          fileSizeBytes: blob.sizeBytes,
-          lastModified: now,
-          source: 'database',
-          folderId,
+      const existingLink = await repos.docMountFileLinks.findByMountPointAndPath(id, finalPath);
+      if (existingLink) {
+        await repos.docMountChunks.deleteByLinkId(existingLink.id);
+        await repos.docMountFileLinks.update(existingLink.id, {
           conversionStatus: hasExtractedText ? 'converted' : 'skipped',
           conversionError: blob.extractionError ?? null,
           plainTextLength: blob.extractedText?.length ?? null,
           chunkCount: 0,
         });
+        // fileType lives on the content row.
+        if (mirrorFileType !== existingLink.fileType) {
+          await repos.docMountFiles.update(existingLink.fileId, { fileType: mirrorFileType });
+        }
       }
 
       // Chunk + enqueue embeddings in the background when we have text to

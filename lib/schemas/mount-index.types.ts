@@ -65,27 +65,28 @@ export const DocMountFolderSchema = z.object({
 export type DocMountFolder = z.infer<typeof DocMountFolderSchema>;
 
 // ============================================================================
-// DOCUMENT MOUNT FILE
+// DOCUMENT MOUNT FILE (content row — content-addressable)
 // ============================================================================
 
+// A doc_mount_files row is the content identity for a set of bytes. Writers
+// look up by sha256 (indexed, not UNIQUE — existing instances may carry
+// duplicate sha rows that pre-date the content/link split) and call
+// findOrCreateByContent to reuse the existing row when there's a match,
+// preserving its UUID. Location, filename, folder, and per-consumer
+// extraction state live on doc_mount_file_links — one file row may be
+// hard-linked from many mounts.
 export const DocMountFileSchema = z.object({
   id: UUIDSchema,
-  mountPointId: UUIDSchema,
-  relativePath: z.string().min(1),   // Relative to basePath (or virtual path for database-backed stores)
-  fileName: z.string().min(1),       // Just the filename
+  sha256: z.string().length(64),     // Content fingerprint; indexed
+  fileSizeBytes: z.number().int().min(0),
   // 'blob' is the catch-all for arbitrary binaries with no extracted text
   // representation — the bytes live in doc_mount_blobs and there are no chunks.
   fileType: z.enum(['pdf', 'docx', 'markdown', 'txt', 'json', 'jsonl', 'blob']),
-  sha256: z.string().length(64),     // Hex digest
-  fileSizeBytes: z.number().int().min(0),
-  lastModified: TimestampSchema,     // File's mtime (or DB write time for database source)
-  // Where the file content lives: on-disk ('filesystem') or inside doc_mount_documents ('database').
+  // Where the file content physically lives: on-disk ('filesystem') or inside
+  // doc_mount_documents / doc_mount_blobs ('database'). Filesystem-source rows
+  // are constrained to a single link (different basePaths can't share bytes
+  // without copy-on-link); database-source rows can be hard-linked freely.
   source: z.enum(['filesystem', 'database']).default('filesystem'),
-  folderId: UUIDSchema.nullable().optional(),  // Folder reference (database-backed stores only; null for filesystem)
-  conversionStatus: z.enum(['pending', 'converted', 'failed', 'skipped']).default('pending'),
-  conversionError: z.string().nullable().optional(),
-  plainTextLength: z.number().int().nullable().optional(),
-  chunkCount: z.number().int().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -93,12 +94,67 @@ export const DocMountFileSchema = z.object({
 export type DocMountFile = z.infer<typeof DocMountFileSchema>;
 
 // ============================================================================
+// DOCUMENT MOUNT FILE LINK (the hard link — per-(mountPoint, relativePath))
+// ============================================================================
+
+// One row per visible location of a file. Multiple link rows may point at the
+// same doc_mount_files row (hard linking). Per-link state — display name,
+// folder placement, conversion lifecycle, extracted text, embeddings — lives
+// here so each consumer can mutate its own view of a shared file without
+// disturbing the others.
+//
+// Cleanup invariant: deleting the last link for a file deletes the file row,
+// which cascades to doc_mount_documents / doc_mount_blobs via FK.
+export const DocMountFileLinkSchema = z.object({
+  id: UUIDSchema,
+  fileId: UUIDSchema,                // FK -> doc_mount_files.id
+  mountPointId: UUIDSchema,          // FK -> doc_mount_points.id
+  relativePath: z.string().min(1),   // Relative to basePath (or virtual for database-backed)
+  fileName: z.string().min(1),
+  folderId: UUIDSchema.nullable().optional(),
+  // Per-link blob metadata (was on doc_mount_blobs before the refactor).
+  // null for non-blob files; populated for blob-type files.
+  originalFileName: z.string().nullable().optional(),
+  originalMimeType: z.string().nullable().optional(),
+  description: z.string().default(''),
+  descriptionUpdatedAt: TimestampSchema.nullable().optional(),
+  // Per-link extraction state for chunkable content (pdf/docx -> text).
+  conversionStatus: z.enum(['pending', 'converted', 'failed', 'skipped']).default('pending'),
+  conversionError: z.string().nullable().optional(),
+  plainTextLength: z.number().int().nullable().optional(),
+  // Per-link extracted text (was on doc_mount_blobs.extractedText). Holds the
+  // OCR/caption / pdf-extract output that fuels embedding and LLM context.
+  extractedText: z.string().nullable().optional(),
+  extractedTextSha256: z.string().length(64).nullable().optional(),
+  extractionStatus: z
+    .enum(['none', 'pending', 'converted', 'failed', 'skipped'])
+    .default('none'),
+  extractionError: z.string().nullable().optional(),
+  chunkCount: z.number().int().default(0),
+  lastModified: TimestampSchema,     // Per-link mtime (link can be touched independently)
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type DocMountFileLink = z.infer<typeof DocMountFileLinkSchema>;
+
+// Convenience joined view: a link row enriched with content fields. This is
+// what most consumers want (and what DocMountFileLinksRepository.find*
+// methods return) so callers don't need to JOIN manually.
+export interface DocMountFileLinkWithContent extends DocMountFileLink {
+  sha256: string;
+  fileSizeBytes: number;
+  fileType: DocMountFile['fileType'];
+  source: DocMountFile['source'];
+}
+
+// ============================================================================
 // DOCUMENT MOUNT CHUNK
 // ============================================================================
 
 export const DocMountChunkSchema = z.object({
   id: UUIDSchema,
-  fileId: UUIDSchema,
+  linkId: UUIDSchema,                // FK -> doc_mount_file_links.id
   mountPointId: UUIDSchema,          // Denormalized for query efficiency
   chunkIndex: z.number().int().min(0),
   content: z.string(),
@@ -136,21 +192,15 @@ export type ProjectDocMountLink = z.infer<typeof ProjectDocMountLinkSchema>;
 // DOCUMENT MOUNT DOCUMENT (database-backed store content)
 // ============================================================================
 
-// Text documents whose bytes live entirely inside quilltap-mount-index.db.
-// Only materialised for mount points with mountType === 'database'. Each row
-// is mirrored in doc_mount_files (source === 'database') so the scanner,
-// search, and embedding pipelines can treat it like any other indexed file.
+// Text content for database-backed files. Keyed by fileId (UNIQUE) — one
+// document row per doc_mount_files row whose source === 'database'. Identity
+// is the content; multiple hard links may reference the same document.
 export const DocMountDocumentSchema = z.object({
   id: UUIDSchema,
-  mountPointId: UUIDSchema,
-  relativePath: z.string().min(1),
-  fileName: z.string().min(1),
-  fileType: z.enum(['markdown', 'txt', 'json', 'jsonl']),
+  fileId: UUIDSchema,                // FK -> doc_mount_files.id (UNIQUE)
   content: z.string(),
-  contentSha256: z.string().length(64),
+  contentSha256: z.string().length(64),  // Mirror of doc_mount_files.sha256
   plainTextLength: z.number().int().min(0),
-  folderId: UUIDSchema.nullable().optional(),  // Folder reference (database-backed stores only)
-  lastModified: TimestampSchema,
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -161,32 +211,21 @@ export type DocMountDocument = z.infer<typeof DocMountDocumentSchema>;
 // DOCUMENT MOUNT BLOB (binary assets — images, etc.)
 // ============================================================================
 
-// Metadata for blobs stored in quilltap-mount-index.db. The raw bytes live in
-// the `data` BLOB column of the same SQLite row but are deliberately absent
-// from this Zod schema: the blob repository exposes dedicated read/write
-// methods so we never accidentally load megabytes of binary into generic
-// SQLiteCollection serialisation paths.
+// Metadata for blobs stored in quilltap-mount-index.db. Content-addressable:
+// keyed by fileId (UNIQUE), with sha256 mirrored from doc_mount_files for
+// sanity. The raw bytes live in the `data` BLOB column of the same SQLite row
+// but are deliberately absent from this Zod schema — the blob repository
+// exposes dedicated read/write methods so we never accidentally load
+// megabytes of binary into generic SQLiteCollection serialisation paths.
+//
+// Per-link metadata (description, original filename, extracted text) lives
+// on doc_mount_file_links so each consumer can override.
 export const DocMountBlobMetadataSchema = z.object({
   id: UUIDSchema,
-  mountPointId: UUIDSchema,
-  relativePath: z.string().min(1),      // e.g. 'images/avatar.webp'
-  originalFileName: z.string().min(1),  // As uploaded by the user
-  originalMimeType: z.string().min(1),  // e.g. 'image/png'
-  storedMimeType: z.string().min(1),    // Usually 'image/webp' after transcode
-  sizeBytes: z.number().int().min(0),
+  fileId: UUIDSchema,                  // FK -> doc_mount_files.id (UNIQUE)
   sha256: z.string().length(64),
-  description: z.string().default(''),  // User-supplied description / embedding transcript
-  descriptionUpdatedAt: TimestampSchema.nullable().optional(),
-  // Extracted text representation for embedding + LLM reads. Populated for
-  // pdf/docx today; null for images and arbitrary binaries until we add a
-  // converter. extractionStatus tracks the extract lifecycle separately from
-  // the chunking lifecycle on doc_mount_files.
-  extractedText: z.string().nullable().optional(),
-  extractedTextSha256: z.string().length(64).nullable().optional(),
-  extractionStatus: z
-    .enum(['none', 'pending', 'converted', 'failed', 'skipped'])
-    .default('none'),
-  extractionError: z.string().nullable().optional(),
+  sizeBytes: z.number().int().min(0),
+  storedMimeType: z.string().min(1),   // Usually 'image/webp' after transcode
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

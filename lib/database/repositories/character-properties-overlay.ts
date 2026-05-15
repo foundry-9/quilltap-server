@@ -91,7 +91,7 @@ import {
   renderPhysicalPromptsJson,
   CHARACTER_WARDROBE_FOLDER,
 } from '@/lib/mount-index/character-vault';
-import type { DocMountDocument } from '@/lib/schemas/mount-index.types';
+import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
 
 // Mirrors the nullability of the underlying Character schema so that a vault
 // whose properties.json carries null `title` / `firstMessage` (the normal

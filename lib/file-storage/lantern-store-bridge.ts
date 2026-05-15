@@ -98,9 +98,11 @@ export async function writeLanternBackgroundToMountStore(
 
   const folderId = await ensureFolderPath(target.mountPointId, input.subfolder);
 
-  const blob = await repos.docMountBlobs.create({
+  const { blobId } = await repos.docMountFileLinks.linkBlobContent({
     mountPointId: target.mountPointId,
     relativePath,
+    fileName: path.posix.basename(relativePath),
+    folderId,
     originalFileName: safeName,
     originalMimeType: input.contentType,
     storedMimeType: transcoded.storedMimeType,
@@ -109,34 +111,17 @@ export async function writeLanternBackgroundToMountStore(
     data: transcoded.data,
   });
 
-  const now = new Date().toISOString();
-  await repos.docMountFiles.create({
-    mountPointId: target.mountPointId,
-    relativePath,
-    fileName: path.posix.basename(relativePath),
-    fileType: 'blob',
-    sha256: blob.sha256,
-    fileSizeBytes: blob.sizeBytes,
-    lastModified: now,
-    source: 'database',
-    folderId,
-    conversionStatus: 'skipped',
-    conversionError: null,
-    plainTextLength: null,
-    chunkCount: 0,
-  });
-
   emitDocumentWritten({ mountPointId: target.mountPointId, relativePath });
   repos.docMountPoints.refreshStats(target.mountPointId).catch(() => { /* best-effort */ });
 
   return {
-    storageKey: buildMountBlobStorageKey(target.mountPointId, blob.id),
+    storageKey: buildMountBlobStorageKey(target.mountPointId, blobId),
     mountPointId: target.mountPointId,
-    blobId: blob.id,
+    blobId,
     relativePath,
-    storedMimeType: blob.storedMimeType,
-    sizeBytes: blob.sizeBytes,
-    sha256: blob.sha256,
+    storedMimeType: transcoded.storedMimeType,
+    sizeBytes: transcoded.data.length,
+    sha256: transcoded.sha256,
   };
 }
 

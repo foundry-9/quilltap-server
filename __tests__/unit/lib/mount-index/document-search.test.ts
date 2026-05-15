@@ -51,7 +51,7 @@ function makeChunk(overrides: Record<string, unknown> = {}) {
   return {
     id: 'chunk-1',
     mountPointId: 'mp-1',
-    fileId: 'file-1',
+    linkId: 'link-1',
     chunkIndex: 0,
     headingContext: null,
     content: 'Sample chunk content.',
@@ -81,6 +81,16 @@ function makeRepos(overrides: Record<string, unknown> = {}) {
     docMountFiles: {
       findById: jest.fn().mockResolvedValue({
         id: 'file-1',
+        fileName: 'notes.md',
+        relativePath: 'notes/notes.md',
+      }),
+    },
+    docMountFileLinks: {
+      findByMountPointId: jest.fn().mockResolvedValue([]),
+      findByIdWithContent: jest.fn().mockResolvedValue({
+        id: 'link-1',
+        fileId: 'file-1',
+        mountPointId: 'mp-1',
         fileName: 'notes.md',
         relativePath: 'notes/notes.md',
       }),
@@ -270,11 +280,41 @@ describe('searchDocumentChunks', () => {
     ) {
       const defaultMp = options.mountPointId ?? 'mp-1'
       const repos = makeRepos()
+      // After the content/link split, document-search joins chunks
+      // (keyed by linkId) to the link rows it gets back from
+      // docMountFileLinks. The fileMap entries here are treated as link
+      // rows — the map key is the linkId.
+      ;(repos.docMountFileLinks as Record<string, unknown>).findByMountPointId = jest.fn(
+        async (mpId: string) =>
+          Object.entries(fileMap)
+            .filter(([, f]) => (f.mountPointId ?? defaultMp) === mpId)
+            .map(([id, f]) => ({
+              id,
+              fileId: `file-${id}`,
+              fileName: f.fileName,
+              relativePath: f.relativePath,
+              mountPointId: f.mountPointId ?? defaultMp,
+            }))
+      )
+      ;(repos.docMountFileLinks as Record<string, unknown>).findByIdWithContent = jest.fn(
+        async (linkId: string) => {
+          const f = fileMap[linkId]
+          if (!f) return null
+          return {
+            id: linkId,
+            fileId: `file-${linkId}`,
+            fileName: f.fileName,
+            relativePath: f.relativePath,
+            mountPointId: f.mountPointId ?? defaultMp,
+          }
+        }
+      )
+      // Legacy facade: callers that still use docMountFiles.findById /
+      // findByMountPointId hit the same map.
       repos.docMountFiles.findById = jest.fn(async (id: string) => {
         const f = fileMap[id]
         return f ? { id, ...f } : null
       })
-      // New: file listing by mountPointId, used to build the pre-scoring allowlist.
       ;(repos.docMountFiles as Record<string, unknown>).findByMountPointId = jest.fn(async (mpId: string) => {
         return Object.entries(fileMap)
           .filter(([, f]) => (f.mountPointId ?? defaultMp) === mpId)
@@ -286,12 +326,12 @@ describe('searchDocumentChunks', () => {
     it('filters out chunks whose file is outside the prefix (pre-scoring allowlist)', async () => {
       const knowledgeChunk = makeChunk({
         id: 'k-1',
-        fileId: 'file-knowledge',
+        linkId: 'file-knowledge',
         embedding: [0.6, 0, 0], // lower score, but inside prefix
       })
       const wardrobeChunk = makeChunk({
         id: 'w-1',
-        fileId: 'file-wardrobe',
+        linkId: 'file-wardrobe',
         embedding: [1, 0, 0], // top score, but outside prefix
       })
 
@@ -316,10 +356,10 @@ describe('searchDocumentChunks', () => {
     })
 
     it('matches the prefix case-insensitively (lowercase, mixed-case, uppercase)', async () => {
-      const lower = makeChunk({ id: 'lc', fileId: 'f-lc', embedding: [1, 0, 0] })
-      const mixed = makeChunk({ id: 'mc', fileId: 'f-mc', embedding: [0.9, 0, 0] })
-      const upper = makeChunk({ id: 'uc', fileId: 'f-uc', embedding: [0.8, 0, 0] })
-      const other = makeChunk({ id: 'ot', fileId: 'f-ot', embedding: [0.7, 0, 0] })
+      const lower = makeChunk({ id: 'lc', linkId: 'f-lc', embedding: [1, 0, 0] })
+      const mixed = makeChunk({ id: 'mc', linkId: 'f-mc', embedding: [0.9, 0, 0] })
+      const upper = makeChunk({ id: 'uc', linkId: 'f-uc', embedding: [0.8, 0, 0] })
+      const other = makeChunk({ id: 'ot', linkId: 'f-ot', embedding: [0.7, 0, 0] })
 
       const repos = makeReposWithFileMap({
         'f-lc': { fileName: 'a.md', relativePath: 'knowledge/a.md' },
@@ -344,7 +384,7 @@ describe('searchDocumentChunks', () => {
     it('returns empty when no files match the prefix', async () => {
       const wardrobeChunk = makeChunk({
         id: 'w-1',
-        fileId: 'file-wardrobe',
+        linkId: 'file-wardrobe',
         embedding: [1, 0, 0],
       })
       const repos = makeReposWithFileMap({
@@ -390,7 +430,7 @@ describe('searchDocumentChunks', () => {
       )
       const knowledgeChunk = makeChunk({
         id: 'k-deep',
-        fileId: 'f-k-deep',
+        linkId: 'f-k-deep',
         embedding: [0.4, 0, 0], // far below every noise chunk
       })
 

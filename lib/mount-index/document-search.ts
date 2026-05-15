@@ -135,16 +135,18 @@ export async function searchDocumentChunks(
 
   let chunksInScope = allChunks
   if (lowerPrefix) {
-    const allowedFileIds = new Set<string>()
+    // After the content/link split chunks key by linkId — collect link ids
+    // whose relativePath matches the prefix.
+    const allowedLinkIds = new Set<string>()
     for (const mpId of mountPointIds) {
-      const files = await repos.docMountFiles.findByMountPointId(mpId)
-      for (const f of files) {
-        if (f.relativePath.toLowerCase().startsWith(lowerPrefix)) {
-          allowedFileIds.add(f.id)
+      const links = await repos.docMountFileLinks.findByMountPointId(mpId)
+      for (const link of links) {
+        if (link.relativePath.toLowerCase().startsWith(lowerPrefix)) {
+          allowedLinkIds.add(link.id)
         }
       }
     }
-    if (allowedFileIds.size === 0) {
+    if (allowedLinkIds.size === 0) {
       logger.debug('Document search found no files matching pathPrefix', {
         context: 'document-search',
         pathPrefix,
@@ -152,12 +154,12 @@ export async function searchDocumentChunks(
       })
       return []
     }
-    chunksInScope = allChunks.filter(c => allowedFileIds.has(c.fileId))
+    chunksInScope = allChunks.filter(c => allowedLinkIds.has(c.linkId))
     if (chunksInScope.length === 0) {
       logger.debug('Document search: pathPrefix files have no embedded chunks yet', {
         context: 'document-search',
         pathPrefix,
-        allowedFileCount: allowedFileIds.size,
+        allowedFileCount: allowedLinkIds.size,
       })
       return []
     }
@@ -204,14 +206,18 @@ export async function searchDocumentChunks(
     mountPointMap.set(mp.id, mp.name)
   }
 
-  const fileIds = new Set(scored.map(s => s.chunk.fileId))
-  const fileMap = new Map<string, { fileName: string; relativePath: string }>()
-  for (const fileId of fileIds) {
-    const file = await repos.docMountFiles.findById(fileId)
-    if (file) {
-      fileMap.set(file.id, {
-        fileName: file.fileName,
-        relativePath: file.relativePath,
+  // Look up display metadata by linkId. Each surviving chunk traces back to
+  // a single link row, which carries fileName + relativePath after the
+  // content/link split.
+  const linkIds = new Set(scored.map(s => s.chunk.linkId))
+  const fileMap = new Map<string, { fileName: string; relativePath: string; fileId: string }>()
+  for (const linkId of linkIds) {
+    const link = await repos.docMountFileLinks.findByIdWithContent(linkId)
+    if (link) {
+      fileMap.set(linkId, {
+        fileName: link.fileName,
+        relativePath: link.relativePath,
+        fileId: link.fileId,
       })
     }
   }
@@ -237,12 +243,12 @@ export async function searchDocumentChunks(
   }
 
   const results: DocumentSearchResult[] = finalScored.map(({ chunk, score }) => {
-    const fileInfo = fileMap.get(chunk.fileId)
+    const fileInfo = fileMap.get(chunk.linkId)
     return {
       chunkId: chunk.id,
       mountPointId: chunk.mountPointId,
       mountPointName: mountPointMap.get(chunk.mountPointId) || 'Unknown',
-      fileId: chunk.fileId,
+      fileId: fileInfo?.fileId || chunk.linkId,
       fileName: fileInfo?.fileName || 'Unknown',
       relativePath: fileInfo?.relativePath || '',
       chunkIndex: chunk.chunkIndex,

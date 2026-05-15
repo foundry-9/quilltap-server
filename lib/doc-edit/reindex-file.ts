@@ -116,55 +116,34 @@ export async function reindexSingleFile(
     // Chunk the text
     const chunks = chunkDocument(plainText);
 
-    // Find existing file record
-    const existingFile = await repos.docMountFiles.findByMountPointAndPath(
+    // Find existing link record
+    const existingLink = await repos.docMountFileLinks.findByMountPointAndPath(
       mountPointId,
       relativePath
     );
 
-    if (existingFile) {
-      // Update existing: delete old chunks, update file record
-      await repos.docMountChunks.deleteByFileId(existingFile.id);
-      await repos.docMountFiles.update(existingFile.id, {
-        sha256,
-        fileSizeBytes,
-        lastModified: lastModifiedIso,
-        conversionStatus: 'converted',
-        conversionError: null,
-        plainTextLength: plainText.length,
-        chunkCount: chunks.length,
-      });
-    } else {
-      // Create new file record (file was created via doc_write_file)
-      await repos.docMountFiles.create({
-        mountPointId,
-        relativePath,
-        fileName: path.basename(relativePath),
-        fileType,
-        sha256,
-        fileSizeBytes,
-        lastModified: lastModifiedIso,
-        source: isDatabaseBacked ? 'database' : 'filesystem',
-        conversionStatus: 'converted',
-        plainTextLength: plainText.length,
-        chunkCount: chunks.length,
-      });
+    if (existingLink) {
+      await repos.docMountChunks.deleteByLinkId(existingLink.id);
     }
 
-    // Get the file record for chunk insertion
-    const fileRecord = await repos.docMountFiles.findByMountPointAndPath(
+    const link = await repos.docMountFileLinks.linkFilesystemFile({
       mountPointId,
-      relativePath
-    );
-    if (!fileRecord) {
-      logger.warn('Could not retrieve file record after re-index create/update', { relativePath });
-      return;
-    }
+      relativePath,
+      fileName: path.basename(relativePath),
+      fileType,
+      sha256,
+      fileSizeBytes,
+      lastModified: lastModifiedIso,
+      source: isDatabaseBacked ? 'database' : 'filesystem',
+      conversionStatus: 'converted',
+      plainTextLength: plainText.length,
+      chunkCount: chunks.length,
+    });
 
     // Insert new chunks
     if (chunks.length > 0) {
       const chunkData = chunks.map(chunk => ({
-        fileId: fileRecord.id,
+        linkId: link.id,
         mountPointId,
         chunkIndex: chunk.chunkIndex,
         content: chunk.content,

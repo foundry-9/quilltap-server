@@ -1638,32 +1638,17 @@ async function importDocumentStores(
     const targetMountId = idMap.get(doc.mountPointId);
     if (!targetMountId) continue;
     try {
-      const nowIso = new Date().toISOString();
-      await globalRepos.docMountDocuments.create({
+      // linkDocumentContent handles file + document + link in one shot.
+      await globalRepos.docMountFileLinks.linkDocumentContent({
         mountPointId: targetMountId,
         relativePath: doc.relativePath,
         fileName: doc.fileName,
+        folderId: doc.folderId ?? null,
         fileType: doc.fileType,
         content: doc.content,
         contentSha256: doc.contentSha256,
         plainTextLength: doc.plainTextLength,
-        lastModified: doc.lastModified || nowIso,
-        folderId: doc.folderId,
-      });
-      // Mirror into doc_mount_files so scan/search treat it uniformly.
-      await globalRepos.docMountFiles.create({
-        mountPointId: targetMountId,
-        relativePath: doc.relativePath,
-        fileName: doc.fileName,
-        fileType: doc.fileType,
-        sha256: doc.contentSha256,
         fileSizeBytes: Buffer.byteLength(doc.content, 'utf-8'),
-        lastModified: doc.lastModified || nowIso,
-        source: 'database',
-        conversionStatus: 'converted',
-        plainTextLength: doc.plainTextLength,
-        chunkCount: 0,
-        folderId: doc.folderId,
       });
       counts.documents++;
     } catch (error) {

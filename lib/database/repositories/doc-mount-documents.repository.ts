@@ -1,14 +1,14 @@
 /**
  * Document Mount Documents Repository
  *
- * Stores the text content of documents for database-backed mount points
- * (mountType === 'database') inside quilltap-mount-index.db. Mirror rows
- * in doc_mount_files keep the scan/search/embedding pipeline agnostic of
- * where the bytes actually live.
+ * Stores the text content of database-backed files inside
+ * quilltap-mount-index.db. Content-addressable: keyed by fileId (UNIQUE),
+ * mirroring the file row in doc_mount_files. Multiple hard links may
+ * reference the same document via doc_mount_file_links.
  *
- * When the mount index DB is in degraded mode, getCollection() throws and
- * all safeQuery fallbacks kick in — matching the pattern used by the other
- * mount-index repositories.
+ * Path/mount lookups have moved to DocMountFileLinksRepository — consumers
+ * that have a (mountPointId, relativePath) handle should resolve to a link
+ * first and then call findByFileId here.
  */
 
 import { logger } from '@/lib/logger';
@@ -18,6 +18,22 @@ import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+
+/**
+ * Joined view: a document row with the link metadata callers need to know
+ * "where this document lives." Most overlay code paths want to iterate
+ * documents AND see their (mountPointId, relativePath, fileName) tuple, so
+ * we serve both in one shot rather than forcing two queries.
+ */
+export interface DocMountDocumentWithLink extends DocMountDocument {
+  linkId: string;
+  mountPointId: string;
+  relativePath: string;
+  fileName: string;
+  folderId: string | null;
+  fileType: 'pdf' | 'docx' | 'markdown' | 'txt' | 'json' | 'jsonl' | 'blob';
+  lastModified: string;
+}
 
 export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMountDocument> {
   private mountIndexCollectionInitialized = false;
@@ -43,19 +59,11 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
           db.exec(sql);
         }
 
-        // (mountPointId, relativePath) is the natural key we look up by.
+        // fileId is the natural key; UNIQUE so one document per file row.
         db.exec(
-          `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${this.collectionName}_mp_path" ` +
-          `ON "${this.collectionName}" ("mountPointId", "relativePath")`
+          `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${this.collectionName}_fileId" ` +
+          `ON "${this.collectionName}" ("fileId")`
         );
-
-        // In-repo migration: add `folderId` column for explicit folder tracking.
-        // Nullable, defaults to null.
-        const columns = db.pragma(`table_info(${this.collectionName})`) as Array<{ name: string }>;
-        if (!columns.some(c => c.name === 'folderId')) {
-          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "folderId" TEXT DEFAULT NULL`);
-          logger.info('Migrated doc_mount_documents: added folderId column');
-        }
 
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
@@ -102,18 +110,75 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
   }
 
   // ============================================================================
-  // Custom query methods
+  // Content-addressable queries
   // ============================================================================
 
+  /**
+   * Fetch the document content for a given file row.
+   */
+  async findByFileId(fileId: string): Promise<DocMountDocument | null> {
+    return this.safeQuery(
+      async () => this.findOneByFilter({ fileId } as TypedQueryFilter<DocMountDocument>),
+      'Error finding document by file ID',
+      { fileId },
+      null
+    );
+  }
+
+  /**
+   * Batch fetch documents for a set of file IDs. Used to hydrate many
+   * documents at once when overlay loaders already have their links.
+   */
+  async findManyByFileIds(fileIds: string[]): Promise<DocMountDocument[]> {
+    if (fileIds.length === 0) return [];
+    return this.safeQuery(
+      async () =>
+        this.findByFilter({
+          fileId: { $in: fileIds },
+        } as TypedQueryFilter<DocMountDocument>),
+      'Error finding documents by file IDs',
+      { fileIdCount: fileIds.length },
+      []
+    );
+  }
+
+  // ============================================================================
+  // Joined-view helpers (document + link metadata)
+  // ============================================================================
+
+  /**
+   * Find a document at a (mountPointId, relativePath) location. Joins
+   * through doc_mount_file_links to resolve the location; documents
+   * themselves are no longer indexed by path. Returns the document content
+   * with link metadata attached.
+   *
+   * Case-insensitive on relativePath (matches the legacy lookup the
+   * vault-driven overlays depend on for `manifesto.md` vs `Manifesto.md`).
+   */
   async findByMountPointAndPath(
     mountPointId: string,
     relativePath: string
-  ): Promise<DocMountDocument | null> {
+  ): Promise<DocMountDocumentWithLink | null> {
     return this.safeQuery(
-      async () => this.findOneByFilter({
-        mountPointId,
-        relativePath: { $ieq: relativePath },
-      } as TypedQueryFilter<DocMountDocument>),
+      async () => {
+        const db = getRawMountIndexDatabase();
+        if (!db) return null;
+        await this.getCollection();
+        const row = db.prepare(
+          `SELECT
+             d.id, d.fileId, d.content, d.contentSha256, d.plainTextLength,
+             d.createdAt, d.updatedAt,
+             l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
+             l.folderId, l.lastModified,
+             f.fileType
+           FROM doc_mount_file_links l
+           JOIN doc_mount_documents d ON d.fileId = l.fileId
+           JOIN doc_mount_files f ON f.id = l.fileId
+           WHERE l.mountPointId = ? AND LOWER(l.relativePath) = LOWER(?)
+           LIMIT 1`
+        ).get(mountPointId, relativePath) as DocMountDocumentWithLink | undefined;
+        return row ?? null;
+      },
       'Error finding document by mount point and path',
       { mountPointId, relativePath },
       null
@@ -121,25 +186,35 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
   }
 
   /**
-   * Find documents at the same relativePath across many mount points in one
-   * query. Used by batched overlay loaders (e.g. character properties.json)
-   * to avoid N+1 reads when hydrating bulk character lists. Path comparison
-   * is case-insensitive so user-managed vault files like `Manifesto.md` match
-   * the canonical `manifesto.md` lookup the overlay performs.
+   * Batch resolve documents at the same relativePath across many mount
+   * points. Used by overlay loaders (character properties.json, etc.) to
+   * hydrate bulk character lists without N+1 queries.
    */
   async findManyByMountPointsAndPath(
     mountPointIds: string[],
     relativePath: string
-  ): Promise<DocMountDocument[]> {
-    if (mountPointIds.length === 0) {
-      return [];
-    }
+  ): Promise<DocMountDocumentWithLink[]> {
+    if (mountPointIds.length === 0) return [];
     return this.safeQuery(
-      async () =>
-        this.findByFilter({
-          mountPointId: { $in: mountPointIds },
-          relativePath: { $ieq: relativePath },
-        } as TypedQueryFilter<DocMountDocument>),
+      async () => {
+        const db = getRawMountIndexDatabase();
+        if (!db) return [];
+        await this.getCollection();
+        const placeholders = mountPointIds.map(() => '?').join(',');
+        return db.prepare(
+          `SELECT
+             d.id, d.fileId, d.content, d.contentSha256, d.plainTextLength,
+             d.createdAt, d.updatedAt,
+             l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
+             l.folderId, l.lastModified,
+             f.fileType
+           FROM doc_mount_file_links l
+           JOIN doc_mount_documents d ON d.fileId = l.fileId
+           JOIN doc_mount_files f ON f.id = l.fileId
+           WHERE l.mountPointId IN (${placeholders})
+             AND LOWER(l.relativePath) = LOWER(?)`
+        ).all(...mountPointIds, relativePath) as DocMountDocumentWithLink[];
+      },
       'Error finding documents by mount point IDs and path',
       { mountPointIdCount: mountPointIds.length, relativePath },
       []
@@ -147,41 +222,40 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
   }
 
   /**
-   * Find all top-level documents (no nested folders) with a specific extension
-   * inside a named folder, across many mount points. Used by overlay loaders
-   * that enumerate directories (e.g. Prompts/*.md, Scenarios/*.md) to avoid
-   * N+1 reads when hydrating bulk character lists.
-   *
-   * - `folder` is a relative folder name without trailing slash (e.g. "Prompts").
-   * - `extension` is the file extension with leading dot (e.g. ".md").
-   * Only top-level files inside the folder are returned; nested files are
-   * excluded.
+   * Find all top-level documents (no nested folders) with a specific
+   * extension inside a named folder, across many mount points. Used by
+   * overlay loaders that enumerate directories (Prompts/*.md, Scenarios/*.md)
+   * to avoid N+1 queries.
    */
   async findManyByMountPointsInFolder(
     mountPointIds: string[],
     folder: string,
     extension: string = '.md'
-  ): Promise<DocMountDocument[]> {
-    if (mountPointIds.length === 0) {
-      return [];
-    }
-    // Prefix match via LIKE, then narrow to top-level + extension in JS.
-    // The SQLite $regex translator cannot express anchored patterns
-    // (it always wraps in %…%), so an anchored regex like
-    // `^folder/[^/]+\.md$` silently matches nothing.
-    //
-    // SQLite's LIKE is case-insensitive for ASCII by default, so the SQL
-    // prefix already matches `Wardrobe/` and `wardrobe/` interchangeably.
-    // The JS filter mirrors that to keep the two layers consistent.
+  ): Promise<DocMountDocumentWithLink[]> {
+    if (mountPointIds.length === 0) return [];
     const prefix = `${folder}/`;
     const prefixLower = prefix.toLowerCase();
     const extensionLower = extension.toLowerCase();
     return this.safeQuery(
       async () => {
-        const rows = await this.findByFilter({
-          mountPointId: { $in: mountPointIds },
-          relativePath: { $like: `${prefix}%` },
-        } as TypedQueryFilter<DocMountDocument>);
+        const db = getRawMountIndexDatabase();
+        if (!db) return [];
+        await this.getCollection();
+        const placeholders = mountPointIds.map(() => '?').join(',');
+        const rows = db.prepare(
+          `SELECT
+             d.id, d.fileId, d.content, d.contentSha256, d.plainTextLength,
+             d.createdAt, d.updatedAt,
+             l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
+             l.folderId, l.lastModified,
+             f.fileType
+           FROM doc_mount_file_links l
+           JOIN doc_mount_documents d ON d.fileId = l.fileId
+           JOIN doc_mount_files f ON f.id = l.fileId
+           WHERE l.mountPointId IN (${placeholders})
+             AND LOWER(l.relativePath) LIKE ?`
+        ).all(...mountPointIds, `${prefixLower}%`) as DocMountDocumentWithLink[];
+        // Narrow to top-level + extension, mirroring the legacy filter.
         return rows.filter((doc) => {
           const pathLower = doc.relativePath.toLowerCase();
           if (!pathLower.startsWith(prefixLower)) return false;
@@ -196,18 +270,59 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
     );
   }
 
-  async findByMountPointId(mountPointId: string): Promise<DocMountDocument[]> {
+  /**
+   * Joined-view list of every document at a mount point. Uses the link
+   * table to drive enumeration so the returned rows carry mountPointId,
+   * relativePath, fileName, etc.
+   */
+  async findByMountPointId(mountPointId: string): Promise<DocMountDocumentWithLink[]> {
     return this.safeQuery(
-      async () => this.findByFilter({ mountPointId } as TypedQueryFilter<DocMountDocument>),
+      async () => {
+        const db = getRawMountIndexDatabase();
+        if (!db) return [];
+        await this.getCollection();
+        return db.prepare(
+          `SELECT
+             d.id, d.fileId, d.content, d.contentSha256, d.plainTextLength,
+             d.createdAt, d.updatedAt,
+             l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
+             l.folderId, l.lastModified,
+             f.fileType
+           FROM doc_mount_file_links l
+           JOIN doc_mount_documents d ON d.fileId = l.fileId
+           JOIN doc_mount_files f ON f.id = l.fileId
+           WHERE l.mountPointId = ?`
+        ).all(mountPointId) as DocMountDocumentWithLink[];
+      },
       'Error finding documents by mount point ID',
       { mountPointId },
       []
     );
   }
 
+  /**
+   * Bulk delete every document row associated with the given mount point's
+   * links. Walks doc_mount_file_links (which carries the mountPointId
+   * post-refactor) and removes the matching documents. Cascade from
+   * doc_mount_files only fires when the file's last link goes away —
+   * the deleteByMountPointId on docMountFileLinks handles that cleanup.
+   * Kept here as a convenience for code that wants to clear documents
+   * without going through the link table.
+   */
   async deleteByMountPointId(mountPointId: string): Promise<number> {
     return this.safeQuery(
-      async () => this.deleteMany({ mountPointId } as TypedQueryFilter<DocMountDocument>),
+      async () => {
+        const db = getRawMountIndexDatabase();
+        if (!db) return 0;
+        await this.getCollection();
+        const res = db.prepare(
+          `DELETE FROM doc_mount_documents
+           WHERE fileId IN (
+             SELECT DISTINCT fileId FROM doc_mount_file_links WHERE mountPointId = ?
+           )`
+        ).run(mountPointId);
+        return res.changes;
+      },
       'Error deleting documents by mount point ID',
       { mountPointId }
     );

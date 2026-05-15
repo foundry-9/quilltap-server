@@ -135,60 +135,19 @@ export async function writeDatabaseDocument(
   const now = new Date().toISOString();
   const fileName = path.basename(rel);
 
-  if (existing) {
-    await repos.docMountDocuments.update(existing.id, {
-      content,
-      contentSha256,
-      plainTextLength: content.length,
-      lastModified: now,
-      fileType,
-      fileName,
-      folderId,
-    });
-  } else {
-    await repos.docMountDocuments.create({
-      mountPointId,
-      relativePath: rel,
-      fileName,
-      fileType,
-      content,
-      contentSha256,
-      plainTextLength: content.length,
-      lastModified: now,
-      folderId,
-    });
-  }
-
-  // Mirror into doc_mount_files so search/scan/embedding see the document.
-  const existingFile = await repos.docMountFiles.findByMountPointAndPath(mountPointId, rel);
-  if (existingFile) {
-    await repos.docMountFiles.update(existingFile.id, {
-      sha256: contentSha256,
-      fileSizeBytes: Buffer.byteLength(content, 'utf-8'),
-      lastModified: now,
-      source: 'database',
-      // Text is already "converted" — chunking happens in reindex-file.ts.
-      conversionStatus: 'converted',
-      conversionError: null,
-      plainTextLength: content.length,
-      folderId,
-    });
-  } else {
-    await repos.docMountFiles.create({
-      mountPointId,
-      relativePath: rel,
-      fileName,
-      fileType,
-      sha256: contentSha256,
-      fileSizeBytes: Buffer.byteLength(content, 'utf-8'),
-      lastModified: now,
-      source: 'database',
-      conversionStatus: 'converted',
-      plainTextLength: content.length,
-      chunkCount: 0,
-      folderId,
-    });
-  }
+  // linkDocumentContent handles the full content/link split: find-or-create
+  // the file row by sha, upsert the document row, upsert the link row.
+  await repos.docMountFileLinks.linkDocumentContent({
+    mountPointId,
+    relativePath: rel,
+    fileName,
+    folderId,
+    fileType,
+    content,
+    contentSha256,
+    plainTextLength: content.length,
+    fileSizeBytes: Buffer.byteLength(content, 'utf-8'),
+  });
 
   emitDocumentWritten({ mountPointId, relativePath: rel });
 
@@ -206,16 +165,12 @@ export async function deleteDatabaseDocument(
 ): Promise<boolean> {
   const repos = getRepositories();
   const rel = normaliseRelativePath(relativePath);
-  const doc = await repos.docMountDocuments.findByMountPointAndPath(mountPointId, rel);
-  if (!doc) return false;
+  // Delete the link with GC. Chunks cascade off the link, and the document
+  // cascades off the file row if this was the last link.
+  const link = await repos.docMountFileLinks.findByMountPointAndPath(mountPointId, rel);
+  if (!link) return false;
 
-  await repos.docMountDocuments.delete(doc.id);
-
-  const file = await repos.docMountFiles.findByMountPointAndPath(mountPointId, rel);
-  if (file) {
-    await repos.docMountChunks.deleteByFileId(file.id);
-    await repos.docMountFiles.delete(file.id);
-  }
+  await repos.docMountFileLinks.deleteWithGC(link.id);
 
   emitDocumentDeleted({ mountPointId, relativePath: rel });
   return true;
@@ -261,20 +216,20 @@ export async function moveDatabaseDocument(
   const destFolderPath = path.dirname(toRel);
   const destFolderId = destFolderPath !== '.' ? await ensureFolderPath(mountPointId, destFolderPath) : null;
 
-  await repos.docMountDocuments.update(existing.id, {
-    relativePath: toRel,
-    fileName: path.basename(toRel),
-    fileType,
-    folderId: destFolderId,
-  });
-
-  const existingFile = await repos.docMountFiles.findByMountPointAndPath(mountPointId, fromRel);
-  if (existingFile) {
-    await repos.docMountFiles.update(existingFile.id, {
+  // Move = update the link row at the source path. fileType lives on the
+  // content row so it doesn't move with the rename, but the fileType
+  // detected from the new path may differ; we update the file row's
+  // fileType when it changed.
+  const link = await repos.docMountFileLinks.findByMountPointAndPath(mountPointId, fromRel);
+  if (link) {
+    await repos.docMountFileLinks.update(link.id, {
       relativePath: toRel,
       fileName: path.basename(toRel),
       folderId: destFolderId,
     });
+    if (link.fileType !== fileType) {
+      await repos.docMountFiles.update(link.fileId, { fileType });
+    }
   }
 
   emitDocumentMoved({ mountPointId, fromRelativePath: fromRel, toRelativePath: toRel });
@@ -284,18 +239,36 @@ export async function moveDatabaseDocument(
 // LIST (for doc_list_files support)
 // ============================================================================
 
+/**
+ * Listing entry — folders are synthesized to look enough like file links
+ * for the doc_list_files tool / Scriptorium UI to render a unified tree.
+ */
+export interface DatabaseFileListEntry {
+  id: string;
+  mountPointId: string;
+  relativePath: string;
+  fileName: string;
+  fileType: DocMountFile['fileType'];
+  sha256: string;
+  fileSizeBytes: number;
+  lastModified: string;
+  source: DocMountFile['source'];
+  folderId: string | null;
+  kind?: 'file' | 'folder';
+}
+
 export async function listDatabaseFiles(
   mountPointId: string,
   options: { folder?: string } = {}
-): Promise<Array<DocMountFile & { kind?: 'file' | 'folder' }>> {
+): Promise<DatabaseFileListEntry[]> {
   const repos = getRepositories();
-  const files = await repos.docMountFiles.findByMountPointId(mountPointId);
+  const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
 
   // Get folders for this mount point
   const folders = await repos.docMountFolders.findByMountPointId(mountPointId);
 
   // Build the result entries
-  const entries: Array<DocMountFile & { kind?: 'file' | 'folder' }> = [];
+  const entries: DatabaseFileListEntry[] = [];
 
   // Normalise folder input. Stored paths don't carry leading or trailing
   // slashes (see folder-paths.ts normalizePath + database-store
@@ -305,26 +278,37 @@ export async function listDatabaseFiles(
     .replace(/^\/+/, '')
     .replace(/\/+$/, '');
 
-  const folderEntry = (folder: typeof folders[number]): DocMountFile & { kind: 'folder' } => ({
+  const folderEntry = (folder: typeof folders[number]): DatabaseFileListEntry => ({
     id: folder.id,
     mountPointId: folder.mountPointId,
     relativePath: folder.path,
     fileName: path.basename(folder.path),
-    fileType: 'markdown' as const,
+    fileType: 'markdown',
     sha256: '',
     fileSizeBytes: 0,
     lastModified: folder.createdAt,
-    source: 'database' as const,
-    conversionStatus: 'converted' as const,
-    plainTextLength: 0,
-    chunkCount: 0,
-    folderId: folder.parentId,
+    source: 'database',
+    folderId: folder.parentId ?? null,
     kind: 'folder',
-  } as DocMountFile & { kind: 'folder' });
+  });
+
+  const linkToEntry = (link: typeof links[number]): DatabaseFileListEntry => ({
+    id: link.id,
+    mountPointId: link.mountPointId,
+    relativePath: link.relativePath,
+    fileName: link.fileName,
+    fileType: link.fileType,
+    sha256: link.sha256,
+    fileSizeBytes: link.fileSizeBytes,
+    lastModified: link.lastModified,
+    source: link.source,
+    folderId: link.folderId ?? null,
+    kind: 'file',
+  });
 
   if (!normalisedFolder) {
-    for (const f of files) {
-      entries.push({ ...f, kind: 'file' });
+    for (const link of links) {
+      entries.push(linkToEntry(link));
     }
     for (const folder of folders) {
       entries.push(folderEntry(folder));
@@ -335,9 +319,9 @@ export async function listDatabaseFiles(
   // Filter to a specific folder.
   const folderPrefix = `${normalisedFolder}/`;
 
-  for (const f of files) {
-    if (f.relativePath.startsWith(folderPrefix)) {
-      entries.push({ ...f, kind: 'file' });
+  for (const link of links) {
+    if (link.relativePath.startsWith(folderPrefix)) {
+      entries.push(linkToEntry(link));
     }
   }
 
@@ -467,57 +451,32 @@ export async function moveDatabaseFolder(
     }
   }
 
-  // Update document paths and folderId
-  const documents = await repos.docMountDocuments.findByMountPointId(mountPointId);
-  for (const doc of documents) {
-    if (oldPrefix && doc.relativePath.startsWith(oldPrefix)) {
-      const newPath = newPrefix + doc.relativePath.substring(oldPrefix.length);
+  // Walk every link in the mount and rewrite its relativePath + folderId
+  // when it falls inside the renamed folder. Post-refactor, path/folder
+  // membership lives entirely on doc_mount_file_links — documents and
+  // blobs are content-addressable and don't know where they appear.
+  const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
+  for (const link of links) {
+    if (oldPrefix && link.relativePath.startsWith(oldPrefix)) {
+      const newPath = newPrefix + link.relativePath.substring(oldPrefix.length);
       const newFolderPath = path.dirname(newPath);
       let newFolderId: string | null = null;
       if (newFolderPath !== '.') {
         const newFolder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, newFolderPath);
         if (newFolder) newFolderId = newFolder.id;
       }
-      await repos.docMountDocuments.update(doc.id, {
+      await repos.docMountFileLinks.update(link.id, {
         relativePath: newPath,
         fileName: path.basename(newPath),
         folderId: newFolderId,
       });
-      movedDocuments.push({
-        oldPath: doc.relativePath,
-        newPath,
-      });
-    }
-  }
-
-  // Update file mirror paths and folderId
-  const files = await repos.docMountFiles.findByMountPointId(mountPointId);
-  for (const file of files) {
-    if (oldPrefix && file.relativePath.startsWith(oldPrefix)) {
-      const newPath = newPrefix + file.relativePath.substring(oldPrefix.length);
-      const newFolderPath = path.dirname(newPath);
-      let newFolderId: string | null = null;
-      if (newFolderPath !== '.') {
-        const newFolder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, newFolderPath);
-        if (newFolder) newFolderId = newFolder.id;
+      // Documents (text content) track their old path in event payloads.
+      if (link.fileType !== 'blob') {
+        movedDocuments.push({
+          oldPath: link.relativePath,
+          newPath,
+        });
       }
-      await repos.docMountFiles.update(file.id, {
-        relativePath: newPath,
-        fileName: path.basename(newPath),
-        folderId: newFolderId,
-      });
-    }
-  }
-
-  // Update blob paths. Blobs don't carry a folderId — their location is
-  // implicit in relativePath — so only the path string needs to follow the
-  // folder rename. The file-mirror loop above already moves the
-  // doc_mount_files row for each blob.
-  const blobs = await repos.docMountBlobs.listByMountPoint(mountPointId);
-  for (const blob of blobs) {
-    if (oldPrefix && blob.relativePath.startsWith(oldPrefix)) {
-      const newPath = newPrefix + blob.relativePath.substring(oldPrefix.length);
-      await repos.docMountBlobs.updatePath(blob.id, newPath);
     }
   }
 
@@ -542,48 +501,19 @@ export async function backfillFolderRowsForMountPoint(
   const createdPaths = new Set<string>();
 
   try {
-    // Backfill from documents
-    const documents = await repos.docMountDocuments.findByMountPointId(mountPointId);
-    for (const doc of documents) {
-      const folderPath = path.dirname(doc.relativePath);
+    // After the content/link split, folder membership lives on the link
+    // row. One pass over links covers documents, blobs, and other files.
+    const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
+    for (const link of links) {
+      const folderPath = path.dirname(link.relativePath);
       if (folderPath !== '.') {
         const folderId = await ensureFolderPath(mountPointId, folderPath);
         if (!createdPaths.has(folderPath)) {
           foldersCreated++;
           createdPaths.add(folderPath);
         }
-        if (doc.folderId !== folderId) {
-          await repos.docMountDocuments.update(doc.id, { folderId });
-          filesUpdated++;
-        }
-      }
-    }
-
-    // Backfill from blobs (blobs don't have folderId, just ensure parent folders exist)
-    const blobs = await repos.docMountBlobs.listByMountPoint(mountPointId);
-    for (const blob of blobs) {
-      const folderPath = path.dirname(blob.relativePath);
-      if (folderPath !== '.') {
-        await ensureFolderPath(mountPointId, folderPath);
-        if (!createdPaths.has(folderPath)) {
-          foldersCreated++;
-          createdPaths.add(folderPath);
-        }
-      }
-    }
-
-    // Backfill from files
-    const files = await repos.docMountFiles.findByMountPointId(mountPointId);
-    for (const file of files) {
-      const folderPath = path.dirname(file.relativePath);
-      if (folderPath !== '.') {
-        const folderId = await ensureFolderPath(mountPointId, folderPath);
-        if (!createdPaths.has(folderPath)) {
-          foldersCreated++;
-          createdPaths.add(folderPath);
-        }
-        if (file.folderId !== folderId) {
-          await repos.docMountFiles.update(file.id, { folderId });
+        if (link.folderId !== folderId) {
+          await repos.docMountFileLinks.update(link.id, { folderId });
           filesUpdated++;
         }
       }
@@ -643,12 +573,11 @@ export async function databaseFolderHasContents(
     return folderHasContents(mountPointId, folderRow.id);
   }
 
-  // Fallback to prefix match for legacy data without folder rows
+  // Fallback to prefix match for legacy data without folder rows. Link
+  // table carries every (mountPoint, path) tuple post-refactor.
   const prefix = folder.endsWith('/') ? folder : `${folder}/`;
-  const documents = await repos.docMountDocuments.findByMountPointId(mountPointId);
-  if (documents.some(d => d.relativePath.startsWith(prefix))) return true;
-  const blobs = await repos.docMountBlobs.listByMountPoint(mountPointId, { folder: prefix });
-  return blobs.length > 0;
+  const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
+  return links.some(l => l.relativePath.startsWith(prefix));
 }
 
 /**
@@ -668,41 +597,37 @@ export async function rescanDatabaseMountPoint(mountPoint: DocMountPoint): Promi
   // Lazy import to avoid a circular dep with the doc-edit module.
   const { reindexSingleFile } = await import('@/lib/doc-edit/reindex-file');
 
-  const documents = await repos.docMountDocuments.findByMountPointId(mountPoint.id);
+  // After the content/link split, every database-backed document has a
+  // link row with conversionStatus + chunkCount + sha (joined view). Walk
+  // links instead of documents to drive the rescan.
+  const links = await repos.docMountFileLinks.findByMountPointId(mountPoint.id);
+  const docLinks = links.filter(l => l.fileType !== 'blob');
   let rechunked = 0;
 
-  for (const doc of documents) {
-    const file = await repos.docMountFiles.findByMountPointAndPath(
-      mountPoint.id,
-      doc.relativePath
-    );
+  for (const link of docLinks) {
     const needsRechunk =
-      !file ||
-      file.chunkCount === 0 ||
-      file.sha256 !== doc.contentSha256;
+      link.chunkCount === 0 ||
+      link.conversionStatus !== 'converted';
 
     if (needsRechunk) {
       try {
-        await reindexSingleFile(mountPoint.id, doc.relativePath, '');
+        await reindexSingleFile(mountPoint.id, link.relativePath, '');
         rechunked++;
       } catch (err) {
         logger.warn('Failed to re-chunk database document during rescan', {
           mountPointId: mountPoint.id,
-          relativePath: doc.relativePath,
+          relativePath: link.relativePath,
           error: err instanceof Error ? err.message : String(err),
         });
       }
     }
 
-    // Still emit the write event — drives the existing embedding-scheduler
-    // debouncer so any chunks (old or freshly rechunked) whose embeddings
-    // are null get picked up by the background job queue.
-    emitDocumentWritten({ mountPointId: mountPoint.id, relativePath: doc.relativePath });
+    emitDocumentWritten({ mountPointId: mountPoint.id, relativePath: link.relativePath });
   }
   logger.info('Rescanned database mount point', {
     mountPointId: mountPoint.id,
-    documents: documents.length,
+    documents: docLinks.length,
     rechunked,
   });
-  return documents.length;
+  return docLinks.length;
 }

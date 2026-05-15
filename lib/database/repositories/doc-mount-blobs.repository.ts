@@ -1,18 +1,22 @@
 /**
  * Document Mount Blobs Repository
  *
- * Stores binary assets (images first; any MIME type later) for all mount
- * point types — filesystem, obsidian, and database — inside the
- * quilltap-mount-index.db SQLCipher database. The `data` column holds raw
- * bytes as a SQLite BLOB, so this repository bypasses the generic
- * SQLiteCollection / AbstractBaseRepository machinery (which is designed
- * for JSON-shaped documents) and talks to better-sqlite3 directly.
+ * Stores binary asset content inside quilltap-mount-index.db, keyed by
+ * fileId. Each blob row mirrors one doc_mount_files row (1:1 by fileId).
+ * Multiple hard links to the same file share a single blob — bytes never
+ * get duplicated when a file appears in two mount points.
  *
- * Callers normally use two separate APIs:
- *   - Metadata-only queries (list, findByPath, updateDescription) return
- *     DocMountBlobMetadata and are cheap.
- *   - readData() returns the raw Buffer and is only called when a blob is
- *     actually served to a client or handed to a tool.
+ * Per-link metadata (relative path, original filename, description,
+ * extracted text) lives on doc_mount_file_links so each consumer can keep
+ * its own values.
+ *
+ * The `data` column holds the raw bytes as a SQLite BLOB; this repository
+ * bypasses the generic SQLiteCollection machinery for the same reason as
+ * before — JSON serialisation paths would mangle binary content.
+ *
+ * Callers normally use:
+ *   - Metadata-only reads (findByFileId, listByMountPoint) — cheap.
+ *   - readData() — only when serving bytes to a client or tool.
  */
 
 import { randomUUID } from 'crypto';
@@ -20,17 +24,26 @@ import { logger } from '@/lib/logger';
 import { DocMountBlobMetadata, DocMountBlobMetadataSchema } from '@/lib/schemas/mount-index.types';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 
-const TABLE = 'doc_mount_blobs';
-
-export interface CreateBlobInput {
+/**
+ * Joined view: a blob row with the link metadata callers need to know where
+ * this blob lives. Most legacy code paths want to enumerate blobs by mount
+ * point and see their location, so we serve both in one shot.
+ */
+export interface DocMountBlobWithLink extends DocMountBlobMetadata {
+  linkId: string;
   mountPointId: string;
   relativePath: string;
+  fileName: string;
+  folderId: string | null;
   originalFileName: string;
   originalMimeType: string;
-  storedMimeType: string;
-  sha256: string;
-  description?: string;
-  data: Buffer;
+  description: string;
+  descriptionUpdatedAt: string | null;
+  extractedText: string | null;
+  extractedTextSha256: string | null;
+  extractionStatus: 'none' | 'pending' | 'converted' | 'failed' | 'skipped';
+  extractionError: string | null;
+  lastModified: string;
 }
 
 export type ExtractionStatus = 'none' | 'pending' | 'converted' | 'failed' | 'skipped';
@@ -40,6 +53,35 @@ export interface UpdateExtractedTextInput {
   extractedTextSha256: string | null;
   extractionStatus: ExtractionStatus;
   extractionError?: string | null;
+}
+
+const TABLE = 'doc_mount_blobs';
+
+export interface UpsertBlobInput {
+  fileId: string;
+  sha256: string;
+  storedMimeType: string;
+  data: Buffer;
+}
+
+/**
+ * Legacy "give me a blob row at this (mount, path)" input — preserves the
+ * old call shape on top of the new content/link split. Internally this
+ * walks through docMountFileLinks.linkBlobContent to dedup by sha and
+ * upsert the link row.
+ */
+export interface CreateBlobInput {
+  mountPointId: string;
+  relativePath: string;
+  originalFileName: string;
+  originalMimeType: string;
+  storedMimeType: string;
+  sha256: string;
+  data: Buffer;
+  description?: string;
+  fileName?: string;
+  folderId?: string | null;
+  fileType?: 'pdf' | 'docx' | 'markdown' | 'txt' | 'json' | 'jsonl' | 'blob';
 }
 
 function nowIso(): string {
@@ -69,46 +111,21 @@ export class DocMountBlobsRepository {
       db.exec(`
         CREATE TABLE IF NOT EXISTS "${TABLE}" (
           "id" TEXT PRIMARY KEY,
-          "mountPointId" TEXT NOT NULL,
-          "relativePath" TEXT NOT NULL,
-          "originalFileName" TEXT NOT NULL,
-          "originalMimeType" TEXT NOT NULL,
-          "storedMimeType" TEXT NOT NULL,
-          "sizeBytes" INTEGER NOT NULL,
+          "fileId" TEXT NOT NULL,
           "sha256" TEXT NOT NULL,
-          "description" TEXT NOT NULL DEFAULT '',
-          "descriptionUpdatedAt" TEXT,
-          "extractedText" TEXT,
-          "extractedTextSha256" TEXT,
-          "extractionStatus" TEXT NOT NULL DEFAULT 'none',
-          "extractionError" TEXT,
+          "sizeBytes" INTEGER NOT NULL,
+          "storedMimeType" TEXT NOT NULL,
           "data" BLOB NOT NULL,
           "createdAt" TEXT NOT NULL,
-          "updatedAt" TEXT NOT NULL
+          "updatedAt" TEXT NOT NULL,
+          FOREIGN KEY ("fileId") REFERENCES "doc_mount_files" ("id") ON DELETE CASCADE
         )
       `);
       db.exec(
-        `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${TABLE}_mp_path" ` +
-        `ON "${TABLE}" ("mountPointId", "relativePath")`
+        `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${TABLE}_fileId" ` +
+        `ON "${TABLE}" ("fileId")`
       );
-      db.exec(`CREATE INDEX IF NOT EXISTS "idx_${TABLE}_mp" ON "${TABLE}" ("mountPointId")`);
 
-      // Backfill for instances that predate the extractedText sidecar. ADD
-      // COLUMN is idempotent via the PRAGMA check so re-runs are safe.
-      const existingCols = db.prepare(`PRAGMA table_info("${TABLE}")`).all() as Array<{ name: string }>;
-      const colNames = new Set(existingCols.map(c => c.name));
-      if (!colNames.has('extractedText')) {
-        db.exec(`ALTER TABLE "${TABLE}" ADD COLUMN "extractedText" TEXT`);
-      }
-      if (!colNames.has('extractedTextSha256')) {
-        db.exec(`ALTER TABLE "${TABLE}" ADD COLUMN "extractedTextSha256" TEXT`);
-      }
-      if (!colNames.has('extractionStatus')) {
-        db.exec(`ALTER TABLE "${TABLE}" ADD COLUMN "extractionStatus" TEXT NOT NULL DEFAULT 'none'`);
-      }
-      if (!colNames.has('extractionError')) {
-        db.exec(`ALTER TABLE "${TABLE}" ADD COLUMN "extractionError" TEXT`);
-      }
       this.tableInitialized = true;
     }
 
@@ -118,10 +135,7 @@ export class DocMountBlobsRepository {
   async findById(id: string): Promise<DocMountBlobMetadata | null> {
     try {
       const row = this.db().prepare(
-        `SELECT id, mountPointId, relativePath, originalFileName, originalMimeType,
-                storedMimeType, sizeBytes, sha256, description, descriptionUpdatedAt,
-                extractedText, extractedTextSha256, extractionStatus, extractionError,
-                createdAt, updatedAt
+        `SELECT id, fileId, sha256, sizeBytes, storedMimeType, createdAt, updatedAt
          FROM "${TABLE}" WHERE id = ?`
       ).get(id) as Record<string, unknown> | undefined;
       return row ? rowToMetadata(row) : null;
@@ -131,61 +145,45 @@ export class DocMountBlobsRepository {
     }
   }
 
-  async findByMountPointAndPath(
-    mountPointId: string,
-    relativePath: string
-  ): Promise<DocMountBlobMetadata | null> {
+  async findByFileId(fileId: string): Promise<DocMountBlobMetadata | null> {
     try {
       const row = this.db().prepare(
-        `SELECT id, mountPointId, relativePath, originalFileName, originalMimeType,
-                storedMimeType, sizeBytes, sha256, description, descriptionUpdatedAt,
-                extractedText, extractedTextSha256, extractionStatus, extractionError,
-                createdAt, updatedAt
-         FROM "${TABLE}" WHERE mountPointId = ? AND relativePath = ?`
-      ).get(mountPointId, relativePath) as Record<string, unknown> | undefined;
+        `SELECT id, fileId, sha256, sizeBytes, storedMimeType, createdAt, updatedAt
+         FROM "${TABLE}" WHERE fileId = ?`
+      ).get(fileId) as Record<string, unknown> | undefined;
       return row ? rowToMetadata(row) : null;
     } catch (error) {
-      logger.warn('Failed to find blob by path', {
-        mountPointId,
-        relativePath,
+      logger.warn('Failed to find blob by fileId', {
+        fileId,
         error: error instanceof Error ? error.message : String(error),
       });
       return null;
     }
   }
 
-  async listByMountPoint(
-    mountPointId: string,
-    options: { folder?: string } = {}
-  ): Promise<DocMountBlobMetadata[]> {
+  async findManyByFileIds(fileIds: string[]): Promise<DocMountBlobMetadata[]> {
+    if (fileIds.length === 0) return [];
     try {
-      const db = this.db();
-      let rows: Array<Record<string, unknown>>;
-      const baseSelect =
-        `SELECT id, mountPointId, relativePath, originalFileName, originalMimeType,
-                storedMimeType, sizeBytes, sha256, description, descriptionUpdatedAt,
-                extractedText, extractedTextSha256, extractionStatus, extractionError,
-                createdAt, updatedAt
-         FROM "${TABLE}" WHERE mountPointId = ?`;
-
-      if (options.folder !== undefined) {
-        const folderPrefix = options.folder.endsWith('/') ? options.folder : `${options.folder}/`;
-        rows = db.prepare(`${baseSelect} AND relativePath LIKE ? ORDER BY relativePath ASC`)
-          .all(mountPointId, `${folderPrefix}%`) as Array<Record<string, unknown>>;
-      } else {
-        rows = db.prepare(`${baseSelect} ORDER BY relativePath ASC`)
-          .all(mountPointId) as Array<Record<string, unknown>>;
-      }
+      const placeholders = fileIds.map(() => '?').join(',');
+      const rows = this.db().prepare(
+        `SELECT id, fileId, sha256, sizeBytes, storedMimeType, createdAt, updatedAt
+         FROM "${TABLE}" WHERE fileId IN (${placeholders})`
+      ).all(...fileIds) as Array<Record<string, unknown>>;
       return rows.map(rowToMetadata);
     } catch (error) {
-      logger.warn('Failed to list blobs by mount point', {
-        mountPointId,
+      logger.warn('Failed to find blobs by fileIds', {
+        fileIdCount: fileIds.length,
         error: error instanceof Error ? error.message : String(error),
       });
       return [];
     }
   }
 
+  /**
+   * Read the raw bytes for a blob row. Resolves either an id or a fileId
+   * (the latter is more common now since callers usually hold a file
+   * reference, not a blob row).
+   */
   async readData(id: string): Promise<Buffer | null> {
     try {
       const row = this.db().prepare(
@@ -201,32 +199,42 @@ export class DocMountBlobsRepository {
     }
   }
 
-  async create(input: CreateBlobInput): Promise<DocMountBlobMetadata> {
-    const id = randomUUID();
-    const now = nowIso();
-    const description = input.description ?? '';
-    const descriptionUpdatedAt = description ? now : null;
-    const sizeBytes = input.data.length;
+  async readDataByFileId(fileId: string): Promise<Buffer | null> {
+    try {
+      const row = this.db().prepare(
+        `SELECT data FROM "${TABLE}" WHERE fileId = ?`
+      ).get(fileId) as { data: Buffer } | undefined;
+      return row ? row.data : null;
+    } catch (error) {
+      logger.warn('Failed to read blob data by fileId', {
+        fileId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
 
+  /**
+   * Insert or replace the blob row for a fileId. If a row already exists,
+   * its bytes are overwritten (preserving the blob's id). If not, a new
+   * row is minted. Callers are responsible for ensuring the file row
+   * already exists in doc_mount_files.
+   */
+  async upsertByFileId(input: UpsertBlobInput): Promise<DocMountBlobMetadata> {
+    const now = nowIso();
+    const sizeBytes = input.data.length;
     const db = this.db();
-    // Upsert on (mountPointId, relativePath) — callers expect writeBlob to
-    // replace a blob at the same virtual path, matching fs.writeFile semantics.
+
     const existing = db.prepare(
-      `SELECT id FROM "${TABLE}" WHERE mountPointId = ? AND relativePath = ?`
-    ).get(input.mountPointId, input.relativePath) as { id: string } | undefined;
+      `SELECT id FROM "${TABLE}" WHERE fileId = ?`
+    ).get(input.fileId) as { id: string } | undefined;
 
     if (existing) {
       db.prepare(
         `UPDATE "${TABLE}" SET
-           originalFileName = ?, originalMimeType = ?, storedMimeType = ?,
-           sizeBytes = ?, sha256 = ?, description = ?, descriptionUpdatedAt = ?,
-           data = ?, updatedAt = ?
+           sha256 = ?, sizeBytes = ?, storedMimeType = ?, data = ?, updatedAt = ?
          WHERE id = ?`
-      ).run(
-        input.originalFileName, input.originalMimeType, input.storedMimeType,
-        sizeBytes, input.sha256, description, descriptionUpdatedAt,
-        input.data, now, existing.id
-      );
+      ).run(input.sha256, sizeBytes, input.storedMimeType, input.data, now, existing.id);
       const updated = await this.findById(existing.id);
       if (!updated) {
         throw new Error(`Blob disappeared after update: ${existing.id}`);
@@ -234,16 +242,14 @@ export class DocMountBlobsRepository {
       return updated;
     }
 
+    const id = randomUUID();
     db.prepare(
       `INSERT INTO "${TABLE}" (
-         id, mountPointId, relativePath, originalFileName, originalMimeType,
-         storedMimeType, sizeBytes, sha256, description, descriptionUpdatedAt,
-         data, createdAt, updatedAt
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         id, fileId, sha256, sizeBytes, storedMimeType, data, createdAt, updatedAt
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
-      id, input.mountPointId, input.relativePath, input.originalFileName,
-      input.originalMimeType, input.storedMimeType, sizeBytes, input.sha256,
-      description, descriptionUpdatedAt, input.data, now, now
+      id, input.fileId, input.sha256, sizeBytes,
+      input.storedMimeType, input.data, now, now
     );
     const created = await this.findById(id);
     if (!created) {
@@ -252,68 +258,46 @@ export class DocMountBlobsRepository {
     return created;
   }
 
-  async updateExtractedText(
-    id: string,
-    input: UpdateExtractedTextInput
-  ): Promise<DocMountBlobMetadata | null> {
-    try {
-      const now = nowIso();
-      this.db().prepare(
-        `UPDATE "${TABLE}" SET
-           extractedText = ?, extractedTextSha256 = ?,
-           extractionStatus = ?, extractionError = ?, updatedAt = ?
-         WHERE id = ?`
-      ).run(
-        input.extractedText,
-        input.extractedTextSha256,
-        input.extractionStatus,
-        input.extractionError ?? null,
-        now,
-        id
+  /**
+   * Legacy facade for callers that hold a (mountPointId, relativePath)
+   * tuple and want one-call write semantics. Delegates to
+   * docMountFileLinks.linkBlobContent, returning the resulting blob row
+   * (with link metadata attached via the joined view for compatibility
+   * with old call sites that read mountPointId / relativePath / etc).
+   */
+  async create(input: CreateBlobInput): Promise<DocMountBlobWithLink> {
+    const path = await import('path');
+    // Late-bind the link repo via the repository factory to avoid a circular import.
+    const { getRepositories } = await import('@/lib/repositories/factory');
+    const repos = getRepositories();
+    const { link } = await repos.docMountFileLinks.linkBlobContent({
+      mountPointId: input.mountPointId,
+      relativePath: input.relativePath,
+      fileName: input.fileName ?? path.posix.basename(input.relativePath),
+      folderId: input.folderId ?? null,
+      fileType: input.fileType ?? 'blob',
+      originalFileName: input.originalFileName,
+      originalMimeType: input.originalMimeType,
+      storedMimeType: input.storedMimeType,
+      sha256: input.sha256,
+      data: input.data,
+      description: input.description,
+    });
+
+    const found = await this.findByMountPointAndPath(link.mountPointId, link.relativePath);
+    if (!found) {
+      throw new Error(
+        `Blob row not visible after upsert: ${link.mountPointId}/${link.relativePath}`
       );
-      return await this.findById(id);
-    } catch (error) {
-      logger.warn('Failed to update blob extracted text', {
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
     }
+    return found;
   }
 
-  async updatePath(id: string, newRelativePath: string): Promise<boolean> {
-    try {
-      const now = nowIso();
-      const result = this.db().prepare(
-        `UPDATE "${TABLE}" SET relativePath = ?, updatedAt = ? WHERE id = ?`
-      ).run(newRelativePath, now, id);
-      return result.changes > 0;
-    } catch (error) {
-      logger.warn('Failed to update blob path', {
-        id,
-        newRelativePath,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
-  }
-
-  async updateDescription(id: string, description: string): Promise<DocMountBlobMetadata | null> {
-    try {
-      const now = nowIso();
-      this.db().prepare(
-        `UPDATE "${TABLE}" SET description = ?, descriptionUpdatedAt = ?, updatedAt = ? WHERE id = ?`
-      ).run(description, now, now, id);
-      return await this.findById(id);
-    } catch (error) {
-      logger.warn('Failed to update blob description', {
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
-  }
-
+  /**
+   * Plain delete by id. After the content/link split, in normal use the
+   * cascade from doc_mount_files (when its last link is removed) handles
+   * cleanup; this is for migration and reconciliation paths.
+   */
   async delete(id: string): Promise<boolean> {
     try {
       const result = this.db().prepare(`DELETE FROM "${TABLE}" WHERE id = ?`).run(id);
@@ -327,12 +311,285 @@ export class DocMountBlobsRepository {
     }
   }
 
-  async deleteByMountPointAndPath(mountPointId: string, relativePath: string): Promise<boolean> {
+  /**
+   * Update the relativePath of the link associated with a blob. Legacy
+   * facade; mirrors the old per-blob updatePath semantics by writing to
+   * the first matching link row.
+   */
+  async updatePath(id: string, newRelativePath: string): Promise<boolean> {
+    try {
+      const db = this.db();
+      const blob = await this.findById(id);
+      if (!blob) return false;
+      const link = db.prepare(
+        `SELECT id FROM doc_mount_file_links WHERE fileId = ? LIMIT 1`
+      ).get(blob.fileId) as { id: string } | undefined;
+      if (!link) return false;
+      const now = new Date().toISOString();
+      const res = db.prepare(
+        `UPDATE doc_mount_file_links SET relativePath = ?, updatedAt = ? WHERE id = ?`
+      ).run(newRelativePath, now, link.id);
+      return res.changes > 0;
+    } catch (error) {
+      logger.warn('Failed to update blob path', {
+        id,
+        newRelativePath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Delete a blob row directly. In normal use the cascade from
+   * doc_mount_files (when its last link is removed) handles cleanup; this
+   * is for migration and reconciliation paths that hold a fileId directly.
+   */
+  async deleteByFileId(fileId: string): Promise<boolean> {
     try {
       const result = this.db().prepare(
-        `DELETE FROM "${TABLE}" WHERE mountPointId = ? AND relativePath = ?`
-      ).run(mountPointId, relativePath);
+        `DELETE FROM "${TABLE}" WHERE fileId = ?`
+      ).run(fileId);
       return result.changes > 0;
+    } catch (error) {
+      logger.warn('Failed to delete blob by fileId', {
+        fileId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+  }
+
+  // ============================================================================
+  // Joined-view helpers (blob + link metadata)
+  // ============================================================================
+
+  /**
+   * Find a blob at a (mountPointId, relativePath) location. Joins through
+   * doc_mount_file_links to resolve the location. Returns the blob
+   * metadata with link fields attached.
+   */
+  async findByMountPointAndPath(
+    mountPointId: string,
+    relativePath: string
+  ): Promise<DocMountBlobWithLink | null> {
+    try {
+      const db = this.db();
+      const row = db.prepare(
+        `SELECT
+           b.id, b.fileId, b.sha256, b.sizeBytes, b.storedMimeType,
+           b.createdAt, b.updatedAt,
+           l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
+           l.folderId, l.originalFileName, l.originalMimeType,
+           l.description, l.descriptionUpdatedAt,
+           l.extractedText, l.extractedTextSha256, l.extractionStatus, l.extractionError,
+           l.lastModified
+         FROM doc_mount_file_links l
+         JOIN doc_mount_blobs b ON b.fileId = l.fileId
+         WHERE l.mountPointId = ? AND LOWER(l.relativePath) = LOWER(?)`
+      ).get(mountPointId, relativePath) as DocMountBlobWithLink | undefined;
+      return row ?? null;
+    } catch (error) {
+      logger.warn('Failed to find blob by path', {
+        mountPointId,
+        relativePath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * List every blob visible at a mount point (joined through links).
+   * Honors an optional folder filter — when set, results are limited to
+   * blobs whose relativePath sits inside that folder prefix.
+   */
+  async listByMountPoint(
+    mountPointId: string,
+    options: { folder?: string } = {}
+  ): Promise<DocMountBlobWithLink[]> {
+    try {
+      const db = this.db();
+      const baseSelect = `
+        SELECT
+           b.id, b.fileId, b.sha256, b.sizeBytes, b.storedMimeType,
+           b.createdAt, b.updatedAt,
+           l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
+           l.folderId, l.originalFileName, l.originalMimeType,
+           l.description, l.descriptionUpdatedAt,
+           l.extractedText, l.extractedTextSha256, l.extractionStatus, l.extractionError,
+           l.lastModified
+        FROM doc_mount_file_links l
+        JOIN doc_mount_blobs b ON b.fileId = l.fileId
+        WHERE l.mountPointId = ?`;
+
+      let rows: DocMountBlobWithLink[];
+      if (options.folder !== undefined) {
+        const folderPrefix = options.folder.endsWith('/') ? options.folder : `${options.folder}/`;
+        rows = db.prepare(
+          `${baseSelect} AND l.relativePath LIKE ? ORDER BY l.relativePath ASC`
+        ).all(mountPointId, `${folderPrefix}%`) as DocMountBlobWithLink[];
+      } else {
+        rows = db.prepare(
+          `${baseSelect} ORDER BY l.relativePath ASC`
+        ).all(mountPointId) as DocMountBlobWithLink[];
+      }
+      return rows;
+    } catch (error) {
+      logger.warn('Failed to list blobs by mount point', {
+        mountPointId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Update the description on the link associated with a blob row. Blobs
+   * themselves don't carry per-link metadata anymore; the description is
+   * a property of the (mountPoint, path) link. If the blob is hard-linked
+   * to multiple paths, only the link the caller passes through gets
+   * updated. The two-argument form (id only) updates the first link found
+   * — used by routes that don't track linkId yet.
+   */
+  async updateDescription(
+    id: string,
+    description: string,
+    linkId?: string
+  ): Promise<DocMountBlobWithLink | null> {
+    try {
+      const db = this.db();
+      const now = new Date().toISOString();
+
+      const blob = await this.findById(id);
+      if (!blob) return null;
+
+      let targetLinkId = linkId;
+      if (!targetLinkId) {
+        const link = db.prepare(
+          `SELECT id FROM doc_mount_file_links WHERE fileId = ? LIMIT 1`
+        ).get(blob.fileId) as { id: string } | undefined;
+        targetLinkId = link?.id;
+      }
+      if (!targetLinkId) return null;
+
+      db.prepare(
+        `UPDATE doc_mount_file_links
+         SET description = ?, descriptionUpdatedAt = ?, updatedAt = ?
+         WHERE id = ?`
+      ).run(description, now, now, targetLinkId);
+
+      // Return the joined view so callers can pick up the new metadata.
+      return db.prepare(
+        `SELECT
+           b.id, b.fileId, b.sha256, b.sizeBytes, b.storedMimeType,
+           b.createdAt, b.updatedAt,
+           l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
+           l.folderId, l.originalFileName, l.originalMimeType,
+           l.description, l.descriptionUpdatedAt,
+           l.extractedText, l.extractedTextSha256, l.extractionStatus, l.extractionError,
+           l.lastModified
+         FROM doc_mount_file_links l
+         JOIN doc_mount_blobs b ON b.fileId = l.fileId
+         WHERE l.id = ?`
+      ).get(targetLinkId) as DocMountBlobWithLink | null;
+    } catch (error) {
+      logger.warn('Failed to update blob description', {
+        id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Update the extracted-text / extraction-status fields on the link
+   * associated with a blob row. Same per-link semantics as
+   * updateDescription.
+   */
+  async updateExtractedText(
+    id: string,
+    input: UpdateExtractedTextInput,
+    linkId?: string
+  ): Promise<DocMountBlobWithLink | null> {
+    try {
+      const db = this.db();
+      const now = new Date().toISOString();
+
+      const blob = await this.findById(id);
+      if (!blob) return null;
+
+      let targetLinkId = linkId;
+      if (!targetLinkId) {
+        const link = db.prepare(
+          `SELECT id FROM doc_mount_file_links WHERE fileId = ? LIMIT 1`
+        ).get(blob.fileId) as { id: string } | undefined;
+        targetLinkId = link?.id;
+      }
+      if (!targetLinkId) return null;
+
+      db.prepare(
+        `UPDATE doc_mount_file_links SET
+           extractedText = ?, extractedTextSha256 = ?,
+           extractionStatus = ?, extractionError = ?, updatedAt = ?
+         WHERE id = ?`
+      ).run(
+        input.extractedText,
+        input.extractedTextSha256,
+        input.extractionStatus,
+        input.extractionError ?? null,
+        now,
+        targetLinkId
+      );
+
+      return db.prepare(
+        `SELECT
+           b.id, b.fileId, b.sha256, b.sizeBytes, b.storedMimeType,
+           b.createdAt, b.updatedAt,
+           l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
+           l.folderId, l.originalFileName, l.originalMimeType,
+           l.description, l.descriptionUpdatedAt,
+           l.extractedText, l.extractedTextSha256, l.extractionStatus, l.extractionError,
+           l.lastModified
+         FROM doc_mount_file_links l
+         JOIN doc_mount_blobs b ON b.fileId = l.fileId
+         WHERE l.id = ?`
+      ).get(targetLinkId) as DocMountBlobWithLink | null;
+    } catch (error) {
+      logger.warn('Failed to update blob extracted text', {
+        id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Delete the link at (mountPointId, relativePath) with GC of the file
+   * row if this was the last link. The blob bytes cascade off the file
+   * row deletion. Returns true when a link was deleted (regardless of
+   * whether the underlying file survived).
+   */
+  async deleteByMountPointAndPath(mountPointId: string, relativePath: string): Promise<boolean> {
+    try {
+      const db = this.db();
+      const link = db.prepare(
+        `SELECT id, fileId FROM doc_mount_file_links
+         WHERE mountPointId = ? AND relativePath = ?`
+      ).get(mountPointId, relativePath) as { id: string; fileId: string } | undefined;
+      if (!link) return false;
+
+      const tx = db.transaction(() => {
+        db.prepare(`DELETE FROM doc_mount_file_links WHERE id = ?`).run(link.id);
+        const remaining = db.prepare(
+          `SELECT COUNT(*) AS count FROM doc_mount_file_links WHERE fileId = ?`
+        ).get(link.fileId) as { count: number };
+        if (remaining.count === 0) {
+          db.prepare(`DELETE FROM doc_mount_files WHERE id = ?`).run(link.fileId);
+        }
+      });
+      tx();
+      return true;
     } catch (error) {
       logger.warn('Failed to delete blob by path', {
         mountPointId,
@@ -343,12 +600,38 @@ export class DocMountBlobsRepository {
     }
   }
 
+  /**
+   * Bulk delete every link in a mount, GC'ing files (and their blobs) as
+   * each one's reference count hits zero. Mirrors the legacy semantic.
+   */
   async deleteByMountPointId(mountPointId: string): Promise<number> {
     try {
-      const result = this.db().prepare(
-        `DELETE FROM "${TABLE}" WHERE mountPointId = ?`
-      ).run(mountPointId);
-      return result.changes;
+      const db = this.db();
+      // Snapshot affected fileIds, then drop links + orphaned files.
+      const affected = db.prepare(
+        `SELECT DISTINCT fileId FROM doc_mount_file_links WHERE mountPointId = ?`
+      ).all(mountPointId) as { fileId: string }[];
+
+      let deletedBlobs = 0;
+      const tx = db.transaction(() => {
+        db.prepare(
+          `DELETE FROM doc_mount_file_links WHERE mountPointId = ?`
+        ).run(mountPointId);
+        if (affected.length > 0) {
+          const placeholders = affected.map(() => '?').join(',');
+          const orphaned = db.prepare(
+            `SELECT f.id FROM doc_mount_files f
+             WHERE f.id IN (${placeholders})
+               AND NOT EXISTS (SELECT 1 FROM doc_mount_file_links l WHERE l.fileId = f.id)`
+          ).all(...affected.map(a => a.fileId)) as { id: string }[];
+          for (const f of orphaned) {
+            db.prepare(`DELETE FROM doc_mount_files WHERE id = ?`).run(f.id);
+            deletedBlobs += 1;
+          }
+        }
+      });
+      tx();
+      return deletedBlobs;
     } catch (error) {
       logger.warn('Failed to delete blobs by mount point', {
         mountPointId,

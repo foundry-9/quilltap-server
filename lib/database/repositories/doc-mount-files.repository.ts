@@ -1,29 +1,27 @@
 /**
  * Document Mount Files Repository
  *
- * Backend-agnostic repository for DocMountFile entities.
- * Overrides getCollection() to route all operations to the dedicated
- * mount index database (quilltap-mount-index.db), isolating document
- * mount tracking data from the main database.
+ * Backend-agnostic repository for DocMountFile entities — the **content row**
+ * for files indexed by the mount-index DB. Identity is the bytes (sha256 is
+ * UNIQUE). Location and per-link metadata live on doc_mount_file_links.
  *
- * When the mount index DB is in degraded mode (corruption, permissions, etc.),
- * getCollection() throws and all safeQuery fallbacks kick in — returning
- * empty arrays, null, etc. The rest of the app continues normally.
+ * Overrides getCollection() to route all operations to the dedicated mount
+ * index database (quilltap-mount-index.db). When the mount index DB is in
+ * degraded mode, getCollection() throws and safeQuery fallbacks kick in.
  */
 
 import { logger } from '@/lib/logger';
-import { DocMountFile, DocMountFileSchema } from '@/lib/schemas/mount-index.types';
+import {
+  DocMountFile,
+  DocMountFileLinkWithContent,
+  DocMountFileSchema,
+} from '@/lib/schemas/mount-index.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 import { generateDDL, extractSchemaMetadata } from '../schema-translator';
 
-/**
- * Document Mount Files Repository
- * Implements CRUD operations and queries for document mount files.
- * Uses the mount index database instead of the main database.
- */
 export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile> {
   private mountIndexCollectionInitialized = false;
 
@@ -45,7 +43,6 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
       throw new Error('Mount index database not initialized');
     }
 
-    // Ensure the table exists in the mount index DB on first access
     if (!this.mountIndexCollectionInitialized) {
       try {
         const ddlStatements = generateDDL(this.collectionName, this.schema);
@@ -53,22 +50,12 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
           db.exec(sql);
         }
 
-        // In-repo migration: add `source` column for legacy mount-index DBs that
-        // predate database-backed document stores. Default 'filesystem' leaves
-        // all existing indexed files pointing at on-disk content; new rows from
-        // database-backed stores set it to 'database'.
-        const columns = db.pragma(`table_info(${this.collectionName})`) as Array<{ name: string }>;
-        if (!columns.some(c => c.name === 'source')) {
-          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "source" TEXT NOT NULL DEFAULT 'filesystem'`);
-          logger.info('Migrated doc_mount_files: added source column');
-        }
-
-        // In-repo migration: add `folderId` column for database-backed stores
-        // with explicit folder tracking. Nullable, defaults to null for filesystem-backed stores.
-        if (!columns.some(c => c.name === 'folderId')) {
-          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "folderId" TEXT DEFAULT NULL`);
-          logger.info('Migrated doc_mount_files: added folderId column');
-        }
+        // Sha256 lookup index. Not UNIQUE — existing instances may carry
+        // duplicate sha rows that pre-date the content/link split (every
+        // (mountPoint, relativePath) used to be its own file row, and the
+        // migration deliberately keeps them rather than collapsing). Writers
+        // call findOrCreateByContent to reuse on match.
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_doc_mount_files_sha256 ON doc_mount_files (sha256)`);
 
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
@@ -79,7 +66,6 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
       }
     }
 
-    // Detect JSON, array, and boolean columns from schema
     const metadata = extractSchemaMetadata(this.collectionName, this.schema);
     const jsonColumns = metadata.fields
       .filter(f => f.type === 'array' || f.type === 'object')
@@ -114,21 +100,55 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
   }
 
   // ============================================================================
-  // Custom query methods
+  // Content-addressable helpers
   // ============================================================================
 
   /**
-   * Find all files for a mount point
-   * @param mountPointId The mount point ID
-   * @returns Promise<DocMountFile[]> Array of files for the mount point
+   * Find a content row by sha256. Returns null if no row matches.
    */
-  async findByMountPointId(mountPointId: string): Promise<DocMountFile[]> {
+  async findBySha256(sha256: string): Promise<DocMountFile | null> {
+    return this.safeQuery(
+      async () => this.findOneByFilter({ sha256 } as TypedQueryFilter<DocMountFile>),
+      'Error finding file by sha256',
+      { sha256 },
+      null
+    );
+  }
+
+  /**
+   * Get-or-create a content row keyed by sha256. If a row with this sha
+   * already exists, returns the existing row (and crucially its existing
+   * UUID is preserved — hard-linkers depend on this stability). If not,
+   * inserts a fresh content row with the supplied attributes.
+   */
+  async findOrCreateByContent(
+    data: Omit<DocMountFile, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
+  ): Promise<DocMountFile> {
+    const existing = await this.findBySha256(data.sha256);
+    if (existing) {
+      return existing;
+    }
+    return this._create(data, options);
+  }
+
+  // ============================================================================
+  // Joined-view facades — most callers want "what files are at this mount?"
+  // and naturally hit the file repo first. Delegate to the link table.
+  // ============================================================================
+
+  /**
+   * Return joined link + content rows for a mount point. Mirrors the
+   * legacy DocMountFile shape (with mountPointId, relativePath, fileName,
+   * etc.) so existing callers continue to compile.
+   */
+  async findByMountPointId(mountPointId: string): Promise<DocMountFileLinkWithContent[]> {
     return this.safeQuery(
       async () => {
-        const results = await this.findByFilter(
-          { mountPointId } as TypedQueryFilter<DocMountFile>
-        );
-        return results;
+        const db = getRawMountIndexDatabase();
+        if (!db) return [];
+        await this.getCollection();
+        return queryLinks(db, 'WHERE l.mountPointId = ?', [mountPointId]);
       },
       'Error finding files by mount point ID',
       { mountPointId },
@@ -137,22 +157,23 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
   }
 
   /**
-   * Find a specific file by mount point and relative path
-   * @param mountPointId The mount point ID
-   * @param relativePath The relative path within the mount point
-   * @returns Promise<DocMountFile | null> The file if found
+   * Joined link + content row for a (mountPointId, relativePath) pair.
    */
   async findByMountPointAndPath(
     mountPointId: string,
     relativePath: string
-  ): Promise<DocMountFile | null> {
+  ): Promise<DocMountFileLinkWithContent | null> {
     return this.safeQuery(
       async () => {
-        const result = await this.findOneByFilter({
-          mountPointId,
-          relativePath: { $ieq: relativePath },
-        } as TypedQueryFilter<DocMountFile>);
-        return result;
+        const db = getRawMountIndexDatabase();
+        if (!db) return null;
+        await this.getCollection();
+        const rows = queryLinks(
+          db,
+          'WHERE l.mountPointId = ? AND LOWER(l.relativePath) = LOWER(?)',
+          [mountPointId, relativePath]
+        );
+        return rows[0] ?? null;
       },
       'Error finding file by mount point and path',
       { mountPointId, relativePath },
@@ -161,36 +182,72 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
   }
 
   /**
-   * Delete all files for a mount point
-   * @param mountPointId The mount point ID
-   * @returns Promise<number> Number of files deleted
+   * Bulk delete every link for a mount point with GC of the underlying
+   * file rows. Returns the count of links deleted.
    */
   async deleteByMountPointId(mountPointId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.deleteMany(
-          { mountPointId } as TypedQueryFilter<DocMountFile>
-        );
-        return count;
+        const db = getRawMountIndexDatabase();
+        if (!db) return 0;
+        await this.getCollection();
+
+        // Snapshot fileIds for GC.
+        const affected = db.prepare(
+          `SELECT DISTINCT fileId FROM doc_mount_file_links WHERE mountPointId = ?`
+        ).all(mountPointId) as { fileId: string }[];
+
+        let linksDeleted = 0;
+        const tx = db.transaction(() => {
+          const res = db.prepare(
+            `DELETE FROM doc_mount_file_links WHERE mountPointId = ?`
+          ).run(mountPointId);
+          linksDeleted = res.changes;
+
+          if (affected.length > 0) {
+            const placeholders = affected.map(() => '?').join(',');
+            const orphaned = db.prepare(
+              `SELECT f.id FROM doc_mount_files f
+               WHERE f.id IN (${placeholders})
+                 AND NOT EXISTS (SELECT 1 FROM doc_mount_file_links l WHERE l.fileId = f.id)`
+            ).all(...affected.map(a => a.fileId)) as { id: string }[];
+            for (const f of orphaned) {
+              db.prepare(`DELETE FROM doc_mount_files WHERE id = ?`).run(f.id);
+            }
+          }
+        });
+        tx();
+        return linksDeleted;
       },
       'Error deleting files by mount point ID',
       { mountPointId }
     );
   }
+}
 
-  /**
-   * Delete a file by its ID
-   * @param id The file ID
-   * @returns Promise<boolean> True if file was deleted, false if not found
-   */
-  async deleteByFileId(id: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const result = await this._delete(id);
-        return result;
-      },
-      'Error deleting file by ID',
-      { id }
-    );
-  }
+/**
+ * Shared helper: SELECT joined link + content rows. Identical projection to
+ * DocMountFileLinksRepository.queryJoined but inlined here to keep the
+ * facade independent of the link repo's class.
+ */
+function queryLinks(
+  db: ReturnType<typeof getRawMountIndexDatabase>,
+  whereClause: string,
+  params: unknown[]
+): DocMountFileLinkWithContent[] {
+  if (!db) return [];
+  const sql = `
+    SELECT
+      l.id, l.fileId, l.mountPointId, l.relativePath, l.fileName,
+      l.folderId, l.originalFileName, l.originalMimeType,
+      l.description, l.descriptionUpdatedAt,
+      l.conversionStatus, l.conversionError, l.plainTextLength,
+      l.extractedText, l.extractedTextSha256, l.extractionStatus, l.extractionError,
+      l.chunkCount, l.lastModified, l.createdAt, l.updatedAt,
+      f.sha256, f.fileSizeBytes, f.fileType, f.source
+    FROM doc_mount_file_links l
+    JOIN doc_mount_files f ON f.id = l.fileId
+    ${whereClause}
+  `;
+  return db.prepare(sql).all(...params) as DocMountFileLinkWithContent[];
 }

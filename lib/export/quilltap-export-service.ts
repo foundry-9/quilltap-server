@@ -542,6 +542,18 @@ export async function exportDocumentStores(
     if (mp.mountType === 'database') {
       const docs = await repos.docMountDocuments.findByMountPointId(mp.id);
       for (const d of docs) {
+        // doc_mount_documents only ever holds text content
+        // (markdown/txt/json/jsonl). The joined view carries the file
+        // row's fileType, which can also be 'pdf'/'docx'/'blob' for blob
+        // mirrors — skip those here; blobs are exported separately below.
+        if (
+          d.fileType !== 'markdown' &&
+          d.fileType !== 'txt' &&
+          d.fileType !== 'json' &&
+          d.fileType !== 'jsonl'
+        ) {
+          continue;
+        }
         documents.push({
           mountPointId: d.mountPointId,
           relativePath: d.relativePath,

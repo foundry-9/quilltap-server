@@ -29,12 +29,13 @@ function joinPath(parts: string[]): string {
   return parts.map(p => decodeURIComponent(p)).join('/');
 }
 
-function mimeForDocument(doc: DocMountDocument): string {
+function mimeForDocument(doc: { fileType?: string }): string {
   switch (doc.fileType) {
     case 'markdown': return 'text/markdown; charset=utf-8';
     case 'txt': return 'text/plain; charset=utf-8';
     case 'json': return 'application/json; charset=utf-8';
     case 'jsonl': return 'application/jsonl; charset=utf-8';
+    default: return 'application/octet-stream';
   }
 }
 

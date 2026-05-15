@@ -120,8 +120,7 @@ export async function convertMountPointToDatabase(
           absolutePath,
           error: msg,
         });
-        await repos.docMountChunks.deleteByFileId(file.id);
-        await repos.docMountFiles.delete(file.id);
+        await repos.docMountFileLinks.deleteWithGC(file.id);
         result.filesSkipped += 1;
         result.errors.push({ relativePath: file.relativePath, error: `source missing: ${msg}` });
         continue;
@@ -130,54 +129,40 @@ export async function convertMountPointToDatabase(
       if (file.fileType === 'markdown' || file.fileType === 'txt') {
         const content = bytes.toString('utf-8');
         const contentSha256 = sha256OfString(content);
-        const existingDoc = await repos.docMountDocuments.findByMountPointAndPath(
-          mountPoint.id,
-          file.relativePath
-        );
-        if (existingDoc) {
-          await repos.docMountDocuments.update(existingDoc.id, {
-            content,
-            contentSha256,
-            plainTextLength: content.length,
-            lastModified: now,
-            fileType: file.fileType,
-            fileName: file.fileName,
-          });
-        } else {
-          await repos.docMountDocuments.create({
-            mountPointId: mountPoint.id,
-            relativePath: file.relativePath,
-            fileName: file.fileName,
-            fileType: file.fileType,
-            content,
-            contentSha256,
-            plainTextLength: content.length,
-            lastModified: now,
-          });
-        }
+        await repos.docMountFileLinks.linkDocumentContent({
+          mountPointId: mountPoint.id,
+          relativePath: file.relativePath,
+          fileName: file.fileName,
+          folderId: file.folderId ?? null,
+          fileType: file.fileType,
+          content,
+          contentSha256,
+          plainTextLength: content.length,
+          fileSizeBytes: Buffer.byteLength(content, 'utf-8'),
+        });
         result.documentsWritten += 1;
       } else {
         // pdf, docx, or any other binary type the scanner picked up.
         // Store as a blob; bypass transcodeToWebP so original bytes survive.
         const storedMimeType = mimeTypeForFileType(file.fileType);
         const sha256 = sha256OfBuffer(bytes);
-        await repos.docMountBlobs.create({
+        await repos.docMountFileLinks.linkBlobContent({
           mountPointId: mountPoint.id,
           relativePath: file.relativePath,
+          fileName: file.fileName,
+          folderId: file.folderId ?? null,
+          fileType: file.fileType,
           originalFileName: file.fileName,
           originalMimeType: storedMimeType,
           storedMimeType,
           sha256,
-          description: '',
           data: bytes,
         });
         result.blobsWritten += 1;
       }
 
-      await repos.docMountFiles.update(file.id, {
-        source: 'database',
-        lastModified: now,
-      });
+      // The linkBlobContent / linkDocumentContent helpers already record
+      // source='database' on the file row. No further update needed.
       result.filesMigrated += 1;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -335,15 +320,18 @@ export async function deconvertMountPointToFilesystem(
 
   // Flip every file row back to source='filesystem'. Do this before purging
   // doc_mount_documents / doc_mount_blobs so a crash mid-purge leaves the
-  // store in a consistent 'disk is authoritative' state.
-  const files = await repos.docMountFiles.findByMountPointId(mountPoint.id);
-  for (const file of files) {
-    if (file.source === 'database') {
-      await repos.docMountFiles.update(file.id, {
-        source: 'filesystem',
-        lastModified: now,
-      });
+  // store in a consistent 'disk is authoritative' state. Files are
+  // content-addressable now and may be shared across mounts via hard
+  // links — only flip rows whose links all live in this mount.
+  const links = await repos.docMountFileLinks.findByMountPointId(mountPoint.id);
+  const seenFileIds = new Set<string>();
+  for (const link of links) {
+    if (seenFileIds.has(link.fileId)) continue;
+    seenFileIds.add(link.fileId);
+    if (link.source === 'database') {
+      await repos.docMountFiles.update(link.fileId, { source: 'filesystem' });
     }
+    await repos.docMountFileLinks.update(link.id, { lastModified: now });
   }
 
   const documentsDeleted = await repos.docMountDocuments.deleteByMountPointId(mountPoint.id);

@@ -154,9 +154,25 @@ export async function writeProjectFileToMountStore(
       ? await ensureFolderPath(target.mountPointId, parentDir)
       : null;
 
-  const blob = await repos.docMountBlobs.create({
+  const mirrorFileType = detectMirrorFileType(relativePath);
+
+  // The existing link at this path (if any) will be re-pointed at the new
+  // content by linkBlobContent's UNIQUE(mountPointId, relativePath) upsert.
+  // Drop its chunks first so a re-extraction starts cleanly.
+  const existingLink = await repos.docMountFileLinks.findByMountPointAndPath(
+    target.mountPointId,
+    relativePath
+  );
+  if (existingLink) {
+    await repos.docMountChunks.deleteByLinkId(existingLink.id);
+  }
+
+  const { link, blobId } = await repos.docMountFileLinks.linkBlobContent({
     mountPointId: target.mountPointId,
     relativePath,
+    fileName: path.posix.basename(relativePath),
+    folderId,
+    fileType: mirrorFileType,
     originalFileName: safeName,
     originalMimeType: input.contentType,
     storedMimeType: transcoded.storedMimeType,
@@ -165,56 +181,17 @@ export async function writeProjectFileToMountStore(
     data: transcoded.data,
   });
 
-  const now = new Date().toISOString();
-  const mirrorFileType = detectMirrorFileType(relativePath);
-  const existingFile = await repos.docMountFiles.findByMountPointAndPath(
-    target.mountPointId,
-    relativePath
-  );
-
-  if (existingFile) {
-    await repos.docMountChunks.deleteByFileId(existingFile.id);
-    await repos.docMountFiles.update(existingFile.id, {
-      sha256: blob.sha256,
-      fileSizeBytes: blob.sizeBytes,
-      lastModified: now,
-      source: 'database',
-      fileType: mirrorFileType,
-      folderId,
-      conversionStatus: 'skipped',
-      conversionError: null,
-      plainTextLength: null,
-      chunkCount: 0,
-    });
-  } else {
-    await repos.docMountFiles.create({
-      mountPointId: target.mountPointId,
-      relativePath,
-      fileName: path.posix.basename(relativePath),
-      fileType: mirrorFileType,
-      sha256: blob.sha256,
-      fileSizeBytes: blob.sizeBytes,
-      lastModified: now,
-      source: 'database',
-      folderId,
-      conversionStatus: 'skipped',
-      conversionError: null,
-      plainTextLength: null,
-      chunkCount: 0,
-    });
-  }
-
   emitDocumentWritten({ mountPointId: target.mountPointId, relativePath });
   repos.docMountPoints.refreshStats(target.mountPointId).catch(() => { /* best-effort */ });
 
   return {
-    storageKey: buildMountBlobStorageKey(target.mountPointId, blob.id),
+    storageKey: buildMountBlobStorageKey(target.mountPointId, blobId),
     mountPointId: target.mountPointId,
-    blobId: blob.id,
-    relativePath,
-    storedMimeType: blob.storedMimeType,
-    sizeBytes: blob.sizeBytes,
-    sha256: blob.sha256,
+    blobId,
+    relativePath: link.relativePath,
+    storedMimeType: transcoded.storedMimeType,
+    sizeBytes: transcoded.data.length,
+    sha256: transcoded.sha256,
   };
 }
 
@@ -241,27 +218,29 @@ export async function mountBlobExists(storageKey: string): Promise<boolean> {
 }
 
 /**
- * Delete the blob and mirror file row for a mount-blob storageKey. No-op
- * when the key is malformed or the blob has already been removed.
+ * Delete the link associated with a mount-blob storageKey. If this was the
+ * last link to the underlying file, GC drops the file row and cascades to
+ * doc_mount_blobs. No-op when the key is malformed or the blob has already
+ * been removed.
  */
 export async function deleteMountBlob(storageKey: string): Promise<void> {
   const parsed = parseMountBlobStorageKey(storageKey);
   if (!parsed) return;
   const repos = getRepositories();
 
-  const metadata = await repos.docMountBlobs.findById(parsed.blobId);
-  if (!metadata) return;
+  const blob = await repos.docMountBlobs.findById(parsed.blobId);
+  if (!blob) return;
 
-  const mirror = await repos.docMountFiles.findByMountPointAndPath(
-    metadata.mountPointId,
-    metadata.relativePath
-  );
-  if (mirror) {
-    await repos.docMountChunks.deleteByFileId(mirror.id);
-    await repos.docMountFiles.delete(mirror.id);
+  // Find every link to this blob's file and drop them with GC. Most blobs
+  // have exactly one link today, but a future hard-linked blob may have
+  // many — we delete them all here because the storageKey was the
+  // user-visible handle for "the file." Callers wanting per-link delete
+  // should call deleteWithGC directly.
+  const links = await repos.docMountFileLinks.findByFileId(blob.fileId);
+  for (const link of links) {
+    await repos.docMountFileLinks.deleteWithGC(link.id);
+    repos.docMountPoints.refreshStats(link.mountPointId).catch(() => { /* best-effort */ });
   }
-  await repos.docMountBlobs.delete(parsed.blobId);
-  repos.docMountPoints.refreshStats(metadata.mountPointId).catch(() => { /* best-effort */ });
 }
 
 // ============================================================================

@@ -1149,41 +1149,73 @@ CREATE INDEX IF NOT EXISTS "idx_doc_mount_folders_mp_path"
   ON "doc_mount_folders" ("mountPointId", "path");
 ```
 
-Folder rows are populated only for `database`-backed mount points. Filesystem-backed mounts continue to derive folder structure from the OS; their `folderId` columns on `doc_mount_files`/`doc_mount_documents` are always NULL. The unique index on (mountPointId, COALESCE(parentId, ''), name) enforces one folder per parent per name; the COALESCE is required because SQLite treats each NULL as distinct in UNIQUE constraints.
+Folder rows are populated only for `database`-backed mount points. Filesystem-backed mounts continue to derive folder structure from the OS; their `folderId` column on `doc_mount_file_links` is always NULL. The unique index on (mountPointId, COALESCE(parentId, ''), name) enforces one folder per parent per name; the COALESCE is required because SQLite treats each NULL as distinct in UNIQUE constraints.
 
 ### doc_mount_files
 
 ```sql
 CREATE TABLE IF NOT EXISTS "doc_mount_files" (
   "id" TEXT PRIMARY KEY,
-  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
-  "relativePath" TEXT NOT NULL,
-  "fileName" TEXT NOT NULL,
-  "fileType" TEXT NOT NULL,
   "sha256" TEXT NOT NULL,
   "fileSizeBytes" INTEGER NOT NULL,
-  "lastModified" TEXT NOT NULL,
+  "fileType" TEXT NOT NULL,
   "source" TEXT NOT NULL DEFAULT 'filesystem',
-  "folderId" TEXT,
-  "conversionStatus" TEXT NOT NULL DEFAULT 'pending',
-  "conversionError" TEXT,
-  "plainTextLength" INTEGER,
-  "chunkCount" INTEGER NOT NULL DEFAULT 0,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS "idx_doc_mount_files_sha256" ON "doc_mount_files" ("sha256");
 ```
 
-`fileType` is one of `'pdf'`, `'docx'`, `'markdown'`, `'txt'`, `'json'`, `'jsonl'`, or `'blob'`. `'blob'` is the catch-all for arbitrary binaries stored via the upload endpoint that have no extracted text representation (images, audio, archives, etc.) — their bytes live in `doc_mount_blobs` and the mirror row exists so the tree, listing, and delete paths treat them uniformly. `'pdf'` and `'docx'` blob-backed rows carry a non-null `plainTextLength` once their `doc_mount_blobs.extractedText` is populated.
+A `doc_mount_files` row is the **content identity** for a set of bytes — one row per file's bytes, regardless of how many mount points reference them. Per-mount metadata (relativePath, fileName, folderId, conversion lifecycle, extracted text) lives on `doc_mount_file_links`; bytes for database-backed files live in `doc_mount_documents` (text) or `doc_mount_blobs` (binary), keyed by `fileId`.
 
-`source` is `'filesystem'` when the bytes live on disk (filesystem/obsidian mounts) or `'database'` when they live in `doc_mount_documents`. The column is added by `DocMountFilesRepository` on first access for legacy mount-index databases that predate database-backed stores. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores; filesystem-backed stores always leave it NULL. The column is added by in-repo `ALTER TABLE` on first access.
+`fileType` is one of `'pdf'`, `'docx'`, `'markdown'`, `'txt'`, `'json'`, `'jsonl'`, or `'blob'`. `'blob'` is the catch-all for arbitrary binaries with no extracted text representation (images, audio, archives, etc.) — their bytes live in `doc_mount_blobs`. `source` is `'filesystem'` when the bytes live on disk (one link per file enforced at the repo layer) or `'database'` when they live in `doc_mount_documents` / `doc_mount_blobs` (any number of links allowed — hard-linkable).
+
+Writers call `findOrCreateByContent(sha256, ...)` rather than `create` directly: if a content row with the matching sha already exists, its UUID is reused so any existing links continue to resolve correctly. The `sha256` INDEX is not UNIQUE because pre-refactor databases may carry duplicate sha rows from the days when every (mountPoint, relativePath) was its own file row; the migration deliberately leaves them in place rather than collapsing.
+
+### doc_mount_file_links
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_file_links" (
+  "id" TEXT PRIMARY KEY,
+  "fileId" TEXT NOT NULL REFERENCES "doc_mount_files"("id") ON DELETE CASCADE,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id") ON DELETE CASCADE,
+  "relativePath" TEXT NOT NULL,
+  "fileName" TEXT NOT NULL,
+  "folderId" TEXT,
+  "originalFileName" TEXT,
+  "originalMimeType" TEXT,
+  "description" TEXT NOT NULL DEFAULT '',
+  "descriptionUpdatedAt" TEXT,
+  "conversionStatus" TEXT NOT NULL DEFAULT 'pending',
+  "conversionError" TEXT,
+  "plainTextLength" INTEGER,
+  "extractedText" TEXT,
+  "extractedTextSha256" TEXT,
+  "extractionStatus" TEXT NOT NULL DEFAULT 'none',
+  "extractionError" TEXT,
+  "chunkCount" INTEGER NOT NULL DEFAULT 0,
+  "lastModified" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_file_links_mp_path"
+  ON "doc_mount_file_links" ("mountPointId", "relativePath");
+CREATE INDEX IF NOT EXISTS "idx_doc_mount_file_links_fileId"
+  ON "doc_mount_file_links" ("fileId");
+CREATE INDEX IF NOT EXISTS "idx_doc_mount_file_links_mountPointId"
+  ON "doc_mount_file_links" ("mountPointId");
+```
+
+One row per visible location of a file (i.e. the hard link). Multiple link rows may point at the same `doc_mount_files` row, meaning the same bytes appear at multiple `(mountPointId, relativePath)` tuples. Per-consumer extraction state (conversion lifecycle, extracted text, chunk count) lives here so two consumers hard-linking the same content can re-extract or re-caption independently.
+
+The UNIQUE index on `(mountPointId, relativePath)` enforces "one file per location" — what used to be advisory in app code. Deleting a link via `DocMountFileLinksRepository.deleteWithGC` cascades to chunks (FK), and if it was the last link for its file the file row gets dropped (cascading to documents/blobs). `sweepOrphanedFiles()` is the defense-in-depth GC for writers that bypass the helper.
 
 ### doc_mount_chunks
 
 ```sql
 CREATE TABLE IF NOT EXISTS "doc_mount_chunks" (
   "id" TEXT PRIMARY KEY,
-  "fileId" TEXT NOT NULL REFERENCES "doc_mount_files"("id"),
+  "linkId" TEXT NOT NULL REFERENCES "doc_mount_file_links"("id") ON DELETE CASCADE,
   "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
   "chunkIndex" INTEGER NOT NULL,
   "content" TEXT NOT NULL,
@@ -1195,7 +1227,7 @@ CREATE TABLE IF NOT EXISTS "doc_mount_chunks" (
 );
 ```
 
-The `embedding` column stores Float32 arrays as BLOBs (same format as `conversation_chunks.embedding`).
+Chunks are keyed by **linkId**, not by fileId — every hard link to a file maintains its own chunk + embedding set so consumers can re-extract independently. The `embedding` column stores Float32 arrays as BLOBs (same format as `conversation_chunks.embedding`). `mountPointId` is denormalized off the link row for fast per-mount queries.
 
 ### project_doc_mount_links
 
@@ -1216,55 +1248,39 @@ Note: `projectId` references the `projects` table in the main database. Cross-da
 ```sql
 CREATE TABLE IF NOT EXISTS "doc_mount_documents" (
   "id" TEXT PRIMARY KEY,
-  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
-  "relativePath" TEXT NOT NULL,
-  "fileName" TEXT NOT NULL,
-  "fileType" TEXT NOT NULL,
+  "fileId" TEXT NOT NULL REFERENCES "doc_mount_files"("id") ON DELETE CASCADE,
   "content" TEXT NOT NULL,
   "contentSha256" TEXT NOT NULL,
   "plainTextLength" INTEGER NOT NULL,
-  "folderId" TEXT,
-  "lastModified" TEXT NOT NULL,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_documents_mp_path"
-  ON "doc_mount_documents" ("mountPointId", "relativePath");
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_documents_fileId"
+  ON "doc_mount_documents" ("fileId");
 ```
 
-Text content for database-backed mount points. Every row is mirrored in `doc_mount_files` (with `source='database'`) so existing scanning, search, and embedding paths treat it identically to on-disk files. `fileType` is one of `'markdown'`, `'txt'`, `'json'`, or `'jsonl'`. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores. The column is added by in-repo `ALTER TABLE` on first access.
+Text content for database-backed files. Content-addressable: one document row per `doc_mount_files` row (UNIQUE on `fileId`). Per-link metadata (relativePath, fileName, folderId, lastModified) lives on `doc_mount_file_links` — multiple hard links may reference the same document. Cascade off `doc_mount_files` reaps the document when the last link goes away. `contentSha256` mirrors `doc_mount_files.sha256` for sanity.
 
 ### doc_mount_blobs
 
 ```sql
 CREATE TABLE IF NOT EXISTS "doc_mount_blobs" (
   "id" TEXT PRIMARY KEY,
-  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
-  "relativePath" TEXT NOT NULL,
-  "originalFileName" TEXT NOT NULL,
-  "originalMimeType" TEXT NOT NULL,
-  "storedMimeType" TEXT NOT NULL,
-  "sizeBytes" INTEGER NOT NULL,
+  "fileId" TEXT NOT NULL REFERENCES "doc_mount_files"("id") ON DELETE CASCADE,
   "sha256" TEXT NOT NULL,
-  "description" TEXT NOT NULL DEFAULT '',
-  "descriptionUpdatedAt" TEXT,
-  "extractedText" TEXT,
-  "extractedTextSha256" TEXT,
-  "extractionStatus" TEXT NOT NULL DEFAULT 'none',
-  "extractionError" TEXT,
+  "sizeBytes" INTEGER NOT NULL,
+  "storedMimeType" TEXT NOT NULL,
   "data" BLOB NOT NULL,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_blobs_mp_path"
-  ON "doc_mount_blobs" ("mountPointId", "relativePath");
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_blobs_fileId"
+  ON "doc_mount_blobs" ("fileId");
 ```
 
-Binary assets for **any** mount point type. Bitmap images are transcoded to WebP on upload using the `sharp` dependency; already-WebP uploads, SVG, and all other MIME types are stored as-is. `originalMimeType` preserves the uploaded format while `storedMimeType` is what `data` actually contains. `description` is user-supplied alt-text / transcript consumed by the embedding pipeline.
+Binary assets for **any** mount point type. Content-addressable: one blob row per `doc_mount_files` row (UNIQUE on `fileId`). Per-link metadata (relativePath, originalFileName, originalMimeType, description, extractedText) lives on `doc_mount_file_links` so a hard-linked image can carry different descriptions or extraction results in two different mounts without disturbing the bytes themselves. Bitmap images are transcoded to WebP on upload using `sharp`; already-WebP uploads, SVG, and other MIME types are stored as-is. `storedMimeType` is what `data` actually contains.
 
-`extractedText` is the plain-text representation of the blob's bytes, populated for PDF and DOCX uploads via the buffer-native converters. `extractedTextSha256` tracks drift between the text and what has been chunked. `extractionStatus` is one of `'none'` (no converter applies — images, arbitrary binaries), `'pending'` (conversion in progress), `'converted'` (text extracted successfully), `'failed'` (converter raised or returned empty), or `'skipped'` (conversion explicitly bypassed). `extractionError` stores the failure reason when `extractionStatus='failed'`. The four extraction columns are added by in-repo `ALTER TABLE` on first access, so upgrading instances pick them up transparently.
-
-Every database-backed blob is mirrored into `doc_mount_files` with `source='database'` and `fileType` set to `'pdf'` / `'docx'` (when `extractedText` is populated) or `'blob'` (arbitrary binary with no text). This keeps the tree, search, chunking, and embedding pipelines uniform across native-text documents and blobs. The mirror row's `sha256` and `fileSizeBytes` track the blob's original bytes; `plainTextLength` tracks the extracted text.
+Cascade off `doc_mount_files` reaps the blob row (and its bytes) when the last link goes away. The extraction lifecycle (`extractedText`, `extractedTextSha256`, `extractionStatus`, `extractionError`) is no longer on this table — it moved to `doc_mount_file_links` so each consumer can override.
 
 ---
 

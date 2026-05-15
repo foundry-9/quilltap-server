@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Feat: Hard-linkable files in the mount-index DB
+
+Split `doc_mount_files` so a single underlying file can be hard-linked from multiple mount points. The file row is now content-addressable (id, sha256, fileSizeBytes, fileType, source); a new `doc_mount_file_links` table carries per-mount metadata (relativePath, fileName, folderId, conversion lifecycle, extracted text, chunk count). `doc_mount_chunks.fileId` becomes `linkId` so each link owns its own chunks and embeddings. `doc_mount_documents` and `doc_mount_blobs` are now keyed by `fileId` (UNIQUE), so the bytes are shared across all hard links to the same file.
+
+New `DocMountFileLinksRepository` exposes `findByMountPointId`, `findByMountPointAndPath`, `findByFileId`, `deleteWithGC`, `sweepOrphanedFiles`, and high-level write helpers `linkBlobContent`, `linkDocumentContent`, `linkFilesystemFile`. Filesystem-source files are constrained to one link (enforced at the repo layer). Deleting a link cascades to its chunks; deleting the last link to a file drops the file row, which cascades to documents/blobs.
+
+Migration `add-doc-mount-file-links-v1` splits existing rows 1:1 (no dedup), rebuilds the four tables to drop the moved columns and add the new FKs, and rekeys chunks. File-storage bridges (project, character vault, Lantern, user uploads), the scanner, reindex-file, conversion, database-store, document-search, doc-edit handler, chat-files-v2, import/export, and Scriptorium API routes all updated. DDL.md updated.
+
+File UUIDs are durable handles: when a writer hits an existing content sha, the existing file row's UUID is preserved so any pre-existing links continue to resolve.
+
 #### Chore: Refactor 4.4 Phase 5 — shared icon module
 
 Fifth pass of the duplicate-function consolidation tracked in `docs/developer/features/REFACTOR_4_4.md`. New shared icon module at `components/ui/icons/index.tsx` exporting five icons (`CloseIcon`, `PencilIcon`, `RefreshIcon`, `CheckIcon`, `ChatIcon`); 12 inline definitions removed across `components/chat/ChatCard.tsx`, `app/prospero/[id]/components/{ChatsTab,CharactersTab,CharactersCard}.tsx`, `app/scriptorium/[id]/page.tsx`, `app/scriptorium/components/DocumentStoreCard.tsx`, `components/profile/{ProfileInfoSection,DataDirectorySection}.tsx`, `components/layout/left-sidebar/collapsed-nav.tsx`, and `app/settings/page.tsx`.

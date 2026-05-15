@@ -63,8 +63,13 @@ interface Repos {
     create: jest.Mock;
     update: jest.Mock;
   };
+  docMountFileLinks: {
+    findByMountPointAndPath: jest.Mock;
+    linkFilesystemFile: jest.Mock;
+  };
   docMountChunks: {
     deleteByFileId: jest.Mock;
+    deleteByLinkId: jest.Mock;
     bulkInsert: jest.Mock;
   };
 }
@@ -88,8 +93,17 @@ function createRepos(): Repos {
       create: jest.fn().mockResolvedValue(undefined),
       update: jest.fn().mockResolvedValue(undefined),
     },
+    docMountFileLinks: {
+      findByMountPointAndPath: jest.fn().mockResolvedValue(null),
+      linkFilesystemFile: jest.fn().mockImplementation(async (input) => ({
+        id: 'link-mock',
+        fileId: 'file-mock',
+        ...input,
+      })),
+    },
     docMountChunks: {
       deleteByFileId: jest.fn().mockResolvedValue(undefined),
+      deleteByLinkId: jest.fn().mockResolvedValue(undefined),
       bulkInsert: jest.fn().mockResolvedValue(undefined),
     },
   };
@@ -118,27 +132,13 @@ describe('reindexSingleFile (blob extractedText branch)', () => {
     };
     repos.docMountBlobs.findByMountPointAndPath.mockResolvedValue(blob);
 
-    // After create, the file record exists for the chunk-insert lookup.
-    const fileRecord = {
-      id: 'file-1',
-      mountPointId: MOUNT_ID,
-      relativePath: 'docs/report.pdf',
-      fileName: 'report.pdf',
-      fileType: 'pdf',
-      sha256: blob.sha256,
-      fileSizeBytes: blob.sizeBytes,
-    };
-    repos.docMountFiles.findByMountPointAndPath.mockImplementation(async () => {
-      // First call (before create): no record. Subsequent calls: return it.
-      if (repos.docMountFiles.create.mock.calls.length === 0) return null;
-      return fileRecord;
-    });
-
     await reindexSingleFile(MOUNT_ID, 'docs/report.pdf', '');
 
-    // A new file-mirror row should be created using the blob's sha256 and
-    // sizeBytes — NOT the length of the extracted text.
-    expect(repos.docMountFiles.create).toHaveBeenCalledWith(
+    // The new high-level helper handles file + link in one shot. The
+    // assertion shifts from `docMountFiles.create` to
+    // `docMountFileLinks.linkFilesystemFile` (which is what reindex-file
+    // calls after the content/link split).
+    expect(repos.docMountFileLinks.linkFilesystemFile).toHaveBeenCalledWith(
       expect.objectContaining({
         mountPointId: MOUNT_ID,
         relativePath: 'docs/report.pdf',
@@ -152,12 +152,12 @@ describe('reindexSingleFile (blob extractedText branch)', () => {
       })
     );
 
-    // Chunks were written for the extracted text.
+    // Chunks were written for the extracted text, keyed by the link id.
     expect(repos.docMountChunks.bulkInsert).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
           mountPointId: MOUNT_ID,
-          fileId: 'file-1',
+          linkId: 'link-mock',
           content: 'Hello chunk',
         }),
       ])
@@ -178,7 +178,7 @@ describe('reindexSingleFile (blob extractedText branch)', () => {
 
     await reindexSingleFile(MOUNT_ID, 'binaries/mystery.bin', '');
 
-    expect(repos.docMountFiles.create).not.toHaveBeenCalled();
+    expect(repos.docMountFileLinks.linkFilesystemFile).not.toHaveBeenCalled();
     expect(repos.docMountFiles.update).not.toHaveBeenCalled();
     expect(repos.docMountChunks.bulkInsert).not.toHaveBeenCalled();
   });
@@ -202,15 +202,10 @@ describe('reindexSingleFile (blob extractedText branch)', () => {
       updatedAt: '2026-04-18T00:00:00.000Z',
     });
 
-    repos.docMountFiles.findByMountPointAndPath.mockImplementation(async () => {
-      if (repos.docMountFiles.create.mock.calls.length === 0) return null;
-      return { id: 'file-md', mountPointId: MOUNT_ID, relativePath: 'notes.md' };
-    });
-
     await reindexSingleFile(MOUNT_ID, 'notes.md', '');
 
     expect(repos.docMountBlobs.findByMountPointAndPath).not.toHaveBeenCalled();
-    expect(repos.docMountFiles.create).toHaveBeenCalledWith(
+    expect(repos.docMountFileLinks.linkFilesystemFile).toHaveBeenCalledWith(
       expect.objectContaining({
         sha256: 'e'.repeat(64),
       })

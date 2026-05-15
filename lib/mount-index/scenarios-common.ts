@@ -36,7 +36,7 @@ import {
   serializeFrontmatter,
   updateFrontmatterInContent,
 } from '@/lib/doc-edit/markdown-parser';
-import type { DocMountDocument } from '@/lib/schemas/mount-index.types';
+import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
 
 export interface ParsedScenario {
   /** Relative path inside the mount point, e.g. `Scenarios/welcome.md`. */

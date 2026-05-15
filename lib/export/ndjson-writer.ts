@@ -429,6 +429,16 @@ async function* streamDocumentStores(
 
       const docs = await repos.docMountDocuments.findByMountPointId(mp.id);
       for (const d of docs) {
+        // doc_mount_documents row only ever holds text content — skip
+        // links that point at blob-type content (they're exported as blobs).
+        if (
+          d.fileType !== 'markdown' &&
+          d.fileType !== 'txt' &&
+          d.fileType !== 'json' &&
+          d.fileType !== 'jsonl'
+        ) {
+          continue;
+        }
         yield {
           kind: 'doc_mount_document',
           data: {

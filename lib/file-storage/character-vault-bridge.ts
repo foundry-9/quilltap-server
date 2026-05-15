@@ -136,17 +136,17 @@ export async function writeCharacterAvatarToVault(
     relativePath = MAIN_AVATAR_PATH;
     folderId = await ensureFolderPath(target.mountPointId, 'images');
 
-    // Delete any prior blob + mirror file at the canonical main path so the
-    // unique (mountPointId, relativePath) index can take the new row.
-    const existingMirror = await repos.docMountFiles.findByMountPointAndPath(
+    // Drop any existing link at the canonical main path. deleteWithGC
+    // takes the underlying file and its blob along if this was the last
+    // reference — typical for character avatars, which aren't hard-linked
+    // elsewhere yet.
+    const existingLink = await repos.docMountFileLinks.findByMountPointAndPath(
       target.mountPointId,
       relativePath
     );
-    if (existingMirror) {
-      await repos.docMountChunks.deleteByFileId(existingMirror.id);
-      await repos.docMountFiles.delete(existingMirror.id);
+    if (existingLink) {
+      await repos.docMountFileLinks.deleteWithGC(existingLink.id);
     }
-    await repos.docMountBlobs.deleteByMountPointAndPath(target.mountPointId, relativePath);
   } else {
     const safeName = sanitizeLeafName(input.filename);
     const desiredPath = `${HISTORY_FOLDER}/${safeName}`;
@@ -156,9 +156,11 @@ export async function writeCharacterAvatarToVault(
   }
 
   const safeOriginalName = sanitizeLeafName(input.filename);
-  const blob = await repos.docMountBlobs.create({
+  const { blobId } = await repos.docMountFileLinks.linkBlobContent({
     mountPointId: target.mountPointId,
     relativePath,
+    fileName: path.posix.basename(relativePath),
+    folderId,
     originalFileName: safeOriginalName || path.posix.basename(relativePath),
     originalMimeType: input.contentType,
     storedMimeType: transcoded.storedMimeType,
@@ -167,34 +169,17 @@ export async function writeCharacterAvatarToVault(
     data: transcoded.data,
   });
 
-  const now = new Date().toISOString();
-  await repos.docMountFiles.create({
-    mountPointId: target.mountPointId,
-    relativePath,
-    fileName: path.posix.basename(relativePath),
-    fileType: 'blob',
-    sha256: blob.sha256,
-    fileSizeBytes: blob.sizeBytes,
-    lastModified: now,
-    source: 'database',
-    folderId,
-    conversionStatus: 'skipped',
-    conversionError: null,
-    plainTextLength: null,
-    chunkCount: 0,
-  });
-
   emitDocumentWritten({ mountPointId: target.mountPointId, relativePath });
   repos.docMountPoints.refreshStats(target.mountPointId).catch(() => { /* best-effort */ });
 
   return {
-    storageKey: buildMountBlobStorageKey(target.mountPointId, blob.id),
+    storageKey: buildMountBlobStorageKey(target.mountPointId, blobId),
     mountPointId: target.mountPointId,
-    blobId: blob.id,
+    blobId,
     relativePath,
-    storedMimeType: blob.storedMimeType,
-    sizeBytes: blob.sizeBytes,
-    sha256: blob.sha256,
+    storedMimeType: transcoded.storedMimeType,
+    sizeBytes: transcoded.data.length,
+    sha256: transcoded.sha256,
   };
 }
 

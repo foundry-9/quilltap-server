@@ -13,7 +13,7 @@ import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { resolveEffectiveFolderPath } from '@/lib/files/folder-utils';
 import { getProjectDocumentStore } from '@/lib/file-storage/project-store-bridge';
 import { detectMimeType } from '@/lib/file-storage/scanner';
-import type { DocMountFile } from '@/lib/schemas/mount-index.types';
+import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.types';
 import { addFileSchema, removeFileSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -21,7 +21,7 @@ import type { AuthenticatedContext } from '@/lib/api/middleware';
  * Map a doc_mount_files row's fileType (+ filename, for the 'blob' catch-all)
  * to a concrete MIME type for the Files card thumbnail and preview.
  */
-function mimeForMountFile(file: DocMountFile): string {
+function mimeForMountFile(file: DocMountFileLinkWithContent): string {
   switch (file.fileType) {
     case 'pdf': return 'application/pdf';
     case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
