@@ -43,6 +43,10 @@ Re-attach a previously kept image to the current message — render it inline in
 
 A character can only attach images from their own album. If they wish to share a photograph another character has kept, they must keep their own copy first.
 
+## How the character knows the UUID
+
+Whenever a fresh image is announced in chat — a new portrait commissioned by Aurora, a backdrop projected by the Lantern, an ad-hoc picture from `generate_image`, or an image the user has uploaded as an attachment — the announcement message in the transcript names the file's UUID inline (catalogued thus: "...uuid `abc-123-...`..."). The character can simply read it off the page and feed it to `keep_image`. Library shelves are well-labelled, and so are these.
+
 ## Where the bytes live
 
 - The image binary lives once, in `doc_mount_blobs`, shared by every link to it.

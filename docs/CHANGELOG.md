@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Fix: Surface every newly-introduced image UUID in chat
+
+The photo album spec calls for every image announced in chat to expose its UUID so the LLM has a handle to call `keep_image` / `attach_image`. Three paths were missing it:
+
+- **Avatar, background, and `generate_image` announcements** authored by the Lantern notifications writer (`lib/services/lantern-notifications/writer.ts`). All three branches of `buildContent` now embed the fileId inline ("...catalogued under uuid `abc-123-...`..."). The existing `addLink` call already wired the file to the message; the change is in the message text only.
+- **User-uploaded chat image attachments**. The orchestrator service (`lib/services/chat-message/orchestrator.service.ts`) now posts a `systemSender: 'librarian'` whisper after persisting a user message that carries one or more image attachments. New helper `postLibrarianUploadAnnouncement` in `lib/services/librarian-notifications/writer.ts`; the whisper lists each upload's filename + UUID and points at `keep_image` / `attach_image`. The announcement's own `attachments` array is left empty so the existing assistant-attachment walker isn't double-fed (the bytes already ride on the user's message).
+- Regression coverage in `__tests__/unit/lantern-notifications-writer.test.ts` (UUID assertions added to every announcement variant) and a new `__tests__/unit/librarian-notifications-upload.test.ts`.
+
+Non-image uploads still flow through without a Librarian whisper — only the photo album tools need the UUID surface.
+
 #### Fix: Four more pre-Phase-3 character-avatar lookups
 
 Follow-up sweep after the homepage fix. Four call sites were still treating `characters.defaultImageId` (and `avatarOverrides[].imageId`) as a `files.id` instead of the `doc_mount_file_links.id` it became in Phase 3:

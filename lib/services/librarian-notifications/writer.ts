@@ -335,6 +335,47 @@ export async function postLibrarianFolderDeletedAnnouncement(
 // character may have entered mid-stream or stepped away and back.
 // ---------------------------------------------------------------------------
 
+/**
+ * Announcement that the user has uploaded one or more image files inline as
+ * attachments on their next message. The bytes are already carried by the
+ * user's own message (`attachments: [fileId, ...]`), so this whisper does NOT
+ * re-attach them — its sole job is to surface each file's UUID in the chat
+ * transcript so the LLM has the handle required to call `keep_image` /
+ * `attach_image`. Mirrors the avatar / background announcements posted by the
+ * Lantern notifications writer.
+ *
+ * Non-image uploads are out of scope: the photo album tools only operate on
+ * images, so non-image attachments don't need this whisper.
+ */
+export interface LibrarianUploadAnnouncement {
+  chatId: string;
+  uploads: Array<{ fileId: string; filename: string }>;
+}
+
+export function buildUploadContent(params: LibrarianUploadAnnouncement): string {
+  const { uploads } = params;
+  if (uploads.length === 0) return '';
+  if (uploads.length === 1) {
+    const { fileId, filename } = uploads[0];
+    return `The Librarian has catalogued the user's freshly-uploaded illustration "${filename}" under uuid \`${fileId}\`. The bytes ride with the user's message above; the image may be filed away later with keep_image, or re-summoned with attach_image.`;
+  }
+  const list = uploads.map(u => `- "${u.filename}" — uuid \`${u.fileId}\``).join('\n');
+  return `The Librarian has catalogued the user's freshly-uploaded illustrations. The bytes ride with the user's message above; each may be filed away later with keep_image, or re-summoned with attach_image:\n\n${list}`;
+}
+
+export async function postLibrarianUploadAnnouncement(
+  params: LibrarianUploadAnnouncement,
+): Promise<MessageEvent | null> {
+  if (params.uploads.length === 0) return null;
+  const content = buildUploadContent(params);
+  // Leave the announcement's `attachments` array empty — the user's own
+  // message already carries the file ids, and the lantern-image walker only
+  // looks at ASSISTANT attachments, so duplicating here would double-feed any
+  // future vision-bearing walker without buying anything for the photo-album
+  // surface.
+  return postLibrarianMessage(params.chatId, content, 'uploaded');
+}
+
 export const SUMMARY_CONTENT_PREFIX =
   'The Librarian deposits a précis of the conversation to date upon the table — file it for reference:';
 

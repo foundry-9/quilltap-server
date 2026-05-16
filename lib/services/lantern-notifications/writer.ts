@@ -43,19 +43,22 @@ interface PostParams {
   prompt?: string | null;
 }
 
-function buildContent(kind: LanternNotificationKind, prompt: string | null): string {
+function buildContent(kind: LanternNotificationKind, prompt: string | null, fileId: string): string {
   const aim = prompt?.trim();
+  // Each branch surfaces the image UUID inline so any character reading the
+  // announcement in chat history has the handle required to call
+  // keep_image / attach_image on it.
   switch (kind.kind) {
     case 'avatar':
       return aim
-        ? `Aurora is requesting a new portrait be commissioned for ${kind.characterName}, with the following description which omits unnecessary detail: "${aim}". The previous likeness is retired with due ceremony; the new one is attached here, should anyone care to take a fresh look.`
-        : `Aurora is requesting a new portrait be commissioned for ${kind.characterName}. The previous likeness is retired with due ceremony; the new one is attached here, should anyone care to take a fresh look.`;
+        ? `Aurora is requesting a new portrait be commissioned for ${kind.characterName}, with the following description which omits unnecessary detail: "${aim}". The previous likeness is retired with due ceremony; the new one is attached here, catalogued under uuid \`${fileId}\`, should anyone care to take a fresh look.`
+        : `Aurora is requesting a new portrait be commissioned for ${kind.characterName}. The previous likeness is retired with due ceremony; the new one is attached here, catalogued under uuid \`${fileId}\`, should anyone care to take a fresh look.`;
     case 'background':
       return aim
-        ? `The Lantern has projected a new backdrop behind the proceedings, aiming for: "${aim}". The resulting image hangs just above, attached for your perusal.`
-        : `The Lantern has projected a new backdrop behind the proceedings. The resulting image hangs just above, attached for your perusal.`;
+        ? `The Lantern has projected a new backdrop behind the proceedings, aiming for: "${aim}". The resulting image (uuid \`${fileId}\`) hangs just above, attached for your perusal.`
+        : `The Lantern has projected a new backdrop behind the proceedings. The resulting image (uuid \`${fileId}\`) hangs just above, attached for your perusal.`;
     case 'character-image':
-      return `The Lantern, acting upon the instructions of ${kind.requesterName}, has produced the following picture. It is attached here, should anyone care to examine it.`;
+      return `The Lantern, acting upon the instructions of ${kind.requesterName}, has produced the following picture, catalogued under uuid \`${fileId}\`. It is attached here, should anyone care to examine it.`;
   }
 }
 
@@ -89,7 +92,7 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       type: 'message',
       id: messageId,
       role: 'ASSISTANT',
-      content: buildContent(kind, prompt),
+      content: buildContent(kind, prompt, fileId),
       attachments: [fileId],
       createdAt: now,
       participantId: null,

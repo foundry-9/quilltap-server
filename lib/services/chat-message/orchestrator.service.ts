@@ -33,6 +33,7 @@ import {
   loadProsperoGeneralContext,
   postProsperoGeneralContextAnnouncement,
 } from '@/lib/services/prospero-notifications/writer'
+import { postLibrarianUploadAnnouncement } from '@/lib/services/librarian-notifications/writer'
 import {
   saveToolMessages,
   createToolContext,
@@ -594,6 +595,25 @@ async function processMessage(
     // Link file attachments
     for (const file of fileProcessing.attachedFiles) {
       await repos.files.addLink(file.id, userMessageId)
+    }
+
+    // Surface uploaded image UUIDs in the chat transcript so the LLM has the
+    // handle required to call `keep_image` / `attach_image` on them. Parallels
+    // the Lantern's avatar/background announcements; the user's own message
+    // already carries the image bytes, so this whisper is text-only.
+    const imageUploads = fileProcessing.attachedFiles
+      .filter(f => f.mimeType.toLowerCase().startsWith('image/'))
+      .map(f => ({ fileId: f.id, filename: f.filename }))
+    if (imageUploads.length > 0) {
+      try {
+        await postLibrarianUploadAnnouncement({ chatId, uploads: imageUploads })
+      } catch (announceError) {
+        logger.warn('Failed to post Librarian upload announcement', {
+          chatId,
+          uploadCount: imageUploads.length,
+          error: announceError instanceof Error ? announceError.message : String(announceError),
+        })
+      }
     }
 
     // Attach dangerFlags to the saved user message

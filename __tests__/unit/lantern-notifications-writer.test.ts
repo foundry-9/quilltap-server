@@ -97,6 +97,10 @@ describe('postLanternImageNotification', () => {
     expect(message.attachments).toEqual(['f1'])
     expect(typeof message.content).toBe('string')
     expect(message.content as string).toContain('Algernon')
+    // Spec: every image announcement must carry the file UUID inline so any
+    // character reading the message in chat history has the handle required
+    // to call keep_image / attach_image on it.
+    expect(message.content as string).toContain('f1')
     expect(addLink).toHaveBeenCalledWith('f1', message.id)
   })
 
@@ -193,6 +197,33 @@ describe('postLanternImageNotification', () => {
     const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
     expect(message.content as string).not.toContain('aiming for')
     expect(message.content as string).toContain('projected a new backdrop')
+    expect(message.content as string).toContain('f1')
+  })
+
+  it('includes the file UUID in every announcement variant', async () => {
+    const cases: Array<{ kind: Parameters<typeof postLanternImageNotification>[0]['kind']; prompt?: string }> = [
+      { kind: { kind: 'avatar', characterName: 'Algernon' } },
+      { kind: { kind: 'avatar', characterName: 'Algernon' }, prompt: 'velvet jacket' },
+      { kind: { kind: 'background' } },
+      { kind: { kind: 'background' }, prompt: 'moonlit conservatory' },
+      { kind: { kind: 'character-image', requesterName: 'Bertie' } },
+    ]
+    for (const c of cases) {
+      const addMessage = jest.fn()
+      mockGetRepositories.mockReturnValue(makeRepos({
+        chat: { id: 'c1', projectId: null, alertCharactersOfLanternImages: true },
+        project: null,
+        addMessage,
+      }))
+      await postLanternImageNotification({
+        chatId: 'c1',
+        fileId: 'photo-uuid-xyz',
+        kind: c.kind,
+        prompt: c.prompt,
+      })
+      const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
+      expect(message.content as string).toContain('photo-uuid-xyz')
+    }
   })
 
   it('does not throw when addMessage fails', async () => {
