@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Feat: `search` tool gains a `scope` parameter and a wider `documents` reach
+
+The unified `search` tool's `documents` source was scoped to project-linked mounts only, and its `knowledge` source was the only path into a character vault (and even then, only `Knowledge/`-prefixed paths). The net effect: a character couldn't find a kept image in their own vault by document search, even though the kept-image markdown is fully embedded and chunked. The fix has two parts.
+
+- **New `scope` parameter** on `search` (`'all' | 'project' | 'character'`, default `'all'`). `scope` controls which document stores the `documents` and `knowledge` sources reach into; it has no effect on `memories` or `conversations`. `all` is the union of the character vault + project-linked stores + Quilltap General. `project` is just the project-linked stores (returns empty when no project is attached). `character` is just the responding character's own vault.
+- **`documents` source now respects `scope`**, not just `projectId`. With `scope='all'` (the default), the documents pool includes the character vault and Quilltap General alongside the project pool — so kept-image markdown under `photos/` becomes reachable through `search` for the first time. With `scope='project'`, behavior matches the pre-change documents-source pool. The `knowledge` source still pins `pathPrefix: 'Knowledge/'`; it just runs over the same scope-narrowed pool.
+- Mount-pool resolution (character vault, project links, Quilltap General) is hoisted into a single block at the top of the handler and shared between both branches, so a single character lookup and a single set of repo round-trips feeds both pools.
+- The completion log now records the chosen `scope`. The existing knowledge/documents dedup (knowledge label wins when the same chunk surfaces in both) is unchanged.
+- `help/scriptorium.md` describes the new `scope` parameter. Regression coverage in `__tests__/unit/lib/tools/handlers/search-scriptorium-handler.test.ts` adds six tests covering scope=all (union pool), scope=project (project-only), scope=character (vault-only), scope=character + sources=['knowledge'] (single tier), scope=project with no project attached (empty), and validator rejection of an unknown scope value.
+
 #### Fix: Surface every newly-introduced image UUID in chat
 
 The photo album spec calls for every image announced in chat to expose its UUID so the LLM has a handle to call `keep_image` / `attach_image`. Three paths were missing it:

@@ -64,9 +64,17 @@ Should a character decide that a particular annotation has outlived its usefulne
 
 ### search
 
-This is the tool that transforms the Scriptorium from a mere record-keeping operation into something rather more resembling an actual research library. When invoked, it casts its net across no fewer than four distinct waters at once: a character's personal memories, the full archive of rendered conversations, any mounted document collections under the Scriptorium's watchful eye, and — most personal of the lot — the character's own knowledge base. Results return as a single unified ledger, ranked by relevance.
+This is the tool that transforms the Scriptorium from a mere record-keeping operation into something rather more resembling an actual research library. When invoked, it casts its net across no fewer than four distinct waters at once: a character's personal memories, the full archive of rendered conversations, every document store the character can reach (their own vault, every store linked to the active chat's project, and the instance-wide Quilltap General), and — narrower still — the `Knowledge/` folders inside those same stores. Results return as a single unified ledger, ranked by relevance.
 
-One may optionally restrict the search to particular sources should one wish to narrow the field of inquiry. The results include sufficient metadata to identify the provenance of each finding: for memories, the importance and summary; for conversations, the title, interchange number, and participants; for documents and knowledge entries alike, the file path and the vault or mount that produced them. Armed with a conversation ID, a character may call `read_conversation` to review the full text; armed with a path and mount-point, `doc_read_file` will fetch the document itself.
+One may optionally restrict the search to particular `sources` (which layers to query) and to a particular `scope` (which stores to look in). The results include sufficient metadata to identify the provenance of each finding: for memories, the importance and summary; for conversations, the title, interchange number, and participants; for documents and knowledge entries alike, the file path and the vault or mount that produced them. Armed with a conversation ID, a character may call `read_conversation` to review the full text; armed with a path and mount-point, `doc_read_file` will fetch the document itself.
+
+#### Choosing a scope
+
+The `scope` parameter controls which document stores the `documents` and `knowledge` sources will reach into. It has no effect on memories or conversations. There are three values:
+
+- **`all`** (the default) — every store the character can see at once: their own vault, every document store linked to the chat's project, and Quilltap General. Use this when one is not sure where the answer lies, or wishes the relevance ranking to choose the best source.
+- **`project`** — only the document stores linked to the active project. Use this when the question is plainly about the work at hand and one wishes to exclude both personal vault clutter and the wider house style. Returns nothing if no project is attached to the chat.
+- **`character`** — only the character's own vault. Use this to consult one's private notes, kept images, and personal research without admixture from the project or the instance.
 
 #### Knowledge at three scopes
 

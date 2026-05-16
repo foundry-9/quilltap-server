@@ -12,6 +12,7 @@
 export interface SearchScriptoriumToolInput {
   query: string
   sources?: ('memories' | 'conversations' | 'documents' | 'knowledge')[]
+  scope?: 'all' | 'project' | 'character'
   limit?: number
   minImportance?: number
 }
@@ -66,7 +67,7 @@ export const searchScriptoriumToolDefinition = {
   function: {
     name: 'search',
     description:
-      "Search across your memories, past conversation history, mounted documents, and every Knowledge/ folder available to you. Returns results from your personal memories, rendered conversations, indexed document collections, and the Knowledge/ folder of your own character vault, the Knowledge/ folder of every document store linked to this chat's project, and the Knowledge/ folder of the instance-wide Quilltap General store — all ranked by relevance. Use this to find information from past interactions, recall conversation details, locate specific discussions by topic, search through reference documents, or look up what's been written down — by you, by the project, or by the operator at large.",
+      "Search across your memories, past conversation history, and every document store you can reach. Returns results from your personal memories, rendered conversations, files in your character vault, files in every document store linked to this chat's project, files in the instance-wide Quilltap General store, and — when narrowed to the `knowledge` source — the `Knowledge/` folders inside those same stores. Use `scope` to confine the search to your own vault or to the project pool. Use this to find information from past interactions, recall conversation details, locate specific discussions by topic, search through reference documents, or look up what's been written down — by you, by the project, or by the operator at large.",
     parameters: {
       type: 'object',
       properties: {
@@ -84,7 +85,14 @@ export const searchScriptoriumToolDefinition = {
             enum: ['memories', 'conversations', 'documents', 'knowledge'],
           },
           description:
-            "Which sources to search. Defaults to all sources if not specified. Use \"documents\" to search through mounted document collections; use \"knowledge\" to search every Knowledge/ folder available to you — the one in your own character vault, the one in each document store linked to the active chat's project, and the one in the instance-wide Quilltap General store. Each knowledge result is tagged with its tier (character, project, or global) so you can tell whose voice it speaks in.",
+            'Which layers to search. Defaults to all sources if not specified. "memories" recalls your personal commonplace-book memories; "conversations" searches rendered transcripts of past chats; "documents" searches every file in every document store within the current `scope`; "knowledge" searches only files under a `Knowledge/` folder inside those same stores. Each knowledge result is tagged with its tier (character, project, or global) so you can tell whose voice it speaks in.',
+        },
+        scope: {
+          type: 'string',
+          enum: ['all', 'project', 'character'],
+          description:
+            "Which document stores the `documents` and `knowledge` sources reach into. \"all\" (the default) searches every store you can see — your own character vault, every document store linked to this chat's project, and the instance-wide Quilltap General store. \"project\" narrows to just the document stores linked to this chat's project (returns nothing if no project is attached). \"character\" narrows to just your own character vault. `scope` has no effect on `memories` or `conversations`.",
+          default: 'all',
         },
         limit: {
           type: 'integer',
@@ -134,6 +142,14 @@ export function validateSearchScriptoriumInput(
       if (typeof s !== 'string' || !validSources.includes(s)) {
         return false
       }
+    }
+  }
+
+  // Optional scope
+  if (obj.scope !== undefined) {
+    const validScopes = ['all', 'project', 'character']
+    if (typeof obj.scope !== 'string' || !validScopes.includes(obj.scope)) {
+      return false
     }
   }
 

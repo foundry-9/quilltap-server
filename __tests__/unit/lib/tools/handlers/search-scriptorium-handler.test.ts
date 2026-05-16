@@ -499,6 +499,154 @@ describe('search-scriptorium-handler', () => {
     })
   })
 
+  describe('scope parameter', () => {
+    const vaultChunk = {
+      chunkId: 'kc-vault',
+      mountPointId: 'vault-mp-1',
+      mountPointName: 'Friday Character Vault',
+      fileId: 'fc',
+      fileName: 'photos/triangle.webp',
+      relativePath: 'photos/triangle.webp',
+      chunkIndex: 0,
+      headingContext: null,
+      content: 'Triangular shadows on the bookshelves.',
+      score: 0.81,
+    }
+    const projectChunk = {
+      chunkId: 'kc-proj',
+      mountPointId: 'proj-mp-1',
+      mountPointName: 'Project Files: Plans',
+      fileId: 'fp',
+      fileName: 'plan.md',
+      relativePath: 'plan.md',
+      chunkIndex: 0,
+      headingContext: null,
+      content: 'The plan.',
+      score: 0.7,
+    }
+    const generalChunk = {
+      chunkId: 'kc-gen',
+      mountPointId: 'global-mp-1',
+      mountPointName: 'Quilltap General',
+      fileId: 'fg',
+      fileName: 'house-style.md',
+      relativePath: 'house-style.md',
+      chunkIndex: 0,
+      headingContext: null,
+      content: 'House style guidance.',
+      score: 0.6,
+    }
+
+    beforeEach(() => {
+      mockFindCharacterById.mockResolvedValue({
+        id: 'character-1',
+        userId: 'user-1',
+        characterDocumentMountPointId: 'vault-mp-1',
+      })
+      mockFindProjectMountLinks.mockResolvedValue([{ mountPointId: 'proj-mp-1' }])
+      mockGetGeneralMountPointId.mockResolvedValue('global-mp-1')
+
+      mockSearchDocumentChunks.mockImplementation(async (_emb: unknown, opts: Record<string, unknown>) => {
+        if (opts.pathPrefix) return []
+        const ids = (opts.mountPointIds as string[]) ?? []
+        const hits = []
+        if (ids.includes('vault-mp-1')) hits.push(vaultChunk)
+        if (ids.includes('proj-mp-1')) hits.push(projectChunk)
+        if (ids.includes('global-mp-1')) hits.push(generalChunk)
+        return hits
+      })
+    })
+
+    it('defaults to scope="all": documents pool is the union of vault + project + general', async () => {
+      const result = await executeSearchScriptoriumTool(
+        { query: 'triangle', sources: ['documents'] },
+        { ...context, projectId: 'project-1' },
+      )
+
+      expect(result.success).toBe(true)
+      const paths = result.results?.map(r => r.metadata.filePath).sort()
+      expect(paths).toEqual(['house-style.md', 'photos/triangle.webp', 'plan.md'])
+
+      const docCall = (mockSearchDocumentChunks.mock.calls as Array<[unknown, Record<string, unknown>]>)
+        .find(c => !c[1].pathPrefix)!
+      expect((docCall[1].mountPointIds as string[]).sort()).toEqual(['global-mp-1', 'proj-mp-1', 'vault-mp-1'])
+    })
+
+    it('scope="project" excludes the vault and Quilltap General from the documents pool', async () => {
+      const result = await executeSearchScriptoriumTool(
+        { query: 'triangle', sources: ['documents'], scope: 'project' },
+        { ...context, projectId: 'project-1' },
+      )
+
+      const paths = result.results?.map(r => r.metadata.filePath)
+      expect(paths).toEqual(['plan.md'])
+
+      const docCall = (mockSearchDocumentChunks.mock.calls as Array<[unknown, Record<string, unknown>]>)
+        .find(c => !c[1].pathPrefix)!
+      expect(docCall[1].mountPointIds).toEqual(['proj-mp-1'])
+    })
+
+    it('scope="character" restricts the documents pool to the character\'s own vault', async () => {
+      const result = await executeSearchScriptoriumTool(
+        { query: 'triangle', sources: ['documents'], scope: 'character' },
+        { ...context, projectId: 'project-1' },
+      )
+
+      const paths = result.results?.map(r => r.metadata.filePath)
+      expect(paths).toEqual(['photos/triangle.webp'])
+
+      const docCall = (mockSearchDocumentChunks.mock.calls as Array<[unknown, Record<string, unknown>]>)
+        .find(c => !c[1].pathPrefix)!
+      expect(docCall[1].mountPointIds).toEqual(['vault-mp-1'])
+    })
+
+    it('scope="character" + sources=["knowledge"] runs only the character knowledge tier', async () => {
+      mockSearchDocumentChunks.mockImplementation(async (_emb: unknown, opts: Record<string, unknown>) => {
+        if (!opts.pathPrefix) return []
+        const ids = (opts.mountPointIds as string[]) ?? []
+        if (ids.includes('vault-mp-1')) {
+          return [{ ...vaultChunk, relativePath: 'Knowledge/notes.md', chunkId: 'kn-vault' }]
+        }
+        return []
+      })
+
+      const result = await executeSearchScriptoriumTool(
+        { query: 'notes', sources: ['knowledge'], scope: 'character' },
+        { ...context, projectId: 'project-1' },
+      )
+
+      const tiers = result.results?.map(r => r.metadata.knowledgeTier)
+      expect(tiers).toEqual(['character'])
+
+      const knowledgeCalls = (mockSearchDocumentChunks.mock.calls as Array<[unknown, Record<string, unknown>]>)
+        .filter(c => c[1].pathPrefix === 'Knowledge/')
+      expect(knowledgeCalls).toHaveLength(1)
+      expect(knowledgeCalls[0][1].mountPointIds).toEqual(['vault-mp-1'])
+    })
+
+    it('scope="project" with no project on the chat returns an empty documents pool', async () => {
+      const result = await executeSearchScriptoriumTool(
+        { query: 'triangle', sources: ['documents'], scope: 'project' },
+        context,
+      )
+
+      expect(result.totalFound).toBe(0)
+      const docCalls = (mockSearchDocumentChunks.mock.calls as Array<[unknown, Record<string, unknown>]>)
+        .filter(c => !c[1].pathPrefix)
+      expect(docCalls).toHaveLength(0)
+    })
+
+    it('rejects an invalid scope value', async () => {
+      const result = await executeSearchScriptoriumTool(
+        { query: 'triangle', scope: 'workspace' },
+        context,
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/Invalid input/)
+    })
+  })
+
   it('formats memory and conversation results for display', () => {
     const formatted = formatSearchScriptoriumResults([
       {

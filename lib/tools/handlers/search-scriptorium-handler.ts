@@ -64,6 +64,7 @@ export async function executeSearchScriptoriumTool(
     const {
       query,
       sources = ['memories', 'conversations', 'documents', 'knowledge'],
+      scope = 'all',
       limit = 10,
       minImportance = 0,
     } = input
@@ -74,6 +75,111 @@ export async function executeSearchScriptoriumTool(
     const searchKnowledge = sources.includes('knowledge')
 
     const results: SearchScriptoriumResult[] = []
+
+    // Resolve the three mount-point pools up front so both the `documents`
+    // and `knowledge` branches can pick from the same set, scoped by `scope`:
+    //   - characterMountPointId: the responding character's own vault (only
+    //     when the character belongs to the calling user — character-vault
+    //     access is the one ownership-gated path)
+    //   - projectMountPointIds: every store linked to the chat's project
+    //   - globalMountPointId: the Quilltap General singleton (may be null
+    //     during the pre-provisioning window)
+    // Mount IDs are deduped so the same store never enters a pool twice.
+    let characterMountPointId: string | null = null
+    let projectMountPointIds: string[] = []
+    let globalMountPointId: string | null = null
+    let ownsCharacter = false
+
+    if (searchDocuments || searchKnowledge) {
+      const repos = getRepositories()
+      try {
+        const character = await repos.characters.findById(context.characterId)
+        ownsCharacter = !!character && character.userId === context.userId
+        if (ownsCharacter) {
+          characterMountPointId = character?.characterDocumentMountPointId ?? null
+        }
+      } catch (error) {
+        logger.warn('Mount pool resolution: character lookup failed', {
+          context: 'search-scriptorium-handler',
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+
+      if (context.projectId) {
+        try {
+          const links = await repos.projectDocMountLinks.findByProjectId(context.projectId)
+          projectMountPointIds = links.map(l => l.mountPointId)
+        } catch (error) {
+          logger.warn('Mount pool resolution: project mount lookup failed', {
+            context: 'search-scriptorium-handler',
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+
+      try {
+        globalMountPointId = await getGeneralMountPointId()
+      } catch (error) {
+        logger.debug('Mount pool resolution: general mount not provisioned yet', {
+          context: 'search-scriptorium-handler',
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+
+      // Dedup: a vault shouldn't enter the pool through more than one tier.
+      if (characterMountPointId) {
+        projectMountPointIds = projectMountPointIds.filter(id => id !== characterMountPointId)
+        if (globalMountPointId === characterMountPointId) globalMountPointId = null
+      }
+      if (globalMountPointId) {
+        projectMountPointIds = projectMountPointIds.filter(id => id !== globalMountPointId)
+      }
+    }
+
+    // Pool for the `documents` source — every store the LLM can see, narrowed
+    // by `scope`. `all` is the union; `project` is project-linked stores only;
+    // `character` is the character's own vault only.
+    const buildDocumentsPool = (): string[] => {
+      const pool = new Set<string>()
+      if (scope === 'character') {
+        if (characterMountPointId) pool.add(characterMountPointId)
+      } else if (scope === 'project') {
+        for (const id of projectMountPointIds) pool.add(id)
+      } else {
+        if (characterMountPointId) pool.add(characterMountPointId)
+        for (const id of projectMountPointIds) pool.add(id)
+        if (globalMountPointId) pool.add(globalMountPointId)
+      }
+      return [...pool]
+    }
+
+    // Tiers for the `knowledge` source — same three pools, each constrained
+    // to `Knowledge/` paths, with tier-specific literal-phrase boosts so a
+    // hit in the closer voice outranks the same hit in the wider pool.
+    const buildKnowledgeTiers = (): Array<{
+      tier: 'character' | 'project' | 'global'
+      mountPointIds: string[]
+      boost: number
+    }> => {
+      const tiers: Array<{
+        tier: 'character' | 'project' | 'global'
+        mountPointIds: string[]
+        boost: number
+      }> = []
+      const wantCharacter = scope === 'all' || scope === 'character'
+      const wantProject = scope === 'all' || scope === 'project'
+      const wantGlobal = scope === 'all'
+      if (wantCharacter && characterMountPointId) {
+        tiers.push({ tier: 'character', mountPointIds: [characterMountPointId], boost: LITERAL_BOOST_CHARACTER })
+      }
+      if (wantProject && projectMountPointIds.length > 0) {
+        tiers.push({ tier: 'project', mountPointIds: projectMountPointIds, boost: LITERAL_BOOST_PROJECT })
+      }
+      if (wantGlobal && globalMountPointId) {
+        tiers.push({ tier: 'global', mountPointIds: [globalMountPointId], boost: LITERAL_BOOST_GLOBAL })
+      }
+      return tiers
+    }
 
     // Search memories if requested
     if (searchMemories) {
@@ -165,118 +271,60 @@ export async function executeSearchScriptoriumTool(
 
     // Search documents if requested. We defer pushing document hits into
     // `results` until after the knowledge branch has run — when a character
-    // vault is linked to the active project, the same chunk surfaces here AND
-    // in the knowledge branch (scoped to that vault's `Knowledge/` folder).
-    // We drop the duplicate from this side so the knowledge-labeled row wins.
+    // vault is in the documents pool (always, under scope='all' or 'character'),
+    // the same chunk surfaces here AND in the knowledge branch (scoped to
+    // that vault's `Knowledge/` folder). We drop the duplicate from this side
+    // so the knowledge-labeled row wins.
     let documentRows: DocumentSearchResult[] = []
     if (searchDocuments) {
-      try {
-        const embeddingResult = await generateEmbeddingForUser(
-          query,
-          context.userId,
-          context.embeddingProfileId
-        )
-
-        documentRows = await searchDocumentChunks(
-          embeddingResult.embedding,
-          {
-            projectId: context.projectId,
-            limit,
-            minScore: 0.3,
-            query,
-            applyLiteralPhraseBoost: true,
-          }
-        )
-      } catch (error) {
-        logger.warn('Document search failed, continuing with other sources', {
+      const documentsPool = buildDocumentsPool()
+      if (documentsPool.length === 0) {
+        logger.debug('Document search: pool empty for scope', {
           context: 'search-scriptorium-handler',
-          error: error instanceof Error ? error.message : String(error),
+          scope,
         })
-      }
-    }
-
-    // Search the three Knowledge/ tiers if requested:
-    //   - character: Knowledge/ inside the responding character's vault
-    //   - project:   Knowledge/ inside every mount linked to the active project
-    //   - global:    Knowledge/ inside the Quilltap General singleton mount
-    //
-    // Each tier passes a distinct literalBoostFraction so a verbatim hit in
-    // the character's own vault outranks the same hit in the project pool,
-    // which in turn outranks the same hit in Quilltap General. Branches are
-    // independent — any one can silently no-op (no vault, no project links,
-    // not provisioned yet) without disturbing the others.
-    const knowledgeChunkIds = new Set<string>()
-    if (searchKnowledge) {
-      const repos = getRepositories()
-      let character: Awaited<ReturnType<typeof repos.characters.findById>> = null
-      try {
-        character = await repos.characters.findById(context.characterId)
-      } catch (error) {
-        logger.warn('Knowledge search: character lookup failed', {
-          context: 'search-scriptorium-handler',
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-
-      const ownsCharacter = !!character && character.userId === context.userId
-
-      // Resolve project-linked mounts (if a project is in scope).
-      let projectMountPointIds: string[] = []
-      if (ownsCharacter && context.projectId) {
+      } else {
         try {
-          const links = await repos.projectDocMountLinks.findByProjectId(context.projectId)
-          projectMountPointIds = links.map(l => l.mountPointId)
+          const embeddingResult = await generateEmbeddingForUser(
+            query,
+            context.userId,
+            context.embeddingProfileId
+          )
+
+          documentRows = await searchDocumentChunks(
+            embeddingResult.embedding,
+            {
+              mountPointIds: documentsPool,
+              limit,
+              minScore: 0.3,
+              query,
+              applyLiteralPhraseBoost: true,
+            }
+          )
         } catch (error) {
-          logger.warn('Knowledge search: project mount lookup failed', {
+          logger.warn('Document search failed, continuing with other sources', {
             context: 'search-scriptorium-handler',
             error: error instanceof Error ? error.message : String(error),
           })
         }
       }
+    }
 
-      // Resolve Quilltap General. Tolerates the pre-migration window where
-      // the mount hasn't been provisioned yet.
-      let globalMountPointId: string | null = null
-      try {
-        globalMountPointId = await getGeneralMountPointId()
-      } catch (error) {
-        logger.debug('Knowledge search: general mount not provisioned yet', {
-          context: 'search-scriptorium-handler',
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
+    // Search the Knowledge/ tiers if requested. The same three pools as the
+    // documents branch, narrowed by `scope`, but each tier is path-filtered
+    // to `Knowledge/` and passes a distinct literalBoostFraction so a
+    // verbatim hit in the character's own vault outranks the same hit in
+    // the project pool, which in turn outranks the same hit in Quilltap
+    // General. Branches are independent — any one can silently no-op (no
+    // vault, no project links, not provisioned yet) without disturbing the
+    // others. Character-vault access requires character ownership.
+    const knowledgeChunkIds = new Set<string>()
+    if (searchKnowledge) {
+      const tiers = buildKnowledgeTiers()
+      const tiersAllowed = tiers.filter(t => t.tier !== 'character' || ownsCharacter)
 
-      // Drop the character vault from the project/global lists if it
-      // happens to be linked there too — same chunk shouldn't enter the
-      // pool through more than one tier.
-      const characterMountPointId = ownsCharacter ? character?.characterDocumentMountPointId ?? null : null
-      if (characterMountPointId) {
-        projectMountPointIds = projectMountPointIds.filter(id => id !== characterMountPointId)
-        if (globalMountPointId === characterMountPointId) globalMountPointId = null
-      }
-      if (globalMountPointId) {
-        projectMountPointIds = projectMountPointIds.filter(id => id !== globalMountPointId)
-      }
-
-      const tiers: Array<{
-        tier: 'character' | 'project' | 'global'
-        mountPointIds: string[]
-        boost: number
-      }> = []
-      if (characterMountPointId) {
-        tiers.push({ tier: 'character', mountPointIds: [characterMountPointId], boost: LITERAL_BOOST_CHARACTER })
-      }
-      if (projectMountPointIds.length > 0) {
-        tiers.push({ tier: 'project', mountPointIds: projectMountPointIds, boost: LITERAL_BOOST_PROJECT })
-      }
-      if (globalMountPointId) {
-        tiers.push({ tier: 'global', mountPointIds: [globalMountPointId], boost: LITERAL_BOOST_GLOBAL })
-      }
-
-      if (ownsCharacter && tiers.length > 0) {
+      if (tiersAllowed.length > 0) {
         try {
-          // One embedding for all three tiers (plus the documents branch
-          // would also reuse it ideally — left as a future tidy).
           const embeddingResult = await generateEmbeddingForUser(
             query,
             context.userId,
@@ -284,7 +332,7 @@ export async function executeSearchScriptoriumTool(
           )
 
           await Promise.all(
-            tiers.map(async ({ tier, mountPointIds, boost }) => {
+            tiersAllowed.map(async ({ tier, mountPointIds, boost }) => {
               try {
                 const hits = await searchDocumentChunks(embeddingResult.embedding, {
                   mountPointIds,
@@ -372,6 +420,7 @@ export async function executeSearchScriptoriumTool(
       context: 'search-scriptorium-handler',
       userId: context.userId,
       query: query.substring(0, 100),
+      scope,
       totalFound: limitedResults.length,
       memorySources: limitedResults.filter(r => r.sourceType === 'memory').length,
       conversationSources: limitedResults.filter(r => r.sourceType === 'conversation').length,
