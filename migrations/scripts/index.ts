@@ -275,6 +275,8 @@ import { addDocMountFileLinksMigration } from './add-doc-mount-file-links';
 import { addUncensoredImageDescriptionProfileFieldMigration } from './add-uncensored-image-description-profile-field';
 // Photo gallery Phase 3: mirror CHARACTER-tagged images into each character's vault photos/ folder + atomic cutover
 import { migrateCharacterPhotosToVaultMigration } from './migrate-character-photos-to-vault';
+// Add opaqueContent column to chat_messages (per-chat opaque-anywhere Staff voicing)
+import { addOpaqueContentFieldMigration } from './add-opaque-content-field';
 
 /**
  * All available migrations.
@@ -545,6 +547,8 @@ export const migrations: Migration[] = [
   addUncensoredImageDescriptionProfileFieldMigration,
   // Photo gallery Phase 3: mirror CHARACTER-tagged images into vault photos/ + atomic cutover
   migrateCharacterPhotosToVaultMigration,
+  // Add opaqueContent column to chat_messages (per-chat opaque-anywhere Staff voicing)
+  addOpaqueContentFieldMigration,
 ];
 
 export {
@@ -800,5 +804,7 @@ export {
   addUncensoredImageDescriptionProfileFieldMigration,
   // Photo gallery Phase 3: mirror CHARACTER-tagged images into vault photos/ + atomic cutover
   migrateCharacterPhotosToVaultMigration,
+  // Add opaqueContent column to chat_messages (per-chat opaque-anywhere Staff voicing)
+  addOpaqueContentFieldMigration,
 };
 

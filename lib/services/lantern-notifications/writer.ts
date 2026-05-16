@@ -62,6 +62,22 @@ function buildContent(kind: LanternNotificationKind, prompt: string | null, file
   }
 }
 
+function buildOpaqueContent(kind: LanternNotificationKind, prompt: string | null, fileId: string): string {
+  const aim = prompt?.trim();
+  switch (kind.kind) {
+    case 'avatar':
+      return aim
+        ? `A new portrait has been commissioned for ${kind.characterName}, with this description (which omits unnecessary detail): "${aim}". The previous likeness is retired; the new one is attached here, catalogued under uuid \`${fileId}\`.`
+        : `A new portrait has been commissioned for ${kind.characterName}. The previous likeness is retired; the new one is attached here, catalogued under uuid \`${fileId}\`.`;
+    case 'background':
+      return aim
+        ? `A new background has been generated for this scene, aiming for: "${aim}". The resulting image (uuid \`${fileId}\`) is attached above for your perusal.`
+        : `A new background has been generated for this scene. The resulting image (uuid \`${fileId}\`) is attached above for your perusal.`;
+    case 'character-image':
+      return `A picture has been generated at ${kind.requesterName}'s request, catalogued under uuid \`${fileId}\`. It is attached here for your examination.`;
+  }
+}
+
 function senderForKind(kind: LanternNotificationKind): 'lantern' | 'aurora' {
   return kind.kind === 'avatar' ? 'aurora' : 'lantern';
 }
@@ -93,6 +109,7 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       id: messageId,
       role: 'ASSISTANT',
       content: buildContent(kind, prompt, fileId),
+      opaqueContent: buildOpaqueContent(kind, prompt, fileId),
       attachments: [fileId],
       createdAt: now,
       participantId: null,

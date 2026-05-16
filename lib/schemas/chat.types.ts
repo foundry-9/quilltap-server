@@ -116,6 +116,22 @@ export const MessageEventSchema = z.object({
   /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close). */
   systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel']).nullable().optional(),
   /**
+   * Neutral, persona-free rewrite of `content` for Staff-authored messages
+   * (systemSender != null). When the chat has any non-user-character
+   * participant whose `systemTransparency !== true`, the context-builder swaps
+   * `content` → `opaqueContent ?? content` in every character's LLM context so
+   * the Staff names ("The Host", "Aurora", "Prospero", …) never reach an
+   * opaque character. The user character does NOT count toward the test —
+   * they stay "transparent by default". The human user's transcript / UI is
+   * unaffected; it always reads `content` with its full persona voicing.
+   *
+   * Writers populate this in lockstep with `content`. NULL on
+   * participant-authored messages and on legacy Staff messages written before
+   * the dual-body migration (in which case the swap falls through to
+   * `content`).
+   */
+  opaqueContent: z.string().nullable().optional(),
+  /**
    * Sub-classification of a Staff-authored message — used by the Salon UI to
    * label collapsed system-message bars (e.g. `timestamp`, `project-context`,
    * `memory-recap`). Always paired with `systemSender`; null on

@@ -21,6 +21,7 @@ const arielLogger = logger.child({ module: 'ariel-notifications' });
 async function postArielMessage(
   chatId: string,
   content: string,
+  opaqueContent: string | null,
   systemKind: string,
   terminalSessionId: string | null = null,
 ): Promise<MessageEvent | null> {
@@ -41,16 +42,22 @@ async function postArielMessage(
     const now = new Date().toISOString();
 
     // Embed terminal session ID in content as an HTML comment so the Salon renderer
-    // can detect it and associate the message with the session.
+    // can detect it and associate the message with the session. Mirror the embed
+    // into opaqueContent so the same renderer hook works for whichever body the
+    // context-builder ends up using.
     const contentWithId = terminalSessionId
       ? `<!-- terminalSessionId:${terminalSessionId} -->\n${content}`
       : content;
+    const opaqueContentWithId = opaqueContent !== null && terminalSessionId
+      ? `<!-- terminalSessionId:${terminalSessionId} -->\n${opaqueContent}`
+      : opaqueContent;
 
     const message: MessageEvent = {
       type: 'message',
       id: messageId,
       role: 'ASSISTANT',
       content: contentWithId,
+      opaqueContent: opaqueContentWithId,
       attachments: [],
       createdAt: now,
       participantId: null,
@@ -103,6 +110,11 @@ export async function postArielSessionOpenedAnnouncement(
     '',
     `(Session id: \`${params.sessionId}\`.)`
   ].join('\n');
+  const opaqueContent = [
+    `Terminal session opened: **${params.shell}** at \`${params.cwd}\`${label}.`,
+    '',
+    `(Session id: \`${params.sessionId}\`.)`
+  ].join('\n');
 
   arielLogger.debug('[ArielNotification] Posting session-opened announcement', {
     context: 'ariel-notifications',
@@ -116,6 +128,7 @@ export async function postArielSessionOpenedAnnouncement(
   return postArielMessage(
     params.chatId,
     content,
+    opaqueContent,
     'session-opened',
     params.sessionId,
   );
@@ -192,9 +205,13 @@ export async function postArielTerminalOutputAnnouncement(
     elided: elided.length !== params.cleanedOutput.length,
   });
 
+  // Terminal output body is already neutral — no persona reference, just the
+  // session label and the elided output. Pass null so the swap falls through
+  // to `content` for opaque chats too.
   return postArielMessage(
     params.chatId,
     content,
+    null,
     `terminal-output-${params.reason}`,
     params.sessionId,
   );
@@ -221,6 +238,7 @@ export async function postArielSessionClosedAnnouncement(
         ? '— Ariel could not recover an exit code; the session may have ended when the server last restarted'
         : `with exit code ${params.exitCode}`;
   const content = `Ariel notes that the terminal session has closed — it exited ${exitLabel}.`;
+  const opaqueContent = `Terminal session closed — it exited ${exitLabel}.`;
 
   arielLogger.debug('[ArielNotification] Posting session-closed announcement', {
     context: 'ariel-notifications',
@@ -232,6 +250,7 @@ export async function postArielSessionClosedAnnouncement(
   return postArielMessage(
     params.chatId,
     content,
+    opaqueContent,
     'session-closed',
     params.sessionId,
   );

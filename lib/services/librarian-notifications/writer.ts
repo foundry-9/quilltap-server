@@ -149,11 +149,30 @@ export function buildOpenContent(params: LibrarianOpenAnnouncement): string {
   return `The Librarian has set out "${displayTitle}" from ${where} at ${who}. You may use doc_read_file and the other doc_* editing tools to consult or revise it (${pathDetails}).`;
 }
 
+export function buildOpenOpaqueContent(params: LibrarianOpenAnnouncement): string {
+  const { displayTitle, filePath, scope, mountPoint, isNew, origin } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const who = origin.kind === 'opened-by-user' ? "the user's request" : `${origin.characterName}'s request`;
+  const pathDetails = `path: "${filePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+
+  if (isNew) {
+    return `Document created: "${displayTitle}" — opened blank at ${who}. Use doc_read_file and the other doc_* editing tools to read or amend it (${pathDetails}).`;
+  }
+  return `Document opened: "${displayTitle}" from ${where} at ${who}. Use doc_read_file and the other doc_* editing tools to consult or revise it (${pathDetails}).`;
+}
+
 export function buildRenameContent(params: LibrarianRenameAnnouncement): string {
   const { oldDisplayTitle, newDisplayTitle, oldFilePath, newFilePath, scope, mountPoint } = params;
   const where = scopeLabel(scope, mountPoint);
   const pathDetails = `old_path: "${oldFilePath}", new_path: "${newFilePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
   return `The Librarian has rechristened the volume formerly catalogued as "${oldDisplayTitle}" in ${where} — it now answers to "${newDisplayTitle}", and the card in the catalogue has been amended to suit. Subsequent references should use the new name (${pathDetails}).`;
+}
+
+export function buildRenameOpaqueContent(params: LibrarianRenameAnnouncement): string {
+  const { oldDisplayTitle, newDisplayTitle, oldFilePath, newFilePath, scope, mountPoint } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const pathDetails = `old_path: "${oldFilePath}", new_path: "${newFilePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  return `Document renamed in ${where}: "${oldDisplayTitle}" → "${newDisplayTitle}". Subsequent references should use the new name (${pathDetails}).`;
 }
 
 export function buildSaveContent(diffContent: string): string {
@@ -168,9 +187,18 @@ export function buildSaveContent(diffContent: string): string {
   return rephrased;
 }
 
+export function buildSaveOpaqueContent(diffContent: string): string {
+  const rephrased = diffContent.replace(/^I've made changes to (".+?"):/, 'The following changes were filed to $1:');
+  if (rephrased === diffContent) {
+    return `The following changes were filed:\n\n${diffContent}`;
+  }
+  return rephrased;
+}
+
 async function postLibrarianMessage(
   chatId: string,
   content: string,
+  opaqueContent: string | null,
   kindLabel: string,
   attachments: string[] = [],
   targetParticipantIds: string[] | null = null,
@@ -192,6 +220,7 @@ async function postLibrarianMessage(
       id: messageId,
       role: 'ASSISTANT',
       content,
+      opaqueContent,
       attachments,
       createdAt: now,
       participantId: null,
@@ -228,8 +257,9 @@ export async function postLibrarianOpenAnnouncement(
   params: LibrarianOpenAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = buildOpenContent(params);
+  const opaqueContent = buildOpenOpaqueContent(params);
   const kindLabel = params.origin.kind;
-  return postLibrarianMessage(params.chatId, content, kindLabel);
+  return postLibrarianMessage(params.chatId, content, opaqueContent, kindLabel);
 }
 
 export async function postLibrarianSaveAnnouncement(
@@ -239,14 +269,16 @@ export async function postLibrarianSaveAnnouncement(
     return null;
   }
   const content = buildSaveContent(params.diffContent);
-  return postLibrarianMessage(params.chatId, content, 'saved');
+  const opaqueContent = buildSaveOpaqueContent(params.diffContent);
+  return postLibrarianMessage(params.chatId, content, opaqueContent, 'saved');
 }
 
 export async function postLibrarianRenameAnnouncement(
   params: LibrarianRenameAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = buildRenameContent(params);
-  return postLibrarianMessage(params.chatId, content, 'renamed');
+  const opaqueContent = buildRenameOpaqueContent(params);
+  return postLibrarianMessage(params.chatId, content, opaqueContent, 'renamed');
 }
 
 export function buildDeleteContent(params: LibrarianDeleteAnnouncement): string {
@@ -257,12 +289,28 @@ export function buildDeleteContent(params: LibrarianDeleteAnnouncement): string 
   return `The Librarian has removed "${displayTitle}" from ${where} at ${who}. The volume is gone from the shelves, and its card struck from the catalogue (${pathDetails}).`;
 }
 
+export function buildDeleteOpaqueContent(params: LibrarianDeleteAnnouncement): string {
+  const { displayTitle, filePath, scope, mountPoint, origin } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const who = origin.kind === 'by-user' ? "the user's instruction" : `${origin.characterName}'s instruction`;
+  const pathDetails = `path: "${filePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  return `Document removed: "${displayTitle}" from ${where} at ${who} (${pathDetails}).`;
+}
+
 export function buildFolderCreatedContent(params: LibrarianFolderCreatedAnnouncement): string {
   const { folderPath, scope, mountPoint, origin } = params;
   const where = scopeLabel(scope, mountPoint);
   const who = actorLabel(origin);
   const pathDetails = `path: "${folderPath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
   return `The Librarian has set aside a fresh shelf for "${folderPath}" in ${where} at ${who} — a new folder, presently empty, awaiting its tenants (${pathDetails}).`;
+}
+
+export function buildFolderCreatedOpaqueContent(params: LibrarianFolderCreatedAnnouncement): string {
+  const { folderPath, scope, mountPoint, origin } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const who = origin.kind === 'by-user' ? "the user's instruction" : `${origin.characterName}'s instruction`;
+  const pathDetails = `path: "${folderPath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  return `Folder created: "${folderPath}" in ${where} at ${who} — currently empty (${pathDetails}).`;
 }
 
 export function buildFolderDeletedContent(params: LibrarianFolderDeletedAnnouncement): string {
@@ -273,20 +321,30 @@ export function buildFolderDeletedContent(params: LibrarianFolderDeletedAnnounce
   return `The Librarian has dismantled the empty shelf at "${folderPath}" in ${where} at ${who}. The folder has been cleared from the catalogue (${pathDetails}).`;
 }
 
+export function buildFolderDeletedOpaqueContent(params: LibrarianFolderDeletedAnnouncement): string {
+  const { folderPath, scope, mountPoint, origin } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const who = origin.kind === 'by-user' ? "the user's instruction" : `${origin.characterName}'s instruction`;
+  const pathDetails = `path: "${folderPath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  return `Folder removed: "${folderPath}" in ${where} at ${who} (${pathDetails}).`;
+}
+
 export async function postLibrarianDeleteAnnouncement(
   params: LibrarianDeleteAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = buildDeleteContent(params);
+  const opaqueContent = buildDeleteOpaqueContent(params);
   const kindLabel = params.origin.kind === 'by-user' ? 'deleted-by-user' : 'deleted-by-character';
-  return postLibrarianMessage(params.chatId, content, kindLabel);
+  return postLibrarianMessage(params.chatId, content, opaqueContent, kindLabel);
 }
 
 export async function postLibrarianFolderCreatedAnnouncement(
   params: LibrarianFolderCreatedAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = buildFolderCreatedContent(params);
+  const opaqueContent = buildFolderCreatedOpaqueContent(params);
   const kindLabel = params.origin.kind === 'by-user' ? 'folder-created-by-user' : 'folder-created-by-character';
-  return postLibrarianMessage(params.chatId, content, kindLabel);
+  return postLibrarianMessage(params.chatId, content, opaqueContent, kindLabel);
 }
 
 function isImageMime(mime: string): boolean {
@@ -311,19 +369,36 @@ export function buildAttachContent(params: LibrarianAttachAnnouncement): string 
   return lead;
 }
 
+export function buildAttachOpaqueContent(params: LibrarianAttachAnnouncement): string {
+  const { displayTitle, filePath, mountPoint, mimeType, description } = params;
+  const where = mountPoint ? `the document store "${mountPoint}"` : 'the document store';
+  const pathDetails = `path: "${filePath}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const kindPhrase = isImageMime(mimeType)
+    ? `Image attached: "${displayTitle}"`
+    : `Document attached: "${displayTitle}"`;
+  const lead = `${kindPhrase} from ${where} — the user has placed it before you for your reply (${pathDetails}).`;
+  const trimmed = description?.trim();
+  if (trimmed) {
+    return `${lead}\n\nDescription:\n\n${trimmed}`;
+  }
+  return lead;
+}
+
 export async function postLibrarianAttachAnnouncement(
   params: LibrarianAttachAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = buildAttachContent(params);
-  return postLibrarianMessage(params.chatId, content, 'attached', [params.mountFileId]);
+  const opaqueContent = buildAttachOpaqueContent(params);
+  return postLibrarianMessage(params.chatId, content, opaqueContent, 'attached', [params.mountFileId]);
 }
 
 export async function postLibrarianFolderDeletedAnnouncement(
   params: LibrarianFolderDeletedAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = buildFolderDeletedContent(params);
+  const opaqueContent = buildFolderDeletedOpaqueContent(params);
   const kindLabel = params.origin.kind === 'by-user' ? 'folder-deleted-by-user' : 'folder-deleted-by-character';
-  return postLibrarianMessage(params.chatId, content, kindLabel);
+  return postLibrarianMessage(params.chatId, content, opaqueContent, kindLabel);
 }
 
 // ---------------------------------------------------------------------------
@@ -363,21 +438,36 @@ export function buildUploadContent(params: LibrarianUploadAnnouncement): string 
   return `The Librarian has catalogued the user's freshly-uploaded illustrations. The bytes ride with the user's message above; each may be filed away later with keep_image, or re-summoned with attach_image:\n\n${list}`;
 }
 
+export function buildUploadOpaqueContent(params: LibrarianUploadAnnouncement): string {
+  const { uploads } = params;
+  if (uploads.length === 0) return '';
+  if (uploads.length === 1) {
+    const { fileId, filename } = uploads[0];
+    return `The user has uploaded an illustration: "${filename}" — uuid \`${fileId}\`. The bytes ride with the user's message above; the image may be filed away later with keep_image, or re-summoned with attach_image.`;
+  }
+  const list = uploads.map(u => `- "${u.filename}" — uuid \`${u.fileId}\``).join('\n');
+  return `The user has uploaded illustrations. The bytes ride with the user's message above; each may be filed away later with keep_image, or re-summoned with attach_image:\n\n${list}`;
+}
+
 export async function postLibrarianUploadAnnouncement(
   params: LibrarianUploadAnnouncement,
 ): Promise<MessageEvent | null> {
   if (params.uploads.length === 0) return null;
   const content = buildUploadContent(params);
+  const opaqueContent = buildUploadOpaqueContent(params);
   // Leave the announcement's `attachments` array empty — the user's own
   // message already carries the file ids, and the lantern-image walker only
   // looks at ASSISTANT attachments, so duplicating here would double-feed any
   // future vision-bearing walker without buying anything for the photo-album
   // surface.
-  return postLibrarianMessage(params.chatId, content, 'uploaded');
+  return postLibrarianMessage(params.chatId, content, opaqueContent, 'uploaded');
 }
 
 export const SUMMARY_CONTENT_PREFIX =
   'The Librarian deposits a précis of the conversation to date upon the table — file it for reference:';
+
+export const SUMMARY_OPAQUE_CONTENT_PREFIX =
+  'Précis of the conversation to date — file it for reference:';
 
 export interface LibrarianSummaryAnnouncement {
   chatId: string;
@@ -405,6 +495,14 @@ export function buildSummaryContent(summary: string): string {
   ].join('\n');
 }
 
+export function buildSummaryOpaqueContent(summary: string): string {
+  return [
+    SUMMARY_OPAQUE_CONTENT_PREFIX,
+    '',
+    summary.trim(),
+  ].join('\n');
+}
+
 export async function postLibrarianSummaryAnnouncement(
   params: LibrarianSummaryAnnouncement,
 ): Promise<MessageEvent | null> {
@@ -412,9 +510,11 @@ export async function postLibrarianSummaryAnnouncement(
     return null;
   }
   const content = buildSummaryContent(params.summary);
+  const opaqueContent = buildSummaryOpaqueContent(params.summary);
   return postLibrarianMessage(
     params.chatId,
     content,
+    opaqueContent,
     'summary',
     [],
     params.targetParticipantIds ?? null,

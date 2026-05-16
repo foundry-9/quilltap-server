@@ -8,11 +8,11 @@
  * `## ⚠️ Outfit Change Notice` blocks that previously lived in the system
  * prompt (Phase D of the system-prompt refactor).
  *
- * Aurora whispers do not need the dual persona/LLM voicing pattern that
- * Commonplace Book recall does — the persona-voiced body is acceptable input
- * for the LLM. For opaque (`systemTransparency=false`) characters the
- * `systemSender` attribution is stripped at context-build time but the body
- * survives, so the content still reaches them as a generic assistant line.
+ * Each builder has a sibling `*OpaqueContent` form that drops the Aurora
+ * persona. When the chat has any non-user-character with
+ * systemTransparency !== true, the context-builder swaps `content` →
+ * `opaqueContent` in every character's LLM context (see
+ * `lib/services/chat-message/context-builder.service.ts`).
  *
  * Errors never propagate — wardrobe operations must never fail because an
  * announcement couldn't be written.
@@ -47,6 +47,16 @@ export function buildOpeningOutfitContent(params: BuildContentParams): string {
   return lines.join('\n');
 }
 
+export function buildOpeningOutfitOpaqueContent(params: BuildContentParams): string {
+  const { characterName, outfit } = params;
+  const outfitText = describeOutfit(outfit);
+  return [
+    `${characterName}'s current attire:`,
+    '',
+    outfitText.trimEnd(),
+  ].join('\n');
+}
+
 /**
  * Mid-chat outfit-change announcement. Fires immediately when a character
  * equips or unequips an item via the sidebar. Replaces the per-turn
@@ -64,9 +74,20 @@ export function buildOutfitChangeContent(params: BuildContentParams): string {
   return lines.join('\n');
 }
 
+export function buildOutfitChangeOpaqueContent(params: BuildContentParams): string {
+  const { characterName, outfit } = params;
+  const outfitText = describeOutfit(outfit);
+  return [
+    `${characterName} is now wearing:`,
+    '',
+    outfitText.trimEnd(),
+  ].join('\n');
+}
+
 interface PostParams {
   chatId: string;
   content: string;
+  opaqueContent: string | null;
   /** Short label for logs — e.g. 'opening-outfit', 'outfit-change'. */
   kind: string;
   /** Optional whisper targeting. Aurora outfit announcements are public by default. */
@@ -74,7 +95,7 @@ interface PostParams {
 }
 
 async function postAuroraMessage(params: PostParams): Promise<MessageEvent | null> {
-  const { chatId, content, kind, targetParticipantIds } = params;
+  const { chatId, content, opaqueContent, kind, targetParticipantIds } = params;
 
   if (!content || content.trim().length === 0) {
     return null;
@@ -92,6 +113,7 @@ async function postAuroraMessage(params: PostParams): Promise<MessageEvent | nul
       id: randomUUID(),
       role: 'ASSISTANT',
       content,
+      opaqueContent,
       attachments: [],
       createdAt: new Date().toISOString(),
       participantId: null,
@@ -134,6 +156,7 @@ export async function postOpeningOutfitWhisper(
   return postAuroraMessage({
     chatId: params.chatId,
     content: buildOpeningOutfitContent(params),
+    opaqueContent: buildOpeningOutfitOpaqueContent(params),
     kind: 'opening-outfit',
   });
 }
@@ -150,6 +173,7 @@ export async function postOutfitChangeWhisper(
   return postAuroraMessage({
     chatId: params.chatId,
     content: buildOutfitChangeContent(params),
+    opaqueContent: buildOutfitChangeOpaqueContent(params),
     kind: 'outfit-change',
   });
 }

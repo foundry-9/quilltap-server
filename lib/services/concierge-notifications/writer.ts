@@ -30,6 +30,14 @@ export function buildDangerContent(): string {
   );
 }
 
+export function buildDangerOpaqueContent(): string {
+  return (
+    "Content advisory: the present conversation — and any adjunct operations it occasions — " +
+    "has been routed to a provider better suited to subjects of its particular character. " +
+    "No interruption is required; proceed at your leisure."
+  );
+}
+
 export async function postConciergeDangerAnnouncement(
   params: ConciergeDangerAnnouncement,
 ): Promise<MessageEvent | null> {
@@ -45,12 +53,14 @@ export async function postConciergeDangerAnnouncement(
     const messageId = randomUUID();
     const now = new Date().toISOString();
     const content = buildDangerContent();
+    const opaqueContent = buildDangerOpaqueContent();
 
     const message: MessageEvent = {
       type: 'message',
       id: messageId,
       role: 'ASSISTANT',
       content,
+      opaqueContent,
       attachments: [],
       createdAt: now,
       participantId: null,

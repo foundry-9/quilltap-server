@@ -495,7 +495,8 @@ CREATE TABLE "chat_messages" (
   "customAnnouncer" TEXT DEFAULT NULL,
   "pendingExternalPrompt" TEXT DEFAULT NULL,
   "pendingExternalAttachments" TEXT DEFAULT NULL,
-  "pendingExternalPromptFull" TEXT DEFAULT NULL
+  "pendingExternalPromptFull" TEXT DEFAULT NULL,
+  "opaqueContent" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");

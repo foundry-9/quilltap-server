@@ -35,9 +35,20 @@ export function buildConnectionProfileChangeContent(
   return `Prospero notes that ${characterName} has been reassigned to ${newPhrase} (previously ${oldPhrase}).`;
 }
 
+export function buildConnectionProfileChangeOpaqueContent(
+  characterName: string,
+  oldProfileLabel: string | null,
+  newProfileLabel: string | null,
+): string {
+  const newPhrase = newProfileLabel ?? 'no connection profile';
+  const oldPhrase = oldProfileLabel ?? 'no connection profile';
+  return `${characterName}'s assigned model has changed to ${newPhrase} (previously ${oldPhrase}).`;
+}
+
 async function postProsperoMessage(
   chatId: string,
   content: string,
+  opaqueContent: string | null,
   kindLabel: string,
 ): Promise<MessageEvent | null> {
   try {
@@ -56,6 +67,7 @@ async function postProsperoMessage(
       id: messageId,
       role: 'ASSISTANT',
       content,
+      opaqueContent,
       attachments: [],
       createdAt: now,
       participantId: null,
@@ -92,7 +104,12 @@ export async function postProsperoConnectionProfileChangeAnnouncement(
     params.oldProfileLabel,
     params.newProfileLabel,
   );
-  return postProsperoMessage(params.chatId, content, 'connection-profile-change');
+  const opaqueContent = buildConnectionProfileChangeOpaqueContent(
+    params.characterName,
+    params.oldProfileLabel,
+    params.newProfileLabel,
+  );
+  return postProsperoMessage(params.chatId, content, opaqueContent, 'connection-profile-change');
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +265,36 @@ export function buildProjectContextContent(project: ProsperoProjectContext): str
   return lines.join('\n').trimEnd();
 }
 
+export function buildProjectContextOpaqueContent(project: ProsperoProjectContext): string {
+  const lines: string[] = [
+    `Project context — *${project.name}*:`,
+    '',
+  ];
+  const description = project.description?.trim();
+  const instructions = project.instructions?.trim();
+  const stores = project.documentStores ?? [];
+
+  if (description) {
+    lines.push('**Project description:**');
+    lines.push('');
+    lines.push(description);
+  }
+
+  if (instructions) {
+    if (description) lines.push('');
+    lines.push('**Project instructions:**');
+    lines.push('');
+    lines.push(instructions);
+  }
+
+  if (stores.length) {
+    if (description || instructions) lines.push('');
+    lines.push(...buildDocumentStoresSection(stores));
+  }
+
+  return lines.join('\n').trimEnd();
+}
+
 export interface ProsperoProjectContextAnnouncement {
   chatId: string;
   project: ProsperoProjectContext;
@@ -264,7 +311,8 @@ export async function postProsperoProjectContextAnnouncement(
   }
 
   const content = buildProjectContextContent(params.project);
-  return postProsperoMessage(params.chatId, content, 'project-context');
+  const opaqueContent = buildProjectContextOpaqueContent(params.project);
+  return postProsperoMessage(params.chatId, content, opaqueContent, 'project-context');
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +370,16 @@ export function buildGeneralContextContent(general: ProsperoGeneralContext): str
   return lines.join('\n');
 }
 
+export function buildGeneralContextOpaqueContent(general: ProsperoGeneralContext): string {
+  const safeName = general.name.replace(/`/g, '\\`');
+  const lines: string[] = [
+    `Beyond any particular project or vault, every character in this instance has standing access to the shared shelf — **${general.name}** — at all times.`,
+    '',
+    `Use \`mount_point: "${safeName}"\` on any \`doc_*\` tool (the ID \`${general.mountPointId}\` also works). Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content lives here as well.`,
+  ];
+  return lines.join('\n');
+}
+
 export interface ProsperoGeneralContextAnnouncement {
   chatId: string;
   general: ProsperoGeneralContext;
@@ -331,5 +389,6 @@ export async function postProsperoGeneralContextAnnouncement(
   params: ProsperoGeneralContextAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = buildGeneralContextContent(params.general);
-  return postProsperoMessage(params.chatId, content, 'general-context');
+  const opaqueContent = buildGeneralContextOpaqueContent(params.general);
+  return postProsperoMessage(params.chatId, content, opaqueContent, 'general-context');
 }

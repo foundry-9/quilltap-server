@@ -47,8 +47,14 @@ export const ChatMessageRowSchema = z.object({
   dangerFlags: z.array(DangerFlagSchema).nullable().optional(),  // JSON array
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),  // JSON array — whisper targets
   isSilentMessage: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Whether message was generated while character was in silent mode (SQLite stores as 0/1)
-  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
+  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
   systemKind: z.string().nullable().optional(),  // Sub-classification of a Staff-authored message (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender.
+  // Neutral, persona-free rewrite of `content` for Staff-authored messages.
+  // Swapped into every character's LLM context when the chat has any non-user-
+  // character participant with systemTransparency !== true. NULL on
+  // participant-authored messages and on legacy Staff messages from before
+  // the dual-body migration.
+  opaqueContent: z.string().nullable().optional(),
   // Structured payload on Host announcements. Two shapes share this field:
   // (a) presence transitions — { participantId, toStatus } — for add/remove/
   // status-change. (b) off-scene character introductions — { introducedCharacterIds }

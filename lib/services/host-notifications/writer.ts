@@ -107,8 +107,43 @@ export async function buildAddContent(character: Character): Promise<string> {
   return lines.join('\n').trimEnd();
 }
 
+/**
+ * Persona-free variant of {@link buildAddContent} for opaque-anywhere chats.
+ * Mirrors the same identity/description payload but drops the Host narration.
+ */
+export async function buildAddOpaqueContent(character: Character): Promise<string> {
+  const lines: string[] = [];
+  lines.push(`${character.name} has joined the scene.`);
+  lines.push('');
+
+  if (character.avatarUrl && character.avatarUrl.trim().length > 0) {
+    lines.push(`![${character.name}](${character.avatarUrl})`);
+    lines.push('');
+  }
+
+  const identity = await readVaultIdentity(character);
+  if (identity) {
+    lines.push('**Identity:**');
+    lines.push('');
+    lines.push(identity);
+  } else {
+    const description = (character.description ?? '').trim();
+    if (description.length > 0) {
+      lines.push('**Description:**');
+      lines.push('');
+      lines.push(description);
+    }
+  }
+
+  return lines.join('\n').trimEnd();
+}
+
 export function buildRemoveContent(characterName: string): string {
   return `The Host bids ${characterName} adieu — they have departed the Salon.`;
+}
+
+export function buildRemoveOpaqueContent(characterName: string): string {
+  return `${characterName} has left the scene.`;
 }
 
 export function buildStatusChangeContent(
@@ -121,9 +156,20 @@ export function buildStatusChangeContent(
   return `The Host notes that ${characterName} is now ${after} (previously ${before}).`;
 }
 
+export function buildStatusChangeOpaqueContent(
+  characterName: string,
+  oldStatus: ParticipantStatus,
+  newStatus: ParticipantStatus,
+): string {
+  const before = STATUS_PHRASE[oldStatus] ?? oldStatus;
+  const after = STATUS_PHRASE[newStatus] ?? newStatus;
+  return `${characterName} is now ${after} (previously ${before}).`;
+}
+
 async function postHostMessage(
   chatId: string,
   content: string,
+  opaqueContent: string | null,
   kindLabel: string,
   hostEvent: { participantId: string; toStatus: ParticipantStatus } | null = null,
 ): Promise<MessageEvent | null> {
@@ -143,6 +189,7 @@ async function postHostMessage(
       id: messageId,
       role: 'ASSISTANT',
       content,
+      opaqueContent,
       attachments: [],
       createdAt: now,
       participantId: null,
@@ -178,9 +225,12 @@ async function postHostMessage(
 export async function postHostAddAnnouncement(
   params: HostAddAnnouncement,
 ): Promise<MessageEvent | null> {
-  const content = await buildAddContent(params.character);
+  const [content, opaqueContent] = await Promise.all([
+    buildAddContent(params.character),
+    buildAddOpaqueContent(params.character),
+  ]);
   const toStatus: ParticipantStatus = params.initialStatus ?? 'active';
-  return postHostMessage(params.chatId, content, 'add', {
+  return postHostMessage(params.chatId, content, opaqueContent, 'add', {
     participantId: params.participantId,
     toStatus,
   });
@@ -190,7 +240,8 @@ export async function postHostRemoveAnnouncement(
   params: HostRemoveAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = buildRemoveContent(params.characterName);
-  return postHostMessage(params.chatId, content, 'remove', {
+  const opaqueContent = buildRemoveOpaqueContent(params.characterName);
+  return postHostMessage(params.chatId, content, opaqueContent, 'remove', {
     participantId: params.participantId,
     toStatus: 'removed',
   });
@@ -204,7 +255,12 @@ export async function postHostStatusChangeAnnouncement(
     params.oldStatus,
     params.newStatus,
   );
-  return postHostMessage(params.chatId, content, `status:${params.oldStatus}->${params.newStatus}`, {
+  const opaqueContent = buildStatusChangeOpaqueContent(
+    params.characterName,
+    params.oldStatus,
+    params.newStatus,
+  );
+  return postHostMessage(params.chatId, content, opaqueContent, `status:${params.oldStatus}->${params.newStatus}`, {
     participantId: params.participantId,
     toStatus: params.newStatus,
   });
@@ -219,6 +275,14 @@ export async function postHostStatusChangeAnnouncement(
 export function buildScenarioContent(scenarioText: string): string {
   return [
     'The Host sets the scene for the proceedings:',
+    '',
+    scenarioText.trim(),
+  ].join('\n');
+}
+
+export function buildScenarioOpaqueContent(scenarioText: string): string {
+  return [
+    'Scene:',
     '',
     scenarioText.trim(),
   ].join('\n');
@@ -239,6 +303,21 @@ export function buildUserCharacterContent(
   ].join('\n');
 }
 
+export function buildUserCharacterOpaqueContent(
+  userCharacterName: string,
+  userCharacterDescription: string | null | undefined,
+): string {
+  const desc = (userCharacterDescription ?? '').trim();
+  if (desc.length === 0) {
+    return `${userCharacterName} is the user's voice in this conversation.`;
+  }
+  return [
+    `${userCharacterName} is the user's voice in this conversation:`,
+    '',
+    desc,
+  ].join('\n');
+}
+
 export function buildMultiCharacterRosterContent(
   respondingCharacterName: string,
   others: OtherParticipantInfo[],
@@ -249,6 +328,21 @@ export function buildMultiCharacterRosterContent(
   }
   return [
     'The Host outlines the company present in the Salon:',
+    '',
+    section,
+  ].join('\n');
+}
+
+export function buildMultiCharacterRosterOpaqueContent(
+  respondingCharacterName: string,
+  others: OtherParticipantInfo[],
+): string {
+  const section = buildMultiCharacterContextSection(others, respondingCharacterName);
+  if (!section) {
+    return `For the moment, ${respondingCharacterName} stands alone in the scene.`;
+  }
+  return [
+    'The company present in the scene:',
     '',
     section,
   ].join('\n');
@@ -272,8 +366,28 @@ export function buildSilentModeEntryContent(characterName: string): string {
   ].join('\n');
 }
 
+export function buildSilentModeEntryOpaqueContent(_characterName: string): string {
+  return [
+    'You have entered SILENT mode. You are present in the scene but MUST NOT speak out loud — no dialogue that others can hear. You may:',
+    '- Have inner thoughts and internal monologue (use *italics* or describe as thoughts)',
+    '- Take physical actions (gestures, movements, facial expressions)',
+    '- React emotionally or physically to what others say and do',
+    '',
+    'You MUST NOT:',
+    '- Speak any dialogue out loud',
+    '- Whisper, murmur, or make any vocal sounds others could hear',
+    '- Communicate verbally in any way',
+    '',
+    'This rule remains in force until you are notified that you are no longer silent.',
+  ].join('\n');
+}
+
 export function buildSilentModeExitContent(characterName: string): string {
   return `The Host whispers a private note to ${characterName} alone: silence is lifted. You may speak aloud again.`;
+}
+
+export function buildSilentModeExitOpaqueContent(_characterName: string): string {
+  return `Silence is lifted. You may speak aloud again.`;
 }
 
 export function buildJoinScenarioContent(
@@ -287,9 +401,21 @@ export function buildJoinScenarioContent(
   ].join('\n');
 }
 
+export function buildJoinScenarioOpaqueContent(
+  _characterName: string,
+  joinScenario: string,
+): string {
+  return [
+    'How you came to be here:',
+    '',
+    joinScenario.trim(),
+  ].join('\n');
+}
+
 async function postHostMessageWithTargets(
   chatId: string,
   content: string,
+  opaqueContent: string | null,
   kindLabel: string,
   targetParticipantIds: string[] | null,
 ): Promise<MessageEvent | null> {
@@ -309,6 +435,7 @@ async function postHostMessageWithTargets(
       id: messageId,
       role: 'ASSISTANT',
       content,
+      opaqueContent,
       attachments: [],
       createdAt: now,
       participantId: null,
@@ -355,6 +482,7 @@ export async function postHostScenarioAnnouncement(
   return postHostMessageWithTargets(
     params.chatId,
     buildScenarioContent(params.scenarioText),
+    buildScenarioOpaqueContent(params.scenarioText),
     'scenario',
     null,
   );
@@ -372,6 +500,7 @@ export async function postHostUserCharacterAnnouncement(
   return postHostMessageWithTargets(
     params.chatId,
     buildUserCharacterContent(params.userCharacterName, params.userCharacterDescription),
+    buildUserCharacterOpaqueContent(params.userCharacterName, params.userCharacterDescription),
     'user-character',
     null,
   );
@@ -389,6 +518,7 @@ export async function postHostRosterAnnouncement(
   return postHostMessageWithTargets(
     params.chatId,
     buildMultiCharacterRosterContent(params.respondingCharacterName, params.others),
+    buildMultiCharacterRosterOpaqueContent(params.respondingCharacterName, params.others),
     'roster',
     null,
   );
@@ -408,9 +538,13 @@ export async function postHostSilentModeAnnouncement(
   const content = params.transition === 'enter'
     ? buildSilentModeEntryContent(params.characterName)
     : buildSilentModeExitContent(params.characterName);
+  const opaqueContent = params.transition === 'enter'
+    ? buildSilentModeEntryOpaqueContent(params.characterName)
+    : buildSilentModeExitOpaqueContent(params.characterName);
   return postHostMessageWithTargets(
     params.chatId,
     content,
+    opaqueContent,
     `silent-mode:${params.transition}`,
     [params.targetParticipantId],
   );
@@ -431,6 +565,7 @@ export async function postHostJoinScenarioAnnouncement(
   return postHostMessageWithTargets(
     params.chatId,
     buildJoinScenarioContent(params.characterName, params.joinScenario),
+    buildJoinScenarioOpaqueContent(params.characterName, params.joinScenario),
     'join-scenario',
     [params.targetParticipantId],
   );
@@ -446,6 +581,10 @@ export function buildTimestampContent(formatted: string): string {
   return `The Host marks the time as ${formatted}.`;
 }
 
+export function buildTimestampOpaqueContent(formatted: string): string {
+  return `Current time: ${formatted}.`;
+}
+
 export interface HostTimestampAnnouncement {
   chatId: string;
   formatted: string;
@@ -458,6 +597,7 @@ export async function postHostTimestampAnnouncement(
   return postHostMessageWithTargets(
     params.chatId,
     buildTimestampContent(params.formatted),
+    buildTimestampOpaqueContent(params.formatted),
     'timestamp',
     null,
   );
@@ -492,32 +632,45 @@ interface OffSceneCharacterCard {
  * Compose a Host announcement introducing one or more off-scene characters.
  * Sorted alphabetically for deterministic, cache-friendly output.
  */
+function renderOffSceneCard(c: OffSceneCharacterCard): string {
+  const lines: string[] = [`### ${c.name}`];
+  if (c.aliases && c.aliases.length > 0) {
+    lines.push(`Aliases: ${c.aliases.join(', ')}`);
+  }
+  if (c.pronouns) {
+    lines.push(`Pronouns: ${c.pronouns.subject}/${c.pronouns.object}/${c.pronouns.possessive}`);
+  }
+  const desc = (c.description ?? '').trim();
+  if (desc.length > 0) {
+    lines.push(desc);
+  }
+  return lines.join('\n');
+}
+
 export function buildOffSceneCharactersContent(
   characters: OffSceneCharacterCard[],
 ): string {
   const sorted = [...characters].sort((a, b) => a.name.localeCompare(b.name));
-
-  const renderCard = (c: OffSceneCharacterCard): string => {
-    const lines: string[] = [`### ${c.name}`];
-    if (c.aliases && c.aliases.length > 0) {
-      lines.push(`Aliases: ${c.aliases.join(', ')}`);
-    }
-    if (c.pronouns) {
-      lines.push(`Pronouns: ${c.pronouns.subject}/${c.pronouns.object}/${c.pronouns.possessive}`);
-    }
-    const desc = (c.description ?? '').trim();
-    if (desc.length > 0) {
-      lines.push(desc);
-    }
-    return lines.join('\n');
-  };
 
   const intro =
     sorted.length === 1
       ? `The Host begs leave to introduce a person spoken of in this conversation but not presently in the Salon — for accurate reference only; not a summons to the scene.`
       : `The Host begs leave to introduce certain persons spoken of in this conversation but not presently in the Salon — for accurate reference only; not a summons to the scene.`;
 
-  return [intro, '', ...sorted.map(renderCard)].join('\n\n');
+  return [intro, '', ...sorted.map(renderOffSceneCard)].join('\n\n');
+}
+
+export function buildOffSceneCharactersOpaqueContent(
+  characters: OffSceneCharacterCard[],
+): string {
+  const sorted = [...characters].sort((a, b) => a.name.localeCompare(b.name));
+
+  const intro =
+    sorted.length === 1
+      ? `A person spoken of in this conversation but not presently in the scene — for accurate reference only; not a summons to the scene:`
+      : `Persons spoken of in this conversation but not presently in the scene — for accurate reference only; not a summons to the scene:`;
+
+  return [intro, '', ...sorted.map(renderOffSceneCard)].join('\n\n');
 }
 
 /**
@@ -589,6 +742,7 @@ export async function postHostOffSceneCharactersAnnouncement(
     }
 
     const content = buildOffSceneCharactersContent(params.characters);
+    const opaqueContent = buildOffSceneCharactersOpaqueContent(params.characters);
     const messageId = randomUUID();
     const now = new Date().toISOString();
     const introducedCharacterIds = params.characters.map((c) => c.id);
@@ -598,6 +752,7 @@ export async function postHostOffSceneCharactersAnnouncement(
       id: messageId,
       role: 'ASSISTANT',
       content,
+      opaqueContent,
       attachments: [],
       createdAt: now,
       participantId: null,
@@ -651,10 +806,26 @@ function buildContinuationFromContent(sourceChatId: string, sourceTitle: string 
   ].join('\n');
 }
 
+function buildContinuationFromOpaqueContent(sourceChatId: string, sourceTitle: string | null): string {
+  const trimmedTitle = sourceTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'an earlier chapter';
+  return [
+    `This conversation continues from [${linkText}](/salon/${sourceChatId}).`,
+    '',
+    'The thread that brought us here is preserved below. Carry on.',
+  ].join('\n');
+}
+
 function buildContinuationToContent(newChatId: string, newTitle: string | null): string {
   const trimmedTitle = newTitle?.trim() ?? '';
   const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'a new venue';
   return `The Host clears their throat: the conversation has moved to [${linkText}](/salon/${newChatId}). The proceedings continue there.`;
+}
+
+function buildContinuationToOpaqueContent(newChatId: string, newTitle: string | null): string {
+  const trimmedTitle = newTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'a new venue';
+  return `The conversation has moved to [${linkText}](/salon/${newChatId}). The proceedings continue there.`;
 }
 
 export interface HostContinuationFromAnnouncement {
@@ -669,6 +840,7 @@ export async function postHostContinuationFromAnnouncement(
   return postHostMessageWithTargets(
     params.chatId,
     buildContinuationFromContent(params.sourceChatId, params.sourceTitle ?? null),
+    buildContinuationFromOpaqueContent(params.sourceChatId, params.sourceTitle ?? null),
     HOST_KIND_CONTINUATION_FROM,
     null,
   );
@@ -686,6 +858,7 @@ export async function postHostContinuationToAnnouncement(
   return postHostMessageWithTargets(
     params.chatId,
     buildContinuationToContent(params.newChatId, params.newTitle ?? null),
+    buildContinuationToOpaqueContent(params.newChatId, params.newTitle ?? null),
     HOST_KIND_CONTINUATION_TO,
     null,
   );
@@ -745,6 +918,8 @@ export async function postHostNoUserCharacterAnnouncement(
     return postHostMessageWithTargets(
       params.chatId,
       buildNoUserCharacterContent(),
+      // No opaque variant: this whisper is for the operator only, never reaches a character's LLM context.
+      null,
       HOST_KIND_NO_USER_CHARACTER,
       null,
     );

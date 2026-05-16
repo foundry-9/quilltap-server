@@ -348,7 +348,7 @@ export function buildConversationMessages(
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -403,21 +403,45 @@ export async function buildMessageContext(
       })
     : messagesWithoutCmpb
 
-  // System transparency: opaque characters (systemTransparency != true) still
-  // need the *content* of remaining Staff (Lantern/Aurora/Librarian/Prospero/
-  // Host) messages — scenario, status, etc. drive the conversation forward —
-  // but they should not see the Staff *attribution*. For opaque characters we
-  // strip the systemSender field so the LLM reads these as generic assistant
-  // messages. The salon UI is unaffected (the human user always sees Staff-
-  // attributed messages with their avatars).
-  const filteredExistingMessages = character.systemTransparency === true
-    ? messagesAfterWhisperFilter
-    : messagesAfterWhisperFilter.map(m => m.systemSender ? { ...m, systemSender: null } : m)
-  if (character.systemTransparency !== true) {
-    const stripped = messagesAfterWhisperFilter.filter(m => m.systemSender).length
-    if (stripped > 0) {
-    }
+  // System transparency: when any non-user-character participant in this chat
+  // has systemTransparency !== true, the whole chat goes "opaque-anywhere" —
+  // every character's LLM context reads Staff messages with the persona-free
+  // `opaqueContent` body in place of `content`, AND has `systemSender`
+  // stripped so the message arrives as a generic assistant line. This
+  // preserves a shared reality across participants: no character should hear
+  // the Staff by name when a companion can't. The user character (controlledBy
+  // === 'user') does NOT count toward the test — they stay transparent by
+  // default. The salon UI is unaffected (the human user always sees Staff-
+  // attributed messages with their full persona voicing and avatars).
+  //
+  // Doc-side gates on `character.systemTransparency` (self_inventory tool
+  // availability, peer-vault visibility in doc_* handlers) remain per-character
+  // and are unrelated to this swap.
+  const llmParticipants = chat.participants.filter(
+    p => p.controlledBy !== 'user' && p.status !== 'removed'
+  )
+  let isOpaqueAnywhere: boolean
+  if (isMultiCharacter && participantCharacters) {
+    isOpaqueAnywhere = llmParticipants.some(p => {
+      const c = participantCharacters.get(p.characterId)
+      // Unknown character record → treat as opaque (safer default — better to
+      // hide Staff names from one transparent companion than to leak them to
+      // an opaque one whose record didn't load).
+      return !c || c.systemTransparency !== true
+    })
+  } else {
+    // Single-character mode: the only LLM-controlled non-user character is
+    // `character` itself.
+    isOpaqueAnywhere = character.systemTransparency !== true
   }
+
+  const filteredExistingMessages = isOpaqueAnywhere
+    ? messagesAfterWhisperFilter.map(m => {
+        if (!m.systemSender) return m
+        const body = m.opaqueContent ?? m.content
+        return { ...m, systemSender: null, content: body }
+      })
+    : messagesAfterWhisperFilter
 
   // Build conversation messages
   const { conversationMessages, messagesWithParticipants } = buildConversationMessages(
