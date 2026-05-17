@@ -22,9 +22,56 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { readDatabaseDocument } from '@/lib/mount-index/database-store';
 import type { MessageEvent } from '@/lib/schemas/types';
 import type { Character } from '@/lib/schemas/character.types';
-import type { ParticipantStatus } from '@/lib/schemas/chat.types';
+import type { ChatParticipantBase, ParticipantStatus } from '@/lib/schemas/chat.types';
 import type { OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder';
 import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter';
+
+/**
+ * Replace `{{char}}` and `{{user}}` template tokens in a character-derived
+ * string with the supplied names. Unlike the global `processTemplate`, this
+ * leaves *unbound* tokens untouched rather than wiping them — Host
+ * announcements are partial-binding contexts (the user character may not
+ * exist; some announcements have no single character subject), and a literal
+ * `{{char}}` is far less surprising than an empty hole.
+ */
+function applyHostTemplates(
+  text: string,
+  charName: string | null | undefined,
+  userName: string | null | undefined,
+): string {
+  if (!text || !text.includes('{{')) return text;
+  let result = text;
+  if (charName) {
+    result = result.replace(/\{\{char\}\}/g, charName);
+  }
+  if (userName) {
+    result = result.replace(/\{\{user\}\}/g, userName);
+  }
+  return result;
+}
+
+/**
+ * Find the user-controlled character participant in a chat and return their
+ * display name, or null when the chat has no user-controlled character.
+ * The result is used as the `{{user}}` binding for Host announcements that
+ * quote character vault documents or character database fields.
+ */
+async function resolveUserCharacterName(
+  participants: ReadonlyArray<ChatParticipantBase> | undefined | null,
+): Promise<string | null> {
+  if (!participants || participants.length === 0) return null;
+  const userParticipant = participants.find(
+    (p) => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId,
+  );
+  if (!userParticipant?.characterId) return null;
+  try {
+    const repos = getRepositories();
+    const character = await repos.characters.findById(userParticipant.characterId);
+    return character?.name ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export interface HostAddAnnouncement {
   chatId: string;
@@ -80,7 +127,10 @@ async function readVaultIdentity(character: Character): Promise<string | null> {
   }
 }
 
-export async function buildAddContent(character: Character): Promise<string> {
+export async function buildAddContent(
+  character: Character,
+  userCharacterName?: string | null,
+): Promise<string> {
   const lines: string[] = [];
   lines.push(`The Host welcomes ${character.name} to the Salon.`);
   lines.push('');
@@ -94,13 +144,13 @@ export async function buildAddContent(character: Character): Promise<string> {
   if (identity) {
     lines.push('**Identity:**');
     lines.push('');
-    lines.push(identity);
+    lines.push(applyHostTemplates(identity, character.name, userCharacterName));
   } else {
     const description = (character.description ?? '').trim();
     if (description.length > 0) {
       lines.push('**Description:**');
       lines.push('');
-      lines.push(description);
+      lines.push(applyHostTemplates(description, character.name, userCharacterName));
     }
   }
 
@@ -111,7 +161,10 @@ export async function buildAddContent(character: Character): Promise<string> {
  * Persona-free variant of {@link buildAddContent} for opaque-anywhere chats.
  * Mirrors the same identity/description payload but drops the Host narration.
  */
-export async function buildAddOpaqueContent(character: Character): Promise<string> {
+export async function buildAddOpaqueContent(
+  character: Character,
+  userCharacterName?: string | null,
+): Promise<string> {
   const lines: string[] = [];
   lines.push(`${character.name} has joined the scene.`);
   lines.push('');
@@ -125,13 +178,13 @@ export async function buildAddOpaqueContent(character: Character): Promise<strin
   if (identity) {
     lines.push('**Identity:**');
     lines.push('');
-    lines.push(identity);
+    lines.push(applyHostTemplates(identity, character.name, userCharacterName));
   } else {
     const description = (character.description ?? '').trim();
     if (description.length > 0) {
       lines.push('**Description:**');
       lines.push('');
-      lines.push(description);
+      lines.push(applyHostTemplates(description, character.name, userCharacterName));
     }
   }
 
@@ -225,9 +278,14 @@ async function postHostMessage(
 export async function postHostAddAnnouncement(
   params: HostAddAnnouncement,
 ): Promise<MessageEvent | null> {
+  const repos = getRepositories();
+  const chat = await repos.chats.findById(params.chatId);
+  const userCharacterName = chat
+    ? await resolveUserCharacterName(chat.participants)
+    : null;
   const [content, opaqueContent] = await Promise.all([
-    buildAddContent(params.character),
-    buildAddOpaqueContent(params.character),
+    buildAddContent(params.character, userCharacterName),
+    buildAddOpaqueContent(params.character, userCharacterName),
   ]);
   const toStatus: ParticipantStatus = params.initialStatus ?? 'active';
   return postHostMessage(params.chatId, content, opaqueContent, 'add', {
@@ -299,7 +357,7 @@ export function buildUserCharacterContent(
   return [
     `The Host introduces ${userCharacterName}, who will be the user's voice in this conversation:`,
     '',
-    desc,
+    applyHostTemplates(desc, null, userCharacterName),
   ].join('\n');
 }
 
@@ -314,7 +372,7 @@ export function buildUserCharacterOpaqueContent(
   return [
     `${userCharacterName} is the user's voice in this conversation:`,
     '',
-    desc,
+    applyHostTemplates(desc, null, userCharacterName),
   ].join('\n');
 }
 
@@ -393,22 +451,24 @@ export function buildSilentModeExitOpaqueContent(_characterName: string): string
 export function buildJoinScenarioContent(
   characterName: string,
   joinScenario: string,
+  userCharacterName?: string | null,
 ): string {
   return [
     `The Host whispers a private note to ${characterName} alone, recounting how they came to be here:`,
     '',
-    joinScenario.trim(),
+    applyHostTemplates(joinScenario.trim(), characterName, userCharacterName),
   ].join('\n');
 }
 
 export function buildJoinScenarioOpaqueContent(
-  _characterName: string,
+  characterName: string,
   joinScenario: string,
+  userCharacterName?: string | null,
 ): string {
   return [
     'How you came to be here:',
     '',
-    joinScenario.trim(),
+    applyHostTemplates(joinScenario.trim(), characterName, userCharacterName),
   ].join('\n');
 }
 
@@ -562,10 +622,15 @@ export async function postHostJoinScenarioAnnouncement(
   params: HostJoinScenarioAnnouncement,
 ): Promise<MessageEvent | null> {
   if (!params.joinScenario || params.joinScenario.trim().length === 0) return null;
+  const repos = getRepositories();
+  const chat = await repos.chats.findById(params.chatId);
+  const userCharacterName = chat
+    ? await resolveUserCharacterName(chat.participants)
+    : null;
   return postHostMessageWithTargets(
     params.chatId,
-    buildJoinScenarioContent(params.characterName, params.joinScenario),
-    buildJoinScenarioOpaqueContent(params.characterName, params.joinScenario),
+    buildJoinScenarioContent(params.characterName, params.joinScenario, userCharacterName),
+    buildJoinScenarioOpaqueContent(params.characterName, params.joinScenario, userCharacterName),
     'join-scenario',
     [params.targetParticipantId],
   );
@@ -632,7 +697,10 @@ interface OffSceneCharacterCard {
  * Compose a Host announcement introducing one or more off-scene characters.
  * Sorted alphabetically for deterministic, cache-friendly output.
  */
-function renderOffSceneCard(c: OffSceneCharacterCard): string {
+function renderOffSceneCard(
+  c: OffSceneCharacterCard,
+  userCharacterName?: string | null,
+): string {
   const lines: string[] = [`### ${c.name}`];
   if (c.aliases && c.aliases.length > 0) {
     lines.push(`Aliases: ${c.aliases.join(', ')}`);
@@ -642,13 +710,14 @@ function renderOffSceneCard(c: OffSceneCharacterCard): string {
   }
   const desc = (c.description ?? '').trim();
   if (desc.length > 0) {
-    lines.push(desc);
+    lines.push(applyHostTemplates(desc, c.name, userCharacterName));
   }
   return lines.join('\n');
 }
 
 export function buildOffSceneCharactersContent(
   characters: OffSceneCharacterCard[],
+  userCharacterName?: string | null,
 ): string {
   const sorted = [...characters].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -657,11 +726,12 @@ export function buildOffSceneCharactersContent(
       ? `The Host begs leave to introduce a person spoken of in this conversation but not presently in the Salon — for accurate reference only; not a summons to the scene.`
       : `The Host begs leave to introduce certain persons spoken of in this conversation but not presently in the Salon — for accurate reference only; not a summons to the scene.`;
 
-  return [intro, '', ...sorted.map(renderOffSceneCard)].join('\n\n');
+  return [intro, '', ...sorted.map((c) => renderOffSceneCard(c, userCharacterName))].join('\n\n');
 }
 
 export function buildOffSceneCharactersOpaqueContent(
   characters: OffSceneCharacterCard[],
+  userCharacterName?: string | null,
 ): string {
   const sorted = [...characters].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -670,7 +740,7 @@ export function buildOffSceneCharactersOpaqueContent(
       ? `A person spoken of in this conversation but not presently in the scene — for accurate reference only; not a summons to the scene:`
       : `Persons spoken of in this conversation but not presently in the scene — for accurate reference only; not a summons to the scene:`;
 
-  return [intro, '', ...sorted.map(renderOffSceneCard)].join('\n\n');
+  return [intro, '', ...sorted.map((c) => renderOffSceneCard(c, userCharacterName))].join('\n\n');
 }
 
 /**
@@ -741,8 +811,9 @@ export async function postHostOffSceneCharactersAnnouncement(
       return null;
     }
 
-    const content = buildOffSceneCharactersContent(params.characters);
-    const opaqueContent = buildOffSceneCharactersOpaqueContent(params.characters);
+    const userCharacterName = await resolveUserCharacterName(chat.participants);
+    const content = buildOffSceneCharactersContent(params.characters, userCharacterName);
+    const opaqueContent = buildOffSceneCharactersOpaqueContent(params.characters, userCharacterName);
     const messageId = randomUUID();
     const now = new Date().toISOString();
     const introducedCharacterIds = params.characters.map((c) => c.id);

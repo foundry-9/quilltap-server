@@ -574,3 +574,82 @@ describe('postHostOffSceneCharactersAnnouncement', () => {
     expect([...introduced].sort()).toEqual(['c-1', 'c-2'])
   })
 })
+
+// ---------------------------------------------------------------------------
+// Template-string replacement in Host announcements
+//
+// Character vault docs and character DB fields may contain {{char}} and
+// {{user}} placeholders. When the Host quotes those fields, the placeholders
+// must be substituted with the character's name and the chat's user-character
+// name; unbound placeholders are left literal so they don't silently vanish.
+// ---------------------------------------------------------------------------
+
+describe('Host announcements: {{char}} / {{user}} template replacement', () => {
+  it('replaces {{char}} and {{user}} in off-scene character descriptions', () => {
+    const result = buildOffSceneCharactersContent(
+      [{ id: 'c-1', name: 'Gary', description: '{{char}} is a friend of {{user}}.' }],
+      'Charlie',
+    )
+    expect(result).toContain('Gary is a friend of Charlie.')
+    expect(result).not.toContain('{{char}}')
+    expect(result).not.toContain('{{user}}')
+  })
+
+  it('leaves {{user}} literal when no user-character name is supplied', () => {
+    const result = buildOffSceneCharactersContent(
+      [{ id: 'c-1', name: 'Gary', description: '{{char}} greets {{user}} warmly.' }],
+      null,
+    )
+    expect(result).toContain('Gary greets {{user}} warmly.')
+  })
+
+  it('replaces {{char}} per-card in multi-character off-scene introductions', () => {
+    const result = buildOffSceneCharactersContent(
+      [
+        { id: 'c-1', name: 'Gary', description: '{{char}} tends the garden.' },
+        { id: 'c-2', name: 'Sunny', description: '{{char}} repairs the engine.' },
+      ],
+      'Charlie',
+    )
+    expect(result).toContain('Gary tends the garden.')
+    expect(result).toContain('Sunny repairs the engine.')
+  })
+
+  it('replaces {{user}} in the user-character introduction description', () => {
+    const result = buildUserCharacterContent(
+      'Charlie',
+      '{{user}} is a wandering scholar.',
+    )
+    expect(result).toContain('Charlie is a wandering scholar.')
+    expect(result).not.toContain('{{user}}')
+  })
+
+  it('replaces {{char}} and {{user}} in join-scenario whispers', () => {
+    const result = buildJoinScenarioContent(
+      'Montague',
+      '{{char}} arrives at the gate where {{user}} waits.',
+      'Charlie',
+    )
+    expect(result).toContain('Montague arrives at the gate where Charlie waits.')
+  })
+
+  it('leaves unrelated double-brace tokens unchanged', () => {
+    const result = buildOffSceneCharactersContent(
+      [{ id: 'c-1', name: 'Gary', description: '{{char}} carries the {{lantern}}.' }],
+      'Charlie',
+    )
+    expect(result).toContain('Gary carries the {{lantern}}.')
+  })
+
+  it('is a no-op for content with no template tokens (cache stability)', () => {
+    const a = buildOffSceneCharactersContent(
+      [{ id: 'c-1', name: 'Gary', description: 'A gardener.' }],
+      'Charlie',
+    )
+    const b = buildOffSceneCharactersContent(
+      [{ id: 'c-1', name: 'Gary', description: 'A gardener.' }],
+      null,
+    )
+    expect(a).toBe(b)
+  })
+})

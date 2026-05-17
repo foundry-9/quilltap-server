@@ -4,6 +4,17 @@
 
 ### 4.4-dev
 
+#### Fix: Host announcements now resolve {{char}} / {{user}} template tokens
+
+Character vault documents (`identity.md`) and character DB fields (`description`, `joinScenario`) routinely contain `{{char}}` and `{{user}}` placeholders, but the Host writer (`lib/services/host-notifications/writer.ts`) was inserting their bodies verbatim — so a description like "{{char}} is a friend of {{user}}" reached the chat (and every character's LLM context, opaque or persona) with the literal braces intact.
+
+- New `applyHostTemplates(text, charName, userName)` helper does targeted `{{char}}` / `{{user}}` replacement and leaves unrelated `{{...}}` tokens untouched, so partially-bound contexts don't silently wipe placeholders the way the global `processTemplate` does.
+- New `resolveUserCharacterName(participants)` helper finds the chat's user-controlled character participant and returns its display name; called by the Host post wrappers.
+- Templating applied to the character-bound announcements: `buildAddContent` / `buildAddOpaqueContent` (identity.md + description), `buildOffSceneCharactersContent` / `buildOffSceneCharactersOpaqueContent` (each card's description, per-character `{{char}}` binding), `buildJoinScenarioContent` / `buildJoinScenarioOpaqueContent` (joining character's bound `{{char}}`), and `buildUserCharacterContent` / `buildUserCharacterOpaqueContent` ({{user}} only, since persona text isn't character-bound).
+- `postHostAddAnnouncement`, `postHostJoinScenarioAnnouncement`, and `postHostOffSceneCharactersAnnouncement` resolve the user character from the chat before building. No external caller changes — the chat lookup these wrappers already do absorbs the user-character resolution.
+- The chat-wide scenario announcement (`buildScenarioContent`) and the unused `buildMultiCharacterRosterContent` are intentionally not templated: scenario has no single character subject, and the roster helper has no callers.
+- Coverage in `__tests__/unit/lib/services/host-notifications-phase-c.test.ts` (7 new tests in a "{{char}} / {{user}} template replacement" describe block): per-card replacement for off-scene intros, literal `{{user}}` preserved when no user character, persona description `{{user}}` substitution, join-scenario both-bindings, unrelated tokens left alone, and no-op identity when no tokens are present.
+
 #### Fix: Run Tool modal's "Run as character" selector reverted to the first character
 
 In the Salon composer's Run Tool modal, the character dropdown was wired to `participant.characterId`, which the chat enrichment service (`enrichParticipantDetail`) doesn't include on its output — only the nested `character.id` is populated. Every `<option>` therefore got `value=""`, so every selection collapsed to the same empty string and React's controlled `<select>` snapped the displayed option back to whichever active character appeared first. Switched the option value and the default-character derivation in `components/chat/RunToolModal.tsx` to `participant.character?.id`.
