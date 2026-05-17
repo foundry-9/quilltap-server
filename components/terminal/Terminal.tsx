@@ -199,7 +199,7 @@ export function Terminal({
   }, [session.state, session.exitInfo]);
 
   return (
-    <div className={`relative bg-black ${className}`}>
+    <div className={`relative qt-terminal-surface ${className}`}>
       <div
         ref={containerRef}
         className="w-full h-full"
@@ -207,7 +207,7 @@ export function Terminal({
       />
 
       {session.state === 'exited' && onClose && (
-        <div className="absolute top-2 right-2 px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded">
+        <div className="qt-terminal-closed-badge">
           Closed
         </div>
       )}

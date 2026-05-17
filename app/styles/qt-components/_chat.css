@@ -2600,6 +2600,106 @@
     .qt-chat-response-status { animation: none; }
     .qt-chat-response-status-icon .animate-pulse { animation: none; }
   }
+
+  /* ==========================================================================
+     TERMINAL — IN-CHAT EMBED, POP-OUT PAGE, AND PANE SURFACES
+     A terminal carries its own identity (dark by default) regardless of the
+     surrounding theme's light/dark mode. Themes may re-tint these via the
+     --qt-terminal-* and --qt-terminal-chrome-* tokens in _variables.css.
+     ========================================================================== */
+
+  /**
+   * Bare terminal surface — the dark canvas that xterm renders on.
+   * Use anywhere the xterm Terminal component is mounted.
+   */
+  .qt-terminal-surface {
+    background-color: var(--qt-terminal-bg);
+  }
+
+  /**
+   * In-chat embed wrapper — outer card around the terminal embed.
+   * Mirrors a chat bubble's border/rounding but keeps the terminal body dark.
+   */
+  .qt-terminal-embed {
+    @apply rounded-lg overflow-hidden;
+    background-color: var(--qt-terminal-embed-bg);
+    border: 1px solid var(--qt-terminal-embed-border);
+  }
+
+  /**
+   * Header strip of the in-chat embed — collapse toggle, pop-out, kill.
+   * Sits on a neutral surface so the title is readable against the chat bg.
+   */
+  .qt-terminal-embed-header {
+    @apply flex items-center justify-between px-4 py-3;
+    background-color: var(--qt-terminal-embed-header-bg);
+    border-bottom: 1px solid var(--qt-terminal-embed-header-border);
+  }
+
+  /**
+   * Footer strip — used when Terminal Mode pane has taken over the body
+   * and the embed shows a "Go to pane →" affordance instead of the live PTY.
+   */
+  .qt-terminal-embed-footer {
+    @apply flex items-center justify-between gap-3 px-4 py-3 text-sm;
+    background-color: var(--qt-terminal-embed-header-bg);
+    border-top: 1px solid var(--qt-terminal-embed-header-border);
+  }
+
+  /**
+   * Pop-out page — full-screen terminal opened via /salon/[id]/terminal/[sessionId].
+   * Carries the terminal identity end-to-end, even on light themes.
+   */
+  .qt-terminal-popout-page {
+    background-color: var(--qt-terminal-bg);
+    color: var(--qt-terminal-chrome-fg);
+  }
+
+  /**
+   * Top bar of the pop-out page — back link, title, kill button.
+   */
+  .qt-terminal-popout-header {
+    @apply flex items-center justify-between px-4 py-3;
+    background-color: var(--qt-terminal-chrome-bg);
+    border-bottom: 1px solid var(--qt-terminal-chrome-border);
+    color: var(--qt-terminal-chrome-fg);
+  }
+
+  /**
+   * Anchor in the pop-out header (back-to-chat link).
+   */
+  .qt-terminal-popout-link {
+    color: var(--qt-terminal-chrome-fg);
+  }
+
+  .qt-terminal-popout-link:hover {
+    text-decoration: underline;
+  }
+
+  /**
+   * Title text in the pop-out header.
+   */
+  .qt-terminal-popout-title {
+    color: var(--qt-terminal-chrome-fg);
+    font-weight: 500;
+  }
+
+  /**
+   * Separator (slash) between breadcrumb fragments in the pop-out header.
+   */
+  .qt-terminal-popout-separator {
+    color: var(--qt-terminal-chrome-muted-fg);
+  }
+
+  /**
+   * Overlay badge shown when a session has exited and the terminal stays
+   * mounted (e.g. in the inline embed before the user dismisses it).
+   */
+  .qt-terminal-closed-badge {
+    @apply absolute top-2 right-2 px-2 py-1 text-xs rounded;
+    background-color: var(--qt-terminal-closed-badge-bg);
+    color: var(--qt-terminal-closed-badge-fg);
+  }
 }
 
 /* ==========================================================================

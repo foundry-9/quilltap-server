@@ -66,7 +66,7 @@ const FIELD_BADGE_CLASS: Record<string, string> = {
 function SignificanceBar({ significance }: { significance: number }) {
   const level = significance >= 0.6 ? 'high' : significance >= 0.3 ? 'medium' : 'low';
   const label = level === 'high' ? 'High Significance' : level === 'medium' ? 'Moderate Significance' : 'Minor Significance';
-  const barClass = level === 'high' ? 'bg-destructive' : level === 'medium' ? 'bg-amber-500' : 'qt-bg-muted-foreground';
+  const barClass = level === 'high' ? 'qt-bg-destructive' : level === 'medium' ? 'qt-bg-warning' : 'qt-bg-muted-foreground';
   const barWidth = level === 'high' ? 'w-full' : level === 'medium' ? 'w-2/3' : 'w-1/3';
 
   return (
@@ -162,7 +162,7 @@ export function SuggestionCard({
   const isEdited = decision === 'edited';
 
   return (
-    <div className={`qt-card flex flex-col gap-4 ${editing ? 'flex-1' : ''} ${isAccepted || isEdited ? 'border-green-500/40' : isRejected ? 'qt-border-destructive/30 opacity-75' : ''}`}>
+    <div className={`qt-card flex flex-col gap-4 ${editing ? 'flex-1' : ''} ${isAccepted || isEdited ? 'qt-border-success/40' : isRejected ? 'qt-border-destructive/30 opacity-75' : ''}`}>
       {/* Header: field badge + progress */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className={`${fieldBadge} text-xs`}>{displayLabel}</span>
@@ -200,7 +200,7 @@ export function SuggestionCard({
             <p className={`qt-body-sm rounded-md p-3 leading-relaxed border ${
               isEdited
                 ? 'qt-bg-primary/5 qt-border-primary/30'
-                : 'bg-green-500/5 border-green-500/20'
+                : 'qt-bg-success/5 qt-border-success/20'
             }`}>
               {isEdited && editedValue ? editedValue : safeProposedValue}
             </p>

@@ -17,6 +17,7 @@ export * from './components/Avatars';
 export * from './components/Dialogs';
 export * from './components/Tabs';
 export * from './components/Chat';
+export * from './components/Terminal';
 export * from './components/FilePreview';
 export * from './components/ThemeComparison';
 export * from './components/EmptyState';

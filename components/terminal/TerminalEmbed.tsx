@@ -92,9 +92,9 @@ export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) 
   const title = label || (session.meta ? `Terminal — ${session.meta.shell}` : 'Terminal');
 
   return (
-    <div className="qt-embed-terminal border border-gray-300 rounded-lg overflow-hidden bg-white">
+    <div className="qt-terminal-embed">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+      <div className="qt-terminal-embed-header">
         <div className="flex items-center gap-2 flex-1">
           <button
             onClick={toggleCollapse}
@@ -137,7 +137,7 @@ export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) 
           {session.state !== 'exited' && (
             <button
               onClick={handleKill}
-              className="qt-button-icon text-sm text-red-600 hover:text-red-700"
+              className="qt-button-icon text-sm qt-text-destructive opacity-70 hover:opacity-100"
               title="Kill session"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -151,7 +151,7 @@ export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) 
       {/* Terminal Body */}
       {!collapsed && (
         isInTerminalPane ? (
-          <div className="px-4 py-3 flex items-center justify-between gap-3 bg-gray-50 text-sm">
+          <div className="qt-terminal-embed-footer">
             <span className="qt-text-secondary">
               Showing in Terminal Mode pane.
             </span>
@@ -165,7 +165,7 @@ export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) 
             </button>
           </div>
         ) : (
-          <div className="bg-black" style={{ height: '360px' }}>
+          <div className="qt-terminal-surface" style={{ height: '360px' }}>
             <Terminal
               sessionId={sessionId}
               className="h-full w-full"

@@ -2,6 +2,20 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.35] - 2026-05-17
+
+### Added
+- Terminal component classes: `qt-terminal-surface`, `qt-terminal-embed`, `qt-terminal-embed-header`, `qt-terminal-embed-footer`, `qt-terminal-popout-page`, `qt-terminal-popout-header`, `qt-terminal-popout-link`, `qt-terminal-popout-title`, `qt-terminal-popout-separator`, `qt-terminal-closed-badge`
+- Terminal CSS variables: `--qt-terminal-bg`, `--qt-terminal-fg`, `--qt-terminal-cursor`, `--qt-terminal-selection`, `--qt-terminal-ansi-*` (16 colors), `--qt-terminal-chrome-bg`, `--qt-terminal-chrome-border`, `--qt-terminal-chrome-fg`, `--qt-terminal-chrome-muted-fg`, `--qt-terminal-closed-badge-*`, `--qt-terminal-embed-*` — themes can override these to retint the terminal stack end-to-end
+- Solid status background utilities: `qt-bg-success`, `qt-bg-warning`, `qt-bg-info`, `qt-bg-destructive`, `qt-bg-accent`, `qt-bg-muted-foreground`
+- Additional opacity variants: `qt-bg-success/40`, `qt-bg-success/60`, `qt-bg-destructive/60`, `qt-bg-muted-foreground/30`, `qt-bg-muted-foreground/60`, `qt-border-success/20`, `qt-border-success/40`, `hover:qt-bg-muted-foreground/60`
+- Foreground utility for accent-coloured surfaces: `qt-text-on-accent`
+- Terminal story preview under `stories/components/Terminal`
+
+### Fixed
+- `qt-bg-primary` now correctly maps to `var(--color-primary)` (was incorrectly pointing at `--color-background`)
+- `qt-bg-secondary` now correctly maps to `var(--color-secondary)` (was incorrectly pointing at `--color-muted`)
+
 ## [1.0.21] - 2026-02-20
 
 ### Added

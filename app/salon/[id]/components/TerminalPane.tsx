@@ -91,7 +91,7 @@ export function TerminalPane({
           <button
             type="button"
             onClick={handleKillClick}
-            className={`qt-icon-button p-1 ${confirmKill ? 'qt-text-destructive' : 'text-red-600 hover:text-red-700'}`}
+            className={`qt-icon-button p-1 qt-text-destructive ${confirmKill ? '' : 'opacity-70 hover:opacity-100'}`}
             title={confirmKill ? 'Click again to confirm: kill terminal and close pane' : 'Kill terminal and close pane'}
             aria-label="Kill terminal and close pane"
           >
@@ -102,7 +102,7 @@ export function TerminalPane({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 bg-black">
+      <div className="flex-1 min-h-0 qt-terminal-surface">
         <Terminal sessionId={sessionId} className="h-full w-full" />
       </div>
     </div>

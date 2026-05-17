@@ -36,9 +36,9 @@ export default function TerminalPopoutPage({ params }: TerminalPopoutPageProps) 
   const title = session.meta?.label || (session.meta ? `Terminal — ${session.meta.shell}` : 'Terminal');
 
   return (
-    <div className="h-screen flex flex-col bg-black">
+    <div className="qt-terminal-popout-page h-screen flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-700">
+      <div className="qt-terminal-popout-header">
         <div className="flex items-center gap-3">
           <button
             onClick={handleBack}
@@ -56,12 +56,12 @@ export default function TerminalPopoutPage({ params }: TerminalPopoutPageProps) 
           </button>
           <a
             href={`/salon/${chatId}`}
-            className="text-white hover:underline text-sm"
+            className="qt-terminal-popout-link text-sm"
           >
             Chat
           </a>
-          <span className="text-gray-500">/</span>
-          <h1 className="text-white font-medium">{title}</h1>
+          <span className="qt-terminal-popout-separator">/</span>
+          <h1 className="qt-terminal-popout-title">{title}</h1>
         </div>
 
         {session.state !== 'exited' && (
