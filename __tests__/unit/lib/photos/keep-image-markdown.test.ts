@@ -12,8 +12,8 @@ const baseInput = {
   generationPrompt: 'A glass-roofed sunroom at dusk, brass details, copper kettle',
   generationRevisedPrompt: null,
   generationModel: 'grok-image-v2',
-  characterName: 'Friday',
-  characterId: 'char-friday-1',
+  linkedByName: 'Friday',
+  linkedById: 'char-friday-1',
   tags: ['covenant', 'sunroom'],
   caption: 'the night we built the sunroom',
   keptAt: '2026-05-14T07:22:33.000Z',
@@ -95,6 +95,7 @@ describe('parseKeptImageFrontmatter', () => {
     expect(parsed.tags).toEqual(['covenant', 'sunroom']);
     expect(parsed.linkedBy).toBe('Friday');
     expect(parsed.linkedById).toBe('char-friday-1');
+    expect(parsed.linkedByRole).toBe('character');
     expect(parsed.generationModel).toBe('grok-image-v2');
     expect(parsed.caption).toBe('the night we built the sunroom');
   });

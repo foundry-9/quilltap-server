@@ -42,3 +42,5 @@ export {
 } from './documents';
 export { handleInsertAnnouncement } from './announcement';
 export { handleAnnouncementPreview } from './announcement-preview';
+export { handleGetPhotoAlbums } from './photo-albums';
+export type { PhotoAlbumOption, PhotoAlbumKind } from './photo-albums';

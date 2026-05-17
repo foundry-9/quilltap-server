@@ -72,6 +72,8 @@ interface VirtualizedMessageListProps {
   onRemoveCharacter: (participantId: string) => void
   onReattribute: (messageId: string) => void
   onImageClick: (filepath: string, filename: string, fileId?: string) => void
+  /** Opens the SaveImageDialog for one image attachment on a message. */
+  onSaveImage?: (messageId: string, attachmentId: string) => void
   fetchChat: () => Promise<void>
   // LLM logs
   messagesWithLogs: Set<string>
@@ -131,6 +133,7 @@ export function VirtualizedMessageList({
   onRemoveCharacter,
   onReattribute,
   onImageClick,
+  onSaveImage,
   fetchChat,
   messagesWithLogs,
   onViewLLMLogs,
@@ -282,6 +285,7 @@ export function VirtualizedMessageList({
                   onImageClick={(filepath, filename, fileId) => {
                     onImageClick(filepath, filename, fileId)
                   }}
+                  onSaveImage={onSaveImage}
                   onHandleNudge={turnManagement.handleNudge}
                   onHandleQueue={turnManagement.handleQueue}
                   onHandleDequeue={turnManagement.handleDequeue}

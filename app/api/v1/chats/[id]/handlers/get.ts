@@ -20,7 +20,7 @@ import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
-import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary } from '../actions';
+import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums } from '../actions';
 import {
   getPhotoLinkSummaryBySha256,
   type PhotoLinkSummary,
@@ -115,6 +115,11 @@ export async function handleGet(
   // Handle outfit-summary action - equipped outfit with resolved item titles
   if (action === 'outfit-summary') {
     return handleGetOutfitSummary(chatId, ctx);
+  }
+
+  // Handle photo-albums action - resolve candidate save targets for an image
+  if (action === 'photo-albums') {
+    return handleGetPhotoAlbums(chatId, ctx);
   }
 
   // Handle get-background action - returns story background URL for the chat

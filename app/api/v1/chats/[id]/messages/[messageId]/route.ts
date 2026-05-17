@@ -8,6 +8,8 @@
  *     the pasted reply
  * POST /api/v1/chats/[id]/messages/[messageId]?action=cancel-external-turn
  *   - Cancel a Courier placeholder turn: delete the message and unpause
+ * POST /api/v1/chats/[id]/messages/[messageId]?action=save-image
+ *   - Save an attached image to a chosen photo album
  */
 
 import { NextRequest } from 'next/server';
@@ -23,6 +25,8 @@ import {
   type MemoryChatSettings,
 } from '@/lib/services/chat-message/memory-trigger.service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { saveImageToAlbum, SaveImageToAlbumError } from '@/lib/photos/save-image-to-album';
+import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
 
 /**
  * Handle overriding danger flags on a message
@@ -270,10 +274,150 @@ async function handleCancelExternalTurn(
   }
 }
 
+const saveImageSchema = z.object({
+  fileId: z.string().uuid('fileId must be a UUID'),
+  mountPointId: z.string().uuid('mountPointId must be a UUID'),
+  caption: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+/**
+ * Save an image attachment from a chat message into a chosen photo album.
+ * Mirrors the LLM `keep_image` tool but lets the human operator pick any
+ * mount point (their persona's vault, any participant's vault, the project
+ * album, a linked document store, or Quilltap General).
+ */
+async function handleSaveImage(
+  req: NextRequest,
+  { user, repos }: AuthenticatedContext,
+  { id, messageId }: { id: string; messageId: string }
+) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const parsed = saveImageSchema.safeParse(body);
+    if (!parsed.success) {
+      return badRequest(parsed.error.issues.map((i) => i.message).join('; '));
+    }
+    const { fileId, mountPointId, caption, tags } = parsed.data;
+
+    const chat = await repos.chats.findById(id);
+    if (!chat) {
+      return notFound('Chat');
+    }
+
+    const messages = await repos.chats.getMessages(id);
+    const message = messages.find((m: { id: string }) => m.id === messageId);
+    if (!message || message.type !== 'message') {
+      return notFound('Message');
+    }
+
+    const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+    if (!attachments.includes(fileId)) {
+      return badRequest('Image is not attached to this message');
+    }
+
+    // Decide attribution. If the chosen mount point is a participant's
+    // character vault, attribute the save to that character (matching the
+    // LLM keep_image flow). Otherwise attribute it to the human operator —
+    // preferring the actively-impersonated user character's name when one
+    // exists.
+    let attribution: { name: string; id: string | null; role: 'character' | 'user' } | null = null;
+    for (const participant of chat.participants) {
+      if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
+      const vault = await getCharacterVaultStore(participant.characterId);
+      if (!vault || vault.mountPointId !== mountPointId) continue;
+      const character = await repos.characters.findById(participant.characterId);
+      attribution = {
+        name: character?.name ?? vault.mountPointName,
+        id: participant.characterId,
+        role: 'character',
+      };
+      break;
+    }
+
+    if (!attribution) {
+      let userPersonaName: string | null = null;
+      let userPersonaId: string | null = null;
+      const activeTypingId = chat.activeTypingParticipantId ?? null;
+      const activeParticipant = activeTypingId
+        ? chat.participants.find((p) => p.id === activeTypingId && p.controlledBy === 'user')
+        : undefined;
+      const fallbackParticipant = chat.participants.find((p) => p.controlledBy === 'user');
+      const userParticipant = activeParticipant ?? fallbackParticipant;
+      if (userParticipant?.characterId) {
+        const character = await repos.characters.findById(userParticipant.characterId);
+        if (character?.name) {
+          userPersonaName = character.name;
+          userPersonaId = character.id;
+        }
+      }
+      attribution = {
+        name: userPersonaName ?? user.name ?? 'Quilltap',
+        id: userPersonaId ?? user.id ?? null,
+        role: 'user',
+      };
+    }
+
+    logger.debug('[SaveImage] dispatching', {
+      chatId: id,
+      messageId,
+      fileId,
+      mountPointId,
+      attributionRole: attribution.role,
+      hasCaption: !!caption,
+    });
+
+    const saved = await saveImageToAlbum({
+      mountPointId,
+      fileId,
+      caption: caption ?? null,
+      tags: tags ?? [],
+      chatId: id,
+      attribution,
+    });
+
+    logger.info('[SaveImage] saved', {
+      chatId: id,
+      messageId,
+      fileId,
+      mountPointId,
+      relativePath: saved.relativePath,
+      linkId: saved.linkId,
+    });
+
+    return successResponse({
+      saved: true,
+      mountPoint: saved.mountPointName,
+      relativePath: saved.relativePath,
+      linkId: saved.linkId,
+      keptAt: saved.keptAt,
+      fileId: saved.fileId,
+      sha256: saved.sha256,
+    });
+  } catch (error) {
+    if (error instanceof SaveImageToAlbumError) {
+      logger.info('[SaveImage] rejected', {
+        chatId: id,
+        messageId,
+        code: error.code,
+        message: error.message,
+      });
+      return badRequest(error.message);
+    }
+    logger.error('[SaveImage] failed', {
+      chatId: id,
+      messageId,
+      error: error instanceof Error ? error.message : String(error),
+    }, error instanceof Error ? error : undefined);
+    return serverError('Failed to save image');
+  }
+}
+
 export const POST = createAuthenticatedParamsHandler<{ id: string; messageId: string }>(
   withActionDispatch({
     'override-danger-flag': handleOverrideDangerFlag,
     'resolve-external-turn': handleResolveExternalTurn,
     'cancel-external-turn': handleCancelExternalTurn,
+    'save-image': handleSaveImage,
   })
 );

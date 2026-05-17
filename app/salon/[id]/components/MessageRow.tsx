@@ -82,6 +82,12 @@ interface MessageRowProps {
   onCopyContent: (content: string) => void
   onResend: (message: Message) => void
   onImageClick: (filepath: string, filename: string, fileId?: string) => void
+  /**
+   * Open the Save Image dialog for one of the message's image attachments.
+   * Fired by the per-message save toolbar button. When omitted, the button
+   * is hidden.
+   */
+  onSaveImage?: (messageId: string, attachmentId: string) => void
   onHandleNudge: (participantId: string) => void
   onHandleQueue: (participantId: string) => void
   onHandleDequeue: (participantId: string) => void
@@ -146,6 +152,7 @@ function MessageRowInner({
   onCopyContent,
   onResend,
   onImageClick,
+  onSaveImage,
   onHandleNudge,
   onHandleQueue,
   onHandleDequeue,
@@ -431,6 +438,26 @@ function MessageRowInner({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                   </button>
+                  {/* Save image (only when one or more image attachments are present) */}
+                  {onSaveImage && getImageAttachments(message).length > 0 && (
+                    <button
+                      onClick={() => {
+                        const images = getImageAttachments(message)
+                        if (images.length > 0) {
+                          onSaveImage(message.id, images[0].id)
+                        }
+                      }}
+                      className="qt-chat-message-action-icon"
+                      title={getImageAttachments(message).length > 1
+                        ? 'Save an image to a photo album'
+                        : 'Save image to a photo album'}
+                      aria-label="Save image to a photo album"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                      </svg>
+                    </button>
+                  )}
                   {/* View source/rendered */}
                   <button
                     onClick={() => onToggleSourceView(message.id)}

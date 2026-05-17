@@ -55,6 +55,7 @@ import { WhisperDialog } from '@/components/chat/WhisperDialog'
 import SplitLayout from './components/SplitLayout'
 import DocumentPane from './components/DocumentPane'
 import DocumentPickerModal from './components/DocumentPickerModal'
+import SaveImageDialog from './components/SaveImageDialog'
 import { TerminalPane } from './components/TerminalPane'
 import TerminalSessionPicker from './components/TerminalSessionPicker'
 import { useDocumentMode, type FocusRequest } from './hooks/useDocumentMode'
@@ -115,6 +116,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [pendingToolResults, setPendingToolResults] = useState<PendingToolResult[]>([])
   const [showAllWhispers, setShowAllWhispers] = useState(false)
   const [whisperTarget, setWhisperTarget] = useState<{ participantId: string; name: string } | null>(null)
+  const [saveImageTarget, setSaveImageTarget] = useState<{ messageId: string; attachmentId: string } | null>(null)
 
   // --- Refs ---
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -1225,6 +1227,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onImageClick={(filepath, filename, fileId) => {
             modals.setModalImage({ src: filepath, filename, fileId })
           }}
+          onSaveImage={(messageId, attachmentId) => {
+            setSaveImageTarget({ messageId, attachmentId })
+          }}
           fetchChat={fetchChat}
           messagesWithLogs={llmLogs.messagesWithLogs}
           onViewLLMLogs={llmLogs.handleViewLLMLogs}
@@ -1496,6 +1501,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           handleAllLLMStop={handleAllLLMStop}
           handleAllLLMTakeOver={handleAllLLMTakeOver}
         />
+
+        {saveImageTarget && (() => {
+          const targetMessage = messages.find((m) => m.id === saveImageTarget.messageId)
+          const attachments = targetMessage?.attachments ?? []
+          return (
+            <SaveImageDialog
+              isOpen={!!saveImageTarget}
+              onClose={() => setSaveImageTarget(null)}
+              chatId={id}
+              messageId={saveImageTarget.messageId}
+              attachments={attachments}
+              initialAttachmentId={saveImageTarget.attachmentId}
+              onSaved={(info) => {
+                showSuccessToast(`Saved to ${info.mountPoint}`)
+                void fetchChatPhotoCount()
+              }}
+            />
+          )
+        })()}
       </div>
 
       <LLMInspectorPanel

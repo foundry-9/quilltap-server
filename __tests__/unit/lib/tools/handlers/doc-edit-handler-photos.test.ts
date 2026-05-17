@@ -256,6 +256,13 @@ describe('photo album handlers', () => {
     mockRepos.characters.findById.mockImplementation(async (id: string) =>
       id === 'char-friday' ? fridayCharacter : null
     );
+    // saveImageToAlbum reads the mount point row to label the result; return
+    // Friday's vault for its mount-point id.
+    mockRepos.docMountPoints.findById.mockImplementation(async (id: string) =>
+      id === 'mp-friday'
+        ? { id: 'mp-friday', name: "Friday's Vault", mountType: 'database', storeType: 'character' }
+        : null
+    );
     mockRepos.docMountFileLinks.findByMountPointId.mockResolvedValue([]);
     mockRepos.docMountFileLinks.linkBlobContent.mockResolvedValue({
       link: buildLink(),

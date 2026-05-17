@@ -70,22 +70,15 @@ import type { AttachImageInput, AttachedImageDescriptor } from '../attach-image-
 import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.types';
 import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
 import { getRepositories } from '@/lib/database/repositories';
-import { isParticipantPresent, SceneStateSchema } from '@/lib/schemas/chat.types';
+import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
-import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
-import { emitDocumentWritten } from '@/lib/mount-index/db-store-events';
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
-import { resolveUniqueRelativePath } from '@/lib/file-storage/bridge-path-helpers';
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
 import {
-  buildKeptImageMarkdown,
-  buildSlugAndFilename,
   parseKeptImageFrontmatter,
-  sha256OfString,
   basenameOfRelativePath,
 } from '@/lib/photos/keep-image-markdown';
-import { chunkAndInsertExtractedText } from '@/lib/photos/chunk-extracted-text';
-import { buildPhotosRelativePath, isPhotosRelativePath, PHOTOS_FOLDER } from '@/lib/photos/photos-paths';
+import { isPhotosRelativePath, PHOTOS_FOLDER } from '@/lib/photos/photos-paths';
+import { saveImageToAlbum, SaveImageToAlbumError } from '@/lib/photos/save-image-to-album';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { searchDocumentChunks } from '@/lib/mount-index/document-search';
 import {
@@ -2558,21 +2551,6 @@ async function handleKeepImage(
     return { success: false, error: 'keep_image requires a character context' };
   }
 
-  // Lazy-import images-v2 so the doc-edit handler module doesn't pull
-  // sharp / webp-conversion at module load — keeps unrelated handler test
-  // suites from having to mock the image-storage stack.
-  const { getImageById, readImageBuffer } = await import('@/lib/images-v2');
-
-  // 1. Resolve the image-v2 record.
-  const fileEntry = await getImageById(input.uuid);
-  if (!fileEntry) {
-    return { success: false, error: `Image not found: ${input.uuid}` };
-  }
-  if (fileEntry.category !== 'IMAGE') {
-    return { success: false, error: `File ${input.uuid} is not an image (category=${fileEntry.category})` };
-  }
-
-  // 2. Resolve the character's vault.
   const vault = await resolveActingCharacterVault(context);
   if (!vault) {
     return {
@@ -2581,141 +2559,49 @@ async function handleKeepImage(
     };
   }
 
-  // 3. Re-keep guard: collision-check on sha256 (the spec said "same fileId"
-  //    but two image-v2 records with identical bytes should still collide,
-  //    which is what linkBlobContent dedupes against anyway).
-  const collision = await findExistingPhotosLinkBySha(vault.mountPointId, fileEntry.sha256);
-  if (collision) {
-    return {
-      success: false,
-      error: `Image already kept by ${vault.characterName} on ${collision.createdAt} as ${collision.relativePath}`,
-    };
-  }
-
-  // 4. Read the image bytes.
-  let buffer: Buffer;
   try {
-    buffer = await readImageBuffer(fileEntry.id);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { success: false, error: `Failed to read image bytes: ${msg}` };
-  }
-  if (!buffer || buffer.length === 0) {
-    return { success: false, error: `Image ${input.uuid} has empty bytes` };
-  }
-
-  // 5. Look up the chat's current sceneState.
-  const repos = getRepositories();
-  let parsedSceneState = null;
-  let sceneStateMalformed = false;
-  if (context.chatId) {
-    const chat = await repos.chats.findById(context.chatId);
-    const raw = chat?.sceneState;
-    if (raw !== null && raw !== undefined) {
-      const parseResult = SceneStateSchema.safeParse(raw);
-      if (parseResult.success) {
-        parsedSceneState = parseResult.data;
-      } else {
-        sceneStateMalformed = true;
-        logger.warn('Scene state failed schema validation; using placeholder', {
-          chatId: context.chatId,
-          error: parseResult.error.message,
-        });
-      }
-    }
-  }
-
-  // 6. Build the Markdown context document.
-  const keptAt = new Date().toISOString();
-  const markdown = buildKeptImageMarkdown({
-    generationPrompt: fileEntry.generationPrompt ?? null,
-    generationRevisedPrompt: fileEntry.generationRevisedPrompt ?? null,
-    generationModel: fileEntry.generationModel ?? null,
-    sceneState: parsedSceneState,
-    sceneStateMalformed,
-    characterName: vault.characterName,
-    characterId: vault.characterId,
-    tags: input.tags ?? [],
-    caption: input.caption ?? null,
-    keptAt,
-  });
-  const extractedTextSha256 = sha256OfString(markdown);
-
-  // 7. Compute the filename and reserve a non-colliding path.
-  const { filename } = buildSlugAndFilename({
-    caption: input.caption ?? null,
-    generationPrompt: fileEntry.generationPrompt ?? null,
-    mimeType: fileEntry.mimeType,
-    keptAt,
-  });
-  const desiredPath = buildPhotosRelativePath(filename);
-  const relativePath = await resolveUniqueRelativePath(vault.mountPointId, desiredPath);
-  const folderId = await ensureFolderPath(vault.mountPointId, PHOTOS_FOLDER);
-
-  // 8. Hard-link the binary into the vault, attaching the Markdown as the
-  //    new link's extractedText. linkBlobContent dedupes by sha256, so if
-  //    this image was already linked elsewhere we share the file row.
-  const { link } = await repos.docMountFileLinks.linkBlobContent({
-    mountPointId: vault.mountPointId,
-    relativePath,
-    fileName: basenameOfRelativePath(relativePath),
-    folderId,
-    originalFileName: fileEntry.originalFilename,
-    originalMimeType: fileEntry.mimeType,
-    storedMimeType: fileEntry.mimeType,
-    sha256: fileEntry.sha256,
-    data: buffer,
-    description: input.caption ?? '',
-    extractedText: markdown,
-    extractedTextSha256,
-    extractionStatus: 'converted',
-  });
-
-  // 9. Chunk + index the Markdown so the vault search picks it up. The
-  //    auto-chunker dispatches by file extension and skips image blobs, so
-  //    we drive it directly here.
-  await chunkAndInsertExtractedText({
-    linkId: link.id,
-    mountPointId: vault.mountPointId,
-    extractedText: markdown,
-    repos,
-  });
-
-  // 10. Bookkeeping.
-  invalidateMountPoint(vault.mountPointId);
-  emitDocumentWritten({ mountPointId: vault.mountPointId, relativePath });
-  enqueueEmbeddingJobsForMountPoint(vault.mountPointId).catch(err => {
-    logger.warn('Failed to enqueue embedding jobs after keep_image', {
+    const saved = await saveImageToAlbum({
       mountPointId: vault.mountPointId,
-      error: err instanceof Error ? err.message : String(err),
+      fileId: input.uuid,
+      caption: input.caption ?? null,
+      tags: input.tags ?? [],
+      chatId: context.chatId ?? null,
+      attribution: {
+        name: vault.characterName,
+        id: vault.characterId,
+        role: 'character',
+      },
     });
-  });
-  repos.docMountPoints.refreshStats(vault.mountPointId).catch(() => { /* best effort */ });
 
-  logger.info('Kept image', {
-    fileEntryId: fileEntry.id,
-    sha256: fileEntry.sha256,
-    linkId: link.id,
-    mountPointId: vault.mountPointId,
-    relativePath,
-    characterId: vault.characterId,
-  });
-
-  const result: KeepImageOutput = {
-    success: true,
-    mount_point: vault.mountPointName,
-    relative_path: relativePath,
-    link_id: link.id,
-    kept_at: keptAt,
-    file_id: fileEntry.id,
-    sha256: fileEntry.sha256,
-  };
-  const formattedCaption = input.caption ? ` ("${input.caption}")` : '';
-  return {
-    success: true,
-    result,
-    formattedText: `Kept image ${fileEntry.id} as [${vault.mountPointName}] ${relativePath}${formattedCaption}`,
-  };
+    const result: KeepImageOutput = {
+      success: true,
+      mount_point: saved.mountPointName,
+      relative_path: saved.relativePath,
+      link_id: saved.linkId,
+      kept_at: saved.keptAt,
+      file_id: saved.fileId,
+      sha256: saved.sha256,
+    };
+    const formattedCaption = input.caption ? ` ("${input.caption}")` : '';
+    return {
+      success: true,
+      result,
+      formattedText: `Kept image ${saved.fileId} as [${saved.mountPointName}] ${saved.relativePath}${formattedCaption}`,
+    };
+  } catch (err) {
+    if (err instanceof SaveImageToAlbumError) {
+      // Preserve the original keep_image wording so existing LLM behaviour
+      // and any tests that match against the error string still pass.
+      if (err.code === 'ALREADY_SAVED' && err.existingRelativePath && err.existingCreatedAt) {
+        return {
+          success: false,
+          error: `Image already kept by ${vault.characterName} on ${err.existingCreatedAt} as ${err.existingRelativePath}`,
+        };
+      }
+      return { success: false, error: err.message };
+    }
+    throw err;
+  }
 }
 
 interface VisiblePhotoVault {

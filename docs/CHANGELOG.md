@@ -4,6 +4,25 @@
 
 ### 4.4-dev
 
+#### Feature: Save image button on Salon message toolbar
+
+Operators can now save any image attached to a chat message into a photo album from the UI. The per-message action bar gains a bookmark icon whenever the message has at least one image attachment (Lantern backdrops, Aurora avatars, `generate_image` results, user uploads, `attach_image` calls). Clicking it opens a dialog with a dropdown of candidate albums:
+
+- Each chat participant's character vault (the user-controlled persona's vault is preselected; falls back to Quilltap General for all-LLM chats).
+- The project's own album (when the project has an `officialMountPointId`).
+- Every document store linked to the project.
+- The instance-wide "Quilltap General" album.
+
+A caption is optional. The save uses the same `photos/` folder, markdown sidecar, and dedup-by-sha256 plumbing as the LLM `keep_image` tool.
+
+- New shared service `lib/photos/save-image-to-album.ts`. The `keep_image` LLM tool (`lib/tools/handlers/doc-edit-handler.ts`) is now a thin wrapper around it; the LLM contract and error wording are preserved. The service throws `SaveImageToAlbumError` for the expected failure modes (image not found, not an image, empty bytes, mount missing, already saved) so callers can decide whether to surface them as user-facing errors.
+- The kept-image markdown frontmatter now carries an explicit `linkedByRole` (`character` / `user` / `system`). `BuildKeptImageMarkdownInput` renamed its `characterName` / `characterId` fields to the role-agnostic `linkedByName` / `linkedById`, with an optional `linkedByRole`. `parseKeptImageFrontmatter` defaults `linkedByRole` to `'character'` when the field is missing, so existing rows continue to parse. Callers in `lib/photos/character-gallery-service.ts` and `lib/photos/user-gallery-service.ts` updated; the user-gallery path now declares `role: 'user'`.
+- New `GET /api/v1/chats/[id]?action=photo-albums` returns the dialog's option list. Default selection prefers `activeTypingParticipantId` when it's a user-controlled participant, then the first user-controlled participant with a vault, then Quilltap General. Handler at `app/api/v1/chats/[id]/actions/photo-albums.ts`; wired into the chat GET dispatcher.
+- New `POST /api/v1/chats/[id]/messages/[messageId]?action=save-image` validates that the requested `fileId` is in the message's `attachments`, derives attribution (character-vault saves attribute to that character; non-vault saves attribute to the user's persona or `user.name`), and delegates to `saveImageToAlbum`. Mapped on the existing message POST route.
+- UI: new bookmark icon in `app/salon/[id]/components/MessageRow.tsx` (rendered only when `getImageAttachments(message).length > 0` and `onSaveImage` is provided). New `SaveImageDialog` component in the same directory, opened from the salon page via a new `saveImageTarget` state pair. Plumbed through `VirtualizedMessageList.tsx` with a new `onSaveImage` prop.
+- Album options for projects, document stores, and Quilltap General lazily create a `photos/` folder in the chosen mount on first save via `ensureFolderPath`; `isPhotosRelativePath` is treated as mount-agnostic.
+- Test coverage: existing `__tests__/unit/lib/photos/keep-image-markdown.test.ts` and `__tests__/unit/lib/photos/photo-link-summary.test.ts` updated for the renamed fields and additional `linkedByRole` assertion. Existing `__tests__/unit/lib/tools/handlers/doc-edit-handler-photos.test.ts` continues to pass against the refactored `handleKeepImage`.
+
 #### Change: Prospero's project and general context announcements merged into one
 
 At chat-start and on each cadence re-injection, Prospero was posting two separate ASSISTANT messages — one labeled "project information" with the project's description / instructions / linked stores, and a second labeled "general context" naming the instance-wide "Quilltap General" shelf. In a project chat the two messages always fired back-to-back; the second never carried information that depended on the first. Collapsed into a single announcement.

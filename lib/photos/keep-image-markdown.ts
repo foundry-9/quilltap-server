@@ -40,6 +40,8 @@ const MIME_TO_EXTENSION: Record<string, string> = {
   'image/heif': 'heif',
 };
 
+export type KeptImageAttributionRole = 'character' | 'user' | 'system';
+
 export interface BuildKeptImageMarkdownInput {
   generationPrompt: string | null;
   generationRevisedPrompt: string | null;
@@ -47,8 +49,15 @@ export interface BuildKeptImageMarkdownInput {
   sceneState: SceneState | null;
   /** True when chat.sceneState was non-null but failed schema validation. */
   sceneStateMalformed?: boolean;
-  characterName: string;
-  characterId: string;
+  /** Display name of whoever saved the image (character name, user persona name, or "Quilltap"). */
+  linkedByName: string;
+  /** Optional id matching `linkedByName` — characterId for character saves, participantId for user saves, null otherwise. */
+  linkedById: string | null;
+  /**
+   * Role of the saver. Defaults to `'character'` for back-compat with rows
+   * written before this field existed. UI/search treats all three the same.
+   */
+  linkedByRole?: KeptImageAttributionRole;
   tags: string[];
   caption: string | null;
   keptAt: string;
@@ -58,10 +67,12 @@ export interface BuildKeptImageMarkdownInput {
  * Build the full Markdown document that gets stored as the link's extractedText.
  */
 export function buildKeptImageMarkdown(input: BuildKeptImageMarkdownInput): string {
+  const role: KeptImageAttributionRole = input.linkedByRole ?? 'character';
   const frontmatter: Record<string, unknown> = {
     tags: input.tags ?? [],
-    linkedBy: input.characterName,
-    linkedById: input.characterId,
+    linkedBy: input.linkedByName,
+    linkedById: input.linkedById,
+    linkedByRole: role,
     generationModel: input.generationModel ?? null,
   };
   const yamlBlock = `---\n${YAML.stringify(frontmatter)}---\n`;
@@ -83,17 +94,17 @@ export function buildKeptImageMarkdown(input: BuildKeptImageMarkdownInput): stri
     sections.push(sceneBlock);
   }
 
-  sections.push(buildAttributionLine(input.characterName, input.keptAt, input.caption));
+  sections.push(buildAttributionLine(input.linkedByName, input.keptAt, input.caption));
 
   return `${yamlBlock}\n${sections.join('\n\n')}\n`;
 }
 
-function buildAttributionLine(characterName: string, keptAt: string, caption: string | null): string {
+function buildAttributionLine(linkedByName: string, keptAt: string, caption: string | null): string {
   const trimmedCaption = caption?.trim() ?? '';
   if (trimmedCaption) {
-    return `${characterName} saved this image at ${keptAt} with this caption: ${trimmedCaption}`;
+    return `${linkedByName} saved this image at ${keptAt} with this caption: ${trimmedCaption}`;
   }
-  return `${characterName} saved this image at ${keptAt}.`;
+  return `${linkedByName} saved this image at ${keptAt}.`;
 }
 
 /**
@@ -141,6 +152,8 @@ export interface KeptImageFrontmatter {
   tags: string[];
   linkedBy: string | null;
   linkedById: string | null;
+  /** Role of the saver. Defaults to `'character'` for back-compat with rows written before this field existed. */
+  linkedByRole: KeptImageAttributionRole;
   generationModel: string | null;
   /** The trailing "X saved this image at TS with this caption: …" caption, if any. */
   caption: string | null;
@@ -156,6 +169,7 @@ export function parseKeptImageFrontmatter(extractedText: string | null | undefin
     tags: [],
     linkedBy: null,
     linkedById: null,
+    linkedByRole: 'character',
     generationModel: null,
     caption: null,
   };
@@ -171,11 +185,16 @@ export function parseKeptImageFrontmatter(extractedText: string | null | undefin
 
   const linkedBy = typeof data.linkedBy === 'string' ? data.linkedBy : null;
   const linkedById = typeof data.linkedById === 'string' ? data.linkedById : null;
+  const roleRaw = data.linkedByRole;
+  const linkedByRole: KeptImageAttributionRole =
+    roleRaw === 'user' || roleRaw === 'system' || roleRaw === 'character'
+      ? roleRaw
+      : 'character';
   const generationModel = typeof data.generationModel === 'string' ? data.generationModel : null;
 
   const caption = extractCaptionFromBody(extractedText.slice(parsed.bodyStartOffset));
 
-  return { tags, linkedBy, linkedById, generationModel, caption };
+  return { tags, linkedBy, linkedById, linkedByRole, generationModel, caption };
 }
 
 const CAPTION_REGEX = / saved this image at [^\s]+ with this caption: (.+)$/m;
