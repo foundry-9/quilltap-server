@@ -4,6 +4,18 @@
 
 ### 4.4-dev
 
+#### Docs: Reconcile API.md with current routes
+
+Audited `docs/developer/API.md` against the routes actually present under `app/api/`. The doc was out of date in several places — entire stale sections, missing endpoints, and a version-string mismatch.
+
+- Added full sections for **Mount Points** (`/api/v1/mount-points` plus the `[id]/files`, `[id]/folders`, `[id]/blobs`, and `[id]/blobs/[...path]` subroutes — CRUD, `scan`, `convert`, `deconvert` actions, blob streaming with the `doc_mount_documents` fallback) and **Terminals** (`/api/v1/terminals` plus `[id]` — spawn, list, get with ring buffer fallback, `kill`/`signal`/`write` actions, delete).
+- Added the three undocumented chat actions: `announcement`, `announcement-preview` (new Chat Announcements subsection) and `photo-albums` (new Chat Photo Albums subsection).
+- Removed stale sections that no longer match the codebase: File Write Permissions, Shell sudo-approval, Shell workspace-acknowledgement, the non-v1 `/api/plugins/*` block, the non-v1 `/api/themes` / `/api/themes/[id]/tokens` / `/api/theme-preference` endpoints, the redundant "Files & Images (Legacy)" stub, and the "Tools & Backup (Legacy)" block whose live content was already covered by Background Jobs and System Backup & Restore.
+- Replaced the deleted Themes block with a focused "Theme Assets & Fonts" section that documents the two real non-v1 routes (`/api/themes/assets/[...path]` and `/api/themes/fonts/[...path]`).
+- Split the "Templates" parent header into standalone "Prompt Templates" and "Roleplay Templates" sections so their TOC anchors resolve.
+- Rebuilt the Table of Contents to match section order and added missing entries (Session, Chat Announcements, Chat Photo Albums, Prompt Templates, Roleplay Templates, Mount Points, Terminals, Theme Assets & Fonts, Background Jobs).
+- Fixed the bottom-of-file Versioning string from `v4.0-dev` to `v4.3-dev` to match the freshness note. Updated the freshness note to list Mount Points, Terminals, the new chat actions, and the `commonplaceBook` / `ariel` `systemSender` values.
+
 #### Chore: Tune bundled themes to the new terminal tokens
 
 Each bundled theme now defines its own `--qt-terminal-*` block so the in-chat terminal embed and pop-out page take on the theme's palette instead of the generic VS-Code dark default. Also fixed a malformed CSS comment in Old School that was swallowing the shared-block closing brace.
@@ -17,7 +29,7 @@ Each bundled theme now defines its own `--qt-terminal-*` block so the in-chat te
 
 #### Chore: Convert terminal and optimizer surfaces to qt-* theme classes
 
-Audited every UI file modified since commit e8905be0 against the "use qt-* classes when possible" rule. The terminal feature (added in commits 7e79245b and c1209ec2) hard-coded `bg-black`, `bg-gray-900`, `text-white`, `text-red-600`, etc., bypassing the theme layer. The character optimizer referenced `qt-bg-muted-foreground` and `bg-amber-500` / `bg-green-500/*` colors that either didn't exist as qt-* classes or weren't theme-aware. Added the missing utility classes, hoisted the terminal color tokens out of dark-mode-only into the universal block, and converted the consumers.
+Audited every UI file modified since commit e8905be0 against the "use qt-\* classes when possible" rule. The terminal feature (added in commits 7e79245b and c1209ec2) hard-coded `bg-black`, `bg-gray-900`, `text-white`, `text-red-600`, etc., bypassing the theme layer. The character optimizer referenced `qt-bg-muted-foreground` and `bg-amber-500` / `bg-green-500/*` colors that either didn't exist as qt-* classes or weren't theme-aware. Added the missing utility classes, hoisted the terminal color tokens out of dark-mode-only into the universal block, and converted the consumers.
 
 - `app/styles/qt-components/_utilities.css`: added solid status backgrounds `qt-bg-success`, `qt-bg-warning`, `qt-bg-info`, `qt-bg-destructive`, `qt-bg-primary`, `qt-bg-accent`, `qt-bg-muted-foreground`; added text utility `qt-text-on-accent`; added opacity variants `qt-bg-success/40`, `qt-bg-success/60`, `qt-bg-destructive/60`, `qt-bg-muted-foreground/30`, `qt-bg-muted-foreground/60`, `qt-border-success/20`, `qt-border-success/40`; added `hover:qt-bg-muted-foreground/60`. Several of these were referenced by existing code but had no definition, so the styling silently fell back to nothing.
 - `app/styles/qt-components/_variables.css`: moved the `--qt-terminal-*` token block (background, foreground, cursor, selection, all 16 ANSI colors) out of `[data-theme].dark` and into the universal `[data-theme],[data-theme].dark,[data-theme].light` baseline so terminals render correctly in light themes too. Added new chrome tokens `--qt-terminal-chrome-bg`, `--qt-terminal-chrome-border`, `--qt-terminal-chrome-fg`, `--qt-terminal-chrome-muted-fg`, `--qt-terminal-closed-badge-*`, and `--qt-terminal-embed-*` so themes can retint the pop-out header, in-chat embed strips, and exited-session overlay.
