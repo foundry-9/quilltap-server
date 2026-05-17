@@ -58,6 +58,8 @@ Character vault documents (`identity.md`) and character DB fields (`description`
 
 In the Salon composer's Run Tool modal, the character dropdown was wired to `participant.characterId`, which the chat enrichment service (`enrichParticipantDetail`) doesn't include on its output — only the nested `character.id` is populated. Every `<option>` therefore got `value=""`, so every selection collapsed to the same empty string and React's controlled `<select>` snapped the displayed option back to whichever active character appeared first. Switched the option value and the default-character derivation in `components/chat/RunToolModal.tsx` to `participant.character?.id`.
 
+- Regression coverage in `__tests__/unit/components/chat/RunToolModal.test.tsx`: verifies selection stays on the user-picked character and the execute payload carries that nested `character.id` even when no top-level `participant.characterId` is present.
+
 #### Fix: Tool results from personal lookups no longer leak into peer LLM context
 
 A character calling `search` or `read_conversation` was writing the tool result as a public chat message, so on the next character's turn the result was injected into that character's LLM context. Friday could read Amy's old conversation summary even though Friday wasn't a participant in that old chat. Vault-read tools (`doc_read_file`, `doc_list_files`, `doc_grep`, `doc_read_heading`, `doc_read_frontmatter`, `doc_read_blob`, `doc_list_blobs`, `doc_open_document`) leaked the same way.
@@ -72,6 +74,8 @@ A character calling `search` or `read_conversation` was writing the tool result 
 #### Fix: Off-scene character intros only fire on what characters say
 
 `lib/chat/context-manager.ts` built the scan corpus for off-scene character mentions from `chat.contextSummary` plus every visible USER/ASSISTANT message — including ASSISTANT messages authored by the Host, Aurora, the Lantern, the Concierge, the Librarian, and the Commonplace Book. A workspace character whose name surfaced only in a memory recall whisper or a summary block would trigger a Host introduction in the next turn, even though no participant had actually talked about them. The scan now reads the full chat history and skips any message with a non-null `systemSender`, as well as the conversation summary. USER messages and character-authored ASSISTANT messages still feed the scan (with `stripToolArtifacts` still applied to assistant content). The full chat history lookup that the introduced-IDs diff already needed is now performed once and shared with the corpus build.
+
+- Regression coverage in `__tests__/unit/context-management.test.ts`: asserts the off-scene scan ignores summary/system-sender mentions, avoids posting a Host introduction in that case, and uses one shared `getMessages` fetch.
 
 #### Fix: Opaque characters no longer hear the Staff by name
 

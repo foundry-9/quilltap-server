@@ -975,6 +975,84 @@ describe('Context Manager', () => {
       expect(userMsg.content).toContain('You also recall about the others present')
       expect(userMsg.content).toContain('## Memories About Other Characters')
     })
+
+    it('ignores summary/system messages when scanning off-scene mentions', async () => {
+      const offSceneCharacter: Character = {
+        ...characterA,
+        id: 'char-c',
+        name: 'Morgan',
+      }
+      const repoMock = {
+        characters: {
+          findByUserId: jest.fn().mockResolvedValue([characterA, characterB, characterUser, offSceneCharacter]),
+        },
+        chats: {
+          getMessages: jest.fn().mockResolvedValue([
+            {
+              type: 'message',
+              role: 'ASSISTANT',
+              systemSender: 'commonplaceBook',
+              content: 'Morgan should help here.',
+              createdAt: timestamp,
+            },
+            {
+              type: 'message',
+              role: 'USER',
+              content: 'Let us keep going.',
+              createdAt: timestamp,
+            },
+          ]),
+          addMessage: jest.fn(),
+        },
+        memories: {
+          findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]),
+        },
+      }
+      mockedGetRepositories.mockReturnValue(repoMock as any)
+      mockedSearchMemories.mockResolvedValue([])
+
+      const result = await buildContext({
+        provider: 'OPENAI',
+        modelName: 'gpt-4o',
+        userId: 'user',
+        character: characterA,
+        userCharacter: { name: 'Alex', description: 'Curious' },
+        chat: {
+          id: 'chat-1',
+          userId: 'user',
+          participants: allParticipants,
+          title: 'Test Chat',
+          contextSummary: 'Morgan was discussed in summary text only.',
+          sillyTavernMetadata: null,
+          tags: [],
+          messageCount: 2,
+          lastMessageAt: timestamp,
+          lastRenameCheckInterchange: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+        existingMessages: [
+          { role: 'USER', content: 'Hello', id: 'm1' },
+          { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+        ],
+        newUserMessage: 'Ready for the next task?',
+        embeddingProfileId: null,
+        skipMemories: true,
+        maxMemories: 1,
+        minMemoryImportance: 0.3,
+        respondingParticipant: participantA,
+        allParticipants,
+        participantCharacters,
+        messagesWithParticipants: [
+          { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+          { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+        ],
+      })
+
+      expect(repoMock.chats.getMessages).toHaveBeenCalledTimes(1)
+      expect(repoMock.chats.addMessage).not.toHaveBeenCalled()
+      expect(result.messages.some(m => m.role === 'assistant' && m.content.includes('Off-Scene Character Mentioned'))).toBe(false)
+    })
   })
 
   describe('buildIdentityReinforcement', () => {
