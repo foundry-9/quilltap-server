@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Chore: Dead code cleanup — barrel slim-down and dependency removal
+
+Periodic knip pass. Removed 11 dead files, trimmed unused re-exports from 15 barrel files, and dropped 4 unused dependencies.
+
+- Files deleted: `components/terminal/index.ts`, `components/files/FolderManagement/MoveFileModal.tsx`, `components/files/FolderManagement/RenameModal.tsx`, `components/images/embedded-gallery/hooks/index.ts`, `components/tools/restore/hooks/index.ts`, `components/tools/search-replace/hooks/index.ts`, `components/settings/connection-profiles/hooks/index.ts`, `components/layout/left-sidebar/sidebar-item.tsx`, `components/layout/left-sidebar/sidebar-section.tsx`, `components/settings/connection-profiles/ProfileForm.tsx`, `components/settings/embedding-profiles/ProfileForm.tsx`. Each was either a barrel index never imported, a hook barrel where consumers imported the underlying file directly, or a component whose only references were dead re-exports.
+- Barrels trimmed (15): `components/files/FolderManagement/index.ts`, `components/images/embedded-gallery/index.ts`, `components/tools/restore/index.ts`, `components/clothing-records/index.ts`, `components/physical-descriptions/index.ts`, `components/homepage/index.ts`, `components/wardrobe/index.ts`, `components/files/FilePreview/index.ts`, `components/tools/search-replace/index.ts`, `components/tools/tool-settings/index.ts`, `components/characters/ai-wizard/index.ts`, `components/tools/import-export/components/index.ts`, `components/settings/connection-profiles/index.tsx`, `components/settings/embedding-profiles/index.tsx`, `components/layout/left-sidebar/index.tsx`. Each kept only the re-exports its consumers actually import.
+- Dependencies removed from `package.json`: `@lexical/clipboard` and `@lexical/history` (both transitive deps of `@lexical/react` / sibling lexical packages, no direct import), `@quilltap/theme-storybook` (lives as its own published package in `packages/theme-storybook/`; no app code imports it), `jsdom` from devDependencies (transitive via `jest-environment-jsdom`).
+- `knip.json`: added `lib/background-jobs/child/child-entry.ts` to `ignore` (forked at runtime via `child_process.fork` by `processor-host.ts`); added `create-quilltap-theme` and `esbuild` to `ignoreDependencies` (both invoked via `npx` in build / theme-scaffold scripts, not imported).
+- Updated `docs/developer/DEAD-CODE-REPORT.md` with a dated section covering all of the above.
+
 #### Chore: Remove debug-level logging added since commit 96bf74b5
 
 Commit 96bf74b5 had previously stripped all `logger.debug` / `console.debug` calls from source. Twenty-nine debug calls accumulated again in subsequent feature work. Removed them all, plus the locals and helpers that only existed to feed them.

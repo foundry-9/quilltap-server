@@ -10,22 +10,6 @@ import { ProfileModal } from './ProfileModal'
 import { ProfileList } from './ProfileList'
 import type { EmbeddingProfile } from './types'
 
-// Re-export types and utilities for consumers
-export type {
-  ApiKey,
-  EmbeddingModel,
-  EmbeddingProfile,
-  EmbeddingProfileFormData,
-  EmbeddingProvider,
-  VocabularyStats,
-  EmbeddingStatusStats,
-} from './types'
-export { PROVIDER_BADGE_CLASSES, PROVIDER_COLORS } from './types'
-export { useEmbeddingProfiles } from './hooks/useEmbeddingProfiles'
-export { ProfileForm } from './ProfileForm'
-export { ProfileList } from './ProfileList'
-export { ProviderBadge } from './ProviderBadge'
-
 /**
  * Main embedding profiles settings tab component
  */
