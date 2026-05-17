@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Feature: "Every X minutes" timestamp injection mode
+
+Added a fourth Reality Injection / Timestamp mode alongside Disabled, Conversation Start, and Every Message. In `EVERY_N_MINUTES` mode the Host posts a timestamp announcement only when at least the configured number of minutes (default 15) have elapsed since the last one in the chat. The initial message always receives an announcement.
+
+- `TimestampModeEnum` in `lib/schemas/settings.types.ts` adds `'EVERY_N_MINUTES'`; `TimestampConfigSchema` adds `intervalMinutes: z.number().int().min(1).default(15)`. Mirrored in the chat-settings `TimestampConfig` interface (`components/settings/chat-settings/types.ts`) and added to `TIMESTAMP_MODES` for the UI.
+- `shouldInjectTimestamp` (`lib/chat/timestamp-utils.ts`) gains a third optional parameter `minutesSinceLastAnnouncement`. For `EVERY_N_MINUTES`, the gate fires on the initial message, fires when no prior announcement exists, and otherwise fires only when elapsed minutes >= the configured interval.
+- `buildContext` in `lib/chat/context-manager.ts` resolves the "minutes since last Host timestamp announcement" exactly once per turn (only when the mode is `EVERY_N_MINUTES`) by scanning `repos.chats.getMessages(chat.id)` for the most recent `systemSender='host'` + `systemKind='timestamp'` message. Passes the result to both `shouldInjectTimestamp` call sites (scene-state gate and Host emission).
+- `TimestampConfigCard` (`components/settings/chat-settings/components/TimestampConfigCard.tsx`) renders a number input for the interval whenever `EVERY_N_MINUTES` is selected; seeds 15 the first time the mode is picked. The compact summary line and the existing chat-settings help (`help/chat-settings.md`) cover the new mode.
+- Test coverage in `__tests__/unit/lib/chat/timestamp-utils.test.ts` (6 new tests in an `EVERY_N_MINUTES mode` describe block): initial-message override, null/undefined "never announced" treatment, sub-interval suppression, at-or-over-interval firing, missing-`intervalMinutes` fallback to 15, custom-interval honoring.
+
 #### Feature: Save image button on Salon message toolbar
 
 Operators can now save any image attached to a chat message into a photo album from the UI. The per-message action bar gains a bookmark icon whenever the message has at least one image attachment (Lantern backdrops, Aurora avatars, `generate_image` results, user uploads, `attach_image` calls). Clicking it opens a dialog with a dropdown of candidate albums:

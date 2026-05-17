@@ -9,7 +9,7 @@ export type AvatarDisplayMode = 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
 export type AvatarDisplayStyle = 'CIRCULAR' | 'RECTANGULAR'
 export type CheapLLMStrategy = 'USER_DEFINED' | 'PROVIDER_CHEAPEST' | 'LOCAL_FIRST'
 export type EmbeddingProvider = 'SAME_PROVIDER' | 'OPENAI' | 'LOCAL'
-export type TimestampMode = 'NONE' | 'START_ONLY' | 'EVERY_MESSAGE'
+export type TimestampMode = 'NONE' | 'START_ONLY' | 'EVERY_MESSAGE' | 'EVERY_N_MINUTES'
 export type TimestampFormat = 'ISO8601' | 'FRIENDLY' | 'DATE_ONLY' | 'TIME_ONLY' | 'CUSTOM'
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'
 
@@ -43,6 +43,8 @@ export interface TimestampConfig {
   fictionalBaseRealTime?: string | null
   autoPrepend: boolean
   timezone?: string | null
+  /** Minimum minutes between Host timestamp announcements when mode is EVERY_N_MINUTES (default 15) */
+  intervalMinutes: number
 }
 
 export interface MemoryCascadePreferences {
@@ -190,6 +192,11 @@ export const TIMESTAMP_MODES = [
     label: 'Every Message',
     description: 'Update timestamp with each message sent',
   },
+  {
+    value: 'EVERY_N_MINUTES' as const,
+    label: 'Every X Minutes',
+    description: 'Have the Host announce the time only when at least this many minutes have passed since the last announcement',
+  },
 ] as const
 
 /**
@@ -237,6 +244,7 @@ export const DEFAULT_TIMESTAMP_CONFIG: TimestampConfig = {
   format: 'FRIENDLY',
   useFictionalTime: false,
   autoPrepend: true,
+  intervalMinutes: 15,
 }
 
 /**

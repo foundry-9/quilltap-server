@@ -426,6 +426,44 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Get the selectedSystemPromptId from the responding participant
   const selectedSystemPromptId = respondingParticipant?.selectedSystemPromptId
 
+  // EVERY_N_MINUTES gating: find the most recent Host timestamp announcement
+  // in this chat so the gate can compare elapsed minutes to the configured
+  // interval. `null` means "no prior announcement" → shouldInjectTimestamp
+  // will fire. Resolved here, used at both the scene-state gate and the
+  // emission site below.
+  let minutesSinceLastTimestampAnnouncement: number | null = null
+  if (options.timestampConfig?.mode === 'EVERY_N_MINUTES') {
+    try {
+      const repos = getRepositories()
+      const allMessages = await repos.chats.getMessages(chat.id)
+      let mostRecent: number | null = null
+      for (const m of allMessages as Array<{
+        type?: string
+        systemSender?: string | null
+        systemKind?: string | null
+        createdAt?: string
+      }>) {
+        if (m.type !== 'message') continue
+        if (m.systemSender !== 'host') continue
+        if (m.systemKind !== 'timestamp') continue
+        if (!m.createdAt) continue
+        const t = new Date(m.createdAt).getTime()
+        if (Number.isFinite(t) && (mostRecent === null || t > mostRecent)) {
+          mostRecent = t
+        }
+      }
+      if (mostRecent !== null) {
+        minutesSinceLastTimestampAnnouncement = (Date.now() - mostRecent) / 60_000
+      }
+    } catch (error) {
+      logger.warn('[ContextManager] Failed to resolve last timestamp announcement; allowing emission', {
+        context: 'context-manager',
+        chatId: chat.id,
+        error: getErrorMessage(error),
+      })
+    }
+  }
+
   // Phase D: wardrobe context (current outfit + available items) is now
   // delivered as Aurora whispers in the transcript, so the per-turn
   // system-prompt loading of equipped outfits has been removed.
@@ -981,7 +1019,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     let sceneTime: string | null = null
     if (
       options.timestampConfig?.autoPrepend &&
-      shouldInjectTimestamp(options.timestampConfig, options.isInitialMessage ?? false)
+      shouldInjectTimestamp(options.timestampConfig, options.isInitialMessage ?? false, minutesSinceLastTimestampAnnouncement)
     ) {
       sceneTime = calculateCurrentTimestamp(options.timestampConfig, options.timezone).formatted
     }
@@ -1420,7 +1458,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // one-turn lag. The `{{timestamp}}` template variable path is unaffected.
   if (
     options.timestampConfig?.autoPrepend &&
-    shouldInjectTimestamp(options.timestampConfig, options.isInitialMessage ?? false)
+    shouldInjectTimestamp(options.timestampConfig, options.isInitialMessage ?? false, minutesSinceLastTimestampAnnouncement)
   ) {
     const timestamp = calculateCurrentTimestamp(options.timestampConfig, options.timezone)
     await postHostTimestampAnnouncement({

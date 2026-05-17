@@ -170,6 +170,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               format: 'FRIENDLY',
               useFictionalTime: false,
               autoPrepend: true,
+              intervalMinutes: 15,
             },
             memoryCascadePreferences: {
               onMessageDelete: 'ASK_EVERY_TIME',
