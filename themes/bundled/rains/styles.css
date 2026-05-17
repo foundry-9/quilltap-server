@@ -831,6 +831,39 @@
   --qt-warning-box-bg: hsl(var(--warning-900) / 0.15);
   --qt-warning-box-border: hsl(var(--warning-100) / 0.3);
   --qt-warning-box-fg: hsl(var(--warning-100));
+
+  /* ================================================================
+     TERMINAL VARIABLES — lantern-lit by a rain-streaked window
+     Warm dark walnut pane, cream/amber text, orange cursor.
+     Pulls the theme's signature warm-orange accent into the readout.
+     ================================================================ */
+  --qt-terminal-bg: hsl(25 14% 9%);
+  --qt-terminal-fg: hsl(48 30% 92%);
+  --qt-terminal-cursor: hsl(15 75% 62%);
+  --qt-terminal-selection: hsl(15 70% 55% / 0.32);
+  --qt-terminal-ansi-black: hsl(25 12% 14%);
+  --qt-terminal-ansi-red: hsl(0 65% 60%);
+  --qt-terminal-ansi-green: hsl(97 50% 55%);
+  --qt-terminal-ansi-yellow: hsl(40 75% 60%);
+  --qt-terminal-ansi-blue: hsl(210 65% 64%);
+  --qt-terminal-ansi-magenta: hsl(330 55% 66%);
+  --qt-terminal-ansi-cyan: hsl(190 55% 58%);
+  --qt-terminal-ansi-white: hsl(48 22% 88%);
+  --qt-terminal-ansi-bright-black: hsl(25 10% 40%);
+  --qt-terminal-ansi-bright-red: hsl(0 75% 72%);
+  --qt-terminal-ansi-bright-green: hsl(97 55% 66%);
+  --qt-terminal-ansi-bright-yellow: hsl(40 85% 70%);
+  --qt-terminal-ansi-bright-blue: hsl(210 75% 74%);
+  --qt-terminal-ansi-bright-magenta: hsl(330 70% 76%);
+  --qt-terminal-ansi-bright-cyan: hsl(190 70% 70%);
+  --qt-terminal-ansi-bright-white: hsl(48 32% 97%);
+
+  --qt-terminal-chrome-bg: hsl(28 12% 13%);
+  --qt-terminal-chrome-border: hsl(15 35% 30%);
+  --qt-terminal-chrome-fg: hsl(48 22% 85%);
+  --qt-terminal-chrome-muted-fg: hsl(48 8% 58%);
+  --qt-terminal-closed-badge-bg: hsl(25 14% 20%);
+  --qt-terminal-closed-badge-fg: hsl(40 65% 74%);
 }
 
 /* ============================================================================

@@ -4,6 +4,17 @@
 
 ### 4.4-dev
 
+#### Chore: Tune bundled themes to the new terminal tokens
+
+Each bundled theme now defines its own `--qt-terminal-*` block so the in-chat terminal embed and pop-out page take on the theme's palette instead of the generic VS-Code dark default. Also fixed a malformed CSS comment in Old School that was swallowing the shared-block closing brace.
+
+- `themes/bundled/art-deco/styles.css` (1.0.7 → 1.0.8): added a navy + gold terminal — midnight pane (`hsl(222 50% 6%)`), warm gold cursor, brass chrome border. ANSI palette borrows the theme's blue/gold accents.
+- `themes/bundled/earl-grey/styles.css` (1.3.3 → 1.3.4): added a charcoal terminal that stays in the theme's near-monochrome family — `hsl(0 0% 8%)` pane, blue accent cursor, charcoal chrome with low-opacity white border.
+- `themes/bundled/great-estate/styles.css` (1.0.2 → 1.0.3): added a walnut + gold-leaf terminal — `hsl(20 30% 8%)` pane, candlelit cream/amber text, gold chrome border. Reads like a teletype tucked into a manor library.
+- `themes/bundled/old-school/styles.css` (1.0.9 → 1.0.10): added a slate-blue terminal matching the theme's professional palette, and fixed a pre-existing bug where the WARNING BOX comment was opened with `/* …` missing the closing `*/`, causing the shared-block `}` to be swallowed into the comment and leaking properties into the dark-mode block. Filled in proper warning-box variable definitions while there.
+- `themes/bundled/rains/styles.css` (1.3.6 → 1.3.7): added a lantern-lit walnut terminal — `hsl(25 14% 9%)` pane, orange-amber cursor that picks up the theme's signature accent, warm cream text. ANSI palette swings warmer than the default.
+- All five themes inherit the new `--qt-terminal-embed-*` defaults (`var(--color-card)` etc.) from `_variables.css` automatically, so the in-chat embed wrapper and footer match the surrounding chat bubbles without per-theme overrides.
+
 #### Chore: Convert terminal and optimizer surfaces to qt-* theme classes
 
 Audited every UI file modified since commit e8905be0 against the "use qt-* classes when possible" rule. The terminal feature (added in commits 7e79245b and c1209ec2) hard-coded `bg-black`, `bg-gray-900`, `text-white`, `text-red-600`, etc., bypassing the theme layer. The character optimizer referenced `qt-bg-muted-foreground` and `bg-amber-500` / `bg-green-500/*` colors that either didn't exist as qt-* classes or weren't theme-aware. Added the missing utility classes, hoisted the terminal color tokens out of dark-mode-only into the universal block, and converted the consumers.
