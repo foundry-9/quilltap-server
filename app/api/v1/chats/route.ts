@@ -52,9 +52,8 @@ import { postOpeningOutfitWhisper } from '@/lib/services/aurora-notifications/wr
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import {
   loadProsperoProjectContext,
-  postProsperoProjectContextAnnouncement,
   loadProsperoGeneralContext,
-  postProsperoGeneralContextAnnouncement,
+  postProsperoContextAnnouncement,
 } from '@/lib/services/prospero-notifications/writer';
 import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
@@ -502,36 +501,27 @@ async function createInitialMessagesScenarioAndStaff(
   scenarioText?: string | null,
   options: ScenarioAndStaffOptions = {},
 ): Promise<void> {
-  // Phase E: emit Prospero project-context whisper at chat-start when a
-  // project is attached and has description/instructions. Replaces the
-  // per-turn `## Project Context` block previously injected via the system
-  // prompt. The cadence-based re-injection (every N messages) is handled by
-  // the orchestrator.
-  if (projectId) {
-    try {
-      const projectContext = await loadProsperoProjectContext(projectId);
-      if (projectContext) {
-        await postProsperoProjectContextAnnouncement({ chatId, project: projectContext });
-      }
-    } catch (error) {
-      logger.warn('[Chats v1] Failed to post chat-start Prospero project-context whisper', {
+  // Phase E: emit Prospero project-and-general-context whisper at chat-start.
+  // When a project is attached, the project's description / instructions /
+  // linked document stores ride along with the always-on Quilltap General
+  // shelf reminder in a single Prospero message; without a project, only the
+  // general shelf is named. Replaces the per-turn `## Project Context` block
+  // previously injected via the system prompt. The cadence-based
+  // re-injection (every N messages) is handled by the orchestrator.
+  try {
+    const projectContext = projectId ? await loadProsperoProjectContext(projectId) : null;
+    const generalContext = await loadProsperoGeneralContext();
+    if (projectContext || generalContext) {
+      await postProsperoContextAnnouncement({
         chatId,
-        projectId,
-        error: getErrorMessage(error, 'Unknown error'),
+        project: projectContext,
+        general: generalContext,
       });
     }
-  }
-
-  // Always-on: announce the instance-wide "Quilltap General" store so every
-  // character knows it can reach the household shelf regardless of project.
-  try {
-    const generalContext = await loadProsperoGeneralContext();
-    if (generalContext) {
-      await postProsperoGeneralContextAnnouncement({ chatId, general: generalContext });
-    }
   } catch (error) {
-    logger.warn('[Chats v1] Failed to post chat-start Prospero general-context whisper', {
+    logger.warn('[Chats v1] Failed to post chat-start Prospero context whisper', {
       chatId,
+      projectId,
       error: getErrorMessage(error, 'Unknown error'),
     });
   }

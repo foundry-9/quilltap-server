@@ -13,6 +13,8 @@ const SENDER_DISPLAY_NAMES: Record<NonNullable<Message['systemSender']>, string>
 
 const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'project-context': 'project information',
+  'project-and-general-context': 'project information and context',
+  'general-context': 'general context',
   'connection-profile-change': 'connection change',
   'tool-run': 'tool run',
   'memory-recap': 'memory recap',

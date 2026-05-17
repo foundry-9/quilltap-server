@@ -113,10 +113,14 @@ export async function postProsperoConnectionProfileChangeAnnouncement(
 }
 
 // ---------------------------------------------------------------------------
-// Phase E: Project context whispers. Replaces the per-turn `## Project
-// Context` system-prompt block. Fired at chat-start and at the configured
-// cadence (default every 5 messages — see
+// Phase E: Project + general context whispers. Replaces the per-turn `##
+// Project Context` system-prompt block. Fired at chat-start and at the
+// configured cadence (default every 5 messages — see
 // `chatSettings.contextCompressionSettings.projectContextReinjectInterval`).
+//
+// Project info (description, instructions, linked document stores) and the
+// instance-wide "Quilltap General" shelf are emitted as a single combined
+// announcement so Prospero speaks once per re-injection rather than twice.
 // ---------------------------------------------------------------------------
 
 export interface ProsperoDocumentStoreInfo {
@@ -144,7 +148,7 @@ export interface ProsperoProjectContext {
 
 /**
  * Fetch the project plus its linked document stores into a single context
- * object suitable for `postProsperoProjectContextAnnouncement`. Returns null
+ * object suitable for `postProsperoContextAnnouncement`. Returns null
  * when the project does not exist; returns an empty `documentStores` array
  * when nothing is linked or the mount index lookup fails.
  */
@@ -295,32 +299,21 @@ export function buildProjectContextOpaqueContent(project: ProsperoProjectContext
   return lines.join('\n').trimEnd();
 }
 
-export interface ProsperoProjectContextAnnouncement {
-  chatId: string;
-  project: ProsperoProjectContext;
-}
-
-export async function postProsperoProjectContextAnnouncement(
-  params: ProsperoProjectContextAnnouncement,
-): Promise<MessageEvent | null> {
-  const description = params.project.description?.trim();
-  const instructions = params.project.instructions?.trim();
-  const storeCount = params.project.documentStores?.length ?? 0;
-  if (!description && !instructions && storeCount === 0) {
-    return null;
-  }
-
-  const content = buildProjectContextContent(params.project);
-  const opaqueContent = buildProjectContextOpaqueContent(params.project);
-  return postProsperoMessage(params.chatId, content, opaqueContent, 'project-context');
+function projectHasContent(project: ProsperoProjectContext | null): boolean {
+  if (!project) return false;
+  const description = project.description?.trim();
+  const instructions = project.instructions?.trim();
+  const storeCount = project.documentStores?.length ?? 0;
+  return Boolean(description) || Boolean(instructions) || storeCount > 0;
 }
 
 // ---------------------------------------------------------------------------
 // Always-on general-context whisper. Names the instance-wide "Quilltap
 // General" mount so every character knows it can reach the household
 // `Scenarios/` library and any other curated content kept there, regardless
-// of which project (if any) the chat lives in. Fires at chat-start and at
-// the same cadence as the project-context whisper.
+// of which project (if any) the chat lives in. Emitted as part of the
+// combined project-and-general announcement when a project is attached;
+// emitted on its own when the chat has no project.
 // ---------------------------------------------------------------------------
 
 export interface ProsperoGeneralContext {
@@ -380,15 +373,141 @@ export function buildGeneralContextOpaqueContent(general: ProsperoGeneralContext
   return lines.join('\n');
 }
 
-export interface ProsperoGeneralContextAnnouncement {
-  chatId: string;
-  general: ProsperoGeneralContext;
+// ---------------------------------------------------------------------------
+// Combined project + general context announcement. When a chat lives in a
+// project, Prospero speaks once with the project's particulars and a
+// reminder of the household's shared shelf alongside. When the chat is
+// project-less, only the general shelf is named. The legacy per-feature
+// post functions have been collapsed into this single entry point so we no
+// longer fire two Prospero messages back-to-back at chat-start or each
+// re-injection cadence.
+// ---------------------------------------------------------------------------
+
+export function buildCombinedContextContent(
+  project: ProsperoProjectContext | null,
+  general: ProsperoGeneralContext | null,
+): string {
+  const hasProject = projectHasContent(project);
+  if (!hasProject && general) {
+    return buildGeneralContextContent(general);
+  }
+  if (!hasProject || !project) {
+    return '';
+  }
+
+  const lines: string[] = [];
+  if (general) {
+    lines.push(
+      `Prospero opens his ledger to the project at hand — *${project.name}* — and lays its particulars before you, with a reminder of the household's shared shelf alongside:`,
+    );
+  } else {
+    lines.push(
+      `Prospero opens his ledger to the project at hand — *${project.name}* — and lays its particulars before you:`,
+    );
+  }
+  lines.push('');
+
+  const description = project.description?.trim();
+  const instructions = project.instructions?.trim();
+  const stores = project.documentStores ?? [];
+
+  if (description) {
+    lines.push('**Project description:**');
+    lines.push('');
+    lines.push(description);
+  }
+  if (instructions) {
+    if (description) lines.push('');
+    lines.push('**Project instructions:**');
+    lines.push('');
+    lines.push(instructions);
+  }
+  if (stores.length) {
+    if (description || instructions) lines.push('');
+    lines.push(...buildDocumentStoresSection(stores));
+  }
+
+  if (general) {
+    if (description || instructions || stores.length) lines.push('');
+    const safeName = general.name.replace(/`/g, '\\`');
+    lines.push(
+      `Beyond this project, every character in this instance has standing access to the household's shared shelf — **${general.name}** — at all times. Use \`mount_point: "${safeName}"\` on any \`doc_*\` tool (the ID \`${general.mountPointId}\` also works). Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content the household keeps lives here as well.`,
+    );
+  }
+
+  return lines.join('\n').trimEnd();
 }
 
-export async function postProsperoGeneralContextAnnouncement(
-  params: ProsperoGeneralContextAnnouncement,
+export function buildCombinedContextOpaqueContent(
+  project: ProsperoProjectContext | null,
+  general: ProsperoGeneralContext | null,
+): string {
+  const hasProject = projectHasContent(project);
+  if (!hasProject && general) {
+    return buildGeneralContextOpaqueContent(general);
+  }
+  if (!hasProject || !project) {
+    return '';
+  }
+
+  const lines: string[] = [
+    `Project context — *${project.name}*:`,
+    '',
+  ];
+  const description = project.description?.trim();
+  const instructions = project.instructions?.trim();
+  const stores = project.documentStores ?? [];
+
+  if (description) {
+    lines.push('**Project description:**');
+    lines.push('');
+    lines.push(description);
+  }
+  if (instructions) {
+    if (description) lines.push('');
+    lines.push('**Project instructions:**');
+    lines.push('');
+    lines.push(instructions);
+  }
+  if (stores.length) {
+    if (description || instructions) lines.push('');
+    lines.push(...buildDocumentStoresSection(stores));
+  }
+
+  if (general) {
+    if (description || instructions || stores.length) lines.push('');
+    const safeName = general.name.replace(/`/g, '\\`');
+    lines.push(
+      `Beyond this project, every character in this instance has standing access to the shared shelf — **${general.name}** — at all times. Use \`mount_point: "${safeName}"\` on any \`doc_*\` tool (the ID \`${general.mountPointId}\` also works). Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content lives here as well.`,
+    );
+  }
+
+  return lines.join('\n').trimEnd();
+}
+
+export interface ProsperoContextAnnouncement {
+  chatId: string;
+  project: ProsperoProjectContext | null;
+  general: ProsperoGeneralContext | null;
+}
+
+export async function postProsperoContextAnnouncement(
+  params: ProsperoContextAnnouncement,
 ): Promise<MessageEvent | null> {
-  const content = buildGeneralContextContent(params.general);
-  const opaqueContent = buildGeneralContextOpaqueContent(params.general);
-  return postProsperoMessage(params.chatId, content, opaqueContent, 'general-context');
+  const hasProject = projectHasContent(params.project);
+  const hasGeneral = Boolean(params.general);
+  if (!hasProject && !hasGeneral) {
+    return null;
+  }
+
+  const content = buildCombinedContextContent(params.project, params.general);
+  const opaqueContent = buildCombinedContextOpaqueContent(params.project, params.general);
+
+  const kind = hasProject && hasGeneral
+    ? 'project-and-general-context'
+    : hasProject
+      ? 'project-context'
+      : 'general-context';
+
+  return postProsperoMessage(params.chatId, content, opaqueContent, kind);
 }

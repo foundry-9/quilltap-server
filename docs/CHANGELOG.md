@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Change: Prospero's project and general context announcements merged into one
+
+At chat-start and on each cadence re-injection, Prospero was posting two separate ASSISTANT messages — one labeled "project information" with the project's description / instructions / linked stores, and a second labeled "general context" naming the instance-wide "Quilltap General" shelf. In a project chat the two messages always fired back-to-back; the second never carried information that depended on the first. Collapsed into a single announcement.
+
+- New `buildCombinedContextContent` / `buildCombinedContextOpaqueContent` and `postProsperoContextAnnouncement` in `lib/services/prospero-notifications/writer.ts`. The combined builder emits one body: the project intro line now reads "…and lays its particulars before you, with a reminder of the household's shared shelf alongside:", followed by description / instructions / linked-store sections, and trailing with a "Beyond this project…" paragraph naming Quilltap General.
+- Project-less chats fall through to the original general-only body. Empty-project + no-general returns null (no message posted). The per-feature `buildProjectContext*` and `buildGeneralContext*` helpers stay exported as composable pieces and remain unit-tested.
+- New `systemKind` value `'project-and-general-context'`, displayed in the Salon collapsed bar as "project information and context". Existing `'project-context'` and `'general-context'` rows still render the legacy labels (added `'general-context': 'general context'` to `KIND_DISPLAY_OVERRIDES` in `app/salon/[id]/components/system-message-labels.ts` so that path also has an explicit label).
+- Call sites updated: `app/api/v1/chats/route.ts` (chat-start) and `lib/services/chat-message/orchestrator.service.ts` (cadence re-injection). Both load the project and general contexts up front and pass them to `postProsperoContextAnnouncement` once. The legacy `postProsperoProjectContextAnnouncement` / `postProsperoGeneralContextAnnouncement` entry points were removed.
+- Test coverage in `__tests__/unit/lib/services/staff-opaque-voicing.test.ts` (4 new tests in the Prospero block): combined project+general body contains both subjects, project-only body omits the general paragraph, general-only delegates to the general builder, and an empty project with no general returns an empty string.
+
 #### Fix: Host announcements now resolve {{char}} / {{user}} template tokens
 
 Character vault documents (`identity.md`) and character DB fields (`description`, `joinScenario`) routinely contain `{{char}}` and `{{user}}` placeholders, but the Host writer (`lib/services/host-notifications/writer.ts`) was inserting their bodies verbatim — so a description like "{{char}} is a friend of {{user}}" reached the chat (and every character's LLM context, opaque or persona) with the literal braces intact.

@@ -77,6 +77,8 @@ import {
   buildProjectContextOpaqueContent,
   buildGeneralContextContent,
   buildGeneralContextOpaqueContent,
+  buildCombinedContextContent,
+  buildCombinedContextOpaqueContent,
 } from '@/lib/services/prospero-notifications/writer'
 import {
   buildOpenContent,
@@ -271,6 +273,41 @@ describe('Prospero opaque builders', () => {
     const opaque = buildGeneralContextOpaqueContent(general)
     expect(opaque).toContain('Quilltap General')
     expectNoPersonaNames(opaque)
+  })
+
+  it('combined context — project and general together', () => {
+    const project = { name: 'Foggy Tale', description: 'A novel.', instructions: null, documentStores: [] }
+    const general = { mountPointId: 'm-1', name: 'Quilltap General', mountType: 'database' as const }
+    const content = buildCombinedContextContent(project, general)
+    expect(content).toContain('Prospero opens his ledger')
+    expect(content).toContain('Foggy Tale')
+    expect(content).toContain('A novel.')
+    expect(content).toContain('Quilltap General')
+    expect(content).toContain("household's shared shelf alongside")
+    const opaque = buildCombinedContextOpaqueContent(project, general)
+    expect(opaque).toContain('Foggy Tale')
+    expect(opaque).toContain('Quilltap General')
+    expectNoPersonaNames(opaque)
+  })
+
+  it('combined context — project only', () => {
+    const project = { name: 'Foggy Tale', description: 'A novel.', instructions: null, documentStores: [] }
+    const content = buildCombinedContextContent(project, null)
+    expect(content).toContain('Prospero opens his ledger')
+    expect(content).toContain('Foggy Tale')
+    expect(content).not.toContain('Quilltap General')
+  })
+
+  it('combined context — general only falls back to general builder', () => {
+    const general = { mountPointId: 'm-1', name: 'Quilltap General', mountType: 'database' as const }
+    expect(buildCombinedContextContent(null, general)).toBe(buildGeneralContextContent(general))
+    expect(buildCombinedContextOpaqueContent(null, general)).toBe(buildGeneralContextOpaqueContent(general))
+  })
+
+  it('combined context — nothing to say returns empty string', () => {
+    const project = { name: 'Foggy Tale', description: null, instructions: null, documentStores: [] }
+    expect(buildCombinedContextContent(project, null)).toBe('')
+    expect(buildCombinedContextOpaqueContent(project, null)).toBe('')
   })
 })
 

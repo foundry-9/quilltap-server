@@ -29,9 +29,8 @@ import {
 } from './context-builder.service'
 import {
   loadProsperoProjectContext,
-  postProsperoProjectContextAnnouncement,
   loadProsperoGeneralContext,
-  postProsperoGeneralContextAnnouncement,
+  postProsperoContextAnnouncement,
 } from '@/lib/services/prospero-notifications/writer'
 import { postLibrarianUploadAnnouncement } from '@/lib/services/librarian-notifications/writer'
 import {
@@ -436,15 +435,17 @@ async function processMessage(
   const existingMessages = await repos.chats.getMessages(chatId)
 
   // ============================================================================
-  // Project Context Re-injection (Phase E: Prospero whisper)
+  // Project + General Context Re-injection (Phase E: Prospero whisper)
   // ============================================================================
-  // The chat-start project-context whisper is posted by `createInitialMessages`
-  // when the chat is created. Here we handle the cadence-based refresh:
-  // every `projectContextReinjectInterval` messages we post a fresh Prospero
-  // project-context whisper into the transcript so the LLM keeps the project's
-  // description and instructions in mind. The `projectContext` parameter on the
-  // system-prompt builder is now unused; the system-prompt block was dropped
-  // along with this rewire.
+  // The chat-start whisper is posted by `createInitialMessages` when the chat
+  // is created. Here we handle the cadence-based refresh: every
+  // `projectContextReinjectInterval` messages we post a fresh Prospero
+  // context whisper into the transcript so the LLM keeps the project's
+  // description / instructions / linked stores in mind alongside the
+  // always-on Quilltap General shelf. Project info and the shared shelf ride
+  // in a single message so Prospero speaks once per cadence rather than
+  // twice. The `projectContext` parameter on the system-prompt builder is
+  // now unused; the system-prompt block was dropped along with this rewire.
 
   const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
   const messageCount = existingMessages.filter(m => m.type === 'message').length
@@ -452,26 +453,13 @@ async function processMessage(
   // re-injects at multiples of N thereafter.
   const shouldInjectContext = reinjectInterval > 0 && messageCount > 0 && messageCount % reinjectInterval === 0
 
-  if (project && shouldInjectContext) {
-    const projectContext = await loadProsperoProjectContext(project.id)
-    if (projectContext) {
-      const posted = await postProsperoProjectContextAnnouncement({
+  if (shouldInjectContext) {
+    const projectContext = project ? await loadProsperoProjectContext(project.id) : null
+    const generalContext = await loadProsperoGeneralContext()
+    if (projectContext || generalContext) {
+      const posted = await postProsperoContextAnnouncement({
         chatId,
         project: projectContext,
-      })
-      if (posted) {
-        existingMessages.push(posted)
-      }
-    }
-  }
-
-  // Always-on general-context re-injection — fires for every chat, project
-  // or not, at the same cadence as the project-context whisper.
-  if (shouldInjectContext) {
-    const generalContext = await loadProsperoGeneralContext()
-    if (generalContext) {
-      const posted = await postProsperoGeneralContextAnnouncement({
-        chatId,
         general: generalContext,
       })
       if (posted) {
