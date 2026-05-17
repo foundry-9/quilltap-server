@@ -23,8 +23,19 @@ import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { runBackupCheckpoint } from '@/lib/database/backends/sqlite/protection';
 import { getRawLLMLogsDatabase } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { runLLMLogsBackupCheckpoint } from '@/lib/database/backends/sqlite/llm-logs-protection';
-import type { BackupManifest, BackupData, ChatWithMessages } from './types';
+import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
+import { runMountIndexBackupCheckpoint } from '@/lib/database/backends/sqlite/mount-index-protection';
+import type {
+  BackupManifest,
+  BackupData,
+  ChatWithMessages,
+  InstanceSettingRow,
+  SerializedVectorEntry,
+  SerializedConversationChunk,
+  SerializedDocMountChunk,
+} from './types';
 import type { ChatEvent } from '@/lib/schemas/types';
+import type { DocMountBlobMetadata } from '@/lib/schemas/mount-index.types';
 
 const execFileAsync = promisify(execFile);
 
@@ -32,6 +43,93 @@ const execFileAsync = promisify(execFile);
 const APP_VERSION = process.env.npm_package_version || '2.0.0';
 
 const moduleLogger = logger.child({ module: 'backup:backup-service' });
+
+/**
+ * Encode a Float32Array embedding as a plain number array so it survives
+ * JSON serialisation. The schemas accept number[] on the way back in and
+ * rehydrate as Float32Array.
+ */
+function encodeEmbedding(
+  embedding: Float32Array | number[] | Buffer | null | undefined
+): number[] | null {
+  if (embedding == null) return null;
+  if (embedding instanceof Float32Array) return Array.from(embedding);
+  if (Array.isArray(embedding)) return [...embedding];
+  if (embedding instanceof Buffer) {
+    const view = new Float32Array(
+      embedding.buffer,
+      embedding.byteOffset,
+      embedding.byteLength / Float32Array.BYTES_PER_ELEMENT
+    );
+    return Array.from(view);
+  }
+  return null;
+}
+
+/**
+ * Dump every row of a mount-index-database table. Returns [] when the
+ * database is unavailable or the table is missing — backups remain useful
+ * even on instances that never provisioned a document store.
+ */
+function dumpMountIndexTable<T = Record<string, unknown>>(table: string): T[] {
+  if (isMountIndexDegraded()) return [];
+  const db = getRawMountIndexDatabase();
+  if (!db) return [];
+  try {
+    return db.prepare(`SELECT * FROM "${table}"`).all() as T[];
+  } catch (error) {
+    moduleLogger.debug('Mount-index table missing or unreadable; skipping', {
+      table,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
+
+/**
+ * Snapshot every instance_settings row from the main quilltap database.
+ * Returns [] if the table is missing (very old databases pre-dating the
+ * instance_settings provisioning migration).
+ */
+function dumpInstanceSettings(): InstanceSettingRow[] {
+  const db = getRawDatabase();
+  if (!db) return [];
+  try {
+    const rows = db.prepare('SELECT "key", "value" FROM "instance_settings"').all() as InstanceSettingRow[];
+    return rows;
+  } catch (error) {
+    moduleLogger.debug('instance_settings table missing or unreadable; skipping', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
+
+/**
+ * Pull every doc-mount blob row from the mount-index database with its
+ * raw bytes. Returned as a stream of {metadata, data} so the caller can
+ * write each blob to disk and move on without holding everything in
+ * memory at once.
+ */
+function* streamDocMountBlobsWithData(): Generator<{ meta: DocMountBlobMetadata; data: Buffer }> {
+  if (isMountIndexDegraded()) return;
+  const db = getRawMountIndexDatabase();
+  if (!db) return;
+  let rows: Array<Record<string, unknown>>;
+  try {
+    rows = db.prepare(
+      `SELECT id, fileId, sha256, sizeBytes, storedMimeType, data, createdAt, updatedAt FROM "doc_mount_blobs"`
+    ).all() as Array<Record<string, unknown>>;
+  } catch {
+    return;
+  }
+  for (const row of rows) {
+    const { data, ...rest } = row;
+    const meta = rest as unknown as DocMountBlobMetadata;
+    const bytes = data instanceof Buffer ? data : Buffer.from(data as Uint8Array);
+    yield { meta, data: bytes };
+  }
+}
 
 /**
  * Collects all user data from database repositories
@@ -122,6 +220,107 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   );
   const conversationAnnotations = conversationAnnotationsArrays.flat();
 
+  // Collect chat documents (Document Mode state) for every user chat.
+  const chatDocumentsArrays = await Promise.all(
+    chatMetadatas.map((chat) => globalRepos.chatDocuments.findByChatId(chat.id))
+  );
+  const chatDocuments = chatDocumentsArrays.flat();
+
+  // Collect conversation chunks for every user chat, encoding embeddings as
+  // number arrays so they survive JSON. Chunks include the embedding so the
+  // restored instance does not have to re-embed an entire chat history.
+  const conversationChunksArrays = await Promise.all(
+    chatMetadatas.map((chat) => globalRepos.conversationChunks.findByChatId(chat.id))
+  );
+  const conversationChunks: SerializedConversationChunk[] = conversationChunksArrays.flat().map((chunk) => ({
+    id: chunk.id,
+    chatId: chunk.chatId,
+    interchangeIndex: chunk.interchangeIndex,
+    content: chunk.content,
+    participantNames: chunk.participantNames ?? [],
+    messageIds: chunk.messageIds ?? [],
+    embedding: encodeEmbedding(chunk.embedding ?? null),
+    createdAt: chunk.createdAt,
+    updatedAt: chunk.updatedAt,
+  }));
+
+  // Per-character vector indices + their entries. Without these the restored
+  // instance would have to re-embed every memory; with them, search keeps
+  // working immediately. Entries' Float32 embeddings ride as number[].
+  const characterIdsWithVectors = await globalRepos.vectorIndices.getAllCharacterIds();
+  const vectorIndexMetas = (
+    await Promise.all(
+      characterIdsWithVectors.map((cid) => globalRepos.vectorIndices.findMetaByCharacterId(cid))
+    )
+  ).filter((meta): meta is NonNullable<typeof meta> => meta !== null);
+  const vectorEntriesArrays = await Promise.all(
+    characterIdsWithVectors.map((cid) => globalRepos.vectorIndices.findEntriesByCharacterId(cid))
+  );
+  const vectorEntries: SerializedVectorEntry[] = vectorEntriesArrays.flat().map((entry) => ({
+    id: entry.id,
+    characterId: entry.characterId,
+    embedding: Array.from(entry.embedding as Float32Array),
+    createdAt: entry.createdAt,
+  }));
+
+  // TF-IDF vocabularies for BUILTIN embedding profiles. Cheap to dump and
+  // means BUILTIN search keeps working after restore without a refit.
+  const tfidfVocabularies = await globalRepos.tfidfVocabularies.findAll();
+
+  // Per-entity embedding sync flags. These are status records; restoring them
+  // tells the background queue not to redo work that was already complete.
+  const embeddingStatus = await globalRepos.embeddingStatus.findAll();
+
+  // Scriptorium / document store tables live in a separate mount-index
+  // database. We dump them with raw SELECTs because most repositories don't
+  // expose a "give me everything" helper, and bulk export wants the latter.
+  const docMountPoints = dumpMountIndexTable<import('@/lib/schemas/mount-index.types').DocMountPoint>('doc_mount_points');
+  const docMountFolders = dumpMountIndexTable<import('@/lib/schemas/mount-index.types').DocMountFolder>('doc_mount_folders');
+  const docMountFiles = dumpMountIndexTable<import('@/lib/schemas/mount-index.types').DocMountFile>('doc_mount_files');
+  const docMountFileLinks = dumpMountIndexTable<import('@/lib/schemas/mount-index.types').DocMountFileLink>('doc_mount_file_links');
+  const docMountDocuments = dumpMountIndexTable<import('@/lib/schemas/mount-index.types').DocMountDocument>('doc_mount_documents');
+  const projectDocMountLinks = dumpMountIndexTable<import('@/lib/schemas/mount-index.types').ProjectDocMountLink>('project_doc_mount_links');
+  // Chunk embeddings are BLOBs in SQLite; the raw rows come back with Buffer
+  // values for the embedding column. Normalise into number[] so JSON can hold
+  // them without base64 plumbing.
+  const docMountChunkRows = dumpMountIndexTable<Record<string, unknown> & {
+    id: string;
+    linkId: string;
+    mountPointId: string;
+    chunkIndex: number;
+    content: string;
+    tokenCount: number;
+    headingContext: string | null;
+    embedding: Buffer | null;
+    createdAt: string;
+    updatedAt: string;
+  }>('doc_mount_chunks');
+  const docMountChunks: SerializedDocMountChunk[] = docMountChunkRows.map((row) => ({
+    id: row.id,
+    linkId: row.linkId,
+    mountPointId: row.mountPointId,
+    chunkIndex: row.chunkIndex,
+    content: row.content,
+    tokenCount: row.tokenCount,
+    headingContext: row.headingContext ?? null,
+    embedding: encodeEmbedding(row.embedding ?? null),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }));
+
+  // Blob metadata is collected here; the bytes are staged to disk below in
+  // createBackup() so we don't carry every PDF/image in memory.
+  const docMountBlobs: DocMountBlobMetadata[] = [];
+  for (const { meta } of streamDocMountBlobsWithData()) {
+    docMountBlobs.push(meta);
+  }
+
+  // Snapshot instance_settings so mount-point routing keys (Lantern
+  // backgrounds, Quilltap Uploads, General) survive restore. Without these
+  // the restored instance would re-provision new mount points and break
+  // every reference held by chats/projects.
+  const instanceSettings = dumpInstanceSettings();
+
   // Strip encrypted API key data from connection profiles for security
   // API keys are encrypted with user-specific keys and can't be restored to another account
   const sanitizedConnectionProfiles = connectionProfiles.map((profile) => ({
@@ -152,6 +351,21 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     wardrobeItems,
     characterPluginData,
     conversationAnnotations,
+    chatDocuments,
+    instanceSettings,
+    embeddingStatus,
+    conversationChunks,
+    tfidfVocabularies,
+    vectorIndexMetas,
+    vectorEntries,
+    docMountPoints,
+    docMountFolders,
+    docMountFiles,
+    docMountFileLinks,
+    docMountChunks,
+    docMountDocuments,
+    docMountBlobs,
+    projectDocMountLinks,
   };
 }
 
@@ -203,7 +417,7 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
 
   return {
     version: '1.0',
-    backupFormat: 2,
+    backupFormat: 3,
     createdAt: new Date().toISOString(),
     userId,
     appVersion: APP_VERSION,
@@ -230,6 +444,21 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       characterPluginData: data.characterPluginData?.length || 0,
       conversationAnnotations: data.conversationAnnotations?.length || 0,
       userInstalledThemes: countUserInstalledThemes(),
+      chatDocuments: data.chatDocuments?.length || 0,
+      instanceSettings: data.instanceSettings?.length || 0,
+      embeddingStatus: data.embeddingStatus?.length || 0,
+      conversationChunks: data.conversationChunks?.length || 0,
+      tfidfVocabularies: data.tfidfVocabularies?.length || 0,
+      vectorIndexMetas: data.vectorIndexMetas?.length || 0,
+      vectorEntries: data.vectorEntries?.length || 0,
+      docMountPoints: data.docMountPoints?.length || 0,
+      docMountFolders: data.docMountFolders?.length || 0,
+      docMountFiles: data.docMountFiles?.length || 0,
+      docMountFileLinks: data.docMountFileLinks?.length || 0,
+      docMountChunks: data.docMountChunks?.length || 0,
+      docMountDocuments: data.docMountDocuments?.length || 0,
+      docMountBlobs: data.docMountBlobs?.length || 0,
+      projectDocMountLinks: data.projectDocMountLinks?.length || 0,
     },
   };
 }
@@ -313,6 +542,12 @@ export async function createBackup(userId: string): Promise<{
     runLLMLogsBackupCheckpoint(rawLLMLogsDb);
   }
 
+  // And the mount-index database, which now flows into the backup.
+  const rawMountIndexDb = getRawMountIndexDatabase();
+  if (rawMountIndexDb) {
+    runMountIndexBackupCheckpoint(rawMountIndexDb);
+  }
+
   // Collect all user data
   const data = await collectUserData(userId);
   const manifest = createManifest(userId, data);
@@ -354,6 +589,23 @@ export async function createBackup(userId: string): Promise<{
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'character-plugin-data.json'), data.characterPluginData || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'conversation-annotations.json'), data.conversationAnnotations || []);
 
+    // Format-3 additions (older restorers will simply skip these missing files).
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'chat-documents.json'), data.chatDocuments || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'instance-settings.json'), data.instanceSettings || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'embedding-status.json'), data.embeddingStatus || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'conversation-chunks.json'), data.conversationChunks || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'tfidf-vocabularies.json'), data.tfidfVocabularies || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'vector-index-metas.json'), data.vectorIndexMetas || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'vector-entries.json'), data.vectorEntries || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-points.json'), data.docMountPoints || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-folders.json'), data.docMountFolders || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-files.json'), data.docMountFiles || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-file-links.json'), data.docMountFileLinks || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-chunks.json'), data.docMountChunks || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-documents.json'), data.docMountDocuments || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-blobs.json'), data.docMountBlobs || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'project-doc-mount-links.json'), data.projectDocMountLinks || []);
+
     moduleLogger.debug('Wrote all JSON data files to staging directory');
 
     // Download and stage user files one at a time to limit memory
@@ -379,6 +631,32 @@ export async function createBackup(userId: string): Promise<{
     }
 
     moduleLogger.debug('Staged user files', { filesStaged, totalFiles: data.files.length });
+
+    // Stage document-store blob bytes to disk, keyed by blob id. The
+    // doc-mount-blobs.json metadata above is the index; the bytes are paired
+    // with each metadata row at restore time by blob id. Streaming the rows
+    // means we never hold more than one blob in memory.
+    let blobsStaged = 0;
+    if ((data.docMountBlobs?.length ?? 0) > 0) {
+      const blobsDir = path.join(stagingDir, 'mount-blobs');
+      await fs.promises.mkdir(blobsDir, { recursive: true });
+      for (const { meta, data: bytes } of streamDocMountBlobsWithData()) {
+        try {
+          await fs.promises.writeFile(path.join(blobsDir, meta.id), bytes);
+          blobsStaged++;
+        } catch (error) {
+          moduleLogger.warn('Failed to stage doc-mount blob bytes, skipping', {
+            blobId: meta.id,
+            sizeBytes: meta.sizeBytes,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      moduleLogger.debug('Staged doc-mount blob bytes', {
+        blobsStaged,
+        totalBlobs: data.docMountBlobs?.length ?? 0,
+      });
+    }
 
     // Copy npm-installed plugins
     const npmPluginsDir = getNpmPluginsDir();

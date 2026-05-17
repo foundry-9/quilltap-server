@@ -130,6 +130,9 @@ interface AnyExportData {
   documents?: ExportedDocumentStoreDocument[];
   blobs?: ExportedDocumentStoreBlob[];
   projectLinks?: ExportedProjectDocMountLink[];
+  // Chat sidecars (per-chat annotations + Document Mode pane state)
+  conversationAnnotations?: import('@/lib/schemas/types').ConversationAnnotation[];
+  chatDocuments?: import('@/lib/schemas/chat-document.types').ChatDocument[];
 }
 
 /**
@@ -592,6 +595,57 @@ export async function executeImport(
       imported.chats = counts.imported;
       imported.messages = counts.messages;
       skipped.chats = counts.skipped;
+    }
+
+    // 7a. Conversation annotations attached to imported chats. Remap chatId
+    // through idMaps.chats; sourceMessageId stays as-is because the message
+    // import preserves message IDs.
+    if (data.conversationAnnotations && data.conversationAnnotations.length > 0) {
+      const globalRepos = getRepositories();
+      let annotationsImported = 0;
+      for (const annotation of data.conversationAnnotations) {
+        const remappedChatId = idMaps.chats.get(annotation.chatId) ?? annotation.chatId;
+        try {
+          const { id, createdAt, updatedAt, ...annotationData } = annotation;
+          await globalRepos.conversationAnnotations.create({
+            ...annotationData,
+            chatId: remappedChatId,
+          });
+          annotationsImported++;
+        } catch (error) {
+          warnings.push(
+            `Failed to import conversation annotation: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      }
+      imported.conversationAnnotations = annotationsImported;
+    }
+
+    // 7b. Chat documents (Document Mode pane state). Remap chatId; the rest
+    // is opaque path/scope metadata that survives without remapping.
+    if (data.chatDocuments && data.chatDocuments.length > 0) {
+      const globalRepos = getRepositories();
+      let chatDocsImported = 0;
+      for (const cd of data.chatDocuments) {
+        const remappedChatId = idMaps.chats.get(cd.chatId) ?? cd.chatId;
+        try {
+          const { id, createdAt, updatedAt, ...cdData } = cd;
+          await globalRepos.chatDocuments.create({
+            ...cdData,
+            chatId: remappedChatId,
+          });
+          chatDocsImported++;
+        } catch (error) {
+          warnings.push(
+            `Failed to import chat document: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      }
+      imported.chatDocuments = chatDocsImported;
     }
 
     // 8. Memories (if includeMemories option is enabled)

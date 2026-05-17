@@ -73,6 +73,8 @@ export interface QuilltapExportCounts {
   documentStoreDocuments?: number;
   documentStoreBlobs?: number;
   documentStoreProjectLinks?: number;
+  conversationAnnotations?: number;
+  chatDocuments?: number;
 }
 
 /**
@@ -174,6 +176,16 @@ export interface CharactersExportData {
 export interface ChatsExportData {
   chats: ExportedChat[];
   memories?: Memory[];
+  /**
+   * Conversation annotations attached to any exported chat. Optional —
+   * older .qtap files predate this field and importers should default to [].
+   */
+  conversationAnnotations?: import('@/lib/schemas/types').ConversationAnnotation[];
+  /**
+   * Document Mode pane state attached to any exported chat. Optional for the
+   * same back-compat reason as conversationAnnotations.
+   */
+  chatDocuments?: import('@/lib/schemas/chat-document.types').ChatDocument[];
 }
 
 /**
@@ -436,6 +448,28 @@ export interface QtapMemoryRecord {
   data: import('@/lib/schemas/types').Memory;
 }
 
+/**
+ * Conversation annotation streamed alongside its parent chat. Emitted after
+ * every `chat_message` so importers can resolve `sourceMessageId` against
+ * remapped message IDs.
+ */
+export interface QtapConversationAnnotationRecord {
+  kind: 'conversation_annotation';
+  chatId: string;
+  data: import('@/lib/schemas/types').ConversationAnnotation;
+}
+
+/**
+ * Chat document (Document Mode pane state) streamed alongside its parent
+ * chat. Captures which doc-store / project document was open in the split
+ * panel so split-pane state survives a round-trip.
+ */
+export interface QtapChatDocumentRecord {
+  kind: 'chat_document';
+  chatId: string;
+  data: import('@/lib/schemas/chat-document.types').ChatDocument;
+}
+
 export interface QtapDocMountPointRecord {
   kind: 'doc_mount_point';
   data: ExportedDocumentStore;
@@ -506,6 +540,8 @@ export type QtapRecord =
   | QtapCharacterPluginDataRecord
   | QtapChatRecord
   | QtapChatMessageRecord
+  | QtapConversationAnnotationRecord
+  | QtapChatDocumentRecord
   | QtapMemoryRecord
   | QtapDocMountPointRecord
   | QtapDocMountFolderRecord

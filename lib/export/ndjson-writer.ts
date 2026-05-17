@@ -242,6 +242,35 @@ async function* streamChats(
       });
     }
 
+    // Conversation annotations and chat documents come after the messages so
+    // importers can resolve sourceMessageId / chatId against IDs they have
+    // already seen in this same stream.
+    try {
+      const annotations = await getRepositories().conversationAnnotations.findByChatId(id);
+      for (const annotation of annotations) {
+        yield { kind: 'conversation_annotation', chatId: id, data: annotation };
+        bump(counts, 'conversationAnnotations');
+      }
+    } catch (error) {
+      logger.warn('Failed to load conversation annotations for export', {
+        chatId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    try {
+      const chatDocs = await getRepositories().chatDocuments.findByChatId(id);
+      for (const cd of chatDocs) {
+        yield { kind: 'chat_document', chatId: id, data: cd };
+        bump(counts, 'chatDocuments');
+      }
+    } catch (error) {
+      logger.warn('Failed to load chat documents for export', {
+        chatId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     // Memories scoped to this chat.
     if (includeMemories) {
       for (const char of allCharacters) {

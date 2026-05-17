@@ -38,7 +38,9 @@
             "required": ["chats"],
             "properties": {
               "chats": { "type": "array", "items": { "$ref": "#/$defs/ExportedChat" } },
-              "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } }
+              "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } },
+              "conversationAnnotations": { "type": "array", "items": { "$ref": "#/$defs/ConversationAnnotation" } },
+              "chatDocuments": { "type": "array", "items": { "$ref": "#/$defs/ChatDocument" } }
             },
             "additionalProperties": false
           }
@@ -535,6 +537,41 @@
         "importance": { "type": "number" },
         "keywords": { "type": "array", "items": { "type": "string" } },
         "source": { "type": "string" },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ConversationAnnotation": {
+      "type": "object",
+      "description": "A Scriptorium-side annotation attached to a position in a chat conversation.",
+      "required": ["id", "chatId", "messageIndex", "characterName", "content", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "chatId": { "$ref": "#/$defs/UUID" },
+        "messageIndex": { "type": "integer", "minimum": 0 },
+        "sourceMessageId": { "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }] },
+        "characterName": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ChatDocument": {
+      "type": "object",
+      "description": "Document Mode pane state — tracks which document is open alongside a chat in the split-panel editor.",
+      "required": ["id", "chatId", "filePath", "scope", "isActive", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "chatId": { "$ref": "#/$defs/UUID" },
+        "filePath": { "type": "string" },
+        "scope": { "type": "string", "enum": ["project", "document_store", "general"] },
+        "mountPoint": { "type": ["string", "null"] },
+        "displayTitle": { "type": ["string", "null"] },
+        "isActive": { "type": "boolean" },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" }
       }

@@ -4,6 +4,34 @@
 
 ### 4.4-dev
 
+#### Backup/restore + .qtap export: cover all user-data tables
+
+The system backup, restore, and `.qtap` export paths were missing several tables that have been added to the schema since they were last audited. Result: backups didn't include the Scriptorium / document-store content, Document Mode pane state, memory embeddings, or several other small-but-real pieces of user state. Restores rebuilt them from scratch (or silently lost them).
+
+Bumped `backupFormat` from 2 to 3. Older backups still restore; new backups now include:
+
+- All 8 `doc_mount_*` tables + `project_doc_mount_links`. Database-backed Scriptorium content (text + binary blobs) is now backed up. Blob bytes are staged to disk in the backup zip under `mount-blobs/<id>` so large PDFs/images don't bloat JSON.
+- `chat_documents` — Document Mode split-pane state per chat.
+- `instance_settings` — including the Lantern / Quilltap Uploads / General mount-point ID references that runtime routing depends on. Mount-point UUIDs are remapped in new-account mode along with the rest of the document-store graph.
+- `vector_indices` + `vector_entries` — per-character memory embeddings. Skipping these would force a full re-embed on every restore.
+- `conversation_chunks` — semantically chunked conversation segments with embeddings.
+- `tfidf_vocabularies` — BUILTIN-provider search vocabularies.
+- `embedding_status` — per-entity embedding sync flags.
+
+Files touched:
+
+- `lib/backup/types.ts`: extended `BackupData`, `BackupManifest`, `RestoreSummary` with the new entity arrays and counts; added `InstanceSettingRow`, `SerializedVectorEntry`, `SerializedConversationChunk`, `SerializedDocMountChunk` interfaces (Float32 embeddings are encoded as `number[]` for JSON survival).
+- `lib/backup/backup-service.ts`: added `collectUserData` collection for all the above plus raw `SELECT * FROM ...` helpers for the mount-index database, an `encodeEmbedding` helper, a `runMountIndexBackupCheckpoint` call so the mount-index WAL is flushed alongside the main DB.
+- `lib/backup/restore-service.ts`: added per-table restore steps in dependency order (mount points → folders → files → links → documents → blobs → chunks → project links; characters → vector indices → vector entries; chats → conversation chunks → chat documents; profiles → tfidf vocabularies → embedding status; finally `instance_settings` after the doc-mount graph is in place). Added a `clearFormat3Entities` helper that truncates the new tables in replace mode before re-insert. UUID remapping for new-account mode covers every new entity; `instance_settings` rows whose key is in `MOUNT_POINT_SETTING_KEYS` get their value remapped through the same mapper as the doc-mount-points themselves.
+
+`.qtap` export side:
+
+- `lib/export/types.ts`: added `QtapConversationAnnotationRecord` and `QtapChatDocumentRecord` to the streaming record union; extended `ChatsExportData` and `QuilltapExportCounts`.
+- `lib/export/ndjson-writer.ts`: emits `conversation_annotation` and `chat_document` records after the chat's messages so an importer sees them with the parent chat already in scope.
+- `lib/import/quilltap-import-stream.ts`: collects the new record kinds (no more "unknown kind" warnings); passes them through to the `chats` data shape.
+- `lib/import/quilltap-import-service.ts`: extended `AnyExportData` and `executeImport` to wire the new arrays into the chat-import block (remaps `chatId` through `idMaps.chats`; creates rows with the existing globalRepos).
+- `public/schemas/qtap-export.schema.json`: added `ConversationAnnotation` and `ChatDocument` `$defs`; allowed `conversationAnnotations` and `chatDocuments` arrays on the `chats` `exportType` `data` object.
+
 #### Docs: Reconcile API.md with current routes
 
 Audited `docs/developer/API.md` against the routes actually present under `app/api/`. The doc was out of date in several places — entire stale sections, missing endpoints, and a version-string mismatch.

@@ -23,12 +23,18 @@ import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bri
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
 import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { UuidRemapper } from './uuid-remapper';
+import { rawQuery } from '@/lib/database/manager';
+import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import type {
   BackupManifest,
   BackupData,
   RestoreOptions,
   RestoreSummary,
   ChatWithMessages,
+  InstanceSettingRow,
+  SerializedVectorEntry,
+  SerializedConversationChunk,
+  SerializedDocMountChunk,
 } from './types';
 import type {
   Character,
@@ -51,8 +57,32 @@ import type {
   PluginConfig,
   CharacterPluginData,
   ConversationAnnotation,
+  ConversationChunk,
+  VectorIndexMeta,
+  TfidfVocabulary,
+  EmbeddingStatus,
 } from '@/lib/schemas/types';
 import type { WardrobeItem, WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import type { ChatDocument } from '@/lib/schemas/chat-document.types';
+import type {
+  DocMountPoint,
+  DocMountFolder,
+  DocMountFile,
+  DocMountFileLink,
+  DocMountDocument,
+  DocMountBlobMetadata,
+  ProjectDocMountLink,
+} from '@/lib/schemas/mount-index.types';
+
+/**
+ * Settings keys whose values are mount-point UUIDs. These need remapping in
+ * new-account mode so they keep pointing at the right mount points.
+ */
+const MOUNT_POINT_SETTING_KEYS = new Set([
+  'lanternBackgroundsMountPointId',
+  'userUploadsMountPointId',
+  'generalMountPointId',
+]);
 
 /**
  * Legacy outfit preset shape — only used to fold old backups into composites.
@@ -469,6 +499,23 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const characterPluginData = await readJsonArrayFileOptional<CharacterPluginData>(rootPath, 'data/character-plugin-data.json', []);
     const conversationAnnotations = await readJsonArrayFileOptional<ConversationAnnotation>(rootPath, 'data/conversation-annotations.json', []);
 
+    // Format-3 additions (optional so older backups still load).
+    const chatDocuments = await readJsonArrayFileOptional<ChatDocument>(rootPath, 'data/chat-documents.json', []);
+    const instanceSettings = await readJsonArrayFileOptional<InstanceSettingRow>(rootPath, 'data/instance-settings.json', []);
+    const embeddingStatus = await readJsonArrayFileOptional<EmbeddingStatus>(rootPath, 'data/embedding-status.json', []);
+    const conversationChunks = await readJsonArrayFileOptional<SerializedConversationChunk>(rootPath, 'data/conversation-chunks.json', []);
+    const tfidfVocabularies = await readJsonArrayFileOptional<TfidfVocabulary>(rootPath, 'data/tfidf-vocabularies.json', []);
+    const vectorIndexMetas = await readJsonArrayFileOptional<VectorIndexMeta>(rootPath, 'data/vector-index-metas.json', []);
+    const vectorEntries = await readJsonArrayFileOptional<SerializedVectorEntry>(rootPath, 'data/vector-entries.json', []);
+    const docMountPoints = await readJsonArrayFileOptional<DocMountPoint>(rootPath, 'data/doc-mount-points.json', []);
+    const docMountFolders = await readJsonArrayFileOptional<DocMountFolder>(rootPath, 'data/doc-mount-folders.json', []);
+    const docMountFiles = await readJsonArrayFileOptional<DocMountFile>(rootPath, 'data/doc-mount-files.json', []);
+    const docMountFileLinks = await readJsonArrayFileOptional<DocMountFileLink>(rootPath, 'data/doc-mount-file-links.json', []);
+    const docMountChunks = await readJsonArrayFileOptional<SerializedDocMountChunk>(rootPath, 'data/doc-mount-chunks.json', []);
+    const docMountDocuments = await readJsonArrayFileOptional<DocMountDocument>(rootPath, 'data/doc-mount-documents.json', []);
+    const docMountBlobs = await readJsonArrayFileOptional<DocMountBlobMetadata>(rootPath, 'data/doc-mount-blobs.json', []);
+    const projectDocMountLinks = await readJsonArrayFileOptional<ProjectDocMountLink>(rootPath, 'data/project-doc-mount-links.json', []);
+
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
       createdAt: manifest.createdAt,
@@ -496,6 +543,21 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       wardrobeItems,
       characterPluginData,
       conversationAnnotations,
+      chatDocuments,
+      instanceSettings,
+      embeddingStatus,
+      conversationChunks,
+      tfidfVocabularies,
+      vectorIndexMetas,
+      vectorEntries,
+      docMountPoints,
+      docMountFolders,
+      docMountFiles,
+      docMountFileLinks,
+      docMountChunks,
+      docMountDocuments,
+      docMountBlobs,
+      projectDocMountLinks,
     };
 
     return { data, extractDir, rootFolder };
@@ -596,10 +658,82 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       characterPluginData: data.characterPluginData?.length || 0,
       conversationAnnotations: data.conversationAnnotations?.length || 0,
       userInstalledThemes: 0, // Counted after zip extraction; not shown in preview
+      chatDocuments: data.chatDocuments?.length || 0,
+      instanceSettings: data.instanceSettings?.length || 0,
+      embeddingStatus: data.embeddingStatus?.length || 0,
+      conversationChunks: data.conversationChunks?.length || 0,
+      tfidfVocabularies: data.tfidfVocabularies?.length || 0,
+      vectorIndexMetas: data.vectorIndexMetas?.length || 0,
+      vectorEntries: data.vectorEntries?.length || 0,
+      docMountPoints: data.docMountPoints?.length || 0,
+      docMountFolders: data.docMountFolders?.length || 0,
+      docMountFiles: data.docMountFiles?.length || 0,
+      docMountFileLinks: data.docMountFileLinks?.length || 0,
+      docMountChunks: data.docMountChunks?.length || 0,
+      docMountDocuments: data.docMountDocuments?.length || 0,
+      docMountBlobs: data.docMountBlobs?.length || 0,
+      projectDocMountLinks: data.projectDocMountLinks?.length || 0,
       warnings: [],
     };
   } finally {
     await cleanupDir(extractDir);
+  }
+}
+
+/**
+ * Truncate the format-3 tables (mount-index + new main-DB tables) before a
+ * replace-mode restore. Done via raw DELETEs because per-row repository
+ * deletes are expensive at scale (especially vector_entries and
+ * doc_mount_chunks). Each statement is independently guarded — if a table
+ * doesn't exist on a very old database, the rest still run.
+ */
+async function clearFormat3Entities(): Promise<void> {
+  const mainTables = [
+    'chat_documents',
+    'conversation_chunks',
+    'tfidf_vocabularies',
+    'embedding_status',
+    'vector_entries',
+    'vector_indices',
+  ];
+  for (const table of mainTables) {
+    try {
+      await rawQuery(`DELETE FROM "${table}"`);
+    } catch (error) {
+      moduleLogger.debug('Skipping table truncate (table missing or empty)', {
+        table,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // instance_settings is special: we don't want to drop EVERYTHING since some
+  // keys are written by startup migrations and aren't part of the backup. The
+  // restore upserts each backup row by key, which is the right behavior. So
+  // we leave the table alone here.
+
+  if (isMountIndexDegraded()) return;
+  const db = getRawMountIndexDatabase();
+  if (!db) return;
+  const mountTables = [
+    'doc_mount_chunks',
+    'doc_mount_blobs',
+    'doc_mount_documents',
+    'doc_mount_file_links',
+    'doc_mount_files',
+    'doc_mount_folders',
+    'project_doc_mount_links',
+    'doc_mount_points',
+  ];
+  for (const table of mountTables) {
+    try {
+      db.prepare(`DELETE FROM "${table}"`).run();
+    } catch (error) {
+      moduleLogger.debug('Skipping mount-index table truncate', {
+        table,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 
@@ -671,6 +805,12 @@ async function deleteUserData(userId: string): Promise<void> {
       });
     }
   }
+
+  // Bulk-delete format-3 entities so the restore can re-insert them with
+  // their backup ids without colliding. Raw DELETEs because the row counts
+  // (chunks, vectors, etc.) can be large and per-row cascades through the
+  // repositories are slow.
+  await clearFormat3Entities();
 
   moduleLogger.info('Deleted existing user data', {
     userId,
@@ -1095,6 +1235,82 @@ function remapBackupData(
     ),
   })) as WardrobeItem[];
 
+  // Chat documents reference chat IDs that have been remapped above.
+  const remappedChatDocuments = (data.chatDocuments || []).map((cd) => ({
+    ...remapper.remapFields(cd, ['id', 'chatId']),
+  })) as ChatDocument[];
+
+  // Conversation chunks reference chats and individual messages.
+  const remappedConversationChunks = (data.conversationChunks || []).map((chunk) => ({
+    ...remapper.remapArrayFields(
+      remapper.remapFields(chunk, ['id', 'chatId']),
+      ['messageIds']
+    ),
+  })) as SerializedConversationChunk[];
+
+  // Vector index meta — id and characterId share the same value by convention.
+  const remappedVectorIndexMetas = (data.vectorIndexMetas || []).map((meta) => ({
+    ...remapper.remapFields(meta, ['id', 'characterId']),
+  })) as VectorIndexMeta[];
+
+  // Vector entries — id is typically the memory id (already remapped through
+  // the memory pass). characterId is also remapped.
+  const remappedVectorEntries = (data.vectorEntries || []).map((entry) => ({
+    ...remapper.remapFields(entry, ['id', 'characterId']),
+  })) as SerializedVectorEntry[];
+
+  // TF-IDF vocabularies. profileId is an embedding-profile id; userId moves
+  // to the target user.
+  const remappedTfidfVocabularies = (data.tfidfVocabularies || []).map((voc) => ({
+    ...remapper.remapFields(voc, ['id', 'profileId']),
+    userId: targetUserId,
+  })) as TfidfVocabulary[];
+
+  // Embedding status — entityId could be a memory/file/help_doc/etc. id, all
+  // of which are already in the mapping by the time embeddingStatus is touched.
+  const remappedEmbeddingStatus = (data.embeddingStatus || []).map((es) => ({
+    ...remapper.remapFields(es, ['id', 'entityId', 'profileId']),
+    userId: targetUserId,
+  })) as EmbeddingStatus[];
+
+  // Document store tables — remap every FK to keep the graph internally
+  // consistent. doc_mount_files row ids are shared by doc_mount_documents and
+  // doc_mount_blobs (fileId), so remapping a file id once means everything
+  // that points at it gets the same new id.
+  const remappedDocMountPoints = (data.docMountPoints || []).map((mp) => ({
+    ...remapper.remapFields(mp, ['id']),
+  })) as DocMountPoint[];
+  const remappedDocMountFolders = (data.docMountFolders || []).map((folder) => ({
+    ...remapper.remapFields(folder, ['id', 'mountPointId', 'parentId']),
+  })) as DocMountFolder[];
+  const remappedDocMountFiles = (data.docMountFiles || []).map((file) => ({
+    ...remapper.remapFields(file, ['id']),
+  })) as DocMountFile[];
+  const remappedDocMountFileLinks = (data.docMountFileLinks || []).map((link) => ({
+    ...remapper.remapFields(link, ['id', 'fileId', 'mountPointId', 'folderId']),
+  })) as DocMountFileLink[];
+  const remappedDocMountChunks = (data.docMountChunks || []).map((chunk) => ({
+    ...remapper.remapFields(chunk, ['id', 'linkId', 'mountPointId']),
+  })) as SerializedDocMountChunk[];
+  const remappedDocMountDocuments = (data.docMountDocuments || []).map((doc) => ({
+    ...remapper.remapFields(doc, ['id', 'fileId']),
+  })) as DocMountDocument[];
+  const remappedDocMountBlobs = (data.docMountBlobs || []).map((blob) => ({
+    ...remapper.remapFields(blob, ['id', 'fileId']),
+  })) as DocMountBlobMetadata[];
+  const remappedProjectDocMountLinks = (data.projectDocMountLinks || []).map((link) => ({
+    ...remapper.remapFields(link, ['id', 'projectId', 'mountPointId']),
+  })) as ProjectDocMountLink[];
+
+  // Instance settings — only the mount-point keys carry UUIDs we need to
+  // remap. Everything else is opaque text (numbers, JSON config blobs).
+  const remappedInstanceSettings = (data.instanceSettings || []).map((row) => {
+    if (MOUNT_POINT_SETTING_KEYS.has(row.key) && row.value) {
+      return { key: row.key, value: remapper.remap(row.value) };
+    }
+    return row;
+  });
+
   return {
     manifest: data.manifest,
     characters: remappedCharacters,
@@ -1120,6 +1336,21 @@ function remapBackupData(
     conversationAnnotations: (data.conversationAnnotations || []).map((annotation) => ({
       ...remapper.remapFields(annotation, ['id', 'chatId', 'sourceMessageId']),
     })) as ConversationAnnotation[],
+    chatDocuments: remappedChatDocuments,
+    instanceSettings: remappedInstanceSettings,
+    embeddingStatus: remappedEmbeddingStatus,
+    conversationChunks: remappedConversationChunks,
+    tfidfVocabularies: remappedTfidfVocabularies,
+    vectorIndexMetas: remappedVectorIndexMetas,
+    vectorEntries: remappedVectorEntries,
+    docMountPoints: remappedDocMountPoints,
+    docMountFolders: remappedDocMountFolders,
+    docMountFiles: remappedDocMountFiles,
+    docMountFileLinks: remappedDocMountFileLinks,
+    docMountChunks: remappedDocMountChunks,
+    docMountDocuments: remappedDocMountDocuments,
+    docMountBlobs: remappedDocMountBlobs,
+    projectDocMountLinks: remappedProjectDocMountLinks,
   };
 }
 
@@ -1475,6 +1706,263 @@ export async function restore(
       }
     }
 
+    // ========================================================================
+    // Format-3 entities (depend on the entities created above)
+    // ========================================================================
+
+    // 22a. Document store mount points
+    let docMountPointsRestored = 0;
+    for (const mp of data.docMountPoints || []) {
+      try {
+        const { id, createdAt, updatedAt, ...mpData } = mp;
+        await globalRepos.docMountPoints.create(mpData, { id: mp.id });
+        docMountPointsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore document store "${mp.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount point', { mountPointId: mp.id, error });
+      }
+    }
+
+    // 22b. Document store folders — sort by path length so parents precede
+    // children (parentId is a self-FK into the same table).
+    let docMountFoldersRestored = 0;
+    const sortedFolders = [...(data.docMountFolders || [])].sort(
+      (a, b) => (a.path?.length ?? 0) - (b.path?.length ?? 0)
+    );
+    for (const folder of sortedFolders) {
+      try {
+        const { id, createdAt, updatedAt, ...folderData } = folder;
+        await globalRepos.docMountFolders.create(folderData, { id: folder.id });
+        docMountFoldersRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore doc-store folder "${folder.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount folder', { folderId: folder.id, error });
+      }
+    }
+
+    // 22c. Document store file content rows (content-addressed by sha256).
+    let docMountFilesRestored = 0;
+    for (const file of data.docMountFiles || []) {
+      try {
+        const { id, createdAt, updatedAt, ...fileData } = file;
+        await globalRepos.docMountFiles.create(fileData, { id: file.id });
+        docMountFilesRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore doc-store file row: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount file', { fileId: file.id, error });
+      }
+    }
+
+    // 22d. Document store file links (hard links to file content).
+    let docMountFileLinksRestored = 0;
+    for (const link of data.docMountFileLinks || []) {
+      try {
+        const { id, createdAt, updatedAt, ...linkData } = link;
+        await globalRepos.docMountFileLinks.create(linkData, { id: link.id });
+        docMountFileLinksRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore doc-store file link "${link.relativePath}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount file link', { linkId: link.id, error });
+      }
+    }
+
+    // 22e. Document store text documents (database-backed text content).
+    let docMountDocumentsRestored = 0;
+    for (const doc of data.docMountDocuments || []) {
+      try {
+        const { id, createdAt, updatedAt, ...docData } = doc;
+        await globalRepos.docMountDocuments.create(docData, { id: doc.id });
+        docMountDocumentsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore doc-store document: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount document', { documentId: doc.id, error });
+      }
+    }
+
+    // 22f. Document store binary blobs (metadata rows + bytes from disk).
+    // Bytes were staged in mount-blobs/<blobId> at backup time. We restore
+    // them by writing the metadata row + bytes directly to the mount-index
+    // DB so we preserve the original blob id (a UNIQUE column on fileId).
+    let docMountBlobsRestored = 0;
+    if ((data.docMountBlobs || []).length > 0) {
+      // In new-account mode the metadata id is remapped but the bytes on
+      // disk are still keyed by the *original* id. Pair them by index, the
+      // same trick used for user files higher up.
+      const originalBlobs = parsedData.docMountBlobs || [];
+      const blobsDir = path.join(rootPath, 'mount-blobs');
+      const mountIndexDb = isMountIndexDegraded() ? null : getRawMountIndexDatabase();
+      if (!mountIndexDb) {
+        warnings.push('Doc-store blobs were not restored — mount-index database is unavailable');
+      } else {
+        const insert = mountIndexDb.prepare(
+          `INSERT INTO "doc_mount_blobs" (id, fileId, sha256, sizeBytes, storedMimeType, data, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        for (let i = 0; i < (data.docMountBlobs || []).length; i++) {
+          const blob = (data.docMountBlobs || [])[i];
+          const original = originalBlobs[i] ?? blob;
+          try {
+            const bytesPath = path.join(blobsDir, original.id);
+            const bytes = await fs.promises.readFile(bytesPath);
+            insert.run(
+              blob.id,
+              blob.fileId,
+              blob.sha256,
+              blob.sizeBytes,
+              blob.storedMimeType,
+              bytes,
+              blob.createdAt,
+              blob.updatedAt
+            );
+            docMountBlobsRestored++;
+          } catch (error) {
+            warnings.push(`Failed to restore doc-store blob ${blob.id}: ${error instanceof Error ? error.message : String(error)}`);
+            moduleLogger.warn('Failed to restore doc mount blob', { blobId: blob.id, error });
+          }
+        }
+      }
+    }
+
+    // 22g. Document store embedded chunks. The repo's create() accepts the
+    // chunk in serialised form; the schema rehydrates embedding as Float32Array.
+    let docMountChunksRestored = 0;
+    for (const chunk of data.docMountChunks || []) {
+      try {
+        const { id, createdAt, updatedAt, ...chunkData } = chunk;
+        await globalRepos.docMountChunks.create(chunkData as unknown as Parameters<typeof globalRepos.docMountChunks.create>[0], { id: chunk.id });
+        docMountChunksRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore doc-store chunk: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount chunk', { chunkId: chunk.id, error });
+      }
+    }
+
+    // 22h. Project ↔ document-store links.
+    let projectDocMountLinksRestored = 0;
+    for (const link of data.projectDocMountLinks || []) {
+      try {
+        const { id, createdAt, updatedAt, ...linkData } = link;
+        await globalRepos.projectDocMountLinks.create(linkData, { id: link.id });
+        projectDocMountLinksRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore project↔store link: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore project doc mount link', { linkId: link.id, error });
+      }
+    }
+
+    // 22i. Chat documents (Document Mode pane state per chat).
+    let chatDocumentsRestored = 0;
+    for (const cd of data.chatDocuments || []) {
+      try {
+        const { id, createdAt, updatedAt, ...cdData } = cd;
+        await globalRepos.chatDocuments.create(cdData, { id: cd.id });
+        chatDocumentsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore chat document: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore chat document', { chatDocumentId: cd.id, error });
+      }
+    }
+
+    // 22j. Vector index metas + entries. Without these every memory would
+    // need to be re-embedded after restore.
+    let vectorIndexMetasRestored = 0;
+    for (const meta of data.vectorIndexMetas || []) {
+      try {
+        await globalRepos.vectorIndices.saveMeta(meta.characterId, meta.dimensions);
+        vectorIndexMetasRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore vector index meta for character ${meta.characterId}: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore vector index meta', { characterId: meta.characterId, error });
+      }
+    }
+
+    // The repo's addEntries batch path expects Float32Array; the serialised
+    // form holds plain number arrays, so rehydrate before insert.
+    let vectorEntriesRestored = 0;
+    if ((data.vectorEntries || []).length > 0) {
+      try {
+        const rehydrated = (data.vectorEntries || []).map((e) => ({
+          id: e.id,
+          characterId: e.characterId,
+          embedding: new Float32Array(e.embedding),
+        }));
+        await globalRepos.vectorIndices.addEntries(rehydrated);
+        vectorEntriesRestored = rehydrated.length;
+      } catch (error) {
+        warnings.push(`Failed to restore vector entries: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore vector entries batch', { error });
+      }
+    }
+
+    // 22k. Conversation chunks (semantic chunks with embeddings).
+    let conversationChunksRestored = 0;
+    for (const chunk of data.conversationChunks || []) {
+      try {
+        const { id, createdAt, updatedAt, ...chunkData } = chunk;
+        // The repo's create accepts ConversationChunkInput; embeddings come
+        // through as number[] and the Zod transform rehydrates them.
+        await globalRepos.conversationChunks.create(
+          chunkData as unknown as Parameters<typeof globalRepos.conversationChunks.create>[0],
+          { id: chunk.id }
+        );
+        conversationChunksRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore conversation chunk: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore conversation chunk', { chunkId: chunk.id, error });
+      }
+    }
+
+    // 22l. TF-IDF vocabularies (one per BUILTIN embedding profile).
+    let tfidfVocabulariesRestored = 0;
+    for (const voc of data.tfidfVocabularies || []) {
+      try {
+        const { id, createdAt, updatedAt, ...vocData } = voc;
+        await globalRepos.tfidfVocabularies.create(
+          { ...vocData, userId: targetUserId },
+          { id: voc.id }
+        );
+        tfidfVocabulariesRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore TF-IDF vocabulary: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore tfidf vocabulary', { vocabularyId: voc.id, error });
+      }
+    }
+
+    // 22m. Embedding status flags.
+    let embeddingStatusRestored = 0;
+    for (const es of data.embeddingStatus || []) {
+      try {
+        const { id, createdAt, updatedAt, ...esData } = es;
+        await globalRepos.embeddingStatus.create(
+          { ...esData, userId: targetUserId },
+          { id: es.id }
+        );
+        embeddingStatusRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore embedding status: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore embedding status', { statusId: es.id, error });
+      }
+    }
+
+    // 22n. Instance settings — applied last because the mount-point keys
+    // reference doc_mount_points that we just restored above. Upsert by key
+    // so a fresh instance's auto-provisioned defaults get overwritten by the
+    // backup's values.
+    let instanceSettingsRestored = 0;
+    for (const row of data.instanceSettings || []) {
+      try {
+        await rawQuery(
+          'INSERT INTO "instance_settings" ("key", "value") VALUES (?, ?) ' +
+            'ON CONFLICT("key") DO UPDATE SET "value" = excluded."value"',
+          [row.key, row.value]
+        );
+        instanceSettingsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore instance setting "${row.key}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore instance setting', { key: row.key, error });
+      }
+    }
+
     // 23. NPM Plugins (copy from extracted dir to plugins/npm directory)
     let npmPluginsRestored = 0;
     const npmPluginsSrcDir = path.join(rootPath, 'plugins', 'npm');
@@ -1585,6 +2073,21 @@ export async function restore(
       characterPluginData: characterPluginDataRestored,
       conversationAnnotations: conversationAnnotationsRestored,
       userInstalledThemes: userInstalledThemesRestored,
+      chatDocuments: chatDocumentsRestored,
+      instanceSettings: instanceSettingsRestored,
+      embeddingStatus: embeddingStatusRestored,
+      conversationChunks: conversationChunksRestored,
+      tfidfVocabularies: tfidfVocabulariesRestored,
+      vectorIndexMetas: vectorIndexMetasRestored,
+      vectorEntries: vectorEntriesRestored,
+      docMountPoints: docMountPointsRestored,
+      docMountFolders: docMountFoldersRestored,
+      docMountFiles: docMountFilesRestored,
+      docMountFileLinks: docMountFileLinksRestored,
+      docMountChunks: docMountChunksRestored,
+      docMountDocuments: docMountDocumentsRestored,
+      docMountBlobs: docMountBlobsRestored,
+      projectDocMountLinks: projectDocMountLinksRestored,
       warnings,
     };
 
