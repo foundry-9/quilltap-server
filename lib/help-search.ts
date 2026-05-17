@@ -108,7 +108,6 @@ export class HelpSearch {
     }
 
     const literalPhrase = getLiteralPhrase(query)
-    let literalHitCount = 0
 
     // Calculate similarity scores
     const results: HelpSearchResult[] = []
@@ -128,7 +127,6 @@ export class HelpSearch {
         ? containsLiteralPhrase(doc.title, literalPhrase) ||
           containsLiteralPhrase(doc.content, literalPhrase)
         : false
-      if (literalHit) literalHitCount++
 
       results.push({
         document: {
@@ -139,14 +137,6 @@ export class HelpSearch {
           content: doc.content,
         },
         score: literalHit ? applyLiteralBoost(rawScore) : rawScore,
-      })
-    }
-
-    if (literalPhrase) {
-      logger.debug('Help search applied literal-phrase boost', {
-        context: 'help-search',
-        phraseLength: literalPhrase.length,
-        literalHitCount,
       })
     }
 

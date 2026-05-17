@@ -4,6 +4,15 @@
 
 ### 4.4-dev
 
+#### Chore: Remove debug-level logging added since commit 96bf74b5
+
+Commit 96bf74b5 had previously stripped all `logger.debug` / `console.debug` calls from source. Twenty-nine debug calls accumulated again in subsequent feature work. Removed them all, plus the locals and helpers that only existed to feed them.
+
+- 17 files affected across `lib/` and `app/api/v1/`. The deleted calls were in `lib/mount-index/document-search.ts`, `lib/tools/handlers/search-scriptorium-handler.ts`, `lib/chat/context/knowledge-injector.ts`, `lib/photos/auto-describe-attachment.ts`, `lib/scriptorium/conversation-search.ts`, `lib/photos/save-image-to-album.ts`, `lib/photos/chunk-extracted-text.ts`, `lib/memory/memory-service.ts`, `lib/help-search.ts`, `lib/database/repositories/doc-mount-file-links.repository.ts`, `lib/chat/context-manager.ts`, `lib/chat-files-v2.ts`, `lib/background-jobs/host/job-dispatcher.ts`, `lib/background-jobs/host/processor-host.ts`, `app/api/v1/chats/[id]/actions/documents.ts`, `app/api/v1/chats/[id]/actions/photo-albums.ts`, and `app/api/v1/chats/[id]/messages/[messageId]/route.ts`.
+- Cleaned up dead code that only fed those calls: `literalHitCount` counters in `document-search.ts`, `conversation-search.ts`, and `help-search.ts`; the `documentDuplicatesDropped` counter in `search-scriptorium-handler.ts`; and the `logDocumentModeSuccess` helper plus its six call sites in `documents.ts`.
+- `case 'debug':` in the child-process log-record router (`processor-host.ts`) dropped; any stray debug record from a forked child now falls through to the default `log.info` branch.
+- Empty `catch (err) { log.debug(...) }` blocks collapsed to `catch { /* best effort */ }`.
+
 #### Feature: "Every X minutes" timestamp injection mode
 
 Added a fourth Reality Injection / Timestamp mode alongside Disabled, Conversation Start, and Every Message. In `EVERY_N_MINUTES` mode the Host posts a timestamp announcement only when at least the configured number of minutes (default 15) have elapsed since the last one in the chat. The initial message always receives an announcement.

@@ -358,15 +358,6 @@ async function handleSaveImage(
       };
     }
 
-    logger.debug('[SaveImage] dispatching', {
-      chatId: id,
-      messageId,
-      fileId,
-      mountPointId,
-      attributionRole: attribution.role,
-      hasCaption: !!caption,
-    });
-
     const saved = await saveImageToAlbum({
       mountPointId,
       fileId,

@@ -147,20 +147,10 @@ export async function searchDocumentChunks(
       }
     }
     if (allowedLinkIds.size === 0) {
-      logger.debug('Document search found no files matching pathPrefix', {
-        context: 'document-search',
-        pathPrefix,
-        mountPointCount: mountPointIds.length,
-      })
       return []
     }
     chunksInScope = allChunks.filter(c => allowedLinkIds.has(c.linkId))
     if (chunksInScope.length === 0) {
-      logger.debug('Document search: pathPrefix files have no embedded chunks yet', {
-        context: 'document-search',
-        pathPrefix,
-        allowedFileCount: allowedLinkIds.size,
-      })
       return []
     }
   }
@@ -175,13 +165,11 @@ export async function searchDocumentChunks(
     : null
 
   const literalBoostFraction = options.literalBoostFraction ?? 0.5
-  let literalHitCount = 0
   const scoredAll = chunksInScope.map(chunk => {
     const rawScore = cosineSimilarity(queryEmbedding, chunk.embedding)
     const literalHit = literalPhrase
       ? containsLiteralPhrase(chunk.content, literalPhrase)
       : false
-    if (literalHit) literalHitCount++
     return {
       chunk,
       score: literalHit ? applyLiteralBoost(rawScore, literalBoostFraction) : rawScore,
@@ -223,24 +211,6 @@ export async function searchDocumentChunks(
   }
 
   const finalScored = scored
-
-  if (lowerPrefix) {
-    logger.debug('Document search applied pathPrefix filter', {
-      context: 'document-search',
-      pathPrefix,
-      inScopeChunkCount: chunksInScope.length,
-      returned: finalScored.length,
-    })
-  }
-
-  if (literalPhrase) {
-    logger.debug('Document search applied literal-phrase boost', {
-      context: 'document-search',
-      phraseLength: literalPhrase.length,
-      literalHitCount,
-      returned: finalScored.length,
-    })
-  }
 
   const results: DocumentSearchResult[] = finalScored.map(({ chunk, score }) => {
     const fileInfo = fileMap.get(chunk.linkId)

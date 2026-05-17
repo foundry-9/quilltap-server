@@ -74,7 +74,6 @@ export async function autoDescribeChatImageAttachment(
 
   const entry = await repos.files.findById(fileEntryId);
   if (!entry) {
-    logger.debug('auto-describe: FileEntry not found', { fileEntryId });
     return { ...EMPTY_RESULT, skipReason: 'not-found' };
   }
   if (!entry.mimeType.startsWith('image/')) {
@@ -84,10 +83,6 @@ export async function autoDescribeChatImageAttachment(
     return { ...EMPTY_RESULT, skipReason: 'no-sha' };
   }
   if (entry.description && entry.description.trim().length > 0) {
-    logger.debug('auto-describe: FileEntry already has a description', {
-      fileEntryId,
-      descriptionLength: entry.description.length,
-    });
     return { ...EMPTY_RESULT, skipReason: 'already-described' };
   }
 

@@ -13,9 +13,6 @@
 
 import { chunkDocument } from '@/lib/mount-index/chunker';
 import type { getRepositories } from '@/lib/database/repositories';
-import { createServiceLogger } from '@/lib/logging/create-logger';
-
-const logger = createServiceLogger('Photos:ChunkExtractedText');
 
 export interface ChunkAndInsertInput {
   linkId: string;
@@ -59,13 +56,6 @@ export async function chunkAndInsertExtractedText(
 
   await repos.docMountFileLinks.update(linkId, {
     chunkCount: chunks.length,
-    plainTextLength: extractedText.length,
-  });
-
-  logger.debug('Chunked extractedText for link', {
-    linkId,
-    mountPointId,
-    chunksCreated: chunks.length,
     plainTextLength: extractedText.length,
   });
 

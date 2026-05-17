@@ -226,11 +226,6 @@ export async function retrieveKnowledgeForTurn(
         );
 
         if (!file) {
-          logger.debug('Knowledge hit file no longer present, skipping', {
-            tier,
-            characterId: params.characterId,
-            path: hit.relativePath,
-          });
           continue;
         }
 
@@ -256,11 +251,8 @@ export async function retrieveKnowledgeForTurn(
                 if (fm.data) {
                   fmTags = renderFrontmatterTags(fm.data);
                 }
-              } catch (error) {
-                logger.debug('Frontmatter parse failed for knowledge file', {
-                  path: hit.relativePath,
-                  error: error instanceof Error ? error.message : String(error),
-                });
+              } catch {
+                /* malformed frontmatter — fall back to no tags */
               }
             }
 
@@ -287,12 +279,8 @@ export async function retrieveKnowledgeForTurn(
         if (!existing || candidate.score > existing.score) {
           candidatesByChunkId.set(hit.chunkId, candidate);
         }
-      } catch (error) {
-        logger.debug('Knowledge candidate construction failed, skipping', {
-          tier,
-          path: hit.relativePath,
-          error: error instanceof Error ? error.message : String(error),
-        });
+      } catch {
+        /* candidate construction failed — skip this hit */
       }
     }
   }

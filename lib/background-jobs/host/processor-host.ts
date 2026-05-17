@@ -238,7 +238,6 @@ function replayLogRecord(record: { level: string; message: string; timestamp: st
     case 'error': log.error(record.message, meta); break;
     case 'warn':  log.warn(record.message, meta); break;
     case 'info':  log.info(record.message, meta); break;
-    case 'debug': log.debug(record.message, meta); break;
     default:      log.info(record.message, meta); break;
   }
 }

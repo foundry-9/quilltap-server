@@ -329,11 +329,9 @@ async function invalidateLocalCachesAsync(
       const mgr = mod.getVectorStoreManager();
       for (const key of vectorStoreKeys) {
         try { mgr.unloadStore(key); }
-        catch (err) { log.debug('Local vector-store unload failed', { key, error: getErrorMessage(err) }); }
+        catch { /* best effort */ }
       }
-    } catch (err) {
-      log.debug('Loading vector-store module for invalidation failed', { error: getErrorMessage(err) });
-    }
+    } catch { /* best effort */ }
   }
 
   if (mountPointKeys.size > 0) {
@@ -341,11 +339,9 @@ async function invalidateLocalCachesAsync(
       const mod = await import('@/lib/mount-index/mount-chunk-cache');
       for (const key of mountPointKeys) {
         try { mod.invalidateMountPoint(key); }
-        catch (err) { log.debug('Local mount-chunk invalidation failed', { key, error: getErrorMessage(err) }); }
+        catch { /* best effort */ }
       }
-    } catch (err) {
-      log.debug('Loading mount-chunk-cache module for invalidation failed', { error: getErrorMessage(err) });
-    }
+    } catch { /* best effort */ }
   }
 }
 

@@ -755,7 +755,6 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
     if (!link) {
       throw new Error(`Link disappeared immediately after upsert: ${linkId}`);
     }
-    logger.debug('Filesystem link upserted', { linkId, sha256: input.sha256, mountPointId: input.mountPointId });
     return link;
   }
 

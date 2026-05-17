@@ -122,14 +122,6 @@ export async function saveImageToAlbum(
 ): Promise<SaveImageToAlbumOutput> {
   const { mountPointId, fileId, caption = null, tags = [], chatId = null, attribution } = input;
 
-  logger.debug('[saveImageToAlbum] entry', {
-    mountPointId,
-    fileId,
-    chatId,
-    role: attribution.role,
-    hasCaption: !!caption,
-  });
-
   // Lazy-import images-v2 so the photos module doesn't pull sharp/webp into
   // unrelated consumers' module load (mirrors the pattern in keep_image).
   const { getImageById, readImageBuffer } = await import('@/lib/images-v2');

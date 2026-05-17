@@ -85,13 +85,11 @@ export async function searchConversationChunks(
     ? getLiteralPhrase(options.query)
     : null
 
-  let literalHitCount = 0
   const scoredAll = allChunks.map(chunk => {
     const rawScore = cosineSimilarity(queryEmbedding, chunk.embedding!)
     const literalHit = literalPhrase
       ? containsLiteralPhrase(chunk.content, literalPhrase)
       : false
-    if (literalHit) literalHitCount++
     return {
       chunk,
       score: literalHit ? applyLiteralBoost(rawScore) : rawScore,
@@ -106,15 +104,6 @@ export async function searchConversationChunks(
 
   if (scored.length === 0) {
     return []
-  }
-
-  if (literalPhrase) {
-    logger.debug('Conversation search applied literal-phrase boost', {
-      context: 'conversation-search',
-      phraseLength: literalPhrase.length,
-      literalHitCount,
-      returned: scored.length,
-    })
   }
 
   // Build title map from already-loaded character chats

@@ -1161,10 +1161,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       try {
         const { getGeneralMountPointId } = await import('@/lib/instance-settings')
         globalMountPointId = await getGeneralMountPointId()
-      } catch (error) {
-        logger.debug('[ContextManager] Quilltap General mount not provisioned yet; skipping global knowledge tier', {
-          error: error instanceof Error ? error.message : String(error),
-        })
+      } catch {
+        /* general mount not provisioned yet — skip global knowledge tier */
       }
 
       const characterMountPointId = character.characterDocumentMountPointId ?? null

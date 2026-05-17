@@ -119,11 +119,8 @@ export async function executeSearchScriptoriumTool(
 
       try {
         globalMountPointId = await getGeneralMountPointId()
-      } catch (error) {
-        logger.debug('Mount pool resolution: general mount not provisioned yet', {
-          context: 'search-scriptorium-handler',
-          error: error instanceof Error ? error.message : String(error),
-        })
+      } catch {
+        /* general mount not provisioned yet */
       }
 
       // Dedup: a vault shouldn't enter the pool through more than one tier.
@@ -278,12 +275,7 @@ export async function executeSearchScriptoriumTool(
     let documentRows: DocumentSearchResult[] = []
     if (searchDocuments) {
       const documentsPool = buildDocumentsPool()
-      if (documentsPool.length === 0) {
-        logger.debug('Document search: pool empty for scope', {
-          context: 'search-scriptorium-handler',
-          scope,
-        })
-      } else {
+      if (documentsPool.length > 0) {
         try {
           const embeddingResult = await generateEmbeddingForUser(
             query,
@@ -384,10 +376,8 @@ export async function executeSearchScriptoriumTool(
     // Now push deferred document rows, skipping any chunk that already came
     // through as a knowledge hit (the knowledge label is more specific and
     // should win the slot).
-    let documentDuplicatesDropped = 0
     for (const dr of documentRows) {
       if (knowledgeChunkIds.has(dr.chunkId)) {
-        documentDuplicatesDropped++
         continue
       }
       results.push({
@@ -403,12 +393,6 @@ export async function executeSearchScriptoriumTool(
           chunkIndex: dr.chunkIndex,
           headingContext: dr.headingContext ?? undefined,
         },
-      })
-    }
-    if (documentDuplicatesDropped > 0) {
-      logger.debug('Dropped document hits also surfaced as knowledge', {
-        context: 'search-scriptorium-handler',
-        droppedCount: documentDuplicatesDropped,
       })
     }
 

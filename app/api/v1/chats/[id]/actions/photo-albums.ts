@@ -133,16 +133,6 @@ export async function handleGetPhotoAlbums(
       defaultOption.isDefault = true;
     }
 
-    logger.debug('[Chats v1] Resolved photo albums', {
-      chatId,
-      total: options.length,
-      kinds: options.reduce<Record<string, number>>((acc, o) => {
-        acc[o.kind] = (acc[o.kind] ?? 0) + 1;
-        return acc;
-      }, {}),
-      defaultKind: defaultOption?.kind ?? null,
-    });
-
     return NextResponse.json({ albums: options });
   } catch (error) {
     logger.error('[Chats v1] Failed to resolve photo albums', { chatId }, error instanceof Error ? error : undefined);

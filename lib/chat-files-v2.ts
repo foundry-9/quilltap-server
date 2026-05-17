@@ -208,14 +208,6 @@ export async function uploadChatFile(
               linked = updated;
             }
           }
-          logger.debug('Skip-duplicate resolution linked existing file to chat', {
-            module: 'chat-files-v2',
-            fileId: linked.id,
-            chatId,
-            messageId: messageId ?? null,
-            previousLinkedCount: existingFile.linkedTo.length,
-            updatedLinkedCount: linked.linkedTo.length,
-          });
           return {
             id: linked.id,
             filename: linked.originalFilename,

@@ -635,12 +635,6 @@ export async function searchMemoriesSemantic(
         }
         if (extras.length > 0) {
           augmentedVectorResults = [...vectorResults, ...extras]
-          logger.debug('[Memory] Literal-boost union added direct hits to vector pool', {
-            characterId,
-            directHitCount: directHitMemories.length,
-            unionedCount: extras.length,
-            userId: options.userId,
-          })
         }
       }
     }
