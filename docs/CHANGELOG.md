@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Off-scene character intros only fire on what characters say
+
+`lib/chat/context-manager.ts` built the scan corpus for off-scene character mentions from `chat.contextSummary` plus every visible USER/ASSISTANT message — including ASSISTANT messages authored by the Host, Aurora, the Lantern, the Concierge, the Librarian, and the Commonplace Book. A workspace character whose name surfaced only in a memory recall whisper or a summary block would trigger a Host introduction in the next turn, even though no participant had actually talked about them. The scan now reads the full chat history and skips any message with a non-null `systemSender`, as well as the conversation summary. USER messages and character-authored ASSISTANT messages still feed the scan (with `stripToolArtifacts` still applied to assistant content). The full chat history lookup that the introduced-IDs diff already needed is now performed once and shared with the corpus build.
+
 #### Fix: Opaque characters no longer hear the Staff by name
 
 The `systemTransparency` audit found that opaque characters (`systemTransparency !== true`) were still receiving every Staff announcement with the persona name intact in the body — only the `systemSender` metadata was stripped. So even though the LLM message wasn't tagged as Host/Aurora/Prospero/etc., the body still said "The Host welcomes Beatrice", "Aurora marks an alteration", "Prospero notes that...", and so on. The covenant the character's `systemTransparency=false` advertised was not what ran.

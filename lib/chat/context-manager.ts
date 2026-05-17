@@ -25,7 +25,7 @@ import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/error-utils'
-import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
+import { extractVisibleConversation, stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks'
 
 // Import from extracted modules
 import {
@@ -475,15 +475,39 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
 
     if (candidates.length > 0) {
-      // Build the scan corpus: conversation summary plus every visible
-      // USER/ASSISTANT message in the chat history. Scanning the full
-      // history (rather than the post-compression window) lets us surface
-      // characters mentioned earlier in long conversations.
-      const visibleForScan = extractVisibleConversation(existingMessages)
+      // Build the scan corpus from things characters and the user actually
+      // *said* — not from synthetic messages (Host/Lantern/Aurora/Librarian/
+      // Concierge/Commonplace Book whispers and announcements) and not from
+      // the conversation summary. Otherwise the Host introduces workspace
+      // characters whose names only ever appeared in a memory whisper or a
+      // summary, which the participants haven't actually talked about.
+      //
+      // `existingMessages` is the trimmed role/content view used for LLM
+      // context and has already been stripped of systemSender/hostEvent, so
+      // load the full chat history from the repo to read those fields — both
+      // for filtering the scan corpus and for the introducedIds diff below.
+      const fullChatMessages = await repos.chats.getMessages(chat.id)
       const corpusParts: string[] = []
-      if (chat.contextSummary) corpusParts.push(chat.contextSummary)
-      for (const msg of visibleForScan) {
-        if (msg.content) corpusParts.push(msg.content)
+      for (const m of fullChatMessages as Array<{
+        type?: string
+        role?: string
+        content?: string
+        systemSender?: string | null
+      }>) {
+        if (m.type !== undefined && m.type !== 'message') continue
+        if (!m.content) continue
+        // Skip synthetic system whispers/announcements (the Host, Commonplace
+        // Book recall, Lantern story-background notes, etc.).
+        if (m.systemSender) continue
+        const role = (m.role || '').toUpperCase()
+        if (role !== 'USER' && role !== 'ASSISTANT') continue
+        if (role === 'ASSISTANT') {
+          const cleaned = stripToolArtifacts(m.content)
+          if (!cleaned) continue
+          corpusParts.push(cleaned)
+        } else {
+          corpusParts.push(m.content)
+        }
       }
       const scanCorpus = corpusParts.join('\n')
 
@@ -491,10 +515,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       if (matchedIds.size > 0) {
         // Diff against characters already introduced by prior Host
         // announcements in this chat — only newly-mentioned ones get a fresh
-        // intro. `existingMessages` is the trimmed role/content view used for
-        // LLM context and has already been stripped of systemSender/hostEvent,
-        // so re-load the full chat history from the repo to read those fields.
-        const fullChatMessages = await repos.chats.getMessages(chat.id)
+        // intro.
         const introducedIds = findIntroducedOffSceneCharacterIds(fullChatMessages)
         const newcomerIds = new Set<string>()
         for (const id of matchedIds) {
