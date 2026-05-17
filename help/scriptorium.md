@@ -52,6 +52,8 @@ When supplied with a `conversationId` — perhaps one unearthed by the `search` 
 
 When annotations are included, the character sees not only the conversation itself but also any commentary that has been affixed to specific messages by any character in the chat.
 
+The result of a `read_conversation` call is **whispered to the calling character** — the operator sees it in the Salon transcript, but peer characters at the same table do not receive the transcript in their LLM context. If a character wishes to share what she's read, she may quote or summarise it in her own narration; what we prevent is the silent injection of one character's archival lookup into another character's prompt.
+
 ### upsert_annotation
 
 Characters can attach persistent annotations to specific messages, identified by message number. Each character may have exactly **one annotation per message** — calling this tool again on the same message replaces the previous annotation rather than stacking them up like an overenthusiastic reviewer's sticky notes.
@@ -67,6 +69,8 @@ Should a character decide that a particular annotation has outlived its usefulne
 This is the tool that transforms the Scriptorium from a mere record-keeping operation into something rather more resembling an actual research library. When invoked, it casts its net across no fewer than four distinct waters at once: a character's personal memories, the full archive of rendered conversations, every document store the character can reach (their own vault, every store linked to the active chat's project, and the instance-wide Quilltap General), and — narrower still — the `Knowledge/` folders inside those same stores. Results return as a single unified ledger, ranked by relevance.
 
 One may optionally restrict the search to particular `sources` (which layers to query) and to a particular `scope` (which stores to look in). The results include sufficient metadata to identify the provenance of each finding: for memories, the importance and summary; for conversations, the title, interchange number, and participants; for documents and knowledge entries alike, the file path and the vault or mount that produced them. Armed with a conversation ID, a character may call `read_conversation` to review the full text; armed with a path and mount-point, `doc_read_file` will fetch the document itself.
+
+Like `read_conversation`, every `search` result is **whispered to the calling character** — peer characters in the same chat do not receive the body of the search result in their LLM context. Since `search` can reach into memories and conversation archives that are inherently per-character, the whisper closes that channel unconditionally; the Shared Vaults toggle does not override it.
 
 #### Choosing a scope
 

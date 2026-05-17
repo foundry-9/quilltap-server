@@ -4,6 +4,17 @@
 
 ### 4.4-dev
 
+#### Fix: Tool results from personal lookups no longer leak into peer LLM context
+
+A character calling `search` or `read_conversation` was writing the tool result as a public chat message, so on the next character's turn the result was injected into that character's LLM context. Friday could read Amy's old conversation summary even though Friday wasn't a participant in that old chat. Vault-read tools (`doc_read_file`, `doc_list_files`, `doc_grep`, `doc_read_heading`, `doc_read_frontmatter`, `doc_read_blob`, `doc_list_blobs`, `doc_open_document`) leaked the same way.
+
+- `saveToolMessages` (`lib/services/chat-message/tool-execution.service.ts`) now sets `targetParticipantIds` on tool-result messages whose tool name falls in either of two categories.
+  - **Always whispered**: `search` and `read_conversation`. These tools return inherently per-character content (memories, past chat transcripts), so the result is always scoped to the calling character + the operator. Peer characters' LLM contexts never see the body.
+  - **Whispered when Shared Vaults is off**: the eight `doc_*` read tools listed above. When the chat's existing `allowCrossCharacterVaultReads` flag is false (the default), vault-read results are whispered to the calling character + the operator. When the flag is true, results stay public, matching the existing "characters may peek at each other's dossiers" semantics.
+- New `ToolWhisperContext` type carries `{ userParticipantId, allowCrossCharacterVaultReads }` from the chat through `saveAssistantMessage` and the direct tool-only branch in the orchestrator down to `saveToolMessages`.
+- The whisper filter in `lib/chat/context/message-attribution.ts` already filtered TOOL-role messages uniformly by `targetParticipantIds`, so no filter change was needed. The Salon UI whisper visibility check at `app/salon/[id]/page.tsx` already shows whispers to the operator when they're the target, so the operator continues to see every tool-result message in chat.
+- `help/shared-character-vaults.md` updated to describe the dual role of the Shared Vaults toggle (peer-vault access + result visibility), and notes that `search` / `read_conversation` results are always whispered regardless of the toggle.
+
 #### Fix: Off-scene character intros only fire on what characters say
 
 `lib/chat/context-manager.ts` built the scan corpus for off-scene character mentions from `chat.contextSummary` plus every visible USER/ASSISTANT message — including ASSISTANT messages authored by the Host, Aurora, the Lantern, the Concierge, the Librarian, and the Commonplace Book. A workspace character whose name surfaced only in a memory recall whisper or a summary block would trigger a Host introduction in the next turn, even though no participant had actually talked about them. The scan now reads the full chat history and skips any message with a non-null `systemSender`, as well as the conversation summary. USER messages and character-authored ASSISTANT messages still feed the scan (with `stripToolArtifacts` still applied to assistant content). The full chat history lookup that the introduced-IDs diff already needed is now performed once and shared with the corpus build.

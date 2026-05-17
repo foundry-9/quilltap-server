@@ -6,8 +6,11 @@
 import {
   detectToolCallsInResponse,
   createToolContext,
+  saveToolMessages,
+  type ToolWhisperContext,
 } from '@/lib/services/chat-message/tool-execution.service'
 import * as toolExecutor from '@/lib/chat/tool-executor'
+import type { ToolMessage, GeneratedImage } from '@/lib/services/chat-message/types'
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
@@ -369,6 +372,133 @@ describe('tool-execution.service', () => {
       expect(typeof context.imageProfileId).toBe('string')
       expect(typeof context.embeddingProfileId).toBe('string')
       expect(typeof context.projectId).toBe('string')
+    })
+  })
+
+  describe('saveToolMessages — tool-result whisper scoping', () => {
+    const userParticipantId = 'user-participant-uuid'
+    const callerParticipantId = 'caller-participant-uuid'
+    const callerCharacterId = 'caller-character-uuid'
+    const chatId = 'chat-uuid'
+
+    function buildRepos() {
+      const addMessage = jest.fn().mockResolvedValue(undefined)
+      const addLink = jest.fn().mockResolvedValue(undefined)
+      const addTag = jest.fn().mockResolvedValue(undefined)
+      const repos = {
+        chats: { addMessage },
+        files: { addLink, addTag },
+      } as unknown as Parameters<typeof saveToolMessages>[0]
+      return { repos, addMessage }
+    }
+
+    function buildToolMessage(toolName: string): ToolMessage {
+      return {
+        toolName,
+        success: true,
+        content: 'result body',
+        arguments: {},
+        callId: `call-${toolName}`,
+      }
+    }
+
+    const noImages: GeneratedImage[] = []
+
+    const baseWhisper: ToolWhisperContext = {
+      userParticipantId,
+      allowCrossCharacterVaultReads: false,
+    }
+
+    async function persistedTarget(
+      toolName: string,
+      whisper: ToolWhisperContext | undefined
+    ): Promise<unknown> {
+      const { repos, addMessage } = buildRepos()
+      await saveToolMessages(
+        repos,
+        chatId,
+        'user-uuid',
+        [buildToolMessage(toolName)],
+        noImages,
+        callerCharacterId,
+        callerParticipantId,
+        whisper
+      )
+      const persisted = addMessage.mock.calls[0][1] as { targetParticipantIds?: unknown }
+      return persisted.targetParticipantIds
+    }
+
+    it('whispers `search` results regardless of allowCrossCharacterVaultReads', async () => {
+      expect(await persistedTarget('search', baseWhisper)).toEqual([userParticipantId])
+      expect(
+        await persistedTarget('search', { ...baseWhisper, allowCrossCharacterVaultReads: true }),
+      ).toEqual([userParticipantId])
+    })
+
+    it('whispers `read_conversation` results regardless of allowCrossCharacterVaultReads', async () => {
+      expect(await persistedTarget('read_conversation', baseWhisper)).toEqual([userParticipantId])
+      expect(
+        await persistedTarget('read_conversation', {
+          ...baseWhisper,
+          allowCrossCharacterVaultReads: true,
+        }),
+      ).toEqual([userParticipantId])
+    })
+
+    it('whispers vault-read tools when allowCrossCharacterVaultReads is false', async () => {
+      for (const toolName of [
+        'doc_read_file',
+        'doc_list_files',
+        'doc_grep',
+        'doc_read_heading',
+        'doc_read_frontmatter',
+        'doc_read_blob',
+        'doc_list_blobs',
+        'doc_open_document',
+      ]) {
+        expect(await persistedTarget(toolName, baseWhisper)).toEqual([userParticipantId])
+      }
+    })
+
+    it('leaves vault-read results public when allowCrossCharacterVaultReads is true', async () => {
+      const open: ToolWhisperContext = { userParticipantId, allowCrossCharacterVaultReads: true }
+      for (const toolName of [
+        'doc_read_file',
+        'doc_list_files',
+        'doc_grep',
+        'doc_read_heading',
+        'doc_read_frontmatter',
+        'doc_read_blob',
+        'doc_list_blobs',
+        'doc_open_document',
+      ]) {
+        expect(await persistedTarget(toolName, open)).toBeNull()
+      }
+    })
+
+    it('leaves write/non-personal tools public', async () => {
+      for (const toolName of [
+        'doc_write_file',
+        'doc_str_replace',
+        'generate_image',
+        'rng',
+        'whisper',
+      ]) {
+        expect(await persistedTarget(toolName, baseWhisper)).toBeNull()
+      }
+    })
+
+    it('omits operator from the target list when userParticipantId is null', async () => {
+      const noUser: ToolWhisperContext = {
+        userParticipantId: null,
+        allowCrossCharacterVaultReads: false,
+      }
+      expect(await persistedTarget('search', noUser)).toEqual([])
+    })
+
+    it('falls back to public when no whisper context is supplied', async () => {
+      expect(await persistedTarget('search', undefined)).toBeNull()
+      expect(await persistedTarget('doc_read_file', undefined)).toBeNull()
     })
   })
 })

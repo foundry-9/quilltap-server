@@ -13,6 +13,53 @@ import { encodeStatusEvent } from './streaming.service'
 
 const logger = createServiceLogger('ToolExecutionService')
 
+// Tools whose results are inherently per-character (memories, conversation
+// transcripts). Whispered to the calling character regardless of chat settings —
+// peer characters' LLM contexts never see the body.
+const ALWAYS_PRIVATE_TOOLS = new Set<string>([
+  'search',
+  'read_conversation',
+])
+
+// Vault-read tools. Whispered to the calling character UNLESS the chat has
+// `allowCrossCharacterVaultReads` enabled (the operator's "characters share
+// each other's vaults" mode), in which case the result is public.
+const VAULT_READ_TOOLS = new Set<string>([
+  'doc_read_file',
+  'doc_list_files',
+  'doc_grep',
+  'doc_read_heading',
+  'doc_read_frontmatter',
+  'doc_read_blob',
+  'doc_list_blobs',
+  'doc_open_document',
+])
+
+/**
+ * Per-chat context used to decide whether a tool result should be whispered.
+ */
+export interface ToolWhisperContext {
+  userParticipantId: string | null
+  allowCrossCharacterVaultReads: boolean
+}
+
+/**
+ * Decide the `targetParticipantIds` for a tool-result message.
+ * Returning null leaves the message public.
+ */
+function computeToolMessageTargets(
+  toolName: string,
+  whisperContext: ToolWhisperContext | undefined
+): string[] | null {
+  if (!whisperContext) return null
+  const isAlwaysPrivate = ALWAYS_PRIVATE_TOOLS.has(toolName)
+  const isVaultRead = VAULT_READ_TOOLS.has(toolName)
+  const shouldWhisper = isAlwaysPrivate
+    || (isVaultRead && !whisperContext.allowCrossCharacterVaultReads)
+  if (!shouldWhisper) return null
+  return whisperContext.userParticipantId ? [whisperContext.userParticipantId] : []
+}
+
 /**
  * Stream controller interface for sending tool updates
  */
@@ -127,7 +174,8 @@ export async function saveToolMessages(
   toolMessages: ToolMessage[],
   generatedImagePaths: GeneratedImage[],
   characterId?: string,
-  participantId?: string
+  participantId?: string,
+  whisperContext?: ToolWhisperContext
 ): Promise<{ firstToolMessageId: string | null; generatedImageIds: string[] }> {
   let firstToolMessageId: string | null = null
   const generatedImageIds: string[] = generatedImagePaths.map(img => img.id)
@@ -141,11 +189,14 @@ export async function saveToolMessages(
       ? generatedImageIds
       : []
 
+    const targetParticipantIds = computeToolMessageTargets(toolMsg.toolName, whisperContext)
+
     const toolMessage = {
       id: toolMessageId,
       type: 'message' as const,
       role: 'TOOL' as const,
       participantId: participantId ?? null,
+      targetParticipantIds,
       content: JSON.stringify({
         toolName: toolMsg.toolName,
         success: toolMsg.success,

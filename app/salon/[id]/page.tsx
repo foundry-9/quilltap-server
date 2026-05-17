@@ -1158,8 +1158,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       aria-checked={chatControls.allowCrossCharacterVaultReads}
                       title={
                         chatControls.allowCrossCharacterVaultReads
-                          ? 'Characters may read each other’s vaults (read-only). Click to lock.'
-                          : 'Each character’s vault is private. Click to let them peek at each other’s dossiers.'
+                          ? 'Characters may read each other’s vaults (read-only) and the results are public to the chat. Click to lock.'
+                          : 'Each character’s vault is private; results from doc_* reads are whispered to the caller. Click to let them peek at each other’s dossiers.'
                       }
                     >
                       <span

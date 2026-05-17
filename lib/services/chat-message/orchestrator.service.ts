@@ -37,6 +37,7 @@ import { postLibrarianUploadAnnouncement } from '@/lib/services/librarian-notifi
 import {
   saveToolMessages,
   createToolContext,
+  type ToolWhisperContext,
 } from './tool-execution.service'
 import {
   buildTools,
@@ -1221,6 +1222,10 @@ async function processMessage(
     })
   } else if (toolMessages.length > 0) {
     // Save tool messages even without text response
+    const toolWhisperContext: ToolWhisperContext = {
+      userParticipantId,
+      allowCrossCharacterVaultReads: chat.allowCrossCharacterVaultReads === true,
+    }
     const toolSaveResult = await saveToolMessages(
       repos,
       chatId,
@@ -1228,7 +1233,8 @@ async function processMessage(
       toolMessages,
       generatedImagePaths,
       character.id,
-      characterParticipant.id
+      characterParticipant.id,
+      toolWhisperContext
     )
 
     await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })

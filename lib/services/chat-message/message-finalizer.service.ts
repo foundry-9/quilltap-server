@@ -21,7 +21,7 @@ import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handl
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage } from './types'
-import { saveToolMessages } from './tool-execution.service'
+import { saveToolMessages, type ToolWhisperContext } from './tool-execution.service'
 import { encodeDoneEvent } from './streaming.service'
 import {
   triggerTurnMemoryExtraction,
@@ -84,6 +84,11 @@ export async function finalizeMessageResponse({
   const normalizedResponse = normalizeContentBlockFormat(fullResponse)
   const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
 
+  const whisperContext: ToolWhisperContext = {
+    userParticipantId,
+    allowCrossCharacterVaultReads: chat.allowCrossCharacterVaultReads === true,
+  }
+
   const assistantMessageId = await saveAssistantMessage(
     repos,
     chatId,
@@ -97,7 +102,8 @@ export async function finalizeMessageResponse({
     toolMessages,
     preGeneratedAssistantMessageId,
     effectiveProfile.provider,
-    effectiveProfile.modelName
+    effectiveProfile.modelName,
+    whisperContext
   )
 
   if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
@@ -300,7 +306,8 @@ export async function saveAssistantMessage(
   toolMessages: ToolMessage[],
   preGeneratedMessageId?: string,
   provider?: string,
-  modelName?: string
+  modelName?: string,
+  whisperContext?: ToolWhisperContext
 ): Promise<string> {
   const assistantMessageId = preGeneratedMessageId || crypto.randomUUID()
   const assistantAttachments = generatedImagePaths.map(img => img.id)
@@ -333,7 +340,8 @@ export async function saveAssistantMessage(
       toolMessages,
       generatedImagePaths,
       character.id,
-      characterParticipant.id
+      characterParticipant.id,
+      whisperContext
     )
   }
 
