@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Run Tool modal's "Run as character" selector reverted to the first character
+
+In the Salon composer's Run Tool modal, the character dropdown was wired to `participant.characterId`, which the chat enrichment service (`enrichParticipantDetail`) doesn't include on its output — only the nested `character.id` is populated. Every `<option>` therefore got `value=""`, so every selection collapsed to the same empty string and React's controlled `<select>` snapped the displayed option back to whichever active character appeared first. Switched the option value and the default-character derivation in `components/chat/RunToolModal.tsx` to `participant.character?.id`.
+
 #### Fix: Tool results from personal lookups no longer leak into peer LLM context
 
 A character calling `search` or `read_conversation` was writing the tool result as a public chat message, so on the next character's turn the result was injected into that character's LLM context. Friday could read Amy's old conversation summary even though Friday wasn't a participant in that old chat. Vault-read tools (`doc_read_file`, `doc_list_files`, `doc_grep`, `doc_read_heading`, `doc_read_frontmatter`, `doc_read_blob`, `doc_list_blobs`, `doc_open_document`) leaked the same way.

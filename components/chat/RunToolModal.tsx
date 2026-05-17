@@ -61,8 +61,9 @@ export default function RunToolModal({
     [participants]
   )
 
-  // Stable identifier for the default character (avoids array ref in useEffect deps)
-  const defaultCharacterId = activeCharacters[0]?.characterId || null
+  // Stable identifier for the default character (avoids array ref in useEffect deps).
+  // The enriched participant doesn't expose a top-level characterId, only `character.id`.
+  const defaultCharacterId = activeCharacters[0]?.character?.id || null
 
   // Fetch tools when modal opens and reset form state
   useEffect(() => {
@@ -343,7 +344,7 @@ export default function RunToolModal({
                 onChange={(e) => setSelectedCharacterId(e.target.value || null)}
               >
                 {activeCharacters.map(p => (
-                  <option key={p.id} value={p.characterId || ''}>
+                  <option key={p.id} value={p.character?.id || ''}>
                     {p.character?.name || 'Unknown'}
                   </option>
                 ))}
