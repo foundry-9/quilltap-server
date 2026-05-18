@@ -24,7 +24,7 @@ import {
 export const addCharacterManifestoFieldMigration: Migration = {
   id: 'add-character-manifesto-field-v1',
   description: 'Add manifesto field to characters table',
-  introducedInVersion: '4.5.0',
+  introducedInVersion: '4.4.0',
   dependsOn: ['sqlite-initial-schema-v1'],
 
   async shouldRun(): Promise<boolean> {

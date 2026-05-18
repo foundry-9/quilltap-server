@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Add 4.4.0 release notes; fix manifesto migration version tag
+
+Added `docs/releases/4.4.0.md` with the full 4.4.0 release notes, including a Subsystem Table and an "Upgrading from 4.3" section that matches the format of prior 4.x release notes.
+
+Reverted `add-character-manifesto-field-v1` migration's `introducedInVersion` from `4.5.0` back to `4.4.0` — the manifesto field is shipping in 4.4, not 4.5.
+
 #### Fix: non-vision LLMs no longer crash on Lantern image attachments
 
 A character using a non-vision profile (e.g. DeepSeek via OpenRouter) would error out with OpenRouter's `404 — No endpoints found that support image input` whenever recent ASSISTANT messages in the chat carried image attachments (Aurora portrait commissions, story-background regenerations, or `generate_image` tool runs). The image-description fallback never fired for those images, so raw bytes were sent to a model that couldn't read them and the turn chain stopped.
