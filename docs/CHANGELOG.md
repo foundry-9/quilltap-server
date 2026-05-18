@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Character vault is now authoritative for Scenarios/ and Prompts/
+
+When a character is configured with `readPropertiesFromDocumentStore = true` and a linked vault, the read overlay now treats the vault's `Scenarios/` and `Prompts/` folders as the sole source of truth for `scenarios` and `systemPrompts`. Previously, an empty folder (or one where every file failed to parse) caused the overlay to silently fall back to the DB row — so stale entries that had been deleted in the UI kept reappearing in new-chat pickers as ghosts. The new behavior: an empty vault folder yields an empty array, never the DB column.
+
+Paired write-side fix in `applyDocumentStoreWriteOverlay`: when the toggle is on and the user updates `scenarios` or `systemPrompts`, the DB column is now mirrored to the same value the vault gets, instead of being intentionally skipped. This keeps the DB in sync with the vault so flipping the toggle off later doesn't resurrect cleared rows.
+
+Files: `lib/database/repositories/character-properties-overlay.ts` (read overlay lines ~904–946; write overlay lines ~1820–1855; docstring at lines 37–43). Tests updated and expanded in `__tests__/unit/lib/database/repositories/character-properties-overlay.test.ts`: "falls back to DB when … folder is empty" cases now assert the array becomes `[]`, plus new coverage for the case where every file fails to parse.
+
+Not shipped here: an automatic cleanup migration for existing characters that have stale ghost rows in the DB. The fix prevents new ghosts from forming, but pre-existing ones need either a deliberate save (which will now sync correctly) or a manual cleanup per character.
+
 #### Replace native confirm/prompt dialogs with styled equivalents
 
 Six native `window.confirm()` call sites and one `prompt()` were still showing the browser's unstyled OS-level dialogs. Swapped each for the existing `showConfirmation` / new `showPrompt` helpers from `@/lib/alert` so all confirm and prompt UI now uses the themed dialog with proper escape/overlay/keyboard handling.

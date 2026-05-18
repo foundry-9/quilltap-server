@@ -725,12 +725,12 @@ describe('applyDocumentStoreOverlay — Prompts/*.md overlay', () => {
       ],
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    // All files invalid; no overlay applied, DB passes through
-    expect(result.systemPrompts).toHaveLength(1);
-    expect(result.systemPrompts[0].name).toBe('db-prompt');
+    // All vault files invalid; vault is authoritative, so the result is empty
+    // — the DB row is a ghost and must not leak through.
+    expect(result.systemPrompts).toEqual([]);
   });
 
-  it('falls back to DB when Prompts/ folder is empty', async () => {
+  it('returns an empty array when Prompts/ is empty (vault authoritative — DB rows are ghosts)', async () => {
     mockRepoPaths({}, {});
     const char = makeCharacter({
       id: 'a',
@@ -748,7 +748,37 @@ describe('applyDocumentStoreOverlay — Prompts/*.md overlay', () => {
       ],
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.systemPrompts[0].name).toBe('db-only');
+    expect(result.systemPrompts).toEqual([]);
+  });
+
+  it('returns an empty array when every Prompts/ file fails to parse', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_PROMPTS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/Bad.md',
+          fileName: 'Bad.md',
+          content: 'no frontmatter at all',
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+      systemPrompts: [
+        {
+          id: '00000000-0000-4000-8000-000000000005',
+          name: 'db-ghost',
+          content: 'db body',
+          isDefault: true,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.systemPrompts).toEqual([]);
   });
 
   it('synthesizes stable IDs across repeated reads', async () => {
@@ -834,7 +864,7 @@ describe('applyDocumentStoreOverlay — Scenarios/*.md overlay', () => {
     expect(result.scenarios[0].content).toBe('Body text without a heading line.');
   });
 
-  it('falls back to DB when the Scenarios/ folder is empty', async () => {
+  it('returns an empty array when Scenarios/ is empty (vault authoritative — DB rows are ghosts)', async () => {
     mockRepoPaths({}, {});
     const char = makeCharacter({
       id: 'a',
@@ -851,7 +881,7 @@ describe('applyDocumentStoreOverlay — Scenarios/*.md overlay', () => {
       ],
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.scenarios[0].title).toBe('db-scenario');
+    expect(result.scenarios).toEqual([]);
   });
 
   it('skips files with no body content', async () => {

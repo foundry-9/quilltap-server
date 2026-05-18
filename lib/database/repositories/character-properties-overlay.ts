@@ -35,9 +35,11 @@
  * so nullable fields retain their "unset" semantics.
  *
  * Prompts/ and Scenarios/ overlays enumerate top-level `.md` files only; nested
- * paths are ignored. When either directory exists and contains at least one
- * valid file, the vault listing fully replaces the DB array (all-or-nothing
- * per directory). An empty directory falls back to the DB.
+ * paths are ignored. When the character is configured to read properties from
+ * the vault, the vault folder is authoritative: parseable files become the
+ * array, and an empty (or all-unparseable) folder yields an empty array. The
+ * DB columns are not consulted while the toggle is on — otherwise stale rows
+ * persist as ghosts after the user clears the vault folder.
  *
  * IDs for synthesized systemPrompts/scenarios entries are derived deterministically
  * from (mountPointId, relativePath) via SHA-256 so the chat's stored
@@ -901,49 +903,46 @@ export async function applyDocumentStoreOverlay(
       }
     }
 
-    // Prompts/*.md → systemPrompts
-    const promptDocs = promptsByMount.get(mountId);
-    if (promptDocs && promptDocs.length > 0) {
-      const parsedPrompts = promptDocs
-        .slice()
-        .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-        .map((doc) => parsePromptFile(doc, character.id))
-        .filter((p): p is CharacterSystemPrompt => p !== null);
-      if (parsedPrompts.length > 0) {
-        // Ensure exactly one isDefault. If the frontmatter declares multiple
-        // defaults, keep only the first; if none are marked default, promote
-        // the first alphabetically so downstream consumers can always pick a
-        // default without falling through to the empty-array branch.
-        let seenDefault = false;
-        const normalized: CharacterSystemPrompt[] = parsedPrompts.map((p) => {
-          if (p.isDefault) {
-            if (seenDefault) {
-              return { ...p, isDefault: false };
-            }
-            seenDefault = true;
-            return p;
+    // Prompts/*.md → systemPrompts. Vault-authoritative: an empty or
+    // all-unparseable folder yields an empty array, never the DB column.
+    const promptDocs = promptsByMount.get(mountId) ?? [];
+    const parsedPrompts = promptDocs
+      .slice()
+      .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+      .map((doc) => parsePromptFile(doc, character.id))
+      .filter((p): p is CharacterSystemPrompt => p !== null);
+    let normalizedPrompts: CharacterSystemPrompt[] = parsedPrompts;
+    if (parsedPrompts.length > 0) {
+      // Ensure exactly one isDefault. If the frontmatter declares multiple
+      // defaults, keep only the first; if none are marked default, promote
+      // the first alphabetically so downstream consumers can always pick a
+      // default without falling through to the empty-array branch.
+      let seenDefault = false;
+      normalizedPrompts = parsedPrompts.map((p) => {
+        if (p.isDefault) {
+          if (seenDefault) {
+            return { ...p, isDefault: false };
           }
+          seenDefault = true;
           return p;
-        });
-        if (!seenDefault) {
-          normalized[0] = { ...normalized[0], isDefault: true };
         }
-        out = { ...out, systemPrompts: normalized };
+        return p;
+      });
+      if (!seenDefault) {
+        normalizedPrompts[0] = { ...normalizedPrompts[0], isDefault: true };
       }
     }
+    out = { ...out, systemPrompts: normalizedPrompts };
 
-    // Scenarios/*.md → scenarios
-    const scenarioDocs = scenariosByMount.get(mountId);
-    if (scenarioDocs && scenarioDocs.length > 0) {
-      const parsedScenarios = scenarioDocs
-        .slice()
-        .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-        .map((doc) => parseScenarioFile(doc, character.id))
-        .filter((s): s is CharacterScenario => s !== null);
-      if (parsedScenarios.length > 0) {
-        out = { ...out, scenarios: parsedScenarios };
-      }
-    }
+    // Scenarios/*.md → scenarios. Vault-authoritative: an empty or
+    // all-unparseable folder yields an empty array, never the DB column.
+    const scenarioDocs = scenariosByMount.get(mountId) ?? [];
+    const parsedScenarios = scenarioDocs
+      .slice()
+      .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+      .map((doc) => parseScenarioFile(doc, character.id))
+      .filter((s): s is CharacterScenario => s !== null);
+    out = { ...out, scenarios: parsedScenarios };
 
     return out;
   });
@@ -1831,7 +1830,11 @@ export async function applyDocumentStoreWriteOverlay(
           }),
           characterId,
         );
-        delete dbPatch.systemPrompts;
+        // Mirror the vault projection into the DB column so the two stay in
+        // sync. The overlay reads from the vault while the toggle is on, but
+        // keeping the DB current means flipping the toggle off later doesn't
+        // resurrect prompts the user had cleared.
+        dbPatch.systemPrompts = incoming;
         routedFieldCount++;
         break;
       }
@@ -1848,7 +1851,8 @@ export async function applyDocumentStoreWriteOverlay(
           }),
           characterId,
         );
-        delete dbPatch.scenarios;
+        // Mirror the vault projection into the DB column (see prompts-dir).
+        dbPatch.scenarios = incoming;
         routedFieldCount++;
         break;
       }
