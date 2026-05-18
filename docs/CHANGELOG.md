@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Add Character dialog now picks the starting outfit
+
+The "Add Character" dialog in the Participants sidebar now includes the same outfit selector used by the new-chat dialog. Previously, characters added to an existing chat arrived with empty equipped slots (no outfit applied at all); the only way to dress them was through the wardrobe dialog after the fact. Now the dialog defaults to "Use defaults" so new arrivals show up in their wardrobe defaults, with the other three modes ("Compose outfit", "Let character choose", "Start undressed") available the same way they are in /salon/new. User-impersonated characters get the same trimmed mode list as the new-chat flow (no `llm_choose`).
+
+Refactor: `resolveDefaultOutfit`, `applyOutfitSelections`, and the `OutfitSelectionContext` interface moved out of `app/api/v1/chats/route.ts` into a new shared helper at `lib/wardrobe/apply-outfit-selections.ts`, plus a small `buildCheapLLMConfig(chatSettings)` helper so both the new-chat route and the add-participant action can build the cheap-LLM context the same way without duplicating the merge.
+
+Schema: `addParticipantSchema` (in `app/api/v1/chats/[id]/schemas.ts`) gained an optional `outfitSelection: OutfitSelectionSchema` field. `handleAddParticipantAction` now applies it after the participant is added (or reactivated); when omitted on a fresh add, it defaults to `mode: 'default'`. On reactivation the previous outfit is left intact unless the client explicitly sends a new selection.
+
+The dialog itself switched from `PUT /api/v1/chats/[id]?action=add-participant` (which actually fell through to `processChatUpdates` because PUT has no add-participant action) to `POST /api/v1/chats/[id]?action=add-participant`, which is the action that's actually wired up to `handleAddParticipantAction`. Behavior is otherwise unchanged for callers that don't send `outfitSelection`.
+
 #### README: reposition around persistent AI collaborators
 
 Shifted the README's primary frame from "self-hosted AI workspace for writers, worldbuilders, roleplayers" to "AI collaborators that remember you — and that no one can take away." New tagline, rewritten opening paragraph, and reordered "What Quilltap Does" so the character/collaborator paragraph leads instead of trailing. Capability paragraph now explicitly names ownership and the inability of the platform to revoke access. Workspace paragraph broadens audience examples (novelist, researcher, Sunday school teacher, worldbuilder) instead of the older writer/worldbuilder/roleplayer triad. Swapped two rows in the "Why Not Just Use Claude or ChatGPT?" comparison table: the "content policies you didn't choose" row becomes a policy-stability row, and the "no relationship continuity" row becomes a model-sunset row ("the model can change; your collaborator doesn't have to").

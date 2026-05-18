@@ -25,11 +25,13 @@ import { TimestampConfigSchema } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   OutfitSelectionSchema,
-  type EquippedSlots,
   type OutfitSelection,
 } from '@/lib/schemas/wardrobe.types';
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } from '@/lib/llm/cheap-llm';
-import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
+import {
+  applyOutfitSelections,
+  buildCheapLLMConfig,
+  type OutfitSelectionContext,
+} from '@/lib/wardrobe/apply-outfit-selections';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import {
   enrichParticipantSummary,
@@ -238,226 +240,6 @@ async function buildAllParticipants(
   firstLLMCharacter.userCharacterId = firstUserCharacterId || undefined;
 
   return { participants: builtParticipants, tags: allTagIds, firstCharacter: firstLLMCharacter, firstImageProfileId };
-}
-
-// ============================================================================
-// Outfit Resolution Helpers
-// ============================================================================
-
-/**
- * Resolve the default outfit for a character from their wardrobe items marked as default.
- * Each default item's coverage types receive the item's ID appended to the slot's array.
- * Multiple defaults may share a slot (e.g. layered tops, several accessories) — order is
- * deterministic by `createdAt` ascending.
- */
-async function resolveDefaultOutfit(characterId: string, repos: Repos): Promise<EquippedSlots> {
-  const defaultItems = await repos.wardrobe.findDefaultsForCharacter(characterId);
-
-  if (defaultItems.length === 0) {
-    return {
-      top: [],
-      bottom: [],
-      footwear: [],
-      accessories: [],
-    };
-  }
-
-  const slots: EquippedSlots = {
-    top: [],
-    bottom: [],
-    footwear: [],
-    accessories: [],
-  };
-
-  // Deterministic order: oldest default first. Items lacking createdAt sort to the end.
-  const orderedDefaults = [...defaultItems].sort((a, b) => {
-    const aTime = a.createdAt ? Date.parse(a.createdAt) : Number.POSITIVE_INFINITY;
-    const bTime = b.createdAt ? Date.parse(b.createdAt) : Number.POSITIVE_INFINITY;
-    return aTime - bTime;
-  });
-
-  for (const item of orderedDefaults) {
-    for (const slotType of item.types) {
-      if (slotType in slots) {
-        slots[slotType as keyof EquippedSlots].push(item.id);
-      }
-    }
-  }
-
-  return slots;
-}
-
-/**
- * Context needed for LLM-based outfit selection during chat creation.
- */
-interface OutfitSelectionContext {
-  userId: string;
-  scenarioText?: string | null;
-  cheapLLMConfig?: CheapLLMConfig;
-  /**
-   * When the new chat is a continuation of an existing one, the source chat
-   * ID flows through here so the `'previous_chat'` mode can copy each
-   * character's equipped outfit forward. Falls back to default outfit when
-   * the source chat has nothing equipped for a given character (e.g. a
-   * newly-joined participant).
-   */
-  sourceChatId?: string | null;
-}
-
-/**
- * Apply outfit selections to a newly created chat.
- * Processes each selection based on its mode:
- * - 'default': Load default wardrobe items and append each to the slots it covers
- * - 'manual': Use the provided slot assignments directly (already arrays)
- * - 'none': Set every slot to an empty array
- * - 'previous_chat': Copy equipped state from the source chat (continuation flow)
- * - 'llm_choose': Ask a cheap LLM to pick an outfit, fall back to defaults on failure
- */
-async function applyOutfitSelections(
-  chatId: string,
-  selections: OutfitSelection[],
-  repos: Repos,
-  context?: OutfitSelectionContext,
-): Promise<void> {
-  for (const selection of selections) {
-    const { characterId, mode } = selection;
-
-    switch (mode) {
-      case 'default': {
-        const slots = await resolveDefaultOutfit(characterId, repos);
-        await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-        break;
-      }
-
-      case 'manual': {
-        const slots: EquippedSlots = selection.slots ?? {
-          top: [],
-          bottom: [],
-          footwear: [],
-          accessories: [],
-        };
-        await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-        break;
-      }
-
-      case 'none': {
-        await repos.chats.setEquippedOutfit(chatId, characterId, {
-          top: [],
-          bottom: [],
-          footwear: [],
-          accessories: [],
-        });
-        break;
-      }
-
-      case 'previous_chat': {
-        // Continuation flow: bring the character in wearing whatever they
-        // were wearing at the end of the source chat. Falls back to default
-        // outfit when the source has nothing for this character (e.g. newly
-        // added participant) or when the context is missing.
-        let applied = false;
-        if (context?.sourceChatId) {
-          try {
-            const previousSlots = await repos.chats.getEquippedOutfitForCharacter(
-              context.sourceChatId,
-              characterId,
-            );
-            if (previousSlots) {
-              await repos.chats.setEquippedOutfit(chatId, characterId, previousSlots);
-              applied = true;
-            } else {
-            }
-          } catch (error) {
-            logger.warn('[Chats v1] Failed to copy previous-chat outfit; falling back to default', {
-              chatId,
-              characterId,
-              sourceChatId: context.sourceChatId,
-              error: getErrorMessage(error, 'Unknown error'),
-            });
-          }
-        } else {
-          logger.warn('[Chats v1] previous_chat outfit mode requested without sourceChatId; falling back to default', {
-            chatId,
-            characterId,
-          });
-        }
-        if (!applied) {
-          const slots = await resolveDefaultOutfit(characterId, repos);
-          await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-        }
-        break;
-      }
-
-      case 'llm_choose': {
-        // Ask a cheap LLM to pick an outfit based on character + scenario context
-        // Falls back to default outfit on any failure
-        let applied = false;
-
-        if (context) {
-          try {
-            const character = await repos.characters.findById(characterId);
-            const wardrobeItems = await repos.wardrobe.findByCharacterId(characterId);
-
-            if (character && wardrobeItems.length > 0) {
-              // Get a cheap LLM provider for the selection task
-              const allProfiles = await repos.connections.findAll();
-              const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-
-              if (defaultProfile) {
-                const cheapSelection = getCheapLLMProvider(
-                  defaultProfile,
-                  context.cheapLLMConfig || DEFAULT_CHEAP_LLM_CONFIG,
-                  allProfiles,
-                  false, // ollamaAvailable
-                );
-
-                const result = await chooseLLMOutfit(
-                  character.name,
-                  character.description || null,
-                  character.personality || null,
-                  character.manifesto || null,
-                  wardrobeItems,
-                  context.scenarioText || null,
-                  cheapSelection,
-                  context.userId,
-                  chatId,
-                  characterId,
-                );
-
-                if (result.success && result.result) {
-                  await repos.chats.setEquippedOutfit(chatId, characterId, result.result);
-                  applied = true;
-                } else {
-                  logger.warn('[Chats v1] LLM outfit selection failed, falling back to defaults', {
-                    chatId,
-                    characterId,
-                    error: result.error,
-                  });
-                }
-              }
-            }
-          } catch (error) {
-            logger.warn('[Chats v1] Error during LLM outfit selection, falling back to defaults', {
-              chatId,
-              characterId,
-              error: getErrorMessage(error, 'Unknown error'),
-            });
-          }
-        }
-
-        // Fallback: use default outfit if LLM selection failed or wasn't attempted
-        if (!applied) {
-          const slots = await resolveDefaultOutfit(characterId, repos);
-          await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-        }
-        break;
-      }
-
-      default:
-        logger.warn('[Chats v1] Unknown outfit selection mode', { chatId, characterId, mode });
-        break;
-    }
-  }
 }
 
 /**
@@ -1154,20 +936,10 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
   // Apply outfit selections to the newly created chat
   // If no selections provided, apply 'default' mode for all LLM-controlled participants
-  // Build cheap LLM config from chat settings for outfit selection
-  const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings
-    ? {
-      ...DEFAULT_CHEAP_LLM_CONFIG,
-      strategy: chatSettings.cheapLLMSettings.strategy,
-      fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
-      userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
-      defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
-    }
-    : DEFAULT_CHEAP_LLM_CONFIG;
   const outfitContext: OutfitSelectionContext = {
     userId: user.id,
     scenarioText: resolvedScenario,
-    cheapLLMConfig,
+    cheapLLMConfig: buildCheapLLMConfig(chatSettings),
     sourceChatId: validatedData.continuationFromChatId ?? null,
   };
   try {

@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod';
+import { OutfitSelectionSchema } from '@/lib/schemas/wardrobe.types';
 
 export const updateChatSchema = z.object({
   title: z.string().optional(),
@@ -47,6 +48,11 @@ export const addParticipantSchema = z.object({
   hasHistoryAccess: z.boolean().optional(),
   joinScenario: z.string().nullish(),
   controlledBy: z.enum(['llm', 'user']).optional(),
+  /**
+   * Starting outfit selection for the added character. When omitted, the
+   * server applies the character's default wardrobe (`mode: 'default'`).
+   */
+  outfitSelection: OutfitSelectionSchema.optional(),
 });
 
 export const removeParticipantSchema = z.object({

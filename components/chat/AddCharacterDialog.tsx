@@ -20,6 +20,8 @@ import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import CreateNPCDialog from './CreateNPCDialog'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { OutfitSelector } from '@/components/wardrobe'
+import type { OutfitSelection } from '@/components/wardrobe'
 
 interface CharacterOption {
   id: string
@@ -69,6 +71,7 @@ export default function AddCharacterDialog({
   const [searchTerm, setSearchTerm] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [isCreateNPCOpen, setIsCreateNPCOpen] = useState(false)
+  const [outfitSelection, setOutfitSelection] = useState<OutfitSelection | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -102,6 +105,7 @@ export default function AddCharacterDialog({
       setJoinScenario('')
       setSearchTerm('')
       setIsCreateNPCOpen(false)
+      setOutfitSelection(null)
     }
   }, [isOpen, isLoading])
 
@@ -190,14 +194,18 @@ export default function AddCharacterDialog({
         participantData.joinScenario = joinScenario.trim()
       }
 
+      // Forward the chosen starting outfit. The server defaults to
+      // `mode: 'default'` when nothing is sent, matching the new-chat flow.
+      if (outfitSelection) {
+        participantData.outfitSelection = outfitSelection
+      }
+
       const response = await fetch(`/api/v1/chats/${chatId}?action=add-participant`, {
-        method: 'PUT',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          addParticipant: participantData,
-        }),
+        body: JSON.stringify(participantData),
       })
 
       if (!response.ok) {
@@ -218,6 +226,19 @@ export default function AddCharacterDialog({
       setIsAdding(false)
     }
   }
+
+  const handleOutfitSelectionsChange = useCallback((selections: OutfitSelection[]) => {
+    setOutfitSelection(selections[0] ?? null)
+  }, [])
+
+  const outfitCharacters = useMemo(() => {
+    if (!selectedCharacter) return []
+    return [{
+      id: selectedCharacter.id,
+      name: selectedCharacter.name,
+      isUserControlled: selectedConnectionProfileId === USER_IMPERSONATION_VALUE,
+    }]
+  }, [selectedCharacter, selectedConnectionProfileId])
 
   const handleNPCCreated = async (characterId: string) => {
     // Auto-select the new NPC
@@ -510,6 +531,16 @@ export default function AddCharacterDialog({
                     minHeight="6rem"
                   />
                 </div>
+              )}
+
+              {/* Starting Outfit */}
+              {selectedCharacterId && outfitCharacters.length > 0 && (
+                <OutfitSelector
+                  key={selectedCharacterId}
+                  characters={outfitCharacters}
+                  onSelectionsChange={handleOutfitSelectionsChange}
+                  disabled={isAdding}
+                />
               )}
             </div>
           )}

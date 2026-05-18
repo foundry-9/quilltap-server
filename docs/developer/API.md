@@ -1889,10 +1889,25 @@ Add a character to the chat.
 
 ```json
 {
+  "type": "CHARACTER",
   "characterId": "char-uuid",
-  "connectionProfileId": "profile-uuid"
+  "connectionProfileId": "profile-uuid",
+  "controlledBy": "llm",
+  "hasHistoryAccess": false,
+  "joinScenario": "Optional entrance description",
+  "outfitSelection": {
+    "characterId": "char-uuid",
+    "mode": "default"
+  }
 }
 ```
+
+**Notes**:
+
+- `controlledBy` accepts `"llm"` (default) or `"user"` (user-impersonated). `connectionProfileId` is required for LLM control and ignored for user control.
+- `hasHistoryAccess` (default `false`) controls whether the new participant sees messages from before they joined.
+- `joinScenario` is optional context describing how the character entered; surfaced as a Host announcement targeted at the new participant when `hasHistoryAccess` is false.
+- `outfitSelection` is optional. Modes: `default` (wardrobe defaults), `manual` (provide a `slots` object), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add defaults to `mode: "default"` so the new arrival is dressed; on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
 
 #### `POST /api/v1/chats/[id]?action=update-participant`
 

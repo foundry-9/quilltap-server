@@ -26,6 +26,11 @@ import {
   postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
+import {
+  applyOutfitSelections,
+  buildCheapLLMConfig,
+} from '@/lib/wardrobe/apply-outfit-selections';
+import type { OutfitSelection } from '@/lib/schemas/wardrobe.types';
 
 /**
  * Start impersonating a participant
@@ -180,6 +185,55 @@ export async function handleSetActiveSpeaker(
 }
 
 /**
+ * Apply the chosen starting outfit for a freshly-added (or reactivated)
+ * participant. Falls back to `'default'` mode when the caller didn't send
+ * anything — matches the new-chat behavior so the character shows up
+ * dressed in their wardrobe defaults rather than undressed by accident.
+ *
+ * Failures are logged and swallowed: outfit-application should never block
+ * a participant from joining the chat.
+ */
+async function applyOutfitForAddedParticipant(
+  chatId: string,
+  chat: ChatMetadata,
+  characterId: string,
+  outfitSelection: OutfitSelection | undefined,
+  userId: string,
+  repos: AuthenticatedContext['repos'],
+): Promise<void> {
+  const selection: OutfitSelection = outfitSelection ?? {
+    characterId,
+    mode: 'default',
+  };
+
+  try {
+    const chatSettings = await repos.chatSettings.findByUserId(userId);
+    await applyOutfitSelections(
+      chatId,
+      [selection],
+      repos,
+      {
+        userId,
+        scenarioText: chat.scenarioText ?? null,
+        cheapLLMConfig: buildCheapLLMConfig(chatSettings),
+      },
+    );
+    logger.debug('[Chats v1] Outfit applied for added participant', {
+      chatId,
+      characterId,
+      mode: selection.mode,
+    });
+  } catch (error) {
+    logger.error('[Chats v1] Failed to apply outfit for added participant', {
+      chatId,
+      characterId,
+      mode: selection.mode,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
  * Add a new participant to the chat
  */
 export async function handleAddParticipantAction(
@@ -259,6 +313,20 @@ export async function handleAddParticipantAction(
         }
       }
 
+      // Reactivation: only re-apply an outfit when the caller explicitly
+      // sent one. Otherwise preserve whatever they had on before they were
+      // removed.
+      if (validatedData.outfitSelection && reactivatedParticipant?.characterId) {
+        await applyOutfitForAddedParticipant(
+          chatId,
+          updatedChat,
+          reactivatedParticipant.characterId,
+          validatedData.outfitSelection,
+          user.id,
+          repos,
+        );
+      }
+
       return NextResponse.json({ participant: enrichedParticipant, chat: updatedChat }, { status: 200 });
     }
   }
@@ -318,6 +386,20 @@ export async function handleAddParticipantAction(
         joinScenario: validatedData.joinScenario,
       });
     }
+  }
+
+  // Apply the chosen starting outfit for the new participant. Defaults to
+  // 'default' mode when the caller didn't supply one, matching the new-chat
+  // flow so the character arrives dressed in their wardrobe defaults.
+  if (validatedData.characterId) {
+    await applyOutfitForAddedParticipant(
+      chatId,
+      result.chat,
+      validatedData.characterId,
+      validatedData.outfitSelection,
+      user.id,
+      repos,
+    );
   }
 
   return NextResponse.json({ participant: enrichedParticipant, chat: result.chat }, { status: 201 });

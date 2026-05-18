@@ -239,6 +239,7 @@ When you reassign a participant to a different connection profile from the sideb
 4. Configure options:
    - **History Access** — Can they see previous messages?
    - **Join Scenario** — Optional entrance description
+   - **Starting Outfit** — The wardrobe with which they cross the threshold: defaults, a slot-by-slot composition, the cheap LLM's best guess from the scene, or nothing at all
 5. Click **Add** to confirm
 6. Character appears in the sidebar
 
