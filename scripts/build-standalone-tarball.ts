@@ -140,9 +140,19 @@ if (existsSync(standaloneNodeModules)) {
   // Remove native-only modules — they'll be resolved from the npm package's node_modules.
   // NOTE: sharp's JS wrapper and its pure-JS dependency @img/colour are kept in the
   // tarball. Only the platform-specific native binaries (@img/sharp-*, @img/sharp-libvips-*)
-  // and platform-specific native modules (better-sqlite3, node-pty) are stripped.
+  // and the platform-specific native module better-sqlite3 are stripped.
   // They're reinstalled on the user's machine via npm install, which compiles them for the target platform.
-  const nativeModulesToStrip = ['better-sqlite3', 'node-pty'];
+  //
+  // node-pty is intentionally NOT stripped: it ships cross-platform prebuilds
+  // (darwin-arm64, darwin-x64, win32-arm64, win32-x64) inside the package, so
+  // it can ride along in the tarball and Just Work on every Electron-shell
+  // target platform. The Electron shell launches standalone/server.js
+  // directly without going through bin/quilltap.js, so it can't rely on the
+  // CLI's linkNativeModules step to wire node-pty in. For the npx-quilltap
+  // path, linkNativeModules will replace the tarball-shipped copy with a
+  // symlink to the npm-installed one (which is rebuilt against the user's
+  // Node ABI on Linux where no prebuild exists).
+  const nativeModulesToStrip = ['better-sqlite3'];
   for (const mod of nativeModulesToStrip) {
     const modPath = join(standaloneNodeModules, mod);
     if (existsSync(modPath)) {

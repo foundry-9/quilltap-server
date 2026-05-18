@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Fix (follow-up): ship node-pty in the standalone tarball so the Electron shell can find it
+
+The previous fix added node-pty to `packages/quilltap`'s deps and made `bin/quilltap.js` symlink it into the standalone dir at launch. That covered the `npx quilltap` path but did not fix the Electron shell, which launches `standalone/server.js` directly (e.g. `Quilltap.app/Contents/MacOS/Quilltap standalone/server.js`) and bypasses `bin/quilltap.js` entirely. The shell bundles its own `better-sqlite3` and `sharp` and injects them into the standalone tree on startup; it does not bundle `node-pty`. With node-pty stripped from the tarball, the shell's `require('node-pty')` resolved to nothing and terminal spawn failed with `Cannot find module 'node-pty'` the same way as before.
+
+`scripts/build-standalone-tarball.ts`: removed `'node-pty'` from `nativeModulesToStrip`. `node-pty` v1.1.0 ships prebuilds for `darwin-arm64`, `darwin-x64`, `win32-arm64`, `win32-x64` — exactly the Electron-shell distribution targets — so it rides along in the tarball and Just Works without any shell-repo change. Comment expanded to explain the design choice.
+
+This is safe for the other consumers: the `npx quilltap` linker still overwrites the tarball-shipped node-pty with a symlink to the npm-installed copy (which on Linux is rebuilt against the user's Node ABI, since node-pty has no Linux prebuilds), and Docker doesn't go through the tarball strip path at all.
+
 #### Fix: terminal spawn fails under standalone/Electron with "node-pty module not available"
 
 The Ariel terminal feature worked under `npm run dev` but blew up under the Electron shell / `npx quilltap` standalone runtime with `[PTY] Failed to import node-pty` / `Cannot find module 'node-pty'`. Root cause: `scripts/build-standalone-tarball.ts` intentionally strips `node-pty` from the tarball (same model as `better-sqlite3` / `sharp` — platform-specific natives are installed on the user's machine), but `packages/quilltap/package.json` never declared `node-pty` as a runtime dep, so nothing reinstalled it on the user side.
