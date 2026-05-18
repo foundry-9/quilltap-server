@@ -66,13 +66,14 @@ function buildRepos() {
       findById: jest.fn(),
     },
     docMountFileLinks: {
-      findByMountPointId: jest.fn(),
+      findByMountPointId: jest.fn().mockResolvedValue([]),
       findByIdWithContent: jest.fn(),
       linkBlobContent: jest.fn(),
       deleteWithGC: jest.fn(),
     },
     docMountPoints: {
       findById: jest.fn(),
+      findEnabled: jest.fn().mockResolvedValue([]),
       refreshStats: jest.fn().mockResolvedValue(undefined),
     },
   };
@@ -196,26 +197,49 @@ describe('listUserGallery', () => {
     mockGetStore.mockResolvedValue({ mountPointId: 'mp-uploads' });
   });
 
-  it('returns an empty list when the user-uploads mount is unprovisioned', async () => {
-    mockGetStore.mockResolvedValue(null);
+  it('returns an empty list when no enabled mount points have photos/ links', async () => {
     const repos = buildRepos();
+    repos.docMountPoints.findEnabled.mockResolvedValue([{ id: 'mp-uploads' }]);
+    repos.docMountFileLinks.findByMountPointId.mockResolvedValue([]);
     const result = await listUserGallery({ userId: 'user-1', repos: repos as any });
     expect(result).toEqual({ entries: [], total: 0, hasMore: false });
   });
 
-  it('returns photos/ links sorted newest-first when no query is supplied', async () => {
+  it('aggregates photos/ links across every enabled mount, deduped by sha256, newest-first', async () => {
     const repos = buildRepos();
-    repos.docMountFileLinks.findByMountPointId.mockResolvedValue([
-      { id: 'l-old', relativePath: 'photos/a.png', createdAt: '2026-05-13T00:00:00.000Z', sha256: SHA, originalMimeType: 'image/png', fileName: 'a.png', fileSizeBytes: 100, extractedText: '' },
-      { id: 'l-new', relativePath: 'photos/b.png', createdAt: '2026-05-15T00:00:00.000Z', sha256: SHA, originalMimeType: 'image/png', fileName: 'b.png', fileSizeBytes: 100, extractedText: '' },
-      { id: 'l-other', relativePath: 'chat/c.png', createdAt: '2026-05-14T00:00:00.000Z', sha256: SHA, originalMimeType: 'image/png', fileName: 'c.png', fileSizeBytes: 100, extractedText: '' },
+    const SHA_A = 'a'.repeat(64);
+    const SHA_B = 'b'.repeat(64);
+
+    repos.docMountPoints.findEnabled.mockResolvedValue([
+      { id: 'mp-uploads' },
+      { id: 'mp-vault-charlie' },
     ]);
+
+    repos.docMountFileLinks.findByMountPointId.mockImplementation(async (id: string) => {
+      if (id === 'mp-uploads') {
+        return [
+          { id: 'l-old', mountPointId: 'mp-uploads', relativePath: 'photos/a.png', createdAt: '2026-05-13T00:00:00.000Z', sha256: SHA_A, originalMimeType: 'image/png', fileName: 'a.png', fileSizeBytes: 100, extractedText: '' },
+          { id: 'l-other', mountPointId: 'mp-uploads', relativePath: 'chat/c.png', createdAt: '2026-05-14T00:00:00.000Z', sha256: SHA_B, originalMimeType: 'image/png', fileName: 'c.png', fileSizeBytes: 100, extractedText: '' },
+        ];
+      }
+      if (id === 'mp-vault-charlie') {
+        // Same sha as l-old — should dedupe with this newer link surfaced as primary.
+        return [
+          { id: 'l-newest-dup', mountPointId: 'mp-vault-charlie', relativePath: 'photos/a-redux.png', createdAt: '2026-05-15T00:00:00.000Z', sha256: SHA_A, originalMimeType: 'image/png', fileName: 'a-redux.png', fileSizeBytes: 100, extractedText: '' },
+          { id: 'l-vault-only', mountPointId: 'mp-vault-charlie', relativePath: 'photos/d.png', createdAt: '2026-05-14T12:00:00.000Z', sha256: SHA_B, originalMimeType: 'image/png', fileName: 'd.png', fileSizeBytes: 100, extractedText: '' },
+        ];
+      }
+      return [];
+    });
     mockLinkSummary.mockResolvedValue({ count: 1, linkers: [] });
 
     const result = await listUserGallery({ userId: 'user-1', repos: repos as any });
 
+    // Three photos/ links → two unique sha256s after dedupe.
     expect(result.total).toBe(2);
-    expect(result.entries.map(e => e.linkId)).toEqual(['l-new', 'l-old']);
+    // Newest primary first: l-newest-dup (2026-05-15) wins for SHA_A, then
+    // l-vault-only (2026-05-14) for SHA_B.
+    expect(result.entries.map(e => e.linkId)).toEqual(['l-newest-dup', 'l-vault-only']);
     expect(result.hasMore).toBe(false);
   });
 });
@@ -233,16 +257,18 @@ describe('removeFromUserGallery', () => {
     expect(result).toEqual({ deleted: false, fileGC: false });
   });
 
-  it('refuses to delete a link outside the user-uploads mount', async () => {
+  it('accepts deletion of any photos/ link regardless of which mount it lives in', async () => {
     const repos = buildRepos();
     repos.docMountFileLinks.findByIdWithContent.mockResolvedValue({
       id: 'l-vault',
       mountPointId: 'mp-some-vault',
       relativePath: 'photos/x.png',
     });
-    await expect(
-      removeFromUserGallery({ linkId: 'l-vault', userId: 'user-1', repos: repos as any })
-    ).rejects.toThrow('not in the user gallery');
+    repos.docMountFileLinks.deleteWithGC.mockResolvedValue({ fileId: 'file-1', fileGC: false });
+
+    const result = await removeFromUserGallery({ linkId: 'l-vault', userId: 'user-1', repos: repos as any });
+    expect(result).toEqual({ deleted: true, fileGC: false });
+    expect(repos.docMountFileLinks.deleteWithGC).toHaveBeenCalledWith('l-vault');
   });
 
   it('refuses to delete a link outside photos/', async () => {

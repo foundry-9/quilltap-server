@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### /photos: aggregate every album's photos/ folder + landing-page polish
+
+`/photos` was reading only the Quilltap Uploads mount's `photos/` folder, but no flow has written there since the SaveImageDialog + Library picker were re-pointed at character vaults — so the page was empty even when the user had hundreds of saved photos sitting in `<character>/photos/`. Refactored `listUserGallery` in `lib/photos/user-gallery-service.ts` to walk every enabled mount point's links, filter to `photos/` paths, dedupe by sha256, and surface one card per unique image with the existing link-summary expansion showing every album the bytes are also in. Semantic search now spans all photo-bearing mounts at once via `searchDocumentChunks(mountPointIds: [...], pathPrefix: 'photos/')` and applies a two-stage relevance gate on top of the default `minScore: 0.3`: queries whose top cosine score is below 0.65 are treated as gibberish and return zero results (so typing keyboard-mash queries no longer returns every photo), and surviving results are pruned to a 0.20 band below the top score so the long tail of marginal matches doesn't bloat the page. `removeFromUserGallery` and `getUserGalleryEntry` are now mount-agnostic — they accept any `photos/` link, so the delete button on /photos works against character/project vault entries instead of throwing "not in the user gallery".
+
+Infinite scroll: an IntersectionObserver on a sentinel beneath the grid pre-fetches the next 60-photo page (with a 600px `rootMargin` so scrolling feels continuous), de-duping by `linkId` in case a save happened mid-scroll. A fetch-generation counter guards against stale load-more responses clobbering a fresh search; an end-of-list sigil appears once `hasMore` flips false.
+
+`app/photos/page.tsx` rewritten with the standard polished landing-page chrome: `qt-page-container` with a `lantern.webp` story background, `qt-page-title` header, byline, counter strip, search bar with magnifier affordance, empty state in a dashed `qt-bg-card/80` panel, and a responsive 2/3/4/5-column grid of `qt-shadow-sm` cards (rounded thumbnails, hover lift, link-count chip overlay, captions + linker label). Detail modal upgraded to a wider two-column layout with a per-link album breakdown ("Vault" / "Album" pill on each linker), kept-prompt excerpt, tag chips, and identity (sha256, linkId) panel; Esc key dismisses; remove button now reads "Remove from this album" so it's clear the action only affects the primary link, not other vaults holding the same bytes.
+
 #### Salon picker "My Gallery" → active user-persona's vault; Librarian attach announcement includes link uuid + kept-image description
 
 Two related fixes around attaching images from gallery to chat.

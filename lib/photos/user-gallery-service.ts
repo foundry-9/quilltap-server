@@ -1,20 +1,22 @@
 /**
  * User photo gallery service.
  *
- * The human user has their own photo album — parallel to the per-character
- * vault album shipped in Phase 1, but rooted in the Quilltap Uploads mount
- * (`<userUploadsMountPointId>/photos/`). Functions here are the backend for
- * the `/api/v1/photos` REST endpoints and the `/photos` gallery page.
+ * The human user's gallery is a deduped roll-up of every `photos/` folder
+ * across the instance — character vaults, project stores, Quilltap General,
+ * Quilltap Uploads. Whenever an image is saved (via `keep_image`, the Salon
+ * Save-Image dialog, or the legacy "save to my gallery" button) it lands in
+ * some mount point's `photos/` folder; this service surfaces them all under
+ * one roof on `/photos`, deduped by sha256 so the same bytes appearing in
+ * multiple albums show as a single card with a "linked in N places" badge.
  *
- * The save path piggy-backs on `linkBlobContent` — the same content-addressed
- * hard-link plumbing the character vault uses — so an image saved to the
- * user's gallery shares its bytes with any chat attachment, kept-image link,
- * or other gallery entry of the same image.
+ * The save path still piggy-backs on `linkBlobContent` — same content-
+ * addressed hard-link plumbing the rest of the photo system uses — and
+ * writes into the Quilltap Uploads mount when called directly. The list
+ * path, however, is now mount-agnostic.
  *
  * @module photos/user-gallery-service
  */
 
-import path from 'path';
 import { logger } from '@/lib/logger';
 import { getUserUploadsStore } from '@/lib/file-storage/user-uploads-bridge';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
@@ -245,67 +247,125 @@ export async function saveToUserGallery(
 }
 
 /**
- * List the user's gallery entries. With `query` set, ranks by semantic
- * similarity over the saved markdown (prompt + scene + caption + tags);
- * otherwise returns most-recent first.
+ * List the user's gallery entries — every `photos/` link across every
+ * enabled mount point, deduped by sha256. With `query` set, ranks by
+ * semantic similarity over the saved markdown (prompt + scene + caption +
+ * tags); otherwise returns most-recent first.
+ *
+ * Each entry surfaces the *primary* link (the most recently created one for
+ * a given sha256) plus the full link-summary so the UI can show how many
+ * other places the same bytes live and which characters/projects own them.
  */
 export async function listUserGallery(
   input: ListUserGalleryInput
 ): Promise<ListUserGalleryOutput> {
   const { query, tags, limit, offset, userId, repos } = input;
-  const target = await getUserUploadsStore();
-  if (!target) {
-    return { entries: [], total: 0, hasMore: false };
-  }
 
   const effectiveLimit = Math.max(1, Math.min(limit ?? DEFAULT_LIMIT, 200));
   const effectiveOffset = Math.max(0, offset ?? 0);
 
-  // Pull every link in the user-uploads mount that lives in photos/. The mount
-  // is single-user (Quilltap is single-user) so we don't filter by userId at
-  // the link layer.
-  const allLinks = await repos.docMountFileLinks.findByMountPointId(target.mountPointId);
-  const photoLinks = allLinks.filter(l => isPhotosRelativePath(l.relativePath));
+  // 1. Fan out across every enabled mount point and collect links whose
+  //    relativePath lives under `photos/`. Quilltap is single-user, so we
+  //    don't filter by userId at the link layer.
+  const mountPoints = await repos.docMountPoints.findEnabled();
+  const allPhotoLinks: Array<{
+    link: Awaited<ReturnType<typeof repos.docMountFileLinks.findByMountPointId>>[number];
+    mountPointId: string;
+  }> = [];
+  for (const mp of mountPoints) {
+    const links = await repos.docMountFileLinks.findByMountPointId(mp.id);
+    for (const link of links) {
+      if (isPhotosRelativePath(link.relativePath)) {
+        allPhotoLinks.push({ link, mountPointId: mp.id });
+      }
+    }
+  }
 
-  let scoredLinks: Array<{ link: typeof photoLinks[number]; relevance?: number }> = [];
+  if (allPhotoLinks.length === 0) {
+    return { entries: [], total: 0, hasMore: false };
+  }
+
+  // 2. Dedupe by sha256. For each unique image, keep the most recently
+  //    created link as the "primary" — that's the one whose mount + path
+  //    drive the displayed thumbnail and the user-facing remove action.
+  const bySha = new Map<string, { primary: typeof allPhotoLinks[number]; relevance?: number }>();
+  for (const entry of allPhotoLinks) {
+    const existing = bySha.get(entry.link.sha256);
+    if (!existing || entry.link.createdAt.localeCompare(existing.primary.link.createdAt) > 0) {
+      bySha.set(entry.link.sha256, { primary: entry });
+    }
+  }
+
+  // 3. Rank. With a query, run semantic search across every mount with at
+  //    least one photo link, constrained to `photos/`. Map scores back to
+  //    sha256 via the primary link's relativePath. Without a query, sort
+  //    by keptAt desc.
+  let ranked: Array<{ sha256: string; primary: typeof allPhotoLinks[number]; relevance?: number }> = [];
 
   if (query && query.trim().length > 0) {
-    // Semantic search constrained to the photos/ folder of the user-uploads
-    // mount. searchDocumentChunks returns chunk hits keyed by relativePath +
-    // mountPointId; we map back to link rows by relativePath since the chunk
-    // result doesn't surface the linkId directly.
+    const photoMountIds = Array.from(new Set(allPhotoLinks.map(e => e.mountPointId)));
     const queryEmbedding = await generateEmbeddingForUser(query, userId);
     const hits = await searchDocumentChunks(queryEmbedding.embedding, {
-      mountPointIds: [target.mountPointId],
+      mountPointIds: photoMountIds,
       pathPrefix: `${PHOTOS_FOLDER}/`,
       query,
       applyLiteralPhraseBoost: true,
-      limit: effectiveLimit * 4,
+      limit: effectiveLimit * 8,
     });
-    const byPath = new Map<string, number>();
+    // Build (mountPointId, lowerRelativePath) -> score so we can match the
+    // primary link back exactly. Photos with the same caption text across
+    // two mounts would otherwise collide on path alone.
+    const byKey = new Map<string, number>();
     for (const hit of hits) {
-      const key = hit.relativePath.toLowerCase();
-      const prior = byPath.get(key);
-      if (prior === undefined || hit.score > prior) byPath.set(key, hit.score);
+      const key = `${hit.mountPointId}::${hit.relativePath.toLowerCase()}`;
+      const prior = byKey.get(key);
+      if (prior === undefined || hit.score > prior) byKey.set(key, hit.score);
     }
-    for (const link of photoLinks) {
-      const score = byPath.get(link.relativePath.toLowerCase());
-      if (score !== undefined) {
-        scoredLinks.push({ link, relevance: score });
+    for (const [sha256, { primary }] of bySha) {
+      // Match against any of the linker rows so a hit in any vault counts.
+      let best: number | undefined;
+      for (const entry of allPhotoLinks) {
+        if (entry.link.sha256 !== sha256) continue;
+        const score = byKey.get(`${entry.mountPointId}::${entry.link.relativePath.toLowerCase()}`);
+        if (score !== undefined && (best === undefined || score > best)) {
+          best = score;
+        }
+      }
+      if (best !== undefined) {
+        ranked.push({ sha256, primary, relevance: best });
       }
     }
-    scoredLinks.sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0));
+    ranked.sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0));
+
+    // Cosine similarity has a per-corpus noise floor — random gibberish like
+    // "asdfasdf" still scores ~0.55-0.60 against image-prompt embeddings, so
+    // the default 0.3 minScore lets thousands of false-positive hits through.
+    // Real semantic matches peak distinctly above the noise: e.g. "wardrobe"
+    // tops 0.84, "covenant" tops 0.78. Two-stage gate:
+    //   1. If the top score is below SEMANTIC_PEAK_GATE, treat the query as
+    //      noise and return zero results.
+    //   2. Otherwise keep results within SEMANTIC_TRAIL_BAND of the top
+    //      score (so the long tail of marginal hits doesn't bloat the page).
+    const SEMANTIC_PEAK_GATE = 0.65;
+    const SEMANTIC_TRAIL_BAND = 0.2;
+    const topScore = ranked[0]?.relevance ?? 0;
+    if (topScore < SEMANTIC_PEAK_GATE) {
+      ranked = [];
+    } else {
+      const cutoff = topScore - SEMANTIC_TRAIL_BAND;
+      ranked = ranked.filter(r => (r.relevance ?? 0) >= cutoff);
+    }
   } else {
-    scoredLinks = photoLinks
-      .slice()
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map(link => ({ link }));
+    ranked = Array.from(bySha.entries()).map(([sha256, { primary }]) => ({ sha256, primary }));
+    ranked.sort((a, b) => b.primary.link.createdAt.localeCompare(a.primary.link.createdAt));
   }
 
-  // Filter by tags after the candidate set is built.
-  const filtered: typeof scoredLinks = [];
-  for (const candidate of scoredLinks) {
-    const meta = parseKeptImageFrontmatter(candidate.link.extractedText ?? null);
+  // 4. Apply optional tag filter. Tags are pulled from kept-image
+  //    frontmatter on the primary link; if a non-primary link has different
+  //    tags they're still visible via the link-summary expansion in the UI.
+  const filtered: typeof ranked = [];
+  for (const candidate of ranked) {
+    const meta = parseKeptImageFrontmatter(candidate.primary.link.extractedText ?? null);
     if (tags && tags.length > 0) {
       const lowered = new Set(meta.tags.map(t => t.toLowerCase()));
       const matches = tags.some(t => lowered.has(t.toLowerCase()));
@@ -318,23 +378,23 @@ export async function listUserGallery(
   const page = filtered.slice(effectiveOffset, effectiveOffset + effectiveLimit);
 
   const entries: UserGalleryEntry[] = [];
-  for (const { link, relevance } of page) {
-    const meta = parseKeptImageFrontmatter(link.extractedText ?? null);
-    const linkSummary = await getPhotoLinkSummaryBySha256(link.sha256, repos);
-    const blobUrl = `/api/v1/mount-points/${target.mountPointId}/blobs/${encodeURI(link.relativePath)}`;
+  for (const { primary, relevance } of page) {
+    const meta = parseKeptImageFrontmatter(primary.link.extractedText ?? null);
+    const linkSummary = await getPhotoLinkSummaryBySha256(primary.link.sha256, repos);
+    const blobUrl = `/api/v1/mount-points/${primary.mountPointId}/blobs/${encodeURI(primary.link.relativePath)}`;
     entries.push({
-      linkId: link.id,
-      mountPointId: target.mountPointId,
-      relativePath: link.relativePath,
-      fileName: link.fileName,
+      linkId: primary.link.id,
+      mountPointId: primary.mountPointId,
+      relativePath: primary.link.relativePath,
+      fileName: primary.link.fileName,
       blobUrl,
-      mimeType: link.originalMimeType ?? 'image/webp',
-      sha256: link.sha256,
-      fileSizeBytes: link.fileSizeBytes,
-      keptAt: link.createdAt,
+      mimeType: primary.link.originalMimeType ?? 'image/webp',
+      sha256: primary.link.sha256,
+      fileSizeBytes: primary.link.fileSizeBytes,
+      keptAt: primary.link.createdAt,
       caption: meta.caption,
       tags: meta.tags,
-      generationPromptExcerpt: extractPromptExcerpt(link.extractedText ?? null),
+      generationPromptExcerpt: extractPromptExcerpt(primary.link.extractedText ?? null),
       relevanceScore: relevance,
       linkSummary,
     });
@@ -352,25 +412,23 @@ export interface RemoveFromUserGalleryInput {
 /**
  * Remove a gallery entry (cascades to its chunks and, if it was the last
  * hard link to the bytes, drops the file row and blob).
+ *
+ * /photos surfaces every `photos/` link across every enabled mount, so the
+ * removal target may live in a character vault, a project store, Quilltap
+ * General, or Quilltap Uploads — we accept any of them, as long as the
+ * link's relativePath is under `photos/`.
  */
 export async function removeFromUserGallery(
   input: RemoveFromUserGalleryInput
 ): Promise<{ deleted: boolean; fileGC: boolean }> {
   const { linkId, repos } = input;
-  const target = await getUserUploadsStore();
-  if (!target) {
-    return { deleted: false, fileGC: false };
-  }
   const link = await repos.docMountFileLinks.findByIdWithContent(linkId);
   if (!link) return { deleted: false, fileGC: false };
-  if (link.mountPointId !== target.mountPointId) {
-    throw new Error('Link is not in the user gallery');
-  }
   if (!isPhotosRelativePath(link.relativePath)) {
     throw new Error('Link is not a gallery entry');
   }
   const result = await repos.docMountFileLinks.deleteWithGC(linkId);
-  invalidateMountPoint(target.mountPointId);
+  invalidateMountPoint(link.mountPointId);
   return { deleted: result.fileId !== null, fileGC: result.fileGC };
 }
 
@@ -393,20 +451,17 @@ export async function getUserGalleryEntry(
   _userId: string,
   repos: ReturnType<typeof getRepositories>
 ): Promise<UserGalleryEntry | null> {
-  const target = await getUserUploadsStore();
-  if (!target) return null;
   const link = await repos.docMountFileLinks.findByIdWithContent(linkId);
   if (!link) return null;
-  if (link.mountPointId !== target.mountPointId) return null;
   if (!isPhotosRelativePath(link.relativePath)) return null;
   const meta = parseKeptImageFrontmatter(link.extractedText ?? null);
   const linkSummary = await getPhotoLinkSummaryBySha256(link.sha256, repos);
   return {
     linkId: link.id,
-    mountPointId: target.mountPointId,
+    mountPointId: link.mountPointId,
     relativePath: link.relativePath,
     fileName: link.fileName,
-    blobUrl: `/api/v1/mount-points/${target.mountPointId}/blobs/${encodeURI(link.relativePath)}`,
+    blobUrl: `/api/v1/mount-points/${link.mountPointId}/blobs/${encodeURI(link.relativePath)}`,
     mimeType: link.originalMimeType ?? 'image/webp',
     sha256: link.sha256,
     fileSizeBytes: link.fileSizeBytes,
