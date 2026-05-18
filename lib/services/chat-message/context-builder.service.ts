@@ -165,10 +165,15 @@ export async function loadAndProcessFiles(
     }
   }
 
-  // Filter out attachments that were processed via fallback
+  // Keep an attachment only when the provider natively supports it
+  // (processFileAttachmentFallback returns type 'unsupported' with no error
+  // in that case). Text/image_description results replace the attachment
+  // with prefix text; 'unsupported' with an error means fallback was
+  // attempted and failed — sending the raw bytes anyway would just trip the
+  // provider's "no image input" rejection, so drop it.
   const attachmentsToSend = fileAttachments.filter((_, idx) => {
     const fallback = fallbackResults[idx]
-    return !fallback || (fallback.type !== 'text' && fallback.type !== 'image_description')
+    return !fallback || (fallback.type === 'unsupported' && !fallback.error)
   })
 
   return {
@@ -544,12 +549,15 @@ export async function buildMessageContext(
   // Additionally surface image attachments from Lantern notifications
   // (story background, avatar regeneration, or the generate_image tool).
   // Without this, vision-capable providers would only see the announcement
-  // text but not the actual image. We piggy-back on the existing
-  // attachments-on-last-user-turn mechanism so non-vision providers still
-  // get the text fallback, and the collector scopes the set to images this
-  // character hasn't seen yet so they aren't re-delivered every turn.
+  // text but not the actual image. For non-vision profiles, each loaded
+  // attachment is run through processFileAttachmentFallback so the
+  // description text is prepended to the last user turn and the raw image
+  // is dropped — same machinery loadAndProcessFiles uses for user uploads.
+  // Without that step, non-vision providers (e.g. DeepSeek via OpenRouter)
+  // reject the request because they're being handed images they can't read.
   const ASSISTANT_IMAGE_LOOKBACK = 6
   let mergedAttachmentsToSend: unknown[] = attachmentsToSend
+  let lanternImagePrefix = ''
   try {
     // If this is a joining character without history access and they have
     // not yet responded, clamp the walk to messages posted after they joined.
@@ -574,7 +582,37 @@ export async function buildMessageContext(
         provider: connectionProfile.provider,
       })
       if (extra.length > 0) {
-        mergedAttachmentsToSend = [...attachmentsToSend, ...extra]
+        const lanternAttachmentsToKeep: typeof extra = []
+        for (const fileAttachment of extra) {
+          const fileMetadata = {
+            id: fileAttachment.id,
+            filepath: fileAttachment.filepath ?? `/api/v1/files/${fileAttachment.id}`,
+            filename: fileAttachment.filename,
+            mimeType: fileAttachment.mimeType,
+            size: fileAttachment.size,
+          }
+          const fallbackResult = await processFileAttachmentFallback(
+            fileMetadata,
+            fileAttachment,
+            connectionProfile,
+            options.repos,
+            userId,
+          )
+          const prefix = formatFallbackAsMessagePrefix(fallbackResult)
+          if (prefix) {
+            lanternImagePrefix += prefix
+          }
+          // Mirror the loadAndProcessFiles filter: only keep the raw
+          // attachment when the provider natively supports it. If the
+          // fallback failed, dropping the bytes avoids the provider's
+          // "no image input" rejection downstream.
+          if (fallbackResult.type === 'unsupported' && !fallbackResult.error) {
+            lanternAttachmentsToKeep.push(fileAttachment)
+          }
+        }
+        if (lanternAttachmentsToKeep.length > 0) {
+          mergedAttachmentsToSend = [...attachmentsToSend, ...lanternAttachmentsToKeep]
+        }
       }
     }
   } catch (err) {
@@ -585,17 +623,21 @@ export async function buildMessageContext(
 
   // Prepare final messages for LLM
   const formattedMessages = formattedContextMessages.map((msg, idx) => {
-    if (idx === formattedContextMessages.length - 1 && msg.role === 'user' && mergedAttachmentsToSend.length > 0) {
+    const isLastUserMessage = idx === formattedContextMessages.length - 1 && msg.role === 'user'
+    const content = isLastUserMessage && lanternImagePrefix
+      ? lanternImagePrefix + msg.content
+      : msg.content
+    if (isLastUserMessage && mergedAttachmentsToSend.length > 0) {
       return {
         role: msg.role,
-        content: msg.content,
+        content,
         attachments: mergedAttachmentsToSend,
         name: msg.name,
       }
     }
     return {
       role: msg.role,
-      content: msg.content,
+      content,
       thoughtSignature: msg.thoughtSignature ?? undefined,
       name: msg.name,
     }

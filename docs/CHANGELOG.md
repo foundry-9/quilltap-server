@@ -4,6 +4,17 @@
 
 ### 4.4-dev
 
+#### Fix: non-vision LLMs no longer crash on Lantern image attachments
+
+A character using a non-vision profile (e.g. DeepSeek via OpenRouter) would error out with OpenRouter's `404 — No endpoints found that support image input` whenever recent ASSISTANT messages in the chat carried image attachments (Aurora portrait commissions, story-background regenerations, or `generate_image` tool runs). The image-description fallback never fired for those images, so raw bytes were sent to a model that couldn't read them and the turn chain stopped.
+
+Two changes in `lib/services/chat-message/context-builder.service.ts`:
+
+- The Lantern-image collector path (the block that loads `recentAssistantImageFileIds` for the responding character) now runs each loaded `FileAttachment` through `processFileAttachmentFallback`, the same way user-uploaded files are handled in `loadAndProcessFiles`. For non-vision profiles, the generated description is accumulated in a `lanternImagePrefix` string and prepended to the last user-turn message; the raw image is dropped from `mergedAttachmentsToSend`. Vision-capable profiles still receive the bytes (fallback short-circuits and the prefix stays empty).
+- The "keep attachment" filter in both `loadAndProcessFiles` and the new Lantern block was tightened. It used to keep any `fallback.type !== 'text' && fallback.type !== 'image_description'`, which meant `type: 'unsupported'` *with* an error (fallback was attempted but failed) still passed the raw bytes through and tripped the provider's "no image input" rejection downstream. The new predicate is `fallback.type === 'unsupported' && !fallback.error`, i.e. the attachment is kept only when the provider natively supports the file type. If the fallback fails the ⚠️ warning prefix rides along and the bytes are dropped, so the turn completes instead of crashing.
+
+No schema or settings changes. The Image Description Profile (and the uncensored fallback profile) configured at `/settings?tab=chat` is what gets used; if it isn't set, the user already sees the existing "Configure one in Settings → Chat Settings → Image Description Profile" warning prefix in the prompt.
+
 #### Fix (follow-up): ship node-pty in the standalone tarball so the Electron shell can find it
 
 The previous fix added node-pty to `packages/quilltap`'s deps and made `bin/quilltap.js` symlink it into the standalone dir at launch. That covered the `npx quilltap` path but did not fix the Electron shell, which launches `standalone/server.js` directly (e.g. `Quilltap.app/Contents/MacOS/Quilltap standalone/server.js`) and bypasses `bin/quilltap.js` entirely. The shell bundles its own `better-sqlite3` and `sharp` and injects them into the standalone tree on startup; it does not bundle `node-pty`. With node-pty stripped from the tarball, the shell's `require('node-pty')` resolved to nothing and terminal spawn failed with `Cannot find module 'node-pty'` the same way as before.
