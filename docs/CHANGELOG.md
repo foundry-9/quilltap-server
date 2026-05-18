@@ -4,6 +4,24 @@
 
 ### 4.4-dev
 
+#### Salon picker "My Gallery" → active user-persona's vault; Librarian attach announcement includes link uuid + kept-image description
+
+Two related fixes around attaching images from gallery to chat.
+
+**Picker "My Gallery" now mirrors Aurora's photo gallery.** Previously the Library file picker's "My Gallery" tab read from `Quilltap Uploads/photos/` (an empty bucket unless the user clicked the rarely-seen bookmark icon in the image-detail overlay), while the chat-message "Save Image" button saved to character vaults — so saving to "Charlie (you)" and looking under "My Gallery" never matched up. The picker now resolves the active user-persona character for the chat (via the existing `photo-albums` action) and reads `/api/v1/characters/<id>/photos` — the same endpoint Aurora's photo gallery uses. Falls back to the Quilltap Uploads gallery only when no user-controlled participant is set. The scope card retitles to `<persona>'s Photos` accordingly.
+
+- `components/chat/LibraryFilePickerModal.tsx`: new `PhotoAlbumOption` / `PhotoAlbumsResponse` types, SWR fetch of `/api/v1/chats/<chatId>?action=photo-albums`, `userPersonaAlbum` derivation (prefers `isDefault` user-character, then first user-character). `ScopePicker` accepts a `userPersonaName` and retitles the gallery card. `GalleryPanel` accepts a `userPersona` and switches its fetch URL between `/api/v1/characters/<id>/photos` and `/api/v1/photos` accordingly; empty-state copy names the persona when set.
+
+**Attach announcement now carries the photo's catalogue handle and the kept-image description.** When the user attaches a gallery photo, the Librarian announcement was emitting only the lead sentence + path, and (for images saved with a caption via the SaveImageDialog) the "description" was just the user's caption rather than the original generation prompt that the kept-image markdown already preserves. Two parts:
+
+- Attach announcement now splices the link uuid into the text body with a `keep_image` / `attach_image` hint, mirroring the upload announcement. `lib/services/librarian-notifications/writer.ts` adds an `attachIdHint()` helper used by both `buildAttachContent` and `buildAttachOpaqueContent`. Updated the `LibrarianAttachAnnouncement.mountFileId` docstring — `findByMountPointAndPath` returns a link row, so the field has always carried a `doc_mount_file_links.id`, not a `doc_mount_files.id` as the comment said.
+- For `photos/` folder attaches, the announcement description now comes from the kept-image markdown (`## Original prompt`, `### Scene at <ts>`, attribution/caption trailer) instead of the vision-LLM round-trip. `lib/photos/keep-image-markdown.ts` exports a new `buildAttachDescriptionFromKeptImage()` helper that strips frontmatter and returns the body. `app/api/v1/chats/[id]/files/route.ts` `handleAttachMountFile` calls it before falling back to `ensureImageDescription`, and logs the source (`kept-image-markdown` / `vision-llm-cached` / `vision-llm-generated` / `empty`).
+
+**`keep_image` accepts link uuids.** So an LLM seeing a Librarian "Image attached" announcement can pass the uuid from the text body straight into `keep_image` without having to know whether it's an images-v2 id or a `doc_mount_file_links` id.
+
+- `lib/photos/save-image-to-album.ts`: when `getImageById(fileId)` misses, `saveImageToAlbum` now tries `docMountFileLinks.findByIdWithContent(fileId)` and looks up the matching FileEntry by sha256. Existing behavior for FileEntry ids is unchanged.
+- `lib/tools/keep-image-tool.ts`: tool description and parameter description updated to tell the LLM the uuid can be a Librarian catalogue handle.
+
 #### Backup/restore + .qtap export: cover all user-data tables
 
 The system backup, restore, and `.qtap` export paths were missing several tables that have been added to the schema since they were last audited. Result: backups didn't include the Scriptorium / document-store content, Document Mode pane state, memory embeddings, or several other small-but-real pieces of user state. Restores rebuilt them from scratch (or silently lost them).

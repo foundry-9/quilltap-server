@@ -12,13 +12,13 @@ export const keepImageTool = {
   function: {
     name: 'keep_image',
     description:
-      "Save an image to your photo album (a `photos/` folder in your character vault) so it survives chat garbage collection and becomes searchable from your memory. Pass the UUID of an image that was generated in this chat. Caption and tags are optional freeform labels for retrieval — they are not the platform's global Tag system. Returns the path the image now lives at in your vault. If you've already kept this image, the call fails — delete the existing copy first if you want to amend the caption or tags.",
+      "Save an image to your photo album (a `photos/` folder in your character vault) so it survives chat garbage collection and becomes searchable from your memory. Pass the UUID of an image that was generated in this chat, or the catalogue handle the Librarian announced when someone attached a photo from a gallery. Caption and tags are optional freeform labels for retrieval — they are not the platform's global Tag system. Returns the path the image now lives at in your vault. If you've already kept this image, the call fails — delete the existing copy first if you want to amend the caption or tags.",
     parameters: {
       type: 'object',
       properties: {
         uuid: {
           type: 'string',
-          description: 'UUID of the image to keep. Use the id returned by generate_image or list_images.',
+          description: 'UUID of the image to keep. Use the id returned by generate_image, list_images, or the catalogue handle from a Librarian "Image attached" announcement.',
         },
         caption: {
           type: 'string',

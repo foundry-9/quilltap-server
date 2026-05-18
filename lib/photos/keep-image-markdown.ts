@@ -205,6 +205,27 @@ function extractCaptionFromBody(body: string): string | null {
   return match[1].trim();
 }
 
+/**
+ * Build a description block suitable for the Librarian's attach
+ * announcement out of a kept-image link's `extractedText`. Returns the
+ * Markdown body (prompt + scene snapshot + attribution/caption) with the
+ * YAML frontmatter stripped, so the LLM gets the same provenance Aurora
+ * sees in the photo gallery — no vision-LLM round-trip needed.
+ *
+ * Returns `null` when the input has no body content (e.g. legacy rows
+ * whose extractedText is empty or frontmatter-only); the caller can fall
+ * back to vision-LLM regeneration in that case.
+ */
+export function buildAttachDescriptionFromKeptImage(
+  extractedText: string | null | undefined
+): string | null {
+  if (!extractedText) return null;
+  const parsed = parseFrontmatter(extractedText);
+  const body = extractedText.slice(parsed.bodyStartOffset).trim();
+  if (!body) return null;
+  return body;
+}
+
 export interface BuildSlugAndFilenameInput {
   caption: string | null;
   generationPrompt: string | null;

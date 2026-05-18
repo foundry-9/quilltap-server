@@ -126,7 +126,25 @@ export async function saveImageToAlbum(
   // unrelated consumers' module load (mirrors the pattern in keep_image).
   const { getImageById, readImageBuffer } = await import('@/lib/images-v2');
 
-  const fileEntry = await getImageById(fileId);
+  // `fileId` may be either an images-v2 FileEntry id (the original
+  // generated/uploaded image's UUID) or a `doc_mount_file_links.id` — the
+  // latter is what the Librarian attach announcement now surfaces, so an
+  // LLM seeing an attached photo can call `keep_image` with the same id it
+  // saw in the message. When given a link id we resolve to the underlying
+  // FileEntry by sha256; this preserves the generation metadata for the new
+  // save.
+  let fileEntry = await getImageById(fileId);
+  if (!fileEntry) {
+    const reposEarly = getRepositories();
+    const sourceLink = await reposEarly.docMountFileLinks.findByIdWithContent(fileId);
+    if (sourceLink) {
+      const sisters = await reposEarly.files.findBySha256(sourceLink.sha256);
+      const sister = sisters.find(f => f.category === 'IMAGE') ?? sisters[0] ?? null;
+      if (sister) {
+        fileEntry = sister;
+      }
+    }
+  }
   if (!fileEntry) {
     throw new SaveImageToAlbumError('IMAGE_NOT_FOUND', `Image not found: ${fileId}`);
   }

@@ -15,6 +15,8 @@ import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import { postLibrarianAttachAnnouncement } from '@/lib/services/librarian-notifications/writer';
 import { generateImageDescription } from '@/lib/chat/file-attachment-fallback';
+import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
+import { buildAttachDescriptionFromKeptImage } from '@/lib/photos/keep-image-markdown';
 import type { RepositoryContainer } from '@/lib/database/repositories';
 import type { FileAttachment } from '@/lib/llm/base';
 
@@ -279,7 +281,26 @@ async function handleAttachMountFile(
   const mountPoint = await repos.docMountPoints.findById(mountPointId);
   const mountPointName = mountPoint?.name ?? null;
 
-  const description = await ensureImageDescription(repos, userId, blob);
+  // For kept images (anything in a `photos/` folder) the link's extractedText
+  // already carries the original generation prompt, scene snapshot, and
+  // saver caption — built by keep_image / save-image-to-album. Surface that
+  // verbatim instead of running the vision LLM on top of what is, by
+  // construction, a richer description than vision could produce.
+  let description = '';
+  let descriptionSource: 'kept-image-markdown' | 'vision-llm-cached' | 'vision-llm-generated' | 'empty' = 'empty';
+  if (isPhotosRelativePath(relativePath)) {
+    const fromMarkdown = buildAttachDescriptionFromKeptImage(mountFile.extractedText);
+    if (fromMarkdown) {
+      description = fromMarkdown;
+      descriptionSource = 'kept-image-markdown';
+    }
+  }
+  if (!description) {
+    description = await ensureImageDescription(repos, userId, blob);
+    if (description) {
+      descriptionSource = blob.description?.trim() ? 'vision-llm-cached' : 'vision-llm-generated';
+    }
+  }
 
   const announcement = await postLibrarianAttachAnnouncement({
     chatId,
@@ -304,6 +325,7 @@ async function handleAttachMountFile(
     relativePath,
     announcementMessageId: announcement.id,
     descriptionIncluded: description.length > 0,
+    descriptionSource,
   });
 
   return NextResponse.json({

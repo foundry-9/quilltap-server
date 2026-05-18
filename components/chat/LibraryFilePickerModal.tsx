@@ -75,13 +75,27 @@ interface GalleryEntry {
   mimeType: string
   caption: string | null
   keptAt: string
-  generationPromptExcerpt: string
+  generationPromptExcerpt?: string
 }
 
 interface GalleryResponse {
   entries: GalleryEntry[]
   total: number
   hasMore: boolean
+}
+
+interface PhotoAlbumOption {
+  mountPointId: string
+  name: string
+  kind: 'character' | 'project' | 'document-store' | 'general'
+  characterId?: string
+  participantId?: string
+  isUserCharacter?: boolean
+  isDefault?: boolean
+}
+
+interface PhotoAlbumsResponse {
+  albums: PhotoAlbumOption[]
 }
 
 type Step = 'scope' | 'browse-project' | 'browse-gallery' | 'browse-mount'
@@ -113,6 +127,17 @@ export default function LibraryFilePickerModal({
   const docStores = (mountsData?.mountPoints || []).filter(
     mp => mp.enabled && mp.mountType === 'database' && mp.storeType !== 'character'
   )
+
+  // "My Gallery" routes to the user's active persona vault for this chat —
+  // the same `photos/` folder Aurora's character page shows. Falls back to
+  // the global Quilltap Uploads gallery when no user persona is set.
+  const { data: albumsData } = useSWR<PhotoAlbumsResponse>(
+    isOpen ? `/api/v1/chats/${chatId}?action=photo-albums` : null
+  )
+  const userPersonaAlbum =
+    albumsData?.albums.find(a => a.kind === 'character' && a.isUserCharacter && a.isDefault) ??
+    albumsData?.albums.find(a => a.kind === 'character' && a.isUserCharacter) ??
+    null
 
   // Reset state when modal closes (modal-reset pattern)
   useEffect(() => {
@@ -327,6 +352,7 @@ export default function LibraryFilePickerModal({
           docStores={docStores}
           projectsLoading={projectsLoading}
           mountsLoading={mountsLoading}
+          userPersonaName={userPersonaAlbum?.name ?? null}
           onPickGeneral={() => handleProjectScopeSelect(null, 'General')}
           onPickGallery={handleGalleryScopeSelect}
           onPickProject={handleProjectScopeSelect}
@@ -358,7 +384,11 @@ export default function LibraryFilePickerModal({
       )}
 
       {step === 'browse-gallery' && (
-        <GalleryPanel onPick={handleGalleryPick} linking={linking} />
+        <GalleryPanel
+          userPersona={userPersonaAlbum}
+          onPick={handleGalleryPick}
+          linking={linking}
+        />
       )}
     </BaseModal>
   )
@@ -369,6 +399,7 @@ function ScopePicker({
   docStores,
   projectsLoading,
   mountsLoading,
+  userPersonaName,
   onPickGeneral,
   onPickGallery,
   onPickProject,
@@ -378,16 +409,21 @@ function ScopePicker({
   docStores: MountPointSummary[]
   projectsLoading: boolean
   mountsLoading: boolean
+  userPersonaName: string | null
   onPickGeneral: () => void
   onPickGallery: () => void
   onPickProject: (id: string, name: string) => void
   onPickMount: (mount: MountPointSummary) => void
 }) {
+  const galleryTitle = userPersonaName ? `${userPersonaName}'s Photos` : 'My Gallery'
+  const gallerySubtitle = userPersonaName
+    ? `Photos saved to ${userPersonaName}'s vault`
+    : "Photos you've saved from chats"
   return (
     <div className="space-y-4">
       <section className="space-y-2">
         <ScopeCard icon="📁" title="General" subtitle="Files not assigned to any project" onClick={onPickGeneral} />
-        <ScopeCard icon="🖼️" title="My Gallery" subtitle="Photos you've saved from chats" onClick={onPickGallery} />
+        <ScopeCard icon="🖼️" title={galleryTitle} subtitle={gallerySubtitle} onClick={onPickGallery} />
       </section>
 
       {projects.length > 0 && (
@@ -456,13 +492,20 @@ function ScopeCard({
 }
 
 function GalleryPanel({
+  userPersona,
   onPick,
   linking,
 }: {
+  userPersona: PhotoAlbumOption | null
   onPick: (entry: GalleryEntry) => void
   linking: boolean
 }) {
-  const { data, isLoading, error } = useSWR<GalleryResponse>('/api/v1/photos?limit=200')
+  // Same `photos/` folder Aurora's character page reads when a user persona
+  // is set; falls back to the global Quilltap Uploads gallery otherwise.
+  const fetchUrl = userPersona?.characterId
+    ? `/api/v1/characters/${userPersona.characterId}/photos?limit=200`
+    : '/api/v1/photos?limit=200'
+  const { data, isLoading, error } = useSWR<GalleryResponse>(fetchUrl)
   const entries = data?.entries ?? []
 
   if (isLoading) {
@@ -474,7 +517,9 @@ function GalleryPanel({
   if (entries.length === 0) {
     return (
       <p className="qt-text-muted py-8 text-center text-sm">
-        Your gallery is empty. Save an image from any chat via &ldquo;Save to my gallery&rdquo; and it&rsquo;ll appear here.
+        {userPersona
+          ? `${userPersona.name}'s photo gallery is empty. Use Save Image on any chat message and pick ${userPersona.name} as the album to add photos here.`
+          : 'Your gallery is empty. Save an image from any chat via "Save to my gallery" and it’ll appear here.'}
       </p>
     )
   }

@@ -107,11 +107,23 @@ export interface LibrarianAttachAnnouncement {
   displayTitle: string;
   filePath: string;
   mountPoint?: string | null;
-  /** doc_mount_files.id of the attached file */
+  /**
+   * `doc_mount_file_links.id` of the attached file — the same id placed on
+   * the announcement message's `attachments` array, and the id LLMs are
+   * invited to pass to `keep_image` / `attach_image`. (The field was named
+   * `mountFileId` historically but the route resolves via
+   * `findByMountPointAndPath`, which returns a link row.)
+   */
   mountFileId: string;
   /** MIME type (storedMimeType from the blob row) */
   mimeType: string;
-  /** Cached or freshly-generated image description; empty for non-images or unavailable */
+  /**
+   * Description body to include after the lead sentence. For images in a
+   * `photos/` folder this is built from the kept-image markdown
+   * (generation prompt + scene state + caption); for other mount files
+   * it's the cached / freshly-generated vision-LLM description. Empty
+   * when neither source has anything to say.
+   */
   description?: string;
 }
 
@@ -351,37 +363,54 @@ function isImageMime(mime: string): boolean {
   return mime.toLowerCase().startsWith('image/');
 }
 
+/**
+ * Trailer that names the link id and tells the LLM what it can do with it.
+ * Mirrors the upload announcement (`buildUploadContent`) so characters can
+ * call `keep_image` or `attach_image` on a Librarian-attached photo just as
+ * they would on a user-uploaded one.
+ */
+function attachIdHint(linkId: string, isImage: boolean): string {
+  if (!isImage) {
+    return `Catalogue handle: \`${linkId}\`.`;
+  }
+  return `The illustration is catalogued under uuid \`${linkId}\` — it may be filed away in your own album later with keep_image, or re-summoned with attach_image.`;
+}
+
 export function buildAttachContent(params: LibrarianAttachAnnouncement): string {
-  const { displayTitle, filePath, mountPoint, mimeType, description } = params;
+  const { displayTitle, filePath, mountPoint, mimeType, description, mountFileId } = params;
   const where = mountPoint ? `the document store "${mountPoint}"` : 'the document store';
   const pathDetails = `path: "${filePath}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
-  const kindPhrase = isImageMime(mimeType)
+  const isImage = isImageMime(mimeType);
+  const kindPhrase = isImage
     ? `the illustration "${displayTitle}"`
     : `the volume "${displayTitle}"`;
   const lead = `The user has bid the Librarian set ${kindPhrase} from ${where} upon the table for your perusal — please consult it as part of your reply (${pathDetails}).`;
+  const handle = attachIdHint(mountFileId, isImage);
   // Splice the description into the announcement body for the benefit of
   // non-vision providers that would otherwise see only the lead sentence.
   // Vision providers see both the description text *and* the image bytes.
   const trimmed = description?.trim();
   if (trimmed) {
-    return `${lead}\n\nThe Librarian's catalogue describes the illustration thus:\n\n${trimmed}`;
+    return `${lead}\n\n${handle}\n\nThe Librarian's catalogue describes the illustration thus:\n\n${trimmed}`;
   }
-  return lead;
+  return `${lead}\n\n${handle}`;
 }
 
 export function buildAttachOpaqueContent(params: LibrarianAttachAnnouncement): string {
-  const { displayTitle, filePath, mountPoint, mimeType, description } = params;
+  const { displayTitle, filePath, mountPoint, mimeType, description, mountFileId } = params;
   const where = mountPoint ? `the document store "${mountPoint}"` : 'the document store';
   const pathDetails = `path: "${filePath}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
-  const kindPhrase = isImageMime(mimeType)
+  const isImage = isImageMime(mimeType);
+  const kindPhrase = isImage
     ? `Image attached: "${displayTitle}"`
     : `Document attached: "${displayTitle}"`;
   const lead = `${kindPhrase} from ${where} — the user has placed it before you for your reply (${pathDetails}).`;
+  const handle = attachIdHint(mountFileId, isImage);
   const trimmed = description?.trim();
   if (trimmed) {
-    return `${lead}\n\nDescription:\n\n${trimmed}`;
+    return `${lead}\n\n${handle}\n\nDescription:\n\n${trimmed}`;
   }
-  return lead;
+  return `${lead}\n\n${handle}`;
 }
 
 export async function postLibrarianAttachAnnouncement(
