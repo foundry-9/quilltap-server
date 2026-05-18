@@ -169,6 +169,19 @@ function ensureNativeModules() {
     }
   }
 
+  // Check node-pty: backs the Ariel terminal feature. Loaded dynamically by
+  // pty-manager in the standalone server, so resolution must succeed and the
+  // native binding's NODE_MODULE_VERSION must match the runtime.
+  try {
+    require('node-pty');
+  } catch (err) {
+    if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
+      needsRebuild.push('node-pty');
+    } else if (err.code === 'MODULE_NOT_FOUND') {
+      needsRebuild.push('node-pty');
+    }
+  }
+
   if (needsRebuild.length === 0) return;
 
   console.log(`  Rebuilding native modules for Node.js ${process.version}...`);
@@ -237,6 +250,28 @@ function linkNativeModules(standaloneDir) {
   const betterSqlite3Dir = resolveModuleDir('better-sqlite3-multiple-ciphers')
                         || resolveModuleDir('better-sqlite3');
   linkModule('better-sqlite3', betterSqlite3Dir);
+
+  // Link node-pty — the standalone tarball strips it (platform-specific),
+  // and pty-manager loads it via a dynamic require, so it needs to resolve
+  // from standaloneDir/node_modules.
+  const nodePtyDir = resolveModuleDir('node-pty');
+  linkModule('node-pty', nodePtyDir);
+  if (nodePtyDir) {
+    // Some npm cache extractions strip the executable bit on spawn-helper,
+    // causing pty.spawn() to fail with `posix_spawnp failed`. Restore it.
+    const prebuildsDir = path.join(nodePtyDir, 'prebuilds');
+    if (fs.existsSync(prebuildsDir)) {
+      try {
+        for (const entry of fs.readdirSync(prebuildsDir, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          const helper = path.join(prebuildsDir, entry.name, 'spawn-helper');
+          if (fs.existsSync(helper)) {
+            try { fs.chmodSync(helper, 0o755); } catch { /* best-effort */ }
+          }
+        }
+      } catch { /* best-effort */ }
+    }
+  }
 
   // Link sharp
   const sharpDir = resolveModuleDir('sharp');

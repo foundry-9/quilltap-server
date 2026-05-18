@@ -4,6 +4,18 @@
 
 ### 4.4-dev
 
+#### Fix: terminal spawn fails under standalone/Electron with "node-pty module not available"
+
+The Ariel terminal feature worked under `npm run dev` but blew up under the Electron shell / `npx quilltap` standalone runtime with `[PTY] Failed to import node-pty` / `Cannot find module 'node-pty'`. Root cause: `scripts/build-standalone-tarball.ts` intentionally strips `node-pty` from the tarball (same model as `better-sqlite3` / `sharp` — platform-specific natives are installed on the user's machine), but `packages/quilltap/package.json` never declared `node-pty` as a runtime dep, so nothing reinstalled it on the user side.
+
+Three coordinated fixes in `packages/quilltap/`:
+
+- `package.json`: added `"node-pty": "^1.1.0"` to dependencies so npm installs it (with prebuilt binaries) when the user runs `npx quilltap`.
+- `bin/quilltap.js` `ensureNativeModules()`: added a `require('node-pty')` probe so a Node-version upgrade triggers `npm rebuild node-pty` alongside the other natives, handling `NODE_MODULE_VERSION` mismatches.
+- `bin/quilltap.js` `linkNativeModules()`: symlinks the resolved `node-pty` into `standaloneDir/node_modules/node-pty` so the dynamic `require('node-pty')` in `lib/terminals/pty-manager.ts` resolves at runtime. Also chmods every `prebuilds/*/spawn-helper` to `0o755` — the same fix `scripts/fix-node-pty-permissions.js` applies for Docker, inlined here because that script isn't shipped with the npm-published package. Without it, `pty.spawn()` fails with `posix_spawnp failed` on macOS installs where npm's cache extraction stripped the executable bit.
+
+Docker, dev (`npm run dev`), and `next.config.js` traces are unaffected — the gap was specific to the standalone tarball + `npx quilltap` path.
+
 #### Character vault is now authoritative for Scenarios/ and Prompts/
 
 When a character is configured with `readPropertiesFromDocumentStore = true` and a linked vault, the read overlay now treats the vault's `Scenarios/` and `Prompts/` folders as the sole source of truth for `scenarios` and `systemPrompts`. Previously, an empty folder (or one where every file failed to parse) caused the overlay to silently fall back to the DB row — so stale entries that had been deleted in the UI kept reappearing in new-chat pickers as ghosts. The new behavior: an empty vault folder yields an empty array, never the DB column.
