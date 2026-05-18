@@ -13,6 +13,7 @@
 
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
 import { formatBytes } from '@/lib/utils/format-bytes'
+import { showConfirmation } from '@/lib/alert'
 import type { DocumentStoreFile, DocumentStoreBlob } from '../../types'
 
 interface FileTableProps {
@@ -198,7 +199,7 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
   }, [canUpload, mountPointId, onRefresh])
 
   const handleBlobDelete = useCallback(async (file: DocumentStoreFile) => {
-    const ok = confirm(`Delete ${file.relativePath}? Markdown references to this blob will 404 until re-uploaded.`)
+    const ok = await showConfirmation(`Delete ${file.relativePath}? Markdown references to this blob will 404 until re-uploaded.`)
     if (!ok) return
     try {
       const res = await fetch(

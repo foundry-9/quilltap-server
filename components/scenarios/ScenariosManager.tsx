@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useState } from 'react'
-import { showConfirmation } from '@/lib/alert'
+import { showConfirmation, showPrompt } from '@/lib/alert'
 import { ScenarioEditorModal } from './ScenarioEditorModal'
 import type { Scenario, ScenarioMutator } from './types'
 
@@ -101,10 +101,12 @@ export function ScenariosManager({
   }
 
   async function handleRename(scenario: Scenario) {
-    const next = prompt(`Rename scenario "${scenario.filename}" to:`, scenario.filename)
-    if (!next || next.trim() === scenario.filename) return
+    const next = await showPrompt(`Rename scenario "${scenario.filename}" to:`, scenario.filename)
+    if (next === undefined) return
+    const trimmed = next.trim()
+    if (!trimmed || trimmed === scenario.filename) return
     setActionError(null)
-    const result = await renameScenario(scenario.path, next.trim())
+    const result = await renameScenario(scenario.path, trimmed)
     if (!result.ok) setActionError(result.error)
   }
 

@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Replace native confirm/prompt dialogs with styled equivalents
+
+Six native `window.confirm()` call sites and one `prompt()` were still showing the browser's unstyled OS-level dialogs. Swapped each for the existing `showConfirmation` / new `showPrompt` helpers from `@/lib/alert` so all confirm and prompt UI now uses the themed dialog with proper escape/overlay/keyboard handling.
+
+- New `components/prompt-dialog.tsx` mirrors `AlertDialog` but with a text input — Enter submits, Escape/overlay/Cancel returns `undefined`, the input is auto-focused and contents pre-selected.
+- New `showPrompt(message, defaultValue?)` in `lib/alert.tsx` is the styled replacement for `window.prompt()`.
+- Swapped sites: `app/scriptorium/[id]/components/FileTable.tsx` (blob delete), `app/photos/page.tsx` (album photo removal), `components/wardrobe/wardrobe-control-dialog.tsx` (wardrobe item delete + three outfit-builder reset/clear actions; the three fitting callbacks went async to await the dialog), `components/scenarios/ScenariosManager.tsx` (scenario rename).
+
 #### Add Character dialog now picks the starting outfit
 
 The "Add Character" dialog in the Participants sidebar now includes the same outfit selector used by the new-chat dialog. Previously, characters added to an existing chat arrived with empty equipped slots (no outfit applied at all); the only way to dress them was through the wardrobe dialog after the fact. Now the dialog defaults to "Use defaults" so new arrivals show up in their wardrobe defaults, with the other three modes ("Compose outfit", "Let character choose", "Start undressed") available the same way they are in /salon/new. User-impersonated characters get the same trimmed mode list as the new-chat flow (no `llm_choose`).

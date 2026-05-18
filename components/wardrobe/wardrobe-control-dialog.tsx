@@ -26,6 +26,7 @@ import { useWardrobeDialog } from '@/components/providers/wardrobe-dialog-provid
 import { BaseModal } from '@/components/ui/BaseModal'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { showConfirmation } from '@/lib/alert'
 import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { useOutfit } from '@/lib/hooks/use-outfit'
@@ -299,7 +300,7 @@ function WardrobeControlDialogInner({
   const handleDelete = useCallback(
     async (item: WardrobeItem) => {
       if (!selectedCharacterId) return
-      if (!window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return
+      if (!(await showConfirmation(`Delete "${item.title}"? This cannot be undone.`))) return
       const url = item.characterId
         ? `/api/v1/characters/${item.characterId}/wardrobe/${item.id}`
         : `/api/v1/wardrobe/${item.id}`
@@ -418,38 +419,38 @@ function WardrobeControlDialogInner({
     setFittingSlots((prev) => ({ ...prev, [slot]: [] }))
   }, [])
 
-  const fittingResetToWorn = useCallback(() => {
+  const fittingResetToWorn = useCallback(async () => {
     if (!selectedCharacterId) return
     const wornSlots = outfit.outfitState[selectedCharacterId]?.slots
     const target = wornSlots ? cloneSlots(wornSlots) : { ...EMPTY_EQUIPPED_SLOTS }
     if (
       !equippedSlotsEqual(fittingSlots, target) &&
-      !window.confirm(
+      !(await showConfirmation(
         'Discard your composition and start from what’s currently worn?',
-      )
+      ))
     ) {
       return
     }
     setFittingSlots(target)
   }, [selectedCharacterId, outfit.outfitState, fittingSlots])
 
-  const fittingResetToDefaults = useCallback(() => {
+  const fittingResetToDefaults = useCallback(async () => {
     const target = buildDefaultOutfit(items)
     if (
       !equippedSlotsEqual(fittingSlots, target) &&
-      !window.confirm(
+      !(await showConfirmation(
         'Discard your composition and start from this character’s default outfit?',
-      )
+      ))
     ) {
       return
     }
     setFittingSlots(target)
   }, [items, fittingSlots])
 
-  const fittingClearAll = useCallback(() => {
+  const fittingClearAll = useCallback(async () => {
     if (
       !equippedSlotsEqual(fittingSlots, EMPTY_EQUIPPED_SLOTS) &&
-      !window.confirm('Empty every slot in the Outfit Builder?')
+      !(await showConfirmation('Empty every slot in the Outfit Builder?'))
     ) {
       return
     }

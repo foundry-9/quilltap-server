@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { showConfirmation } from '@/lib/alert';
 
 interface PhotoLinker {
   linkId: string;
@@ -163,7 +164,7 @@ export default function PhotosPage() {
 
   const handleDelete = useCallback(
     async (linkId: string) => {
-      if (!window.confirm('Remove this photo from this album? Other albums that link the same image will keep their copy.')) return;
+      if (!(await showConfirmation('Remove this photo from this album? Other albums that link the same image will keep their copy.'))) return;
       setDeleting(linkId);
       try {
         const res = await fetch(`/api/v1/photos/${linkId}`, { method: 'DELETE' });
