@@ -4,7 +4,27 @@
 
 ### 4.5-dev
 
-(empty — new development starts here)
+#### `quilltap db` high-level subcommands
+
+`packages/quilltap` gains a verb-based layer on top of the existing flag/SQL CLI so common drill-downs no longer require hand-written SQL. New file `packages/quilltap/lib/db-commands.js`; `bin/quilltap.js` dispatches to it when `args[0]` matches a known verb, otherwise the legacy flag path runs unchanged.
+
+Verbs:
+
+- `schema [table]` — column list with FKs and indexes; `schema` alone prints tables grouped by domain; `schema --grep <text>` searches tables/columns. Single-table output ends with `→ docs/developer/DDL.md#<table>` so the canonical reference is one click away.
+- `find character|chat|project [query]` — fuzzy name → UUID (character lookup also searches `aliases`).
+- `chats --character <name|id>` (uses `participants LIKE`), `chats --project <name|id>`.
+- `messages --chat <id|title>` with `--last N`, `--full`, `--from`, `--type`.
+- `logs --chat|--message|--character|--tail` — auto-resolves name→UUID across the main/llm-logs DB boundary.
+- `message <id>` and `log <id>` — full single-record body (log accepts `--field request|response|both`).
+- `memories --character <id|name>` with `--about` and `--source` filters.
+
+All verbs accept `--json` and `--limit N`. Ambiguous name resolution prints all candidates and exits with code 2.
+
+REPL gains `.cols <table>` (alias for `PRAGMA table_info`) and `.find <text>` (tables/columns substring search). Existing `.tables` and `.schema` are unchanged.
+
+`packages/quilltap/lib/db-helpers.js` factored out `openEncryptedDb(dbPath, pepper, opts)` and added `openMainDb` / `openLlmLogsDb` alongside the existing `openMountIndexDb`, so all three databases open through the same code path.
+
+Docs updated: `packages/quilltap/README.md` (new "Database Tool" section), `docs/developer/DDL.md` ("How to Query" split into high-level and low-level), `CLAUDE.md` (claude-specific instructions point at the subcommands first).
 
 ### 4.4.0
 

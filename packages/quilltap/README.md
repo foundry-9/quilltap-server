@@ -89,6 +89,49 @@ Quilltap stores its database, files, and logs in a platform-specific directory:
 
 Override with `--data-dir` or the `QUILLTAP_DATA_DIR` environment variable.
 
+## Database Tool
+
+The encrypted SQLite databases (main, LLM logs, mount index) can be queried directly via `quilltap db`. There are two modes: high-level subcommands that auto-pick the right database and resolve characters/chats/projects by name, and a low-level path for arbitrary SQL.
+
+### Subcommands
+
+```bash
+quilltap db schema                          # Tables grouped by domain
+quilltap db schema chat_messages            # Columns, indexes, DDL.md link
+quilltap db schema --grep memory            # Find tables/columns by substring
+
+quilltap db find character Friday           # Resolve a name to a UUID (fuzzy)
+quilltap db find chat "physical prompts"
+quilltap db find project "Quilltap"
+
+quilltap db chats --character Friday        # All chats containing a character
+quilltap db chats --project "Quilltap"      # All chats in a project
+quilltap db messages --chat <id|title> --last 50 --full
+quilltap db logs --chat <id|title>          # LLM logs for a chat
+quilltap db logs --message <id>             # LLM logs for a single message
+quilltap db logs --character Friday         # LLM logs by character
+quilltap db logs --tail 20                  # Recent LLM logs
+
+quilltap db message <id>                    # Full content of one message
+quilltap db log <id> [--field request|response|both]
+quilltap db memories --character Friday [--about Amy] [--source AUTO]
+```
+
+Most subcommands accept `--json` (for piping) and `--limit N`. Names are case-insensitive; aliases are searched alongside character names. Ambiguous matches print all candidates and exit non-zero.
+
+### Low-level options
+
+```bash
+quilltap db --tables                                # List tables in active DB
+quilltap db --count chat_messages                   # Row count
+quilltap db "SELECT id FROM characters LIMIT 5"     # Raw SQL
+quilltap db --repl                                  # Interactive prompt
+quilltap db --llm-logs --tables                     # Target the LLM logs DB
+quilltap db --mount-points --tables                 # Target the mount index DB
+```
+
+In the REPL, `.cols <table>` and `.find <text>` mirror the subcommand helpers.
+
 ## Theme Management
 
 The CLI includes theme management commands:

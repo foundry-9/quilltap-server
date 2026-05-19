@@ -690,16 +690,37 @@ function printDbHelp() {
 Quilltap Database Tool
 
 Usage: quilltap db [options] [sql]
+       quilltap db <subcommand> [args]
 
 Query your encrypted Quilltap database directly.
 
-Options:
-  --tables              List all tables
+Subcommands (high-level shortcuts; auto-pick the right database):
+  schema [table]              Schema overview, or details for one table
+  schema --grep <text>        Find tables/columns whose name matches
+  find character [query]      List or look up characters by name/id
+  find chat [query]           List or look up chats by title/id
+  find project [query]        List or look up projects by name/id
+  chats --character <name|id> Chats containing a character
+  chats --project <name|id>   Chats in a project
+  messages --chat <id|title>  Recent messages in a chat
+                              (flags: --last N --full --from <pid> --type <t>)
+  logs --chat <id|title>      LLM logs for a chat
+  logs --message <id>         LLM logs for a single message
+  logs --character <name|id>  LLM logs for a character
+  logs --tail N               Most recent LLM logs
+  message <id>                Full content of a single chat message
+  log <id>                    Full request/response of a single LLM log
+  memories --character <id>   Memories held by a character
+                              (flags: --about <id|name> --source AUTO|MANUAL)
+  Most subcommands also accept --json and --limit N.
+
+Low-level options (legacy; still supported):
+  --tables              List all tables in the active database
   --count <table>       Show row count for a table
-  --repl                Interactive SQL prompt
+  --repl                Interactive SQL prompt (extras: .cols, .find)
   --llm-logs            Target the LLM logs database
   --mount-points        Target the document mount-index database
-  --data-dir <path>     Override data directory
+  --data-dir <path>     Override data directory (pass instance root)
   --passphrase <pass>   Provide passphrase for encrypted .dbkey
   -h, --help            Show this help
 
@@ -713,22 +734,63 @@ will check the QUILLTAP_DB_PASSPHRASE environment variable, then prompt
 interactively (with hidden input) if a TTY is available.
 
 Examples:
+  quilltap db schema                                   # tables grouped by domain
+  quilltap db schema chat_messages                     # columns + indexes + DDL link
+  quilltap db find character Friday                    # name → uuid
+  quilltap db chats --character Friday                 # all chats with Friday
+  quilltap db messages --chat <id> --last 50 --full    # recent messages
+  quilltap db logs --chat "physical prompts"           # llm logs for a chat
+  quilltap db log <log-id>                             # full request/response
   quilltap db --tables
   quilltap db "SELECT count(*) FROM characters"
   quilltap db --count messages
   quilltap db --repl
-  quilltap db --llm-logs --tables
-  quilltap db --mount-points --tables
-  quilltap db --mount-points "SELECT id, name FROM doc_mount_points"
   quilltap db --lock-status
-  quilltap db --lock-clean
   QUILLTAP_DB_PASSPHRASE=secret quilltap db --tables
 `);
 }
 
 async function dbCommand(args) {
+  // ---- Pre-flight: extract dataDir/passphrase, then check for a verb subcommand
+  //      before the legacy flag loop. This lets `quilltap db <verb>` dispatch
+  //      to the new high-level commands without touching the legacy path.
+  const { isVerb, runVerb, makeCtx } = require('../lib/db-commands');
+
+  // Strip --data-dir / --passphrase out so they can appear anywhere on the line,
+  // including before or after the verb.
+  const cleaned = [];
   let dataDirOverride = '';
   let passphrase = '';
+  for (let j = 0; j < args.length; j++) {
+    const a = args[j];
+    if (a === '--data-dir' || a === '-d') { dataDirOverride = args[++j]; continue; }
+    if (a === '--passphrase') { passphrase = args[++j]; continue; }
+    cleaned.push(a);
+  }
+
+  // Find first non-flag arg to test for verb
+  const firstPositional = cleaned.find(a => !a.startsWith('-'));
+  if (firstPositional && isVerb(firstPositional)) {
+    const dataDir = resolveDataDir(dataDirOverride);
+    let pepper;
+    try {
+      pepper = await loadDbKey(dataDir, passphrase);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+    // Re-strip global flags but preserve everything else (verb + its flags)
+    const ctx = makeCtx(dataDir, pepper);
+    try {
+      runVerb(cleaned, ctx);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(err.ambiguous ? 2 : 1);
+    }
+    return;
+  }
+
+  // ---- Legacy flag-based path (unchanged) ----
   let useLlmLogs = false;
   let useMountPoints = false;
   let showTables = false;
@@ -741,25 +803,23 @@ async function dbCommand(args) {
   let lockOverride = false;
 
   let i = 0;
-  while (i < args.length) {
-    switch (args[i]) {
-      case '--data-dir': case '-d': dataDirOverride = args[++i]; break;
-      case '--passphrase': passphrase = args[++i]; break;
+  while (i < cleaned.length) {
+    switch (cleaned[i]) {
       case '--llm-logs': useLlmLogs = true; break;
       case '--mount-points': useMountPoints = true; break;
       case '--tables': showTables = true; break;
-      case '--count': countTable = args[++i]; break;
+      case '--count': countTable = cleaned[++i]; break;
       case '--repl': repl = true; break;
       case '--help': case '-h': showHelp = true; break;
       case '--lock-status': lockStatus = true; break;
       case '--lock-clean': lockClean = true; break;
       case '--lock-override': lockOverride = true; break;
       default:
-        if (args[i].startsWith('-')) {
-          console.error(`Unknown option: ${args[i]}`);
+        if (cleaned[i].startsWith('-')) {
+          console.error(`Unknown option: ${cleaned[i]}`);
           process.exit(1);
         }
-        sql = args[i];
+        sql = cleaned[i];
         break;
     }
     i++;
@@ -851,7 +911,7 @@ async function dbCommand(args) {
       const readline = require('readline');
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: 'quilltap> ' });
       console.log(`Connected to ${dbPath}`);
-      console.log('Type .tables, .schema <table>, or SQL. Ctrl+D to exit.\n');
+      console.log('Type .tables, .schema <table>, .cols <table>, .find <text>, or SQL. Ctrl+D to exit.\n');
       rl.prompt();
       rl.on('line', (line) => {
         const trimmed = line.trim();
@@ -866,6 +926,38 @@ async function dbCommand(args) {
             else {
               const row = db.prepare("SELECT sql FROM sqlite_master WHERE name = ?").get(table);
               console.log(row ? row.sql : `Table '${table}' not found`);
+            }
+          } else if (trimmed.startsWith('.cols')) {
+            const table = trimmed.split(/\s+/)[1];
+            if (!table) { console.log('Usage: .cols <table>'); }
+            else {
+              const cols = db.prepare(`PRAGMA table_info("${table.replace(/"/g, '""')}")`).all();
+              if (cols.length === 0) console.log(`Table '${table}' not found`);
+              else console.table(cols.map(c => ({
+                name: c.name, type: c.type,
+                notNull: c.notnull ? 'NOT NULL' : '',
+                default: c.dflt_value === null ? '' : c.dflt_value,
+                pk: c.pk ? 'pk' : '',
+              })));
+            }
+          } else if (trimmed.startsWith('.find')) {
+            const needle = trimmed.slice(5).trim();
+            if (!needle) { console.log('Usage: .find <text>'); }
+            else {
+              const lc = needle.toLowerCase();
+              const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(r => r.name);
+              const matches = [];
+              for (const t of tables) {
+                const tableHit = t.toLowerCase().includes(lc);
+                const cols = db.prepare(`PRAGMA table_info("${t.replace(/"/g, '""')}")`).all();
+                const colHits = cols.filter(c => c.name.toLowerCase().includes(lc)).map(c => c.name);
+                if (tableHit || colHits.length) matches.push({ table: t, tableMatch: tableHit, columns: colHits });
+              }
+              if (matches.length === 0) console.log(`No tables or columns matching '${needle}'`);
+              else for (const m of matches) {
+                const flag = m.tableMatch ? '*' : ' ';
+                console.log(`${flag} ${m.table}${m.columns.length ? '  ' + m.columns.map(c => '.' + c).join(', ') : ''}`);
+              }
             }
           } else {
             const stmt = db.prepare(trimmed);

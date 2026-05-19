@@ -115,10 +115,9 @@ async function loadDbKey(dataDir, passphrase) {
   return tryDecrypt(passphrase);
 }
 
-function openMountIndexDb(dataDir, pepper, { readonly = true } = {}) {
-  const dbPath = path.join(dataDir, 'quilltap-mount-index.db');
+function openEncryptedDb(dbPath, pepper, { readonly = true, friendlyName = 'database' } = {}) {
   if (!fs.existsSync(dbPath)) {
-    throw new Error(`Mount index database not found: ${dbPath}`);
+    throw new Error(`${friendlyName} not found: ${dbPath}`);
   }
 
   let Database;
@@ -138,16 +137,31 @@ function openMountIndexDb(dataDir, pepper, { readonly = true } = {}) {
     db.prepare('SELECT 1').get();
   } catch (err) {
     db.close();
-    throw new Error(`Cannot open mount index database: ${err.message}\n` +
+    throw new Error(`Cannot open ${friendlyName}: ${err.message}\n` +
       'The database may be encrypted with a different key, or the .dbkey file may be missing.');
   }
 
   return db;
 }
 
+function openMainDb(dataDir, pepper, opts = {}) {
+  return openEncryptedDb(path.join(dataDir, 'quilltap.db'), pepper, { ...opts, friendlyName: 'main database' });
+}
+
+function openLlmLogsDb(dataDir, pepper, opts = {}) {
+  return openEncryptedDb(path.join(dataDir, 'quilltap-llm-logs.db'), pepper, { ...opts, friendlyName: 'LLM logs database' });
+}
+
+function openMountIndexDb(dataDir, pepper, opts = {}) {
+  return openEncryptedDb(path.join(dataDir, 'quilltap-mount-index.db'), pepper, { ...opts, friendlyName: 'mount index database' });
+}
+
 module.exports = {
   resolveDataDir,
   promptPassphrase,
   loadDbKey,
+  openEncryptedDb,
+  openMainDb,
+  openLlmLogsDb,
   openMountIndexDb,
 };
