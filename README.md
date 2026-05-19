@@ -8,16 +8,16 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.4.0--dev.243-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.4.0--dev.244-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.com/channels/1476289075152556205/1476290238187049184)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/6enCeQxY)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
 </p>
 
-**Website:** [quilltap.ai](https://quilltap.ai) · **Discord:** [Join us](https://discord.com/channels/1476289075152556205/1476290238187049184) · **Docker:** [foundry9/quilltap](https://hub.docker.com/r/foundry9/quilltap)
+**Website:** [quilltap.ai](https://quilltap.ai) · **Discord:** [Join us](https://discord.gg/6enCeQxY) · **Docker:** [foundry9/quilltap](https://hub.docker.com/r/foundry9/quilltap)
 
 ---
 
@@ -366,7 +366,7 @@ Copyright © 2025, 2026 Foundry-9 LLC
 ## Support
 
 - **Issues:** [GitHub Issues](https://github.com/foundry-9/quilltap-server/issues)
-- **Discord:** [Join us](https://discord.com/channels/1476289075152556205/1476290238187049184)
+- **Discord:** [Join us](https://discord.gg/6enCeQxY)
 - **Website:** [quilltap.ai](https://quilltap.ai)
 - **Author:** Charles Sebold ([charles.sebold@foundry-9.com](mailto:charles.sebold@foundry-9.com))
 - **Company:** [Foundry-9 LLC](https://foundry-9.com)
