@@ -4,6 +4,17 @@
 
 ### 4.5-dev
 
+#### `quilltap docs` read subcommands — fix queries against post-link-table schema
+
+`docs show`, `docs files`, `docs read`, and `docs export` were still issuing the pre-`doc_mount_file_links` queries (`SELECT … FROM doc_mount_files WHERE mountPointId = ? AND relativePath = ?` and similar against `doc_mount_blobs`/`doc_mount_documents`), so every invocation failed with `Error: no such column: mountPointId` once a database had been through the link-table migration. Reissued every query through the new schema:
+
+- File lookups join `doc_mount_file_links` (`mountPointId`, `relativePath`) to `doc_mount_files` (`fileId` → content row).
+- Content lookups in `doc_mount_documents` and `doc_mount_blobs` go by `fileId` directly (both are 1:1 with `doc_mount_files.id`).
+- Chunks read by `linkId` instead of `fileId`.
+- `docs show` blob/doc counts join through `doc_mount_file_links` to scope per-mount counts under the new content-addressable layout.
+- `docs read --rendered` reads `extractedText` from `doc_mount_file_links` (the field moved off `doc_mount_blobs` in the migration).
+- Dropped the legacy "defensive" pass in `docs export` that scanned `doc_mount_blobs` directly for rows without a `doc_mount_files` entry — link rows are now the authoritative membership signal.
+
 #### `quilltap docs` — write subcommands (write/delete/mkdir/move/copy)
 
 New CLI verbs that mutate document mounts in addition to the existing read-only set. Mount arguments accept either the mount name (case-insensitive) or its UUID; ambiguous names print candidates and exit non-zero.

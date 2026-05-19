@@ -224,10 +224,22 @@ async function handleShow(flags, id) {
   const { db } = await openDb(flags);
   try {
     const mount = requireMount(db, id);
-    const fileCount = db.prepare('SELECT COUNT(*) AS n FROM doc_mount_files WHERE mountPointId = ?').get(id).n;
-    const chunkCount = db.prepare('SELECT COUNT(*) AS n FROM doc_mount_chunks WHERE mountPointId = ?').get(id).n;
-    const blobCount = db.prepare('SELECT COUNT(*) AS n FROM doc_mount_blobs WHERE mountPointId = ?').get(id).n;
-    const docCount = db.prepare('SELECT COUNT(*) AS n FROM doc_mount_documents WHERE mountPointId = ?').get(id).n;
+    const fileCount = db.prepare(
+      'SELECT COUNT(*) AS n FROM doc_mount_file_links WHERE mountPointId = ?'
+    ).get(mount.id).n;
+    const chunkCount = db.prepare(
+      'SELECT COUNT(*) AS n FROM doc_mount_chunks WHERE mountPointId = ?'
+    ).get(mount.id).n;
+    const blobCount = db.prepare(`
+      SELECT COUNT(*) AS n FROM doc_mount_file_links l
+      JOIN doc_mount_blobs b ON b.fileId = l.fileId
+      WHERE l.mountPointId = ?
+    `).get(mount.id).n;
+    const docCount = db.prepare(`
+      SELECT COUNT(*) AS n FROM doc_mount_file_links l
+      JOIN doc_mount_documents d ON d.fileId = l.fileId
+      WHERE l.mountPointId = ?
+    `).get(mount.id).n;
 
     const liveCounts = {
       filesActual: fileCount,
@@ -271,23 +283,27 @@ async function handleFiles(flags, id) {
   }
   const { db } = await openDb(flags);
   try {
-    requireMount(db, id);
+    const mount = requireMount(db, id);
     let rows;
     if (flags.folder) {
       const prefix = flags.folder.replace(/\/+$/, '') + '/';
       rows = db.prepare(`
-        SELECT relativePath, fileType, source, fileSizeBytes, chunkCount, conversionStatus
-        FROM doc_mount_files
-        WHERE mountPointId = ? AND relativePath LIKE ?
-        ORDER BY relativePath
-      `).all(id, prefix + '%');
+        SELECT l.relativePath, f.fileType, f.source, f.fileSizeBytes,
+               l.chunkCount, l.conversionStatus
+        FROM doc_mount_file_links l
+        JOIN doc_mount_files f ON f.id = l.fileId
+        WHERE l.mountPointId = ? AND l.relativePath LIKE ?
+        ORDER BY l.relativePath
+      `).all(mount.id, prefix + '%');
     } else {
       rows = db.prepare(`
-        SELECT relativePath, fileType, source, fileSizeBytes, chunkCount, conversionStatus
-        FROM doc_mount_files
-        WHERE mountPointId = ?
-        ORDER BY relativePath
-      `).all(id);
+        SELECT l.relativePath, f.fileType, f.source, f.fileSizeBytes,
+               l.chunkCount, l.conversionStatus
+        FROM doc_mount_file_links l
+        JOIN doc_mount_files f ON f.id = l.fileId
+        WHERE l.mountPointId = ?
+        ORDER BY l.relativePath
+      `).all(mount.id);
     }
     if (flags.json) {
       process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
@@ -348,90 +364,10 @@ async function handleRead(flags, id, relativePath) {
 
 function readRaw(db, mount, relativePath, flags) {
   const file = db.prepare(`
-    SELECT id, source, fileType
-    FROM doc_mount_files
-    WHERE mountPointId = ? AND relativePath = ?
-  `).get(mount.id, relativePath);
-
-  if (file) {
-    ttyGuard(file.fileType, flags, relativePath);
-
-    if (file.source === 'filesystem') {
-      const fullPath = path.join(mount.basePath, relativePath);
-      if (!fs.existsSync(fullPath)) {
-        console.error(`File missing on disk: ${fullPath}`);
-        process.exit(1);
-      }
-      // Stream so we don't load huge files into memory.
-      const stream = fs.createReadStream(fullPath);
-      stream.pipe(process.stdout);
-      return new Promise((resolve, reject) => {
-        stream.on('end', resolve);
-        stream.on('error', reject);
-      });
-    }
-
-    if (file.source === 'database') {
-      if (TEXT_FILE_TYPES.has(file.fileType)) {
-        const doc = db.prepare(`
-          SELECT content FROM doc_mount_documents
-          WHERE mountPointId = ? AND relativePath = ?
-        `).get(mount.id, relativePath);
-        if (!doc) {
-          console.error(`File row exists but no document content for ${relativePath}`);
-          process.exit(1);
-        }
-        process.stdout.write(doc.content);
-        return;
-      }
-      // Binary stored in doc_mount_blobs
-      const blob = db.prepare(`
-        SELECT data FROM doc_mount_blobs
-        WHERE mountPointId = ? AND relativePath = ?
-      `).get(mount.id, relativePath);
-      if (!blob) {
-        console.error(`File row exists but no blob bytes for ${relativePath}`);
-        process.exit(1);
-      }
-      process.stdout.write(blob.data);
-      return;
-    }
-
-    console.error(`Unknown file source: ${file.source}`);
-    process.exit(1);
-  }
-
-  // No row in doc_mount_files — try blobs directly (some binaries may not be mirrored).
-  const blob = db.prepare(`
-    SELECT data, originalMimeType FROM doc_mount_blobs
-    WHERE mountPointId = ? AND relativePath = ?
-  `).get(mount.id, relativePath);
-  if (blob) {
-    ttyGuard('blob', flags, relativePath);
-    process.stdout.write(blob.data);
-    return;
-  }
-
-  console.error(`No file at ${relativePath} in mount ${mount.name}`);
-  process.exit(1);
-}
-
-function readRendered(db, mount, relativePath) {
-  // 1. Blob with extractedText wins.
-  const blob = db.prepare(`
-    SELECT extractedText FROM doc_mount_blobs
-    WHERE mountPointId = ? AND relativePath = ?
-  `).get(mount.id, relativePath);
-  if (blob && blob.extractedText) {
-    process.stdout.write(blob.extractedText);
-    return;
-  }
-
-  // 2. Look up the file row.
-  const file = db.prepare(`
-    SELECT id, source, fileType
-    FROM doc_mount_files
-    WHERE mountPointId = ? AND relativePath = ?
+    SELECT l.fileId, f.source, f.fileType
+    FROM doc_mount_file_links l
+    JOIN doc_mount_files f ON f.id = l.fileId
+    WHERE l.mountPointId = ? AND l.relativePath = ?
   `).get(mount.id, relativePath);
 
   if (!file) {
@@ -439,12 +375,77 @@ function readRendered(db, mount, relativePath) {
     process.exit(1);
   }
 
+  ttyGuard(file.fileType, flags, relativePath);
+
+  if (file.source === 'filesystem') {
+    const fullPath = path.join(mount.basePath, relativePath);
+    if (!fs.existsSync(fullPath)) {
+      console.error(`File missing on disk: ${fullPath}`);
+      process.exit(1);
+    }
+    // Stream so we don't load huge files into memory.
+    const stream = fs.createReadStream(fullPath);
+    stream.pipe(process.stdout);
+    return new Promise((resolve, reject) => {
+      stream.on('end', resolve);
+      stream.on('error', reject);
+    });
+  }
+
+  if (file.source === 'database') {
+    if (TEXT_FILE_TYPES.has(file.fileType)) {
+      const doc = db.prepare(
+        `SELECT content FROM doc_mount_documents WHERE fileId = ?`
+      ).get(file.fileId);
+      if (!doc) {
+        console.error(`File row exists but no document content for ${relativePath}`);
+        process.exit(1);
+      }
+      process.stdout.write(doc.content);
+      return;
+    }
+    // Binary stored in doc_mount_blobs
+    const blob = db.prepare(
+      `SELECT data FROM doc_mount_blobs WHERE fileId = ?`
+    ).get(file.fileId);
+    if (!blob) {
+      console.error(`File row exists but no blob bytes for ${relativePath}`);
+      process.exit(1);
+    }
+    process.stdout.write(blob.data);
+    return;
+  }
+
+  console.error(`Unknown file source: ${file.source}`);
+  process.exit(1);
+}
+
+function readRendered(db, mount, relativePath) {
+  // 1. Look up the link row (it carries extractedText now).
+  const file = db.prepare(`
+    SELECT l.id AS linkId, l.fileId, l.extractedText,
+           f.source, f.fileType
+    FROM doc_mount_file_links l
+    JOIN doc_mount_files f ON f.id = l.fileId
+    WHERE l.mountPointId = ? AND l.relativePath = ?
+  `).get(mount.id, relativePath);
+
+  if (!file) {
+    console.error(`No file at ${relativePath} in mount ${mount.name}`);
+    process.exit(1);
+  }
+
+  // 2. Extracted text on the link wins.
+  if (file.extractedText) {
+    process.stdout.write(file.extractedText);
+    return;
+  }
+
   // 3. Database-backed text doc — content IS the rendered form.
   if (file.source === 'database' && TEXT_FILE_TYPES.has(file.fileType)) {
-    const doc = db.prepare(`
-      SELECT content FROM doc_mount_documents
-      WHERE mountPointId = ? AND relativePath = ?
-    `).get(mount.id, relativePath);
+    const doc = db.prepare(
+      `SELECT content FROM doc_mount_documents WHERE fileId = ?`
+    ).get(file.fileId);
     if (doc) {
       process.stdout.write(doc.content);
       return;
@@ -460,12 +461,12 @@ function readRendered(db, mount, relativePath) {
     }
   }
 
-  // 5. Fall back to concatenated chunks.
+  // 5. Fall back to concatenated chunks (now keyed by linkId).
   const chunks = db.prepare(`
     SELECT content FROM doc_mount_chunks
-    WHERE fileId = ?
+    WHERE linkId = ?
     ORDER BY chunkIndex
-  `).all(file.id);
+  `).all(file.linkId);
   if (chunks.length === 0) {
     console.error(`No rendered text available for ${relativePath}. Run 'quilltap docs scan ${mount.id}' to extract and embed.`);
     process.exit(1);
@@ -500,16 +501,16 @@ async function handleExport(flags, id, outputDir) {
   const { db } = await openDb(flags);
   let writtenFiles = 0;
   let writtenBytes = 0;
-  const writtenPaths = new Set();
   try {
     const mount = requireMount(db, id);
 
     const files = db.prepare(`
-      SELECT id, relativePath, source, fileType
-      FROM doc_mount_files
-      WHERE mountPointId = ?
-      ORDER BY relativePath
-    `).all(id);
+      SELECT l.fileId, l.relativePath, f.source, f.fileType
+      FROM doc_mount_file_links l
+      JOIN doc_mount_files f ON f.id = l.fileId
+      WHERE l.mountPointId = ?
+      ORDER BY l.relativePath
+    `).all(mount.id);
 
     for (const file of files) {
       const dest = path.join(resolvedOut, file.relativePath);
@@ -525,10 +526,9 @@ async function handleExport(flags, id, outputDir) {
         writtenBytes += fs.statSync(dest).size;
       } else if (file.source === 'database') {
         if (TEXT_FILE_TYPES.has(file.fileType)) {
-          const doc = db.prepare(`
-            SELECT content FROM doc_mount_documents
-            WHERE mountPointId = ? AND relativePath = ?
-          `).get(id, file.relativePath);
+          const doc = db.prepare(
+            `SELECT content FROM doc_mount_documents WHERE fileId = ?`
+          ).get(file.fileId);
           if (!doc) {
             console.error(`${YELLOW}skip${RESET} ${file.relativePath} (no document content)`);
             continue;
@@ -536,10 +536,9 @@ async function handleExport(flags, id, outputDir) {
           fs.writeFileSync(dest, doc.content, 'utf8');
           writtenBytes += Buffer.byteLength(doc.content, 'utf8');
         } else {
-          const blob = db.prepare(`
-            SELECT data FROM doc_mount_blobs
-            WHERE mountPointId = ? AND relativePath = ?
-          `).get(id, file.relativePath);
+          const blob = db.prepare(
+            `SELECT data FROM doc_mount_blobs WHERE fileId = ?`
+          ).get(file.fileId);
           if (!blob) {
             console.error(`${YELLOW}skip${RESET} ${file.relativePath} (no blob bytes)`);
             continue;
@@ -551,22 +550,6 @@ async function handleExport(flags, id, outputDir) {
         console.error(`${YELLOW}skip${RESET} ${file.relativePath} (unknown source: ${file.source})`);
         continue;
       }
-      writtenFiles += 1;
-      writtenPaths.add(file.relativePath);
-    }
-
-    // Catch any blobs not mirrored into doc_mount_files (defensive).
-    const blobs = db.prepare(`
-      SELECT relativePath, data
-      FROM doc_mount_blobs
-      WHERE mountPointId = ?
-    `).all(id);
-    for (const blob of blobs) {
-      if (writtenPaths.has(blob.relativePath)) continue;
-      const dest = path.join(resolvedOut, blob.relativePath);
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.writeFileSync(dest, blob.data);
-      writtenBytes += blob.data.length;
       writtenFiles += 1;
     }
 
