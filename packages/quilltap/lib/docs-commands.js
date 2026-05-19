@@ -1144,18 +1144,20 @@ async function docsCommand(args) {
     printDocsHelp();
     process.exit(1);
   }
-  if (args[0] === '-h' || args[0] === '--help') {
-    printDocsHelp();
-    process.exit(0);
-  }
 
-  const verb = args[0];
-  const { flags, positional } = parseFlags(args.slice(1));
+  const { flags, positional } = parseFlags(args);
 
   if (flags.help) {
     printDocsHelp();
     process.exit(0);
   }
+
+  if (positional.length === 0) {
+    printDocsHelp();
+    process.exit(1);
+  }
+
+  const verb = positional.shift();
 
   try {
     switch (verb) {

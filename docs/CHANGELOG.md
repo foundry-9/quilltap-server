@@ -4,6 +4,10 @@
 
 ### 4.5-dev
 
+#### `quilltap docs` — accept global flags before the verb
+
+`quilltap docs --instance Friday read <mount> <path>` (and other docs invocations with `--instance`, `--data-dir`, `--passphrase`, `--port`, `--json`, etc. placed before the subcommand) failed with `Unknown docs subcommand: --instance`. The dispatcher took `args[0]` as the verb before parsing flags, so any flag in front of the verb was treated as the subcommand. Fixed by parsing flags across the entire arg list first, then shifting the first positional as the verb — matching how `db`, `themes`, and `memory-diff` already behave.
+
 #### `quilltap docs` read subcommands — fix queries against post-link-table schema
 
 `docs show`, `docs files`, `docs read`, and `docs export` were still issuing the pre-`doc_mount_file_links` queries (`SELECT … FROM doc_mount_files WHERE mountPointId = ? AND relativePath = ?` and similar against `doc_mount_blobs`/`doc_mount_documents`), so every invocation failed with `Error: no such column: mountPointId` once a database had been through the link-table migration. Reissued every query through the new schema:
