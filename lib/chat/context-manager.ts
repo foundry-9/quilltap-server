@@ -24,8 +24,8 @@ import type { ConnectionProfile } from '@/lib/schemas/types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/errors'
-import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
+import { getErrorMessage } from '@/lib/error-utils'
+import { extractVisibleConversation, stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks'
 
 // Import from extracted modules
 import {
@@ -33,16 +33,25 @@ import {
   buildOtherParticipantsInfo,
   buildIdentityReinforcement,
   type OtherParticipantInfo,
-  type ProjectContext,
-  type WardrobeContext,
 } from './context/system-prompt-builder'
 import {
   formatMemoriesForContext,
   formatInterCharacterMemoriesForContext,
   formatSummaryForContext,
+  formatFrozenMemoryArchive,
+  formatDynamicMemoryHead,
+  formatCurrentSceneState,
+  DYNAMIC_HEAD_TOKEN_BUDGET,
+  DYNAMIC_HEAD_DEFAULT_SIZE,
   type DebugMemoryInfo,
   type DebugInterCharacterMemoryInfo,
+  type SceneStateEmissionEntry,
 } from './context/memory-injector'
+import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
+import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
+import type { MessageEvent } from '@/lib/schemas/types'
+import { getOrComputeFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import {
   filterMessagesByHistoryAccess,
   filterWhisperMessages,
@@ -57,22 +66,42 @@ import {
 } from './context/message-selector'
 import {
   findMentionedCharacterIds,
-  formatMentionedCharactersSection,
 } from './context/mentioned-characters'
+import {
+  retrieveKnowledgeForTurn,
+  type KnowledgeDebugEntry,
+} from './context/knowledge-injector'
 import {
   shouldApplyCompression,
   shouldApplyBudgetCompression,
   splitMessagesForCompression,
   applyContextCompression,
-  buildCompressedSystemMessage,
+  buildCompressedHistoryBlock,
   type ContextCompressionOptions,
   type ContextCompressionResult,
 } from './context/compression'
+import {
+  buildCommonplacePersonaWhisper,
+  buildCommonplaceLLMContext,
+  postCommonplaceWhisper,
+} from '@/lib/services/commonplace-notifications/writer'
+import {
+  postHostTimestampAnnouncement,
+  buildTimestampContent,
+  postHostOffSceneCharactersAnnouncement,
+  findIntroducedOffSceneCharacterIds,
+} from '@/lib/services/host-notifications/writer'
+import { SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
+import {
+  shouldInjectTimestamp,
+  calculateCurrentTimestamp,
+} from '@/lib/chat/timestamp-utils'
+import { getCompiledIdentityStack } from '@/lib/services/system-prompt-compiler/compiler'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 
 // Re-export types from extracted modules for backwards compatibility
-export type { OtherParticipantInfo, ProjectContext } from './context/system-prompt-builder'
+export type { OtherParticipantInfo } from './context/system-prompt-builder'
 export type { MessageWithParticipant } from './context/message-attribution'
 export type { SelectableMessage } from './context/message-selector'
 export type { ContextCompressionOptions, ContextCompressionResult } from './context/compression'
@@ -92,6 +121,11 @@ export {
   selectRecentMessages,
 }
 
+// Per-character cap on inter-character memories. Top 10 by SQL ordering
+// (importance DESC, lastReinforcedAt/createdAt DESC); the formatter then
+// re-ranks the slice by effective weight inside each character's block.
+const INTER_CHAR_PER_CHARACTER_LIMIT = 10
+
 /**
  * Message format expected by the context manager
  */
@@ -108,6 +142,13 @@ export interface ContextMessage {
   thoughtSignature?: string | null
   /** Optional name for multi-character chats (provider-dependent support) */
   name?: string
+  /**
+   * Provider cache breakpoint marker. Set on the head Librarian summary
+   * whisper so providers that support per-message caching (Anthropic) can
+   * anchor a cache breakpoint there: system+tools stay hot across summary
+   * folds; only the summary-and-after re-prefills.
+   */
+  cacheControl?: { type: 'ephemeral' }
 }
 
 /**
@@ -120,6 +161,12 @@ export interface ContextBudget {
   systemPromptBudget: number
   /** Tokens allocated for memories */
   memoryBudget: number
+  /**
+   * Tokens allocated for per-turn knowledge recall (responding character's
+   * vault Knowledge/ folder). Independent of memoryBudget — knowledge is
+   * first-class character canon and is not fed to the memory compressor.
+   */
+  knowledgeBudget: number
   /** Tokens allocated for conversation summary */
   summaryBudget: number
   /** Tokens allocated for recent messages */
@@ -138,6 +185,8 @@ export interface BuiltContext {
   tokenUsage: {
     systemPrompt: number
     memories: number
+    /** Tokens spent on per-turn knowledge recall (responding character's vault Knowledge/ folder). */
+    knowledge: number
     summary: number
     recentMessages: number
     total: number
@@ -158,6 +207,8 @@ export interface BuiltContext {
   debugMemories?: Array<{ summary: string; importance: number; score: number; effectiveWeight: number }>
   /** Debug info: the inter-character memories that were included (multi-character chats) */
   debugInterCharacterMemories?: Array<{ aboutCharacterName: string; summary: string; importance: number }>
+  /** Debug info: the knowledge entries that were included for this turn */
+  debugKnowledge?: Array<{ filePath: string; score: number; inline: boolean; tokenCount: number }>
   /** Debug info: the memory recap content injected on chat start / character join */
   debugMemoryRecap?: string
   /** Debug info: the conversation summary that was included */
@@ -207,8 +258,6 @@ export interface BuildContextOptions {
   embeddingProfileId?: string
   /** Skip memory retrieval */
   skipMemories?: boolean
-  /** Maximum memories to retrieve */
-  maxMemories?: number
   /** Minimum importance for memories */
   minMemoryImportance?: number
 
@@ -251,13 +300,6 @@ export interface BuildContextOptions {
   isInitialMessage?: boolean
   /** Resolved IANA timezone name for timestamp formatting */
   timezone?: string
-
-  // ============================================================================
-  // Project Context
-  // ============================================================================
-
-  /** Project context to inject into system prompt (if chat is in a project) */
-  projectContext?: ProjectContext | null
 
   // ============================================================================
   // Connection Profile (for budget-driven compression)
@@ -324,6 +366,7 @@ export function calculateContextBudget(
     totalLimit: allocation.totalLimit,
     systemPromptBudget: allocation.systemPrompt,
     memoryBudget: allocation.memories,
+    knowledgeBudget: allocation.knowledge,
     summaryBudget: allocation.conversationSummary,
     recentMessagesBudget: allocation.recentMessages,
     responseReserve: allocation.responseReserve,
@@ -348,7 +391,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     roleplayTemplate,
     embeddingProfileId,
     skipMemories = false,
-    maxMemories = 18,
     minMemoryImportance = 0.5,
     // Multi-character options (Phase 3)
     respondingParticipant,
@@ -357,8 +399,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     messagesWithParticipants,
     // Tool instructions (native tool rules or text-block tool instructions)
     toolInstructions,
-    // Project context
-    projectContext,
   } = options
 
   const warnings: string[] = []
@@ -386,58 +426,62 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Get the selectedSystemPromptId from the responding participant
   const selectedSystemPromptId = respondingParticipant?.selectedSystemPromptId
 
-  // Load wardrobe context for equipped outfit rendering (if available)
-  let wardrobeContext: WardrobeContext | undefined
-  try {
-    const repos = getRepositories()
-    const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chat.id, character.id)
-    if (equippedSlots) {
-      const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[]
-      if (equippedItemIds.length > 0) {
-        const equippedItemsData = await repos.wardrobe.findByIds(equippedItemIds)
-        const equippedItemsMap = new Map(equippedItemsData.map(item => [item.id, item]))
-
-        const equippedItems: Record<string, { title: string; description?: string | null }> = {}
-        for (const [slot, itemId] of Object.entries(equippedSlots)) {
-          if (itemId) {
-            const item = equippedItemsMap.get(itemId)
-            if (item) {
-              equippedItems[slot] = { title: item.title, description: item.description }
-            }
-          }
+  // EVERY_N_MINUTES gating: find the most recent Host timestamp announcement
+  // in this chat so the gate can compare elapsed minutes to the configured
+  // interval. `null` means "no prior announcement" → shouldInjectTimestamp
+  // will fire. Resolved here, used at both the scene-state gate and the
+  // emission site below.
+  let minutesSinceLastTimestampAnnouncement: number | null = null
+  if (options.timestampConfig?.mode === 'EVERY_N_MINUTES') {
+    try {
+      const repos = getRepositories()
+      const allMessages = await repos.chats.getMessages(chat.id)
+      let mostRecent: number | null = null
+      for (const m of allMessages as Array<{
+        type?: string
+        systemSender?: string | null
+        systemKind?: string | null
+        createdAt?: string
+      }>) {
+        if (m.type !== 'message') continue
+        if (m.systemSender !== 'host') continue
+        if (m.systemKind !== 'timestamp') continue
+        if (!m.createdAt) continue
+        const t = new Date(m.createdAt).getTime()
+        if (Number.isFinite(t) && (mostRecent === null || t > mostRecent)) {
+          mostRecent = t
         }
-
-        const wardrobeItems = await repos.wardrobe.findByCharacterId(character.id)
-        wardrobeContext = {
-          equippedItems,
-          wardrobeItems: wardrobeItems.map(item => ({
-            id: item.id,
-            title: item.title,
-            types: item.types,
-            appropriateness: item.appropriateness,
-          })),
-        }
-
-        logger.debug('[ContextManager] Loaded wardrobe context for system prompt', {
-          characterId: character.id,
-          chatId: chat.id,
-          equippedSlotCount: Object.keys(equippedItems).length,
-          totalWardrobeItems: wardrobeItems.length,
-        })
       }
+      if (mostRecent !== null) {
+        minutesSinceLastTimestampAnnouncement = (Date.now() - mostRecent) / 60_000
+      }
+    } catch (error) {
+      logger.warn('[ContextManager] Failed to resolve last timestamp announcement; allowing emission', {
+        context: 'context-manager',
+        chatId: chat.id,
+        error: getErrorMessage(error),
+      })
     }
-  } catch (error) {
-    logger.warn('[ContextManager] Failed to load wardrobe context', {
-      characterId: character.id,
-      chatId: chat.id,
-      error: getErrorMessage(error),
-    })
   }
 
-  // Build "Characters Mentioned" section: scan the conversation for references
-  // to characters that exist on the system but are not currently in the chat.
+  // Phase D: wardrobe context (current outfit + available items) is now
+  // delivered as Aurora whispers in the transcript, so the per-turn
+  // system-prompt loading of equipped outfits has been removed.
+
+  // Off-scene character introductions: scan the conversation for workspace
+  // characters who are NOT current participants but get name-dropped in
+  // history. The first time each one is named, the Host introduces them with
+  // a public chat message — visible to the user, surfaced to every
+  // character's LLM context via normal history. Subsequent turns recall the
+  // particulars from history without re-injecting cards into the system
+  // prompt every turn (which used to bisect provider prompt caching).
+  //
+  // Idempotent per character: prior Host announcements stamp the introduced
+  // IDs onto `hostEvent.introducedCharacterIds`, so repeated mentions of
+  // already-introduced characters are no-ops.
+  //
   // Failures here must never break prompt assembly — log and skip on error.
-  let mentionedCharactersSection: string | undefined
+  let pendingOffSceneAnnouncement: { content: string } | null = null
   try {
     const repos = getRepositories()
     const allUserCharacters = await repos.characters.findByUserId(userId)
@@ -469,75 +513,104 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
 
     if (candidates.length > 0) {
-      // Build the scan corpus: conversation summary plus every visible
-      // USER/ASSISTANT message in the chat history. Scanning the full
-      // history (rather than the post-compression window) lets us surface
-      // characters mentioned earlier in long conversations.
-      const visibleForScan = extractVisibleConversation(existingMessages)
+      // Build the scan corpus from things characters and the user actually
+      // *said* — not from synthetic messages (Host/Lantern/Aurora/Librarian/
+      // Concierge/Commonplace Book whispers and announcements) and not from
+      // the conversation summary. Otherwise the Host introduces workspace
+      // characters whose names only ever appeared in a memory whisper or a
+      // summary, which the participants haven't actually talked about.
+      //
+      // `existingMessages` is the trimmed role/content view used for LLM
+      // context and has already been stripped of systemSender/hostEvent, so
+      // load the full chat history from the repo to read those fields — both
+      // for filtering the scan corpus and for the introducedIds diff below.
+      const fullChatMessages = await repos.chats.getMessages(chat.id)
       const corpusParts: string[] = []
-      if (chat.contextSummary) corpusParts.push(chat.contextSummary)
-      for (const msg of visibleForScan) {
-        if (msg.content) corpusParts.push(msg.content)
+      for (const m of fullChatMessages as Array<{
+        type?: string
+        role?: string
+        content?: string
+        systemSender?: string | null
+      }>) {
+        if (m.type !== undefined && m.type !== 'message') continue
+        if (!m.content) continue
+        // Skip synthetic system whispers/announcements (the Host, Commonplace
+        // Book recall, Lantern story-background notes, etc.).
+        if (m.systemSender) continue
+        const role = (m.role || '').toUpperCase()
+        if (role !== 'USER' && role !== 'ASSISTANT') continue
+        if (role === 'ASSISTANT') {
+          const cleaned = stripToolArtifacts(m.content)
+          if (!cleaned) continue
+          corpusParts.push(cleaned)
+        } else {
+          corpusParts.push(m.content)
+        }
       }
       const scanCorpus = corpusParts.join('\n')
 
       const matchedIds = findMentionedCharacterIds(scanCorpus, candidates)
       if (matchedIds.size > 0) {
-        const matched = candidates.filter(c => matchedIds.has(c.id))
-        const formatted = formatMentionedCharactersSection(matched)
-        if (formatted.section.length > 0) {
-          mentionedCharactersSection = formatted.section
-          logger.debug('[ContextManager] Mentioned characters section built', {
+        // Diff against characters already introduced by prior Host
+        // announcements in this chat — only newly-mentioned ones get a fresh
+        // intro.
+        const introducedIds = findIntroducedOffSceneCharacterIds(fullChatMessages)
+        const newcomerIds = new Set<string>()
+        for (const id of matchedIds) {
+          if (!introducedIds.has(id)) newcomerIds.add(id)
+        }
+
+        if (newcomerIds.size > 0) {
+          const newcomers = candidates.filter(c => newcomerIds.has(c.id))
+          const announcement = await postHostOffSceneCharactersAnnouncement({
             chatId: chat.id,
-            candidateCount: candidates.length,
-            matchedCount: matched.length,
-            includedCount: formatted.includedCount,
-            matchedNames: matched.map(c => c.name),
-            sectionTokens: estimateTokens(formatted.section, provider),
+            characters: newcomers.map(c => ({
+              id: c.id,
+              name: c.name,
+              aliases: c.aliases ?? undefined,
+              pronouns: c.pronouns ?? undefined,
+              description: c.description ?? undefined,
+            })),
           })
+          if (announcement) {
+            // Surface the announcement to THIS turn's LLM context so the
+            // responding character sees the intro without a one-turn lag.
+            // (It's already persisted to the chat for future turns.)
+            pendingOffSceneAnnouncement = { content: announcement.content }
+          }
+        } else {
         }
       } else {
-        logger.debug('[ContextManager] No mentioned characters found', {
-          chatId: chat.id,
-          candidateCount: candidates.length,
-        })
       }
     }
   } catch (error) {
-    logger.warn('[ContextManager] Failed to build mentioned-characters section', {
+    logger.warn('[ContextManager] Failed to compute off-scene character introductions', {
       chatId: chat.id,
       error: getErrorMessage(error),
     })
   }
 
   const tSystemPromptStart = performance.now()
-  const systemPrompt = buildSystemPrompt(
+  // Phase H: prefer the precompiled identity stack from
+  // chats.compiledIdentityStacks when present. Falls back to a fresh build
+  // inside `buildSystemPrompt` when missing or empty (legacy chats / cache
+  // miss after a character edit).
+  const precompiledIdentityStack = respondingParticipant
+    ? getCompiledIdentityStack(chat, respondingParticipant.id)
+    : null
+  const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,
-    otherParticipantsInfo,
     roleplayTemplate,
     toolInstructions,
     selectedSystemPromptId,
-    options.timestampConfig,
-    options.isInitialMessage,
-    projectContext,
-    options.timezone,
-    options.statusChangeNotifications,
-    respondingParticipant?.status as 'active' | 'silent' | 'absent' | 'removed' | undefined,
-    options.chat.scenarioText ?? undefined,
-    wardrobeContext,
-    options.outfitChangeNotifications
-    // mentionedCharactersSection is appended AFTER truncation below so it
-    // always survives; the in-prompt position would otherwise be lopped off
-    // whenever the core system prompt exceeds its token budget.
-  )
-  const systemPromptTokens = estimateTokens(systemPrompt, provider)
-  logger.debug('[ContextManager] buildSystemPrompt complete', {
-    chatId: chat.id,
-    durationMs: Math.round(performance.now() - tSystemPromptStart),
-    systemPromptChars: systemPrompt.length,
-    systemPromptTokens,
+    timestampConfig: options.timestampConfig,
+    isInitialMessage: options.isInitialMessage,
+    timezone: options.timezone,
+    scenarioText: options.chat.scenarioText ?? undefined,
+    precompiledIdentityStack,
   })
+  const systemPromptTokens = estimateTokens(systemPrompt, provider)
 
   // Log multi-character context info for debugging identity confusion
   if (isMultiCharacter && respondingParticipant) {
@@ -556,12 +629,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     finalSystemPrompt = truncateToTokenLimit(systemPrompt, budget.systemPromptBudget, provider)
   }
 
-  // Append "Characters Mentioned" after any truncation so it always survives,
-  // even when the core system prompt is over budget. The section's own length
-  // is bounded by formatMentionedCharactersSection's internal hard cap.
-  if (mentionedCharactersSection) {
-    finalSystemPrompt = `${finalSystemPrompt}\n\n${mentionedCharactersSection}`
-  }
+  // Off-scene character cards are no longer spliced into the system prompt
+  // (they used to live here and broke prompt-cache prefixes whenever a new
+  // workspace character got name-dropped). They now ride as Host
+  // introductions in chat history; the per-turn announcement (when there's a
+  // newcomer) is appended to `pendingOffSceneAnnouncement` above and pushed
+  // into this turn's contextMessages alongside the timestamp whisper.
 
   const finalSystemPromptTokens = estimateTokens(finalSystemPrompt, provider)
 
@@ -584,12 +657,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     visibleConversation.map(m => ({ role: m.role, content: m.content })),
     provider
   )
-  logger.debug('[ContextManager] Conversation token count complete', {
-    chatId: chat.id,
-    durationMs: Math.round(performance.now() - tTokenCountStart),
-    visibleMessageCount: visibleConversation.length,
-    conversationTokens,
-  })
 
   // Total estimated prompt = system prompt + conversation + a rough memory estimate
   // (Memories haven't been retrieved yet, but we use the budget allocation as an estimate)
@@ -727,17 +794,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
 
-  // If using compressed context, replace system prompt and filter messages
-  let effectiveSystemPrompt = finalSystemPrompt
+  // If using compressed context, emit the rolling summary as its own system
+  // block (block 3) and filter messages down to the recent window. The persona
+  // prompt itself stays byte-identical across turns so block 1 keeps caching;
+  // the summary churns in its own block where churn is expected.
+  let compressedHistoryBlock: string | null = null
   let effectiveMessages = existingMessages
 
   if (useCompressedContext && compressionResult) {
-    // Build the compressed system message (includes compressed history)
-    effectiveSystemPrompt = buildCompressedSystemMessage(
-      compressionResult.compressedHistory,
-      undefined,  // System prompt compression disabled — always use fresh per-character prompt
-      finalSystemPrompt
-    )
+    compressedHistoryBlock = buildCompressedHistoryBlock(compressionResult.compressedHistory)
 
     // Only keep window messages (the ones that weren't compressed)
     // Extract visible messages first since we need the count for dynamic window sizing
@@ -791,10 +856,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
   }
 
-  // Update system prompt token count for compressed version
-  const effectiveSystemPromptTokens = useCompressedContext
-    ? estimateTokens(effectiveSystemPrompt, provider)
-    : finalSystemPromptTokens
+  // System-prompt token count = persona prompt (always) + compressed-history
+  // block (only when compression fired). The two are emitted as separate
+  // system messages so their cache lifetimes are decoupled.
+  const compressedHistoryBlockTokens = compressedHistoryBlock
+    ? estimateTokens(compressedHistoryBlock, provider)
+    : 0
+  const effectiveSystemPromptTokens = finalSystemPromptTokens + compressedHistoryBlockTokens
 
   // 1b. Generate memory recap on chat start or character join
   let memoryRecapContent = ''
@@ -846,63 +914,160 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     (existingMessages.length > 0 ? existingMessages[existingMessages.length - 1].content : '')
 
   const tMemoryStart = performance.now()
-  let memoryPath: 'skipped' | 'pre-searched' | 'semantic-search' = 'skipped'
+  let memoryPath: 'skipped' | 'pre-searched' | 'two-pool' = 'skipped'
+  let frozenArchiveCount = 0
+  let dynamicHeadCount = 0
   if (!skipMemories && character.id) {
-    if (options.preSearchedMemories && options.preSearchedMemories.length > 0) {
-      // Use proactively recalled memories (skips internal search)
-      memoryPath = 'pre-searched'
-      try {
-        const formatted = formatMemoriesForContext(
-          options.preSearchedMemories,
-          budget.memoryBudget,
-          provider
+    try {
+      // Phase 3a/3b: two-pool architecture.
+      //
+      // The frozen archive (top-N by effective weight at the current
+      // compaction generation) is sorted by memory.id so its bytes are
+      // identical across turns within a generation — the prefix-cache prize.
+      // The dynamic head is the per-turn relevance ranking, capped at a
+      // small token budget; entries already in the archive are filtered out
+      // so the LLM doesn't see the same memory twice.
+      const compactionGen = chat.compactionGeneration ?? 0
+      const dynamicHeadBudget = Math.min(DYNAMIC_HEAD_TOKEN_BUDGET, budget.memoryBudget)
+      const archiveBudget = Math.max(0, budget.memoryBudget - dynamicHeadBudget)
+
+      const frozenArchive = await getOrComputeFrozenArchive(character.id, compactionGen)
+      const archiveFormatted = formatFrozenMemoryArchive(frozenArchive, archiveBudget, provider)
+      frozenArchiveCount = archiveFormatted.memoriesUsed
+
+      const archiveIds = new Set(frozenArchive.map(m => m.id))
+      let dynamicHeadResults: SemanticSearchResult[] = []
+
+      if (options.preSearchedMemories && options.preSearchedMemories.length > 0) {
+        memoryPath = 'pre-searched'
+        dynamicHeadResults = options.preSearchedMemories.filter(
+          r => !archiveIds.has(r.memory.id),
         )
-
-        memoryContent = formatted.content
-        memoryTokens = formatted.tokenCount
-        memoriesIncluded = formatted.memoriesUsed
-        debugMemories = formatted.debugMemories
-
-      } catch (error) {
-        warnings.push(`Failed to format pre-searched memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      }
-    } else if (memorySearchQuery) {
-      // Default: search using user message (or last message in continue mode)
-      memoryPath = 'semantic-search'
-      try {
+      } else if (memorySearchQuery) {
+        memoryPath = 'two-pool'
         const memoryResults = await searchMemoriesSemantic(
           character.id,
           memorySearchQuery,
           {
             userId,
             embeddingProfileId,
-            limit: maxMemories * 2, // Get more to filter
+            // Pull a few more than the head size so the archive-overlap filter
+            // still leaves enough candidates to fill the head.
+            limit: DYNAMIC_HEAD_DEFAULT_SIZE * 3,
             minImportance: minMemoryImportance,
-          }
+          },
         )
-
-        const formatted = formatMemoriesForContext(
-          memoryResults.slice(0, maxMemories),
-          budget.memoryBudget,
-          provider
-        )
-
-        memoryContent = formatted.content
-        memoryTokens = formatted.tokenCount
-        memoriesIncluded = formatted.memoriesUsed
-        debugMemories = formatted.debugMemories
-      } catch (error) {
-        warnings.push(`Failed to retrieve memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        dynamicHeadResults = memoryResults.filter(r => !archiveIds.has(r.memory.id))
       }
+
+      const headFormatted = formatDynamicMemoryHead(dynamicHeadResults, provider, {
+        maxTokens: dynamicHeadBudget,
+        maxEntries: DYNAMIC_HEAD_DEFAULT_SIZE,
+      })
+      dynamicHeadCount = headFormatted.memoriesUsed
+
+      const sections: string[] = []
+      if (archiveFormatted.content) sections.push(archiveFormatted.content)
+      if (headFormatted.content) sections.push(headFormatted.content)
+      memoryContent = sections.join('\n\n')
+      memoryTokens = archiveFormatted.tokenCount + headFormatted.tokenCount
+      memoriesIncluded = archiveFormatted.memoriesUsed + headFormatted.memoriesUsed
+      debugMemories = [...archiveFormatted.debugMemories, ...headFormatted.debugMemories]
+    } catch (error) {
+      warnings.push(`Failed to retrieve memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
-  logger.debug('[ContextManager] Memory retrieval + format complete', {
-    chatId: chat.id,
-    characterId: character.id,
-    durationMs: Math.round(performance.now() - tMemoryStart),
-    path: memoryPath,
-    memoriesIncluded,
-  })
+
+  // 2a-bis. Render the latest scene-state snapshot as the `## Current State`
+  // section that prefaces the Commonplace Book whisper. Time is included only
+  // when the chat would also announce it via the Host (matches the gate at
+  // postHostTimestampAnnouncement below).
+  //
+  // The Commonplace Book scene-state cache keys per recipient: a participant
+  // ID in multi-character chats, the sentinel `__public__` for single-char
+  // chats (which post untargeted whispers). When the same target sees the
+  // same character with the same action+clothing two turns in a row, the
+  // character's block collapses to `### Name — _unchanged_` to keep the
+  // whisper from re-establishing several hundred tokens of unchanged
+  // wardrobe prose every turn.
+  const cacheTargetKey: string =
+    isMultiCharacter && respondingParticipant
+      ? respondingParticipant.id
+      : '__public__'
+  const priorCache = chat.commonplaceSceneCache as
+    | Record<string, Record<string, SceneStateEmissionEntry>>
+    | null
+    | undefined
+  const priorEmissionByCharacter = new Map<string, SceneStateEmissionEntry>(
+    Object.entries(priorCache?.[cacheTargetKey] ?? {}),
+  )
+  let currentStateContent = ''
+  let currentStateTokens = 0
+  let emittedSceneStateByCharacter: Map<string, SceneStateEmissionEntry> | null = null
+  try {
+    const rawScene = (chat as { sceneState?: unknown }).sceneState
+    let parsedScene: SceneState | null = null
+    if (rawScene) {
+      const candidate = typeof rawScene === 'string'
+        ? (() => { try { return JSON.parse(rawScene) } catch { return null } })()
+        : rawScene
+      if (candidate) {
+        const result = SceneStateSchema.safeParse(candidate)
+        if (result.success) parsedScene = result.data
+      }
+    }
+    let sceneTime: string | null = null
+    if (
+      options.timestampConfig?.autoPrepend &&
+      shouldInjectTimestamp(options.timestampConfig, options.isInitialMessage ?? false, minutesSinceLastTimestampAnnouncement)
+    ) {
+      sceneTime = calculateCurrentTimestamp(options.timestampConfig, options.timezone).formatted
+    }
+
+    // Scene-state tracking only re-runs at turn boundaries, so its cached
+    // clothing field can lag mid-turn wardrobe edits and `wardrobe_*` tool
+    // calls. The wardrobe slots are the source of truth — read them live so
+    // the responding character's prompt always reflects what each present
+    // character is actually wearing right now.
+    const liveClothingByCharacterId = new Map<string, string>()
+    if (parsedScene && parsedScene.characters.length > 0) {
+      const repos = getRepositories()
+      await Promise.all(parsedScene.characters.map(async (c) => {
+        if (!c.characterId) return
+        try {
+          const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chat.id, c.characterId)
+          if (!equippedSlots) return
+          const resolved = await resolveEquippedOutfitForCharacter(repos, c.characterId, equippedSlots)
+          const description = describeOutfit({
+            top: decorateOutfitItems(resolved.leafItemsBySlot.top),
+            bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom),
+            footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear),
+            accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories),
+          })
+          if (description) liveClothingByCharacterId.set(c.characterId, description)
+        } catch (error) {
+          logger.warn('Failed to read live wardrobe for scene-state clothing override', {
+            chatId: chat.id,
+            characterId: c.characterId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }))
+    }
+
+    const formatted = formatCurrentSceneState(
+      parsedScene,
+      sceneTime,
+      provider,
+      liveClothingByCharacterId,
+      priorEmissionByCharacter,
+    )
+    currentStateContent = formatted.content
+    currentStateTokens = formatted.tokenCount
+    emittedSceneStateByCharacter = formatted.emittedByCharacter
+  } catch (error) {
+    warnings.push(`Failed to format current scene state: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
 
   // 2b. Retrieve inter-character memories in multi-character chats
   let interCharacterMemoryContent = ''
@@ -930,18 +1095,22 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         }
       }
 
-      if (otherCharacterIds.length > 0) {
-        // Fetch memories this character has about other characters
+      // Half the remaining memory budget is reserved for inter-character
+      // whispers. Current State (rendered above the memory sections) is
+      // accounted for here so it doesn't crowd out inter-character lines.
+      const interCharacterBudget = Math.floor(
+        (budget.memoryBudget - memoryTokens - currentStateTokens) / 2,
+      )
+
+      if (otherCharacterIds.length > 0 && interCharacterBudget > 0) {
         const interCharacterMemories = await repos.memories.findByCharacterAboutCharacters(
           character.id,
-          otherCharacterIds
+          otherCharacterIds,
+          INTER_CHAR_PER_CHARACTER_LIMIT,
         )
         interCharacterLoadedCount = interCharacterMemories.length
 
-        // Use half the remaining memory budget for inter-character memories
-        const interCharacterBudget = Math.floor((budget.memoryBudget - memoryTokens) / 2)
-
-        if (interCharacterMemories.length > 0 && interCharacterBudget > 0) {
+        if (interCharacterMemories.length > 0) {
           const formatted = formatInterCharacterMemoriesForContext(
             interCharacterMemories,
             otherCharacterNames,
@@ -961,13 +1130,64 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
   if (isMultiCharacter) {
-    logger.debug('[ContextManager] Inter-character memory retrieval complete', {
-      chatId: chat.id,
-      characterId: character.id,
-      durationMs: Math.round(performance.now() - tInterStart),
-      loadedCount: interCharacterLoadedCount,
-      includedCount: interCharacterMemoriesIncluded,
-    })
+  }
+
+  // 2c. Retrieve relevant knowledge from all three tiers available to the
+  // responding character: their own vault, every document store linked to
+  // the active project, and the instance-wide Quilltap General mount.
+  // Independent of memory retrieval and intentionally NOT fed to the
+  // Phase-2 memory compressor below — knowledge files are first-class
+  // canon and shouldn't be lossy-summarised. Each tier silently no-ops
+  // when its mount(s) aren't available.
+  let knowledgeContent = ''
+  let knowledgeTokens = 0
+  let debugKnowledge: KnowledgeDebugEntry[] = []
+
+  if (
+    !skipMemories &&
+    character.id &&
+    memorySearchQuery &&
+    budget.knowledgeBudget > 0
+  ) {
+    try {
+      const repos = getRepositories()
+
+      const projectId = options.chat.projectId ?? null
+      const projectMountPointIds = projectId
+        ? (await repos.projectDocMountLinks.findByProjectId(projectId)).map(l => l.mountPointId)
+        : []
+
+      let globalMountPointId: string | null = null
+      try {
+        const { getGeneralMountPointId } = await import('@/lib/instance-settings')
+        globalMountPointId = await getGeneralMountPointId()
+      } catch {
+        /* general mount not provisioned yet — skip global knowledge tier */
+      }
+
+      const characterMountPointId = character.characterDocumentMountPointId ?? null
+
+      if (characterMountPointId || projectMountPointIds.length > 0 || globalMountPointId) {
+        const result = await retrieveKnowledgeForTurn({
+          characterId: character.id,
+          userId,
+          embeddingProfileId,
+          query: memorySearchQuery,
+          characterMountPointId,
+          projectMountPointIds,
+          globalMountPointId,
+          budgetTokens: budget.knowledgeBudget,
+          provider,
+        })
+        knowledgeContent = result.content
+        knowledgeTokens = result.tokenCount
+        debugKnowledge = result.debug
+      }
+    } catch (error) {
+      warnings.push(
+        `Failed to retrieve knowledge: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      )
+    }
   }
 
   // ============================================================================
@@ -1071,19 +1291,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
 
-  // 3. Include conversation summary if available
-  let summaryContent = ''
-  let summaryTokens = 0
-
-  if (chat.contextSummary) {
-    const formatted = formatSummaryForContext(
-      chat.contextSummary,
-      budget.summaryBudget,
-      provider
-    )
-    summaryContent = formatted.content
-    summaryTokens = formatted.tokenCount
-  }
+  // 3. Conversation summary now rides as a Librarian whisper in the
+  // transcript (Phase F), so it no longer occupies its own system-prompt
+  // section. The chat-level `contextSummary` field is still maintained for
+  // other consumers (title generation, danger classification, etc.).
+  const summaryTokens = 0
 
   // 4. Calculate remaining budget for messages
   // Use effective (possibly compressed) system prompt tokens
@@ -1102,14 +1314,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // 5a-bis. Filter whisper messages not visible to this participant
     const whisperFiltered = filterWhisperMessages(filteredMessages, respondingParticipant.id)
 
-    // 5b. Prepend join scenario if participant has one and doesn't have history access
-    let joinScenarioContent = ''
-    if (!respondingParticipant.hasHistoryAccess && respondingParticipant.joinScenario) {
-      joinScenarioContent = respondingParticipant.joinScenario
-
-    }
-
-    // 5c. Attribute messages for the responding character's perspective
+    // 5b. Attribute messages for the responding character's perspective
+    // (Phase C: join-scenario context for participants without history access
+    // is now delivered as a Host whisper at the moment they join, not as a
+    // per-turn system-prompt insertion.)
     const attributedMessages = attributeMessagesForCharacter(
       whisperFiltered,
       respondingParticipant.id,
@@ -1121,16 +1329,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     messagesToProcess = attributedMessages.map(msg => ({
       role: msg.role,
       content: msg.content,
+      id: msg.id,
       name: msg.name,
       participantId: msg.participantId,
       thoughtSignature: msg.thoughtSignature,
     }))
-
-    // Prepend join scenario to effective system prompt if present
-    if (joinScenarioContent) {
-      // Add join scenario to effective system prompt instead of as a separate message
-      effectiveSystemPrompt += `\n\n## How You Entered This Conversation\n${joinScenarioContent}`
-    }
   } else {
     // Single-character mode: use effective messages (possibly filtered by compression)
     messagesToProcess = effectiveMessages.map(msg => ({
@@ -1139,6 +1342,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       id: msg.id,
       thoughtSignature: msg.thoughtSignature,
     }))
+  }
+
+  // Drop messages already absorbed into the running summary. The Librarian
+  // summary whisper survives: it is posted after the fold and its id is not
+  // in the anchor set, so the surviving tail begins with the most recent
+  // summary whisper followed by post-fold turns. Empty anchor set (fresh
+  // chat or post-invalidation) leaves messagesToProcess unchanged.
+  const summaryAnchorIds = chat.summaryAnchorMessageIds ?? []
+  if (summaryAnchorIds.length > 0) {
+    const anchorSet = new Set(summaryAnchorIds)
+    const before = messagesToProcess.length
+    messagesToProcess = messagesToProcess.filter(m => !m.id || !anchorSet.has(m.id))
   }
 
   // 6. Select recent messages to fit budget
@@ -1165,53 +1380,185 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // 8. Assemble final context
   const contextMessages: ContextMessage[] = []
 
-  // System prompt with injected memories and summary
-  // Use effective system prompt (possibly compressed)
-  let fullSystemContent = effectiveSystemPrompt
-
-  // Memory recap: narrative summary of what the character remembers (chat start only)
-  // Placed after character notes but before per-message memories and identity lockdown
-  if (memoryRecapContent) {
-    fullSystemContent += '\n\n' + memoryRecapContent
-  }
-
-  if (memoryContent) {
-    fullSystemContent += '\n\n' + memoryContent
-  }
-
-  if (interCharacterMemoryContent) {
-    fullSystemContent += '\n\n' + interCharacterMemoryContent
-  }
-
-  if (summaryContent) {
-    fullSystemContent += '\n\n' + summaryContent
-  }
-
-  // Identity reinforcement: append as the very last content in system prompt
-  // so it's the closest instruction to where the LLM begins generating
-  const otherParticipantNames = otherParticipantsInfo?.map(p => p.name)
-  const identityReminder = buildIdentityReinforcement(
-    character.name,
-    userCharacter?.name || 'User',
-    isMultiCharacter ? otherParticipantNames : undefined,
-  )
-  fullSystemContent += '\n\n' + identityReminder
-
+  // System block 1 — stable identity stack: character + roleplay template +
+  // tool prose. Memories ride as Commonplace Book whispers and conversation
+  // summary as a Librarian whisper, so they are NOT here. Across turns of the
+  // same character this content is byte-identical (modulo edits to the
+  // character) and forms the cacheable prefix for provider prompt caching
+  // (Anthropic ephemeral cache, OpenAI automatic prefix cache, etc.).
   contextMessages.push({
     role: 'system',
-    content: fullSystemContent,
+    content: finalSystemPrompt,
     metadata: { isInjected: true },
   })
 
-  // Add selected conversation messages
-  // In multi-character mode, preserve name attribution
+  // System block 2 — fully static identity reinforcement. Emitted as a
+  // separate system message so block 1 can be marked with a cache breakpoint
+  // without the reinforcement's content changes invalidating it. (The
+  // reinforcement no longer names individual participants — that list used
+  // to live here and bisected the cacheable region; participant attribution
+  // now comes from Host roster announcements + per-message `name` fields.)
+  const identityReminder = buildIdentityReinforcement(character.name)
+  contextMessages.push({
+    role: 'system',
+    content: identityReminder,
+    metadata: { isInjected: true },
+  })
+
+  // System block 3 — compressed-history rolling summary, only when budget
+  // compression fired. Lives in its own block so its churn (refreshed every
+  // few turns by the async compressor) does not invalidate the persona
+  // prefix that blocks 1 and 2 form.
+  if (compressedHistoryBlock) {
+    contextMessages.push({
+      role: 'system',
+      content: compressedHistoryBlock,
+      metadata: { isInjected: true },
+    })
+  }
+
+  // Add selected conversation messages.
+  // The first surviving Librarian summary whisper (after the running-summary
+  // fold drops earlier turns) gets a cache breakpoint so the system+tools
+  // prefix stays hot across fold events.
+  let summaryBreakpointPlaced = false
   for (const msg of selectedMessages) {
+    const isSummaryHead = !summaryBreakpointPlaced &&
+      typeof msg.content === 'string' &&
+      msg.content.startsWith(SUMMARY_CONTENT_PREFIX)
     contextMessages.push({
       role: msg.role.toLowerCase() as 'user' | 'assistant',
       content: msg.content,
       thoughtSignature: msg.thoughtSignature,
       name: msg.name,
+      cacheControl: isSummaryHead ? { type: 'ephemeral' } : undefined,
     })
+    if (isSummaryHead) summaryBreakpointPlaced = true
+  }
+
+  // Off-scene character introduction: when a workspace character is
+  // name-dropped for the first time in this chat, the Host posts a public
+  // introduction. The announcement is persisted to chat history (above) and
+  // surfaced to THIS turn's LLM context here so the responding character
+  // sees the intro without a one-turn lag.
+  if (pendingOffSceneAnnouncement) {
+    contextMessages.push({
+      role: 'assistant',
+      content: pendingOffSceneAnnouncement.content,
+    })
+  }
+
+  // Phase G: timestamp whisper. When `timestampConfig.autoPrepend` is set and
+  // the mode says to inject this turn (`START_ONLY` + isInitialMessage, or
+  // `EVERY_MESSAGE`), the Host narrates the current time. The whisper is
+  // persisted into the transcript (visible to the user with the Host avatar)
+  // and added to this turn's `contextMessages` so the LLM sees it without a
+  // one-turn lag. The `{{timestamp}}` template variable path is unaffected.
+  if (
+    options.timestampConfig?.autoPrepend &&
+    shouldInjectTimestamp(options.timestampConfig, options.isInitialMessage ?? false, minutesSinceLastTimestampAnnouncement)
+  ) {
+    const timestamp = calculateCurrentTimestamp(options.timestampConfig, options.timezone)
+    await postHostTimestampAnnouncement({
+      chatId: chat.id,
+      formatted: timestamp.formatted,
+    })
+    contextMessages.push({
+      role: 'assistant',
+      content: buildTimestampContent(timestamp.formatted),
+    })
+  }
+
+  // Memory tail: persist a single consolidated Commonplace Book whisper to the
+  // transcript (visible in the salon UI with the Commonplace Book avatar) AND
+  // inline plain "you remember…" framing into the new user message body for
+  // this turn's LLM call. The Staff persona stays in the transcript; the LLM
+  // receives clean second-person recall, not meta-narrative.
+  const cmpbParts = {
+    currentState: currentStateContent || undefined,
+    recap: memoryRecapContent || undefined,
+    relevant: memoryContent || undefined,
+    interChar: interCharacterMemoryContent || undefined,
+    knowledge: knowledgeContent || undefined,
+  }
+  const personaWhisper = buildCommonplacePersonaWhisper(cmpbParts)
+  const llmRecallText = buildCommonplaceLLMContext(cmpbParts)
+
+  if (personaWhisper) {
+    // Persist the persona-voiced whisper. Targeted to the responding character
+    // in multi-character chats; untargeted in single-character (only one
+    // character anyway, so no privacy concern).
+    const targetParticipantId = isMultiCharacter ? respondingParticipant?.id ?? null : null
+    const posted = await postCommonplaceWhisper({
+      chatId: chat.id,
+      targetParticipantId,
+      content: personaWhisper,
+      kind: 'consolidated',
+    })
+
+    // The Commonplace Book whisper is a snapshot reminder, not a permanent
+    // record — once a fresher one lands for this character, every prior
+    // commonplaceBook whisper targeted at the same scope is stale. Sweep
+    // them after the new one is durably posted (so a write failure on the
+    // new one cannot orphan the character with no whisper at all).
+    if (posted) {
+      // Persist the per-target scene-state emission cache so the NEXT
+      // whisper for the same recipient can short-circuit unchanged
+      // character sections. Fire-and-forget — a cache-write failure is
+      // benign (next turn will re-emit full and reset the cache anyway).
+      if (emittedSceneStateByCharacter && emittedSceneStateByCharacter.size > 0) {
+        try {
+          const slice: Record<string, SceneStateEmissionEntry> = {}
+          for (const [characterId, entry] of emittedSceneStateByCharacter) {
+            slice[characterId] = entry
+          }
+          const nextCache: Record<string, Record<string, SceneStateEmissionEntry>> = {
+            ...(priorCache ?? {}),
+            [cacheTargetKey]: slice,
+          }
+          await getRepositories().chats.update(chat.id, {
+            commonplaceSceneCache: nextCache,
+          } as Partial<typeof chat>)
+        } catch (cacheError) {
+          logger.warn('[CommonplaceWhisper] Failed to persist scene-state cache', {
+            chatId: chat.id,
+            targetKey: cacheTargetKey,
+            error: getErrorMessage(cacheError),
+          })
+        }
+      }
+
+      try {
+        const refreshed = await getRepositories().chats.getMessages(chat.id)
+        const stale = refreshed
+          .filter((m): m is MessageEvent => m.type === 'message')
+          .filter(m => m.systemSender === 'commonplaceBook' && m.id !== posted.id)
+          .filter(m => {
+            const ids = m.targetParticipantIds
+            if (targetParticipantId === null) {
+              return ids === null || ids === undefined
+            }
+            return Array.isArray(ids) && ids.includes(targetParticipantId)
+          })
+          .map(m => m.id)
+
+        if (stale.length > 0) {
+          const removed = await getRepositories().chats.deleteMessagesByIds(chat.id, stale)
+          logger.info('[CommonplaceWhisper] Swept stale whispers', {
+            chatId: chat.id,
+            messageId: posted.id,
+            targetParticipantId,
+            deletedCount: removed,
+          })
+        }
+      } catch (sweepError) {
+        logger.error('[CommonplaceWhisper] Failed to sweep stale whispers', {
+          chatId: chat.id,
+          targetParticipantId,
+          error: getErrorMessage(sweepError),
+        }, sweepError as Error)
+      }
+    }
   }
 
   // Add new user message (only if provided - not in continue mode)
@@ -1222,9 +1569,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       newUserMsgName = findUserParticipantName(allParticipants, participantCharacters)
     }
 
+    const composedUserContent = llmRecallText
+      ? `${newUserMessage}\n\n---\n\n${llmRecallText}`
+      : newUserMessage
+
     contextMessages.push({
       role: 'user',
-      content: newUserMessage,
+      content: composedUserContent,
       name: newUserMsgName,
     })
   }
@@ -1232,7 +1583,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Calculate final token usage
   // Use effective system prompt tokens (possibly compressed)
   const totalMemoryTokens = memoryRecapTokens + memoryTokens + interCharacterMemoryTokens
-  const totalUsed = effectiveSystemPromptTokens + totalMemoryTokens + summaryTokens + messagesTokens + newUserMessageTokens
+  const totalUsed = effectiveSystemPromptTokens + totalMemoryTokens + knowledgeTokens + summaryTokens + messagesTokens + newUserMessageTokens
   const totalMemoriesIncluded = memoriesIncluded + interCharacterMemoriesIncluded
 
   return {
@@ -1240,6 +1591,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     tokenUsage: {
       systemPrompt: effectiveSystemPromptTokens,
       memories: totalMemoryTokens,
+      knowledge: knowledgeTokens,
       summary: summaryTokens,
       recentMessages: messagesTokens + newUserMessageTokens,
       total: totalUsed,
@@ -1253,9 +1605,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // Debug info for the debug panel
     debugMemories,
     debugInterCharacterMemories: debugInterCharacterMemories.length > 0 ? debugInterCharacterMemories : undefined,
+    debugKnowledge: debugKnowledge.length > 0 ? debugKnowledge : undefined,
     debugMemoryRecap: memoryRecapContent || undefined,
     debugSummary: chat.contextSummary || undefined,
-    debugSystemPrompt: effectiveSystemPrompt,
+    debugSystemPrompt: compressedHistoryBlock
+      ? `${finalSystemPrompt}\n\n${compressedHistoryBlock}`
+      : finalSystemPrompt,
     // Original uncompressed system prompt (for async pre-compression)
     originalSystemPrompt: finalSystemPrompt,
     // Compression info

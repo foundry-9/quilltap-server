@@ -53,6 +53,12 @@ You'll be asked:
   - Example: "Maya walks through the tavern door, shaking rain from her cloak"
   - This appears as a system message in the chat
 
+- **Starting Outfit** — How the new arrival is dressed when they step into the room. The same four choices the new-chat ceremony offers:
+  - **Use defaults** — They arrive in whatever the wardrobe marks as default (the standing presumption)
+  - **Compose outfit** — Pick the starting outfit slot by slot, the way one might lay clothes out on the bed before a party
+  - **Let character choose** — A cheap LLM peeks at the scenario and chooses something fitting (not offered to characters you're impersonating)
+  - **Start undressed** — Every slot empty, for entrances best left to imagination
+
 ## How Multi-Character Chats Work
 
 ### The Turn System

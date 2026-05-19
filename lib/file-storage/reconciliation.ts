@@ -24,6 +24,8 @@ import { scanDirectory, computeSha256, detectMimeType } from './scanner';
 
 const logger = createLogger('file-storage:reconciliation');
 
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+
 // ============================================================================
 // RECONCILIATION
 // ============================================================================
@@ -37,6 +39,9 @@ const logger = createLogger('file-storage:reconciliation');
 export async function reconcileFilesystem(): Promise<void> {
   const startTime = Date.now();
   const filesDir = getFilesDir();
+
+  const { startupProgress } = await import('@/lib/startup/progress');
+  startupProgress.setCurrent('subsystem:reconcile:start');
 
   logger.info('Starting filesystem reconciliation', { filesDir });
 
@@ -100,12 +105,6 @@ export async function reconcileFilesystem(): Promise<void> {
 
             if (folderPathMismatch) {
               updates.folderPath = expectedFolderPath;
-              logger.debug('Correcting folderPath mismatch during reconciliation', {
-                fileId: dbRecord.id,
-                storageKey: scannedFile.relativePath,
-                oldFolderPath: dbRecord.folderPath || '(empty)',
-                newFolderPath: expectedFolderPath,
-              });
             }
 
             await repos.files.update(dbRecord.id, updates);
@@ -148,10 +147,13 @@ export async function reconcileFilesystem(): Promise<void> {
         const sha256 = await computeSha256(absolutePath);
         const mimeType = detectMimeType(scannedFile.name);
 
-        // Parse projectId and folderPath from path
+        // Parse projectId and folderPath from path. Only treat the first
+        // segment as a projectId if it's a valid UUID — migration archive
+        // siblings (e.g. `<uuid>_doc_store_archive/`) and other non-UUID
+        // top-level dirs collapse to projectId=null.
         const parts = scannedFile.relativePath.split('/');
         const projectOrGeneral = parts[0];
-        const projectId = projectOrGeneral === '_general' ? null : projectOrGeneral;
+        const projectId = UUID_REGEX.test(projectOrGeneral) ? projectOrGeneral : null;
         const folderPath = deriveFolderPathFromStorageKey(scannedFile.relativePath);
 
         // Check for SHA-256 match among unmatched DB records (moved file)
@@ -250,12 +252,6 @@ export async function reconcileFilesystem(): Promise<void> {
       try {
         await repos.files.delete(dbRecord.id);
         recordsDeleted++;
-
-        logger.debug('Deleted DB record for missing file', {
-          fileId: dbRecord.id,
-          storageKey: dbRecord.storageKey,
-          filename: dbRecord.originalFilename,
-        });
       } catch (err) {
         errors++;
         logger.warn('Failed to delete stale record during reconciliation', {
@@ -276,11 +272,20 @@ export async function reconcileFilesystem(): Promise<void> {
       errors,
       durationMs,
     });
+    startupProgress.publish({
+      rawLabel: 'subsystem:reconcile:complete',
+      detail: `${filesOnDisk} on disk, ${recordsCreated} added, ${recordsDeleted} pruned, ${recordsPreserved} preserved`,
+    });
   } catch (error) {
     const durationMs = Date.now() - startTime;
     logger.error('Filesystem reconciliation failed', {
       error: error instanceof Error ? error.message : String(error),
       durationMs,
+    });
+    startupProgress.publish({
+      rawLabel: 'subsystem:reconcile:complete',
+      level: 'warn',
+      detail: error instanceof Error ? error.message : String(error),
     });
   }
 }

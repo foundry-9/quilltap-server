@@ -6,6 +6,7 @@ import EmbeddingProfilesTab from '@/components/settings/embedding-profiles-tab'
 import { MemoryDedupCard } from '@/components/tools/memory-dedup-card'
 import { MemoryHousekeepingCard } from '@/components/tools/memory-housekeeping-card'
 import { MemoryBackfillCard } from '@/components/tools/memory-backfill-card'
+import { MemoryRegenerateCard } from '@/components/tools/memory-regenerate-card'
 import { useSettingsSection } from './useSettingsSection'
 
 export function MemorySearchTabContent() {
@@ -31,6 +32,10 @@ export function MemorySearchTabContent() {
 
         <CollapsibleCard title="Memory Deduplication" description="Find and remove duplicate memories" sectionId="memory-deduplication" forceOpen={activeSection === 'memory-deduplication'}>
           <MemoryDedupCard />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Regenerate Memories" description="Wipe and rebuild every chat-linked memory using the current extraction pipeline" sectionId="memory-regenerate" forceOpen={activeSection === 'memory-regenerate'}>
+          <MemoryRegenerateCard />
         </CollapsibleCard>
       </div>
     </div>

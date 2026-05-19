@@ -5,6 +5,8 @@ import useSWR from 'swr'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { getErrorMessage } from '@/lib/error-utils'
+import { formatBytes } from '@/lib/utils/format-bytes'
+import { formatDateTime } from '@/lib/format-time'
 import { CapabilitiesReportDialog } from './capabilities-report-dialog'
 
 interface ReportInfo {
@@ -119,27 +121,7 @@ export function CapabilitiesReportCard() {
     }
   }
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
-  }
-
-  const formatDate = (dateString: string): string => {
-    try {
-      return new Date(dateString).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    } catch {
-      return dateString
-    }
-  }
+  const formatDate = formatDateTime
 
   return (
     <div className="qt-card p-6">
@@ -289,7 +271,7 @@ export function CapabilitiesReportCard() {
                   </p>
                   <div className="flex gap-4 mt-1 qt-text-small">
                     <span>{formatDate(report.createdAt)}</span>
-                    <span>{formatFileSize(report.size)}</span>
+                    <span>{formatBytes(report.size)}</span>
                   </div>
                 </div>
                 <div className="ml-4 flex items-center gap-2">

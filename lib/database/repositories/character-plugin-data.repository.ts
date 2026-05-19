@@ -21,20 +21,6 @@ export class CharacterPluginDataRepository extends AbstractBaseRepository<Charac
   }
 
   /**
-   * Find a plugin data entry by ID
-   */
-  async findById(id: string): Promise<CharacterPluginData | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all plugin data entries
-   */
-  async findAll(): Promise<CharacterPluginData[]> {
-    return this._findAll();
-  }
-
-  /**
    * Find all plugin data for a specific character
    * @param characterId The character ID
    * @returns All plugin data entries for this character
@@ -119,7 +105,6 @@ export class CharacterPluginDataRepository extends AbstractBaseRepository<Charac
         const entry = await this._update(id, data);
 
         if (entry) {
-          logger.debug('Character plugin data updated', { entryId: id });
         }
 
         return entry;
@@ -170,11 +155,6 @@ export class CharacterPluginDataRepository extends AbstractBaseRepository<Charac
       if (!updated) {
         throw new Error(`Failed to update plugin data for ${pluginName} on character ${characterId}`);
       }
-      logger.debug('Character plugin data upserted (updated)', {
-        characterId,
-        pluginName,
-        entryId: existing.id,
-      });
       return updated;
     }
 
@@ -182,11 +162,6 @@ export class CharacterPluginDataRepository extends AbstractBaseRepository<Charac
       characterId,
       pluginName,
       data,
-    });
-    logger.debug('Character plugin data upserted (created)', {
-      characterId,
-      pluginName,
-      entryId: created.id,
     });
     return created;
   }

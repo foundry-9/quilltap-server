@@ -26,20 +26,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
   // ============================================================================
 
   /**
-   * Find a provider model by ID
-   */
-  async findById(id: string): Promise<ProviderModel | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all provider models
-   */
-  async findAll(): Promise<ProviderModel[]> {
-    return this._findAll();
-  }
-
-  /**
    * Create a new provider model
    */
   async create(

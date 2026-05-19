@@ -9,6 +9,8 @@
 
 import { useState } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
+import { formatBytes } from '@/lib/utils/format-bytes'
+import { formatDateTime } from '@/lib/format-time'
 
 /**
  * Information about a file conflict
@@ -40,29 +42,6 @@ interface FileConflictDialogProps {
   conflict: FileConflictInfo | null
   onResolve: (resolution: ConflictResolution) => void
   resolving?: boolean
-}
-
-/**
- * Format file size for display
- */
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-/**
- * Format date for display
- */
-function formatDate(dateString: string): string {
-  const date = new Date(dateString)
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 /**
@@ -162,7 +141,7 @@ export default function FileConflictDialog({
           <div className="qt-text-sm space-y-1 ml-7">
             <div className="font-medium">{conflict.existingFile.filename}</div>
             <div className="qt-text-xs qt-text-secondary">
-              {formatFileSize(conflict.existingFile.size)} • Uploaded {formatDate(conflict.existingFile.createdAt)}
+              {formatBytes(conflict.existingFile.size)} • Uploaded {formatDateTime(conflict.existingFile.createdAt)}
             </div>
           </div>
         </div>
@@ -176,7 +155,7 @@ export default function FileConflictDialog({
           <div className="qt-text-sm space-y-1 ml-7">
             <div className="font-medium">{conflict.newFile.filename}</div>
             <div className="qt-text-xs qt-text-secondary">
-              {formatFileSize(conflict.newFile.size)}
+              {formatBytes(conflict.newFile.size)}
             </div>
           </div>
         </div>

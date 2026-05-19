@@ -16,12 +16,15 @@
     "packages/**",
     "plugins/**",
     "migrations/lib/**",
+    "lib/background-jobs/child/child-entry.ts",
     "**/*.d.ts"
   ],
   "ignoreDependencies": [
     "@types/*",
     "ts-node",
-    "@vitest/mocker"
+    "@vitest/mocker",
+    "create-quilltap-theme",
+    "esbuild"
   ],
   "ignoreBinaries": []
 }

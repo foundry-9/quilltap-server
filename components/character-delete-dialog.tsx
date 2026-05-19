@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 
 interface ExclusiveChat {
   id: string
@@ -38,15 +39,7 @@ export function CharacterDeleteDialog({
   const [deleteChats, setDeleteChats] = useState(true)
   const [deleteImages, setDeleteImages] = useState(true)
 
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [onClose])
+  useEscapeKey(onClose)
 
   useEffect(() => {
     const fetchPreview = async () => {

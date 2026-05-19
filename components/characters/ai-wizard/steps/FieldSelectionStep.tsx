@@ -32,11 +32,13 @@ export function FieldSelectionStep({
   currentData,
   canGeneratePhysicalDescription,
 }: FieldSelectionStepProps) {
-  // All possible fields
+  // All possible fields, ordered by vantage point (outside → acquaintance → self)
   const allFields: GeneratableField[] = [
     'name',
     'title',
+    'identity',
     'description',
+    'manifesto',
     'personality',
     'scenarios',
     'exampleDialogues',

@@ -175,6 +175,7 @@ export function getRecommendedContextAllocation(
   totalLimit: number
   systemPrompt: number
   memories: number
+  knowledge: number
   conversationSummary: number
   recentMessages: number
   responseReserve: number
@@ -189,6 +190,11 @@ export function getRecommendedContextAllocation(
   // budget caused recently-appended sections to be lopped off the end.
   const systemPrompt = Math.max(4000, Math.floor(totalLimit * 0.20))
   const memories = Math.max(2000, Math.floor(totalLimit * 0.04))
+  // Knowledge: per-turn recall of relevant files from the responding
+  // character's vault Knowledge/ folder. Floor of 800 fits roughly one full
+  // inline file (≤500-token body + frontmatter + framing) or several
+  // pointer entries; 2% of total context lets larger windows scale up.
+  const knowledge = Math.max(800, Math.floor(totalLimit * 0.02))
   const conversationSummary = Math.max(1000, Math.floor(totalLimit * 0.02))
   const responseReserve = totalLimit >= 200000 ? 8192
     : totalLimit >= 100000 ? 4096
@@ -203,6 +209,7 @@ export function getRecommendedContextAllocation(
     totalLimit,
     systemPrompt,
     memories,
+    knowledge,
     conversationSummary,
     recentMessages,
     responseReserve,

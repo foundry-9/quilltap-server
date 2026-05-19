@@ -27,6 +27,7 @@
  * POST /api/v1/chats/[id]?action=remove-avatar - Remove avatar override
  * POST /api/v1/chats/[id]?action=add-tool-result - Add tool result message
  * POST /api/v1/chats/[id]?action=queue-memories - Queue memory extraction jobs
+ * POST /api/v1/chats/[id]?action=extract-memories-dry-run - Stream NDJSON dry-run of per-turn memory extraction (no persistence)
  * POST /api/v1/chats/[id]?action=rng - Execute random number generator (dice, coin, bottle)
  * POST /api/v1/chats/[id]?action=toggle-agent-mode - Toggle agent mode for this chat
  * POST /api/v1/chats/[id]?action=reclassify-danger - Reset and re-queue danger classification
@@ -34,6 +35,7 @@
  * POST /api/v1/chats/[id]?action=toggle-avatar-generation - Toggle avatar generation
  * POST /api/v1/chats/[id]?action=regenerate-avatar - Regenerate character avatar
  * POST /api/v1/chats/[id]?action=render-conversation - Queue Scriptorium render with full re-embed
+ * POST /api/v1/chats/[id]?action=announcement - Post an ad-hoc announcement bubble
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)
  */
 

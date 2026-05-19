@@ -15,8 +15,14 @@ import type {
   FileEntry,
   Project,
 } from '@/lib/schemas/types'
+import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.types'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
 import { getFilePath } from '@/lib/api/middleware/file-path'
+import {
+  resolveCharacterAvatar,
+  buildMountFileUrl,
+  buildLegacyFileUrl,
+} from '@/lib/photos/resolve-character-avatar'
 import { logger } from '@/lib/logger'
 
 type Repos = RepositoryContainer
@@ -32,6 +38,13 @@ type Repos = RepositoryContainer
 export interface ChatListPreloaded {
   characters: Map<string, Character>
   files: Map<string, FileEntry>
+  /**
+   * Vault link ids resolved up front for character avatars and story
+   * backgrounds. Post-Phase-3 `defaultImageId` / `storyBackgroundImageId`
+   * carry `doc_mount_file_links.id`; we look them up alongside `files`
+   * so the per-character enrichment hot path stays one map lookup.
+   */
+  docMountFileLinks: Map<string, DocMountFileLinkWithContent>
   projects: Map<string, Project>
 }
 
@@ -215,17 +228,31 @@ export async function getCharacterSummary(
 
   let defaultImage: EnrichedImage | null = null
   if (character.defaultImageId) {
-    const fileEntry = preloaded
-      ? preloaded.files.get(character.defaultImageId) ?? null
-      : await repos.files.findById(character.defaultImageId)
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
+    if (preloaded) {
+      const link = preloaded.docMountFileLinks.get(character.defaultImageId)
+      if (link) {
+        defaultImage = {
+          id: character.defaultImageId,
+          filepath: buildMountFileUrl(link.mountPointId, link.relativePath),
+          url: null,
+        }
+      } else {
+        const fileEntry = preloaded.files.get(character.defaultImageId) ?? null
+        if (fileEntry) {
+          defaultImage = { id: fileEntry.id, filepath: buildLegacyFileUrl(fileEntry.id), url: null }
+        }
+      }
+    } else {
+      const resolved = await resolveCharacterAvatar(character.defaultImageId, repos)
+      if (resolved) {
+        defaultImage = { id: resolved.id, filepath: resolved.url, url: null }
+      }
     }
   }
 
   let avatarUrl: string | null = character.avatarUrl || null
   if (!avatarUrl && defaultImage) {
-    avatarUrl = `/api/v1/files/${defaultImage.id}`
+    avatarUrl = defaultImage.filepath
   }
 
   return {
@@ -264,14 +291,14 @@ export async function getCharacterDetail(
   if (chatId && character.avatarOverrides?.length) {
     const override = character.avatarOverrides.find(o => o.chatId === chatId)
     if (override) {
-      const overrideFile = await repos.files.findById(override.imageId)
-      if (overrideFile) {
-        const overrideImage: EnrichedImage = { id: overrideFile.id, filepath: getFilePath(overrideFile), url: null }
+      const resolved = await resolveCharacterAvatar(override.imageId, repos)
+      if (resolved) {
+        const overrideImage: EnrichedImage = { id: resolved.id, filepath: resolved.url, url: null }
         return {
           id: character.id,
           name: character.name,
           title: character.title ?? null,
-          avatarUrl: `/api/v1/files/${overrideFile.id}`,
+          avatarUrl: resolved.url,
           defaultImageId: override.imageId,
           defaultImage: overrideImage,
           systemPrompts,
@@ -282,16 +309,16 @@ export async function getCharacterDetail(
 
   let defaultImage: EnrichedImage | null = null
   if (character.defaultImageId) {
-    const fileEntry = await repos.files.findById(character.defaultImageId)
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
+    const resolved = await resolveCharacterAvatar(character.defaultImageId, repos)
+    if (resolved) {
+      defaultImage = { id: resolved.id, filepath: resolved.url, url: null }
     }
   }
 
   // Build avatar URL: use explicit avatarUrl if non-empty, else fall back to defaultImage
   let avatarUrl: string | null = character.avatarUrl || null
   if (!avatarUrl && defaultImage) {
-    avatarUrl = `/api/v1/files/${defaultImage.id}`
+    avatarUrl = defaultImage.filepath
   }
 
   return {
@@ -566,20 +593,26 @@ export async function enrichChatsForList(
     : []
   const charactersMap = new Map(characters.map(c => [c.id, c]))
 
-  // Union character defaultImage ids with chat storyBackground ids so all
-  // file lookups go through a single findByIds call.
+  // Story backgrounds still resolve through the legacy files table (they
+  // live in the Lantern Backgrounds mount but `chat.storyBackgroundImageId`
+  // continues to point at a `files` row by design).
+  const characterAvatarIds = new Set<string>()
   for (const character of characters) {
-    if (character.defaultImageId) fileIds.add(character.defaultImageId)
+    if (character.defaultImageId) characterAvatarIds.add(character.defaultImageId)
   }
 
-  const [files, projects] = await Promise.all([
+  const [files, links, projects] = await Promise.all([
     fileIds.size > 0 ? repos.files.findByIds(Array.from(fileIds)) : Promise.resolve([] as FileEntry[]),
+    characterAvatarIds.size > 0
+      ? repos.docMountFileLinks.findByIdsWithContent(Array.from(characterAvatarIds))
+      : Promise.resolve([] as DocMountFileLinkWithContent[]),
     projectIds.size > 0 ? repos.projects.findByIds(Array.from(projectIds)) : Promise.resolve([] as Project[]),
   ])
 
   const preloaded: ChatListPreloaded = {
     characters: charactersMap,
     files: new Map(files.map(f => [f.id, f])),
+    docMountFileLinks: new Map(links.map(l => [l.id, l])),
     projects: new Map(projects.map(p => [p.id, p])),
   }
 

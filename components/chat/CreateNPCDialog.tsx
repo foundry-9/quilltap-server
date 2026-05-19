@@ -15,6 +15,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useSWR from 'swr'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 interface ConnectionProfile {
   id: string
@@ -308,18 +309,17 @@ export default function CreateNPCDialog({
                 <label htmlFor="npc-description" className="block text-sm qt-text-primary mb-2">
                   Description <span className="qt-text-destructive">*</span>
                 </label>
-                <textarea
-                  id="npc-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the NPC's personality and characteristics"
-                  rows={4}
-                  className="qt-textarea"
-                  disabled={isCreating}
-                />
-                <p className="qt-text-xs mt-1">
-                  This will be used as both description and personality
+                <p className="qt-text-xs mb-2">
+                  Describe the NPC&rsquo;s personality and characteristics. Used as both description and personality.
                 </p>
+                <MarkdownLexicalEditor
+                  value={description}
+                  onChange={setDescription}
+                  disabled={isCreating}
+                  namespace="CreateNPCDialog.description"
+                  ariaLabel="NPC description"
+                  minHeight="8rem"
+                />
               </div>
 
               {/* Physical Description (optional) */}
@@ -327,14 +327,16 @@ export default function CreateNPCDialog({
                 <label htmlFor="npc-physical" className="block text-sm qt-text-primary mb-2">
                   Physical Description <span className="qt-text-secondary font-normal">(optional)</span>
                 </label>
-                <textarea
-                  id="npc-physical"
+                <p className="qt-text-xs mb-2">
+                  Describe the NPC&rsquo;s physical appearance.
+                </p>
+                <MarkdownLexicalEditor
                   value={physicalDescription}
-                  onChange={(e) => setPhysicalDescription(e.target.value)}
-                  placeholder="Describe the NPC's physical appearance"
-                  rows={3}
-                  className="qt-textarea"
+                  onChange={setPhysicalDescription}
                   disabled={isCreating}
+                  namespace="CreateNPCDialog.physicalDescription"
+                  ariaLabel="Physical description"
+                  minHeight="6rem"
                 />
               </div>
 
@@ -343,14 +345,16 @@ export default function CreateNPCDialog({
                 <label htmlFor="npc-scenario" className="block text-sm qt-text-primary mb-2">
                   Scenario <span className="qt-text-secondary font-normal">(optional)</span>
                 </label>
-                <textarea
-                  id="npc-scenario"
+                <p className="qt-text-xs mb-2">
+                  Describe the scenario or context for this NPC.
+                </p>
+                <MarkdownLexicalEditor
                   value={scenario}
-                  onChange={(e) => setScenario(e.target.value)}
-                  placeholder="Describe the scenario or context for this NPC"
-                  rows={3}
-                  className="qt-textarea"
+                  onChange={setScenario}
                   disabled={isCreating}
+                  namespace="CreateNPCDialog.scenario"
+                  ariaLabel="Scenario"
+                  minHeight="6rem"
                 />
               </div>
 
@@ -359,14 +363,16 @@ export default function CreateNPCDialog({
                 <label htmlFor="npc-system-prompt" className="block text-sm qt-text-primary mb-2">
                   System Prompt <span className="qt-text-secondary font-normal">(optional)</span>
                 </label>
-                <textarea
-                  id="npc-system-prompt"
+                <p className="qt-text-xs mb-2">
+                  Custom system prompt for this NPC.
+                </p>
+                <MarkdownLexicalEditor
                   value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder="Custom system prompt for this NPC"
-                  rows={3}
-                  className="qt-textarea"
+                  onChange={setSystemPrompt}
                   disabled={isCreating}
+                  namespace="CreateNPCDialog.systemPrompt"
+                  ariaLabel="System prompt"
+                  minHeight="6rem"
                 />
               </div>
 

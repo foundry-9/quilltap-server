@@ -23,8 +23,6 @@ export interface Message {
   completionTokens?: number | null
   /** Total tokens (promptTokens + completionTokens) */
   tokenCount?: number | null
-  /** Embedded tool messages that belong to this assistant message */
-  toolCalls?: Message[]
   /** Server-side pre-rendered HTML for simple messages (no tools, no attachments) */
   renderedHtml?: string | null
   /** Provider that generated this message (e.g., 'openai', 'anthropic') */
@@ -35,8 +33,16 @@ export interface Message {
   targetParticipantIds?: string[] | null
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage?: boolean
-  /** Personified feature that authored this message (e.g., 'lantern' for Lantern announcements, 'aurora' for character-avatar refreshes, 'librarian' for Document Mode open/save announcements, 'concierge' for dangerous-content classification announcements, 'host' for Salon participation announcements) */
-  systemSender?: 'lantern' | 'aurora' | 'librarian' | 'concierge' | 'prospero' | 'host' | null
+  /** Personified feature that authored this message (e.g., 'lantern' for Lantern announcements, 'aurora' for character-avatar refreshes, 'librarian' for Document Mode open/save announcements, 'concierge' for dangerous-content classification announcements, 'host' for Salon participation announcements, 'commonplaceBook' for memory recall whispers, 'ariel' for terminal session announcements) */
+  systemSender?: 'lantern' | 'aurora' | 'librarian' | 'concierge' | 'prospero' | 'host' | 'commonplaceBook' | 'ariel' | null
+  /** Sub-classification of a Staff-authored message — used by the Salon UI to label collapsed system-message bars (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender. */
+  systemKind?: string | null
+  /** Ad-hoc announcer metadata for user-authored announcement bubbles (Insert Announcement composer button). Mutually exclusive with systemSender. */
+  customAnnouncer?: {
+    kind: 'character' | 'custom'
+    characterId?: string | null
+    displayName?: string | null
+  } | null
   /** Danger flags from content classification */
   dangerFlags?: Array<{
     category: string
@@ -46,6 +52,25 @@ export interface Message {
     reroutedProvider?: string | null
     reroutedModel?: string | null
   }>
+  /** The Courier: when non-null, this is a placeholder assistant message
+   * awaiting a manually pasted reply. The string is the Markdown blob the
+   * user must copy out, carry to an external LLM, and paste back. In delta
+   * mode this is the *delta* bundle; otherwise it is the full bundle. */
+  pendingExternalPrompt?: string | null
+  /** Full-context fallback bundle, present alongside `pendingExternalPrompt`
+   * when delta mode rendered a delta. Lets the bubble offer a "Use full
+   * context" toggle for when the destination LLM has lost its conversation. */
+  pendingExternalPromptFull?: string | null
+  /** Attachments referenced by a pending Courier turn — surfaced as
+   * download links so the user can re-upload them in their destination
+   * client. Cleared when the paste resolves. */
+  pendingExternalAttachments?: Array<{
+    fileId: string
+    filename: string
+    mimeType: string
+    sizeBytes: number
+    downloadUrl: string
+  }> | null
 }
 
 export interface CharacterData {
@@ -136,6 +161,12 @@ export interface Chat {
   documentMode?: 'normal' | 'split' | 'focus'
   /** Divider position for split mode as percentage of main area width */
   dividerPosition?: number
+  /** Terminal Mode layout state: normal (chat only), split (chat + terminal), focus (terminal only) */
+  terminalMode?: 'normal' | 'split' | 'focus'
+  /** Active terminal session shown in Terminal Mode pane (null = no session bound) */
+  activeTerminalSessionId?: string | null
+  /** Vertical divider position for the right-pane split when both Document and Terminal Modes are active (20-80) */
+  rightPaneVerticalSplit?: number
   /** Whether agent mode is enabled for this chat */
   agentModeEnabled?: boolean | null
   /** Resolved agent mode enabled state (from cascade: global → character → project → chat) */
@@ -162,6 +193,13 @@ export interface Chat {
   isDangerousChat?: boolean | null
   /** Categories of dangerous content detected (e.g. 'nsfw', 'violence') */
   dangerCategories?: string[]
+  /** Off-scene character cards referenced by ad-hoc announcement bubbles (customAnnouncer.kind === 'character'). Populated server-side from message rows. */
+  offSceneCharacters?: Array<{
+    id: string
+    name: string
+    title: string | null
+    avatarUrl: string | null
+  }>
 }
 
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'

@@ -1,5 +1,6 @@
 'use client'
 
+import { formatRelativeDate } from '@/lib/format-time'
 import type { JobDetail } from './types'
 
 interface TaskItemProps {
@@ -29,26 +30,7 @@ export function TaskItem({
     return tokens.toString()
   }
 
-  const formatDate = (dateString: string): string => {
-    try {
-      const date = new Date(dateString)
-      const now = new Date()
-      const diffMs = now.getTime() - date.getTime()
-      const diffMins = Math.floor(diffMs / 60000)
-
-      if (diffMins < 1) return 'Just now'
-      if (diffMins < 60) return `${diffMins}m ago`
-      if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`
-      return date.toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    } catch {
-      return dateString
-    }
-  }
+  const formatDate = formatRelativeDate
 
   const getStatusColor = (status: string): string => {
     switch (status) {

@@ -1,0 +1,178 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { Terminal } from './Terminal';
+import { useTerminalSession } from '@/hooks/useTerminalSession';
+import { showErrorToast } from '@/lib/toast';
+import { useTerminalModeContext } from '@/app/salon/[id]/hooks/useTerminalMode';
+
+interface TerminalEmbedProps {
+  sessionId: string;
+  label?: string | null;
+  chatId: string;
+}
+
+/**
+ * Inline terminal message wrapper for Salon chat bubbles
+ *
+ * Renders a collapsible terminal with header controls (pop-out, kill).
+ * Collapse state persists in localStorage.
+ */
+export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) {
+  const router = useRouter();
+  const session = useTerminalSession(sessionId);
+  const terminalModeCtx = useTerminalModeContext();
+  const isInTerminalPane =
+    terminalModeCtx.terminalMode !== 'normal' &&
+    terminalModeCtx.activeTerminalSessionId === sessionId;
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(`terminalEmbed:${sessionId}:collapsed`) === 'true';
+  });
+
+  // When the WS reports the PTY has exited, tell the salon page to refresh
+  // its message list so the new Ariel close announcement appears.
+  const exitDispatchedRef = useRef(false);
+  useEffect(() => {
+    if (session.state !== 'exited' || exitDispatchedRef.current) return;
+    exitDispatchedRef.current = true;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('quilltap:terminal-exited', {
+          detail: { chatId, sessionId },
+        }),
+      );
+    }
+  }, [session.state, chatId, sessionId]);
+
+  // Persist collapse state
+  const toggleCollapse = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      const key = `terminalEmbed:${sessionId}:collapsed`;
+      localStorage.setItem(key, String(next));
+      return next;
+    });
+  }, [sessionId]);
+
+  const handleKill = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/v1/terminals/${sessionId}?action=kill`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        showErrorToast('Failed to terminate session');
+      }
+    } catch (err) {
+      showErrorToast('Failed to terminate session');
+      console.error('Kill session error:', err);
+    }
+  }, [sessionId]);
+
+  const handlePopOut = useCallback(() => {
+    router.push(`/salon/${chatId}/terminal/${sessionId}`);
+  }, [router, chatId, sessionId]);
+
+  const handleFocusPane = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const pane = document.querySelector('.qt-doc-pane');
+    if (pane && 'scrollIntoView' in pane) {
+      try {
+        (pane as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch {
+        // ignore
+      }
+    }
+    const xtermTextarea = pane?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null;
+    xtermTextarea?.focus();
+  }, []);
+
+  const title = label || (session.meta ? `Terminal — ${session.meta.shell}` : 'Terminal');
+
+  return (
+    <div className="qt-terminal-embed">
+      {/* Header */}
+      <div className="qt-terminal-embed-header">
+        <div className="flex items-center gap-2 flex-1">
+          <button
+            onClick={toggleCollapse}
+            className="qt-icon-button p-1"
+            aria-label={collapsed ? 'Expand' : 'Collapse'}
+          >
+            <svg
+              className={`w-4 h-4 transition-transform ${collapsed ? '-rotate-90' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 14l-7 7m0 0l-7-7m7 7V3"
+              />
+            </svg>
+          </button>
+          <h3 className="text-sm font-medium">{title}</h3>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handlePopOut}
+            className="qt-button-icon text-sm"
+            title="Pop out"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4m-4-6l6-6m0 0V4m0-2h2"
+              />
+            </svg>
+          </button>
+
+          {session.state !== 'exited' && (
+            <button
+              onClick={handleKill}
+              className="qt-button-icon text-sm qt-text-destructive opacity-70 hover:opacity-100"
+              title="Kill session"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Terminal Body */}
+      {!collapsed && (
+        isInTerminalPane ? (
+          <div className="qt-terminal-embed-footer">
+            <span className="qt-text-secondary">
+              Showing in Terminal Mode pane.
+            </span>
+            <button
+              type="button"
+              onClick={handleFocusPane}
+              className="qt-button-secondary text-xs px-2 py-1"
+              title="Focus the Terminal Mode pane"
+            >
+              Go to pane →
+            </button>
+          </div>
+        ) : (
+          <div className="qt-terminal-surface" style={{ height: '360px' }}>
+            <Terminal
+              sessionId={sessionId}
+              className="h-full w-full"
+            />
+          </div>
+        )
+      )}
+    </div>
+  );
+}

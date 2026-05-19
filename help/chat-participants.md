@@ -125,6 +125,14 @@ Immediately beneath the connection profile selector, each LLM-controlled charact
 
 If you want a character to keep the same costume but change their register for an afternoon — swap them from their "Formal" variant to their "Casual" one here, and the switch takes effect with the very next line they speak.
 
+### Rebuild System Prompt Button
+
+Tucked beside the system prompt dropdown — and present even for characters who carry no named prompts at all — is a small refresh button with a circular-arrow glyph. Press it and Quilltap will re-compile this character's system prompt for the chat from the ground up, drawing on whatever is presently inscribed on the character's record: manifesto, personality, named prompts, aliases, pronouns, and the rest of the identity pantry.
+
+Why on earth would one need such a thing? Because while changing the dropdown is caught the moment you let go of it, **edits to the underlying character — say, you stepped away to polish their manifesto on the character page — are not propagated to a running chat's cached prompt automatically.** Your edits will eventually take effect, but the cached version may linger through a turn or two first. The refresh button settles the matter at once. A toast confirms the rebuild has been completed, and the very next turn speaks from the fresh draft.
+
+Reach for it whenever you've revised a character's prompt content elsewhere and want to be quite certain the chat is reading from the updated copy rather than yesterday's.
+
 ### Status Indicators
 
 **Control Mode:**
@@ -217,6 +225,8 @@ Whenever a character is added to the chat, removed from it, or switched between 
 
 Characters whose **System Transparency** is off do not see the Host's messages — the same Staff-filter rule that already hides Lantern, Aurora, Librarian, and Prospero announcements from opaque characters applies here too. You always see them.
 
+The Host also issues a one-time advisory whisper when a chat has no user-controlled character attached. Without one, the auto-memory pipeline cannot record what your characters come to know about *you* — only what they come to know about themselves — so the Host gently nudges you toward attaching or creating a user persona. The whisper appears at most once per chat; once acted upon (or once a user-controlled character has been added), it does not return.
+
 ### Announcements from Prospero
 
 When you reassign a participant to a different connection profile from the sidebar — swapping the LLM that drives a particular character — Prospero, master of the agentic and tool-using systems, steps forward and announces the change so the rest of the room is in on the news. The note records the participant's name, the new profile, and the one it replaced. Like the Host's announcements, Prospero's messages are filtered out of the conversation handed to characters whose **System Transparency** is off; you always see them.
@@ -229,6 +239,7 @@ When you reassign a participant to a different connection profile from the sideb
 4. Configure options:
    - **History Access** — Can they see previous messages?
    - **Join Scenario** — Optional entrance description
+   - **Starting Outfit** — The wardrobe with which they cross the threshold: defaults, a slot-by-slot composition, the cheap LLM's best guess from the scene, or nothing at all
 5. Click **Add** to confirm
 6. Character appears in the sidebar
 

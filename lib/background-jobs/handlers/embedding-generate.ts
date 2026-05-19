@@ -7,12 +7,49 @@
 
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
+import { EMBEDDING_MAX_CHARS, generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { getVectorStoreManager } from '@/lib/embedding/vector-store';
 import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-indices.repository';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { logger } from '@/lib/logger';
 import type { EmbeddingGeneratePayload } from '../queue-service';
+
+type EmbeddingEntityType = 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC' | 'MOUNT_CHUNK';
+
+/**
+ * Guard against oversize content. Returns true if the entity was skipped (and
+ * the caller should bail without throwing — we don't want the queue to retry
+ * something that will always be too big for the model). Returns false if the
+ * caller should proceed with embedding.
+ */
+async function skipIfOversize(
+  text: string,
+  entityType: EmbeddingEntityType,
+  payload: EmbeddingGeneratePayload,
+  job: BackgroundJob,
+  repos: ReturnType<typeof getRepositories>,
+  extraLog: Record<string, unknown> = {}
+): Promise<boolean> {
+  if (text.length <= EMBEDDING_MAX_CHARS) return false;
+
+  const reason = `Oversize: ${text.length} chars exceeds ${EMBEDDING_MAX_CHARS}-char cap`;
+  logger.warn('[EmbeddingGenerate] Skipping oversize entity', {
+    context: 'handleEmbeddingGenerate',
+    jobId: job.id,
+    entityType,
+    entityId: payload.entityId,
+    textLength: text.length,
+    maxChars: EMBEDDING_MAX_CHARS,
+    ...extraLog,
+  });
+  await repos.embeddingStatus.markAsFailed(
+    entityType,
+    payload.entityId,
+    payload.profileId,
+    reason
+  );
+  return true;
+}
 
 /**
  * Handle an embedding generate job
@@ -59,10 +96,17 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
   try {
     // Generate embedding using the specified profile
     const textToEmbed = `${memory.summary}\n\n${memory.content}`;
+    if (await skipIfOversize(textToEmbed, 'MEMORY', payload, job, repos, {
+      memoryId: memory.id,
+      characterId: memory.characterId,
+    })) {
+      return;
+    }
     const embeddingResult = await generateEmbeddingForUser(
       textToEmbed,
       job.userId,
-      payload.profileId
+      payload.profileId,
+      { priority: 'background' }
     );
 
     // Update memory with embedding
@@ -151,10 +195,17 @@ async function handleConversationChunkEmbedding(
   }
 
   try {
+    if (await skipIfOversize(chunk.content, 'CONVERSATION_CHUNK', payload, job, repos, {
+      chunkId: chunk.id,
+      chatId: payload.chatId,
+    })) {
+      return;
+    }
     const embeddingResult = await generateEmbeddingForUser(
       chunk.content,
       job.userId,
-      payload.profileId
+      payload.profileId,
+      { priority: 'background' }
     );
 
     // Store embedding directly on the chunk (same Float32 BLOB format as memories)
@@ -224,10 +275,17 @@ async function handleHelpDocEmbedding(
 
   try {
     const textToEmbed = `${doc.title}\n\n${doc.content}`;
+    if (await skipIfOversize(textToEmbed, 'HELP_DOC', payload, job, repos, {
+      docId: doc.id,
+      title: doc.title,
+    })) {
+      return;
+    }
     const embeddingResult = await generateEmbeddingForUser(
       textToEmbed,
       job.userId,
-      payload.profileId
+      payload.profileId,
+      { priority: 'background' }
     );
 
     await repos.helpDocs.updateEmbedding(doc.id, embeddingResult.embedding);
@@ -293,10 +351,17 @@ async function handleMountChunkEmbedding(
   }
 
   try {
+    if (await skipIfOversize(chunk.content, 'MOUNT_CHUNK', payload, job, repos, {
+      chunkId: chunk.id,
+      mountPointId: chunk.mountPointId,
+    })) {
+      return;
+    }
     const embeddingResult = await generateEmbeddingForUser(
       chunk.content,
       job.userId,
-      payload.profileId
+      payload.profileId,
+      { priority: 'background' }
     );
 
     await repos.docMountChunks.updateEmbedding(chunk.id, embeddingResult.embedding);

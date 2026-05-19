@@ -337,10 +337,15 @@ describe('Cascade Delete Utilities', () => {
         findByIds: jest.fn().mockResolvedValue([]),
       }
 
+      const docMountFileLinksRepo = {
+        findByIdWithContent: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         personas: personasRepo as any,
         files: filesRepo as any,
+        docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
       const result = await findExclusiveImagesForCharacter('char-1')
@@ -414,12 +419,17 @@ describe('Cascade Delete Utilities', () => {
         findByIds: jest.fn().mockResolvedValue([]),
       }
 
+      const docMountFileLinksRepo = {
+        findByIdWithContent: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
         files: filesRepo as any,
+        docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
       const result = await getCascadeDeletePreview('char-1')
@@ -458,12 +468,17 @@ describe('Cascade Delete Utilities', () => {
         findByIds: jest.fn().mockResolvedValue([]),
       }
 
+      const docMountFileLinksRepo = {
+        findByIdWithContent: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
         files: filesRepo as any,
+        docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
       const result = await getCascadeDeletePreview('char-1')
@@ -528,12 +543,17 @@ describe('Cascade Delete Utilities', () => {
         delete: jest.fn().mockResolvedValue(true),
       }
 
+      const docMountFileLinksRepo = {
+        findByIdWithContent: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
         files: filesRepo as any,
+        docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
       // getVectorStoreManager is already mocked in jest.setup.ts
@@ -581,12 +601,17 @@ describe('Cascade Delete Utilities', () => {
         delete: jest.fn().mockResolvedValue(true),
       }
 
+      const docMountFileLinksRepo = {
+        findByIdWithContent: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
         files: filesRepo as any,
+        docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
       // getVectorStoreManager is already mocked in jest.setup.ts

@@ -185,6 +185,10 @@ import { normalizeEmbeddingsUnitVectorsMigration } from './normalize-embeddings-
 import { addAutoHousekeepingSettingsFieldMigration } from './add-auto-housekeeping-settings-field';
 // Add memoryExtractionLimits column to chat_settings
 import { addMemoryExtractionLimitsFieldMigration } from './add-memory-extraction-limits-field';
+// Add memoryExtractionConcurrency column to chat_settings
+import { addMemoryExtractionConcurrencyFieldMigration } from './add-memory-extraction-concurrency-field';
+// Move memory extraction knobs out of chat_settings into instance_settings
+import { migrateExtractionKnobsToInstanceSettingsMigration } from './migrate-extraction-knobs-to-instance-settings';
 // Add supportsImageUpload column to connection_profiles (per-profile vision capability)
 import { addProfileSupportsImageUploadFieldMigration } from './add-profile-supports-image-upload-field';
 // Add Lantern image alert columns to projects and chats
@@ -203,6 +207,76 @@ import { addCharacterSystemTransparencyFieldMigration } from './add-character-sy
 import { addProjectOfficialMountPointMigration } from './add-project-official-mount-point';
 // Add compositionModeDefault column to chat_settings
 import { addCompositionModeDefaultFieldMigration } from './add-composition-mode-default-field';
+// Add compiledIdentityStacks column to chats (Phase H system-prompt precompile)
+import { addCompiledIdentityStacksFieldMigration } from './add-compiled-identity-stacks-field';
+// Add hostEvent column to chat_messages (per-character Librarian summaries)
+import { addHostEventFieldMigration } from './add-host-event-field';
+// Add systemKind column to chat_messages (Salon collapsed-bar labels)
+import { addSystemKindFieldMigration } from './add-system-kind-field';
+// Backfill memories.aboutCharacterId via name-presence heuristic
+import { alignAboutCharacterIdMigration } from './align-about-character-id';
+// Re-run aboutCharacterId alignment with the holder-dominance tiebreaker
+import { alignAboutCharacterIdV2Migration } from './align-about-character-id-v2';
+// Add identity field to characters table
+import { addCharacterIdentityFieldMigration } from './add-character-identity-field';
+// Add manifesto field to characters table
+import { addCharacterManifestoFieldMigration } from './add-character-manifesto-field';
+// Re-absorb leftover project files into database-backed official store
+import { reabsorbLeftoverProjectFilesMigration } from './reabsorb-leftover-project-files';
+// Relink legacy files.storageKey rows to mount-blob shims (Stage-1 follow-up)
+import { relinkFilesToMountBlobsMigration } from './relink-files-to-mount-blobs';
+// Add requestHashes column to llm_logs (cache-stability instrumentation)
+import { addLLMLogsRequestHashesColumnMigration } from './add-llm-logs-request-hashes-column';
+// Add summarization-gate tracking columns to chats (triple-gate Phase 2)
+import { addSummarizationGateFieldsMigration } from './add-summarization-gate-fields';
+// Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
+import { addSummaryAnchorFieldMigration } from './add-summary-anchor-field';
+// Add summaryAnchorMessageIds column to chats (edit-aware invalidation Phase 4)
+import { addSummaryAnchorMessageIdsFieldMigration } from './add-summary-anchor-message-ids-field';
+// Add truncateToDimensions + normalizeL2 columns to embedding_profiles (Matryoshka)
+import { addEmbeddingProfileTruncationFieldsMigration } from './add-embedding-profile-truncation-fields';
+// Apply Matryoshka truncation to existing stored vectors so they match the active profile
+import { applyEmbeddingProfileTruncationMigration } from './apply-embedding-profile-truncation';
+// Terminal sessions table for in-chat terminal feature
+import { addTerminalSessionsTableMigration } from './add-terminal-sessions-table';
+// Terminal Mode fields on chats (split-pane persistence)
+import { addTerminalModeFieldsMigration } from './add-terminal-mode-fields';
+// Add componentItemIds column to wardrobe_items (composite items)
+import { addWardrobeComponentItemIdsMigration } from './add-wardrobe-component-item-ids-v1';
+// Migrate outfit_presets rows into composite wardrobe_items
+import { migrateOutfitPresetsToCompositesMigration } from './migrate-outfit-presets-to-composites-v1';
+// Convert chats.equippedOutfit slot values from UUID|null to UUID[]
+import { convertEquippedOutfitToArraysMigration } from './convert-equipped-outfit-to-arrays-v1';
+// Drop the outfit_presets table (after backup snapshot)
+import { dropOutfitPresetsTableMigration } from './drop-outfit-presets-table-v1';
+// Provision the global Lantern Backgrounds mount point
+import { provisionLanternBackgroundsMountMigration } from './provision-lantern-backgrounds-mount';
+// Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount
+import { migrateGeneralStoryBackgroundsToMountMigration } from './migrate-general-story-backgrounds-to-mount';
+// Move character avatars off _general/ into each character's vault under images/
+import { migrateCharacterAvatarsToVaultsMigration } from './migrate-character-avatars-to-vaults';
+// Provision the global Quilltap Uploads mount point
+import { provisionUserUploadsMountMigration } from './provision-user-uploads-mount';
+// Sweep any remaining files under _general/ into the Quilltap Uploads mount
+import { migrateRemainingGeneralToUploadsMigration } from './migrate-remaining-general-to-uploads';
+// Provision the global Quilltap General mount point (houses general Scenarios/)
+import { provisionGeneralMountMigration } from './provision-general-mount';
+// Add customAnnouncer column to chat_messages (Insert Announcement composer button)
+import { addCustomAnnouncerFieldMigration } from './add-custom-announcer-field';
+// Add transport column to connection_profiles + pendingExternalPrompt/Attachments columns to chat_messages (The Courier)
+import { addCourierTransportFieldsMigration } from './add-courier-transport-fields';
+// Add Courier delta-mode column to connection_profiles + courierCheckpoints to chats + pendingExternalPromptFull to chat_messages
+import { addCourierDeltaFieldsMigration } from './add-courier-delta-fields';
+// Add commonplaceSceneCache column to chats for per-target scene-state diffing
+import { addCommonplaceSceneCacheMigration } from './add-commonplace-scene-cache';
+// Split doc_mount_files into content + link rows; rekey chunks to linkId
+import { addDocMountFileLinksMigration } from './add-doc-mount-file-links';
+// Add uncensoredImageDescriptionProfileId column to chat_settings (Phase 2 photos)
+import { addUncensoredImageDescriptionProfileFieldMigration } from './add-uncensored-image-description-profile-field';
+// Photo gallery Phase 3: mirror CHARACTER-tagged images into each character's vault photos/ folder + atomic cutover
+import { migrateCharacterPhotosToVaultMigration } from './migrate-character-photos-to-vault';
+// Add opaqueContent column to chat_messages (per-chat opaque-anywhere Staff voicing)
+import { addOpaqueContentFieldMigration } from './add-opaque-content-field';
 
 /**
  * All available migrations.
@@ -383,6 +457,10 @@ export const migrations: Migration[] = [
   addAutoHousekeepingSettingsFieldMigration,
   // Add memoryExtractionLimits column to chat_settings
   addMemoryExtractionLimitsFieldMigration,
+  // Add memoryExtractionConcurrency column to chat_settings
+  addMemoryExtractionConcurrencyFieldMigration,
+  // Move memory extraction knobs out of chat_settings into instance_settings
+  migrateExtractionKnobsToInstanceSettingsMigration,
   // Add supportsImageUpload column to connection_profiles
   addProfileSupportsImageUploadFieldMigration,
   // Add Lantern image alert columns to projects and chats
@@ -401,6 +479,76 @@ export const migrations: Migration[] = [
   addProjectOfficialMountPointMigration,
   // Add compositionModeDefault column to chat_settings
   addCompositionModeDefaultFieldMigration,
+  // Add compiledIdentityStacks column to chats (Phase H system-prompt precompile)
+  addCompiledIdentityStacksFieldMigration,
+  // Add hostEvent column to chat_messages (per-character Librarian summaries)
+  addHostEventFieldMigration,
+  // Add systemKind column to chat_messages (Salon collapsed-bar labels)
+  addSystemKindFieldMigration,
+  // Backfill memories.aboutCharacterId via name-presence heuristic
+  alignAboutCharacterIdMigration,
+  // v2: re-run with the holder-dominance tiebreaker
+  alignAboutCharacterIdV2Migration,
+  // Add identity field to characters table
+  addCharacterIdentityFieldMigration,
+  // Add manifesto field to characters table
+  addCharacterManifestoFieldMigration,
+  // Re-absorb leftover project files into database-backed official store
+  reabsorbLeftoverProjectFilesMigration,
+  // Relink legacy files.storageKey rows to mount-blob shims (Stage-1 follow-up)
+  relinkFilesToMountBlobsMigration,
+  // Add requestHashes column to llm_logs (cache-stability instrumentation)
+  addLLMLogsRequestHashesColumnMigration,
+  // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
+  addSummarizationGateFieldsMigration,
+  // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
+  addSummaryAnchorFieldMigration,
+  // Add summaryAnchorMessageIds column to chats (edit-aware invalidation Phase 4)
+  addSummaryAnchorMessageIdsFieldMigration,
+  // Add Matryoshka truncation columns to embedding_profiles
+  addEmbeddingProfileTruncationFieldsMigration,
+  // Apply Matryoshka truncation to existing stored vectors
+  applyEmbeddingProfileTruncationMigration,
+  // Terminal sessions table for in-chat terminal feature
+  addTerminalSessionsTableMigration,
+  // Terminal Mode fields on chats (split-pane persistence)
+  addTerminalModeFieldsMigration,
+  // Add componentItemIds column to wardrobe_items (composite items)
+  addWardrobeComponentItemIdsMigration,
+  // Migrate outfit_presets rows into composite wardrobe_items
+  migrateOutfitPresetsToCompositesMigration,
+  // Convert chats.equippedOutfit slot values from UUID|null to UUID[]
+  convertEquippedOutfitToArraysMigration,
+  // Drop the outfit_presets table (after backup snapshot)
+  dropOutfitPresetsTableMigration,
+  // Provision the global Lantern Backgrounds mount point
+  provisionLanternBackgroundsMountMigration,
+  // Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount
+  migrateGeneralStoryBackgroundsToMountMigration,
+  // Move character avatars off _general/ into each character's vault under images/
+  migrateCharacterAvatarsToVaultsMigration,
+  // Provision the global Quilltap Uploads mount point
+  provisionUserUploadsMountMigration,
+  // Sweep any remaining files under _general/ into the Quilltap Uploads mount
+  migrateRemainingGeneralToUploadsMigration,
+  // Provision the global Quilltap General mount point (houses general Scenarios/)
+  provisionGeneralMountMigration,
+  // Add customAnnouncer column to chat_messages (Insert Announcement composer button)
+  addCustomAnnouncerFieldMigration,
+  // Add transport column to connection_profiles + pendingExternalPrompt/Attachments to chat_messages (The Courier)
+  addCourierTransportFieldsMigration,
+  // Add Courier delta-mode column to connection_profiles + courierCheckpoints to chats + pendingExternalPromptFull to chat_messages
+  addCourierDeltaFieldsMigration,
+  // Add commonplaceSceneCache column to chats for per-target scene-state diffing
+  addCommonplaceSceneCacheMigration,
+  // Split doc_mount_files into content + link rows; rekey chunks to linkId
+  addDocMountFileLinksMigration,
+  // Add uncensoredImageDescriptionProfileId column to chat_settings (Phase 2 photos)
+  addUncensoredImageDescriptionProfileFieldMigration,
+  // Photo gallery Phase 3: mirror CHARACTER-tagged images into vault photos/ + atomic cutover
+  migrateCharacterPhotosToVaultMigration,
+  // Add opaqueContent column to chat_messages (per-chat opaque-anywhere Staff voicing)
+  addOpaqueContentFieldMigration,
 ];
 
 export {
@@ -566,6 +714,10 @@ export {
   addAutoHousekeepingSettingsFieldMigration,
   // Add memoryExtractionLimits column to chat_settings
   addMemoryExtractionLimitsFieldMigration,
+  // Add memoryExtractionConcurrency column to chat_settings
+  addMemoryExtractionConcurrencyFieldMigration,
+  // Move memory extraction knobs out of chat_settings into instance_settings
+  migrateExtractionKnobsToInstanceSettingsMigration,
   // Add supportsImageUpload column to connection_profiles
   addProfileSupportsImageUploadFieldMigration,
   // Add Lantern image alert columns to projects and chats
@@ -584,5 +736,75 @@ export {
   addProjectOfficialMountPointMigration,
   // Add compositionModeDefault column to chat_settings
   addCompositionModeDefaultFieldMigration,
+  // Add compiledIdentityStacks column to chats (Phase H system-prompt precompile)
+  addCompiledIdentityStacksFieldMigration,
+  // Add hostEvent column to chat_messages (per-character Librarian summaries)
+  addHostEventFieldMigration,
+  // Add systemKind column to chat_messages (Salon collapsed-bar labels)
+  addSystemKindFieldMigration,
+  // Backfill memories.aboutCharacterId via name-presence heuristic
+  alignAboutCharacterIdMigration,
+  // v2: re-run with the holder-dominance tiebreaker
+  alignAboutCharacterIdV2Migration,
+  // Add identity field to characters table
+  addCharacterIdentityFieldMigration,
+  // Add manifesto field to characters table
+  addCharacterManifestoFieldMigration,
+  // Re-absorb leftover project files into database-backed official store
+  reabsorbLeftoverProjectFilesMigration,
+  // Relink legacy files.storageKey rows to mount-blob shims (Stage-1 follow-up)
+  relinkFilesToMountBlobsMigration,
+  // Add requestHashes column to llm_logs (cache-stability instrumentation)
+  addLLMLogsRequestHashesColumnMigration,
+  // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
+  addSummarizationGateFieldsMigration,
+  // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
+  addSummaryAnchorFieldMigration,
+  // Add summaryAnchorMessageIds column to chats (edit-aware invalidation Phase 4)
+  addSummaryAnchorMessageIdsFieldMigration,
+  // Add Matryoshka truncation columns to embedding_profiles
+  addEmbeddingProfileTruncationFieldsMigration,
+  // Apply Matryoshka truncation to existing stored vectors
+  applyEmbeddingProfileTruncationMigration,
+  // Terminal sessions table
+  addTerminalSessionsTableMigration,
+  // Terminal Mode fields on chats (split-pane persistence)
+  addTerminalModeFieldsMigration,
+  // Add componentItemIds column to wardrobe_items (composite items)
+  addWardrobeComponentItemIdsMigration,
+  // Migrate outfit_presets rows into composite wardrobe_items
+  migrateOutfitPresetsToCompositesMigration,
+  // Convert chats.equippedOutfit slot values from UUID|null to UUID[]
+  convertEquippedOutfitToArraysMigration,
+  // Drop the outfit_presets table (after backup snapshot)
+  dropOutfitPresetsTableMigration,
+  // Provision the global Lantern Backgrounds mount point
+  provisionLanternBackgroundsMountMigration,
+  // Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount
+  migrateGeneralStoryBackgroundsToMountMigration,
+  // Move character avatars off _general/ into each character's vault under images/
+  migrateCharacterAvatarsToVaultsMigration,
+  // Provision the global Quilltap Uploads mount point
+  provisionUserUploadsMountMigration,
+  // Sweep any remaining files under _general/ into the Quilltap Uploads mount
+  migrateRemainingGeneralToUploadsMigration,
+  // Provision the global Quilltap General mount point (houses general Scenarios/)
+  provisionGeneralMountMigration,
+  // Add customAnnouncer column to chat_messages (Insert Announcement composer button)
+  addCustomAnnouncerFieldMigration,
+  // Add transport column to connection_profiles + pendingExternalPrompt/Attachments to chat_messages (The Courier)
+  addCourierTransportFieldsMigration,
+  // Add Courier delta-mode column to connection_profiles + courierCheckpoints to chats + pendingExternalPromptFull to chat_messages
+  addCourierDeltaFieldsMigration,
+  // Add commonplaceSceneCache column to chats for per-target scene-state diffing
+  addCommonplaceSceneCacheMigration,
+  // Split doc_mount_files into content + link rows; rekey chunks to linkId
+  addDocMountFileLinksMigration,
+  // Add uncensoredImageDescriptionProfileId column to chat_settings (Phase 2 photos)
+  addUncensoredImageDescriptionProfileFieldMigration,
+  // Photo gallery Phase 3: mirror CHARACTER-tagged images into vault photos/ + atomic cutover
+  migrateCharacterPhotosToVaultMigration,
+  // Add opaqueContent column to chat_messages (per-chat opaque-anywhere Staff voicing)
+  addOpaqueContentFieldMigration,
 };
 

@@ -76,11 +76,6 @@ export async function peekFormat(
     ? 'ndjson'
     : 'legacy';
 
-  logger.debug('Detected .qtap format', {
-    format,
-    peekedBytes: peekedTotal,
-  });
-
   // Rebuild a stream that starts with the peeked chunks, then drains the
   // original reader. The reader is still live — we just took some bytes off
   // the front and now re-prepend them.

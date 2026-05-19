@@ -11,7 +11,7 @@
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { WardrobeItem, EquippedSlots } from '@/lib/schemas/wardrobe.types'
-import { EMPTY_EQUIPPED_SLOTS, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
+import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
 import { executeCheapLLMTask } from './core-execution'
 import type { CheapLLMTaskResult } from './types'
 import { logger } from '@/lib/logger'
@@ -23,10 +23,14 @@ const OUTFIT_SELECTION_PROMPT = `You are a wardrobe assistant for a roleplay cha
 
 Choose items that are contextually appropriate. For example, formal wear for a business meeting, casual clothes for relaxing at home, or era-appropriate costume for a historical setting.
 
-You MUST respond with ONLY a JSON object mapping slot names to wardrobe item IDs. Valid slots are: "top", "bottom", "footwear", "accessories". Use null for any slot you want to leave empty.
+You MUST respond with ONLY a JSON object mapping slot names to ARRAYS of wardrobe item IDs. Valid slots are: "top", "bottom", "footwear", "accessories". Use an empty array [] for any slot you want to leave empty.
+
+You may put multiple items in the same slot to layer them (e.g. a t-shirt under a sweater); list them inner-to-outer.
+
+If the available wardrobe contains a composite item (its description mentions it bundles other items, or its title implies an outfit set), you may pick that composite directly — equipping it places it in all the slots it covers.
 
 Example response:
-{"top": "item-uuid-1", "bottom": "item-uuid-2", "footwear": "item-uuid-3", "accessories": null}
+{"top": ["uuid-tshirt", "uuid-sweater"], "bottom": ["uuid-jeans"], "footwear": ["uuid-boots"], "accessories": []}
 
 Do not include any other text, explanation, or markdown formatting. Just the JSON object.`
 
@@ -34,7 +38,9 @@ Do not include any other text, explanation, or markdown formatting. Just the JSO
  * Ask an LLM to choose an outfit for a character based on context.
  *
  * @param characterName The character's display name
- * @param characterPersonality Brief personality description (for context)
+ * @param characterDescription What an interlocutor perceives — behaviour, mannerisms (may be null)
+ * @param characterPersonality Internal driver of speech and behaviour (may be null)
+ * @param characterManifesto Foundational tenets the character is built on (may be null)
  * @param wardrobeItems Available wardrobe items the LLM can choose from
  * @param scenarioText The scenario or setting for the chat (may be null)
  * @param selection The cheap LLM provider selection to use
@@ -44,38 +50,51 @@ Do not include any other text, explanation, or markdown formatting. Just the JSO
  */
 export async function chooseLLMOutfit(
   characterName: string,
+  characterDescription: string | null,
   characterPersonality: string | null,
+  characterManifesto: string | null,
   wardrobeItems: WardrobeItem[],
   scenarioText: string | null,
   selection: CheapLLMSelection,
   userId: string,
   chatId?: string,
+  characterId?: string,
 ): Promise<CheapLLMTaskResult<EquippedSlots>> {
   if (wardrobeItems.length === 0) {
-    logger.debug('[OutfitSelection] No wardrobe items available, returning empty slots', {
-      characterName,
-      chatId,
-    })
     return {
       success: true,
-      result: { ...EMPTY_EQUIPPED_SLOTS },
+      result: { top: [], bottom: [], footwear: [], accessories: [] },
     }
   }
 
-  // Build wardrobe listing for the LLM
+  // Build wardrobe listing for the LLM. Composite items (those that bundle
+  // other wardrobe items) get a marker so the LLM knows they cover their
+  // listed slots in one pick.
   const wardrobeSection = wardrobeItems.map(item => {
     const types = item.types.join(', ')
     const appropriateness = item.appropriateness ? ` [appropriate for: ${item.appropriateness}]` : ''
     const desc = item.description ? ` — ${item.description}` : ''
-    return `  - ID: ${item.id} | "${item.title}" (covers: ${types})${appropriateness}${desc}`
+    const componentCount = item.componentItemIds?.length ?? 0
+    const compositeMarker = componentCount > 0
+      ? ` [composite — bundles ${componentCount} other item${componentCount === 1 ? '' : 's'}]`
+      : ''
+    return `  - ID: ${item.id} | "${item.title}"${compositeMarker} (covers: ${types})${appropriateness}${desc}`
   }).join('\n')
 
-  const personalityNote = characterPersonality
-    ? `\nCharacter Personality: ${characterPersonality.substring(0, 300)}`
+  const manifestoNote = characterManifesto && characterManifesto.trim().length > 0
+    ? `\nCharacter Manifesto (foundational tenets):\n${characterManifesto}`
+    : ''
+
+  const descriptionNote = characterDescription && characterDescription.trim().length > 0
+    ? `\nCharacter Description (behaviour and mannerisms):\n${characterDescription}`
+    : ''
+
+  const personalityNote = characterPersonality && characterPersonality.trim().length > 0
+    ? `\nCharacter Personality (internal drivers):\n${characterPersonality}`
     : ''
 
   const scenarioNote = scenarioText
-    ? `\nScenario: ${scenarioText.substring(0, 500)}`
+    ? `\nScenario: ${scenarioText}`
     : '\nScenario: (general conversation, no specific setting)'
 
   const messages: LLMMessage[] = [
@@ -85,7 +104,7 @@ export async function chooseLLMOutfit(
     },
     {
       role: 'user',
-      content: `Character: ${characterName}${personalityNote}${scenarioNote}
+      content: `Character: ${characterName}${manifestoNote}${descriptionNote}${personalityNote}${scenarioNote}
 
 Available Wardrobe Items:
 ${wardrobeSection}
@@ -122,33 +141,50 @@ Choose what ${characterName} should wear for this scene:`,
           chatId,
           responsePreview: cleanContent.substring(0, 200),
         })
-        return { ...EMPTY_EQUIPPED_SLOTS }
+        return { top: [], bottom: [], footwear: [], accessories: [] }
       }
 
-      // Validate and map the response to EquippedSlots
-      const result: EquippedSlots = { ...EMPTY_EQUIPPED_SLOTS }
+      // Validate and map the response to EquippedSlots. Each slot is an
+      // array; we validate each ID, accept it if the wardrobe contains it
+      // and the item covers this slot (composites that cover the slot are
+      // accepted as-is — equipping them is the "store-as-composite" path),
+      // and drop anything else with a debug log.
+      const result: EquippedSlots = {
+        top: [],
+        bottom: [],
+        footwear: [],
+        accessories: [],
+      }
 
       for (const slot of WARDROBE_SLOT_TYPES) {
-        const itemId = parsed[slot]
-        if (typeof itemId === 'string' && validItemIds.has(itemId)) {
-          // Verify the item actually covers this slot
-          const itemSlots = itemSlotMap.get(itemId)
-          if (itemSlots && itemSlots.includes(slot)) {
-            result[slot] = itemId
-          } else {
-            logger.debug('[OutfitSelection] LLM assigned item to wrong slot, skipping', {
-              chatId,
-              slot,
-              itemId,
-              itemCovers: itemSlots,
-            })
+        const raw = parsed[slot]
+
+        // Tolerate the legacy single-id-or-null shape so older models that
+        // miss the array instruction still produce something usable.
+        let candidates: unknown[]
+        if (Array.isArray(raw)) {
+          candidates = raw
+        } else if (raw === null || raw === undefined) {
+          candidates = []
+        } else {
+          candidates = [raw]
+        }
+
+        for (const candidate of candidates) {
+          if (typeof candidate !== 'string') {
+            continue
           }
-        } else if (itemId !== null && itemId !== undefined) {
-          logger.debug('[OutfitSelection] LLM referenced unknown item ID, skipping', {
-            chatId,
-            slot,
-            itemId,
-          })
+          if (!validItemIds.has(candidate)) {
+            continue
+          }
+          const itemSlots = itemSlotMap.get(candidate)
+          if (!itemSlots || !itemSlots.includes(slot)) {
+            continue
+          }
+          // Avoid emitting the same id twice in one slot.
+          if (!result[slot].includes(candidate)) {
+            result[slot].push(candidate)
+          }
         }
       }
 
@@ -156,5 +192,9 @@ Choose what ${characterName} should wear for this scene:`,
     },
     'outfit-selection',
     chatId,
+    undefined,
+    undefined,
+    undefined,
+    characterId,
   )
 }

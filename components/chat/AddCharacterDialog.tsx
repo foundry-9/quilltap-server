@@ -19,6 +19,9 @@ import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import CreateNPCDialog from './CreateNPCDialog'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { OutfitSelector } from '@/components/wardrobe'
+import type { OutfitSelection } from '@/components/wardrobe'
 
 interface CharacterOption {
   id: string
@@ -39,6 +42,7 @@ interface ConnectionProfile {
   name: string
   provider: string
   modelName: string
+  isDefault?: boolean
 }
 
 interface AddCharacterDialogProps {
@@ -67,6 +71,7 @@ export default function AddCharacterDialog({
   const [searchTerm, setSearchTerm] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [isCreateNPCOpen, setIsCreateNPCOpen] = useState(false)
+  const [outfitSelection, setOutfitSelection] = useState<OutfitSelection | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -100,22 +105,30 @@ export default function AddCharacterDialog({
       setJoinScenario('')
       setSearchTerm('')
       setIsCreateNPCOpen(false)
+      setOutfitSelection(null)
     }
   }, [isOpen, isLoading])
 
-  // Set default connection profile when character is selected
+  // Set default connection profile when character is selected.
+  // Fall back through: character default → user default → first available,
+  // skipping any character default that no longer exists in the user's profiles.
   useEffect(() => {
-    if (selectedCharacterId) {
-      const character = characters.find(c => c.id === selectedCharacterId)
-      if (character?.defaultConnectionProfileId) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream selectedCharacterId changes (parent renders unconditionally)
-        setSelectedConnectionProfileId(character.defaultConnectionProfileId)
-      } else {
-        // Fall back to first available profile
-        if (connectionProfiles.length > 0) {
-          setSelectedConnectionProfileId(connectionProfiles[0].id)
-        }
-      }
+    if (!selectedCharacterId) return
+    const character = characters.find(c => c.id === selectedCharacterId)
+    const characterDefault = character?.defaultConnectionProfileId
+    const characterDefaultExists = characterDefault
+      ? connectionProfiles.some(p => p.id === characterDefault)
+      : false
+    let resolved: string | null = null
+    if (characterDefault && characterDefaultExists) {
+      resolved = characterDefault
+    } else {
+      const userDefault = connectionProfiles.find(p => p.isDefault)
+      resolved = userDefault?.id ?? connectionProfiles[0]?.id ?? null
+    }
+    if (resolved) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream selectedCharacterId changes (parent renders unconditionally)
+      setSelectedConnectionProfileId(resolved)
     }
   }, [selectedCharacterId, characters, connectionProfiles])
 
@@ -181,14 +194,18 @@ export default function AddCharacterDialog({
         participantData.joinScenario = joinScenario.trim()
       }
 
+      // Forward the chosen starting outfit. The server defaults to
+      // `mode: 'default'` when nothing is sent, matching the new-chat flow.
+      if (outfitSelection) {
+        participantData.outfitSelection = outfitSelection
+      }
+
       const response = await fetch(`/api/v1/chats/${chatId}?action=add-participant`, {
-        method: 'PUT',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          addParticipant: participantData,
-        }),
+        body: JSON.stringify(participantData),
       })
 
       if (!response.ok) {
@@ -209,6 +226,19 @@ export default function AddCharacterDialog({
       setIsAdding(false)
     }
   }
+
+  const handleOutfitSelectionsChange = useCallback((selections: OutfitSelection[]) => {
+    setOutfitSelection(selections[0] ?? null)
+  }, [])
+
+  const outfitCharacters = useMemo(() => {
+    if (!selectedCharacter) return []
+    return [{
+      id: selectedCharacter.id,
+      name: selectedCharacter.name,
+      isUserControlled: selectedConnectionProfileId === USER_IMPERSONATION_VALUE,
+    }]
+  }, [selectedCharacter, selectedConnectionProfileId])
 
   const handleNPCCreated = async (characterId: string) => {
     // Auto-select the new NPC
@@ -488,19 +518,29 @@ export default function AddCharacterDialog({
                   <label htmlFor="joinScenario" className="block text-sm qt-text-primary mb-2">
                     How did they join? <span className="qt-text-secondary font-normal">(optional)</span>
                   </label>
-                  <textarea
-                    id="joinScenario"
-                    value={joinScenario}
-                    onChange={(e) => setJoinScenario(e.target.value)}
-                    placeholder="e.g., They walked up and joined the group at the tavern table..."
-                    rows={3}
-                    disabled={isAdding}
-                    className="qt-textarea"
-                  />
-                  <p className="qt-text-xs mt-1">
-                    This text will be included in the character&apos;s context to explain how they joined the conversation.
+                  <p className="qt-text-xs mb-2">
+                    Included in the character&rsquo;s context to explain how they joined the conversation.
                   </p>
+                  <MarkdownLexicalEditor
+                    value={joinScenario}
+                    onChange={setJoinScenario}
+                    disabled={isAdding}
+                    remountKey={selectedCharacterId}
+                    namespace="AddCharacterDialog.joinScenario"
+                    ariaLabel="Join scenario"
+                    minHeight="6rem"
+                  />
                 </div>
+              )}
+
+              {/* Starting Outfit */}
+              {selectedCharacterId && outfitCharacters.length > 0 && (
+                <OutfitSelector
+                  key={selectedCharacterId}
+                  characters={outfitCharacters}
+                  onSelectionsChange={handleOutfitSelectionsChange}
+                  disabled={isAdding}
+                />
               )}
             </div>
           )}

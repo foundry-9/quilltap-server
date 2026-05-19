@@ -344,6 +344,7 @@ export {
   LLMLogResponseSummarySchema,
   LLMLogTokenUsageSchema,
   LLMLogCacheUsageSchema,
+  LLMLogRequestHashesSchema,
   LLMLogSchema,
 } from './llm-log.types';
 
@@ -354,6 +355,7 @@ export type {
   LLMLogResponseSummary,
   LLMLogTokenUsage,
   LLMLogCacheUsage,
+  LLMLogRequestHashes,
   LLMLog,
 } from './llm-log.types';
 

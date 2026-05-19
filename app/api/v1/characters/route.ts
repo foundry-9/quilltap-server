@@ -22,21 +22,28 @@ import { getSeedImports } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
 import { reseedAvatarsForCharacters } from '@/lib/startup/seed-initial-data';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
+import { writeCharacterAvatarToVault } from '@/lib/file-storage/character-vault-bridge';
 import type { Character } from '@/lib/schemas/character.types';
 
 /**
- * Fire-and-forget vault provisioning for a just-created character.
- * The API response returns immediately; vault creation runs in the
- * background. If it fails, the next server startup backfill will
- * retry the same character (the helper is idempotent).
+ * Provision the character's vault synchronously before returning from the
+ * create API, so the vault is ready by the time the response is sent.
+ * Failures are logged but don't fail the request — the character record
+ * still exists and the next startup backfill will retry (the helper is
+ * idempotent). The previous fire-and-forget version was unreliable: a
+ * dangling promise started after `return NextResponse.json(...)` in a
+ * Next.js route can be torn down before it completes, leaving the
+ * character vault-less until next restart.
  */
-function provisionVaultInBackground(character: Character): void {
-  ensureCharacterVault(character).catch((err) => {
-    logger.warn('[Characters v1] Background vault provisioning failed', {
+async function provisionVault(character: Character): Promise<void> {
+  try {
+    await ensureCharacterVault(character);
+  } catch (err) {
+    logger.warn('[Characters v1] Vault provisioning failed; will retry on next startup', {
       characterId: character.id,
       error: err instanceof Error ? err.message : String(err),
     });
-  });
+  }
 }
 
 const CHARACTERS_POST_ACTIONS = ['ai-wizard', 'ai-wizard-stream', 'import', 'quick-create', 'reset-builtins'] as const;
@@ -50,6 +57,7 @@ const createCharacterSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   title: z.string().optional(),
   description: z.string().optional(),
+  manifesto: z.string().optional(),
   personality: z.string().optional(),
   scenarios: z
     .array(
@@ -128,6 +136,7 @@ const wizardRequestSchema = z.object({
     .object({
       title: z.string().optional(),
       description: z.string().optional(),
+      manifesto: z.string().optional(),
       personality: z.string().optional(),
       scenarios: z.array(z.object({ id: z.string(), title: z.string(), content: z.string() })).optional(),
       exampleDialogues: z.string().optional(),
@@ -140,6 +149,7 @@ const wizardRequestSchema = z.object({
       'name',
       'title',
       'description',
+      'manifesto',
       'personality',
       'scenarios',
       'exampleDialogues',
@@ -431,6 +441,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     name: validatedData.name,
     title: validatedData.title || null,
     description: validatedData.description || null,
+    manifesto: validatedData.manifesto || null,
     personality: validatedData.personality || null,
     scenarios: normalizedScenarios,
     firstMessage: validatedData.firstMessage || null,
@@ -456,7 +467,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     npc: character.npc,
   });
 
-  provisionVaultInBackground(character);
+  await provisionVault(character);
 
   return NextResponse.json({ character }, { status: 201 });
 }
@@ -477,6 +488,7 @@ async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext
     name: validatedData.name,
     title: null,
     description: 'Character created during chat import',
+    manifesto: null,
     personality: null,
     scenarios: [],
     firstMessage: null,
@@ -497,7 +509,7 @@ async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext
     name: character.name,
   });
 
-  provisionVaultInBackground(character);
+  await provisionVault(character);
 
   return NextResponse.json({ character }, { status: 201 });
 }
@@ -509,7 +521,10 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
     const contentType = req.headers.get('content-type');
 
     let characterData = null;
-    let avatarUrl = null;
+    // SillyTavern character cards embed their JSON metadata in a PNG tEXt chunk;
+    // the same PNG is the character's portrait. Keep the bytes so we can land
+    // them in the new vault as the imported avatar.
+    let pngAvatarBytes: Buffer | null = null;
 
     if (contentType?.includes('multipart/form-data')) {
       const formData = await req.formData();
@@ -528,7 +543,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
           return badRequest('Invalid SillyTavern PNG file');
         }
 
-        avatarUrl = null;
+        pngAvatarBytes = buffer;
       } else if (file.type === 'application/json' || file.name.endsWith('.json')) {
         const jsonText = buffer.toString('utf-8');
         characterData = JSON.parse(jsonText);
@@ -551,7 +566,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
     const character = await repos.characters.create({
       userId: user.id,
       ...importedData,
-      avatarUrl: avatarUrl,
+      avatarUrl: null,
       isFavorite: false,
       tags: [] as string[],
       partnerLinks: [] as { partnerId: string; isDefault: boolean }[],
@@ -561,14 +576,47 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
       clothingRecords: [],
     });
 
+    let defaultImageId: string | null = null;
+    if (pngAvatarBytes) {
+      // Provision the vault synchronously so the imported portrait lands inside
+      // it. There is no disk fallback: if the vault write fails the character
+      // is still created (avatar regen from the UI can recover), but bytes
+      // never leak into the catch-all _general/ space.
+      try {
+        await ensureCharacterVault(character);
+        const filename = `${character.name || 'avatar'}.png`;
+        const written = await writeCharacterAvatarToVault({
+          characterId: character.id,
+          kind: 'main',
+          filename,
+          content: pngAvatarBytes,
+          contentType: 'image/png',
+        });
+        // Post-Phase-3: defaultImageId is a doc_mount_file_links id pointing
+        // at the avatar in the character's vault. The legacy `files` row
+        // (and its CHARACTER tag) is no longer created.
+        await repos.characters.update(character.id, { defaultImageId: written.linkId });
+        defaultImageId = written.linkId;
+      } catch (avatarError) {
+        logger.error(
+          '[Characters v1] Failed to persist imported SillyTavern avatar; character kept without portrait',
+          {
+            characterId: character.id,
+            error: avatarError instanceof Error ? avatarError.message : String(avatarError),
+          },
+        );
+      }
+    } else {
+      await provisionVault(character);
+    }
+
     const chats = await repos.chats.findByCharacterId(character.id);
 
     logger.info('[Characters v1] Character imported', {
       characterId: character.id,
       name: character.name,
+      hasAvatar: defaultImageId !== null,
     });
-
-    provisionVaultInBackground(character);
 
     return NextResponse.json(
       {
@@ -577,6 +625,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
           name: character.name,
           description: character.description,
           avatarUrl: character.avatarUrl,
+          defaultImageId,
           createdAt: character.createdAt,
           updatedAt: character.updatedAt,
           _count: {

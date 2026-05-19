@@ -76,6 +76,7 @@ export function createMockCharacter(overrides: Partial<Character> = {}): Charact
     userId: generateId(),
     name: 'Test Character',
     title: null,
+    identity: null,
     description: 'A test character for unit tests',
     personality: 'Friendly and helpful',
     scenarios: [],

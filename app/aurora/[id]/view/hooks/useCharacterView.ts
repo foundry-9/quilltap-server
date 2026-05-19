@@ -102,6 +102,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   // (pronouns, aliases, title, talkativeness) is intentionally excluded.
   const templateFields: Record<string, string | null | undefined> = {
     description: character?.description,
+    manifesto: character?.manifesto,
     personality: character?.personality,
     firstMessage: character?.firstMessage,
     exampleDialogues: character?.exampleDialogues,

@@ -18,7 +18,9 @@ interface ApplyConfirmationProps {
 }
 
 const FIELD_LABELS: Record<string, string> = {
+  identity: 'Identity',
   description: 'Description',
+  manifesto: 'Manifesto',
   personality: 'Personality',
   scenarios: 'Scenario',
   exampleDialogues: 'Example Dialogues',
@@ -31,7 +33,9 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const FIELD_BADGE_CLASS: Record<string, string> = {
+  identity: 'qt-badge-primary',
   description: 'qt-badge-secondary',
+  manifesto: 'qt-badge-primary',
   personality: 'qt-badge-character',
   scenarios: 'qt-badge-project',
   exampleDialogues: 'qt-badge-chat',

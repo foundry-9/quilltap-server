@@ -5,10 +5,43 @@
  * Handles both character memories and inter-character memories.
  */
 
+import { createHash } from 'node:crypto'
 import type { Provider, Memory } from '@/lib/schemas/types'
+import type { SceneState } from '@/lib/schemas/chat.types'
 import { estimateTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { calculateEffectiveWeight, formatRelativeAge } from '@/lib/memory/memory-weighting'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
+
+/**
+ * Per-target emission record for a single character's slice of the
+ * Commonplace Book scene-state whisper. Persisted on
+ * `chats.commonplaceSceneCache` so the next emission to the same target
+ * can collapse the character's section to "_unchanged_" when both hashes
+ * match.
+ */
+export interface SceneStateEmissionEntry {
+  /** Short hash of the character's `action` text, after trim. */
+  actionHash: string
+  /** Short hash of the character's clothing text (live override or cached). */
+  clothingHash: string
+  /** ISO timestamp of the most recent FULL emission of this character's
+   *  section to this target. Carried forward unchanged across compact
+   *  emissions so the timestamp tracks the last time the content actually
+   *  changed — useful for diagnostics and for the LLM to know how stale
+   *  the cached scene is. */
+  emittedAt: string
+}
+
+const SCENE_HASH_LENGTH = 16
+
+function sceneHash(input: string): string {
+  return createHash('sha256').update(input).digest('hex').slice(0, SCENE_HASH_LENGTH)
+}
+
+/** Phase 3b: hard cap on the dynamic-head rank instruction. */
+export const DYNAMIC_HEAD_TOKEN_BUDGET = 200
+/** Phase 3b: how many rank-instruction entries to attempt. */
+export const DYNAMIC_HEAD_DEFAULT_SIZE = 5
 
 /**
  * Debug info for included memories
@@ -50,6 +83,105 @@ export interface FormattedInterCharacterMemoriesResult {
 }
 
 /**
+ * Render the latest scene-state snapshot as the `## Current State` section
+ * for the Commonplace Book whisper. Returns `''` when no scene state is
+ * available so callers can treat the section as absent.
+ *
+ * `time` is the chat's announced timestamp (the same string the Host
+ * announces); pass `null`/`undefined` when the chat is not announcing time
+ * and the Time line is dropped entirely.
+ *
+ * `liveClothingByCharacterId` lets the caller override each character's
+ * clothing line with a freshly-rendered description of their currently
+ * equipped wardrobe slots. The cached `c.clothing` from scene state is only
+ * refreshed at turn boundaries, so passing live values here keeps the
+ * responding character's prompt in sync with mid-turn wardrobe edits and
+ * `wardrobe_*` tool calls.
+ *
+ * `priorEmissionByCharacter` is the per-target emission cache from the most
+ * recent Commonplace Book whisper for the same recipient. When a
+ * character's current (action, clothing) hashes match the cached pair,
+ * their section collapses to a single `### Name — _unchanged_` line; the
+ * cached `emittedAt` is preserved on the returned `emittedByCharacter` so
+ * subsequent compact emissions don't reset the timestamp. The caller
+ * persists the returned map back to `chat.commonplaceSceneCache[target]`.
+ */
+export function formatCurrentSceneState(
+  sceneState: SceneState | null | undefined,
+  time: string | null | undefined,
+  provider?: Provider,
+  liveClothingByCharacterId?: ReadonlyMap<string, string>,
+  priorEmissionByCharacter?: ReadonlyMap<string, SceneStateEmissionEntry>,
+): {
+  content: string
+  tokenCount: number
+  emittedByCharacter: Map<string, SceneStateEmissionEntry>
+} {
+  if (!sceneState) {
+    return { content: '', tokenCount: 0, emittedByCharacter: new Map() }
+  }
+
+  const characters = Array.isArray(sceneState.characters) ? sceneState.characters : []
+  const names = characters.map(c => c.characterName).filter(n => typeof n === 'string' && n.length > 0)
+
+  const lines: string[] = ['## Current State', '']
+  lines.push(`- **Location**: ${sceneState.location || 'Unknown'}`)
+  lines.push(`- **Characters Present**: ${names.join(', ')}`)
+  if (time && time.trim().length > 0) {
+    lines.push(`- **Time**: ${time.trim()}`)
+  }
+  lines.push('- **Active Now**: true')
+
+  const nowIso = new Date().toISOString()
+  const emittedByCharacter = new Map<string, SceneStateEmissionEntry>()
+
+  for (const c of characters) {
+    if (!c.characterName) continue
+
+    const actionText = (c.action ?? '').trim() || '_unspecified_'
+    const liveClothing = liveClothingByCharacterId?.get(c.characterId)?.trim()
+    const clothingText = liveClothing || (c.clothing ?? '').trim() || '_unspecified_'
+    const actionHash = sceneHash(actionText)
+    const clothingHash = sceneHash(clothingText)
+
+    const prior = c.characterId ? priorEmissionByCharacter?.get(c.characterId) : undefined
+    const unchanged = !!prior && prior.actionHash === actionHash && prior.clothingHash === clothingHash
+
+    lines.push('')
+    if (unchanged) {
+      // Compact: skip the full Action + Clothing prose. The prior whisper
+      // already conveyed it; the recipient's LLM client (or the Courier
+      // delta consumer) still remembers.
+      lines.push(`### ${c.characterName} — _unchanged_`)
+    } else {
+      lines.push(`### ${c.characterName}`)
+      lines.push('')
+      lines.push('#### Action')
+      lines.push('')
+      lines.push(actionText)
+      lines.push('')
+      lines.push('#### Clothing')
+      lines.push('')
+      lines.push(clothingText)
+    }
+
+    if (c.characterId) {
+      emittedByCharacter.set(c.characterId, {
+        actionHash,
+        clothingHash,
+        // Preserve the prior timestamp when nothing changed — it tracks
+        // the last time the section was *actually* re-emitted in full.
+        emittedAt: unchanged && prior ? prior.emittedAt : nowIso,
+      })
+    }
+  }
+
+  const content = lines.join('\n')
+  const tokenCount = estimateTokens(content + '\n', provider)
+  return { content, tokenCount, emittedByCharacter }
+}
+
+/**
  * Format memories for injection into context
  */
 export function formatMemoriesForContext(
@@ -81,9 +213,12 @@ export function formatMemoriesForContext(
   const now = new Date()
 
   for (const { memory, score, weight } of sortedMemories) {
-    // Use summary with relative age label for temporal context
+    // Use full content (not summary) so the whisper carries the same nuance the
+    // model formed at extraction time. Summary is the cache-friendly form for
+    // recap LLM inputs, but the per-line whisper has the budget for the body.
     const age = formatRelativeAge(memory, now)
-    const memoryLine = `- [${age}] ${memory.summary}`
+    const body = memory.content?.trim() || memory.summary
+    const memoryLine = `- [${age}] ${body}`
     const lineTokens = estimateTokens(memoryLine + '\n', provider)
 
     if (currentTokens + lineTokens > maxTokens) {
@@ -152,7 +287,8 @@ export function formatInterCharacterMemoriesForContext(
     const now = new Date()
     for (const { memory } of sortedMemories) {
       const age = formatRelativeAge(memory, now)
-      const memoryLine = `- About ${characterName}: [${age}] ${memory.summary}`
+      const body = memory.content?.trim() || memory.summary
+      const memoryLine = `- About ${characterName}: [${age}] ${body}`
       const lineTokens = estimateTokens(memoryLine + '\n', provider)
 
       if (currentTokens + lineTokens > maxTokens) {
@@ -176,6 +312,134 @@ export function formatInterCharacterMemoriesForContext(
 
   return {
     content: memoryParts.join('\n'),
+    tokenCount: currentTokens,
+    memoriesUsed,
+    debugMemories,
+  }
+}
+
+/**
+ * Phase 3a: Format the frozen-archive memory pool for context.
+ *
+ * The archive is a stable per-generation slice (already sorted by `memory.id`
+ * by the caller — see `frozen-archive-cache.ts`). The output uses
+ * `memory.summary` rather than `memory.content` so the bytes stay compact and
+ * the cache prefix doesn't bloat. No per-turn re-ranking is performed: order
+ * follows the input array verbatim so prefix-cache bytes are byte-stable
+ * across turns within a generation.
+ */
+export function formatFrozenMemoryArchive(
+  memories: Memory[],
+  maxTokens: number,
+  provider: Provider,
+): FormattedMemoriesResult {
+  if (memories.length === 0) {
+    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
+  }
+
+  const header = '## Memory Anchors'
+  const memoryParts: string[] = [header]
+  let currentTokens = estimateTokens(`${header}\n`, provider)
+  let memoriesUsed = 0
+  const debugMemories: DebugMemoryInfo[] = []
+
+  for (const memory of memories) {
+    const summary = memory.summary?.trim() || memory.content?.trim() || ''
+    if (!summary) continue
+
+    const memoryLine = `- ${summary}`
+    const lineTokens = estimateTokens(`${memoryLine}\n`, provider)
+    if (currentTokens + lineTokens > maxTokens) {
+      break
+    }
+
+    memoryParts.push(memoryLine)
+    currentTokens += lineTokens
+    memoriesUsed++
+    debugMemories.push({
+      summary: memory.summary,
+      importance: memory.importance,
+      score: 0,
+      effectiveWeight: 0,
+    })
+  }
+
+  if (memoriesUsed === 0) {
+    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
+  }
+
+  return {
+    content: memoryParts.join('\n'),
+    tokenCount: currentTokens,
+    memoriesUsed,
+    debugMemories,
+  }
+}
+
+/**
+ * Phase 3b: Format a compact "dynamic head" rank instruction for the user-
+ * message tail. Hard-capped at `DYNAMIC_HEAD_TOKEN_BUDGET` tokens. Uses
+ * `memory.summary` (not full content) and a short id prefix so the LLM can
+ * cite the relevant entry without the prompt bloating per turn. Caller is
+ * expected to pre-filter out memories already present in the frozen archive.
+ */
+export function formatDynamicMemoryHead(
+  memories: SemanticSearchResult[],
+  provider: Provider,
+  options: { maxTokens?: number; maxEntries?: number } = {},
+): FormattedMemoriesResult {
+  const maxTokens = options.maxTokens ?? DYNAMIC_HEAD_TOKEN_BUDGET
+  const maxEntries = options.maxEntries ?? DYNAMIC_HEAD_DEFAULT_SIZE
+
+  if (memories.length === 0) {
+    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
+  }
+
+  const ranked = memories
+    .map(r => ({
+      ...r,
+      weight: r.effectiveWeight ?? calculateEffectiveWeight(r.memory).effectiveWeight,
+    }))
+    .sort((a, b) => {
+      const weightDiff = b.weight - a.weight
+      if (Math.abs(weightDiff) > 0.05) return weightDiff
+      return b.score - a.score
+    })
+    .slice(0, maxEntries)
+
+  const header = 'Most relevant memories for this turn:'
+  const entries: string[] = []
+  const debugMemories: DebugMemoryInfo[] = []
+  // Reserve token budget for the header + final newline.
+  let currentTokens = estimateTokens(`${header}\n`, provider)
+  let memoriesUsed = 0
+
+  for (const { memory, score, weight } of ranked) {
+    const summary = memory.summary?.trim() || memory.content?.trim() || ''
+    if (!summary) continue
+    const idTag = `[m_${memory.id.slice(0, 4)}]`
+    const entry = `${idTag} ${summary}`
+    const candidateTokens = estimateTokens(`${entry}\n`, provider)
+    if (currentTokens + candidateTokens > maxTokens) {
+      break
+    }
+    entries.push(entry)
+    currentTokens += candidateTokens
+    memoriesUsed++
+    debugMemories.push({
+      summary: memory.summary,
+      importance: memory.importance,
+      score,
+      effectiveWeight: weight,
+    })
+  }
+
+  if (memoriesUsed === 0) {
+    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
+  }
+
+  return {
+    content: `${header}\n${entries.join('\n')}`,
     tokenCount: currentTokens,
     memoriesUsed,
     debugMemories,

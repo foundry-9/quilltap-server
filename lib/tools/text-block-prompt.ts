@@ -38,8 +38,10 @@ export interface TextBlockPromptOptions {
   createNote?: boolean
   /** Enable list wardrobe tool */
   wardrobeList?: boolean
-  /** Enable update outfit item tool */
+  /** Enable composite-outfit tool (wardrobe_set_outfit) */
   wardrobeUpdateOutfit?: boolean
+  /** Enable atomic-item tool (wardrobe_change_item) */
+  wardrobeChangeItem?: boolean
   /** Enable create wardrobe item tool */
   wardrobeCreateItem?: boolean
 }
@@ -149,20 +151,33 @@ Format: [[WARDROBE /]]
 With filters: [[WARDROBE type_filter="top" /]]`)
   }
 
+  if (options.wardrobeChangeItem) {
+    toolDocs.push(`
+### Change Wardrobe Item (single garment)
+Equip, layer, or remove a SINGLE garment in your outfit. For composite outfits (bundles of items), use SET_OUTFIT instead.
+To equip (replaces what's in the slots it covers): [[CHANGE_ITEM mode="equip" id="item-uuid" /]]
+By name: [[CHANGE_ITEM mode="equip" title="Charcoal Sweater" /]]
+To layer over what's already worn: [[CHANGE_ITEM mode="add_to_slot" slot="top" id="item-uuid" /]]
+To take off one specific item: [[CHANGE_ITEM mode="remove_from_slot" slot="top" id="item-uuid" /]]
+To clear a slot entirely: [[CHANGE_ITEM mode="clear_slot" slot="top" /]]`)
+  }
+
   if (options.wardrobeUpdateOutfit) {
     toolDocs.push(`
-### Equip/Remove Outfit Item
-Change what you're wearing by equipping or removing items from outfit slots.
-To equip: [[EQUIP slot="top" id="item-uuid" /]]
-To equip by name: [[EQUIP slot="top" title="Charcoal Sweater" /]]
-To remove: [[EQUIP slot="top" /]]`)
+### Set Outfit (composite outfits)
+Put on or take off a composite outfit — a wardrobe item that bundles multiple pieces (e.g. "Rain Outfit" = coat + jeans + boots).
+To wear: [[SET_OUTFIT mode="wear" id="item-uuid" /]]
+By name: [[SET_OUTFIT mode="wear" title="Rain Outfit" /]]
+To remove: [[SET_OUTFIT mode="remove" id="item-uuid" /]]
+For single garments, use CHANGE_ITEM instead.`)
   }
 
   if (options.wardrobeCreateItem) {
     toolDocs.push(`
 ### Create Wardrobe Item
-Design and add a new clothing item to your wardrobe, or gift one to another character.
-Format: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" appropriateness="casual"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]
+Design and add a new clothing item to your wardrobe, or gift one to another character. You can also build composite outfits that bundle existing items.
+Single garment: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" appropriateness="casual"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]
+Composite outfit (bundles existing items by id or title): [[CREATE_WARDROBE_ITEM title="Rain Outfit" component_titles="Yellow Slicker,Dark Jeans,Wellington Boots"]]Practical attire for a downpour[[/CREATE_WARDROBE_ITEM]]
 Gift to another character: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" recipient="CharacterName"]]A gift for you[[/CREATE_WARDROBE_ITEM]]`)
   }
 

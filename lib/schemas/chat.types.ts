@@ -113,8 +113,124 @@ export const MessageEventSchema = z.object({
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage: z.boolean().nullable().optional(),
-  /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements. */
-  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host']).nullable().optional(),
+  /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close). */
+  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel']).nullable().optional(),
+  /**
+   * Neutral, persona-free rewrite of `content` for Staff-authored messages
+   * (systemSender != null). When the chat has any non-user-character
+   * participant whose `systemTransparency !== true`, the context-builder swaps
+   * `content` → `opaqueContent ?? content` in every character's LLM context so
+   * the Staff names ("The Host", "Aurora", "Prospero", …) never reach an
+   * opaque character. The user character does NOT count toward the test —
+   * they stay "transparent by default". The human user's transcript / UI is
+   * unaffected; it always reads `content` with its full persona voicing.
+   *
+   * Writers populate this in lockstep with `content`. NULL on
+   * participant-authored messages and on legacy Staff messages written before
+   * the dual-body migration (in which case the swap falls through to
+   * `content`).
+   */
+  opaqueContent: z.string().nullable().optional(),
+  /**
+   * Sub-classification of a Staff-authored message — used by the Salon UI to
+   * label collapsed system-message bars (e.g. `timestamp`, `project-context`,
+   * `memory-recap`). Always paired with `systemSender`; null on
+   * participant-authored messages. Each writer chooses a stable kebab-case
+   * label per emission path.
+   */
+  systemKind: z.string().nullable().optional(),
+  /**
+   * Structured payload on Host announcements (`systemSender = 'host'`).
+   *
+   * Two shapes share this field today; both are optional and any combination
+   * is permitted, but in practice each announcement uses exactly one:
+   *
+   * - **Presence transitions** (`systemKind` = add / remove / status-change):
+   *   `participantId` + `toStatus` carry the affected participant and the
+   *   status they were transitioning to. Consumed by the per-character
+   *   Librarian summary pipeline to compute presence windows.
+   * - **Off-scene character introductions** (`systemKind` =
+   *   `off-scene-characters`): `introducedCharacterIds` carries the workspace
+   *   character IDs the Host introduced in this announcement. Consumed by the
+   *   context builder to skip re-introducing the same characters on later
+   *   turns.
+   *
+   * NULL on Host announcements with no structured payload (scenario, roster,
+   * timestamp, silent-mode, join-scenario, no-user-character) and on every
+   * non-Host message.
+   */
+  hostEvent: z.object({
+    participantId: UUIDSchema.optional(),
+    toStatus: z.enum(['active', 'silent', 'absent', 'removed']).optional(),
+    introducedCharacterIds: z.array(UUIDSchema).optional(),
+  }).nullable().optional(),
+  /**
+   * Phase 3c: anchor tying a Staff-authored whisper to the compaction
+   * generation under which it was produced. Today this is set on Librarian
+   * per-character summary whispers so the summarization pipeline can sweep
+   * stale anchors deterministically when `compactionGeneration` bumps —
+   * instead of the prior content-prefix sweep, which couldn't distinguish
+   * whispers that legitimately span generation boundaries.
+   *
+   * NULL on whispers from before the anchoring change (and on every
+   * non-anchorable message). The sweep treats null as "older than current
+   * generation" so legacy whispers continue to be removed on regen.
+   */
+  summaryAnchor: z.object({
+    compactionGeneration: z.number(),
+  }).nullable().optional(),
+  /**
+   * Ad-hoc announcer metadata for user-authored announcement bubbles
+   * (Insert Announcement composer button). Mutually exclusive with
+   * `systemSender`: when this is set, the message renders with the named
+   * character or custom display name in lieu of any Staff member.
+   *
+   * - `kind: 'character'` → `characterId` references a workspace character
+   *   who is not a participant in this chat. The renderer resolves the
+   *   character's avatar/name via the off-scene character lookup attached
+   *   to the chat payload.
+   * - `kind: 'custom'` → `displayName` is the free-text label shown next
+   *   to a placeholder avatar.
+   *
+   * NULL on every other message.
+   */
+  customAnnouncer: z.object({
+    kind: z.enum(['character', 'custom']),
+    characterId: UUIDSchema.nullable().optional(),
+    displayName: z.string().nullable().optional(),
+  }).nullable().optional(),
+  /**
+   * The Courier: when non-null, this message is a placeholder for a manual /
+   * clipboard turn awaiting a pasted reply. The string is the Markdown blob
+   * the user must copy out, carry to an external LLM, and paste the reply
+   * back in. When delta mode is active, this is the *delta* bundle; the full
+   * fallback lives in `pendingExternalPromptFull`. `content` is empty until
+   * the paste resolves; on resolve, all pending fields are cleared and
+   * `content` carries the reply.
+   */
+  pendingExternalPrompt: z.string().nullable().optional(),
+  /**
+   * The Courier — full-context fallback bundle. Populated alongside
+   * `pendingExternalPrompt` when delta mode rendered a delta, so the Salon
+   * bubble can offer a "Use full context" toggle (e.g. if the user switched
+   * LLM clients or cleared their desktop conversation and needs to
+   * re-establish). Null when delta mode wasn't applicable.
+   */
+  pendingExternalPromptFull: z.string().nullable().optional(),
+  /**
+   * Attachments referenced by a pending Courier turn — surfaced as download
+   * links in the Salon bubble so the user can re-upload them in their
+   * destination client. Cleared when the paste resolves. When both delta
+   * and full bundles are present, this is the union (so the user has access
+   * to every file regardless of which bundle they paste).
+   */
+  pendingExternalAttachments: z.array(z.object({
+    fileId: UUIDSchema,
+    filename: z.string(),
+    mimeType: z.string(),
+    sizeBytes: z.number(),
+    downloadUrl: z.string(),
+  })).nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;
@@ -320,6 +436,26 @@ export const ChatMetadataSchema = z.object({
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
+  /**
+   * Monotonic counter bumped on every summarization fire (T_soft or T_hard).
+   * Used by Phase 3 to anchor memory pools and per-character whispers — when
+   * this number changes, downstream caches know to invalidate.
+   */
+  compactionGeneration: z.number().default(0),
+  /** Interchange count when the last summarization fire happened. Drives T_soft. */
+  lastSummaryTurn: z.number().default(0),
+  /** Rolling-buffer token count when the last summarization fire happened. Drives T_soft. */
+  lastSummaryTokens: z.number().default(0),
+  /** Interchange count when the last full-from-scratch rebuild happened. Drives T_hard. */
+  lastFullRebuildTurn: z.number().default(0),
+  /**
+   * Phase 4: list of conversation message IDs (USER + ASSISTANT) that fed
+   * the current `contextSummary`. Used by the edit/delete invalidation hook
+   * to clear the summary only when a covered message changes — typo fixes
+   * on a message that arrived after the last summary leave the summary
+   * intact.
+   */
+  summaryAnchorMessageIds: z.array(UUIDSchema).default([]),
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
@@ -343,6 +479,15 @@ export const ChatMetadataSchema = z.object({
 
   /** Divider position for split mode as percentage of main area width (20-80) */
   dividerPosition: z.number().min(20).max(80).default(45),
+
+  /** Terminal Mode layout state: normal (chat only), split (chat + terminal), focus (terminal only) */
+  terminalMode: z.enum(['normal', 'split', 'focus']).default('normal'),
+
+  /** Active terminal session shown in Terminal Mode pane (null = no session bound) */
+  activeTerminalSessionId: UUIDSchema.nullable().optional(),
+
+  /** Vertical divider position (%) for the right-pane split when both Document and Terminal Modes are active (20-80) */
+  rightPaneVerticalSplit: z.number().min(20).max(80).default(50),
 
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),
@@ -438,6 +583,49 @@ export const ChatMetadataSchema = z.object({
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
 
+  /**
+   * Phase H: precompiled per-participant identity stack — the character-static
+   * portion of the system prompt (identity preamble, base prompt, manifesto,
+   * personality, aliases, pronouns, physical descriptions, example dialogues), with
+   * templates ({{user}}, {{scenario}}, {{persona}}) resolved at compile time.
+   * Keyed by participantId. Recompiled at chat creation, on participant add,
+   * on selectedSystemPromptId change, and on chat.scenarioText change. Edits
+   * to the underlying character record do NOT auto-invalidate this field —
+   * users will need to manually rehydrate (or restart the chat) to pick them
+   * up. When missing for a participant, context-manager builds the stack
+   * fresh and uses it without persisting (read-through fallback).
+   */
+  compiledIdentityStacks: JsonSchema.nullable().optional(),
+
+  /**
+   * The Courier — per-character delta-mode checkpoints. JSON shape:
+   *   { [characterId]: { lastResolvedMessageId: UUID, resolvedAt: ISOString } }
+   * Set on every successful `resolve-external-turn`. The orchestrator consults
+   * this when the responding character's profile has `courierDeltaMode` on:
+   * a checkpoint present for the character means the next Courier turn for
+   * that character renders only messages newer than `resolvedAt`, on the
+   * assumption that the external LLM client still remembers everything up
+   * through the last paste. Null on chats that have never used a Courier
+   * profile.
+   */
+  courierCheckpoints: JsonSchema.nullable().optional(),
+
+  /**
+   * The Commonplace Book — per-target scene-state emission cache. JSON shape:
+   *   { [targetKey]: { [characterId]: { actionHash, clothingHash, emittedAt } } }
+   * where `targetKey` is the recipient participant ID (or the sentinel
+   * `"__public__"` for untargeted whispers in single-character chats).
+   * `formatCurrentSceneState` consults this map per target before emitting
+   * the `Current State` block; when a character's action+clothing hash
+   * matches what was last sent to the same target, the character's section
+   * collapses to a single `### Name — _unchanged_` line so the LLM (or the
+   * Courier delta) doesn't carry the same several-hundred-token wardrobe
+   * prose every turn. The cache is updated only after the new whisper has
+   * been durably posted. Null on chats that have not yet emitted a
+   * Commonplace Book whisper.
+   */
+  commonplaceSceneCache: JsonSchema.nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -467,6 +655,13 @@ export const ChatMetadataBaseSchema = z.object({
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
+  /** Triple-gate summarization tracking. See ChatMetadataSchema for details. */
+  compactionGeneration: z.number().default(0),
+  lastSummaryTurn: z.number().default(0),
+  lastSummaryTokens: z.number().default(0),
+  lastFullRebuildTurn: z.number().default(0),
+  /** Phase 4: message IDs covered by the current summary. See ChatMetadataSchema. */
+  summaryAnchorMessageIds: z.array(UUIDSchema).default([]),
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
@@ -485,6 +680,15 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Divider position for split mode as percentage of main area width (20-80) */
   dividerPosition: z.number().min(20).max(80).default(45),
+
+  /** Terminal Mode layout state: normal (chat only), split (chat + terminal), focus (terminal only) */
+  terminalMode: z.enum(['normal', 'split', 'focus']).default('normal'),
+
+  /** Active terminal session shown in Terminal Mode pane (null = no session bound) */
+  activeTerminalSessionId: UUIDSchema.nullable().optional(),
+
+  /** Vertical divider position (%) for the right-pane split when both Document and Terminal Modes are active (20-80) */
+  rightPaneVerticalSplit: z.number().min(20).max(80).default(50),
 
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),
@@ -575,6 +779,26 @@ export const ChatMetadataBaseSchema = z.object({
   chatType: z.enum(['salon', 'help']).default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
+
+  /**
+   * Phase H: precompiled per-participant identity stack — the character-static
+   * portion of the system prompt (identity preamble, base prompt, manifesto,
+   * personality, aliases, pronouns, physical descriptions, example dialogues), with
+   * templates ({{user}}, {{scenario}}, {{persona}}) resolved at compile time.
+   * Keyed by participantId. Recompiled at chat creation, on participant add,
+   * on selectedSystemPromptId change, and on chat.scenarioText change. Edits
+   * to the underlying character record do NOT auto-invalidate this field —
+   * users will need to manually rehydrate (or restart the chat) to pick them
+   * up. When missing for a participant, context-manager builds the stack
+   * fresh and uses it without persisting (read-through fallback).
+   */
+  compiledIdentityStacks: JsonSchema.nullable().optional(),
+
+  /** The Courier — per-character delta-mode checkpoints. See ChatMetadataSchema for the contract. */
+  courierCheckpoints: JsonSchema.nullable().optional(),
+
+  /** The Commonplace Book — per-target scene-state emission cache. See ChatMetadataSchema for the contract. */
+  commonplaceSceneCache: JsonSchema.nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

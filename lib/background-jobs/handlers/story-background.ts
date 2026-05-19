@@ -9,13 +9,17 @@ import { createHash } from 'node:crypto';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import {
+  getLanternBackgroundsStore,
+  writeLanternBackgroundToMountStore,
+} from '@/lib/file-storage/lantern-store-bridge';
 
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import type { StoryBackgroundGenerationPayload } from '../queue-service';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import {
@@ -30,6 +34,7 @@ import {
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 
 /**
  * Detect post-hoc content-moderation rejections from image providers.
@@ -184,26 +189,25 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // 8. Derive scene context AND resolve character appearances in parallel
   let sceneContext = payload.sceneContext || chat.title;
 
-  // Build appearance inputs from loaded characters, enriched with equipped wardrobe items
+  // Build appearance inputs from loaded characters, enriched with equipped
+  // wardrobe items. Equipped slots are arrays-per-slot; composites are
+  // expanded via resolveEquippedOutfitForCharacter before flattening for
+  // the appearance-resolution input.
   const appearanceInputs: AppearanceResolutionInput[] = [];
   for (const char of validCharacters) {
     let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
     try {
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       if (equippedSlots) {
-        const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
-        if (equippedItemIds.length > 0) {
-          const items = await repos.wardrobe.findByIds(equippedItemIds);
-          const itemsMap = new Map(items.map(item => [item.id, item]));
-          equippedWardrobeItems = [];
-          for (const [slot, itemId] of Object.entries(equippedSlots)) {
-            if (itemId) {
-              const item = itemsMap.get(itemId);
-              if (item) {
-                equippedWardrobeItems.push({ slot, title: item.title, description: item.description });
-              }
-            }
+        const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots);
+        const flat: Array<{ slot: string; title: string; description?: string | null }> = [];
+        for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
+          for (const item of resolved.leafItemsBySlot[slot]) {
+            flat.push({ slot, title: item.title, description: item.description });
           }
+        }
+        if (flat.length > 0) {
+          equippedWardrobeItems = flat;
         }
       }
     } catch (err) {
@@ -515,7 +519,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     const genDurationMs = Date.now() - genStartTime;
     const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
 
-    logLLMCall({
+    await logLLMCall({
       userId: job.userId,
       type: 'IMAGE_GENERATION',
       chatId: payload.chatId,
@@ -528,18 +532,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
       },
       durationMs: genDurationMs,
-    }).catch(err => {
-      logger.warn('[StoryBackground] Failed to log image generation to LLM Inspector', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        error: getErrorMessage(err),
-      });
     });
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     const genDurationMs = Date.now() - genStartTime;
 
-    logLLMCall({
+    await logLLMCall({
       userId: job.userId,
       type: 'IMAGE_GENERATION',
       chatId: payload.chatId,
@@ -553,7 +551,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         error: errorMessage,
       },
       durationMs: genDurationMs,
-    }).catch(() => { /* never block on logging */ });
+    });
 
     // If the provider post-hoc rejected the generated image for content
     // moderation, the Concierge has a second door: retry with the configured
@@ -630,7 +628,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       const rerouteDurationMs = Date.now() - rerouteStartTime;
       const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
 
-      logLLMCall({
+      await logLLMCall({
         userId: job.userId,
         type: 'IMAGE_GENERATION',
         chatId: payload.chatId,
@@ -643,7 +641,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           content: rerouteRevisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s) (Concierge reroute)`,
         },
         durationMs: rerouteDurationMs,
-      }).catch(() => { /* never block on logging */ });
+      });
 
       activeImageProfile = uncensoredProfile;
 
@@ -658,7 +656,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       const rerouteErrorMessage = getErrorMessage(rerouteError);
       const rerouteDurationMs = Date.now() - rerouteStartTime;
 
-      logLLMCall({
+      await logLLMCall({
         userId: job.userId,
         type: 'IMAGE_GENERATION',
         chatId: payload.chatId,
@@ -672,7 +670,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           error: rerouteErrorMessage,
         },
         durationMs: rerouteDurationMs,
-      }).catch(() => { /* never block on logging */ });
+      });
 
       logger.error('[StoryBackground] Image generation failed (Concierge reroute also failed)', {
         context: 'background-jobs.story-background',
@@ -720,34 +718,64 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const linkedTo = [payload.chatId, ...payload.characterIds];
 
   try {
-    // Upload to file storage
-    const uploadResult = await fileStorageManager.uploadFile({
-      filename: originalFilename,
-      content: buffer,
-      contentType: mimeType,
-      projectId: payload.projectId ?? null,
-      folderPath: '/story-backgrounds/',
-    });
-
-    // Ensure /story-backgrounds/ folder record exists in database
     const folderProjectId = payload.projectId ?? null;
-    const existingFolder = await repos.folders.findByPath(
-      job.userId,
-      '/story-backgrounds/',
-      folderProjectId
-    );
-    if (!existingFolder) {
-      await repos.folders.create({
-        userId: job.userId,
-        path: '/story-backgrounds/',
-        name: 'story-backgrounds',
-        parentFolderId: null,
-        projectId: folderProjectId,
-      });
 
+    // Project-scoped backgrounds keep landing in the project's official mount
+    // (handled by fileStorageManager → project-store-bridge). Project-less
+    // backgrounds must land in the global Lantern Backgrounds mount; no disk
+    // fallback — fail rather than leak generated bytes into _general/.
+    let storageKey: string;
+    let fileFolderPath: string | null;
+    let usedLantern = false;
+
+    if (folderProjectId) {
+      const uploadResult = await fileStorageManager.uploadFile({
+        filename: originalFilename,
+        content: buffer,
+        contentType: mimeType,
+        projectId: folderProjectId,
+        folderPath: '/story-backgrounds/',
+      });
+      storageKey = uploadResult.storageKey;
+      fileFolderPath = '/story-backgrounds/';
+    } else {
+      const lantern = await getLanternBackgroundsStore();
+      if (!lantern) {
+        throw new Error(
+          'Lantern Backgrounds mount is not provisioned; cannot persist project-less story background.',
+        );
+      }
+      const written = await writeLanternBackgroundToMountStore({
+        filename: originalFilename,
+        content: buffer,
+        contentType: mimeType,
+        subfolder: 'generated',
+        description: `Story background for: ${payload.sceneContext || chat.title}`,
+      });
+      storageKey = written.storageKey;
+      fileFolderPath = null;
+      usedLantern = true;
     }
 
-    // Create file metadata record
+    // Legacy folder records only matter for the project-mount tree; the
+    // Lantern mount manages its own folder hierarchy in doc_mount_folders.
+    if (!usedLantern) {
+      const existingFolder = await repos.folders.findByPath(
+        job.userId,
+        '/story-backgrounds/',
+        folderProjectId
+      );
+      if (!existingFolder) {
+        await repos.folders.create({
+          userId: job.userId,
+          path: '/story-backgrounds/',
+          name: 'story-backgrounds',
+          parentFolderId: null,
+          projectId: folderProjectId,
+        });
+      }
+    }
+
     const category: FileCategory = 'IMAGE';
     const source: FileSource = 'GENERATED';
 
@@ -767,9 +795,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       generationRevisedPrompt: imageData.revisedPrompt || null,
       description: `Story background for: ${payload.sceneContext || chat.title}`,
       tags: [],
-      storageKey: uploadResult.storageKey,
+      storageKey,
       projectId: folderProjectId,
-      folderPath: '/story-backgrounds/',
+      folderPath: fileFolderPath,
     }, { id: fileId });
 
     logger.info('[StoryBackground] Image saved successfully', {
@@ -813,5 +841,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     chatId: payload.chatId,
     fileId,
     kind: { kind: 'background' },
+    prompt: finalPrompt,
   });
 }

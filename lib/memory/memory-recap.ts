@@ -159,7 +159,8 @@ export async function generateMemoryRecap(
         selection,
         userId,
         chatId,
-        uncensoredFallback
+        uncensoredFallback,
+        characterId
       )
 
       if (!result.success || !result.result) {

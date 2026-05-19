@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
 import { resolveEffectiveFolderPath, normalizeFolderPath, validateFolderPath } from '@/lib/files/folder-utils';
 import { findAndPrepareOverwrite } from '@/lib/files/overwrite-utils';
 import { logger } from '@/lib/logger';
@@ -128,13 +129,30 @@ export async function saveFileEntry(options: SaveFileEntryOptions): Promise<{
     filename: sanitizedFilename,
   });
 
-  const { storageKey } = await fileStorageManager.uploadFile({
-    filename: sanitizedFilename,
-    content: options.contentBuffer,
-    contentType: options.mimeType,
-    projectId: options.projectId,
-    folderPath: options.folderPath,
-  });
+  // Project-bound files keep flowing through FSM (which resolves to the
+  // project-store-bridge). Project-less uploads land in the Quilltap Uploads
+  // mount under uploads/, not the catch-all _general/. The user's chosen
+  // folderPath is preserved on the files row for the Files-tab tree UI.
+  let storageKey: string;
+  if (options.projectId) {
+    const uploaded = await fileStorageManager.uploadFile({
+      filename: sanitizedFilename,
+      content: options.contentBuffer,
+      contentType: options.mimeType,
+      projectId: options.projectId,
+      folderPath: options.folderPath,
+    });
+    storageKey = uploaded.storageKey;
+  } else {
+    const subfolder = options.category === 'IMAGE' ? 'images' : 'uploads';
+    const written = await writeUserUploadToMountStore({
+      filename: sanitizedFilename,
+      content: options.contentBuffer,
+      contentType: options.mimeType,
+      subfolder,
+    });
+    storageKey = written.storageKey;
+  }
 
   const fileId = overwrite ? overwrite.fileId : randomUUID();
 

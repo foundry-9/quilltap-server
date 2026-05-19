@@ -8,6 +8,7 @@
 
 import packageJson from '@/package.json';
 import { logger } from '@/lib/logger';
+import { formatBytes } from '@/lib/utils/format-bytes';
 import { getRepositories } from '@/lib/repositories/factory';
 import { isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { buildSystemPrompt, buildOtherParticipantsInfo } from '@/lib/chat/context/system-prompt-builder';
@@ -53,13 +54,6 @@ function roundPercent(n: number): number {
 
 function formatNumber(n: number): string {
   return n.toLocaleString('en-US');
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 function formatDate(iso: string): string {
@@ -406,10 +400,6 @@ async function buildPromptSection(
         roleplayTemplate = { systemPrompt: (tpl as { systemPrompt: string }).systemPrompt };
       }
     } catch (err) {
-      logger.debug('self_inventory: roleplay template lookup failed', {
-        templateId: chat.roleplayTemplateId,
-        error: getErrorMessage(err),
-      });
     }
   }
 
@@ -425,30 +415,18 @@ async function buildPromptSection(
         };
       }
     } catch (err) {
-      logger.debug('self_inventory: project lookup failed', {
-        projectId: chat.projectId,
-        error: getErrorMessage(err),
-      });
     }
   }
 
-  const systemPrompt = buildSystemPrompt(
+  const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,
-    otherParticipants,
     roleplayTemplate,
-    undefined,
-    respondingParticipant.selectedSystemPromptId ?? null,
-    chat.timestampConfig ?? null,
-    false,
-    projectContext,
-    undefined,
-    undefined,
-    respondingParticipant.status,
-    chat.scenarioText ?? null,
-    undefined,
-    undefined
-  );
+    selectedSystemPromptId: respondingParticipant.selectedSystemPromptId ?? null,
+    timestampConfig: chat.timestampConfig ?? null,
+    isInitialMessage: false,
+    scenarioText: chat.scenarioText ?? null,
+  });
 
   const characterCount = systemPrompt.length;
   const approxTokens = Math.round(characterCount / 4);
@@ -481,11 +459,6 @@ async function buildLastTurnSection(
     try {
       contextWindow = getModelContextLimit(provider, modelName);
     } catch (err) {
-      logger.debug('self_inventory: context window lookup failed', {
-        provider,
-        modelName,
-        error: getErrorMessage(err),
-      });
     }
 
     const utilizationPercent =
@@ -720,13 +693,6 @@ export async function executeSelfInventoryTool(
     };
   }
 
-  logger.debug('self_inventory: assembling report', {
-    context: 'self-inventory-handler',
-    userId: context.userId,
-    chatId: context.chatId,
-    characterId: context.characterId,
-  });
-
   const vault: SelfInventoryVaultSection = await buildVaultSection(character).catch(
     (err) => ({
       available: false as const,
@@ -824,7 +790,7 @@ function formatVaultSection(section: SelfInventoryVaultSection): string {
 
   const lines = section.files.map((f) => {
     const date = formatDate(f.lastModified);
-    return `- ${f.relativePath}  [${f.fileType}, ${formatSize(f.fileSizeBytes)}, modified ${date}]`;
+    return `- ${f.relativePath}  [${f.fileType}, ${formatBytes(f.fileSizeBytes)}, modified ${date}]`;
   });
   const footer = `(To read a file: doc_read_file with scope='document_store', mount_point='${section.mountPointName}', path='<relativePath>')`;
   return `${header}\n${lines.join('\n')}\n${footer}`;

@@ -1,5 +1,4 @@
 export { LoadingSpinner } from './LoadingSpinner'
-export { SearchInput } from './SearchInput'
 export { WizardLoadingStep } from './WizardLoadingStep'
 export { WizardCompleteStep } from './WizardCompleteStep'
 export { WizardErrorStep } from './WizardErrorStep'

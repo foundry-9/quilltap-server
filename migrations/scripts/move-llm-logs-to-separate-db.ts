@@ -46,6 +46,7 @@ const LLM_LOGS_TABLE_DDL = `CREATE TABLE IF NOT EXISTS "llm_logs" (
   "response" TEXT NOT NULL,
   "usage" TEXT,
   "cacheUsage" TEXT,
+  "requestHashes" TEXT,
   "durationMs" INTEGER,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL

@@ -13,7 +13,7 @@
 
 import { AbstractMapRegistry } from './abstract-map-registry';
 import type { BaseRegistryState } from './base-registry';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
 import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { loadPluginModule } from './dynamic-loader';

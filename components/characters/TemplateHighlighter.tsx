@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, Fragment } from 'react'
+import { escapeRegex } from '@/lib/utils/regex'
 
 interface HighlightMatch {
   type: 'char' | 'user'
@@ -188,10 +189,6 @@ export function replaceWithTemplate(
   const flags = caseSensitive ? 'g' : 'gi'
   const regex = new RegExp(escapeRegex(name), flags)
   return content.replace(regex, template)
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 interface TemplateDisplayProps {

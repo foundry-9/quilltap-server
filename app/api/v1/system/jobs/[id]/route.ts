@@ -12,7 +12,7 @@ import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/l
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { ensureProcessorRunning } from '@/lib/background-jobs';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { notFound, forbidden, badRequest, serverError } from '@/lib/api/responses';
 
 /**

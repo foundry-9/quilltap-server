@@ -77,20 +77,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   }
 
   /**
-   * Find a log by ID
-   */
-  async findById(id: string): Promise<LLMLog | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all logs (without pagination)
-   */
-  async findAll(): Promise<LLMLog[]> {
-    return this._findAll();
-  }
-
-  /**
    * Find logs by user ID with pagination
    * @param userId The user ID
    * @param limit Maximum number of logs to return (default: 50)

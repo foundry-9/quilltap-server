@@ -67,7 +67,7 @@ export type CheapLLMSettings = z.infer<typeof CheapLLMSettingsSchema>;
 // TIMESTAMP CONFIGURATION
 // ============================================================================
 
-export const TimestampModeEnum = z.enum(['NONE', 'START_ONLY', 'EVERY_MESSAGE']);
+export const TimestampModeEnum = z.enum(['NONE', 'START_ONLY', 'EVERY_MESSAGE', 'EVERY_N_MINUTES']);
 export type TimestampMode = z.infer<typeof TimestampModeEnum>;
 
 export const TimestampFormatEnum = z.enum(['ISO8601', 'FRIENDLY', 'DATE_ONLY', 'TIME_ONLY', 'CUSTOM']);
@@ -90,6 +90,8 @@ export const TimestampConfigSchema = z.object({
   autoPrepend: z.boolean().default(true),
   /** IANA timezone name override for this chat (e.g., "America/New_York") */
   timezone: z.string().nullable().optional(),
+  /** Minimum minutes between Host timestamp announcements when mode is EVERY_N_MINUTES (default 15) */
+  intervalMinutes: z.number().int().min(1).default(15),
 });
 
 export type TimestampConfig = z.infer<typeof TimestampConfigSchema>;
@@ -289,6 +291,12 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Profile ID to use for image description fallback (when provider doesn't support images) */
   imageDescriptionProfileId: UUIDSchema.nullable().optional(),
+  /**
+   * Profile ID to use as a candid fallback when `imageDescriptionProfileId`
+   * refuses or returns an unusable response. Typically an uncensored
+   * vision-capable model that can describe images the primary refuses to.
+   */
+  uncensoredImageDescriptionProfileId: UUIDSchema.nullable().optional(),
   /** Default roleplay template ID for all new chats */
   defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),
   /** Theme preference settings */
@@ -305,6 +313,7 @@ export const ChatSettingsSchema = z.object({
     format: 'FRIENDLY',
     useFictionalTime: false,
     autoPrepend: true,
+    intervalMinutes: 15,
   }),
   /** Memory cascade preferences for message deletion/regeneration */
   memoryCascadePreferences: MemoryCascadePreferencesSchema.default({

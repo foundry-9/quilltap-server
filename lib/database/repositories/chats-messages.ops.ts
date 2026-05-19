@@ -47,7 +47,53 @@ export const ChatMessageRowSchema = z.object({
   dangerFlags: z.array(DangerFlagSchema).nullable().optional(),  // JSON array
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),  // JSON array — whisper targets
   isSilentMessage: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Whether message was generated while character was in silent mode (SQLite stores as 0/1)
-  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
+  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
+  systemKind: z.string().nullable().optional(),  // Sub-classification of a Staff-authored message (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender.
+  // Neutral, persona-free rewrite of `content` for Staff-authored messages.
+  // Swapped into every character's LLM context when the chat has any non-user-
+  // character participant with systemTransparency !== true. NULL on
+  // participant-authored messages and on legacy Staff messages from before
+  // the dual-body migration.
+  opaqueContent: z.string().nullable().optional(),
+  // Structured payload on Host announcements. Two shapes share this field:
+  // (a) presence transitions — { participantId, toStatus } — for add/remove/
+  // status-change. (b) off-scene character introductions — { introducedCharacterIds }
+  // — stamped by the off-scene Host announcer so the context builder can
+  // detect already-introduced characters. All fields optional; NULL on
+  // announcements with no structured payload and on every non-Host message.
+  hostEvent: z.object({
+    participantId: UUIDSchema.optional(),
+    toStatus: z.enum(['active', 'silent', 'absent', 'removed']).optional(),
+    introducedCharacterIds: z.array(UUIDSchema).optional(),
+  }).nullable().optional(),
+  // Ad-hoc announcer metadata for user-authored announcement bubbles
+  // (Insert Announcement composer button). Mutually exclusive with
+  // systemSender. Shape: { kind: 'character', characterId } or
+  // { kind: 'custom', displayName }.
+  customAnnouncer: z.object({
+    kind: z.enum(['character', 'custom']),
+    characterId: UUIDSchema.nullable().optional(),
+    displayName: z.string().nullable().optional(),
+  }).nullable().optional(),
+  // The Courier: when non-null, this row is a placeholder for a manual /
+  // clipboard turn awaiting a pasted reply. Cleared on resolve.
+  pendingExternalPrompt: z.string().nullable().optional(),
+  // Full-context fallback alongside `pendingExternalPrompt` when delta mode
+  // rendered a delta. Lets the bubble toggle to the full version.
+  pendingExternalPromptFull: z.string().nullable().optional(),
+  pendingExternalAttachments: z.array(z.object({
+    fileId: UUIDSchema,
+    filename: z.string(),
+    mimeType: z.string(),
+    sizeBytes: z.number(),
+    downloadUrl: z.string(),
+  })).nullable().optional(),
+  // Phase 3c: anchor tying a Staff-authored whisper to the compaction
+  // generation under which it was produced. Set on per-character Librarian
+  // summary whispers; null on every other message.
+  summaryAnchor: z.object({
+    compactionGeneration: z.number(),
+  }).nullable().optional(),
   // For type='context-summary'
   context: z.string().nullable().optional(),
   // For type='system'
@@ -264,6 +310,64 @@ export class ChatMessagesOps {
       const messages = await this.getMessages(chatId);
       return messages.length;
     }, 'Failed to get message count for chat', { chatId }, 0);
+  }
+
+  /**
+   * Delete a specific set of messages from a chat by ID. Returns the number
+   * of messages actually removed. Used by the per-character Librarian
+   * summary pipeline to sweep prior summary whispers when a fresh one is
+   * about to be posted.
+   */
+  async deleteMessagesByIds(chatId: string, messageIds: string[]): Promise<number> {
+    if (messageIds.length === 0) return 0;
+
+    return safeQuery(async () => {
+      const messagesCollection = await this.ctx.getMessagesCollection();
+      const now = this.ctx.getCurrentTimestamp();
+      let removed = 0;
+
+      if (this.ctx.isSQLiteBackend()) {
+        for (const messageId of messageIds) {
+          const result = await messagesCollection.deleteOne({ id: messageId, chatId } as QueryFilter);
+          // deleteOne may return either a count or a boolean depending on backend
+          if (typeof result === 'number') {
+            removed += result;
+          } else if (result) {
+            removed += 1;
+          }
+        }
+      } else {
+        // Legacy data compatibility: rewrite embedded messages array
+        const existing = await this.getMessages(chatId);
+        const idSet = new Set(messageIds);
+        const remaining = existing.filter(m => !idSet.has(m.id));
+        removed = existing.length - remaining.length;
+        if (removed > 0) {
+          await messagesCollection.updateOne(
+            { chatId } as QueryFilter,
+            {
+              $set: {
+                messages: remaining,
+                updatedAt: now,
+              },
+            } as any,
+          );
+        }
+      }
+
+      if (removed > 0) {
+        const chat = await this.ctx.findById(chatId);
+        if (chat) {
+          const allMessages = await this.getMessages(chatId);
+          await this.ctx.update(chatId, {
+            messageCount: this.countVisibleMessages(allMessages),
+          } as Partial<ChatMetadata>);
+        }
+        logger.info('Messages deleted from chat', { chatId, removed, requested: messageIds.length });
+      }
+
+      return removed;
+    }, 'Failed to delete messages from chat', { chatId, count: messageIds.length }, 0);
   }
 
   /**

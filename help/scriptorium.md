@@ -52,6 +52,8 @@ When supplied with a `conversationId` — perhaps one unearthed by the `search` 
 
 When annotations are included, the character sees not only the conversation itself but also any commentary that has been affixed to specific messages by any character in the chat.
 
+The result of a `read_conversation` call is **whispered to the calling character** — the operator sees it in the Salon transcript, but peer characters at the same table do not receive the transcript in their LLM context. If a character wishes to share what she's read, she may quote or summarise it in her own narration; what we prevent is the silent injection of one character's archival lookup into another character's prompt.
+
 ### upsert_annotation
 
 Characters can attach persistent annotations to specific messages, identified by message number. Each character may have exactly **one annotation per message** — calling this tool again on the same message replaces the previous annotation rather than stacking them up like an overenthusiastic reviewer's sticky notes.
@@ -64,9 +66,31 @@ Should a character decide that a particular annotation has outlived its usefulne
 
 ### search
 
-This is the tool that transforms the Scriptorium from a mere record-keeping operation into something rather more resembling an actual research library. When invoked, it searches across both a character's personal memories *and* the full archive of rendered conversations simultaneously, returning a unified set of results ranked by relevance.
+This is the tool that transforms the Scriptorium from a mere record-keeping operation into something rather more resembling an actual research library. When invoked, it casts its net across no fewer than four distinct waters at once: a character's personal memories, the full archive of rendered conversations, every document store the character can reach (their own vault, every store linked to the active chat's project, and the instance-wide Quilltap General), and — narrower still — the `Knowledge/` folders inside those same stores. Results return as a single unified ledger, ranked by relevance.
 
-One may optionally restrict the search to particular sources — memories only, or conversations only — should one wish to narrow the field of inquiry. The results include sufficient metadata to identify the provenance of each finding: for memories, the importance and summary; for conversations, the title, interchange number, and participants. Armed with a conversation ID from the search results, a character can then call `read_conversation` to review the full text, completing the journey from vague recollection to precise citation.
+One may optionally restrict the search to particular `sources` (which layers to query) and to a particular `scope` (which stores to look in). The results include sufficient metadata to identify the provenance of each finding: for memories, the importance and summary; for conversations, the title, interchange number, and participants; for documents and knowledge entries alike, the file path and the vault or mount that produced them. Armed with a conversation ID, a character may call `read_conversation` to review the full text; armed with a path and mount-point, `doc_read_file` will fetch the document itself.
+
+Like `read_conversation`, every `search` result is **whispered to the calling character** — peer characters in the same chat do not receive the body of the search result in their LLM context. Since `search` can reach into memories and conversation archives that are inherently per-character, the whisper closes that channel unconditionally; the Shared Vaults toggle does not override it.
+
+#### Choosing a scope
+
+The `scope` parameter controls which document stores the `documents` and `knowledge` sources will reach into. It has no effect on memories or conversations. There are three values:
+
+- **`all`** (the default) — every store the character can see at once: their own vault, every document store linked to the chat's project, and Quilltap General. Use this when one is not sure where the answer lies, or wishes the relevance ranking to choose the best source.
+- **`project`** — only the document stores linked to the active project. Use this when the question is plainly about the work at hand and one wishes to exclude both personal vault clutter and the wider house style. Returns nothing if no project is attached to the chat.
+- **`character`** — only the character's own vault. Use this to consult one's private notes, kept images, and personal research without admixture from the project or the instance.
+
+#### Knowledge at three scopes
+
+The fourth source — `knowledge` — deserves particular notice, for it draws not from one well but from three, each at a different remove from the responding character. A `Knowledge/` folder (case quite irrelevant — `Knowledge/`, `knowledge/`, `KNOWLEDGE/` all answer the call) may live in any of the following places, and every one of them will be searched in turn:
+
+- **Character knowledge** — the character's own vault, a private archive arranged inside the Scriptorium. Research notes, dossiers, glossaries, the careful reckonings a writer keeps to ensure their character does not forget a detail mid-conversation.
+- **Project knowledge** — the `Knowledge/` folder inside *every* document store linked to the active chat's project. Useful for material that the entire project should know but that does not belong to any one character: the lore bible, the campaign's rulings, the gazetteer of place-names.
+- **General knowledge** — the `Knowledge/` folder inside the instance-wide Quilltap General store, available to every character in every chat regardless of project. The natural home for one's house style guide, master glossary, or the rules by which all one's worlds abide.
+
+When the search tool returns a knowledge result, the tier is plainly labelled (character, project, or general) so that one knows at a glance whether the source is intimate, communal, or institutional. The ranking favours the closer voice: a verbatim hit in a character's own vault outranks the same hit in a project mount, which in turn outranks the same hit in Quilltap General. A search whose query has no literal substring match anywhere is ranked purely by semantic similarity, with no tier preference applied — vector relevance carries the day.
+
+These knowledge files may be plain markdown, plain text, PDFs, or DOCX documents — anything the indexing already recognises. Markdown files may carry YAML frontmatter at their head (`tags:`, `topics:`, and so forth) to assist in retrieval; the format is delightfully forgiving. Beyond explicit `search` invocations, the Commonplace Book consults all three knowledge tiers on every turn alongside its usual recall of memories, whispering the most relevant pages — or pointers to them — directly to the responding character. Brief files arrive inline, ready to consult at a glance; longer ones arrive as a `doc_read_file` template, the equivalent of a librarian's note saying *the matter you want is in this volume, on these shelves; do let us know if you'd care to fetch it*.
 
 ## Why It Matters
 

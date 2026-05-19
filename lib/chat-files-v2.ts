@@ -8,11 +8,13 @@ import { extname } from 'node:path';
 import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
 import { fileStorageManager } from './file-storage/manager';
+import { writeUserUploadToMountStore } from './file-storage/user-uploads-bridge';
 import { detectTextContent, getBestMimeType } from './files/text-detection';
 import type { FileEntry, FileCategory, Provider } from './schemas/types';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from './files/tag-inheritance';
 import { resizeImageForProvider, canResizeImage, calculateBase64Size, getProviderMaxBase64Size } from './files/image-processing';
+import { autoDescribeChatImageAttachment } from './photos/auto-describe-attachment';
 
 export interface ChatFileUploadResult {
   id: string;
@@ -195,15 +197,26 @@ export async function uploadChatFile(
           : (filenameDuplicate || contentDuplicate);
 
         if (existingFile) {
+          // Link the existing file to this chat (and optional message) so the
+          // LLM context loader can find it via findByLinkedTo(chatId). Without
+          // this, the message saves with the fileId in its attachments array
+          // but the bytes never reach the provider.
+          let linked = existingFile;
+          for (const entityId of linkedTo) {
+            const updated = await repos.files.addLink(linked.id, entityId);
+            if (updated) {
+              linked = updated;
+            }
+          }
           return {
-            id: existingFile.id,
-            filename: existingFile.originalFilename,
-            filepath: getFileApiPath(existingFile.id),
-            mimeType: existingFile.mimeType,
-            size: existingFile.size,
-            sha256: existingFile.sha256,
-            width: existingFile.width || undefined,
-            height: existingFile.height || undefined,
+            id: linked.id,
+            filename: linked.originalFilename,
+            filepath: getFileApiPath(linked.id),
+            mimeType: linked.mimeType,
+            size: linked.size,
+            sha256: linked.sha256,
+            width: linked.width || undefined,
+            height: linked.height || undefined,
           };
         }
       }
@@ -313,14 +326,34 @@ async function uploadFileToProject(
   // Generate a new file ID
   const fileId = crypto.randomUUID();
 
-  // Upload to file storage
-  const { storageKey } = await fileStorageManager.uploadFile({
-    filename,
-    content: buffer,
-    contentType: mimeType,
-    projectId: projectId || null,
-    folderPath: '/',
-  });
+  // Route project-bound attachments through the project mount (via FSM, which
+  // resolves to project-store-bridge). Project-less attachments land in the
+  // Quilltap Uploads mount under chat/, not the catch-all _general/.
+  let storageKey: string;
+  let fileFolderPath: string | null;
+  let fileProjectId: string | null;
+  if (projectId) {
+    const uploaded = await fileStorageManager.uploadFile({
+      filename,
+      content: buffer,
+      contentType: mimeType,
+      projectId,
+      folderPath: '/',
+    });
+    storageKey = uploaded.storageKey;
+    fileFolderPath = '/';
+    fileProjectId = projectId;
+  } else {
+    const written = await writeUserUploadToMountStore({
+      filename,
+      content: buffer,
+      contentType: mimeType,
+      subfolder: 'chat',
+    });
+    storageKey = written.storageKey;
+    fileFolderPath = null;
+    fileProjectId = null;
+  }
   // Inherit tags from the chat (and any other linked entities)
   const inheritedTags = await getInheritedTags(linkedTo, userId);
   // Create metadata in repository
@@ -342,10 +375,25 @@ async function uploadFileToProject(
     generationRevisedPrompt: null,
     description: null,
     tags: inheritedTags,
-    projectId: projectId || null,
-    folderPath: '/',
+    projectId: fileProjectId,
+    folderPath: fileFolderPath,
     storageKey,
   }, { id: fileId });
+
+  // Fire-and-forget vision-describe for image uploads. The describe call
+  // takes 5-15s; running it inline would block the upload response. Failures
+  // are logged inside the orchestrator — the upload still succeeds.
+  if (category === 'IMAGE') {
+    void autoDescribeChatImageAttachment({ fileEntryId: fileEntry.id, userId, repos })
+      .catch(err => {
+        logger.warn('Auto-describe failed for chat image upload', {
+          module: 'chat-files-v2',
+          fileId: fileEntry.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+  }
+
   return {
     id: fileEntry.id,
     filename: fileEntry.originalFilename,
@@ -453,20 +501,24 @@ async function loadMountFileAsAttachment(
   const { provider, autoResize = true } = options;
   const repos = getRepositories();
 
-  const mountFile = await repos.docMountFiles.findById(mountFileId);
-  if (!mountFile) {
+  // The chat attachment id can be either a file id or a link id depending
+  // on when the chat was created. Try as a link id first (the modern path);
+  // fall back to looking up by file id.
+  let mountLink = await repos.docMountFileLinks.findByIdWithContent(mountFileId);
+  if (!mountLink) {
+    const links = await repos.docMountFileLinks.findByFileId(mountFileId);
+    mountLink = links[0] ?? null;
+  }
+  if (!mountLink) {
     return null;
   }
 
-  const blob = await repos.docMountBlobs.findByMountPointAndPath(
-    mountFile.mountPointId,
-    mountFile.relativePath
-  );
+  const blob = await repos.docMountBlobs.findByFileId(mountLink.fileId);
   if (!blob) {
     logger.warn('[chat-files-v2] Mount file has no blob row', {
       mountFileId,
-      mountPointId: mountFile.mountPointId,
-      relativePath: mountFile.relativePath,
+      mountPointId: mountLink.mountPointId,
+      relativePath: mountLink.relativePath,
     });
     return null;
   }
@@ -498,7 +550,7 @@ async function loadMountFileAsAttachment(
         provider,
         buffer,
         mimeType: outputMimeType,
-        filename: blob.originalFileName,
+        filename: mountLink.originalFileName ?? mountLink.fileName,
       });
       if (resizeResult.wasResized) {
         buffer = resizeResult.buffer;
@@ -507,12 +559,12 @@ async function loadMountFileAsAttachment(
     }
   }
 
-  const url = `/api/v1/mount-points/${mountFile.mountPointId}/blobs/${encodeURI(mountFile.relativePath)}`;
+  const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
 
   return {
-    id: mountFile.id,
+    id: mountLink.id,
     filepath: url,
-    filename: blob.originalFileName || mountFile.fileName,
+    filename: mountLink.originalFileName ?? mountLink.fileName,
     mimeType: outputMimeType,
     size: buffer.length,
     data: buffer.toString('base64'),
@@ -559,11 +611,6 @@ export async function loadChatFilesForLLM(
 
       const mountAttachment = await loadMountFileAsAttachment(fileId, options);
       if (mountAttachment) {
-        logger.debug('[chat-files-v2] Loaded mount-file attachment for LLM', {
-          mountFileId: fileId,
-          mimeType: mountAttachment.mimeType,
-          size: mountAttachment.size,
-        });
         attachments.push(mountAttachment);
         continue;
       }

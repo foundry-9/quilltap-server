@@ -21,6 +21,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 - **User Documentation**: Found in `/help/` and maintained and searchable using MessagePack
 - **Electron**: Desktop shell lives in a separate repository ([quilltap-shell](https://github.com/foundry-9/quilltap-shell)); this repo produces the standalone tarball it consumes
 - **Native Modules**: `better-sqlite3` (compiled via node-gyp) and `sharp` (pre-built platform binaries via `@img/sharp-{platform}-{arch}`). Both require special handling in standalone and Docker builds — sharp's platform-specific binaries must be installed for the target platform. When adding new native modules, update `next.config.js` (`serverExternalPackages` + `outputFileTracingIncludes`).
+- **Background Jobs**: All job handlers run in a forked child process (`child_process.fork`, lazy-spawned). Parent (Next.js HTTP) is the only DB writer; the child opens a readonly SQLCipher connection, runs handlers, batches repository write payloads in an `AsyncLocalStorage` buffer, and ships them back over IPC for the parent to apply in one `db.transaction(...)`. See `lib/background-jobs/host/`, `lib/background-jobs/child/`, and `docs/developer/BACKGROUND_JOBS_CHILD.md`. Handlers should treat `getRepositories()` as the proxy: read methods pass through, write methods buffer; never assume read-your-writes within a single job.
 
 ## API Architecture
 
@@ -134,6 +135,18 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 
 This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", as in "quilt" + "tap". There is a linting rule to keep you from using that word. Please, please, never call anything in this system "quilttap" because that is **WRONG.**
 
+### Character field semantics
+
+Quilltap distinguishes four character fields by *vantage point*, plus a fifth foundational field (`manifesto`) that is not a vantage point. They are not interchangeable; do not collapse them.
+
+- **manifesto** — the basic tenets, the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Not a vantage point — nobody "sees" the manifesto; it is the load-bearing truth the character is built on. Short, declarative, foundational. Synced as `manifesto.md` in the character vault (vault path lookups are case-insensitive, so `Manifesto.md` matches too).
+- **identity** — the most surface-level knowledge of the character, from outside. What strangers can know on sight or by reputation: name, station, occupation, public reputation. Shallow but useful for someone considering whether to approach. Never internal motivation or private mannerisms.
+- **description** — what someone talking to (or acquainted with) the character perceives. NOT physical appearance (that lives in `physicalDescriptions`). Behaviour, mannerisms, frequent verbal patterns. What an interlocutor notices, but not the character's internal monologue.
+- **personality** — what the character knows about themselves. The internal driver of speech and behaviour. Other characters don't see this unless the character shares it.
+- **title** — the user's or character's own private label/framing for them (e.g. "the protagonist", "the rival"). Not how others refer to them; not in scope for the optimizer to edit.
+
+The character optimizer enforces these vantage points when proposing edits. When writing about a character field anywhere (UI placeholder, help docs, prompts), align with these definitions.
+
 ### Feature Names
 
 - **The Concierge** - the dangerous content tracking/rerouting/hiding system — merged into Chat tab at `/settings?tab=chat`
@@ -160,13 +173,15 @@ Rules for adding or updating these assets:
 
 - **Always WebP.** Convert source PNGs with `cwebp -q 82 -m 6 -mt <in>.png -o <out>.webp` (or better) and delete the PNG after verifying the WebP. Don't check multi-MB PNG originals into the repo — these are bundled with the app and every byte ships.
 - **Filename pattern:** `<feature>-avatar.webp`, all lowercase, hyphen-separated. The feature name should match how the feature is referred to elsewhere (e.g. `lantern-avatar.webp`, not `the-lantern-avatar.webp`).
-- **Pair new avatars with new `systemSender` enum values.** `MessageEventSchema` in `lib/schemas/chat.types.ts` and the matching SQLite column on `chat_messages` both list the allowed senders. Adding a new sender means updating the Zod enum in both places, adding a branch to `getMessageAvatar`, and including the new value in `public/schemas/qtap-export.schema.json`. Current `systemSender` enum (`lib/schemas/chat.types.ts`): `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`. (A `pascal-avatar.webp` exists on disk but Pascal does not currently author synthetic messages — the avatar is reserved for future use.) Sender responsibilities:
+- **Pair new avatars with new `systemSender` enum values.** `MessageEventSchema` in `lib/schemas/chat.types.ts` and the matching SQLite column on `chat_messages` both list the allowed senders. Adding a new sender means updating the Zod enum in both places, adding a branch to `getMessageAvatar`, and including the new value in `public/schemas/qtap-export.schema.json`. Current `systemSender` enum (`lib/schemas/chat.types.ts`): `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`, `commonplaceBook`, `ariel`. (A `pascal-avatar.webp` exists on disk but Pascal does not currently author synthetic messages — the avatar is reserved for future use.) Sender responsibilities:
   - `lantern` — image-pipeline announcements (background generation, etc.)
   - `aurora` — character avatar refresh / wardrobe announcements
   - `librarian` — Document Mode open/save/rename/delete announcements, plus character `doc_delete_file` / `doc_create_folder` / `doc_delete_folder` / `doc_copy_file` tool calls
   - `concierge` — dangerous-content classification announcements
   - `host` — Salon participation announcements (character add/remove/status change)
-  - `prospero` — agentic / tool-use announcements; currently fires when a participant's connection profile is changed via the Participants sidebar
+  - `prospero` — agentic / tool-use announcements; fires when a participant's connection profile is changed via the Participants sidebar, and authors the standalone bubble for any user-initiated tool run (the Run Tool modal). User-initiated runs may set `private: true`, which writes the operator's userId into `targetParticipantIds` so the Salon UI hides them by default and every character's LLM context excludes them.
+  - `commonplaceBook` — memory recall whispers (memory recap, relevant memories, inter-character memories), targeted at the responding character via `targetParticipantIds`
+  - `ariel` — terminal session announcements (PTY open/close in the Salon)
 
 ## Claude-specific instructions
 
@@ -181,7 +196,8 @@ Rules for adding or updating these assets:
   - Query with filter: `npx quilltap db "SELECT * FROM TABLENAME WHERE field = 'value';"`
   - Interactive REPL: `npx quilltap db --repl`
   - Query LLM logs DB: `npx quilltap db --llm-logs --tables`
-  - Custom data dir: `npx quilltap db --data-dir /path/to/data --tables`
+  - Custom data dir: `npx quilltap db --data-dir ~/iCloud/Quilltap/Friday --tables` — pass the **instance root**, not the `data/` subdirectory. The CLI appends `data/quilltap.db` itself, so `--data-dir ~/iCloud/Quilltap/Friday/data` will fail looking for `data/data/quilltap.db`.
+  - SQLite columns are **camelCase**, mirroring the Zod/TypeScript types (e.g. `createdAt`, `updatedAt`, `chatType`, `messageCount`, `projectId`) — not `snake_case`. When in doubt, `PRAGMA table_info(<table>);` or check [DDL.md](docs/developer/DDL.md).
   - All information about the databases, including schema and how to query them, can be found in [DDL.md](docs/developer/DDL.md).
 - This is built in Next.js 16+, so don't look in middleware.ts, but consider proxy.ts, for things you would expect there.
 - When creating or modifying API routes, always use the `/api/v1/` structure with action dispatch patterns. Don't create new routes outside `/api/v1/`. Use the middleware from `@/lib/api/middleware` and response helpers from `@/lib/api/responses`.
@@ -199,6 +215,31 @@ Rules for adding or updating these assets:
 - Help files have a `url` field in their frontmatter and an "In-Chat Navigation" section with an exact `help_navigate` tool call. When creating or modifying help files, ensure the `url` frontmatter points to the correct page (with `?tab=` and `&section=` parameters for settings deep-linking), and that the "In-Chat Navigation" section contains the matching `help_navigate(url: "...")` call.
 - All writing for users is to be in the style of "steampunk + roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket"
 - **IMPORTANT**: We need the human developer's confirmation that they have walked through the release checklist in [DEVELOPMENT.md](./docs/developer/DEVELOPMENT.md#checklist-before-release) when they are ready to run the command `tag-for-release` in production - if they want to go through them, then go through that list with them. Don't do anything there on your own unless they ask you to; this is up to the developer.
+
+## Writing migrations
+
+Every migration registered in [`migrations/scripts/`](./migrations/scripts) and listed in `migrations/scripts/index.ts` must satisfy two rules so the loading screen at startup can tell users what's happening:
+
+1. **Each migration must have a pretty-label entry in [`lib/startup/prettify.ts`](./lib/startup/prettify.ts)** (the `PRETTY_LABELS` table). Use the project's steampunk-Wodehouse voice — terse, present-continuous, oriented around what's happening to the user's data, not the implementation. Without an entry, the loading screen falls back to a hyphen-split humanization of the migration ID, which leaks an internal name to users.
+
+2. **Any migration that iterates over a collection must call `reportProgress(...)` inside the loop**, imported from [`migrations/lib/progress.ts`](./migrations/lib/progress.ts). The helper is throttled (one emit per ~250 ms), so it is safe to call every iteration. Use the single-tier form for flat loops and the multi-tier form for nested ones:
+
+   ```ts
+   import { reportProgress } from '../lib/progress';
+
+   // Flat:
+   reportProgress(i + 1, items.length, 'items');
+
+   // Nested (outer first):
+   reportProgress([
+     { current: p + 1, total: projects.length, unit: 'projects' },
+     { current: f + 1, total: files.length, unit: 'files' },
+   ]);
+   ```
+
+   For batched/streaming migrations where the loop is internal to a SQL batch, count the total upfront with `SELECT COUNT(*)` and pass the running `totalScanned` against it. For synchronous transactions (`db.transaction(...)`) the progress can't reach the UI mid-transaction — fine to skip there.
+
+The commit skill enforces both rules. Adding a migration without a prettify entry, or with a non-trivial loop that doesn't call `reportProgress`, will block the commit.
 
 ## Best Practices and Principles
 

@@ -262,11 +262,5 @@ export function rankMemoriesByWeight(
 
   filtered.sort((a, b) => b.weightResult.effectiveWeight - a.weightResult.effectiveWeight)
 
-  logger.debug('[MemoryWeighting] Ranked memories by weight', {
-    total: memories.length,
-    afterFilter: filtered.length,
-    filteredOut: memories.length - filtered.length,
-  })
-
   return filtered
 }

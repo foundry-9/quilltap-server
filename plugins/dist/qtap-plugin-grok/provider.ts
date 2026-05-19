@@ -302,6 +302,13 @@ export class GrokProvider implements TextProvider {
       requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
 
+    // Pin sticky cache routing. Grok caches per-server, so requests without
+    // a stable key round-robin across machines and effectively never hit cache.
+    const promptCacheKey = params.profileParameters?.promptCacheKey;
+    if (typeof promptCacheKey === 'string' && promptCacheKey.length > 0) {
+      requestParams.prompt_cache_key = promptCacheKey;
+    }
+
     // Build tools - server-side (web search) + client-side (function calling)
     const tools: ResponsesTool[] = [];
 
@@ -335,6 +342,10 @@ export class GrokProvider implements TextProvider {
     const text = this.extractTextFromResponse(response);
     const finishReason = this.getFinishReason(response);
     const raw = this.buildRawResponse(response);
+    const cachedTokens = response.usage?.input_tokens_details?.cached_tokens
+    const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
+      ? { cacheReadInputTokens: cachedTokens, cachedTokens }
+      : undefined
 
     return {
       content: text,
@@ -346,6 +357,7 @@ export class GrokProvider implements TextProvider {
       },
       raw,
       attachmentResults,
+      ...(cacheUsage ? { cacheUsage } : {}),
     };
   }
 
@@ -373,6 +385,11 @@ export class GrokProvider implements TextProvider {
 
     if (params.stop) {
       requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
+    }
+
+    const promptCacheKey = params.profileParameters?.promptCacheKey;
+    if (typeof promptCacheKey === 'string' && promptCacheKey.length > 0) {
+      requestParams.prompt_cache_key = promptCacheKey;
     }
 
     const tools: ResponsesTool[] = [];
@@ -410,6 +427,10 @@ export class GrokProvider implements TextProvider {
     // Build final response
     if (finalResponse) {
       const raw = this.buildRawResponse(finalResponse);
+      const cachedTokens = finalResponse.usage?.input_tokens_details?.cached_tokens
+      const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
+        ? { cacheReadInputTokens: cachedTokens, cachedTokens }
+        : undefined
 
       yield {
         content: '',
@@ -421,6 +442,7 @@ export class GrokProvider implements TextProvider {
         },
         attachmentResults,
         rawResponse: raw,
+        ...(cacheUsage ? { cacheUsage } : {}),
       };
     } else {
       logger.warn('Stream ended without response.completed event', {

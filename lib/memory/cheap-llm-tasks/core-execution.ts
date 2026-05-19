@@ -5,8 +5,8 @@
 import { createLLMProvider } from '@/lib/llm'
 import type { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { getRepositories } from '@/lib/repositories/factory'
-import { getErrorMessage } from '@/lib/errors'
+import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
+import { getErrorMessage } from '@/lib/error-utils'
 import { logger } from '@/lib/logger'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
@@ -34,58 +34,30 @@ const profilesWithoutCustomTemp = new Set<string>()
  */
 function mapTaskTypeToLogType(taskType?: string): LLMLogType {
   const mapping: Record<string, LLMLogType> = {
-    'memory-extraction-user': 'MEMORY_EXTRACTION',
-    'memory-extraction-character': 'MEMORY_EXTRACTION',
-    'memory-extraction-inter-character': 'MEMORY_EXTRACTION',
+    'memory-extraction-self': 'MEMORY_EXTRACTION',
+    'memory-extraction-other': 'MEMORY_EXTRACTION',
+    'batch-memory-extraction': 'MEMORY_EXTRACTION',
+    'memory-keyword-extraction': 'MEMORY_EXTRACTION',
     'title-chat': 'TITLE_GENERATION',
     'title-from-summary': 'TITLE_GENERATION',
     'consider-title-update': 'TITLE_GENERATION',
     'compress-conversation-history': 'CONTEXT_COMPRESSION',
     'compress-system-prompt': 'CONTEXT_COMPRESSION',
+    'compress-memories': 'CONTEXT_COMPRESSION',
     'summarize-chat': 'SUMMARIZATION',
     'update-context-summary': 'SUMMARIZATION',
-    'craft-image-prompt': 'IMAGE_PROMPT_CRAFTING',
-    'describe-attachment': 'IMAGE_DESCRIPTION',
-    'batch-memory-extraction': 'MEMORY_EXTRACTION',
-    'craft-story-background-prompt': 'IMAGE_PROMPT_CRAFTING',
+    'fold-chat-summary': 'SUMMARIZATION',
+    'memory-recap-summarization': 'SUMMARIZATION',
     'derive-scene-context': 'SUMMARIZATION',
-    'memory-keyword-extraction': 'MEMORY_EXTRACTION',
+    'outfit-selection': 'SUMMARIZATION',
+    'craft-image-prompt': 'IMAGE_PROMPT_CRAFTING',
+    'craft-story-background-prompt': 'IMAGE_PROMPT_CRAFTING',
+    'describe-attachment': 'IMAGE_DESCRIPTION',
     'resolve-character-appearances': 'APPEARANCE_RESOLUTION',
     'sanitize-appearance': 'APPEARANCE_RESOLUTION',
     'scene-state-tracking': 'SCENE_STATE_TRACKING',
-    'memory-recap-summarization': 'SUMMARIZATION',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
-}
-
-/**
- * Gets the decrypted API key for a cheap LLM selection
- */
-async function getApiKeyForSelection(
-  selection: CheapLLMSelection,
-  userId: string
-): Promise<string | null> {
-  if (selection.isLocal) {
-    // Local models don't need an API key
-    return ''
-  }
-
-  if (!selection.connectionProfileId) {
-    return null
-  }
-
-  const repos = getRepositories()
-  const profile = await repos.connections.findById(selection.connectionProfileId)
-  if (!profile?.apiKeyId) {
-    return null
-  }
-
-  const apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId)
-  if (!apiKey) {
-    return null
-  }
-
-  return apiKey.key_value
 }
 
 /**
@@ -99,9 +71,10 @@ async function sendToProvider(
   taskType?: string,
   chatId?: string,
   messageId?: string,
-  maxTokens?: number
+  maxTokens?: number,
+  characterId?: string
 ): Promise<ProviderResponse> {
-  const apiKey = await getApiKeyForSelection(selection, userId)
+  const apiKey = await getApiKeyForCheapLLMSelection(selection, userId)
   if (apiKey === null) {
     throw new Error('No API key available for cheap LLM provider')
   }
@@ -112,7 +85,7 @@ async function sendToProvider(
   )
 
   const profileKey = `${selection.provider}:${selection.modelName}`
-  const effectiveMaxTokens = maxTokens ?? 1000
+  const effectiveMaxTokens = Math.max(maxTokens ?? 2048, 2048)
 
   const logCall = (response: LLMResponse, temperature?: number) => {
     logLLMCall({
@@ -120,6 +93,7 @@ async function sendToProvider(
       type: mapTaskTypeToLogType(taskType),
       chatId,
       messageId,
+      characterId,
       provider: selection.provider,
       modelName: selection.modelName,
       request: {
@@ -233,10 +207,11 @@ export async function executeCheapLLMTask<T>(
   chatId?: string,
   messageId?: string,
   uncensoredFallback?: UncensoredFallbackOptions,
-  maxTokens?: number
+  maxTokens?: number,
+  characterId?: string
 ): Promise<CheapLLMTaskResult<T>> {
   try {
-    let response = await sendToProvider(selection, messages, userId, taskType, chatId, messageId, maxTokens)
+    let response = await sendToProvider(selection, messages, userId, taskType, chatId, messageId, maxTokens, characterId)
 
     // Check if we should retry with an uncensored provider
     const uncensoredSelection = shouldAttemptUncensoredFallback(response.content, selection, uncensoredFallback)
@@ -250,7 +225,7 @@ export async function executeCheapLLMTask<T>(
         uncensoredModel: uncensoredSelection.modelName,
       })
 
-      const retryResponse = await sendToProvider(uncensoredSelection, messages, userId, taskType, chatId, messageId, maxTokens)
+      const retryResponse = await sendToProvider(uncensoredSelection, messages, userId, taskType, chatId, messageId, maxTokens, characterId)
 
       if (retryResponse.content.trim() === '') {
         throw new Error(`Empty response from both safe provider (${selection.provider}/${selection.modelName}) and uncensored provider (${uncensoredSelection.provider}/${uncensoredSelection.modelName})`)

@@ -23,6 +23,15 @@
   }
 
   /**
+   * Default background - the page/dialog default surface
+   * Pairs with qt-border-default. Use for popovers, sticky headers,
+   * and other elements that should match the underlying dialog/page.
+   */
+  .qt-bg-default {
+    background-color: var(--color-background);
+  }
+
+  /**
    * Surface alt background - slightly elevated/different surface
    * Use for nested containers, alternating rows, subtle highlights
    */
@@ -44,6 +53,60 @@
    */
   .qt-bg-muted {
     background-color: var(--color-muted);
+  }
+
+  /**
+   * Muted-foreground background — for solid status dots and bars
+   * using the secondary/muted-foreground color (e.g. low-significance bars).
+   */
+  .qt-bg-muted-foreground {
+    background-color: var(--color-muted-foreground);
+  }
+
+  /* ==========================================================================
+     SOLID STATUS BACKGROUND UTILITIES (full opacity)
+     ========================================================================== */
+
+  /**
+   * Primary brand color background — for selected pips, severity bars
+   */
+  .qt-bg-primary {
+    background-color: var(--color-primary);
+  }
+
+  /**
+   * Accent color background — for selected stepper segments
+   */
+  .qt-bg-accent {
+    background-color: var(--color-accent);
+  }
+
+  /**
+   * Success color background — for severity bars, status indicators
+   */
+  .qt-bg-success {
+    background-color: var(--color-success);
+  }
+
+  /**
+   * Warning color background — for severity bars, status indicators
+   */
+  .qt-bg-warning {
+    background-color: var(--color-warning);
+  }
+
+  /**
+   * Info color background — for status indicators
+   */
+  .qt-bg-info {
+    background-color: var(--color-info);
+  }
+
+  /**
+   * Destructive color background — for severity bars, status indicators
+   */
+  .qt-bg-destructive {
+    background-color: var(--color-destructive);
   }
 
   /* ==========================================================================
@@ -123,6 +186,37 @@
 
   .qt-bg-destructive\/20 {
     background-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
+  }
+
+  .qt-bg-destructive\/60 {
+    background-color: color-mix(in srgb, var(--color-destructive) 60%, transparent);
+  }
+
+  /**
+   * Success color backgrounds — additional opacity steps
+   */
+  .qt-bg-success\/40 {
+    background-color: color-mix(in srgb, var(--color-success) 40%, transparent);
+  }
+
+  .qt-bg-success\/60 {
+    background-color: color-mix(in srgb, var(--color-success) 60%, transparent);
+  }
+
+  /**
+   * Muted-foreground backgrounds with opacity — used for inactive pips
+   * and de-emphasized status dots.
+   */
+  .qt-bg-muted-foreground\/30 {
+    background-color: color-mix(in srgb, var(--color-muted-foreground) 30%, transparent);
+  }
+
+  .qt-bg-muted-foreground\/60 {
+    background-color: color-mix(in srgb, var(--color-muted-foreground) 60%, transparent);
+  }
+
+  .hover\:qt-bg-muted-foreground\/60:hover {
+    background-color: color-mix(in srgb, var(--color-muted-foreground) 60%, transparent);
   }
 
   /* ==========================================================================
@@ -207,6 +301,17 @@
     border-color: color-mix(in srgb, var(--color-info) 30%, transparent);
   }
 
+  /**
+   * Success border — additional opacity steps for accent rings
+   */
+  .qt-border-success\/20 {
+    border-color: color-mix(in srgb, var(--color-success) 20%, transparent);
+  }
+
+  .qt-border-success\/40 {
+    border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
+  }
+
   /* ==========================================================================
      TEXT COLOR UTILITIES
      ========================================================================== */
@@ -244,6 +349,14 @@
    */
   .qt-text-destructive {
     color: var(--color-destructive);
+  }
+
+  /**
+   * Foreground intended for use on an accent-coloured surface
+   * (e.g. text inside a qt-bg-accent pill).
+   */
+  .qt-text-on-accent {
+    color: var(--color-accent-foreground);
   }
 
   /* ==========================================================================

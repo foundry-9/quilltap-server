@@ -17,6 +17,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { logger } from '@/lib/logger';
 import { rankMemoriesByWeight } from '@/lib/memory/memory-weighting';
 import { parseLLMJson, stripCodeFences } from '@/lib/services/ai-import.service';
+import { FIELD_SEMANTICS_PREAMBLE } from '@/lib/services/character-field-semantics';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
 import { isEmbeddingAvailable } from '@/lib/embedding/embedding-service';
@@ -30,7 +31,7 @@ import type { Character, CharacterScenario, CharacterSystemPrompt, Memory } from
 
 export interface OptimizerSuggestion {
   id: string;
-  field: 'description' | 'personality' | 'scenarios' | 'exampleDialogues' | 'systemPrompt' | 'physicalDescription' | 'clothingRecord' | 'talkativeness';
+  field: 'identity' | 'description' | 'manifesto' | 'personality' | 'scenarios' | 'exampleDialogues' | 'systemPrompt' | 'physicalDescription' | 'clothingRecord' | 'talkativeness';
   subId?: string;
   subName?: string;
   title?: string;
@@ -148,8 +149,14 @@ export function buildCharacterContext(character: Character): string {
   const parts: string[] = [
     `=== Character: ${character.name} ===`,
     '',
+    `Identity:`,
+    character.identity || '(empty)',
+    '',
     `Description:`,
     character.description || '(empty)',
+    '',
+    `Manifesto:`,
+    character.manifesto || '(empty)',
     '',
     `Personality:`,
     character.personality || '(empty)',
@@ -220,14 +227,19 @@ export function buildMemoryContext(memories: Array<{ memory: Memory }>): string 
  * Get analysis prompt
  */
 export function getAnalysisPrompt(): string {
-  return `Analyze this character's configuration alongside their most-reinforced memories. Identify 3-8 behavioral patterns that are established in the memories but not fully captured in the character's current configuration.
+  return `${FIELD_SEMANTICS_PREAMBLE}
 
-Focus on HOW the character acts, speaks, and relates to others — not just facts about them. Look for:
-- Speech habits and verbal patterns
-- Emotional tendencies and reactions
-- Relationship dynamics
-- Behavioral quirks or consistent actions
-- Attitudes and worldview that emerge through interactions
+Analyze this character's configuration alongside their most-reinforced memories. Identify 3-8 behavioral patterns that are established in the memories but not fully captured in the character's current configuration.
+
+For every pattern you identify, decide which of the three editable fields (IDENTITY, DESCRIPTION, PERSONALITY) it is evidence for, using the vantage-point rule above. Patterns that demonstrate behavior visible to interlocutors → DESCRIPTION. Patterns that reveal the character's self-knowledge or inner drivers → PERSONALITY. Public-knowledge facts strangers could know on sight → IDENTITY. Patterns that don't fit any of these (e.g. environment) belong to scenarios and should still be surfaced.
+
+Look for:
+- Speech habits and verbal patterns (DESCRIPTION)
+- Emotional tendencies and inner drivers (PERSONALITY)
+- Relationship dynamics — outward (DESCRIPTION) vs. inward attitude (PERSONALITY)
+- Behavioural quirks or consistent actions (DESCRIPTION)
+- Self-knowledge, motivations, beliefs the character privately holds (PERSONALITY)
+- Public-facing facts: station, occupation, reputation that strangers know on sight (IDENTITY)
 - Recurring settings or environments that might warrant new or updated scenarios (remember: a scenario describes the setting/environment of a chat, not a change in the character's personality)
 
 Respond with JSON:
@@ -262,22 +274,35 @@ Rules that apply to every suggestion:
 - Include 1-3 memory excerpts that support the suggestion.
 - Only propose changes that are meaningfully different from the current value.
 - Preserve the character's existing voice and style while incorporating the behavioral patterns.
-- Scenarios describe "where and when" (setting, environment, circumstances). They should not alter the character's personality, voice, or core behaviour unless the environment itself demands it.`;
+- Scenarios describe "where and when" (setting, environment, circumstances). They should not alter the character's personality, voice, or core behavior unless the environment itself demands it.`;
 
 /**
- * Suggestions prompt for the general, character-wide fields: description,
- * personality, exampleDialogues, and talkativeness. Per-item scenario and
- * system-prompt suggestions are produced by their own dedicated passes.
+ * Suggestions prompt for the general, character-wide fields: identity,
+ * description, personality, exampleDialogues, and talkativeness. Per-item
+ * scenario and system-prompt suggestions are produced by their own dedicated
+ * passes.
  */
 export function getGeneralFieldsSuggestionsPrompt(analysis: OptimizerAnalysis): string {
-  return `Based on the behavioural analysis below and the character's current configuration, propose targeted modifications to the character's GENERAL fields only:
+  return `${FIELD_SEMANTICS_PREAMBLE}
 
-  - description
-  - personality
+Based on the behavioral analysis below and the character's current configuration, propose targeted modifications to the character's GENERAL fields only:
+
+  - identity (public-knowledge / outside-view facts only — name, station, occupation, reputation)
+  - description (behavior, mannerisms, verbal patterns visible to interlocutors)
+  - manifesto (the basic tenets, the axiomatic core; not a vantage-point field, it is the load-bearing truth the character is built on)
+  - personality (the character's own self-knowledge; inner drivers of speech and behavior)
   - exampleDialogues
   - talkativeness (a number between 0.1 and 1.0)
 
-Do NOT suggest edits to scenarios, system prompts, physical descriptions, or clothing records in this response — those are handled by separate passes. If you see nothing worth changing in the general fields, respond with an empty JSON array.
+The vantage-point rule is strict:
+- A suggestion for IDENTITY may only contain facts a stranger could plausibly know without having spoken to the character. Never put internal motivation, private mannerisms, or self-knowledge here.
+- A suggestion for DESCRIPTION must reflect things someone who has interacted with the character would notice — not the character's own internal monologue, and not surface-level public reputation.
+- A suggestion for MANIFESTO should be rare and high-stakes — propose manifesto changes only when the memory contradicts a basic tenet, not for tonal or stylistic improvements. Manifesto edits reverberate across every other field.
+- A suggestion for PERSONALITY must reflect the character's own self-knowledge and inner drivers. Never put outward behavior someone else would observe here, and never put public-facing identity facts.
+- Do NOT propose the same content under two different fields. Pick the one whose vantage point matches.
+- Do NOT suggest edits to title, scenarios, system prompts, physical descriptions, or clothing records in this response — those are out of scope for this pass (scenarios and system prompts are handled by separate passes).
+
+If you see nothing worth changing in the general fields, respond with an empty JSON array.
 
 === Behavioural Analysis ===
 ${JSON.stringify(analysis, null, 2)}
@@ -297,7 +322,7 @@ export function getScenarioSuggestionPrompt(
   analysis: OptimizerAnalysis,
   scenario: CharacterScenario,
 ): string {
-  return `Focus solely on the following scenario. Decide whether its content should be refined to better reflect the demonstrated behaviour below. A scenario describes the environment, circumstances, and context of a chat — it is the stage, not the actor. Refinements should sharpen the setting (place, circumstance, atmosphere, starting situation), not rewrite the character's personality.
+  return `Focus solely on the following scenario. Decide whether its content should be refined to better reflect the demonstrated behavior below. A scenario describes the environment, circumstances, and context of a chat — it is the stage, not the actor. Refinements should sharpen the setting (place, circumstance, atmosphere, starting situation), not rewrite the character's personality.
 
 === Scenario Under Review ===
 ID: ${scenario.id}
@@ -330,7 +355,7 @@ export function getSystemPromptSuggestionPrompt(
   analysis: OptimizerAnalysis,
   prompt: CharacterSystemPrompt,
 ): string {
-  return `Focus solely on the following system prompt. Decide whether its text should be refined to better reflect the demonstrated behaviour below, while preserving the interaction style the prompt is clearly trying to achieve.
+  return `Focus solely on the following system prompt. Decide whether its text should be refined to better reflect the demonstrated behavior below, while preserving the interaction style the prompt is clearly trying to achieve.
 
 === System Prompt Under Review ===
 ID: ${prompt.id}
@@ -360,7 +385,7 @@ Respond with a JSON array of at most one suggestion.`;
  * based on patterns the existing items don't already cover.
  */
 export function getNewItemsSuggestionPrompt(analysis: OptimizerAnalysis): string {
-  return `Review the character's existing scenarios and system prompts (shown in the character context). Propose any NEW scenarios or NEW system prompts that are warranted by the behavioural patterns below but aren't already covered by the existing set. Do NOT propose edits to existing items here — this pass handles additions only. If no new items are warranted, respond with an empty JSON array.
+  return `Review the character's existing scenarios and system prompts (shown in the character context). Propose any NEW scenarios or NEW system prompts that are warranted by the behavioral patterns below but aren't already covered by the existing set. Do NOT propose edits to existing items here — this pass handles additions only. If no new items are warranted, respond with an empty JSON array.
 
 === Behavioural Analysis ===
 ${JSON.stringify(analysis, null, 2)}
@@ -463,7 +488,14 @@ export async function runCharacterOptimizer(
       throw new Error('Character not found');
     }
 
-    // Memory retrieval pipeline: search → date filter → rank → reinforcement filter → limit
+    // Memory retrieval pipeline: search → date filter → rank → reinforcement filter → limit.
+    //
+    // The optimizer only learns from memories ABOUT the character (self-references:
+    // aboutCharacterId === characterId). Inter-character memories the character holds
+    // about other participants would skew behavioral-pattern analysis toward those
+    // others' habits. Legacy null-aboutCharacterId rows are excluded by design — the
+    // post-attribution-overhaul pipeline collapses self-references to characterId, so
+    // the null pile is genuinely unattributed and not a fallback for "self".
     let candidateMemories: Memory[] = [];
 
     if (searchQuery) {
@@ -473,12 +505,12 @@ export async function runCharacterOptimizer(
         try {
           const embeddingAvailable = await isEmbeddingAvailable(userId);
           if (embeddingAvailable) {
-            const embeddingResult = await generateEmbeddingForUser(searchQuery, userId);
+            const embeddingResult = await generateEmbeddingForUser(searchQuery, userId, undefined, { priority: 'background' });
             const vectorStore = await getCharacterVectorStore(characterId);
             const results = vectorStore.search(embeddingResult.embedding, 500);
             const matchedIds = new Set(results.map(r => r.id));
-            const allMemories = await repos.memories.findByCharacterId(characterId);
-            candidateMemories = allMemories.filter(m => matchedIds.has(m.id));
+            const aboutSelf = await repos.memories.findByCharacterAboutCharacter(characterId, characterId);
+            candidateMemories = aboutSelf.filter(m => matchedIds.has(m.id));
             usedSemantic = true;
           }
         } catch (err) {
@@ -488,15 +520,15 @@ export async function runCharacterOptimizer(
           });
         }
         if (!usedSemantic) {
-          candidateMemories = await repos.memories.searchByContent(characterId, searchQuery);
+          candidateMemories = await repos.memories.searchByContentAboutCharacter(characterId, characterId, searchQuery);
         }
       } else {
         // Text search only
-        candidateMemories = await repos.memories.searchByContent(characterId, searchQuery);
+        candidateMemories = await repos.memories.searchByContentAboutCharacter(characterId, characterId, searchQuery);
       }
     } else {
-      // No search query — load all memories (current behavior)
-      candidateMemories = await repos.memories.findByCharacterId(characterId);
+      // No search query — load all about-self memories
+      candidateMemories = await repos.memories.findByCharacterAboutCharacter(characterId, characterId);
     }
 
     // Apply date filters
@@ -1002,7 +1034,9 @@ function groupSuggestionsForReport(suggestions: OptimizerSuggestion[]): Suggesti
     } else if (s.field === 'systemPrompt') {
       (s.subId ? promptUpdates : promptNew).push(s);
     } else if (
+      s.field === 'identity' ||
       s.field === 'description' ||
+      s.field === 'manifesto' ||
       s.field === 'personality' ||
       s.field === 'exampleDialogues' ||
       s.field === 'talkativeness'
@@ -1035,8 +1069,12 @@ function describeSuggestion(s: OptimizerSuggestion): string {
     return `New system prompt${name ? `: ${name}` : ''}`;
   }
   switch (s.field) {
+    case 'identity':
+      return 'Identity';
     case 'description':
       return 'Description';
+    case 'manifesto':
+      return 'Manifesto';
     case 'personality':
       return 'Personality';
     case 'exampleDialogues':

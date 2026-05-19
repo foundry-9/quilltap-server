@@ -4,7 +4,7 @@
  * Tests form validation, creation, and editing of memories
  */
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, jest } from '@jest/globals';
 import { MemoryEditor } from '@/components/memory/memory-editor';
 
@@ -103,10 +103,12 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const contentInput = container.querySelector('textarea#content') as HTMLTextAreaElement;
+      const contentEditor = container.querySelector('[aria-label="Memory content"]');
+      const contentEditable = contentEditor?.querySelector('[contenteditable="true"]') as HTMLElement | null;
       const summaryInput = container.querySelector('input#summary') as HTMLInputElement;
 
-      expect(contentInput.value).toBe('');
+      // Empty Lexical content is either empty string or a single empty paragraph
+      expect((contentEditable?.textContent ?? '').trim()).toBe('');
       expect(summaryInput.value).toBe('');
     });
   });
@@ -125,7 +127,7 @@ describe('MemoryEditor', () => {
       expect(screen.getByText('Save Changes')).toBeInTheDocument();
     });
 
-    it('should populate form with existing memory data', () => {
+    it('should populate form with existing memory data', async () => {
       const { container } = render(
         <MemoryEditor
           characterId={mockCharacterId}
@@ -135,11 +137,17 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const contentInput = container.querySelector('textarea#content') as HTMLTextAreaElement;
       const summaryInput = container.querySelector('input#summary') as HTMLInputElement;
-
-      expect(contentInput.value).toBe(mockMemory.content);
       expect(summaryInput.value).toBe(mockMemory.summary);
+
+      // MarkdownLexicalEditor renders Lexical's contenteditable with the
+      // markdown converted to rich text. The bridge schedules the conversion
+      // via editor.update so the DOM lands a microtask later.
+      await waitFor(() => {
+        const contentEditor = container.querySelector('[aria-label="Memory content"]');
+        const contentEditable = contentEditor?.querySelector('[contenteditable="true"]') as HTMLElement | null;
+        expect(contentEditable?.textContent).toContain(mockMemory.content);
+      });
     });
 
     it('should show importance value from existing memory', () => {
@@ -292,7 +300,7 @@ describe('MemoryEditor', () => {
       );
 
       expect(container.querySelector('input#summary')).toBeInTheDocument();
-      expect(container.querySelector('textarea#content')).toBeInTheDocument();
+      expect(container.querySelector('[aria-label="Memory content"]')).toBeInTheDocument();
       expect(container.querySelector('input#keywords')).toBeInTheDocument();
       expect(container.querySelector('input#importance')).toBeInTheDocument();
     });

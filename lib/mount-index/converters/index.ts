@@ -19,7 +19,6 @@ export async function convertToPlainText(
   absolutePath: string,
   fileType: SupportedFileType,
 ): Promise<string> {
-  logger.debug('Starting conversion', { path: absolutePath, fileType });
 
   let text: string;
 
@@ -47,12 +46,6 @@ export async function convertToPlainText(
       return '';
     }
   }
-
-  logger.debug('Conversion complete', {
-    path: absolutePath,
-    fileType,
-    resultLength: text.length,
-  });
 
   return text;
 }

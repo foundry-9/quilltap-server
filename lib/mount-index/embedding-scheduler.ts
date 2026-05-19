@@ -32,7 +32,6 @@ export async function enqueueEmbeddingJobsForMountPoint(mountPointId: string): P
   );
 
   if (unembeddedChunks.length === 0) {
-    logger.debug('No un-embedded chunks to process', { mountPointId });
     return 0;
   }
 

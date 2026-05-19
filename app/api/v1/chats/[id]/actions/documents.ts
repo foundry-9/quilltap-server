@@ -35,7 +35,7 @@ import {
   postLibrarianSaveAnnouncement,
   postLibrarianDeleteAnnouncement,
 } from '@/lib/services/librarian-notifications/writer';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -376,12 +376,6 @@ export async function handleOpenDocument(
       documentMode: data.mode,
     } as Record<string, unknown>);
 
-    logger.debug('Opened document in chat document mode', {
-      chatId,
-      filePath,
-      scope: effectiveScope,
-      mode: data.mode,
-    });
 
     const librarianMessage = await postLibrarianOpenAnnouncement({
       chatId,
@@ -476,12 +470,6 @@ export async function handleReadDocument(
   try {
     const fileData = await readFileWithMtime(resolvedRequest.resolved);
 
-    logger.debug('Read document for document mode', {
-      chatId,
-      filePath: data.filePath,
-      scope: data.scope,
-    });
-
     return successResponse({
       content: fileData.content,
       mtime: fileData.mtime,
@@ -491,7 +479,6 @@ export async function handleReadDocument(
     const message = getErrorMessage(error);
 
     if (code === 'ENOENT') {
-      logger.debug('Document not found on disk', { chatId, filePath: data.filePath, scope: data.scope });
       // notFound() appends "not found" to its argument, which would produce
       // "File not found: X not found" — use errorResponse so the client sees
       // the same shape as open-document's missing-file response.
@@ -549,14 +536,6 @@ export async function handleWriteDocument(
         data.filePath,
       );
     }
-
-    logger.debug('Saved document from document mode', {
-      chatId,
-      filePath: data.filePath,
-      scope: data.scope,
-      hadExpectedMtime: data.mtime !== undefined,
-      hasDiffContent: Boolean(data.diffContent),
-    });
 
     const librarianMessage = data.diffContent
       ? await postLibrarianSaveAnnouncement({ chatId, diffContent: data.diffContent })
@@ -724,14 +703,6 @@ export async function handleRenameDocument(
     displayTitle: newDisplayTitle,
   });
 
-  logger.debug('Renamed document', {
-    chatId,
-    from: doc.filePath,
-    to: newFilePath,
-    scope: doc.scope,
-    mountType: resolvedOld.mountType ?? 'filesystem',
-  });
-
   const librarianMessage = await postLibrarianRenameAnnouncement({
     chatId,
     oldDisplayTitle,
@@ -826,13 +797,6 @@ export async function handleDeleteDocument(
   } as Record<string, unknown>);
 
   const displayTitle = doc.displayTitle || path.basename(doc.filePath);
-
-  logger.debug('Deleted document', {
-    chatId,
-    filePath: doc.filePath,
-    scope: doc.scope,
-    mountType: resolved.mountType ?? 'filesystem',
-  });
 
   const librarianMessage = await postLibrarianDeleteAnnouncement({
     chatId,

@@ -24,7 +24,7 @@
 import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import type { MessageEvent } from '@/lib/schemas/types';
 import { isLanternImageAlertEnabled } from './resolver';
 
@@ -37,21 +37,44 @@ interface PostParams {
   chatId: string;
   fileId: string;
   kind: LanternNotificationKind;
+  // Generation prompt to quote in the announcement. Callers pass it in
+  // because the file row is typically a still-buffered write in the
+  // background-job child and not yet readable from the DB.
+  prompt?: string | null;
 }
 
-function buildContent(kind: LanternNotificationKind, prompt: string | null): string {
+function buildContent(kind: LanternNotificationKind, prompt: string | null, fileId: string): string {
+  const aim = prompt?.trim();
+  // Each branch surfaces the image UUID inline so any character reading the
+  // announcement in chat history has the handle required to call
+  // keep_image / attach_image on it.
+  switch (kind.kind) {
+    case 'avatar':
+      return aim
+        ? `Aurora is requesting a new portrait be commissioned for ${kind.characterName}, with the following description which omits unnecessary detail: "${aim}". The previous likeness is retired with due ceremony; the new one is attached here, catalogued under uuid \`${fileId}\`, should anyone care to take a fresh look.`
+        : `Aurora is requesting a new portrait be commissioned for ${kind.characterName}. The previous likeness is retired with due ceremony; the new one is attached here, catalogued under uuid \`${fileId}\`, should anyone care to take a fresh look.`;
+    case 'background':
+      return aim
+        ? `The Lantern has projected a new backdrop behind the proceedings, aiming for: "${aim}". The resulting image (uuid \`${fileId}\`) hangs just above, attached for your perusal.`
+        : `The Lantern has projected a new backdrop behind the proceedings. The resulting image (uuid \`${fileId}\`) hangs just above, attached for your perusal.`;
+    case 'character-image':
+      return `The Lantern, acting upon the instructions of ${kind.requesterName}, has produced the following picture, catalogued under uuid \`${fileId}\`. It is attached here, should anyone care to examine it.`;
+  }
+}
+
+function buildOpaqueContent(kind: LanternNotificationKind, prompt: string | null, fileId: string): string {
   const aim = prompt?.trim();
   switch (kind.kind) {
     case 'avatar':
       return aim
-        ? `Aurora has refreshed the portrait filed under ${kind.characterName}'s name, aiming for: "${aim}". The previous likeness is retired with due ceremony; the new one is attached here, should anyone care to take a fresh look.`
-        : `Aurora has refreshed the portrait filed under ${kind.characterName}'s name, the previous likeness now retired with due ceremony. The new one is attached here, should anyone care to take a fresh look.`;
+        ? `A new portrait has been commissioned for ${kind.characterName}, with this description (which omits unnecessary detail): "${aim}". The previous likeness is retired; the new one is attached here, catalogued under uuid \`${fileId}\`.`
+        : `A new portrait has been commissioned for ${kind.characterName}. The previous likeness is retired; the new one is attached here, catalogued under uuid \`${fileId}\`.`;
     case 'background':
       return aim
-        ? `The Lantern has projected a new backdrop behind the proceedings, aiming for: "${aim}". The resulting image hangs just above, attached for your perusal.`
-        : `The Lantern has projected a new backdrop behind the proceedings. The resulting image hangs just above, attached for your perusal.`;
+        ? `A new background has been generated for this scene, aiming for: "${aim}". The resulting image (uuid \`${fileId}\`) is attached above for your perusal.`
+        : `A new background has been generated for this scene. The resulting image (uuid \`${fileId}\`) is attached above for your perusal.`;
     case 'character-image':
-      return `The Lantern, acting upon the instructions of ${kind.requesterName}, has produced the following picture. It is attached here, should anyone care to examine it.`;
+      return `A picture has been generated at ${kind.requesterName}'s request, catalogued under uuid \`${fileId}\`. It is attached here for your examination.`;
   }
 }
 
@@ -60,18 +83,13 @@ function senderForKind(kind: LanternNotificationKind): 'lantern' | 'aurora' {
 }
 
 export async function postLanternImageNotification(params: PostParams): Promise<void> {
-  const { chatId, fileId, kind } = params;
+  const { chatId, fileId, kind, prompt = null } = params;
 
   try {
     const repos = getRepositories();
 
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
-      logger.debug('[LanternNotification] Chat not found, skipping announcement', {
-        context: 'lantern-notifications',
-        chatId,
-        fileId,
-      });
       return;
     }
 
@@ -80,26 +98,7 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       : null;
 
     if (!isLanternImageAlertEnabled(chat, project)) {
-      logger.debug('[LanternNotification] Alert disabled, skipping', {
-        context: 'lantern-notifications',
-        chatId,
-        fileId,
-        kind: kind.kind,
-      });
       return;
-    }
-
-    let generationPrompt: string | null = null;
-    try {
-      const file = await repos.files.findById(fileId);
-      generationPrompt = file?.generationPrompt ?? null;
-    } catch (fetchError) {
-      logger.debug('[LanternNotification] Could not read generation prompt for file', {
-        context: 'lantern-notifications',
-        chatId,
-        fileId,
-        error: getErrorMessage(fetchError),
-      });
     }
 
     const messageId = randomUUID();
@@ -109,11 +108,13 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       type: 'message',
       id: messageId,
       role: 'ASSISTANT',
-      content: buildContent(kind, generationPrompt),
+      content: buildContent(kind, prompt, fileId),
+      opaqueContent: buildOpaqueContent(kind, prompt, fileId),
       attachments: [fileId],
       createdAt: now,
       participantId: null,
       systemSender: senderForKind(kind),
+      systemKind: kind.kind,
     };
 
     await repos.chats.addMessage(chatId, message);

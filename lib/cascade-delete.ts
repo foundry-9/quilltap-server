@@ -9,6 +9,8 @@ import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
 import { fileStorageManager } from '@/lib/file-storage/manager'
 import { getVectorStoreManager } from '@/lib/embedding/vector-store'
+import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar'
+import { removeFromCharacterGallery } from '@/lib/photos/character-gallery-service'
 import type { ChatMetadata, FileEntry } from '@/lib/schemas/types'
 
 /**
@@ -46,11 +48,22 @@ export interface ExclusiveChatInfo {
   messageCount: number
 }
 
+/**
+ * One entry in the cascade-delete preview for "images exclusively used by this
+ * character". Post-Phase-3 a character's avatar lives in their vault as a
+ * `doc_mount_file_links` row, but legacy `files` rows can still appear in the
+ * brief window between SillyTavern import and the next migration sweep, so we
+ * carry both shapes through.
+ */
+export type ExclusiveCharacterImage =
+  | { kind: 'legacy-file'; id: string; file: FileEntry }
+  | { kind: 'vault-link'; id: string; linkId: string; characterId: string };
+
 export interface CascadeDeletePreview {
   characterId: string
   characterName: string
   exclusiveChats: ExclusiveChatInfo[]
-  exclusiveCharacterImages: FileEntry[]
+  exclusiveCharacterImages: ExclusiveCharacterImage[]
   exclusiveChatImages: FileEntry[]
   memoryCount: number
 }
@@ -97,7 +110,7 @@ export async function findExclusiveChatsForCharacter(
  */
 export async function findExclusiveImagesForCharacter(
   characterId: string
-): Promise<FileEntry[]> {
+): Promise<ExclusiveCharacterImage[]> {
   const repos = getRepositories()
   const character = await repos.characters.findById(characterId)
 
@@ -105,57 +118,61 @@ export async function findExclusiveImagesForCharacter(
     return []
   }
 
-  const exclusiveImages: FileEntry[] = []
+  const exclusiveImages: ExclusiveCharacterImage[] = []
+  const seenIds = new Set<string>()
 
-  // Check defaultImageId
+  // Candidate ids: the character's defaultImageId plus every avatarOverride.
+  const candidateIds = new Set<string>()
   if (character.defaultImageId) {
-    const image = await repos.files.findById(character.defaultImageId)
-    if (image) {
-      // Check if this image is only linked to this character
-      const isExclusive = image.linkedTo.length === 0 ||
-        (image.linkedTo.length === 1 && image.linkedTo[0] === characterId)
-
-      if (isExclusive) {
-        // Use targeted queries to check if used as default image elsewhere
-        const charsUsingAsDefault = await repos.characters.findByDefaultImageId(image.id)
-
-        const usedElsewhere = charsUsingAsDefault.some(c => c.id !== characterId)
-
-        if (!usedElsewhere) {
-          exclusiveImages.push(image)
-        }
-      }
+    candidateIds.add(character.defaultImageId)
+  }
+  for (const override of character.avatarOverrides || []) {
+    if (override.imageId) {
+      candidateIds.add(override.imageId)
     }
   }
 
-  // Collect all avatar override image IDs and fetch in batch
-  const overrideImageIds = (character.avatarOverrides || [])
-    .map(o => o.imageId)
-    .filter((id): id is string => !!id)
+  for (const id of candidateIds) {
+    if (seenIds.has(id)) continue
 
-  if (overrideImageIds.length > 0) {
-    const overrideImages = await repos.files.findByIds(overrideImageIds)
+    const resolved = await resolveCharacterAvatar(id, repos)
+    if (!resolved) continue
 
-    for (const image of overrideImages) {
-      // Skip if already added
-      if (exclusiveImages.find(i => i.id === image.id)) {
-        continue
-      }
-
-      // Use targeted queries to check usage
-      const [charsUsingAsDefault, charsUsingInOverrides] = await Promise.all([
-        repos.characters.findByDefaultImageId(image.id),
-        repos.characters.findByAvatarOverrideImageId(image.id),
-      ])
-
-      const usedElsewhere =
-        charsUsingAsDefault.some(c => c.id !== characterId) ||
-        charsUsingInOverrides.some(c => c.id !== characterId)
-
-      if (!usedElsewhere) {
-        exclusiveImages.push(image)
-      }
+    if (resolved.kind === 'vault-link') {
+      // Vault links live in the character's private vault, so they're
+      // exclusive by construction. Deleting the link reclaims the underlying
+      // content row if no other vault hard-linked the same bytes.
+      seenIds.add(id)
+      exclusiveImages.push({
+        kind: 'vault-link',
+        id,
+        linkId: id,
+        characterId,
+      })
+      continue
     }
+
+    // Legacy files-table avatar: keep the historic exclusivity check.
+    const image = resolved.kind === 'legacy-file'
+      ? await repos.files.findById(id)
+      : null
+    if (!image) continue
+
+    const isExclusive = image.linkedTo.length === 0 ||
+      (image.linkedTo.length === 1 && image.linkedTo[0] === characterId)
+    if (!isExclusive) continue
+
+    const [charsUsingAsDefault, charsUsingInOverrides] = await Promise.all([
+      repos.characters.findByDefaultImageId(image.id),
+      repos.characters.findByAvatarOverrideImageId(image.id),
+    ])
+    const usedElsewhere =
+      charsUsingAsDefault.some(c => c.id !== characterId) ||
+      charsUsingInOverrides.some(c => c.id !== characterId)
+    if (usedElsewhere) continue
+
+    seenIds.add(id)
+    exclusiveImages.push({ kind: 'legacy-file', id: image.id, file: image })
   }
 
   return exclusiveImages
@@ -317,8 +334,19 @@ export async function executeCascadeDelete(
   if (options.deleteExclusiveImages) {
     for (const image of preview.exclusiveCharacterImages) {
       try {
-        await deleteFileCompletely(image.id)
-        deletedImages++
+        if (image.kind === 'vault-link') {
+          const result = await removeFromCharacterGallery({
+            characterId: image.characterId,
+            linkId: image.linkId,
+            repos,
+          })
+          if (result.deleted) {
+            deletedImages++
+          }
+        } else {
+          await deleteFileCompletely(image.id)
+          deletedImages++
+        }
       } catch (err) {
         logger.error(`Failed to delete character image ${image.id}`, { context: { imageId: image.id } }, err instanceof Error ? err : undefined)
       }

@@ -10,6 +10,7 @@ import { WardrobeItem, WardrobeItemSchema, WardrobeItemType } from '@/lib/schema
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { getOverlaidWardrobeItems, syncCharacterVaultWardrobe } from './character-properties-overlay';
 import { TypedQueryFilter } from '../interfaces';
+import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
 
 /**
  * Wardrobe Repository
@@ -19,20 +20,6 @@ import { TypedQueryFilter } from '../interfaces';
 export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   constructor() {
     super('wardrobe_items', WardrobeItemSchema);
-  }
-
-  /**
-   * Find a wardrobe item by ID
-   */
-  async findById(id: string): Promise<WardrobeItem | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all wardrobe items
-   */
-  async findAll(): Promise<WardrobeItem[]> {
-    return this._findAll();
   }
 
   /**
@@ -240,6 +227,39 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
+   * Reject a save that would introduce a cycle through `componentItemIds`.
+   * Looks at the would-be id (passed in or freshly minted) plus its proposed
+   * components and walks the existing graph for the character's items + shared
+   * archetypes. Throws on any cycle found.
+   */
+  private async assertNoComponentCycles(
+    selfId: string,
+    componentItemIds: readonly string[],
+    characterId: string | null,
+  ): Promise<void> {
+    if (componentItemIds.length === 0) return;
+
+    const peers = characterId
+      ? await this.findByCharacterId(characterId, true)
+      : await this.findArchetypes(true);
+    const itemsById = new Map(peers.map((i) => [i.id, i]));
+    const cycles = detectComponentCycles(selfId, componentItemIds, itemsById);
+
+    if (cycles.length > 0) {
+      const message = `Wardrobe item ${selfId} would create a component cycle: ${cycles
+        .map((c) => c.join(' → '))
+        .join('; ')}`;
+      logger.warn('[Wardrobe] Rejected save — component cycle detected', {
+        context: 'wardrobe',
+        wardrobeItemId: selfId,
+        componentItemIds: [...componentItemIds],
+        cycles,
+      });
+      throw new Error(message);
+    }
+  }
+
+  /**
    * Create a new wardrobe item
    * @param data The wardrobe item data
    * @param options Optional CreateOptions to specify ID and createdAt (for sync)
@@ -250,7 +270,14 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   ): Promise<WardrobeItem> {
     return this.safeQuery(
       async () => {
-        const item = await this._create(data, options);
+        const candidateId = options?.id ?? this.generateId();
+        await this.assertNoComponentCycles(
+          candidateId,
+          data.componentItemIds ?? [],
+          data.characterId ?? null,
+        );
+
+        const item = await this._create(data, { ...options, id: candidateId });
 
         logger.info('Wardrobe item created successfully', {
           wardrobeItemId: item.id,
@@ -281,13 +308,19 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
    */
   async createFromVault(item: WardrobeItem): Promise<WardrobeItem> {
     return this.safeQuery(
-      () =>
-        this._create(
+      async () => {
+        await this.assertNoComponentCycles(
+          item.id,
+          item.componentItemIds ?? [],
+          item.characterId ?? null,
+        );
+        return this._create(
           {
             characterId: item.characterId ?? null,
             title: item.title,
             description: item.description ?? null,
             types: item.types,
+            componentItemIds: item.componentItemIds ?? [],
             appropriateness: item.appropriateness ?? null,
             isDefault: item.isDefault,
             migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
@@ -298,7 +331,8 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
           },
-        ),
+        );
+      },
       'Error ingesting vault-only wardrobe item into DB',
       { wardrobeItemId: item.id, characterId: item.characterId ?? null, title: item.title },
     );
@@ -315,6 +349,12 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
         // Remove id and createdAt to prevent accidental overwrites
         delete updateData.id;
         delete updateData.createdAt;
+
+        if (updateData.componentItemIds !== undefined) {
+          const existing = await this._findById(id);
+          const characterId = updateData.characterId ?? existing?.characterId ?? null;
+          await this.assertNoComponentCycles(id, updateData.componentItemIds, characterId);
+        }
 
         const item = await this._update(id, updateData);
 
@@ -344,13 +384,35 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
         if (result) {
           logger.info('Wardrobe item deleted successfully', { wardrobeItemId: id });
           if (existing?.characterId) {
-            await syncCharacterVaultWardrobe(existing.characterId);
+            // Pass the deleted id as a tombstone so the sync's vault-only
+            // ingestion step doesn't re-promote the still-on-disk Wardrobe/
+            // file (preserving the same id) and resurrect the row we just
+            // deleted. With the id excluded, the projection sweep treats
+            // the file as unmanaged and removes it.
+            await syncCharacterVaultWardrobe(existing.characterId, new Set([id]));
           }
         }
 
         return result;
       },
       'Error deleting wardrobe item',
+      { wardrobeItemId: id }
+    );
+  }
+
+  /**
+   * Delete a wardrobe item without firing `syncCharacterVaultWardrobe`.
+   * Symmetric with `createFromVault`: used by the vault-to-DB sync path
+   * (`sync-properties-from-vault`) which rebuilds the row set in a tight
+   * delete-then-recreate loop. The standard `delete` would let each
+   * iteration's post-write sync re-promote the just-deleted vault file
+   * back into the DB, leaving the table populated and causing the
+   * subsequent recreate to hit a UNIQUE constraint on `id`.
+   */
+  async deleteRaw(id: string): Promise<boolean> {
+    return this.safeQuery(
+      () => this._delete(id),
+      'Error deleting wardrobe item (raw)',
       { wardrobeItemId: id }
     );
   }

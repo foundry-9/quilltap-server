@@ -177,6 +177,18 @@ Remove a character's message:
 - May prompt about associated memories
 - See [Memory Cascade](#memory-cascade-on-deletion) for details
 
+### Save Image to a Photo Album
+
+When a message has an image pinned beneath it — whether the Lantern just lit a new backdrop, Aurora unveiled a fresh portrait, a character offered an attached snapshot, or you yourself uploaded one — the toolbar gains a small bookmark. Press it, and a dialog presents itself:
+
+1. **Pick the album.** Your own persona's photo album sits at the top, already chosen for you. Beneath it you'll find each other character in the chat, the project's own album (if the project keeps one), every linked document store, and the universal "Quilltap General" cabinet at the foot of the list.
+2. **Add a caption, if you fancy.** A short remembrance — what you wanted to keep this image *for*. Left blank, the original generation notes stand in for you.
+3. **Press Save.** The image is hard-linked into the chosen album's `photos/` folder, indexed for search, and quietly retired from the perils of garbage collection.
+
+The same image saved twice into the same album is politely refused — you'll see a small note explaining when it was first kept. Save it to a different album and you'll have two records, both pointing at the same underlying bytes (Quilltap does not waste storage on duplication).
+
+This is the operator-facing twin of the characters' own `keep_image` tool; everything an LLM can preserve, you can now preserve too.
+
 ### Reattribute Message (Multi-Character)
 
 Change which character "said" a message:

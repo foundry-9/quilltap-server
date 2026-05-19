@@ -15,6 +15,8 @@ import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import { postLibrarianAttachAnnouncement } from '@/lib/services/librarian-notifications/writer';
 import { generateImageDescription } from '@/lib/chat/file-attachment-fallback';
+import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
+import { buildAttachDescriptionFromKeptImage } from '@/lib/photos/keep-image-markdown';
 import type { RepositoryContainer } from '@/lib/database/repositories';
 import type { FileAttachment } from '@/lib/llm/base';
 
@@ -193,10 +195,6 @@ async function ensureImageDescription(
   }
   const existing = blob.description?.trim();
   if (existing) {
-    logger.debug('[Chats v1 Files] Reusing cached blob description', {
-      blobId: blob.id,
-      descriptionLength: existing.length,
-    });
     return existing;
   }
 
@@ -283,7 +281,26 @@ async function handleAttachMountFile(
   const mountPoint = await repos.docMountPoints.findById(mountPointId);
   const mountPointName = mountPoint?.name ?? null;
 
-  const description = await ensureImageDescription(repos, userId, blob);
+  // For kept images (anything in a `photos/` folder) the link's extractedText
+  // already carries the original generation prompt, scene snapshot, and
+  // saver caption — built by keep_image / save-image-to-album. Surface that
+  // verbatim instead of running the vision LLM on top of what is, by
+  // construction, a richer description than vision could produce.
+  let description = '';
+  let descriptionSource: 'kept-image-markdown' | 'vision-llm-cached' | 'vision-llm-generated' | 'empty' = 'empty';
+  if (isPhotosRelativePath(relativePath)) {
+    const fromMarkdown = buildAttachDescriptionFromKeptImage(mountFile.extractedText);
+    if (fromMarkdown) {
+      description = fromMarkdown;
+      descriptionSource = 'kept-image-markdown';
+    }
+  }
+  if (!description) {
+    description = await ensureImageDescription(repos, userId, blob);
+    if (description) {
+      descriptionSource = blob.description?.trim() ? 'vision-llm-cached' : 'vision-llm-generated';
+    }
+  }
 
   const announcement = await postLibrarianAttachAnnouncement({
     chatId,
@@ -308,6 +325,7 @@ async function handleAttachMountFile(
     relativePath,
     announcementMessageId: announcement.id,
     descriptionIncluded: description.length > 0,
+    descriptionSource,
   });
 
   return NextResponse.json({
@@ -376,17 +394,19 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           const ids = Array.isArray(event.attachments) ? event.attachments : [];
           for (const attachmentId of ids) {
             if (seenIds.has(attachmentId)) continue;
-            const mountFile = await repos.docMountFiles.findById(attachmentId);
-            if (!mountFile) continue;
-            const blob = await repos.docMountBlobs.findByMountPointAndPath(
-              mountFile.mountPointId,
-              mountFile.relativePath,
-            );
+            // Try as a link id (modern) or fall back to file id.
+            let mountLink = await repos.docMountFileLinks.findByIdWithContent(attachmentId);
+            if (!mountLink) {
+              const links = await repos.docMountFileLinks.findByFileId(attachmentId);
+              mountLink = links[0] ?? null;
+            }
+            if (!mountLink) continue;
+            const blob = await repos.docMountBlobs.findByFileId(mountLink.fileId);
             if (!blob) continue;
-            const url = `/api/v1/mount-points/${mountFile.mountPointId}/blobs/${encodeURI(mountFile.relativePath)}`;
+            const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
             allFiles.push({
-              id: mountFile.id,
-              filename: blob.originalFileName || mountFile.fileName,
+              id: mountLink.id,
+              filename: mountLink.originalFileName ?? mountLink.fileName,
               filepath: url,
               mimeType: blob.storedMimeType,
               size: blob.sizeBytes,
@@ -394,7 +414,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
               createdAt: event.createdAt,
               type: 'mountFile',
             });
-            seenIds.add(mountFile.id);
+            seenIds.add(mountLink.id);
           }
         }
       } catch (err) {

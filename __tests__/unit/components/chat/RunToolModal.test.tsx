@@ -397,6 +397,7 @@ describe('RunToolModal', () => {
             toolName: 'search',
             arguments: { query: 'test-value' },
             characterId: 'char-abc',
+            private: false,
           }),
         })
       )
@@ -474,6 +475,57 @@ describe('RunToolModal', () => {
 
       expect(baseProps.onToolExecuted).not.toHaveBeenCalled()
       // onClose should not have been called during execution failure
+    })
+
+    it('keeps a user-selected character id when participants only expose nested character.id', async () => {
+      mockFetchTools([createMockTool({ parameters: undefined })])
+      const participantsWithoutTopLevelCharacterId = [
+        {
+          id: 'participant-1',
+          type: 'CHARACTER' as const,
+          displayOrder: 0,
+          isActive: true,
+          character: { name: 'Alice', id: 'char-alice' },
+        },
+        {
+          id: 'participant-2',
+          type: 'CHARACTER' as const,
+          displayOrder: 1,
+          isActive: true,
+          character: { name: 'Bob', id: 'char-bob' },
+        },
+      ]
+
+      await act(async () => {
+        render(
+          <RunToolModal
+            {...baseProps}
+            participants={participantsWithoutTopLevelCharacterId as any}
+          />
+        )
+      })
+
+      fireEvent.click(screen.getByText('Search Memories'))
+      const selector = screen.getByRole('combobox')
+      fireEvent.change(selector, { target: { value: 'char-bob' } })
+      expect((selector as HTMLSelectElement).value).toBe('char-bob')
+
+      mockFetchExecute({ success: true, result: { toolName: 'search', success: true } })
+      await act(async () => {
+        fireEvent.click(screen.getByText('Run Tool'))
+      })
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/v1/chats/chat-123?action=run-tool',
+        expect.objectContaining({
+          body: JSON.stringify({
+            toolName: 'search',
+            arguments: {},
+            characterId: 'char-bob',
+            private: false,
+          }),
+        })
+      )
     })
   })
 

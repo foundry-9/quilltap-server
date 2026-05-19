@@ -28,6 +28,10 @@ export function ProfileList({
 }: ProfileListProps) {
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
   const [refitSuccess, setRefitSuccess] = useState<string | null>(null)
+  const [reapplyConfirming, setReapplyConfirming] = useState<string | null>(null)
+  const [reapplySuccess, setReapplySuccess] = useState<string | null>(null)
+  const [reindexMismatchedConfirming, setReindexMismatchedConfirming] = useState<string | null>(null)
+  const [reindexMismatchedSuccess, setReindexMismatchedSuccess] = useState<string | null>(null)
 
   const {
     loading: deleteLoading,
@@ -41,6 +45,20 @@ export function ProfileList({
     error: refitError,
     execute: executeRefit,
     clearError: clearRefitError,
+  } = useAsyncOperation<void>()
+
+  const {
+    loading: reapplyLoading,
+    error: reapplyError,
+    execute: executeReapply,
+    clearError: clearReapplyError,
+  } = useAsyncOperation<void>()
+
+  const {
+    loading: reindexMismatchedLoading,
+    error: reindexMismatchedError,
+    execute: executeReindexMismatched,
+    clearError: clearReindexMismatchedError,
   } = useAsyncOperation<void>()
 
   const handleDelete = async (id: string) => {
@@ -69,6 +87,48 @@ export function ProfileList({
       setRefitSuccess(profile.provider === 'BUILTIN'
         ? 'Vocabulary refit job queued. Help docs, memories, and conversations will be re-embedded. Track progress via the Emb badge.'
         : 'Re-embedding everything — help docs, memories, and conversations. Track progress via the Emb badge.'
+      )
+    })
+  }
+
+  const handleReapply = async (profile: EmbeddingProfile) => {
+    setReapplySuccess(null)
+    await executeReapply(async () => {
+      const result = await fetchJson(
+        `/api/v1/embedding-profiles/${profile.id}?action=reapply`,
+        { method: 'POST' }
+      )
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to trigger re-apply')
+      }
+      notifyQueueChange()
+      setReapplyConfirming(null)
+      setReapplySuccess(
+        `Matryoshka re-apply queued. Stored vectors will be sliced to ${profile.truncateToDimensions}d and renormalized. ` +
+        'A backup of each affected database is taken before any rewrite. Track progress via the Emb badge.'
+      )
+    })
+  }
+
+  const handleReindexMismatched = async (profile: EmbeddingProfile) => {
+    setReindexMismatchedSuccess(null)
+    const targetDim = profile.truncateToDimensions ?? profile.dimensions
+    await executeReindexMismatched(async () => {
+      const result = await fetchJson(
+        `/api/v1/embedding-profiles/${profile.id}?action=reindex`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: 'mismatched-dim' }),
+        }
+      )
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to trigger partial reindex')
+      }
+      notifyQueueChange()
+      setReindexMismatchedConfirming(null)
+      setReindexMismatchedSuccess(
+        `Partial re-embedding queued. Only rows whose stored vector dim differs from ${targetDim}d will be re-embedded against this profile. Track progress via the Emb badge.`
       )
     })
   }
@@ -105,6 +165,60 @@ export function ProfileList({
           message={refitError}
           onRetry={clearRefitError}
         />
+      )}
+
+      {reapplyError && (
+        <ErrorAlert
+          message={reapplyError}
+          onRetry={clearReapplyError}
+        />
+      )}
+
+      {reindexMismatchedError && (
+        <ErrorAlert
+          message={reindexMismatchedError}
+          onRetry={clearReindexMismatchedError}
+        />
+      )}
+
+      {reindexMismatchedSuccess && (
+        <div className="qt-alert-success">
+          <div className="flex items-center justify-between gap-4">
+            <p className="qt-label flex-1">{reindexMismatchedSuccess}</p>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Link href="/settings?tab=system" className="qt-button-ghost qt-button-sm">
+                View Tasks Queue
+              </Link>
+              <button
+                type="button"
+                onClick={() => setReindexMismatchedSuccess(null)}
+                className="qt-button-ghost qt-button-sm"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reapplySuccess && (
+        <div className="qt-alert-success">
+          <div className="flex items-center justify-between gap-4">
+            <p className="qt-label flex-1">{reapplySuccess}</p>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Link href="/settings?tab=system" className="qt-button-ghost qt-button-sm">
+                View Tasks Queue
+              </Link>
+              <button
+                type="button"
+                onClick={() => setReapplySuccess(null)}
+                className="qt-button-ghost qt-button-sm"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {refitSuccess && (
@@ -149,6 +263,12 @@ export function ProfileList({
           if (profile.dimensions) {
             metadata.push({ label: 'Dimensions', value: profile.dimensions.toString() })
           }
+          if (profile.truncateToDimensions) {
+            metadata.push({
+              label: 'Truncate to',
+              value: `${profile.truncateToDimensions} (Matryoshka)`,
+            })
+          }
           if (profile.apiKey) {
             metadata.push({ label: 'API Key', value: profile.apiKey.label })
           }
@@ -182,6 +302,46 @@ export function ProfileList({
             })
           }
 
+          // Add Matryoshka re-apply button for default profiles with truncation set.
+          // Two-step: first click asks for confirmation, second click runs the job.
+          if (profile.isDefault && profile.truncateToDimensions) {
+            const isConfirming = reapplyConfirming === profile.id
+            actions.push({
+              label: isConfirming
+                ? (reapplyLoading ? 'Queuing…' : `Confirm: slice to ${profile.truncateToDimensions}d`)
+                : 'Re-apply (Matryoshka)',
+              onClick: isConfirming ? () => handleReapply(profile) : () => setReapplyConfirming(profile.id),
+              variant: 'secondary' as const,
+            })
+          }
+
+          // Add partial-reindex button for default non-BUILTIN profiles whose
+          // target dim is determinable. Re-embeds only rows whose stored
+          // vector dim differs from this profile's target — useful when an
+          // earlier provider left orphans behind that the Matryoshka slicer
+          // can't safely fix (different embedding space, not just dim).
+          const partialReindexTargetDim =
+            profile.truncateToDimensions ?? profile.dimensions
+          if (
+            profile.isDefault &&
+            profile.provider !== 'BUILTIN' &&
+            partialReindexTargetDim &&
+            partialReindexTargetDim > 0
+          ) {
+            const isConfirming = reindexMismatchedConfirming === profile.id
+            actions.push({
+              label: isConfirming
+                ? (reindexMismatchedLoading
+                    ? 'Queuing…'
+                    : `Confirm: re-embed misfits at ${partialReindexTargetDim}d`)
+                : 'Re-embed Mismatched',
+              onClick: isConfirming
+                ? () => handleReindexMismatched(profile)
+                : () => setReindexMismatchedConfirming(profile.id),
+              variant: 'secondary' as const,
+            })
+          }
+
           return (
             <ProfileCard
               key={profile.id}
@@ -189,6 +349,7 @@ export function ProfileList({
               badges={badges}
               metadata={metadata}
               actions={actions}
+              actionsPosition="footer"
               deleteConfig={{
                 isConfirming: deleteConfirming === profile.id,
                 onConfirmChange: (confirming) => setDeleteConfirming(confirming ? profile.id : null),

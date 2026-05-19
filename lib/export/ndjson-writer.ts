@@ -142,10 +142,6 @@ async function* streamCharacters(
         yield { kind: 'wardrobe_item', characterId: id, data: item };
       }
       if (wardrobeItems.length > 0) {
-        logger.debug('Streamed wardrobe items for character export', {
-          characterId: id,
-          wardrobeItemCount: wardrobeItems.length,
-        });
       }
     } catch (error) {
       logger.warn('Failed to load wardrobe items for character export', {
@@ -167,10 +163,6 @@ async function* streamCharacters(
         };
       }
       if (pluginNames.length > 0) {
-        logger.debug('Streamed plugin data for character export', {
-          characterId: id,
-          pluginCount: pluginNames.length,
-        });
       }
     } catch (error) {
       logger.warn('Failed to load plugin data for character export', {
@@ -245,6 +237,35 @@ async function* streamChats(
       }
     } catch (error) {
       logger.warn('Failed to load chat messages for export', {
+        chatId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Conversation annotations and chat documents come after the messages so
+    // importers can resolve sourceMessageId / chatId against IDs they have
+    // already seen in this same stream.
+    try {
+      const annotations = await getRepositories().conversationAnnotations.findByChatId(id);
+      for (const annotation of annotations) {
+        yield { kind: 'conversation_annotation', chatId: id, data: annotation };
+        bump(counts, 'conversationAnnotations');
+      }
+    } catch (error) {
+      logger.warn('Failed to load conversation annotations for export', {
+        chatId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    try {
+      const chatDocs = await getRepositories().chatDocuments.findByChatId(id);
+      for (const cd of chatDocs) {
+        yield { kind: 'chat_document', chatId: id, data: cd };
+        bump(counts, 'chatDocuments');
+      }
+    } catch (error) {
+      logger.warn('Failed to load chat documents for export', {
         chatId: id,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -437,6 +458,16 @@ async function* streamDocumentStores(
 
       const docs = await repos.docMountDocuments.findByMountPointId(mp.id);
       for (const d of docs) {
+        // doc_mount_documents row only ever holds text content — skip
+        // links that point at blob-type content (they're exported as blobs).
+        if (
+          d.fileType !== 'markdown' &&
+          d.fileType !== 'txt' &&
+          d.fileType !== 'json' &&
+          d.fileType !== 'jsonl'
+        ) {
+          continue;
+        }
         yield {
           kind: 'doc_mount_document',
           data: {

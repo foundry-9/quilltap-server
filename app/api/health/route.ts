@@ -10,7 +10,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 
 export const dynamic = 'force-dynamic';
 

@@ -11,6 +11,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useHasDangerousChats } from '@/components/hooks/use-has-dangerous-chats'
 import { useTheme } from '@/components/providers/theme-provider'
@@ -18,6 +19,74 @@ import { ProfileMenu } from './profile-menu'
 import { NavUserMenuThemeContent } from '@/components/dashboard/nav-user-menu-theme'
 import { NavUserMenuQuickHideContent, QuickHideIcon } from '@/components/dashboard/nav-user-menu-quick-hide'
 import { useHelpChatOptional } from '@/components/providers/help-chat-provider'
+import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
+
+// Match a UUID immediately following /salon/. If the user is reading a chat,
+// the sidebar's Wardrobe button should pass that chat id along so the dialog
+// can show Wearing now / Wear this against the right scope.
+const SALON_CHAT_PATH_RE = /^\/salon\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/
+
+interface SalonParticipantLite {
+  id: string
+  controlledBy?: string | null
+  displayOrder?: number | null
+  character?: { id?: string | null } | null
+}
+
+interface MessageLite {
+  role?: string | null
+  participantId?: string | null
+  createdAt?: string | null
+}
+
+/**
+ * Resolve the wardrobe dialog's default character for a chat. Priority:
+ *   1. Most recent assistant message authored by a non-user-controlled participant.
+ *   2. First non-user-controlled CHARACTER participant in chat order.
+ *   3. null — caller should let the dialog fall back to alphabetical first.
+ */
+async function resolveDefaultCharacterForChat(
+  chatId: string,
+): Promise<string | null> {
+  try {
+    const [chatRes, msgRes] = await Promise.all([
+      fetch(`/api/v1/chats/${chatId}`, { cache: 'no-store' }),
+      fetch(`/api/v1/messages?chatId=${chatId}`, { cache: 'no-store' }),
+    ])
+    if (!chatRes.ok) return null
+    const chatData = (await chatRes.json()) as {
+      chat?: { participants?: SalonParticipantLite[] }
+    }
+    const participants = chatData.chat?.participants ?? []
+    const eligible = participants.filter(
+      (p) => p.controlledBy !== 'user' && p.character?.id,
+    )
+    if (eligible.length === 0) return null
+    const eligibleIds = new Set(eligible.map((p) => p.character!.id!))
+
+    // Priority 1: most recent assistant message attribution
+    if (msgRes.ok) {
+      const msgData = (await msgRes.json()) as { messages?: MessageLite[] }
+      const messages = msgData.messages ?? []
+      // Scan from the end — messages are returned in chronological order.
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const m = messages[i]
+        if (m.role !== 'assistant' || !m.participantId) continue
+        const p = eligible.find((pp) => pp.id === m.participantId)
+        const cid = p?.character?.id
+        if (cid && eligibleIds.has(cid)) return cid
+      }
+    }
+
+    // Priority 2: first non-user-controlled participant in chat order
+    const sortedByOrder = [...eligible].sort(
+      (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
+    )
+    return sortedByOrder[0]?.character?.id ?? null
+  } catch {
+    return null
+  }
+}
 
 /**
  * Foundry icon (anvil/wrench)
@@ -62,6 +131,27 @@ function PaletteIcon({ className }: { className?: string }) {
 }
 
 /**
+ * Wardrobe icon (clothes hanger)
+ */
+function WardrobeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" />
+      <path d="M12 9v2" />
+      <path d="M12 11 3.5 16.5a1 1 0 0 0 .5 1.85h16a1 1 0 0 0 .5-1.85L12 11z" />
+    </svg>
+  )
+}
+
+/**
  * Help icon (question mark in circle)
  */
 function HelpIcon({ className }: { className?: string }) {
@@ -89,6 +179,8 @@ export function SidebarFooter() {
   const { hasDangerousChats } = useHasDangerousChats()
   const theme = useTheme()
   const helpChat = useHelpChatOptional()
+  const wardrobeDialog = useWardrobeDialogOptional()
+  const pathname = usePathname()
   const [openPopout, setOpenPopout] = useState<PopoutMenu>(null)
   const themesRef = useRef<HTMLDivElement>(null)
   const quickHideRef = useRef<HTMLDivElement>(null)
@@ -146,6 +238,28 @@ export function SidebarFooter() {
             <HelpIcon className="qt-left-sidebar-item-icon w-5 h-5" />
           </button>
         )}
+        {wardrobeDialog && (
+          <button
+            type="button"
+            onClick={async () => {
+              const chatMatch = pathname?.match(SALON_CHAT_PATH_RE)
+              if (!chatMatch) {
+                wardrobeDialog.open()
+                return
+              }
+              const chatId = chatMatch[1]
+              const characterId = await resolveDefaultCharacterForChat(chatId)
+              wardrobeDialog.open(
+                characterId ? { chatId, characterId } : { chatId },
+              )
+            }}
+            className="qt-left-sidebar-item justify-center px-0"
+            title="Wardrobe"
+          >
+            <WardrobeIcon className="qt-left-sidebar-item-icon w-5 h-5" />
+          </button>
+        )}
+
         <a
           href="/settings"
           className="qt-left-sidebar-item justify-center px-0"

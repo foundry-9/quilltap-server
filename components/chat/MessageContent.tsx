@@ -1,12 +1,22 @@
 'use client'
 
 import { useMemo, useState, useCallback, ReactNode } from 'react'
+import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import type { Components } from 'react-markdown'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+
+// Internal links — same-origin, app-route paths starting with a single "/" —
+// must navigate via the Next.js router so they work inside the Electron shell
+// (which has no concept of "open in a new tab" and would either reject or
+// shell-open `target="_blank"` links). Protocol-relative `//host/...` URLs
+// are external and excluded.
+function isInternalHref(href: string | undefined): href is string {
+  return typeof href === 'string' && href.startsWith('/') && !href.startsWith('//')
+}
 
 /**
  * Code block with copy button component
@@ -449,8 +459,18 @@ export default function MessageContent({
         </blockquote>
       )
     },
-    // Links - must open in new tab; CSS (qt-link) handles appearance.
+    // Links — internal app routes use the Next.js router (required for the
+    // Electron shell, which can't honour `target="_blank"`). External links
+    // still open in a new tab. CSS (qt-link, scoped chat overrides) handles
+    // appearance.
     a({ href, children }) {
+      if (isInternalHref(href)) {
+        return (
+          <Link href={href} className="qt-link">
+            {children}
+          </Link>
+        )
+      }
       return (
         <a
           href={href}

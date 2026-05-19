@@ -39,7 +39,7 @@ const QUEUE_TYPES = [
     key: 'memory',
     label: 'Mem',
     title: 'Memory extraction queue',
-    jobTypes: ['MEMORY_EXTRACTION', 'INTER_CHARACTER_MEMORY'],
+    jobTypes: ['MEMORY_EXTRACTION', 'INTER_CHARACTER_MEMORY', 'MEMORY_REGENERATE_CHAT', 'MEMORY_REGENERATE_ALL'],
     badgeClass: 'qt-queue-badge-memory',
   },
   {

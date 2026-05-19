@@ -84,6 +84,21 @@ export function CharacterDetails({
 
       {/* Main Content with Template Highlighting */}
       <div className="space-y-6">
+        {character?.identity && (
+          <div>
+            <h2 className="qt-heading-4 text-foreground mb-2">
+              Identity
+            </h2>
+            <div className="qt-text-small">
+              <TemplateDisplay
+                content={character.identity}
+                characterName={character.name}
+                userCharacterName={defaultPartnerName}
+              />
+            </div>
+          </div>
+        )}
+
         {character?.description && (
           <div>
             <h2 className="qt-heading-4 text-foreground mb-2">
@@ -97,6 +112,26 @@ export function CharacterDetails({
             <div className="qt-text-small">
               <TemplateDisplay
                 content={character.description}
+                characterName={character.name}
+                userCharacterName={defaultPartnerName}
+              />
+            </div>
+          </div>
+        )}
+
+        {character?.manifesto && (
+          <div>
+            <h2 className="qt-heading-4 text-foreground mb-2">
+              Manifesto
+              {(templateCounts.fieldCounts.manifesto?.char > 0 || templateCounts.fieldCounts.manifesto?.user > 0) && (
+                <span className="ml-2 text-xs font-normal qt-text-xs">
+                  (template replacements available)
+                </span>
+              )}
+            </h2>
+            <div className="qt-text-small">
+              <TemplateDisplay
+                content={character.manifesto}
                 characterName={character.name}
                 userCharacterName={defaultPartnerName}
               />

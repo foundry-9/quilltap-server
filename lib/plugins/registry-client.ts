@@ -81,7 +81,6 @@ async function fetchRegistryJson<T>(
   url: string,
   timeoutMs: number,
 ): Promise<T> {
-  log.debug('Fetching registry URL', { url, timeoutMs });
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -111,7 +110,6 @@ async function downloadBuffer(
   url: string,
   timeoutMs: number,
 ): Promise<Buffer> {
-  log.debug('Downloading tarball', { url, timeoutMs });
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -161,8 +159,6 @@ export async function getLatestVersion(
       log.warn('No latest dist-tag found in registry response', { packageName });
       return null;
     }
-
-    log.debug('Resolved latest version from registry', { packageName, version: latest });
     return latest;
   } catch (error) {
     if (error instanceof Error) {
@@ -203,7 +199,6 @@ export async function installPackageFromRegistry(
 ): Promise<RegistryInstallResult> {
   try {
     // 1. Fetch package metadata
-    log.debug('Fetching package metadata for installation', { packageName });
 
     const encoded = encodePackageName(packageName);
     const url = `${registryUrl}/${encoded}`;
@@ -228,11 +223,8 @@ export async function installPackageFromRegistry(
       return { success: false, error: `No tarball URL found for version ${latestTag}` };
     }
 
-    log.debug('Resolved tarball URL', { packageName, version: latestTag, tarballUrl });
-
     // 2. Download the tarball
     const tarballBuffer = await downloadBuffer(tarballUrl, DOWNLOAD_TIMEOUT);
-    log.debug('Tarball downloaded', { packageName, bytes: tarballBuffer.length });
 
     // 3. Prepare the extraction target
     const extractDir = path.join(targetDir, 'node_modules', packageName);
@@ -250,8 +242,6 @@ export async function installPackageFromRegistry(
         strip: 1,
       }),
     );
-
-    log.debug('Tarball extracted successfully', { packageName, extractDir });
 
     // 5. Verify the extraction produced something
     const entries = await fs.readdir(extractDir);

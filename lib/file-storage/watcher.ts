@@ -47,6 +47,8 @@ const PENDING_UNLINK_MS = 3000;
 // HELPERS
 // ============================================================================
 
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+
 /**
  * Check if a path should be ignored by the watcher
  */
@@ -54,6 +56,13 @@ function shouldIgnore(relativePath: string): boolean {
   // Ignore _thumbnails directory
   if (relativePath.startsWith('_thumbnails/') || relativePath === '_thumbnails') {
     return true;
+  }
+  // Ignore migration archive directories (created by v4.3 / v4.4 sweeps —
+  // safety-net copies of files now living in document-store mounts).
+  for (const segment of relativePath.split('/')) {
+    if (segment.endsWith('_doc_store_archive') || segment.endsWith('_archive')) {
+      return true;
+    }
   }
   // Ignore hidden files and legacy sidecars
   const name = basename(relativePath);
@@ -110,7 +119,7 @@ async function handleFileAdd(filesDir: string, relativePath: string): Promise<vo
     // Parse projectId and folderPath from the storage key
     const parts = relativePath.split('/');
     const projectOrGeneral = parts[0];
-    const projectId = projectOrGeneral === '_general' ? null : projectOrGeneral;
+    const projectId = UUID_REGEX.test(projectOrGeneral) ? projectOrGeneral : null;
     const folderPath = deriveFolderPathFromStorageKey(relativePath);
 
     // Check pending unlinks for a SHA-256 match (file move: unlink + add)
@@ -285,7 +294,7 @@ async function handleDirAdd(relativePath: string): Promise<void> {
     // Parse projectId and folderPath from the relative path
     const parts = relativePath.split('/');
     const projectOrGeneral = parts[0];
-    const projectId = projectOrGeneral === '_general' ? null : projectOrGeneral;
+    const projectId = UUID_REGEX.test(projectOrGeneral) ? projectOrGeneral : null;
 
     if (parts.length < 2) {
       // Top-level project directory — no folder record needed

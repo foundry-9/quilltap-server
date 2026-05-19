@@ -40,9 +40,19 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
   const characters = await repos.characters.findAllRaw();
   result.scanned = characters.length;
 
+  const { startupProgress } = await import('@/lib/startup/progress');
+  startupProgress.setCurrent('subsystem:vault-backfill:start', {
+    detail: `${characters.length} ${characters.length === 1 ? 'character' : 'characters'}`,
+  });
+
   logger.info('Character vault backfill scanning', { total: characters.length });
 
+  let index = 0;
   for (const character of characters) {
+    index++;
+    startupProgress.setSubProgress([
+      { current: index, total: characters.length, unit: 'characters' },
+    ]);
     try {
       const outcome = await ensureCharacterVault(character);
       if (outcome.created) {
@@ -66,5 +76,11 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
   }
 
   logger.info('Character vault backfill complete', result);
+  startupProgress.publish({
+    rawLabel: 'subsystem:vault-backfill:complete',
+    detail: `${result.vaultsCreated} created, ${result.alreadyLinked} already linked${result.errors > 0 ? `, ${result.errors} errors` : ''}`,
+    level: result.errors > 0 ? 'warn' : 'info',
+  });
+  startupProgress.setSubProgress(null);
   return result;
 }

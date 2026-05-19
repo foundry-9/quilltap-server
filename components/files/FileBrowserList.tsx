@@ -14,10 +14,10 @@ import {
   FolderInfo,
   SortField,
   SortState,
-  formatFileSize,
   formatFileDate,
   getFileTypeLabel,
 } from './types'
+import { formatBytes } from '@/lib/utils/format-bytes'
 
 interface FileBrowserListProps {
   /** Files to display */
@@ -234,7 +234,7 @@ export default function FileBrowserList({
                 {getFileTypeLabel(file.mimeType)}
               </td>
               <td className="p-2 hidden lg:table-cell qt-text-secondary qt-text-small">
-                {formatFileSize(file.size)}
+                {formatBytes(file.size)}
               </td>
               <td className="p-2 hidden sm:table-cell qt-text-secondary qt-text-small">
                 {formatFileDate(file.createdAt)}

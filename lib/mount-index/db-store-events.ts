@@ -64,17 +64,14 @@ const emitter = new TypedEmitter();
 emitter.setMaxListeners(50);
 
 export function emitDocumentWritten(event: DocumentWrittenEvent): void {
-  logger.debug('document-written event', event);
   emitter.emit('document-written', event);
 }
 
 export function emitDocumentDeleted(event: DocumentDeletedEvent): void {
-  logger.debug('document-deleted event', event);
   emitter.emit('document-deleted', event);
 }
 
 export function emitDocumentMoved(event: DocumentMovedEvent): void {
-  logger.debug('document-moved event', event);
   emitter.emit('document-moved', event);
 }
 

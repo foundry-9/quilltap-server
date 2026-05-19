@@ -48,15 +48,10 @@ const updateMountPointSchema = z.object({
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
-      logger.debug('[Mount Points v1] Getting mount point by ID', {
-        mountPointId: id,
-        userId: user.id,
-      });
 
       const mountPoint = await repos.docMountPoints.findById(id);
 
       if (!mountPoint) {
-        logger.debug('[Mount Points v1] Mount point not found', { mountPointId: id });
         return notFound('Mount point');
       }
 
@@ -65,13 +60,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const embeddedChunkCount = allChunks.filter(
         c => c.embedding != null && c.embedding.length > 0
       ).length;
-
-      logger.debug('[Mount Points v1] Found mount point', {
-        mountPointId: id,
-        name: mountPoint.name,
-        embeddedChunkCount,
-        totalChunks: allChunks.length,
-      });
 
       return NextResponse.json({
         mountPoint: { ...mountPoint, embeddedChunkCount },
@@ -90,14 +78,9 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
-      logger.debug('[Mount Points v1] Updating mount point', {
-        mountPointId: id,
-        userId: user.id,
-      });
 
       const existing = await repos.docMountPoints.findById(id);
       if (!existing) {
-        logger.debug('[Mount Points v1] Mount point not found for update', { mountPointId: id });
         return notFound('Mount point');
       }
 
@@ -153,14 +136,9 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
-      logger.debug('[Mount Points v1] Deleting mount point', {
-        mountPointId: id,
-        userId: user.id,
-      });
 
       const existing = await repos.docMountPoints.findById(id);
       if (!existing) {
-        logger.debug('[Mount Points v1] Mount point not found for deletion', { mountPointId: id });
         return notFound('Mount point');
       }
 
@@ -174,36 +152,19 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       // Delete associated chunks first
       const chunksDeleted = await repos.docMountChunks.deleteByMountPointId(id);
-      logger.debug('[Mount Points v1] Deleted associated chunks', {
-        mountPointId: id,
-        chunksDeleted,
-      });
 
       // Delete associated files
       const filesDeleted = await repos.docMountFiles.deleteByMountPointId(id);
-      logger.debug('[Mount Points v1] Deleted associated files', {
-        mountPointId: id,
-        filesDeleted,
-      });
 
       // Delete DB-backed document bodies and blobs (no-ops on filesystem mounts).
       const documentsDeleted = await repos.docMountDocuments.deleteByMountPointId(id);
       const blobsDeleted = await repos.docMountBlobs.deleteByMountPointId(id);
-      logger.debug('[Mount Points v1] Deleted DB-backed documents and blobs', {
-        mountPointId: id,
-        documentsDeleted,
-        blobsDeleted,
-      });
 
       // Delete project links
       const links = await repos.projectDocMountLinks.findByMountPointId(id);
       for (const link of links) {
         await repos.projectDocMountLinks.delete(link.id);
       }
-      logger.debug('[Mount Points v1] Deleted project links', {
-        mountPointId: id,
-        linksDeleted: links.length,
-      });
 
       // Delete the mount point itself
       await repos.docMountPoints.delete(id);
@@ -235,14 +196,9 @@ async function handleScan(
   { id }: { id: string }
 ): Promise<NextResponse> {
   try {
-    logger.debug('[Mount Points v1] Scan action triggered', {
-      mountPointId: id,
-      userId: user.id,
-    });
 
     const mountPoint = await repos.docMountPoints.findById(id);
     if (!mountPoint) {
-      logger.debug('[Mount Points v1] Mount point not found for scan', { mountPointId: id });
       return notFound('Mount point');
     }
 
@@ -262,10 +218,6 @@ async function handleScan(
 
     // Enqueue embedding jobs for newly scanned content
     const embeddingJobsEnqueued = await enqueueEmbeddingJobsForMountPoint(id);
-    logger.debug('[Mount Points v1] Embedding jobs enqueued', {
-      mountPointId: id,
-      jobsEnqueued: embeddingJobsEnqueued,
-    });
 
     return successResponse({ scanResult, embeddingJobsEnqueued });
   } catch (error) {
@@ -284,10 +236,6 @@ async function handleConvert(
   { id }: { id: string }
 ): Promise<NextResponse> {
   try {
-    logger.debug('[Mount Points v1] Convert action triggered', {
-      mountPointId: id,
-      userId: user.id,
-    });
 
     const mountPoint = await repos.docMountPoints.findById(id);
     if (!mountPoint) {
@@ -373,10 +321,6 @@ async function handleDeconvert(
   { id }: { id: string }
 ): Promise<NextResponse> {
   try {
-    logger.debug('[Mount Points v1] Deconvert action triggered', {
-      mountPointId: id,
-      userId: user.id,
-    });
 
     const body = await req.json().catch(() => ({}));
     const parsed = deconvertSchema.safeParse(body);

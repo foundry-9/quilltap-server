@@ -251,6 +251,128 @@ describe('lib/chat/file-attachment-fallback', () => {
     expect(result.error).toBeUndefined()
   })
 
+  it('falls back to the uncensored profile when the primary refuses', async () => {
+    const uncensoredProfile: ConnectionProfile = {
+      ...baseProfile,
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Local llava',
+      provider: 'OLLAMA',
+      modelName: 'llava-uncensored',
+    }
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: baseProfile.id,
+      uncensoredImageDescriptionProfileId: uncensoredProfile.id,
+    })
+    mockRepos.connections.findById.mockImplementation(async (id: string) =>
+      id === baseProfile.id ? baseProfile : uncensoredProfile
+    )
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    const sendMessage = jest
+      .fn()
+      .mockResolvedValueOnce({
+        content: 'I cannot describe this image.',
+        finishReason: 'stop',
+        usage: { promptTokens: 5, completionTokens: 8, totalTokens: 13 },
+      })
+      .mockResolvedValueOnce({
+        content: 'A copper kettle on a windowsill at sunset; warm tones; long horizontal composition.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 30, totalTokens: 40 },
+      })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+    expect(result.type).toBe('image_description')
+    expect(result.imageDescription).toContain('copper kettle')
+    expect(result.processingMetadata?.usedUncensoredFallback).toBe(true)
+    expect(result.processingMetadata?.descriptionProfileId).toBe(uncensoredProfile.id)
+  })
+
+  it('does not retry when no uncensored fallback is configured', async () => {
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: baseProfile.id,
+      uncensoredImageDescriptionProfileId: null,
+    })
+    mockRepos.connections.findById.mockResolvedValue(baseProfile)
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    const sendMessage = jest.fn().mockResolvedValue({
+      content: 'I cannot describe this image.',
+      finishReason: 'stop',
+      usage: { promptTokens: 5, completionTokens: 8, totalTokens: 13 },
+    })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(result.type).toBe('unsupported')
+    expect(result.processingMetadata?.usedUncensoredFallback).toBeUndefined()
+  })
+
+  it('does not retry when the uncensored fallback is the same profile as the primary', async () => {
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: baseProfile.id,
+      uncensoredImageDescriptionProfileId: baseProfile.id,
+    })
+    mockRepos.connections.findById.mockResolvedValue(baseProfile)
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    const sendMessage = jest.fn().mockResolvedValue({
+      content: 'I cannot describe this image.',
+      finishReason: 'stop',
+      usage: { promptTokens: 5, completionTokens: 8, totalTokens: 13 },
+    })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(result.type).toBe('unsupported')
+  })
+
+  it('surfaces a combined error when both primary and fallback fail', async () => {
+    const uncensoredProfile: ConnectionProfile = {
+      ...baseProfile,
+      id: '66666666-6666-6666-6666-666666666666',
+      name: 'Backup',
+    }
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: baseProfile.id,
+      uncensoredImageDescriptionProfileId: uncensoredProfile.id,
+    })
+    mockRepos.connections.findById.mockImplementation(async (id: string) =>
+      id === baseProfile.id ? baseProfile : uncensoredProfile
+    )
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    const sendMessage = jest
+      .fn()
+      .mockResolvedValueOnce({
+        content: 'Cannot do this.',
+        finishReason: 'stop',
+        usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+      })
+      .mockResolvedValueOnce({
+        content: '',
+        finishReason: 'stop',
+        usage: { promptTokens: 5, completionTokens: 0, totalTokens: 5 },
+      })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+    expect(result.type).toBe('unsupported')
+    expect(result.error).toContain('uncensored fallback also failed')
+  })
+
   it('formats fallback results into a message prefix', () => {
     expect(
       formatFallbackAsMessagePrefix({

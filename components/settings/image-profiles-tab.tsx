@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
+import { useModalState } from '@/hooks/useModalState'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { ProviderBadge } from '@/components/image-profiles/ProviderIcon'
 import { ImageProfileModal } from '@/components/image-profiles/ImageProfileModal'
@@ -36,8 +37,6 @@ interface ImageProfile {
 export default function ImageProfilesTab() {
   const [profiles, setProfiles] = useState<ImageProfile[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingProfile, setEditingProfile] = useState<ImageProfile | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
 
   const {
@@ -102,6 +101,14 @@ export default function ImageProfilesTab() {
     }
   }
 
+  const {
+    isOpen: isModalOpen,
+    payload: editingProfile,
+    openModal: handleOpenModal,
+    closeModal: handleCloseModal,
+    handleSuccess: handleModalSuccess,
+  } = useModalState<ImageProfile>(() => refreshProfiles())
+
   const handleDelete = async (id: string) => {
     const result = await executeDelete(async () => {
       const response = await fetchJson(`/api/v1/image-profiles/${id}`, { method: 'DELETE' })
@@ -114,20 +121,6 @@ export default function ImageProfilesTab() {
       setDeleteConfirming(null)
       await refreshProfiles()
     }
-  }
-
-  const handleOpenModal = (profile?: ImageProfile) => {
-    setEditingProfile(profile || null)
-    setIsModalOpen(true)
-  }
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false)
-    setEditingProfile(null)
-  }
-
-  const handleModalSuccess = () => {
-    refreshProfiles()
   }
 
   if (loadingProfiles) {

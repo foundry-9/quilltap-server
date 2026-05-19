@@ -13,6 +13,7 @@ import { createAuthenticatedParamsHandler, getActionParam } from '@/lib/api/midd
 import { badRequest, notFound, serverError } from '@/lib/api/responses';
 import { createLLMProvider } from '@/lib/llm';
 import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoriesBySourceMessageWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
+import { invalidateContextSummaryIfMessageCovered } from '@/lib/chat/context-summary';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import type { ChatEvent, MessageEvent, ChatMetadata, ChatParticipant } from '@/lib/schemas/types';
@@ -117,6 +118,10 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     // Update chat's updatedAt timestamp
     await repos.chats.update(result.chat.id, {});
 
+    // Phase 4: invalidate the context summary if this message was part of
+    // the set that fed it.
+    await invalidateContextSummaryIfMessageCovered(result.chat.id, [messageId]);
+
     return NextResponse.json({ message: updatedMessage });
   }
 );
@@ -198,6 +203,10 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       // Update chat's updatedAt timestamp
       await repos.chats.update(result.chat.id, {});
+
+      // Phase 4: invalidate the context summary if any deleted message was
+      // part of the set that fed it.
+      await invalidateContextSummaryIfMessageCovered(result.chat.id, messageIdsToDelete);
 
       logger.info('[Messages API v1] Message deleted', {
         messageId,

@@ -43,6 +43,7 @@ interface UseChatSettingsReturn {
   handleAvatarStyleChange: (style: AvatarDisplayStyle) => Promise<void>
   handleCheapLLMUpdate: (updates: Partial<CheapLLMSettings>) => Promise<void>
   handleImageDescriptionProfileChange: (profileId: string | null) => Promise<void>
+  handleUncensoredImageDescriptionProfileChange: (profileId: string | null) => Promise<void>
   handleMemoryCascadeUpdate: (updates: Partial<MemoryCascadePreferences>) => Promise<void>
   handleTokenDisplayChange: (key: keyof TokenDisplaySettings, value: boolean) => Promise<void>
   handleContextCompressionUpdate: (updates: Partial<ContextCompressionSettings>) => Promise<void>
@@ -239,6 +240,34 @@ export function useChatSettings(): UseChatSettingsReturn {
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to save'
         console.error('Failed to update image description profile', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [mutateSettings, showSuccess]
+  )
+
+  /**
+   * Update uncensored image description fallback profile
+   */
+  const handleUncensoredImageDescriptionProfileChange = useCallback(
+    async (profileId: string | null) => {
+      try {
+        setSaving(true)
+
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uncensoredImageDescriptionProfileId: profileId }),
+        })
+
+        if (!res.ok) throw new Error('Failed to update settings')
+
+        await mutateSettings()
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Failed to save'
+        console.error('Failed to update uncensored image description profile', { error: errorMsg })
       } finally {
         setSaving(false)
       }
@@ -705,6 +734,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleAvatarStyleChange,
     handleCheapLLMUpdate,
     handleImageDescriptionProfileChange,
+    handleUncensoredImageDescriptionProfileChange,
     handleMemoryCascadeUpdate,
     handleTokenDisplayChange,
     handleContextCompressionUpdate,

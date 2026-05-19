@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 
 interface ExternalPromptResultDialogProps {
   characterName: string | undefined
@@ -15,36 +16,11 @@ export function ExternalPromptResultDialog({
   prompt,
   onClose,
 }: ExternalPromptResultDialogProps) {
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
 
-  // Escape key handler
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [onClose])
+  useEscapeKey(onClose)
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(prompt)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Fallback for older browsers
-      const textarea = document.createElement('textarea')
-      textarea.value = prompt
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }
+  const handleCopy = () => copy(prompt)
 
   const handleDownload = () => {
     const safeName = (characterName || 'character').replace(/[^a-zA-Z0-9-_ ]/g, '').trim()

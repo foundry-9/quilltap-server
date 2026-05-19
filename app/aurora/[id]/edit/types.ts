@@ -14,7 +14,9 @@ export interface Character {
   id: string
   name: string
   title?: string | null
+  identity?: string | null
   description?: string | null
+  manifesto?: string | null
   personality?: string | null
   scenarios?: CharacterScenario[]
   firstMessage?: string | null
@@ -41,7 +43,9 @@ export interface CharacterFormData {
   aliases: string[]
   pronouns: { subject: string; object: string; possessive: string } | null
   title: string
+  identity: string
   description: string
+  manifesto: string
   personality: string
   scenarios: CharacterScenario[]
   firstMessage: string
@@ -63,4 +67,9 @@ export interface CharacterEditState {
   formData: CharacterFormData
   originalFormData: CharacterFormData
   avatarRefreshKey: number
+  // Bumped whenever formData is replaced from an external source (initial
+  // load, vault overlay toggle, sync from/to vault, wizard apply) so the
+  // markdown editors remount and re-parse the fresh values. Without this,
+  // MarkdownBridgePlugin's one-shot init keeps showing pre-replace content.
+  externalUpdateCount: number
 }

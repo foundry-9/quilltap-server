@@ -219,8 +219,35 @@ export class GoogleImagenProvider implements ImageProvider {
     }
 
     const data = await response.json();
+    const predictions = (data.predictions ?? []) as Array<Record<string, any>>;
+    const usable = predictions.filter(
+      (pred) => typeof pred.bytesBase64Encoded === 'string' && pred.bytesBase64Encoded.length > 0
+    );
+
+    // Imagen's :predict API returns HTTP 200 with an empty `predictions`
+    // array (or predictions carrying `raiFilteredReason` and no image bytes)
+    // when the safety filter rejects the prompt. Surface that as a moderation
+    // error — phrased to match `isImageModerationError` in the
+    // story-background handler — so callers can fall back to an uncensored
+    // profile instead of bailing silently.
+    if (usable.length === 0) {
+      const filterReason =
+        predictions.find((p) => typeof p.raiFilteredReason === 'string')?.raiFilteredReason
+        ?? data.raiFilteredReason
+        ?? data.filteredReason
+        ?? null;
+      logger.warn('Google Imagen returned no usable images (likely safety filter)', {
+        context: 'GoogleImagenProvider.generateWithImagen',
+        predictionCount: predictions.length,
+        filterReason,
+      });
+      throw new Error(
+        `Google Imagen rejected prompt by content policy${filterReason ? `: ${filterReason}` : ''}`
+      );
+    }
+
     return {
-      images: (data.predictions ?? []).map((pred: any) => ({
+      images: usable.map((pred) => ({
         data: pred.bytesBase64Encoded,
         mimeType: pred.mimeType || 'image/png',
       })),

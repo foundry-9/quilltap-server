@@ -233,21 +233,6 @@ export const plugin: TextProviderPlugin = {
   },
 
   /**
-   * Check whether a model supports assistant message prefill.
-   * Claude 4.6 models dropped support for assistant prefill — ending the
-   * messages array with an assistant role message now returns a 400 error.
-   */
-  modelSupportsPrefill: (model: string): boolean => {
-    // Claude 4.6+ models do not support assistant prefill
-    // Match patterns: claude-*-4-6, claude-*-4-6-*, and any future 4.7+, 5.x+, etc.
-    if (/claude-(?:opus|sonnet|haiku)-4-6/.test(model)) {
-      return false;
-    }
-    // All older Claude models support prefill
-    return true;
-  },
-
-  /**
    * Render the Anthropic icon
    */
 

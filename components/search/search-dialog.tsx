@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import useSWR from 'swr'
 import { SearchResults } from './search-results'
 import type { SearchResult, SearchResponse, SearchType } from './types'
@@ -147,16 +148,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialQuery, initialTypes, hasSearched])
 
-  // Handle escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [isOpen, onClose])
+  useEscapeKey(onClose, isOpen)
 
   // Handle input change with debounce
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

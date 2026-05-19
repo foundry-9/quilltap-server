@@ -53,6 +53,7 @@ export default function RunToolModal({
   const [formValid, setFormValid] = useState(false)
   const [executing, setExecuting] = useState(false)
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
+  const [isPrivate, setIsPrivate] = useState(false)
 
   // Active character participants for the character selector
   const activeCharacters = useMemo(() =>
@@ -60,8 +61,9 @@ export default function RunToolModal({
     [participants]
   )
 
-  // Stable identifier for the default character (avoids array ref in useEffect deps)
-  const defaultCharacterId = activeCharacters[0]?.characterId || null
+  // Stable identifier for the default character (avoids array ref in useEffect deps).
+  // The enriched participant doesn't expose a top-level characterId, only `character.id`.
+  const defaultCharacterId = activeCharacters[0]?.character?.id || null
 
   // Fetch tools when modal opens and reset form state
   useEffect(() => {
@@ -72,6 +74,7 @@ export default function RunToolModal({
     setSearchQuery('')
     setFormValues({})
     setSelectedCharacterId(defaultCharacterId)
+    setIsPrivate(false)
 
     fetch(`/api/v1/tools?chatId=${chatId}&includeSchemas=true`)
       .then(res => res.json())
@@ -134,6 +137,7 @@ export default function RunToolModal({
           toolName: selectedTool.id,
           arguments: cleanArgs,
           characterId: selectedCharacterId || undefined,
+          private: isPrivate,
         }),
       })
 
@@ -151,7 +155,7 @@ export default function RunToolModal({
     } finally {
       setExecuting(false)
     }
-  }, [selectedTool, formValues, chatId, selectedCharacterId, onToolExecuted, onClose])
+  }, [selectedTool, formValues, chatId, selectedCharacterId, isPrivate, onToolExecuted, onClose])
 
   // Group tools by category
   const filteredTools = tools.filter(t => {
@@ -340,13 +344,32 @@ export default function RunToolModal({
                 onChange={(e) => setSelectedCharacterId(e.target.value || null)}
               >
                 {activeCharacters.map(p => (
-                  <option key={p.id} value={p.characterId || ''}>
+                  <option key={p.id} value={p.character?.id || ''}>
                     {p.character?.name || 'Unknown'}
                   </option>
                 ))}
               </select>
             </div>
           )}
+
+          {/* Private (whisper) toggle */}
+          <div className="border-t qt-border pt-3">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isPrivate}
+                onChange={(e) => setIsPrivate(e.target.checked)}
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-medium qt-text">Private (whisper)</div>
+                <div className="text-xs qt-text-secondary">
+                  Hide from the chat by default and exclude from every character&apos;s context.
+                  Toggle &ldquo;show all whispers&rdquo; in the salon to view it.
+                </div>
+              </div>
+            </label>
+          </div>
 
           {/* Parameter form */}
           {hasSchema ? (

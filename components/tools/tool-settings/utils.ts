@@ -40,6 +40,7 @@ export function getGroupCheckState(
  */
 const BUILT_IN_CATEGORY_GROUPS: Record<string, string> = {
   documents: 'Document Editing',
+  photos: 'Photo Albums',
   wardrobe: 'Wardrobe',
   shell: 'Workspace',
   help: 'Quilltap Help',

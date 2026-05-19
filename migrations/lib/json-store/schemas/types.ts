@@ -157,6 +157,11 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Profile ID to use for image description fallback (when provider doesn't support images) */
   imageDescriptionProfileId: UUIDSchema.nullable().optional(),
+  /**
+   * Profile ID for the uncensored vision fallback used when the primary
+   * image-description profile refuses or returns an unusable response.
+   */
+  uncensoredImageDescriptionProfileId: UUIDSchema.nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

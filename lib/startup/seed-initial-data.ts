@@ -12,8 +12,6 @@
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/database/repositories';
 import { SINGLE_USER_ID } from '@/lib/auth/single-user';
-import { createHash } from 'crypto';
-import { randomUUID } from 'crypto';
 import {
   getSeedCharacters,
   prepareSeedCharacter,
@@ -23,7 +21,12 @@ import {
   getSeedAvatars,
 } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
-import { fileStorageManager } from '@/lib/file-storage/manager';
+import {
+  getCharacterVaultStore,
+  writeCharacterAvatarToVault,
+} from '@/lib/file-storage/character-vault-bridge';
+import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
+import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 
 /**
  * Seed initial data if the database is empty
@@ -275,58 +278,50 @@ async function seedAvatars(
           continue;
         }
 
-        // Skip if the character already has a valid avatar file
+        // Skip if the character already has a valid avatar. Post-Phase-3 the
+        // id is a doc_mount_file_links id; the resolver also covers legacy
+        // pre-migration files.id values.
         if (character.defaultImageId) {
-          const existingFile = await repos.files.findById(character.defaultImageId);
-          if (existingFile) {
+          const resolved = await resolveCharacterAvatar(character.defaultImageId, repos);
+          if (resolved) {
             continue;
           }
         }
 
-        // Calculate SHA256 hash for the image
-        const sha256 = createHash('sha256').update(avatar.content).digest('hex');
-
-        // Upload the file to storage
-        const { storageKey } = await fileStorageManager.uploadFile({
+        // Seed characters created during first-startup do not auto-provision a
+        // vault the way API-created ones do, so ensure one exists here.
+        // ensureCharacterVault is idempotent and reads the current DB row, so
+        // a character that already carries characterDocumentMountPointId
+        // returns unchanged. Re-fetch first so we see vaults provisioned by
+        // an upstream step like seedFromImports.
+        const freshCharacter = await repos.characters.findById(character.id) ?? character;
+        await ensureCharacterVault(freshCharacter);
+        const vault = await getCharacterVaultStore(character.id);
+        if (!vault) {
+          throw new Error(
+            `Failed to resolve vault for seed character ${character.id} (${character.name}) after provisioning.`,
+          );
+        }
+        const written = await writeCharacterAvatarToVault({
+          characterId: character.id,
+          kind: 'main',
           filename: avatar.filename,
           content: avatar.content,
           contentType: avatar.mimeType,
         });
 
-        // Create the file entry in the database
-        const fileId = randomUUID();
-        const fileEntry = await repos.files.create({
-          userId: SINGLE_USER_ID,
-          sha256,
-          originalFilename: avatar.filename,
-          mimeType: avatar.mimeType,
-          size: avatar.content.length,
-          width: null,
-          height: null,
-          linkedTo: [character.id],
-          source: 'SYSTEM',
-          category: 'AVATAR',
-          storageKey,
-          generationPrompt: null,
-          generationModel: null,
-          generationRevisedPrompt: null,
-          description: null,
-          tags: [],
-          folderPath: '/',
-          projectId: null,
-        }, { id: fileId });
-
-        // Update the character's defaultImageId
+        // Post-Phase-3: defaultImageId is a doc_mount_file_links id pointing
+        // at the avatar in the character's vault. No legacy `files` row.
         await repos.characters.update(character.id, {
-          defaultImageId: fileEntry.id,
+          defaultImageId: written.linkId,
         });
 
         logger.info('Seeded avatar for character', {
           context,
           characterName: character.name,
           characterId: character.id,
-          fileId: fileEntry.id,
-          storageKey,
+          linkId: written.linkId,
+          storageKey: written.storageKey,
           size: avatar.content.length,
         });
       } catch (avatarError) {

@@ -8,7 +8,12 @@
  * @module mount-index/document-search
  */
 
-import { cosineSimilarity } from '@/lib/embedding/embedding-service'
+import { assertEmbeddingDimensionsMatch, cosineSimilarity } from '@/lib/embedding/embedding-service'
+import {
+  applyLiteralBoost,
+  containsLiteralPhrase,
+  getLiteralPhrase,
+} from '@/lib/embedding/literal-boost'
 import { getRepositories } from '@/lib/repositories/factory'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { getChunksForMountPoints } from './mount-chunk-cache'
@@ -37,6 +42,35 @@ export interface DocumentSearchOptions {
   limit?: number
   /** Minimum cosine similarity score */
   minScore?: number
+  /**
+   * Restrict results to chunks whose file's `relativePath` starts with this
+   * prefix (case-insensitive). Used by the per-character knowledge source
+   * to scope to `Knowledge/` inside a vault. When set, the search pulls a
+   * larger candidate pool than `limit` so prefix filtering doesn't starve
+   * the result.
+   */
+  pathPrefix?: string
+  /**
+   * Original query text. Required when `applyLiteralPhraseBoost` is set —
+   * the embedding alone can't be substring-matched against chunk content.
+   */
+  query?: string
+  /**
+   * When true and the trimmed query is ≥ LITERAL_BOOST_MIN_PHRASE_LENGTH
+   * characters, items whose chunk content contains the query verbatim
+   * (case-insensitive) get their cosine score lifted toward 1.0 by
+   * `literalBoostFraction` (default 0.5) before minScore filtering and
+   * slicing. Used by the unified `search` tool and the per-turn knowledge
+   * injector.
+   */
+  applyLiteralPhraseBoost?: boolean
+  /**
+   * Fraction of the distance from the cosine score to 1.0 that a literal
+   * hit lifts the score by. Defaults to 0.5 — the legacy halfway boost.
+   * The knowledge sources pass smaller fractions for project/global tiers
+   * so personal-vault hits outrank shared-pool hits at equal cosine.
+   */
+  literalBoostFraction?: number
 }
 
 /**
@@ -54,13 +88,6 @@ export async function searchDocumentChunks(
   const limit = options.limit || 10
   const minScore = options.minScore || 0.3
 
-  logger.debug('Searching document mount chunks', {
-    projectId: options.projectId,
-    mountPointIds: options.mountPointIds,
-    limit,
-    minScore,
-  })
-
   // Determine which mount point IDs to search
   let mountPointIds: string[] | undefined = options.mountPointIds
 
@@ -70,7 +97,6 @@ export async function searchDocumentChunks(
     mountPointIds = links.map(l => l.mountPointId)
 
     if (mountPointIds.length === 0) {
-      logger.debug('Project has no linked mount points', { projectId: options.projectId })
       return []
     }
   }
@@ -82,7 +108,6 @@ export async function searchDocumentChunks(
   }
 
   if (mountPointIds.length === 0) {
-    logger.debug('No mount points to search')
     return []
   }
 
@@ -91,54 +116,109 @@ export async function searchDocumentChunks(
   const allChunks = await getChunksForMountPoints(mountPointIds)
 
   if (allChunks.length === 0) {
-    logger.debug('No embedded document chunks found', { mountPointIds })
     return []
   }
 
-  logger.debug('Loaded embedded document chunks for search', { chunkCount: allChunks.length })
+  // Pre-flight dimension guard: if the corpus and the query have drifted apart
+  // (e.g. the embedding profile's truncateToDimensions changed but the corpus
+  // hasn't been re-applied), surface a clear error before we iterate 65k rows
+  // and let cosineSimilarity throw on the first one.
+  const sampleStored = allChunks[0].embedding
+  assertEmbeddingDimensionsMatch(queryEmbedding, sampleStored, 'document chunk search')
 
-  // Compute cosine similarity (dot product — vectors are unit-length) for each chunk
-  const scored = allChunks
-    .map(chunk => ({
+  // pathPrefix is a hard constraint, not a soft signal — apply it to the
+  // chunk universe *before* scoring, not as a post-filter on a top-K pool.
+  // (A post-filter starves results when the prefix matches a small fraction
+  // of files, e.g. a single Knowledge/ file in a vault of 50 wardrobe items.)
+  const pathPrefix = options.pathPrefix
+  const lowerPrefix = pathPrefix ? pathPrefix.toLowerCase() : null
+
+  let chunksInScope = allChunks
+  if (lowerPrefix) {
+    // After the content/link split chunks key by linkId — collect link ids
+    // whose relativePath matches the prefix.
+    const allowedLinkIds = new Set<string>()
+    for (const mpId of mountPointIds) {
+      const links = await repos.docMountFileLinks.findByMountPointId(mpId)
+      for (const link of links) {
+        if (link.relativePath.toLowerCase().startsWith(lowerPrefix)) {
+          allowedLinkIds.add(link.id)
+        }
+      }
+    }
+    if (allowedLinkIds.size === 0) {
+      return []
+    }
+    chunksInScope = allChunks.filter(c => allowedLinkIds.has(c.linkId))
+    if (chunksInScope.length === 0) {
+      return []
+    }
+  }
+
+  // Compute cosine similarity (dot product — vectors are unit-length) for
+  // each in-scope chunk. If literal-boost is on, lift the score of any chunk
+  // whose content contains the trimmed query verbatim before applying the
+  // minScore filter and the limit slice — that way a buried exact match
+  // can't be silently outranked or sliced off.
+  const literalPhrase = options.applyLiteralPhraseBoost
+    ? getLiteralPhrase(options.query)
+    : null
+
+  const literalBoostFraction = options.literalBoostFraction ?? 0.5
+  const scoredAll = chunksInScope.map(chunk => {
+    const rawScore = cosineSimilarity(queryEmbedding, chunk.embedding)
+    const literalHit = literalPhrase
+      ? containsLiteralPhrase(chunk.content, literalPhrase)
+      : false
+    return {
       chunk,
-      score: cosineSimilarity(queryEmbedding, chunk.embedding),
-    }))
+      score: literalHit ? applyLiteralBoost(rawScore, literalBoostFraction) : rawScore,
+      literalHit,
+    }
+  })
+
+  const scored = scoredAll
     .filter(item => item.score >= minScore)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
 
   if (scored.length === 0) {
-    logger.debug('No document chunks above minimum score', { minScore })
     return []
   }
 
-  // Build metadata maps for mount points and files
+  // Build metadata maps for mount points and files (from the surviving rows
+  // only — no need to look up files we won't render).
   const mountPointMap = new Map<string, string>()
   const mountPoints = await repos.docMountPoints.findAll()
   for (const mp of mountPoints) {
     mountPointMap.set(mp.id, mp.name)
   }
 
-  // Collect unique file IDs from results
-  const fileIds = new Set(scored.map(s => s.chunk.fileId))
-  const fileMap = new Map<string, { fileName: string; relativePath: string }>()
-  for (const fileId of fileIds) {
-    const file = await repos.docMountFiles.findById(fileId)
-    if (file) {
-      fileMap.set(file.id, {
-        fileName: file.fileName,
-        relativePath: file.relativePath,
+  // Look up display metadata by linkId. Each surviving chunk traces back to
+  // a single link row, which carries fileName + relativePath after the
+  // content/link split.
+  const linkIds = new Set(scored.map(s => s.chunk.linkId))
+  const fileMap = new Map<string, { fileName: string; relativePath: string; fileId: string }>()
+  for (const linkId of linkIds) {
+    const link = await repos.docMountFileLinks.findByIdWithContent(linkId)
+    if (link) {
+      fileMap.set(linkId, {
+        fileName: link.fileName,
+        relativePath: link.relativePath,
+        fileId: link.fileId,
       })
     }
   }
 
-  const results: DocumentSearchResult[] = scored.map(({ chunk, score }) => {
-    const fileInfo = fileMap.get(chunk.fileId)
+  const finalScored = scored
+
+  const results: DocumentSearchResult[] = finalScored.map(({ chunk, score }) => {
+    const fileInfo = fileMap.get(chunk.linkId)
     return {
       chunkId: chunk.id,
       mountPointId: chunk.mountPointId,
       mountPointName: mountPointMap.get(chunk.mountPointId) || 'Unknown',
-      fileId: chunk.fileId,
+      fileId: fileInfo?.fileId || chunk.linkId,
       fileName: fileInfo?.fileName || 'Unknown',
       relativePath: fileInfo?.relativePath || '',
       chunkIndex: chunk.chunkIndex,
@@ -146,11 +226,6 @@ export async function searchDocumentChunks(
       content: chunk.content,
       score,
     }
-  })
-
-  logger.debug('Document chunk search completed', {
-    resultsCount: results.length,
-    topScore: results[0]?.score,
   })
 
   return results

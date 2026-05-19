@@ -13,12 +13,15 @@ import { handleLLMLogCleanup } from './llm-log-cleanup';
 import { handleEmbeddingGenerate } from './embedding-generate';
 import { handleEmbeddingRefit } from './embedding-refit';
 import { handleEmbeddingReindexAll } from './embedding-reindex';
+import { handleEmbeddingReapplyProfile } from './embedding-reapply-profile';
 import { handleStoryBackgroundGeneration } from './story-background';
 import { handleChatDangerClassification } from './chat-danger-classification';
 import { handleSceneStateTracking } from './scene-state-tracking';
 import { handleCharacterAvatarGeneration } from './character-avatar';
 import { handleConversationRender } from './conversation-render';
 import { handleMemoryHousekeeping } from './memory-housekeeping';
+import { handleMemoryRegenerateChat } from './memory-regenerate-chat';
+import { handleMemoryRegenerateAll } from './memory-regenerate-all';
 import { handleWardrobeOutfitAnnouncement } from './wardrobe-announcement';
 
 /**
@@ -38,12 +41,15 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   EMBEDDING_GENERATE: handleEmbeddingGenerate,
   EMBEDDING_REFIT: handleEmbeddingRefit,
   EMBEDDING_REINDEX_ALL: handleEmbeddingReindexAll,
+  EMBEDDING_REAPPLY_PROFILE: handleEmbeddingReapplyProfile,
   STORY_BACKGROUND_GENERATION: handleStoryBackgroundGeneration,
   CHAT_DANGER_CLASSIFICATION: handleChatDangerClassification,
   SCENE_STATE_TRACKING: handleSceneStateTracking,
   CHARACTER_AVATAR_GENERATION: handleCharacterAvatarGeneration,
   CONVERSATION_RENDER: handleConversationRender,
   MEMORY_HOUSEKEEPING: handleMemoryHousekeeping,
+  MEMORY_REGENERATE_CHAT: handleMemoryRegenerateChat,
+  MEMORY_REGENERATE_ALL: handleMemoryRegenerateAll,
   WARDROBE_OUTFIT_ANNOUNCEMENT: handleWardrobeOutfitAnnouncement,
 };
 
@@ -67,10 +73,13 @@ export { handleLLMLogCleanup };
 export { handleEmbeddingGenerate };
 export { handleEmbeddingRefit };
 export { handleEmbeddingReindexAll };
+export { handleEmbeddingReapplyProfile };
 export { handleStoryBackgroundGeneration };
 export { handleChatDangerClassification };
 export { handleSceneStateTracking };
 export { handleCharacterAvatarGeneration };
 export { handleConversationRender };
 export { handleMemoryHousekeeping };
+export { handleMemoryRegenerateChat };
+export { handleMemoryRegenerateAll };
 export { handleWardrobeOutfitAnnouncement };

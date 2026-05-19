@@ -89,7 +89,6 @@ export function findAllMatches(
   const { normalizeDiacritics: shouldNormalize = true, caseSensitive = true } = options;
 
   if (!needle) {
-    logger.debug('Empty needle provided to findAllMatches');
     return [];
   }
 
@@ -123,7 +122,6 @@ export function findAllMatches(
   const matches: Array<{ index: number; length: number }> = [];
 
   if (!normalizedNeedle) {
-    logger.debug('Needle became empty after normalization');
     return matches;
   }
 
@@ -152,10 +150,6 @@ export function findAllMatches(
     matches.push({ index: originalIndex, length: originalLength });
     searchIndex += 1;
   }
-
-  logger.debug(
-    `Found ${matches.length} matches for needle in haystack (normalize=${shouldNormalize}, caseSensitive=${caseSensitive})`
-  );
   return matches;
 }
 
@@ -172,10 +166,7 @@ export function findUniqueMatch(
   const matches = findAllMatches(haystack, needle, options);
 
   if (matches.length === 1) {
-    logger.debug('Found exactly one unique match');
     return { found: true, ...matches[0] };
   }
-
-  logger.debug(`Expected unique match but found ${matches.length} matches`);
   return { found: false, count: matches.length };
 }

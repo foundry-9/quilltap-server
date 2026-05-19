@@ -15,9 +15,12 @@ import { SidebarProvider } from '@/components/providers/sidebar-provider'
 import { PageToolbarProvider } from '@/components/providers/page-toolbar-provider'
 import { HelpChatProvider } from '@/components/providers/help-chat-provider'
 import { HelpChatDialog } from '@/components/help-chat/HelpChatDialog'
+import { WardrobeDialogProvider } from '@/components/providers/wardrobe-dialog-provider'
+import { WardrobeControlDialog } from '@/components/wardrobe/wardrobe-control-dialog'
 import { LeftSidebar } from './left-sidebar'
 import { PageToolbar } from './page-toolbar'
 import FooterWrapper from '@/components/footer-wrapper'
+import { StartupProgress, useStartupPhase } from '@/components/loading/StartupProgress'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -29,6 +32,7 @@ interface AppLayoutProps {
 function AppLayoutInner({ children }: AppLayoutProps) {
   const pathname = usePathname()
   const { data: session, status } = useSession()
+  const startupPhase = useStartupPhase()
 
   // Don't render layout on auth, setup, or unlock pages
   const isAuthPage = pathname?.startsWith('/auth')
@@ -46,13 +50,15 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     )
   }
 
-  // Show loading state while checking session
-  if (status === 'loading') {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="animate-pulse qt-text-secondary">Loading...</div>
-      </div>
-    )
+  // Show the startup-progress screen while session resolves OR the server
+  // hasn't reached the `complete` phase yet. The startup-status poll covers
+  // the gap where session.status flips to authenticated but reconciliation /
+  // vault backfill / mount rescan are still running and their endpoints
+  // would 500 if the app tried to fetch from them.
+  const startupNotComplete =
+    startupPhase != null && startupPhase !== 'complete'
+  if (status === 'loading' || startupNotComplete) {
+    return <StartupProgress />
   }
 
   // Don't show sidebar/header for auth pages or unauthenticated users
@@ -68,19 +74,22 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   return (
     <HelpChatProvider>
-      <div className="qt-app-layout">
-        <LeftSidebar />
-        <div className="qt-app-main">
-          <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
-            <PageToolbar />
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {children}
-            </div>
-          </main>
-          <FooterWrapper />
+      <WardrobeDialogProvider>
+        <div className="qt-app-layout">
+          <LeftSidebar />
+          <div className="qt-app-main">
+            <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <PageToolbar />
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {children}
+              </div>
+            </main>
+            <FooterWrapper />
+          </div>
         </div>
-      </div>
-      <HelpChatDialog />
+        <HelpChatDialog />
+        <WardrobeControlDialog />
+      </WardrobeDialogProvider>
     </HelpChatProvider>
   )
 }

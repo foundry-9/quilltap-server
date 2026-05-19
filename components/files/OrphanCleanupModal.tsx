@@ -9,13 +9,7 @@
  */
 
 import { BaseModal } from '@/components/ui/BaseModal'
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-}
+import { formatBytes } from '@/lib/utils/format-bytes'
 
 interface OrphanCleanupModalProps {
   isOpen: boolean
@@ -105,7 +99,7 @@ export default function OrphanCleanupModal({
         {/* Unique files summary */}
         <div>
           <p className="qt-text-small qt-text-secondary">
-            The remaining <strong>{uniqueCount} unique files</strong> ({formatSize(uniqueSize)}) await your instruction.
+            The remaining <strong>{uniqueCount} unique files</strong> ({formatBytes(uniqueSize)}) await your instruction.
           </p>
         </div>
 

@@ -122,7 +122,7 @@ ${pageContext.content}`)
   }
 
   // 10. Identity reinforcement bookend
-  parts.push(buildIdentityReinforcement(character.name, userName, otherCharacterNames))
+  parts.push(buildIdentityReinforcement(character.name))
 
   helpChatLogger.debug('Built help chat system prompt', {
     characterName: character.name,

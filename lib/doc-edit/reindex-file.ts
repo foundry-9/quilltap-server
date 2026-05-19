@@ -59,14 +59,8 @@ export async function reindexSingleFile(
 ): Promise<void> {
   const repos = getRepositories();
 
-  logger.debug('Re-indexing single file after edit', {
-    mountPointId,
-    relativePath,
-  });
-
   const fileType = detectFileType(relativePath);
   if (!fileType) {
-    logger.debug('File type not indexable, skipping re-index', { relativePath });
     return;
   }
 
@@ -97,7 +91,6 @@ export async function reindexSingleFile(
       } else {
         const blob = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, relativePath);
         if (!blob || !blob.extractedText || blob.extractedText.trim().length === 0) {
-          logger.debug('No DB-backed text source for reindex, skipping', { relativePath });
           return;
         }
         plainText = blob.extractedText;
@@ -112,7 +105,6 @@ export async function reindexSingleFile(
       ]);
       const converted = await convertToPlainText(absolutePath, fileType);
       if (!converted || converted.trim().length === 0) {
-        logger.debug('File conversion produced no text after edit', { relativePath });
         return;
       }
       plainText = converted;
@@ -124,55 +116,34 @@ export async function reindexSingleFile(
     // Chunk the text
     const chunks = chunkDocument(plainText);
 
-    // Find existing file record
-    const existingFile = await repos.docMountFiles.findByMountPointAndPath(
+    // Find existing link record
+    const existingLink = await repos.docMountFileLinks.findByMountPointAndPath(
       mountPointId,
       relativePath
     );
 
-    if (existingFile) {
-      // Update existing: delete old chunks, update file record
-      await repos.docMountChunks.deleteByFileId(existingFile.id);
-      await repos.docMountFiles.update(existingFile.id, {
-        sha256,
-        fileSizeBytes,
-        lastModified: lastModifiedIso,
-        conversionStatus: 'converted',
-        conversionError: null,
-        plainTextLength: plainText.length,
-        chunkCount: chunks.length,
-      });
-    } else {
-      // Create new file record (file was created via doc_write_file)
-      await repos.docMountFiles.create({
-        mountPointId,
-        relativePath,
-        fileName: path.basename(relativePath),
-        fileType,
-        sha256,
-        fileSizeBytes,
-        lastModified: lastModifiedIso,
-        source: isDatabaseBacked ? 'database' : 'filesystem',
-        conversionStatus: 'converted',
-        plainTextLength: plainText.length,
-        chunkCount: chunks.length,
-      });
+    if (existingLink) {
+      await repos.docMountChunks.deleteByLinkId(existingLink.id);
     }
 
-    // Get the file record for chunk insertion
-    const fileRecord = await repos.docMountFiles.findByMountPointAndPath(
+    const link = await repos.docMountFileLinks.linkFilesystemFile({
       mountPointId,
-      relativePath
-    );
-    if (!fileRecord) {
-      logger.warn('Could not retrieve file record after re-index create/update', { relativePath });
-      return;
-    }
+      relativePath,
+      fileName: path.basename(relativePath),
+      fileType,
+      sha256,
+      fileSizeBytes,
+      lastModified: lastModifiedIso,
+      source: isDatabaseBacked ? 'database' : 'filesystem',
+      conversionStatus: 'converted',
+      plainTextLength: plainText.length,
+      chunkCount: chunks.length,
+    });
 
     // Insert new chunks
     if (chunks.length > 0) {
       const chunkData = chunks.map(chunk => ({
-        fileId: fileRecord.id,
+        linkId: link.id,
         mountPointId,
         chunkIndex: chunk.chunkIndex,
         content: chunk.content,
@@ -182,12 +153,6 @@ export async function reindexSingleFile(
       }));
       await repos.docMountChunks.bulkInsert(chunkData);
     }
-
-    logger.debug('Single file re-index complete', {
-      mountPointId,
-      relativePath,
-      chunkCount: chunks.length,
-    });
 
     // NOTE: Embedding jobs should be enqueued by the caller if needed,
     // following the same pattern as the scan runner.

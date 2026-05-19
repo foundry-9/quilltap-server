@@ -40,7 +40,6 @@ import {
   useImpersonation,
   useChatControls,
   useSSEStreaming,
-  useOutfit,
   type SwipeState,
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
@@ -51,12 +50,16 @@ import {
   ChatModals,
 } from './components'
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
+import { NewChatModal } from '@/components/new-chat/NewChatModal'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
-import { GiftWardrobeItemModal } from '@/components/wardrobe/gift-wardrobe-item-modal'
 import SplitLayout from './components/SplitLayout'
 import DocumentPane from './components/DocumentPane'
 import DocumentPickerModal from './components/DocumentPickerModal'
+import SaveImageDialog from './components/SaveImageDialog'
+import { TerminalPane } from './components/TerminalPane'
+import TerminalSessionPicker from './components/TerminalSessionPicker'
 import { useDocumentMode, type FocusRequest } from './hooks/useDocumentMode'
+import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -89,6 +92,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [viewSourceMessageIds, setViewSourceMessageIds] = useState<Set<string>>(new Set())
+  const [expandedSystemMessageIds, setExpandedSystemMessageIds] = useState<Set<string>>(new Set())
+  const toggleSystemMessageExpanded = useCallback((messageId: string) => {
+    setExpandedSystemMessageIds(prev => {
+      const next = new Set(prev)
+      if (next.has(messageId)) {
+        next.delete(messageId)
+      } else {
+        next.add(messageId)
+      }
+      return next
+    })
+  }, [])
   const [roleplayTemplateName, setRoleplayTemplateName] = useState<string | null>(null)
   const [roleplayRenderingPatterns, setRoleplayRenderingPatterns] = useState<RenderingPattern[] | undefined>(undefined)
   const [roleplayDialogueDetection, setRoleplayDialogueDetection] = useState<DialogueDetection | null | undefined>(undefined)
@@ -101,7 +116,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [pendingToolResults, setPendingToolResults] = useState<PendingToolResult[]>([])
   const [showAllWhispers, setShowAllWhispers] = useState(false)
   const [whisperTarget, setWhisperTarget] = useState<{ participantId: string; name: string } | null>(null)
-  const [giftTarget, setGiftTarget] = useState<{ participantId: string; characterId: string; name: string } | null>(null)
+  const [saveImageTarget, setSaveImageTarget] = useState<{ messageId: string; attachmentId: string } | null>(null)
 
   // --- Refs ---
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -131,15 +146,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const participant = chat?.participants.find(p => p.id === participantId)
     const name = participant?.character?.name || 'Unknown'
     setWhisperTarget({ participantId, name })
-  }, [chat?.participants])
-
-  const handleGiftItem = useCallback((participantId: string) => {
-    const participant = chat?.participants.find(p => p.id === participantId)
-    const characterId = participant?.character?.id
-    const name = participant?.character?.name || 'Unknown'
-    if (characterId) {
-      setGiftTarget({ participantId, characterId, name })
-    }
   }, [chat?.participants])
 
   // --- Avatar generation polling ---
@@ -259,6 +265,23 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   })
   const [showDocumentPicker, setShowDocumentPicker] = useState(false)
 
+  // --- Terminal Mode hook ---
+  // Mirrors Document Mode: persists layout state on the chat record so the
+  // pane comes back on reload. The Ariel session-opened announcement is posted
+  // server-side when we spawn, so the hook also calls fetchChat after spawn.
+  const terminalModeHook = useTerminalMode({
+    chatId: id,
+    chat,
+    fetchChat: () => fetchChat(),
+  })
+  const terminalCtxValue = useMemo(
+    () => ({
+      terminalMode: terminalModeHook.terminalMode,
+      activeTerminalSessionId: terminalModeHook.activeTerminalSessionId,
+    }),
+    [terminalModeHook.terminalMode, terminalModeHook.activeTerminalSessionId],
+  )
+
   // --- File attachments hook ---
   const fileHook = useFileAttachments(id, chat?.projectId)
   const { attachedFiles, setAttachedFiles, uploadingFile } = fileHook
@@ -359,8 +382,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     scrollOnStreamComplete: () => scrollOnStreamComplete(),
     setAttachedFiles,
     inputRef: inputRef as React.RefObject<ComposerEditorHandle>,
-    setSudoApprovalState: modals.setSudoApprovalState,
-    setWorkspaceAcknowledgementState: modals.setWorkspaceAcknowledgementState,
     getFirstCharacterParticipant: participantsWithImpersonation.getFirstCharacterParticipant,
     setPauseState: chatControls.setPauseState,
     onToolResult: (name, success, result) => {
@@ -389,43 +410,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // --- Outfit hook ---
   // Collect all character IDs from participants so we can fetch wardrobe for all of them
   // (including user-controlled characters that may not have equipped outfits yet)
-  const participantCharacterIds = useMemo(() =>
-    (chat?.participants ?? [])
-      .filter(p => p.type === 'CHARACTER' && p.character?.id)
-      .map(p => p.character!.id),
-    [chat?.participants]
-  )
-  const outfit = useOutfit(id, participantCharacterIds)
-
-  // Refresh outfit state when a tool result comes back (generation completes).
-  // Invalidate wardrobe cache first since tools may have created/gifted new items.
-  // The Aurora announcement of any tool-driven change is scheduled server-side
-  // by the wardrobe-update-outfit tool handler, so the client only needs to
-  // refresh its local view of the outfit.
-  const wasGeneratingForOutfitRef = useRef(false)
-  useEffect(() => {
-    const isGenerating = sseStreaming.streaming || sseStreaming.waitingForResponse
-    if (wasGeneratingForOutfitRef.current && !isGenerating) {
-      outfit.invalidateWardrobe()
-      void outfit.refreshOutfit()
-    }
-    wasGeneratingForOutfitRef.current = isGenerating
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- outfit.refreshOutfit and invalidateWardrobe are stable (useCallback)
-  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, outfit.refreshOutfit, outfit.invalidateWardrobe])
-
-  // Equip slot handler that maps participantId -> characterId
-  const handleEquipSlot = useCallback(async (participantId: string, slot: string, itemId: string | null) => {
-    const participant = chat?.participants.find(p => p.id === participantId)
-    const characterId = participant?.character?.id
-    if (characterId) {
-      await outfit.equipSlot(characterId, slot, itemId)
-      // If avatar generation is enabled, start polling for the auto-triggered avatar update
-      if (chat?.avatarGenerationEnabled) {
-        startAvatarPoll(characterId)
-      }
-    }
-  }, [chat?.participants, chat?.avatarGenerationEnabled, outfit, startAvatarPoll])
-
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
     return visibleMessages[index]?.id ?? index
@@ -627,6 +611,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     fetchChatMemoryCount()
   }, [fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount])
 
+  // When a TerminalEmbed reports its PTY has exited, refresh the chat so the
+  // new Ariel close announcement appears inline.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ chatId?: string }>).detail
+      if (!detail?.chatId || detail.chatId !== id) return
+      void fetchChat()
+    }
+    window.addEventListener('quilltap:terminal-exited', handler)
+    return () => window.removeEventListener('quilltap:terminal-exited', handler)
+  }, [id, fetchChat])
+
+  // The terminal WebSocket pushes `chat-update` server messages when something
+  // (e.g., an Ariel periodic terminal-output summary) gets posted to the chat
+  // out-of-band. Refetch so the new message shows up without a manual reload.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ chatId?: string }>).detail
+      if (!detail?.chatId || detail.chatId !== id) return
+      void fetchChat()
+    }
+    window.addEventListener('quilltap:chat-update', handler)
+    return () => window.removeEventListener('quilltap:chat-update', handler)
+  }, [id, fetchChat])
+
   useEffect(() => {
     const fetchTemplateData = async () => {
       if (!chat?.roleplayTemplateId) {
@@ -751,6 +760,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     document.addEventListener('keydown', handleDocKeyDown)
     return () => document.removeEventListener('keydown', handleDocKeyDown)
   }, [documentModeHook])
+
+  // Keyboard shortcuts for Terminal Mode (mirrors Document Mode's pattern).
+  useEffect(() => {
+    const handleTerminalKeyDown = (e: KeyboardEvent) => {
+      // Cmd+Shift+T / Ctrl+Shift+T: toggle Terminal Mode
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'T' || e.key === 't')) {
+        e.preventDefault()
+        if (terminalModeHook.terminalMode === 'normal') {
+          void terminalModeHook.requestOpen()
+        } else {
+          void terminalModeHook.hidePane()
+        }
+        return
+      }
+
+      // Escape exits terminal focus back to split.
+      if (e.key === 'Escape' && terminalModeHook.terminalMode === 'focus') {
+        e.preventDefault()
+        terminalModeHook.toggleFocusMode()
+      }
+    }
+
+    document.addEventListener('keydown', handleTerminalKeyDown)
+    return () => document.removeEventListener('keydown', handleTerminalKeyDown)
+  }, [terminalModeHook])
 
   // --- Toolbar setup ---
   const { setLeftContent, setRightContent } = usePageToolbar()
@@ -914,6 +948,43 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [respondingParticipantId, chat?.participants, participantsWithImpersonation])
 
   const getMessageAvatar = useCallback((message: Message) => {
+    // Ad-hoc announcement bubble (Insert Announcement composer button).
+    // customAnnouncer takes precedence over systemSender by construction:
+    // the writer only sets one or the other per message.
+    if (message.customAnnouncer) {
+      if (message.customAnnouncer.kind === 'character' && message.customAnnouncer.characterId) {
+        const charId = message.customAnnouncer.characterId
+        const participant = chat?.participants.find(p => p.character?.id === charId)
+        if (participant?.character) {
+          return {
+            name: participant.character.name,
+            title: participant.character.title ?? null,
+            avatarUrl: participant.character.avatarUrl ?? null,
+            defaultImage: participant.character.defaultImage ?? null,
+          }
+        }
+        const offScene = chat?.offSceneCharacters?.find(c => c.id === charId)
+        if (offScene) {
+          return {
+            name: offScene.name,
+            title: offScene.title,
+            avatarUrl: offScene.avatarUrl,
+            defaultImage: null,
+          }
+        }
+        // Character no longer exists; render with a placeholder name so the
+        // bubble is still legible.
+        return { name: 'Off-scene character', title: null, avatarUrl: null, defaultImage: null }
+      }
+      if (message.customAnnouncer.kind === 'custom') {
+        return {
+          name: message.customAnnouncer.displayName || 'Announcement',
+          title: null,
+          avatarUrl: null,
+          defaultImage: null,
+        }
+      }
+    }
     if (message.systemSender === 'lantern') {
       return { name: 'The Lantern', title: null, avatarUrl: '/images/avatars/lantern-avatar.webp', defaultImage: null }
     }
@@ -931,6 +1002,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
     if (message.systemSender === 'prospero') {
       return { name: 'Prospero', title: null, avatarUrl: '/images/avatars/prospero-avatar.webp', defaultImage: null }
+    }
+    if (message.systemSender === 'commonplaceBook') {
+      return { name: 'The Commonplace Book', title: null, avatarUrl: '/images/avatars/commonplace-book-avatar.webp', defaultImage: null }
+    }
+    if (message.systemSender === 'ariel') {
+      return { name: 'Ariel', title: null, avatarUrl: '/images/avatars/ariel-avatar.webp', defaultImage: null }
     }
     if (message.participantId) {
       const participant = participantsWithImpersonation.getParticipantById(message.participantId)
@@ -954,7 +1031,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
     }
     return null
-  }, [participantsWithImpersonation, chat?.user])
+  }, [participantsWithImpersonation, chat?.user, chat?.participants, chat?.offSceneCharacters])
 
   // --- Reattribute handler ---
   const handleReattribute = useCallback((messageId: string) => {
@@ -967,6 +1044,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       })
     }
   }, [messages, modals])
+
+  // Terminal Mode entry: hook decides whether to re-attach a still-live bound
+  // session, show the session picker, or spawn-and-enter a fresh one.
+  const handleOpenTerminal = useCallback(() => {
+    void terminalModeHook.requestOpen()
+  }, [terminalModeHook])
 
   // Handle document open — opens the document; the server posts a Librarian announcement which
   // the hook surfaces via onLibrarianMessage, so the user never loses their turn.
@@ -1037,16 +1120,30 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }
 
   // --- Render ---
+  // Combine the two modes for SplitLayout. Focus on either side wins; otherwise
+  // either-side split wins; otherwise normal.
+  const combinedMode: 'normal' | 'split' | 'focus' =
+    documentModeHook.documentMode === 'focus' || terminalModeHook.terminalMode === 'focus'
+      ? 'focus'
+      : documentModeHook.documentMode === 'split' || terminalModeHook.terminalMode === 'split'
+        ? 'split'
+        : 'normal'
+
+  const isTerminalModeActive = terminalModeHook.terminalMode !== 'normal'
+
   return (
+    <TerminalModeContext.Provider value={terminalCtxValue}>
     <div
       className="qt-chat-layout"
       style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <div className="qt-chat-main">
         <SplitLayout
-          mode={documentModeHook.documentMode}
+          mode={combinedMode}
           dividerPosition={documentModeHook.dividerPosition}
           onDividerPositionChange={documentModeHook.setDividerPosition}
+          rightPaneVerticalSplit={terminalModeHook.rightPaneVerticalSplit}
+          onRightPaneVerticalSplitChange={terminalModeHook.setRightPaneVerticalSplit}
           chatContent={
             <>
               {/* Chat toggles - shown in multi-character chats */}
@@ -1063,8 +1160,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       aria-checked={chatControls.allowCrossCharacterVaultReads}
                       title={
                         chatControls.allowCrossCharacterVaultReads
-                          ? 'Characters may read each other’s vaults (read-only). Click to lock.'
-                          : 'Each character’s vault is private. Click to let them peek at each other’s dossiers.'
+                          ? 'Characters may read each other’s vaults (read-only) and the results are public to the chat. Click to lock.'
+                          : 'Each character’s vault is private; results from doc_* reads are whispered to the caller. Click to let them peek at each other’s dossiers.'
                       }
                     >
                       <span
@@ -1103,6 +1200,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           editingMessageId={editingMessageId}
           editContent={editContent}
           viewSourceMessageIds={viewSourceMessageIds}
+          expandedSystemMessageIds={expandedSystemMessageIds}
+          onToggleSystemMessageExpanded={toggleSystemMessageExpanded}
           swipeStates={swipeStates}
           setSwipeStates={setSwipeStates}
           chatSettings={chatSettings}
@@ -1117,6 +1216,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           userParticipantId={participantsWithImpersonation.userParticipantId}
           isPaused={isPaused}
           respondingParticipantId={respondingParticipantId}
+          chatId={id}
           messageActions={messageActions}
           turnManagement={turnManagement}
           setEditContent={setEditContent}
@@ -1126,6 +1226,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onReattribute={handleReattribute}
           onImageClick={(filepath, filename, fileId) => {
             modals.setModalImage({ src: filepath, filename, fileId })
+          }}
+          onSaveImage={(messageId, attachmentId) => {
+            setSaveImageTarget({ messageId, attachmentId })
           }}
           fetchChat={fetchChat}
           messagesWithLogs={llmLogs.messagesWithLogs}
@@ -1217,11 +1320,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onGenerateImageClick={modals.openGenerateImage}
           onLibraryFileClick={modals.openLibraryFilePicker}
           onStandaloneGenerateImageClick={modals.openStandaloneGenerateImage}
+          onInsertAnnouncementClick={modals.openInsertAnnouncement}
           onAddCharacterClick={modals.openAddCharacter}
           onSettingsClick={modals.openChatSettings}
           onRenameClick={modals.openRename}
           onProjectClick={modals.openChatProject}
           projectName={chat?.projectName}
+          onContinueChatClick={modals.openContinueChat}
           onDeleteChatMemoriesClick={memoryActions.handleDeleteChatMemories}
           onReextractMemoriesClick={memoryActions.handleReextractMemories}
           onSearchReplaceClick={modals.openSearchReplace}
@@ -1233,6 +1338,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           hideStopButton={modals.showParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
           narrationDelimiters={narrationDelimiters}
+          onOpenTerminalClick={handleOpenTerminal}
+          isTerminalModeActive={isTerminalModeActive}
         />
             </>
           }
@@ -1252,6 +1359,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setScrollPosition={documentModeHook.setScrollPosition}
                 onContentChange={documentModeHook.handleContentChange}
                 onBlur={documentModeHook.flushSave}
+                onFlushSave={documentModeHook.flushSave}
                 onTitleChange={documentModeHook.renameDocument}
                 onToggleFocusMode={documentModeHook.toggleFocusMode}
                 onCloseDocument={documentModeHook.closeDocument}
@@ -1263,6 +1371,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               />
             ) : null
           }
+          terminalContent={
+            terminalModeHook.activeTerminalSessionId && terminalModeHook.terminalMode !== 'normal' ? (
+              <TerminalPane
+                sessionId={terminalModeHook.activeTerminalSessionId}
+                chatId={id}
+                mode={terminalModeHook.terminalMode}
+                onToggleFocusMode={terminalModeHook.toggleFocusMode}
+                onHidePane={terminalModeHook.hidePane}
+                onKill={terminalModeHook.killTerminal}
+              />
+            ) : null
+          }
+        />
+
+        {/* Terminal Session Picker Modal */}
+        <TerminalSessionPicker
+          isOpen={terminalModeHook.showTerminalPicker}
+          sessions={terminalModeHook.pickerSessions}
+          onAttach={(sessionId) => {
+            void terminalModeHook.attachExistingSession(sessionId)
+          }}
+          onSpawnNew={() => {
+            void terminalModeHook.spawnNewSession()
+          }}
+          onClose={terminalModeHook.closeTerminalPicker}
         />
 
         {/* Document Picker Modal */}
@@ -1277,6 +1410,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             setShowDocumentPicker(false)
           }}
         />
+
+        {/* Continue Elsewhere — fork this conversation into a new chat with a
+            different scenario or project. Reuses the standard new-chat modal
+            in continuation mode, which posts continuationFromChatId to the
+            create endpoint so the server backfills the new chat with the
+            tail of this one. */}
+        {chat && (
+          <NewChatModal
+            isOpen={modals.continueChatModalOpen}
+            onClose={modals.closeContinueChat}
+            characterId={chat.participants.find((p) => p.controlledBy !== 'user')?.character?.id || ''}
+            characterName={chat.participants.find((p) => p.controlledBy !== 'user')?.character?.name || ''}
+            projectId={chat.projectId ?? undefined}
+            continuationFromChatId={id}
+            initialSelectedCharacterIds={chat.participants
+              .filter((p) => p.type === 'CHARACTER' && p.controlledBy !== 'user' && !p.removedAt)
+              .map((p) => p.character?.id)
+              .filter((cid): cid is string => typeof cid === 'string' && cid.length > 0)}
+            initialUserCharacterId={chat.participants
+              .find((p) => p.type === 'CHARACTER' && p.controlledBy === 'user' && !p.removedAt)
+              ?.character?.id ?? null}
+            initialImageProfileId={chat.imageProfileId ?? null}
+            initialAvatarGenerationEnabled={chat.avatarGenerationEnabled ?? false}
+          />
+        )}
 
         {/* Modals */}
         <ChatModals
@@ -1316,14 +1474,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           closeLibraryFilePicker={modals.closeLibraryFilePicker}
           standaloneGenerateImageOpen={modals.standaloneGenerateImageOpen}
           closeStandaloneGenerateImage={modals.closeStandaloneGenerateImage}
+          insertAnnouncementOpen={modals.insertAnnouncementOpen}
+          closeInsertAnnouncement={modals.closeInsertAnnouncement}
           allLLMPauseModalOpen={modals.allLLMPauseModalOpen}
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}
           reattributeDialogState={modals.reattributeDialogState}
           setReattributeDialogState={modals.setReattributeDialogState}
-          sudoApprovalState={modals.sudoApprovalState}
-          setSudoApprovalState={modals.setSudoApprovalState}
-          workspaceAcknowledgementState={modals.workspaceAcknowledgementState}
-          setWorkspaceAcknowledgementState={modals.setWorkspaceAcknowledgementState}
           selectLLMProfileDialogState={modals.selectLLMProfileDialogState}
           setSelectLLMProfileDialogState={modals.setSelectLLMProfileDialogState}
           isConflictDialogOpen={isConflictDialogOpen}
@@ -1344,8 +1500,26 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           handleAllLLMContinue={handleAllLLMContinue}
           handleAllLLMStop={handleAllLLMStop}
           handleAllLLMTakeOver={handleAllLLMTakeOver}
-          triggerContinueMode={sseStreaming.triggerContinueMode}
         />
+
+        {saveImageTarget && (() => {
+          const targetMessage = messages.find((m) => m.id === saveImageTarget.messageId)
+          const attachments = targetMessage?.attachments ?? []
+          return (
+            <SaveImageDialog
+              isOpen={!!saveImageTarget}
+              onClose={() => setSaveImageTarget(null)}
+              chatId={id}
+              messageId={saveImageTarget.messageId}
+              attachments={attachments}
+              initialAttachmentId={saveImageTarget.attachmentId}
+              onSaved={(info) => {
+                showSuccessToast(`Saved to ${info.mountPoint}`)
+                void fetchChatPhotoCount()
+              }}
+            />
+          )
+        })()}
       </div>
 
       <LLMInspectorPanel
@@ -1385,14 +1559,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           connectionProfiles={chatControls.connectionProfiles}
           onConnectionProfileChange={chatControls.handleConnectionProfileChange}
           onSystemPromptChange={chatControls.handleSystemPromptChange}
+          onRebuildSystemPrompt={chatControls.handleRebuildSystemPrompt}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}
-          outfitState={outfit.outfitState}
-          wardrobeCache={outfit.wardrobeCache}
-          outfitLoading={outfit.loading}
-          onEquipSlot={handleEquipSlot}
-          onGiftItem={handleGiftItem}
-          onRegenerateAvatar={chat?.avatarGenerationEnabled ? handleRegenerateAvatar : undefined}
+          chatId={id}
+          onRegenerateAvatar={handleRegenerateAvatar}
           isDangerousChat={chat?.isDangerousChat === true}
         />
       )}
@@ -1411,19 +1582,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         />
       )}
 
-      {giftTarget && (
-        <GiftWardrobeItemModal
-          recipientCharacterId={giftTarget.characterId}
-          recipientName={giftTarget.name}
-          chatId={id}
-          onClose={() => setGiftTarget(null)}
-          onGifted={() => {
-            outfit.invalidateWardrobe(giftTarget.characterId)
-            setGiftTarget(null)
-            outfit.refreshOutfit()
-          }}
-        />
-      )}
     </div>
+    </TerminalModeContext.Provider>
   )
 }

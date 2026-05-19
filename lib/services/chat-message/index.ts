@@ -84,9 +84,15 @@ export {
 
 // Memory Triggers
 export {
-  triggerMemoryExtraction,
-  triggerInterCharacterMemory,
-  triggerUserControlledCharacterMemory,
+  triggerTurnMemoryExtraction,
   triggerContextSummaryCheck,
   type MemoryChatSettings,
 } from './memory-trigger.service'
+
+// Per-turn transcript helpers
+export {
+  buildTurnTranscript,
+  findTurnOpenerMessageId,
+  type TurnTranscript,
+  type TurnCharacterSlice,
+} from './turn-transcript'

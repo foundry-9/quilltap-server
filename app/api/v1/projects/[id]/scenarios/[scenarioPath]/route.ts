@@ -28,13 +28,14 @@ import {
   PROJECT_SCENARIOS_FOLDER,
 } from '@/lib/mount-index/project-scenarios';
 import {
+  buildScenarioFileContent,
+  resolveScenarioPath,
+} from '@/lib/mount-index/scenarios-common';
+import {
   writeDatabaseDocument,
   deleteDatabaseDocument,
   moveDatabaseDocument,
 } from '@/lib/mount-index/database-store';
-import {
-  serializeFrontmatter,
-} from '@/lib/doc-edit/markdown-parser';
 import { sanitizeFileName } from '@/lib/mount-index/character-vault';
 
 // ============================================================================
@@ -55,49 +56,6 @@ const renameScenarioSchema = z.object({
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function resolveScenarioPath(scenarioPath: string): { ok: true; path: string } | { ok: false; error: string } {
-  let candidate = decodeURIComponent(scenarioPath).trim();
-  if (!candidate) {
-    return { ok: false, error: 'scenarioPath cannot be empty' };
-  }
-  if (candidate.includes('..') || candidate.includes('//')) {
-    return { ok: false, error: 'Invalid scenarioPath' };
-  }
-  // Allow caller to pass bare filename or full Scenarios/<path>.md.
-  if (!candidate.startsWith(`${PROJECT_SCENARIOS_FOLDER}/`)) {
-    candidate = `${PROJECT_SCENARIOS_FOLDER}/${candidate.replace(/^\/+/, '')}`;
-  }
-  if (!/\.md$/i.test(candidate)) {
-    candidate = `${candidate}.md`;
-  }
-  // Reject nested paths under Scenarios/ — top-level only.
-  const rest = candidate.slice(PROJECT_SCENARIOS_FOLDER.length + 1);
-  if (rest.includes('/')) {
-    return { ok: false, error: 'Project scenarios cannot live in nested folders' };
-  }
-  return { ok: true, path: candidate };
-}
-
-function buildScenarioFileContent(input: {
-  name?: string;
-  description?: string;
-  isDefault?: boolean;
-  body: string;
-}): string {
-  const frontmatter: Record<string, unknown> = {};
-  if (input.name && input.name.trim().length > 0) {
-    frontmatter.name = input.name.trim();
-  }
-  if (input.description && input.description.trim().length > 0) {
-    frontmatter.description = input.description.trim();
-  }
-  if (input.isDefault) {
-    frontmatter.isDefault = true;
-  }
-  const fmBlock = Object.keys(frontmatter).length > 0 ? serializeFrontmatter(frontmatter) : '';
-  return `${fmBlock}${fmBlock ? '\n' : ''}${input.body}`;
-}
 
 async function loadProjectAndStore(
   projectId: string,
@@ -126,7 +84,7 @@ async function loadProjectAndStore(
 export const GET = createAuthenticatedParamsHandler<{ id: string; scenarioPath: string }>(
   async (_req: NextRequest, { repos }: RequestContext, { id, scenarioPath }) => {
     try {
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, PROJECT_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadProjectAndStore(id, repos);
@@ -154,7 +112,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; scenarioPath: 
 export const PUT = createAuthenticatedParamsHandler<{ id: string; scenarioPath: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id, scenarioPath }) => {
     try {
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, PROJECT_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadProjectAndStore(id, repos);
@@ -221,7 +179,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string; scenarioPath:
         return badRequest('Unknown action — supported: rename');
       }
 
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, PROJECT_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadProjectAndStore(id, repos);
@@ -288,7 +246,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string; scenarioPath:
 export const DELETE = createAuthenticatedParamsHandler<{ id: string; scenarioPath: string }>(
   async (_req: NextRequest, { user, repos }: RequestContext, { id, scenarioPath }) => {
     try {
-      const resolved = resolveScenarioPath(scenarioPath);
+      const resolved = resolveScenarioPath(scenarioPath, PROJECT_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
       const lookup = await loadProjectAndStore(id, repos);

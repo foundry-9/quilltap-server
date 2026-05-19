@@ -19,6 +19,8 @@ const updateArchetypeSchema = z.object({
   types: z.array(WardrobeItemTypeEnum).min(1).optional(),
   appropriateness: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
+  /** Replace this item's composite components (use `[]` to demote to a leaf). */
+  componentItemIds: z.array(z.string()).optional(),
 });
 
 // GET /api/v1/wardrobe/[itemId]
@@ -30,8 +32,6 @@ export const GET = createAuthenticatedParamsHandler<{ itemId: string }>(
       if (!item || item.characterId !== null) {
         return notFound('Archetype wardrobe item');
       }
-
-      logger.debug('[Wardrobe Archetypes v1] Fetched archetype item', { itemId });
 
       return NextResponse.json({ wardrobeItem: item });
     } catch (error) {
@@ -56,11 +56,6 @@ export const PUT = createAuthenticatedParamsHandler<{ itemId: string }>(
     const body = await req.json();
     const validatedData = updateArchetypeSchema.parse(body);
 
-    logger.debug('[Wardrobe Archetypes v1] Updating archetype item', {
-      itemId,
-      fields: Object.keys(validatedData),
-    });
-
     const item = await repos.wardrobe.update(itemId, validatedData);
 
     if (!item) {
@@ -82,11 +77,13 @@ export const DELETE = createAuthenticatedParamsHandler<{ itemId: string }>(
         return notFound('Archetype wardrobe item');
       }
 
-      // Clean up references before deleting
+      // Clean up references before deleting.
+      // Outfit presets no longer exist as a separate table — composite
+      // wardrobe items may still reference this id in `componentItemIds`,
+      // but `expandComposites` tolerates unknown ids gracefully so any
+      // dangling references are harmless.
       try {
         await repos.chats.removeEquippedItemFromAllChats(itemId);
-        await repos.outfitPresets.removeItemFromPresets(itemId);
-        logger.debug('[Wardrobe Archetypes v1] Cleaned up equipped references', { itemId });
       } catch (cleanupError) {
         logger.warn('[Wardrobe Archetypes v1] Cleanup of equipped references had issues, proceeding with delete', {
           itemId,

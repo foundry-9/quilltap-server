@@ -21,12 +21,10 @@ import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handl
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage } from './types'
-import { saveToolMessages } from './tool-execution.service'
+import { saveToolMessages, type ToolWhisperContext } from './tool-execution.service'
 import { encodeDoneEvent } from './streaming.service'
 import {
-  triggerMemoryExtraction,
-  triggerInterCharacterMemory,
-  triggerUserControlledCharacterMemory,
+  triggerTurnMemoryExtraction,
   triggerContextSummaryCheck,
   triggerChatDangerClassification,
   type MemoryChatSettings,
@@ -86,6 +84,11 @@ export async function finalizeMessageResponse({
   const normalizedResponse = normalizeContentBlockFormat(fullResponse)
   const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
 
+  const whisperContext: ToolWhisperContext = {
+    userParticipantId,
+    allowCrossCharacterVaultReads: chat.allowCrossCharacterVaultReads === true,
+  }
+
   const assistantMessageId = await saveAssistantMessage(
     repos,
     chatId,
@@ -99,7 +102,8 @@ export async function finalizeMessageResponse({
     toolMessages,
     preGeneratedAssistantMessageId,
     effectiveProfile.provider,
-    effectiveProfile.modelName
+    effectiveProfile.modelName,
+    whisperContext
   )
 
   if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
@@ -235,74 +239,19 @@ export async function finalizeMessageResponse({
       isDangerousChat: chat.isDangerousChat === true,
     }
 
-    const allCharacterPronouns = isMultiCharacter
-      ? Object.fromEntries(Array.from(participantCharacters.values()).map(c => [c.name, c.pronouns ?? null]))
-      : undefined
-
-    await triggerMemoryExtraction(repos, {
-      characterId: character.id,
-      characterName: character.name,
-      characterPronouns: character.pronouns,
-      userCharacterName: resolvedIdentity.name !== 'User' ? resolvedIdentity.name : undefined,
-      userCharacterId,
-      allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
-      allCharacterPronouns,
-      chatId,
-      userMessage: isContinueMode ? '[Continue/Nudge - no user message]' : content,
-      assistantMessage: cleanedResponse,
-      sourceMessageId: assistantMessageId,
-      userId,
-      connectionProfile,
-      chatSettings: memoryChatSettings,
-    })
-
-    if (isMultiCharacter) {
-      await triggerInterCharacterMemory(repos, {
-        character,
-        characterParticipantId: characterParticipant.id,
-        assistantMessage: cleanedResponse,
-        assistantMessageId,
+    // Per-turn memory extraction: fire only when the turn closes (control
+    // returns to the user). On earlier characters' finalize calls in a
+    // multi-character turn, `turnInfo.isUsersTurn` is false and we leave
+    // extraction for the last speaker. Tool / continuation cycles inside
+    // a single character's response don't toggle isUsersTurn either, so
+    // those won't trigger spurious extractions.
+    if (turnInfo.isUsersTurn) {
+      await triggerTurnMemoryExtraction(repos, {
         chatId,
         userId,
         connectionProfile,
         chatSettings: memoryChatSettings,
-        existingMessages,
-        participants: chat.participants,
-        participantCharacters,
       })
-    }
-
-    if (!isContinueMode && chat.activeTypingParticipantId) {
-      const activeTypingParticipant = chat.participants.find(
-        p => p.id === chat.activeTypingParticipantId
-      )
-
-      if (
-        activeTypingParticipant &&
-        activeTypingParticipant.type === 'CHARACTER' &&
-        activeTypingParticipant.characterId &&
-        activeTypingParticipant.id !== characterParticipant.id
-      ) {
-        const userControlledCharacter = participantCharacters.get(activeTypingParticipant.characterId)
-          || await repos.characters.findById(activeTypingParticipant.characterId)
-
-        if (userControlledCharacter) {
-          await triggerUserControlledCharacterMemory(repos, {
-            userControlledCharacter,
-            userControlledParticipantId: activeTypingParticipant.id,
-            userTypedMessage: content,
-            respondingCharacter: character,
-            llmResponse: cleanedResponse,
-            llmResponseMessageId: assistantMessageId,
-            chatId,
-            userId,
-            chatSettings: memoryChatSettings,
-            allCharacterNames: isMultiCharacter
-              ? Array.from(participantCharacters.values()).map(c => c.name)
-              : [userControlledCharacter.name, character.name],
-          })
-        }
-      }
     }
 
     await triggerContextSummaryCheck(repos, {
@@ -357,7 +306,8 @@ export async function saveAssistantMessage(
   toolMessages: ToolMessage[],
   preGeneratedMessageId?: string,
   provider?: string,
-  modelName?: string
+  modelName?: string,
+  whisperContext?: ToolWhisperContext
 ): Promise<string> {
   const assistantMessageId = preGeneratedMessageId || crypto.randomUUID()
   const assistantAttachments = generatedImagePaths.map(img => img.id)
@@ -389,7 +339,9 @@ export async function saveAssistantMessage(
       '',
       toolMessages,
       generatedImagePaths,
-      character.id
+      character.id,
+      characterParticipant.id,
+      whisperContext
     )
   }
 

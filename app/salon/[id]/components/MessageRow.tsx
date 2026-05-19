@@ -3,16 +3,26 @@
 import { memo } from 'react'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
-import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
 import { TokenBadge } from '@/components/chat/TokenBadge'
 import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
 import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
+import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
+import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-message-labels'
+import { CourierBubble } from './CourierBubble'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+
+const TERMINAL_SESSION_ID_RE = /<!--\s*terminalSessionId:([0-9a-f-]+)\s*-->/i
+
+function extractTerminalSessionId(content: string | null | undefined): string | null {
+  if (!content) return null
+  const m = content.match(TERMINAL_SESSION_ID_RE)
+  return m ? m[1] : null
+}
 
 interface MessageAvatarInfo {
   name: string
@@ -57,6 +67,8 @@ interface MessageRowProps {
   onViewLLMLogs?: (messageId: string) => void
   /** Character data for tool messages */
   character?: CharacterData
+  /** Chat ID for terminal embed rendering */
+  chatId?: string
 
   // Callbacks
   onEditStart: (message: Message) => void
@@ -70,6 +82,12 @@ interface MessageRowProps {
   onCopyContent: (content: string) => void
   onResend: (message: Message) => void
   onImageClick: (filepath: string, filename: string, fileId?: string) => void
+  /**
+   * Open the Save Image dialog for one of the message's image attachments.
+   * Fired by the per-message save toolbar button. When omitted, the button
+   * is hidden.
+   */
+  onSaveImage?: (messageId: string, attachmentId: string) => void
   onHandleNudge: (participantId: string) => void
   onHandleQueue: (participantId: string) => void
   onHandleDequeue: (participantId: string) => void
@@ -83,6 +101,12 @@ interface MessageRowProps {
   isOverheardWhisper?: boolean
   /** Whether the Concierge has flagged this chat as dangerous */
   isDangerousChat?: boolean
+  /** True for Staff-authored messages that should render as a thin collapsed bar */
+  isSystemMessageCollapsed?: boolean
+  /** Toggle the collapsed state of a system-authored message */
+  onToggleSystemMessageExpanded?: (messageId: string) => void
+  /** Callback fired after a Courier placeholder is resolved or cancelled — triggers a chat refetch. */
+  onCourierTurnSettled?: () => void
 }
 
 function getImageAttachments(message: Message) {
@@ -116,6 +140,7 @@ function MessageRowInner({
   hasLLMLogs,
   onViewLLMLogs,
   character,
+  chatId,
   onEditStart,
   onEditSave,
   onEditCancel,
@@ -127,6 +152,7 @@ function MessageRowInner({
   onCopyContent,
   onResend,
   onImageClick,
+  onSaveImage,
   onHandleNudge,
   onHandleQueue,
   onHandleDequeue,
@@ -137,6 +163,9 @@ function MessageRowInner({
   participantNames,
   isOverheardWhisper = false,
   isDangerousChat = false,
+  isSystemMessageCollapsed = false,
+  onCourierTurnSettled,
+  onToggleSystemMessageExpanded,
 }: MessageRowProps) {
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
 
@@ -157,6 +186,82 @@ function MessageRowInner({
     ? dangerousContentSettings.displayMode
     : 'SHOW'
   const showDangerBadges = hasDangerFlags && dangerousContentSettings?.showWarningBadges !== false
+
+  // The Courier: pending placeholder for a manual / clipboard turn. Render
+  // a special bubble with the Markdown blob, copy button, attachment links,
+  // and a paste-back textarea. Skip the normal action bar, edit, source-view,
+  // and danger-flag chrome.
+  if (message.pendingExternalPrompt) {
+    const courierName = messageAvatar?.name || 'this character'
+    return (
+      <div
+        id={`message-${message.id}`}
+        data-message-id={message.id}
+        key={message.id}
+        className={messageRowClasses.concat(['qt-chat-message-row-courier']).join(' ')}
+      >
+        {message.role === 'ASSISTANT' && shouldShowAvatars && messageAvatar && (
+          <div className={`flex-shrink-0 qt-chat-desktop-avatar${isDangerousChat ? ' qt-chat-avatar-dangerous' : ''}`}>
+            <Avatar
+              name={messageAvatar.name}
+              title={messageAvatar.title}
+              src={messageAvatar}
+              size="chat"
+              showName
+              showTitle
+              className="flex flex-col items-center w-32 gap-1"
+            />
+            <ProviderModelBadge provider={message.provider} modelName={message.modelName} size="xs" />
+          </div>
+        )}
+        <div className="qt-chat-message-body group">
+          <div className="chat-message qt-chat-message-assistant">
+            <CourierBubble
+              chatId={chatId || ''}
+              message={message}
+              characterName={courierName}
+              onResolved={() => onCourierTurnSettled?.()}
+              onCancelled={() => onCourierTurnSettled?.()}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isSystemMessageCollapsed && message.systemSender && onToggleSystemMessageExpanded) {
+    const senderName = getSystemSenderDisplayName(message.systemSender)
+    const kindLabel = getSystemKindDisplayLabel(message)
+    return (
+      <div
+        id={`message-${message.id}`}
+        data-message-id={message.id}
+        key={message.id}
+        className={messageRowClasses.join(' ')}
+      >
+        <button
+          type="button"
+          onClick={() => onToggleSystemMessageExpanded(message.id)}
+          className="qt-chat-system-bar"
+          aria-expanded={false}
+          aria-label={`Expand ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
+        >
+          <span className="qt-chat-system-bar-sender">{senderName}</span>
+          {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
+          <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
+          <svg
+            className="qt-chat-system-bar-chevron"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -181,6 +286,32 @@ function MessageRowInner({
         </div>
       )}
       <div className="qt-chat-message-body group">
+        {message.systemSender && !isEditing && onToggleSystemMessageExpanded && (() => {
+          const senderName = getSystemSenderDisplayName(message.systemSender)
+          const kindLabel = getSystemKindDisplayLabel(message)
+          return (
+            <button
+              type="button"
+              onClick={() => onToggleSystemMessageExpanded(message.id)}
+              className="qt-chat-system-bar qt-chat-system-bar-expanded"
+              aria-expanded={true}
+              aria-label={`Collapse ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
+            >
+              <span className="qt-chat-system-bar-sender">{senderName}</span>
+              {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
+              <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
+              <svg
+                className="qt-chat-system-bar-chevron qt-chat-system-bar-chevron-down"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )
+        })()}
         <div
           className={`chat-message ${
             message.role === 'USER'
@@ -227,20 +358,6 @@ function MessageRowInner({
                   silent — inner thoughts and actions only
                 </div>
               )}
-              {/* Embedded tool calls - shown at top of message */}
-              {message.toolCalls && message.toolCalls.length > 0 && (
-                <div className="mb-3 space-y-2">
-                  {message.toolCalls.map((toolMsg) => (
-                    <ToolMessage
-                      key={toolMsg.id}
-                      message={toolMsg}
-                      character={character}
-                      onImageClick={onImageClick}
-                      embedded
-                    />
-                  ))}
-                </div>
-              )}
               <DangerContentWrapper displayMode={dangerDisplayMode}>
                 {viewSourceMessageIds.has(message.id) ? (
                   <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
@@ -250,6 +367,11 @@ function MessageRowInner({
                   <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} />
                 )}
               </DangerContentWrapper>
+              {/* Terminal embed for ariel session-opened messages */}
+              {message.systemSender === 'ariel' && message.systemKind === 'session-opened' && chatId && (() => {
+                const terminalSessionId = extractTerminalSessionId(message.content)
+                return terminalSessionId ? <div className="mt-2"><TerminalEmbed sessionId={terminalSessionId} chatId={chatId} /></div> : null
+              })()}
               {/* Danger flag badges */}
               {showDangerBadges && message.dangerFlags && (
                 <DangerFlagBadge
@@ -292,6 +414,20 @@ function MessageRowInner({
               {/* Action bar - shows action icons at bottom of message */}
               <div className="qt-chat-message-action-bar">
                 <div className="qt-chat-message-action-bar-icons">
+                  {/* Collapse (Staff-authored messages only) */}
+                  {message.systemSender && onToggleSystemMessageExpanded && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleSystemMessageExpanded(message.id)}
+                      className="qt-chat-message-action-icon"
+                      title="Collapse this message"
+                      aria-label="Collapse this message"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                  )}
                   {/* Copy */}
                   <button
                     onClick={() => onCopyContent(message.content)}
@@ -302,6 +438,26 @@ function MessageRowInner({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                   </button>
+                  {/* Save image (only when one or more image attachments are present) */}
+                  {onSaveImage && getImageAttachments(message).length > 0 && (
+                    <button
+                      onClick={() => {
+                        const images = getImageAttachments(message)
+                        if (images.length > 0) {
+                          onSaveImage(message.id, images[0].id)
+                        }
+                      }}
+                      className="qt-chat-message-action-icon"
+                      title={getImageAttachments(message).length > 1
+                        ? 'Save an image to a photo album'
+                        : 'Save image to a photo album'}
+                      aria-label="Save image to a photo album"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                      </svg>
+                    </button>
+                  )}
                   {/* View source/rendered */}
                   <button
                     onClick={() => onToggleSourceView(message.id)}
@@ -635,11 +791,6 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   const nextAttachments = next.message.attachments || []
   if (prevAttachments.length !== nextAttachments.length) return false
 
-  // Tool calls (check if array changed)
-  const prevToolCalls = prev.message.toolCalls || []
-  const nextToolCalls = next.message.toolCalls || []
-  if (prevToolCalls.length !== nextToolCalls.length) return false
-
   // Pre-rendered HTML
   if (prev.message.renderedHtml !== next.message.renderedHtml) return false
 
@@ -672,6 +823,9 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
 
   // Danger state
   if (prev.isDangerousChat !== next.isDangerousChat) return false
+
+  // System-message collapse state
+  if (prev.isSystemMessageCollapsed !== next.isSystemMessageCollapsed) return false
 
   // Props are equal, skip re-render
   return true

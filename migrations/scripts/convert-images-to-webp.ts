@@ -14,6 +14,7 @@
 
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
+import { reportProgress } from '../lib/progress';
 import fs from 'fs';
 import path from 'path';
 import { createHash } from 'node:crypto';
@@ -132,7 +133,10 @@ export const convertImagesToWebPMigration: Migration = {
       totalImages: imageFiles.length,
     });
 
+    let processed = 0;
     for (const file of imageFiles) {
+      processed++;
+      reportProgress(processed, imageFiles.length, 'images');
       try {
         // 1. Resolve the full path on disk
         if (!file.storageKey) {
@@ -216,16 +220,6 @@ export const convertImagesToWebPMigration: Migration = {
         }
 
         converted++;
-
-        if (converted % 50 === 0) {
-          logger.info('[WebP Migration] Progress', {
-            context: 'migrations.convert-images-to-webp',
-            converted,
-            skipped,
-            failed,
-            remaining: imageFiles.length - converted - skipped - failed,
-          });
-        }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error('[WebP Migration] Failed to convert image', {

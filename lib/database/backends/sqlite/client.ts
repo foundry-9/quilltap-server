@@ -17,9 +17,33 @@ import { releaseActiveInstanceLock } from './instance-lock';
 // Singleton State
 // ============================================================================
 
-let sqliteDatabase: DatabaseType | null = null;
-let isInitialized = false;
-let shutdownHandlersRegistered = false;
+// HMR- and dual-bundle-safe singleton state. Module-local `let`s lose their
+// values when Turbopack/HMR reloads this file — and worse, when the same
+// source compiles into more than one server bundle (e.g. instrumentation
+// vs. API routes vs. the background-job dispatcher chunk), each bundle
+// gets its own module-locals. The dispatcher's `getRawDatabase()` call site
+// would then see `null` even though another bundle's instance had opened
+// the connection. Stashing on `globalThis` keeps a single shared handle
+// across reloads and bundles, matching the pattern in
+// `llm-logs-client.ts`, `mount-index-client.ts`, and `manager.ts`.
+declare global {
+  var __quilltapMainDatabase: DatabaseType | undefined;
+  var __quilltapMainDatabaseInitialized: boolean | undefined;
+  var __quilltapMainDatabaseShutdownHandlersRegistered: boolean | undefined;
+}
+
+function getDb(): DatabaseType | null {
+  return globalThis.__quilltapMainDatabase ?? null;
+}
+function setDb(db: DatabaseType | null): void {
+  globalThis.__quilltapMainDatabase = db ?? undefined;
+}
+function getInitFlag(): boolean {
+  return globalThis.__quilltapMainDatabaseInitialized ?? false;
+}
+function setInitFlag(v: boolean): void {
+  globalThis.__quilltapMainDatabaseInitialized = v;
+}
 
 // ============================================================================
 // Client Management
@@ -27,10 +51,27 @@ let shutdownHandlersRegistered = false;
 
 /**
  * Initialize and return the SQLite database connection
+ *
+ * Inside the forked job-runner child (`QUILLTAP_JOB_CHILD === '1'`) this
+ * delegates to `getReadonlyChildSQLiteClient`, which opens the same
+ * SQLCipher database in readonly mode and skips WAL/journal/instance-lock
+ * configuration. The child reads freely; all writes are batched and shipped
+ * back to the parent via IPC for the parent to apply on its RW connection.
  */
 export function getSQLiteClient(config: SQLiteConfig): DatabaseType {
-  if (sqliteDatabase && isInitialized) {
-    return sqliteDatabase;
+  const existing = getDb();
+  if (existing && getInitFlag()) {
+    return existing;
+  }
+
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    // Lazy require to keep this import out of the parent's startup graph.
+    const { getReadonlyChildSQLiteClient } = require('./child-client') as
+      typeof import('./child-client');
+    const child = getReadonlyChildSQLiteClient(config);
+    setDb(child);
+    setInitFlag(true);
+    return child;
   }
 
   logger.info('Initializing SQLite database connection', {
@@ -40,7 +81,7 @@ export function getSQLiteClient(config: SQLiteConfig): DatabaseType {
 
   try {
     // Create or open the database
-    sqliteDatabase = new Database(config.path, {
+    const db = new Database(config.path, {
       // verbose: process.env.NODE_ENV === 'development' ? console.log : undefined,
     });
 
@@ -50,19 +91,20 @@ export function getSQLiteClient(config: SQLiteConfig): DatabaseType {
     const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
     if (sqlcipherKey) {
       const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
-      sqliteDatabase.pragma(`key = "x'${keyHex}'"`);
+      db.pragma(`key = "x'${keyHex}'"`);
     }
 
     // Configure pragmas
-    configurePragmas(sqliteDatabase, config);
+    configurePragmas(db, config);
 
-    isInitialized = true;
+    setDb(db);
+    setInitFlag(true);
 
     logger.info('SQLite database connection established', {
       path: config.path,
     });
 
-    return sqliteDatabase;
+    return db;
   } catch (error) {
     logger.error('Failed to initialize SQLite database', {
       path: config.path,
@@ -115,7 +157,8 @@ function configurePragmas(db: DatabaseType, config: SQLiteConfig): void {
  * the WAL into the main database file, then optimizes and closes.
  */
 export function closeSQLiteClient(): void {
-  if (sqliteDatabase) {
+  const db = getDb();
+  if (db) {
     try {
       logger.info('Closing SQLite database connection');
 
@@ -123,14 +166,14 @@ export function closeSQLiteClient(): void {
       stopPeriodicCheckpoints();
 
       // Run a TRUNCATE checkpoint to merge WAL into main DB
-      runShutdownCheckpoint(sqliteDatabase);
+      runShutdownCheckpoint(db);
 
       // Optimize before closing
-      sqliteDatabase.pragma('optimize');
+      db.pragma('optimize');
 
-      sqliteDatabase.close();
-      sqliteDatabase = null;
-      isInitialized = false;
+      db.close();
+      setDb(null);
+      setInitFlag(false);
 
       logger.info('SQLite database connection closed');
     } catch (error) {
@@ -146,13 +189,14 @@ export function closeSQLiteClient(): void {
  * Check if the database is connected and healthy
  */
 export function isSQLiteConnected(): boolean {
-  if (!sqliteDatabase || !isInitialized) {
+  const db = getDb();
+  if (!db || !getInitFlag()) {
     return false;
   }
 
   try {
     // Simple query to verify connection
-    sqliteDatabase.prepare('SELECT 1').get();
+    db.prepare('SELECT 1').get();
     return true;
   } catch {
     return false;
@@ -163,12 +207,13 @@ export function isSQLiteConnected(): boolean {
  * Run a checkpoint on the WAL file
  */
 export function runCheckpoint(mode: 'PASSIVE' | 'FULL' | 'RESTART' | 'TRUNCATE' = 'PASSIVE'): void {
-  if (!sqliteDatabase || !isInitialized) {
+  const db = getDb();
+  if (!db || !getInitFlag()) {
     return;
   }
 
   try {
-    sqliteDatabase.pragma(`wal_checkpoint(${mode})`);
+    db.pragma(`wal_checkpoint(${mode})`);
   } catch (error) {
     logger.error('Error running WAL checkpoint', {
       mode,
@@ -181,14 +226,15 @@ export function runCheckpoint(mode: 'PASSIVE' | 'FULL' | 'RESTART' | 'TRUNCATE' 
  * Get database statistics
  */
 export function getDatabaseStats(): { pageCount: number; pageSize: number; freelist: number } | null {
-  if (!sqliteDatabase || !isInitialized) {
+  const db = getDb();
+  if (!db || !getInitFlag()) {
     return null;
   }
 
   try {
-    const pageCount = sqliteDatabase.pragma('page_count', { simple: true }) as number;
-    const pageSize = sqliteDatabase.pragma('page_size', { simple: true }) as number;
-    const freelist = sqliteDatabase.pragma('freelist_count', { simple: true }) as number;
+    const pageCount = db.pragma('page_count', { simple: true }) as number;
+    const pageSize = db.pragma('page_size', { simple: true }) as number;
+    const freelist = db.pragma('freelist_count', { simple: true }) as number;
 
     return { pageCount, pageSize, freelist };
   } catch {
@@ -200,13 +246,14 @@ export function getDatabaseStats(): { pageCount: number; pageSize: number; freel
  * Vacuum the database to reclaim space
  */
 export function vacuumDatabase(): void {
-  if (!sqliteDatabase || !isInitialized) {
+  const db = getDb();
+  if (!db || !getInitFlag()) {
     return;
   }
 
   try {
     logger.info('Running VACUUM on SQLite database');
-    sqliteDatabase.exec('VACUUM');
+    db.exec('VACUUM');
     logger.info('VACUUM completed');
   } catch (error) {
     logger.error('Error running VACUUM', {
@@ -220,11 +267,16 @@ export function vacuumDatabase(): void {
  * Setup shutdown handlers for graceful cleanup
  */
 export function setupSQLiteShutdownHandlers(): void {
+  // The forked job-runner child has its own shutdown protocol via IPC; it
+  // must not register process-level signal handlers that would race with the
+  // parent's lifecycle.
+  if (process.env.QUILLTAP_JOB_CHILD === '1') return;
+
   // Prevent adding listeners multiple times (important for hot reloading)
-  if (shutdownHandlersRegistered) {
+  if (globalThis.__quilltapMainDatabaseShutdownHandlersRegistered) {
     return;
   }
-  shutdownHandlersRegistered = true;
+  globalThis.__quilltapMainDatabaseShutdownHandlersRegistered = true;
 
   const handleShutdown = () => {
     closeMountIndexSQLiteClient();
@@ -237,8 +289,16 @@ export function setupSQLiteShutdownHandlers(): void {
   process.on('SIGINT', handleShutdown);
 
   process.on('uncaughtException', (error) => {
+    if (isRecoverableContentParseError(error)) {
+      logger.warn('Uncaught content-parse error (recovered, server kept alive)', {
+        error: error.message,
+        stack: (error as Error).stack,
+      });
+      return;
+    }
     logger.error('Uncaught exception, closing SQLite connection', {
-      error: error instanceof Error ? error.message : String(error),
+      error: error.message,
+      stack: error.stack,
     });
     closeSQLiteClient();
     releaseActiveInstanceLock();
@@ -261,8 +321,22 @@ export function setupSQLiteShutdownHandlers(): void {
       return;
     }
 
+    // SyntaxError from JSON.parse on transient/malformed network content
+    // (e.g. an LLM provider returning an empty or truncated streaming chunk)
+    // is recoverable in the same way — the offending request fails, but the
+    // server should keep running long enough for the next one to succeed.
+    if (isRecoverableContentParseError(reason)) {
+      const err = reason as SyntaxError;
+      logger.warn('Unhandled content-parse rejection (recovered, server kept alive)', {
+        reason: err.message,
+        stack: err.stack,
+      });
+      return;
+    }
+
     logger.error('Unhandled rejection, closing SQLite connection', {
       reason: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
     });
     closeSQLiteClient();
     releaseActiveInstanceLock();
@@ -313,6 +387,22 @@ function isRecoverableNetworkRejection(reason: unknown): boolean {
   return false;
 }
 
+/**
+ * `JSON.parse` on a truncated/empty network response throws a `SyntaxError`
+ * that often surfaces here when an LLM provider hangs up mid-stream and the
+ * SDK's stream iterator is processing chunks from a fire-and-forget context
+ * (cleanup callbacks, abort handlers, log writers). These should fail the
+ * specific request, not the whole server. Anchored on `JSON.parse` in the
+ * stack so it stays narrow — a real source-level SyntaxError won't match.
+ */
+function isRecoverableContentParseError(reason: unknown): boolean {
+  return (
+    reason instanceof SyntaxError &&
+    typeof reason.stack === 'string' &&
+    reason.stack.includes('JSON.parse')
+  );
+}
+
 // ============================================================================
 // Raw Database Access
 // ============================================================================
@@ -325,7 +415,8 @@ function isRecoverableNetworkRejection(reason: unknown): boolean {
  * database access (e.g., for PRAGMA calls or .backup()).
  */
 export function getRawDatabase(): DatabaseType | null {
-  return sqliteDatabase && isInitialized ? sqliteDatabase : null;
+  const db = getDb();
+  return db && getInitFlag() ? db : null;
 }
 
 // ============================================================================
@@ -336,11 +427,12 @@ export function getRawDatabase(): DatabaseType | null {
  * Execute a function within a transaction
  */
 export function withTransaction<T>(fn: () => T): T {
-  if (!sqliteDatabase || !isInitialized) {
+  const db = getDb();
+  if (!db || !getInitFlag()) {
     throw new Error('SQLite database not initialized');
   }
 
-  const transaction = sqliteDatabase.transaction(fn);
+  const transaction = db.transaction(fn);
   return transaction();
 }
 
@@ -348,11 +440,12 @@ export function withTransaction<T>(fn: () => T): T {
  * Execute a function within an immediate transaction (write lock)
  */
 export function withImmediateTransaction<T>(fn: () => T): T {
-  if (!sqliteDatabase || !isInitialized) {
+  const db = getDb();
+  if (!db || !getInitFlag()) {
     throw new Error('SQLite database not initialized');
   }
 
-  const transaction = sqliteDatabase.transaction(fn);
+  const transaction = db.transaction(fn);
   return transaction.immediate();
 }
 
@@ -360,10 +453,11 @@ export function withImmediateTransaction<T>(fn: () => T): T {
  * Execute a function within an exclusive transaction (full lock)
  */
 export function withExclusiveTransaction<T>(fn: () => T): T {
-  if (!sqliteDatabase || !isInitialized) {
+  const db = getDb();
+  if (!db || !getInitFlag()) {
     throw new Error('SQLite database not initialized');
   }
 
-  const transaction = sqliteDatabase.transaction(fn);
+  const transaction = db.transaction(fn);
   return transaction.exclusive();
 }

@@ -266,6 +266,8 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       baseUrl,
       modelName,
       dimensions,
+      truncateToDimensions,
+      normalizeL2,
       isDefault = false,
     } = body;
 
@@ -283,8 +285,20 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       return badRequest('Model name is required');
     }
 
-    if (dimensions !== undefined && (typeof dimensions !== 'number' || dimensions <= 0)) {
+    if (dimensions !== undefined && dimensions !== null && (typeof dimensions !== 'number' || dimensions <= 0)) {
       return badRequest('Dimensions must be a positive number');
+    }
+
+    if (
+      truncateToDimensions !== undefined &&
+      truncateToDimensions !== null &&
+      (typeof truncateToDimensions !== 'number' || !Number.isInteger(truncateToDimensions) || truncateToDimensions <= 0)
+    ) {
+      return badRequest('truncateToDimensions must be a positive integer');
+    }
+
+    if (normalizeL2 !== undefined && typeof normalizeL2 !== 'boolean') {
+      return badRequest('normalizeL2 must be a boolean');
     }
 
     // Validate apiKeyId if provided
@@ -318,6 +332,8 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       baseUrl: baseUrl || null,
       modelName: modelName.trim(),
       dimensions: dimensions || null,
+      truncateToDimensions: truncateToDimensions ?? null,
+      normalizeL2: normalizeL2 ?? true,
       isDefault,
       tags: [],
     });

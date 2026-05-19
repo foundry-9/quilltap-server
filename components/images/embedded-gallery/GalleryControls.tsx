@@ -1,10 +1,7 @@
 'use client'
 
 interface GalleryControlsProps {
-  taggedCount: number
   totalCount: number
-  showOnlyTagged: boolean
-  onFilterToggle: (checked: boolean) => void
   onUploadClick: () => void
   onClearAvatarClick: () => void
   thumbnailSize: number
@@ -16,10 +13,7 @@ interface GalleryControlsProps {
 }
 
 export function GalleryControls({
-  taggedCount,
   totalCount,
-  showOnlyTagged,
-  onFilterToggle,
   onUploadClick,
   onClearAvatarClick,
   thumbnailSize,
@@ -33,24 +27,8 @@ export function GalleryControls({
     <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
       <div className="flex items-center gap-4">
         <p className="qt-text-small">
-          {showOnlyTagged
-            ? `${taggedCount} tagged photo${taggedCount !== 1 ? 's' : ''}`
-            : `${totalCount} photo${totalCount !== 1 ? 's' : ''} (${taggedCount} tagged)`
-          }
+          {totalCount} photo{totalCount !== 1 ? 's' : ''}
         </p>
-
-        {/* Filter Toggle */}
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showOnlyTagged}
-            onChange={(e) => {
-              onFilterToggle(e.target.checked)
-            }}
-            className="rounded border-input text-primary focus:ring-ring"
-          />
-          <span className="qt-text-secondary">Show only tagged</span>
-        </label>
       </div>
 
       <div className="flex items-center gap-2">
