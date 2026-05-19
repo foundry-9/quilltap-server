@@ -7,7 +7,6 @@ import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
-import type { SudoApprovalState, WorkspaceAcknowledgementState } from './useModalState'
 
 export interface PendingToolCall {
   id: string
@@ -49,13 +48,6 @@ interface SSEEvent {
     name: string
     success: boolean
     result?: any
-    requiresSudoApproval?: boolean
-    pendingSudoCommand?: {
-      command: string
-      parameters?: string[]
-      timeout_ms?: number
-    }
-    requiresWorkspaceAcknowledgement?: boolean
   }
   provider?: string
   modelName?: string
@@ -70,6 +62,8 @@ interface SSEEvent {
   nextSpeakerId?: string | null
   reason?: string
   isSilentMessage?: boolean
+  // The Courier: { pendingExternalTurn: true, messageId, participantId, characterName }
+  pendingExternalTurn?: boolean
 }
 
 /**
@@ -105,8 +99,6 @@ interface UseSSEStreamingParams {
   scrollOnStreamComplete: () => void
   setAttachedFiles: (files: any[]) => void
   inputRef: React.RefObject<ComposerEditorHandle | null>
-  setSudoApprovalState: (state: SudoApprovalState | null) => void
-  setWorkspaceAcknowledgementState: (state: WorkspaceAcknowledgementState | null) => void
   getFirstCharacterParticipant: () => import('../types').Participant | undefined
   setPauseState: (paused: boolean) => void
   /** Called when a tool result arrives, allowing the page to react to specific tools */
@@ -130,8 +122,6 @@ export function useSSEStreaming({
   scrollOnStreamComplete,
   setAttachedFiles,
   inputRef,
-  setSudoApprovalState,
-  setWorkspaceAcknowledgementState,
   getFirstCharacterParticipant,
   setPauseState,
   onToolResult: onToolResultCallback,
@@ -286,6 +276,13 @@ export function useSSEStreaming({
           }
         }
 
+        // The Courier: server placed a placeholder for a manual / clipboard
+        // turn. Refetch so the bubble appears with the Markdown blob + paste
+        // textarea. The accompanying `done` event closes the stream.
+        if (data.pendingExternalTurn) {
+          await fetchChat()
+        }
+
         // Handle turn start (chained character about to respond)
         // Server sends flat: { turnStart: true, participantId, characterName, chainDepth }
         if (data.turnStart) {
@@ -328,7 +325,7 @@ export function useSSEStreaming({
     }
 
     return fullContent
-  }, [scheduleStreamingContent, resetStreamingContent])
+  }, [scheduleStreamingContent, resetStreamingContent, fetchChat])
 
   // Handle common error extraction
   const extractErrorMessage = useCallback((err: unknown): string => {
@@ -475,33 +472,13 @@ export function useSSEStreaming({
           }
         },
         onToolResult: (data) => {
-          const { index, name, success, result, requiresSudoApproval, pendingSudoCommand, requiresWorkspaceAcknowledgement } = data.toolResult!
+          const { index, name, success, result } = data.toolResult!
 
           setPendingToolCalls(prev => prev.map((tc, idx) =>
             (index !== undefined && idx === index) || (index === undefined && tc.name === name)
               ? { ...tc, status: success ? 'success' : 'error', result }
               : tc
           ))
-
-          if (requiresSudoApproval && pendingSudoCommand) {
-            setSudoApprovalState({
-              isOpen: true,
-              pendingSudoCommand: {
-                command: pendingSudoCommand.command,
-                parameters: pendingSudoCommand.parameters,
-                timeout_ms: pendingSudoCommand.timeout_ms,
-              },
-              respondingParticipantId: respondingParticipantId ?? undefined,
-            })
-          }
-
-          if (requiresWorkspaceAcknowledgement) {
-            setWorkspaceAcknowledgementState({
-              isOpen: true,
-              toolName: name,
-              respondingParticipantId: respondingParticipantId ?? undefined,
-            })
-          }
 
           // Handle help_navigate: navigate the current window to the target URL
           if (name === 'help_navigate' && success && result?.navigationUrl) {
@@ -538,6 +515,21 @@ export function useSSEStreaming({
             setWaitingForResponse(false)
             setSending(false)
             setRespondingParticipantId(null)
+            return
+          }
+
+          // The Courier: the server parked a placeholder for a manual /
+          // clipboard turn and already pushed an SSE pendingExternalTurn that
+          // triggered fetchChat. The placeholder is now in the messages list
+          // via that refresh — pushing another optimistic copy here would
+          // create a duplicate React key.
+          if (data.pendingExternalTurn) {
+            resetStreamingContent()
+            setStreaming(false)
+            setWaitingForResponse(false)
+            setRespondingParticipantId(null)
+            scrollOnStreamComplete()
+            await fetchChat()
             return
           }
 
@@ -645,7 +637,7 @@ export function useSSEStreaming({
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, setSudoApprovalState, setWorkspaceAcknowledgementState, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.

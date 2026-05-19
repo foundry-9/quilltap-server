@@ -34,8 +34,20 @@ Once you have selected a tool, a form appears with the tool's parameters:
 - **Optional parameters** can be included by checking the checkbox next to their name
 - Each parameter includes a description explaining what it expects
 - A collapsible **arguments preview** at the bottom shows the exact JSON that will be sent
+- A **Private (whisper)** checkbox lets you mark the run as confidential — see "Private Runs" below
 
-Click **Run Tool** when you are satisfied with your parameters. The tool executes, and its result appears in the chat as a tool message — visible to both you and the AI on subsequent turns.
+Click **Run Tool** when you are satisfied with your parameters. The tool executes, and its result appears as its own row in the chat — announced by **Prospero**, with your name in the attribution line ("Charles ran `rng`") and the request and response tucked into collapsible, copyable monospace panels. You and the AI can both see it on subsequent turns, unless the run was marked private.
+
+## Private Runs
+
+Tick the **Private (whisper)** box before pressing **Run Tool** when the result is for your eyes only — a die you'd rather the cast didn't witness, a peek at a memory you don't want surfacing in the conversation, a debug query.
+
+A private run:
+
+- **Hides from the chat by default.** Toggle "show all whispers" in The Salon to make it appear (it'll be marked with a small "whisper" label).
+- **Is excluded from every character's context.** No participant — single-character or multi — receives the run in their LLM context. As far as your cast is concerned, it never happened.
+
+Public runs (the default) behave the way they always have: visible to everyone, included in subsequent turns.
 
 ## What Can You Run?
 
@@ -54,9 +66,9 @@ The only tools excluded are internal-only mechanisms that would be of no use to 
 
 ## A Note on Results
 
-Tool results created through Run Tool are marked as **user-initiated** and appear in the chat history just as they would if the AI had used the tool. This means:
+Tool results created through Run Tool are marked as **user-initiated** and appear in the chat history as Prospero-authored rows. This means:
 
-- The AI can see and reference the results on its next turn
+- The AI can see and reference public results on its next turn (private runs are excluded from every character's context)
 - Results persist in the chat history
 - Image generation results include any generated images as attachments
 

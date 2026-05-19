@@ -159,7 +159,7 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
   try {
     const fs = await import('fs');
     const { getSQLiteDatabasePath, getLLMLogsDatabasePath } = await import('@/lib/paths');
-    const { isDatabaseEncrypted } = await import('@/lib/startup/db-encryption-state');
+    const { getDatabaseEncryptionState } = await import('@/lib/startup/db-encryption-state');
     const { convertDatabaseToEncrypted } = await import('@/lib/startup/db-encryption-converter');
 
     const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
@@ -177,7 +177,13 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
       } catch { /* ignore */ }
 
       for (const dbPath of [getSQLiteDatabasePath(), getLLMLogsDatabasePath()]) {
-        if (fs.default.existsSync(dbPath) && !isDatabaseEncrypted(dbPath)) {
+        if (!fs.default.existsSync(dbPath)) continue;
+        const state = getDatabaseEncryptionState(dbPath);
+        if (state === 'unknown') {
+          unlockLogger.warn('Skipping post-setup encryption — header read failed; will retry on next restart', { dbPath });
+          continue;
+        }
+        if (state === 'plaintext') {
           unlockLogger.info('Encrypting existing plaintext database after setup', { dbPath });
           convertDatabaseToEncrypted(dbPath, pepper);
         }
@@ -257,6 +263,8 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
   // If the server was in locked mode, trigger deferred initialization
   if (startupState.getPhase() === 'locked') {
     unlockLogger.info('Server unlocked — triggering deferred startup initialization');
+    const { startupProgress } = await import('@/lib/startup/progress');
+    startupProgress.setCurrent('subsystem:unlocking');
 
     // Run the rest of the startup sequence asynchronously
     // (The register() function in instrumentation.ts already returned,
@@ -271,6 +279,11 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
         });
         startupState.setPhase('failed');
         startupState.setError(err instanceof Error ? err.message : String(err));
+        startupProgress.publish({
+          rawLabel: 'subsystem:errored',
+          level: 'error',
+          detail: err instanceof Error ? err.message : String(err),
+        });
       }
     });
   }

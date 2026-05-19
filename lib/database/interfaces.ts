@@ -14,7 +14,7 @@ import { z } from 'zod';
 /**
  * Comparison operators for query filters
  */
-export type ComparisonOperator = '$eq' | '$ne' | '$gt' | '$gte' | '$lt' | '$lte' | '$in' | '$nin' | '$exists' | '$like';
+export type ComparisonOperator = '$eq' | '$ieq' | '$ne' | '$gt' | '$gte' | '$lt' | '$lte' | '$in' | '$nin' | '$exists' | '$like';
 
 /**
  * Logical operators for combining filters
@@ -26,6 +26,8 @@ export type LogicalOperator = '$and' | '$or' | '$not';
  */
 export interface ComparisonCondition {
   $eq?: unknown;
+  /** Case-insensitive equality (ASCII NOCASE). Use for filesystem paths and similar identifiers. */
+  $ieq?: unknown;
   $ne?: unknown;
   $gt?: number | string | Date;
   $gte?: number | string | Date;

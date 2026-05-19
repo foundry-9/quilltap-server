@@ -97,6 +97,10 @@ describe('postLanternImageNotification', () => {
     expect(message.attachments).toEqual(['f1'])
     expect(typeof message.content).toBe('string')
     expect(message.content as string).toContain('Algernon')
+    // Spec: every image announcement must carry the file UUID inline so any
+    // character reading the message in chat history has the handle required
+    // to call keep_image / attach_image on it.
+    expect(message.content as string).toContain('f1')
     expect(addLink).toHaveBeenCalledWith('f1', message.id)
   })
 
@@ -135,12 +139,11 @@ describe('postLanternImageNotification', () => {
     expect(message.content as string).toContain('Bertie Wooster')
   })
 
-  it('includes the generation prompt in avatar announcements when available', async () => {
+  it('includes the generation prompt in avatar announcements when passed in', async () => {
     const addMessage = jest.fn()
     mockGetRepositories.mockReturnValue(makeRepos({
       chat: { id: 'c1', projectId: null, alertCharactersOfLanternImages: true },
       project: null,
-      file: { id: 'f1', generationPrompt: 'Algernon in a velvet smoking jacket' },
       addMessage,
     }))
 
@@ -148,19 +151,20 @@ describe('postLanternImageNotification', () => {
       chatId: 'c1',
       fileId: 'f1',
       kind: { kind: 'avatar', characterName: 'Algernon' },
+      prompt: 'Algernon in a velvet smoking jacket',
     })
 
     const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
-    expect(message.content as string).toContain('aiming for')
+    expect(message.content as string).toContain('is requesting a new portrait be commissioned')
+    expect(message.content as string).toContain('omits unnecessary detail')
     expect(message.content as string).toContain('velvet smoking jacket')
   })
 
-  it('includes the generation prompt in background announcements when available', async () => {
+  it('includes the generation prompt in background announcements when passed in', async () => {
     const addMessage = jest.fn()
     mockGetRepositories.mockReturnValue(makeRepos({
       chat: { id: 'c1', projectId: null, alertCharactersOfLanternImages: true },
       project: null,
-      file: { id: 'f1', generationPrompt: 'a moonlit conservatory in bloom' },
       addMessage,
     }))
 
@@ -168,6 +172,7 @@ describe('postLanternImageNotification', () => {
       chatId: 'c1',
       fileId: 'f1',
       kind: { kind: 'background' },
+      prompt: 'a moonlit conservatory in bloom',
     })
 
     const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
@@ -175,12 +180,11 @@ describe('postLanternImageNotification', () => {
     expect(message.content as string).toContain('moonlit conservatory')
   })
 
-  it('falls back to the plain wording when no generation prompt is on the file', async () => {
+  it('falls back to the plain wording when no prompt is passed', async () => {
     const addMessage = jest.fn()
     mockGetRepositories.mockReturnValue(makeRepos({
       chat: { id: 'c1', projectId: null, alertCharactersOfLanternImages: true },
       project: null,
-      file: { id: 'f1', generationPrompt: null },
       addMessage,
     }))
 
@@ -193,6 +197,33 @@ describe('postLanternImageNotification', () => {
     const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
     expect(message.content as string).not.toContain('aiming for')
     expect(message.content as string).toContain('projected a new backdrop')
+    expect(message.content as string).toContain('f1')
+  })
+
+  it('includes the file UUID in every announcement variant', async () => {
+    const cases: Array<{ kind: Parameters<typeof postLanternImageNotification>[0]['kind']; prompt?: string }> = [
+      { kind: { kind: 'avatar', characterName: 'Algernon' } },
+      { kind: { kind: 'avatar', characterName: 'Algernon' }, prompt: 'velvet jacket' },
+      { kind: { kind: 'background' } },
+      { kind: { kind: 'background' }, prompt: 'moonlit conservatory' },
+      { kind: { kind: 'character-image', requesterName: 'Bertie' } },
+    ]
+    for (const c of cases) {
+      const addMessage = jest.fn()
+      mockGetRepositories.mockReturnValue(makeRepos({
+        chat: { id: 'c1', projectId: null, alertCharactersOfLanternImages: true },
+        project: null,
+        addMessage,
+      }))
+      await postLanternImageNotification({
+        chatId: 'c1',
+        fileId: 'photo-uuid-xyz',
+        kind: c.kind,
+        prompt: c.prompt,
+      })
+      const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
+      expect(message.content as string).toContain('photo-uuid-xyz')
+    }
   })
 
   it('does not throw when addMessage fails', async () => {

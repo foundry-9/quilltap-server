@@ -102,6 +102,22 @@ export const LLMLogCacheUsageSchema = z.object({
 export type LLMLogCacheUsage = z.infer<typeof LLMLogCacheUsageSchema>;
 
 // ============================================================================
+// REQUEST HASHES
+// ============================================================================
+
+// Per-tier prefix hashes (SHA-256 truncated to 16 hex chars) used to verify
+// that the cacheable prefix of a request is byte-stable across turns. A drift
+// in any tier's hash signals that the cache will miss; observability for
+// Phase 1 of the LLM cost-reduction plan.
+export const LLMLogRequestHashesSchema = z.object({
+  systemBlock1Hash: z.string().optional(),
+  systemBlock2Hash: z.string().optional(),
+  toolsArrayHash: z.string().optional(),
+  historyTailHash: z.string().optional(),
+});
+export type LLMLogRequestHashes = z.infer<typeof LLMLogRequestHashesSchema>;
+
+// ============================================================================
 // LLM LOG ENTITY
 // ============================================================================
 
@@ -130,6 +146,9 @@ export const LLMLogSchema = z.object({
   // Token usage
   usage: LLMLogTokenUsageSchema.nullable().optional(),
   cacheUsage: LLMLogCacheUsageSchema.nullable().optional(),
+
+  // Per-tier prefix hashes for cache-stability diagnostics
+  requestHashes: LLMLogRequestHashesSchema.nullable().optional(),
 
   // Timing
   durationMs: z.number().nullable().optional(),

@@ -57,13 +57,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         return badRequest('Mount point is disabled');
       }
 
-      logger.debug('[Mount Points v1] Creating folder', {
-        mountPointId: id,
-        relativePath: rel,
-        mountType: mountPoint.mountType,
-        userId: user.id,
-      });
-
       if (mountPoint.mountType === 'database') {
         const result = await createDatabaseFolder(id, rel);
         logger.info('[Mount Points v1] Database folder created', {

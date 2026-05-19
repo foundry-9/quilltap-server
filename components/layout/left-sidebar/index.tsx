@@ -27,9 +27,3 @@ export function LeftSidebar() {
   )
 }
 
-// Re-export components for convenience
-export { SidebarSection } from './sidebar-section'
-export { SidebarItem, ViewAllLink } from './sidebar-item'
-export { SidebarHeader } from './sidebar-header'
-export { SidebarFooter } from './sidebar-footer'
-export { CollapsedNav } from './collapsed-nav'

@@ -25,7 +25,9 @@ interface UseAIWizardProps {
   characterName: string
   currentData: {
     title?: string
+    identity?: string
     description?: string
+    manifesto?: string
     personality?: string
     scenarios?: Array<{ id: string; title: string; content: string }>
     exampleDialogues?: string
@@ -129,7 +131,9 @@ export function useAIWizard({
     // Name is available if characterName is empty
     if (!characterName.trim()) fields.push('name')
     if (!currentData.title?.trim()) fields.push('title')
+    if (!currentData.identity?.trim()) fields.push('identity')
     if (!currentData.description?.trim()) fields.push('description')
+    if (!currentData.manifesto?.trim()) fields.push('manifesto')
     if (!currentData.personality?.trim()) fields.push('personality')
     // Scenarios are always available — you can always generate more
     fields.push('scenarios')

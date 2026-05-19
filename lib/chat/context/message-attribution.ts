@@ -5,7 +5,7 @@
  * Converts messages to the responding character's perspective for context building.
  */
 
-import type { Character, ChatParticipantBase } from '@/lib/schemas/types'
+import type { Character, ChatParticipantBase, ParticipantStatus } from '@/lib/schemas/types'
 import type { MultiCharacterMessage } from '@/lib/llm/message-formatter'
 import { logger } from '@/lib/logger'
 import { isParticipantPresent } from '@/lib/schemas/chat.types'
@@ -25,6 +25,28 @@ export interface MessageWithParticipant {
   createdAt?: string
   /** Target participant IDs for whisper messages */
   targetParticipantIds?: string[] | null
+  /**
+   * Structured payload on Host announcements. For presence transitions both
+   * `participantId` and `toStatus` are set; for off-scene-character
+   * introductions only `introducedCharacterIds` is set. Presence tracking
+   * filters on the first shape and ignores the second.
+   */
+  hostEvent?: {
+    participantId?: string
+    toStatus?: ParticipantStatus
+    introducedCharacterIds?: string[]
+  } | null
+}
+
+/**
+ * A presence window for a participant: an interval [from, to) during which the
+ * participant was 'active' or 'silent' in the chat. `to` is null on the
+ * trailing open window (still present right now). Times are ISO strings; lex
+ * order matches chronological order so plain string compares work.
+ */
+export interface PresenceWindow {
+  from: string
+  to: string | null
 }
 
 /**
@@ -54,6 +76,88 @@ export function filterMessagesByHistoryAccess(
   })
 
   return filteredMessages
+}
+
+/**
+ * Compute the presence windows for a participant by walking Host status
+ * announcements (`hostEvent.participantId === participant.id`) in
+ * chronological order.
+ *
+ * Each Host status event marks a transition; an interval is "open" while the
+ * participant is `active` or `silent`, and closed by a transition to `absent`
+ * or `removed`. The trailing open window — still present right now — has
+ * `to: null`.
+ *
+ * If no Host events exist for the participant (legacy data, or freshly added
+ * with nothing else having happened), the participant is assumed to be
+ * present from `participant.createdAt` onward (one open window).
+ *
+ * Callers with `participant.hasHistoryAccess === true` should skip this
+ * filter entirely — they see the whole transcript regardless of presence.
+ */
+export function computePresenceWindowsForParticipant(
+  messages: MessageWithParticipant[],
+  participant: ChatParticipantBase,
+): PresenceWindow[] {
+  const events = messages
+    .filter(
+      m =>
+        m.hostEvent &&
+        m.hostEvent.participantId === participant.id &&
+        m.hostEvent.toStatus !== undefined &&
+        m.createdAt,
+    )
+    .map(m => ({ at: m.createdAt as string, toStatus: m.hostEvent!.toStatus as ParticipantStatus }))
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
+
+  const windows: PresenceWindow[] = []
+  let openFrom: string | null = null
+
+  if (events.length === 0) {
+    return [{ from: participant.createdAt, to: null }]
+  }
+
+  for (const event of events) {
+    const present = event.toStatus === 'active' || event.toStatus === 'silent'
+    if (present) {
+      if (openFrom === null) {
+        openFrom = event.at
+      }
+    } else {
+      if (openFrom !== null) {
+        windows.push({ from: openFrom, to: event.at })
+        openFrom = null
+      }
+    }
+  }
+
+  if (openFrom !== null) {
+    windows.push({ from: openFrom, to: null })
+  }
+
+  return windows
+}
+
+/**
+ * Filter messages to those that fall inside one of the participant's presence
+ * windows. Messages without `createdAt` are dropped (we can't place them).
+ *
+ * `from` is inclusive, `to` is exclusive — so a message at exactly the moment
+ * a participant goes 'absent' is not visible to them. A null `to` means the
+ * window is still open.
+ */
+export function filterMessagesByPresenceWindows(
+  messages: MessageWithParticipant[],
+  windows: PresenceWindow[],
+): MessageWithParticipant[] {
+  if (windows.length === 0) {
+    return []
+  }
+  return messages.filter(msg => {
+    if (!msg.createdAt) return false
+    const t = msg.createdAt
+    return windows.some(w => t >= w.from && (w.to === null || t < w.to))
+  })
 }
 
 /**
@@ -150,6 +254,7 @@ export function attributeMessagesForCharacter(
     return {
       role,
       content: msg.content,
+      id: msg.id,
       name: participantName,
       participantId: msg.participantId || undefined,
       thoughtSignature: msg.thoughtSignature,

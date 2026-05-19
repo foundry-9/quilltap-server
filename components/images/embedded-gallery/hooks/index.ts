@@ -1,1 +1,0 @@
-export { useGalleryData } from './useGalleryData'

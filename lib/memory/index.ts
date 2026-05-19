@@ -8,7 +8,8 @@
 
 // Cheap LLM Tasks
 export {
-  extractMemoryFromMessage,
+  extractSelfMemoriesFromTurn,
+  extractOtherMemoriesFromTurn,
   summarizeChat,
   titleChat,
   updateContextSummary,
@@ -16,23 +17,25 @@ export {
   batchExtractMemories,
   considerTitleUpdate,
   deriveSceneContext,
+  renderCanonBlock,
+  loadCanonForSelf,
+  loadCanonForObserverAboutSubject,
+  NO_CANON_FALLBACK,
   type MemoryCandidate,
   type ChatMessage,
   type Attachment,
   type CheapLLMTaskResult,
   type DeriveSceneContextInput,
+  type CanonSource,
 } from './cheap-llm-tasks'
 
-// Memory Processor (Sprint 3: Auto-Memory Formation)
+// Memory Processor (per-turn extraction)
 export {
-  processMessageForMemory,
-  processMessageForMemoryAsync,
-  processInterCharacterMemory,
-  processInterCharacterMemoryAsync,
-  batchProcessChatForMemories,
-  type MemoryExtractionContext,
-  type InterCharacterMemoryContext,
-  type MemoryProcessingResult,
+  processTurnForMemory,
+  type TurnMemoryExtractionContext,
+  type TurnMemoryProcessingResult,
+  type TurnTranscript,
+  type TurnCharacterSlice,
 } from './memory-processor'
 
 // Format Utilities

@@ -216,10 +216,6 @@ export async function exportCharacters(
       let wardrobeItems: WardrobeItem[] = [];
       try {
         wardrobeItems = await globalRepos.wardrobe.findByCharacterIdRaw(id);
-        logger.debug('Loaded wardrobe items for character export', {
-          characterId: id,
-          wardrobeItemCount: wardrobeItems.length,
-        });
       } catch (error) {
         logger.warn('Failed to load wardrobe items for character export', {
           characterId: id,
@@ -232,10 +228,6 @@ export async function exportCharacters(
       try {
         pluginData = await globalRepos.characterPluginData.getPluginDataMap(id);
         if (Object.keys(pluginData).length > 0) {
-          logger.debug('Loaded plugin data for character export', {
-            characterId: id,
-            pluginCount: Object.keys(pluginData).length,
-          });
         }
       } catch (error) {
         logger.warn('Failed to load plugin data for character export', {
@@ -550,6 +542,18 @@ export async function exportDocumentStores(
     if (mp.mountType === 'database') {
       const docs = await repos.docMountDocuments.findByMountPointId(mp.id);
       for (const d of docs) {
+        // doc_mount_documents only ever holds text content
+        // (markdown/txt/json/jsonl). The joined view carries the file
+        // row's fileType, which can also be 'pdf'/'docx'/'blob' for blob
+        // mirrors — skip those here; blobs are exported separately below.
+        if (
+          d.fileType !== 'markdown' &&
+          d.fileType !== 'txt' &&
+          d.fileType !== 'json' &&
+          d.fileType !== 'jsonl'
+        ) {
+          continue;
+        }
         documents.push({
           mountPointId: d.mountPointId,
           relativePath: d.relativePath,

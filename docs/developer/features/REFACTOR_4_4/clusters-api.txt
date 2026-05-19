@@ -1,0 +1,704 @@
+=== AREA: api ===
+Total signatures: 3539
+Unique names: 2933
+Names appearing in >=2 files: 247
+
+======================================================================
+TOP EXACT-NAME CLUSTERS (same function name across files)
+======================================================================
+
+## delete  [score=79.17, 36 files, 37 defs]
+   lib/database/repositories/background-jobs.repository.ts:430  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/character-plugin-data.repository.ts:136  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/characters.repository.ts:266  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/chat-documents.repository.ts:54  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/chat-settings.repository.ts:108  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/chats.repository.ts:289  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/connection-profiles.repository.ts:124  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/conversation-annotations.repository.ts:52  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/conversation-chunks.repository.ts:70  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/doc-mount-blobs.repository.ts:316  async delete(id: string) : Promise<boolean>
+   ... and 27 more
+
+## findById  [score=75.86, 35 files, 36 defs]
+   lib/database/repositories/background-jobs.repository.ts:48  async findById(id: string) : Promise<BackgroundJob | null>
+   lib/database/repositories/character-plugin-data.repository.ts:26  async findById(id: string) : Promise<CharacterPluginData | null>
+   lib/database/repositories/characters.repository.ts:33  async findById(id: string) : Promise<Character | null>
+   lib/database/repositories/chat-documents.repository.ts:35  async findById(id: string) : Promise<ChatDocument | null>
+   lib/database/repositories/chat-settings.repository.ts:26  async findById(id: string) : Promise<ChatSettings | null>
+   lib/database/repositories/chats.repository.ts:137  async findById(id: string) : Promise<ChatMetadata | null>
+   lib/database/repositories/connection-profiles.repository.ts:36  async findById(id: string) : Promise<ConnectionProfile | null>
+   lib/database/repositories/conversation-annotations.repository.ts:33  async findById(id: string) : Promise<ConversationAnnotation | null>
+   lib/database/repositories/conversation-chunks.repository.ts:51  async findById(id: string) : Promise<ConversationChunk | null>
+   lib/database/repositories/doc-mount-blobs.repository.ts:117  async findById(id: string) : Promise<DocMountBlobMetadata | null>
+   ... and 26 more
+
+## update  [score=73.86, 34 files, 35 defs]
+   lib/database/repositories/background-jobs.repository.ts:310  async update(id: string, data: Partial<BackgroundJob>) : Promise<BackgroundJob | null>
+   lib/database/repositories/character-plugin-data.repository.ts:116  async update(id: string, data: Partial<CharacterPluginData>) : Promise<CharacterPluginData | null>
+   lib/database/repositories/characters.repository.ts:232  async update(id: string, data: Partial<Character>) : Promise<Character | null>
+   lib/database/repositories/chat-documents.repository.ts:50  async update(id: string, data: Partial<ChatDocument>) : Promise<ChatDocument | null>
+   lib/database/repositories/chat-settings.repository.ts:89  async update(id: string, data: Partial<ChatSettings>) : Promise<ChatSettings | null>
+   lib/database/repositories/chats.repository.ts:275  async update(id: string, data: Partial<ChatMetadata>) : Promise<ChatMetadata | null>
+   lib/database/repositories/connection-profiles.repository.ts:105  async update(id: string, data: Partial<ConnectionProfile>) : Promise<ConnectionProfile | null>
+   lib/database/repositories/conversation-annotations.repository.ts:48  async update(id: string, data: Partial<ConversationAnnotation>) : Promise<ConversationAnnotation | null>
+   lib/database/repositories/conversation-chunks.repository.ts:66  async update(id: string, data: Partial<ConversationChunk>) : Promise<ConversationChunk | null>
+   lib/database/repositories/doc-mount-chunks.repository.ts:113  async update(id: string, data: Partial<DocMountChunk>) : Promise<DocMountChunk | null>
+   ... and 25 more
+
+## findAll  [score=73.71, 34 files, 35 defs]
+   lib/database/repositories/background-jobs.repository.ts:55  async findAll() : Promise<BackgroundJob[]>
+   lib/database/repositories/character-plugin-data.repository.ts:33  async findAll() : Promise<CharacterPluginData[]>
+   lib/database/repositories/characters.repository.ts:51  async findAll() : Promise<Character[]>
+   lib/database/repositories/chat-documents.repository.ts:39  async findAll() : Promise<ChatDocument[]>
+   lib/database/repositories/chat-settings.repository.ts:50  async findAll() : Promise<ChatSettings[]>
+   lib/database/repositories/chats.repository.ts:144  async findAll() : Promise<ChatMetadata[]>
+   lib/database/repositories/connection-profiles.repository.ts:43  async findAll() : Promise<ConnectionProfile[]>
+   lib/database/repositories/conversation-annotations.repository.ts:37  async findAll() : Promise<ConversationAnnotation[]>
+   lib/database/repositories/conversation-chunks.repository.ts:55  async findAll() : Promise<ConversationChunk[]>
+   lib/database/repositories/doc-mount-chunks.repository.ts:102  async findAll() : Promise<DocMountChunk[]>
+   ... and 25 more
+
+## create  [score=65.80, 31 files, 32 defs]
+   lib/database/repositories/background-jobs.repository.ts:251  async create(data: Omit<BackgroundJob, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<BackgroundJob>
+   lib/database/repositories/character-plugin-data.repository.ts:89  async create(data: Omit<CharacterPluginData, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<CharacterPluginData>
+   lib/database/repositories/characters.repository.ts:182  async create(data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<Character>
+   lib/database/repositories/chat-settings.repository.ts:65  async create(data: Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<ChatSettings>
+   lib/database/repositories/chats.repository.ts:216  async create(data: Omit<ChatMetadataInput, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<ChatMetadata>
+   lib/database/repositories/connection-profiles.repository.ts:81  async create(data: Omit<ConnectionProfile, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<ConnectionProfile>
+   lib/database/repositories/doc-mount-blobs.repository.ts:203  async create(input: CreateBlobInput) : Promise<DocMountBlobMetadata>
+   lib/database/repositories/doc-mount-chunks.repository.ts:106  async create(data: Omit<DocMountChunk, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<DocMountChunk>
+   lib/database/repositories/doc-mount-documents.repository.ts:96  async create(data: Omit<DocMountDocument, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<DocMountDocument>
+   lib/database/repositories/doc-mount-files.repository.ts:108  async create(data: Omit<DocMountFile, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<DocMountFile>
+   ... and 22 more
+
+## getCollection  [score=31.27, 13 files, 14 defs]
+   lib/database/backends/sqlite/backend.ts:668  getCollection(name: string) : DatabaseCollection<T>
+   lib/database/backends/sqlite/backend.ts:894  getCollection(name: string) : DatabaseCollection<T>
+   lib/database/manager.ts:224  async getCollection(name: string) : Promise<DatabaseCollection<T>>
+   lib/database/repositories/base.repository.ts:99  async getCollection() : Promise<DatabaseCollection<T>>
+   lib/database/repositories/conversation-chunks.repository.ts:40  async getCollection() : Promise<DatabaseCollection<ConversationChunk>>
+   lib/database/repositories/doc-mount-chunks.repository.ts:46  async getCollection() : Promise<DatabaseCollection<DocMountChunk>>
+   lib/database/repositories/doc-mount-documents.repository.ts:28  async getCollection() : Promise<DatabaseCollection<DocMountDocument>>
+   lib/database/repositories/doc-mount-files.repository.ts:38  async getCollection() : Promise<DatabaseCollection<DocMountFile>>
+   lib/database/repositories/doc-mount-folders.repository.ts:36  async getCollection() : Promise<DatabaseCollection<DocMountFolder>>
+   lib/database/repositories/doc-mount-points.repository.ts:38  async getCollection() : Promise<DatabaseCollection<DocMountPoint>>
+   ... and 4 more
+
+## findByUserId  [score=28.98, 12 files, 12 defs]
+   lib/database/repositories/background-jobs.repository.ts:104  async findByUserId(userId: string, status?: BackgroundJobStatus) : Promise<BackgroundJob[]>
+   lib/database/repositories/base.repository.ts:481  async findByUserId(userId: string) : Promise<T[]>
+   lib/database/repositories/characters.repository.ts:69  async findByUserId(userId: string) : Promise<Character[]>
+   lib/database/repositories/chat-settings.repository.ts:38  async findByUserId(userId: string) : Promise<ChatSettings | null>
+   lib/database/repositories/chats.repository.ts:151  async findByUserId(userId: string) : Promise<ChatMetadata[]>
+   lib/database/repositories/embedding-status.repository.ts:88  async findByUserId(userId: string) : Promise<EmbeddingStatus[]>
+   lib/database/repositories/files.repository.ts:115  async findByUserId(userId: string) : Promise<FileEntry[]>
+   lib/database/repositories/llm-logs.repository.ts:100  async findByUserId(userId: string, limit: number = 50, offset: number = 0) : Promise<LLMLog[]>
+   lib/database/repositories/plugin-config.repository.ts:55  async findByUserId(userId: string) : Promise<PluginConfig[]>
+   lib/database/repositories/prompt-templates.repository.ts:193  async findByUserId(userId: string) : Promise<PromptTemplate[]>
+   ... and 2 more
+
+## getStats  [score=23.25, 8 files, 8 defs]
+   lib/database/repositories/background-jobs.repository.ts:444  async getStats(userId?: string) : Promise<QueueStats>
+   lib/embedding/vector-store.ts:560  getStats()
+   lib/mount-index/mount-chunk-cache.ts:107  getStats()
+   lib/plugins/abstract-provider-registry.ts:241  getStats()
+   lib/plugins/registry.ts:184  getStats()
+   lib/plugins/system-prompt-registry.ts:287  getStats()
+   lib/plugins/tool-registry.ts:449  getStats()
+   lib/themes/theme-registry.ts:828  getStats()
+
+## findByChatId  [score=20.09, 7 files, 7 defs]
+   lib/database/repositories/chat-documents.repository.ts:84  async findByChatId(chatId: string) : Promise<ChatDocument[]>
+   lib/database/repositories/conversation-annotations.repository.ts:66  async findByChatId(chatId: string) : Promise<ConversationAnnotation[]>
+   lib/database/repositories/conversation-chunks.repository.ts:84  async findByChatId(chatId: string) : Promise<ConversationChunk[]>
+   lib/database/repositories/llm-logs.repository.ts:148  async findByChatId(chatId: string) : Promise<LLMLog[]>
+   lib/database/repositories/memories.repository.ts:815  async findByChatId(chatId: string) : Promise<Memory[]>
+   lib/database/repositories/terminal-sessions.repository.ts:97  async findByChatId(chatId: string) : Promise<TerminalSession[]>
+   lib/repositories/user-scoped.ts:469  async findByChatId(chatId: string) : Promise<LLMLog[]>
+
+## createEmptyState  [score=19.94, 7 files, 7 defs]
+   lib/plugins/moderation-provider-registry.ts:43  createEmptyState() : ModerationProviderRegistryState
+   lib/plugins/provider-registry.ts:63  createEmptyState() : ProviderRegistryState
+   lib/plugins/registry.ts:45  createEmptyState() : PluginRegistryState
+   lib/plugins/search-provider-registry.ts:49  createEmptyState() : SearchProviderRegistryState
+   lib/plugins/system-prompt-registry.ts:106  createEmptyState() : SystemPromptRegistryState
+   lib/plugins/tool-registry.ts:51  createEmptyState() : ToolRegistryState
+   lib/themes/theme-registry.ts:209  createEmptyState() : ThemeRegistryState
+
+## findByCharacterId  [score=19.70, 7 files, 10 defs]
+   lib/database/repositories/character-plugin-data.repository.ts:42  async findByCharacterId(characterId: string) : Promise<CharacterPluginData[]>
+   lib/database/repositories/chats.repository.ts:158  async findByCharacterId(characterId: string) : Promise<ChatMetadata[]>
+   lib/database/repositories/llm-logs.repository.ts:202  async findByCharacterId(characterId: string) : Promise<LLMLog[]>
+   lib/database/repositories/memories.repository.ts:89  async findByCharacterId(characterId: string) : Promise<Memory[]>
+   lib/database/repositories/projects.repository.ts:125  async findByCharacterId(characterId: string) : Promise<Project[]>
+   lib/database/repositories/wardrobe.repository.ts:65  async findByCharacterId(characterId: string, includeArchived = false) : Promise<WardrobeItem[]>
+   lib/repositories/user-scoped.ts:215  async findByCharacterId(characterId: string) : Promise<ChatMetadata[]>
+   lib/repositories/user-scoped.ts:332  async findByCharacterId(characterId: string) : Promise<Memory[]>
+   lib/repositories/user-scoped.ts:388  async findByCharacterId(characterId: string) : Promise<Project[]>
+   lib/repositories/user-scoped.ts:474  async findByCharacterId(characterId: string) : Promise<LLMLog[]>
+
+## handleGet  [score=19.50, 6 files, 6 defs]
+   app/api/v1/chats/[id]/handlers/get.ts:30  async handleGet(req: NextRequest, ctx: AuthenticatedContext, chatId: string) : Promise<NextResponse>
+   app/api/v1/files/[id]/handlers/get.ts:5  async handleGet(request: NextRequest, ctx: AuthenticatedContext, fileId: string) : Promise<NextResponse>
+   app/api/v1/files/handlers/get.ts:7  async handleGet(request: NextRequest, ctx: AuthenticatedContext) : Promise<NextResponse>
+   app/api/v1/files/proxy/[...key]/route.ts:42  async handleGet(request: NextRequest, ctx: RequestContext, { key: keyArray }: { key: string[] }) : Promise<NextResponse>
+   app/api/v1/help-chats/[id]/route.ts:69  async handleGet(_req: NextRequest, context: AuthenticatedContext, id: string) : Promise<NextResponse>
+   app/api/v1/projects/[id]/handlers/get.ts:30  async handleGet(req: NextRequest, ctx: AuthenticatedContext, projectId: string) : Promise<NextResponse>
+
+## get  [score=19.17, 6 files, 6 defs]
+   lib/chat/timestamp-utils.ts:57  get(type: string) : string
+   lib/plugins/registry.ts:116  get(name: string) : LoadedPlugin | null
+   lib/plugins/system-prompt-registry.ts:226  get(promptId: string) : LoadedSystemPrompt | null
+   lib/terminal/pty-manager.ts:401  get(id: string) : PtySession | undefined
+   lib/themes/theme-registry.ts:743  get(themeId: string) : LoadedTheme | null
+   lib/tools/registry.ts:48  get(name: string) : ToolDefinition | undefined
+
+## handleDelete  [score=18.00, 5 files, 5 defs]
+   app/api/v1/chats/[id]/handlers/delete.ts:18  async handleDelete(req: NextRequest, ctx: AuthenticatedContext, chatId: string) : Promise<NextResponse>
+   app/api/v1/files/[id]/handlers/delete.ts:4  async handleDelete(request: NextRequest, ctx: AuthenticatedContext, fileId: string) : Promise<NextResponse>
+   app/api/v1/help-chats/[id]/route.ts:169  async handleDelete(_req: NextRequest, context: AuthenticatedContext, id: string) : Promise<NextResponse>
+   app/api/v1/projects/[id]/handlers/delete.ts:28  async handleDelete(req: NextRequest, ctx: AuthenticatedContext, projectId: string) : Promise<NextResponse>
+   app/api/v1/terminals/[id]/route.ts:174  async handleDelete(request: NextRequest, context: RequestContext, params: RouteParams, ) : Promise<NextResponse>
+
+## handleCreate  [score=18.00, 5 files, 5 defs]
+   app/api/v1/api-keys/route.ts:106  async handleCreate(req: NextRequest, user: { id: string })
+   app/api/v1/characters/route.ts:423  async handleCreate(req: NextRequest, context: AuthenticatedContext)
+   app/api/v1/chats/route.ts:1003  async handleCreate(req: NextRequest, context: AuthenticatedContext)
+   app/api/v1/connection-profiles/route.ts:142  async handleCreate(req: NextRequest, context: AuthenticatedContext)
+   app/api/v1/help-chats/route.ts:125  async handleCreate(req: NextRequest, context: AuthenticatedContext)
+
+## findByName  [score=17.63, 6 files, 6 defs]
+   lib/database/repositories/embedding-profiles.repository.ts:43  async findByName(userId: string, name: string) : Promise<EmbeddingProfile | null>
+   lib/database/repositories/image-profiles.repository.ts:39  async findByName(userId: string, name: string) : Promise<ImageProfile | null>
+   lib/database/repositories/prompt-templates.repository.ts:246  async findByName(userId: string, name: string) : Promise<PromptTemplate | null>
+   lib/database/repositories/roleplay-templates.repository.ts:290  async findByName(userId: string, name: string) : Promise<RoleplayTemplate | null>
+   lib/database/repositories/tags.repository.ts:56  async findByName(userId: string, name: string) : Promise<Tag | null>
+   lib/repositories/user-scoped.ts:258  async findByName(name: string) : Promise<Tag | null>
+
+## findByIds  [score=17.57, 6 files, 6 defs]
+   lib/database/repositories/base.repository.ts:488  async findByIds(ids: string[]) : Promise<T[]>
+   lib/database/repositories/characters.repository.ts:123  async findByIds(ids: string[]) : Promise<Character[]>
+   lib/database/repositories/files.repository.ts:41  async findByIds(ids: string[]) : Promise<FileEntry[]>
+   lib/database/repositories/memories.repository.ts:139  async findByIds(ids: string[]) : Promise<Memory[]>
+   lib/database/repositories/tags.repository.ts:41  async findByIds(ids: string[]) : Promise<Tag[]>
+   lib/database/repositories/wardrobe.repository.ts:44  async findByIds(ids: string[]) : Promise<WardrobeItem[]>
+
+## initialize  [score=16.87, 6 files, 6 defs]
+   lib/file-storage/manager.ts:193  async initialize() : Promise<void>
+   lib/plugins/abstract-provider-registry.ts:212  async initialize(providers: TPlugin[]) : Promise<void>
+   lib/plugins/registry.ts:60  async initialize(scanResult: PluginScanResult) : Promise<void>
+   lib/plugins/system-prompt-registry.ts:119  async initialize(plugins: SystemPromptPluginData[]) : Promise<void>
+   lib/plugins/tool-registry.ts:418  async initialize(plugins: ToolPlugin[]) : Promise<void>
+   lib/themes/theme-registry.ts:223  async initialize() : Promise<void>
+
+## deleteByChatId  [score=16.80, 5 files, 5 defs]
+   lib/database/repositories/chat-documents.repository.ts:205  async deleteByChatId(chatId: string) : Promise<number>
+   lib/database/repositories/llm-logs.repository.ts:523  async deleteByChatId(chatId: string) : Promise<number>
+   lib/database/repositories/memories.repository.ts:927  async deleteByChatId(chatId: string) : Promise<number>
+   lib/database/repositories/terminal-sessions.repository.ts:134  async deleteByChatId(chatId: string) : Promise<number>
+   lib/repositories/user-scoped.ts:510  async deleteByChatId(chatId: string) : Promise<number>
+
+## exportState  [score=16.80, 5 files, 5 defs]
+   lib/plugins/abstract-provider-registry.ts:284  exportState()
+   lib/plugins/registry.ts:212  exportState()
+   lib/plugins/system-prompt-registry.ts:306  exportState()
+   lib/plugins/tool-registry.ts:481  exportState()
+   lib/themes/theme-registry.ts:850  exportState()
+
+## getErrors  [score=16.40, 5 files, 5 defs]
+   lib/plugins/abstract-provider-registry.ts:254  getErrors() : Array<
+   lib/plugins/registry.ts:202  getErrors() : Array<
+   lib/plugins/system-prompt-registry.ts:299  getErrors() : SystemPromptLoadError[]
+   lib/plugins/tool-registry.ts:468  getErrors() : Array<
+   lib/themes/theme-registry.ts:843  getErrors() : ThemeLoadError[]
+
+## deleteByMountPointId  [score=16.20, 5 files, 5 defs]
+   lib/database/repositories/doc-mount-blobs.repository.ts:345  async deleteByMountPointId(mountPointId: string) : Promise<number>
+   lib/database/repositories/doc-mount-chunks.repository.ts:269  async deleteByMountPointId(mountPointId: string) : Promise<number>
+   lib/database/repositories/doc-mount-documents.repository.ts:215  async deleteByMountPointId(mountPointId: string) : Promise<number>
+   lib/database/repositories/doc-mount-files.repository.ts:176  async deleteByMountPointId(mountPointId: string) : Promise<number>
+   lib/database/repositories/doc-mount-folders.repository.ts:234  async deleteByMountPointId(mountPointId: string) : Promise<void>
+
+## addTag  [score=16.20, 5 files, 5 defs]
+   lib/database/repositories/base.repository.ts:517  async addTag(entityId: string, tagId: string) : Promise<T | null>
+   lib/database/repositories/connection-profiles.repository.ts:143  async addTag(profileId: string, tagId: string) : Promise<ConnectionProfile | null>
+   lib/database/repositories/prompt-templates.repository.ts:354  async addTag(templateId: string, tagId: string) : Promise<PromptTemplate | null>
+   lib/database/repositories/roleplay-templates.repository.ts:401  async addTag(templateId: string, tagId: string) : Promise<RoleplayTemplate | null>
+   lib/repositories/user-scoped.ts:122  async addTag(entityId: string, tagId: string) : Promise<T | null>
+
+## removeTag  [score=16.20, 5 files, 5 defs]
+   lib/database/repositories/base.repository.ts:539  async removeTag(entityId: string, tagId: string) : Promise<T | null>
+   lib/database/repositories/connection-profiles.repository.ts:150  async removeTag(profileId: string, tagId: string) : Promise<ConnectionProfile | null>
+   lib/database/repositories/prompt-templates.repository.ts:385  async removeTag(templateId: string, tagId: string) : Promise<PromptTemplate | null>
+   lib/database/repositories/roleplay-templates.repository.ts:431  async removeTag(templateId: string, tagId: string) : Promise<RoleplayTemplate | null>
+   lib/repositories/user-scoped.ts:128  async removeTag(entityId: string, tagId: string) : Promise<T | null>
+
+## findByMountPointId  [score=15.60, 5 files, 5 defs]
+   lib/database/repositories/doc-mount-chunks.repository.ts:151  async findByMountPointId(mountPointId: string) : Promise<DocMountChunk[]>
+   lib/database/repositories/doc-mount-documents.repository.ts:206  async findByMountPointId(mountPointId: string) : Promise<DocMountDocument[]>
+   lib/database/repositories/doc-mount-files.repository.ts:133  async findByMountPointId(mountPointId: string) : Promise<DocMountFile[]>
+   lib/database/repositories/doc-mount-folders.repository.ts:217  async findByMountPointId(mountPointId: string) : Promise<DocMountFolder[]>
+   lib/database/repositories/project-doc-mount-links.repository.ts:138  async findByMountPointId(mountPointId: string) : Promise<ProjectDocMountLink[]>
+
+## escapeRegex  [score=15.60, 4 files, 4 defs]
+   lib/chat/annotations.ts:73  escapeRegex(s: string) : string
+   lib/chat/context/mentioned-characters.ts:11  escapeRegex(input: string) : string
+   lib/database/repositories/base.repository.ts:164  escapeRegex(str: string) : string
+   lib/memory/about-character-resolution.ts:44  escapeRegex(value: string) : string
+
+## has  [score=15.20, 4 files, 4 defs]
+   lib/plugins/registry.ts:140  has(name: string) : boolean
+   lib/plugins/system-prompt-registry.ts:233  has(promptId: string) : boolean
+   lib/themes/theme-registry.ts:757  has(themeId: string) : boolean
+   lib/tools/registry.ts:62  has(name: string) : boolean
+
+## ensureInitialized  [score=15.10, 4 files, 4 defs]
+   app/api/v1/themes/[themeId]/route.ts:24  async ensureInitialized()
+   app/api/v1/themes/route.ts:31  async ensureInitialized()
+   lib/database/repositories/vector-indices.repository.ts:30  async ensureInitialized() : Promise<void>
+   lib/file-storage/manager.ts:246  async ensureInitialized() : Promise<void>
+
+## handlePost  [score=14.85, 4 files, 4 defs]
+   app/api/v1/chats/[id]/handlers/post.ts:96  async handlePost(req: NextRequest, ctx: AuthenticatedContext, chatId: string) : Promise<NextResponse>
+   app/api/v1/files/[id]/handlers/post.ts:7  async handlePost(request: NextRequest, ctx: AuthenticatedContext, fileId: string) : Promise<NextResponse>
+   app/api/v1/files/handlers/post.ts:13  async handlePost(request: NextRequest, ctx: AuthenticatedContext) : Promise<NextResponse>
+   app/api/v1/projects/[id]/handlers/post.ts:22  async handlePost(req: NextRequest, ctx: AuthenticatedContext, projectId: string) : Promise<NextResponse>
+
+## deleteByCharacterId  [score=14.55, 4 files, 4 defs]
+   lib/database/repositories/character-plugin-data.repository.ts:208  async deleteByCharacterId(characterId: string) : Promise<number>
+   lib/database/repositories/llm-logs.repository.ts:539  async deleteByCharacterId(characterId: string) : Promise<number>
+   lib/database/repositories/vector-indices.repository.ts:312  async deleteByCharacterId(characterId: string) : Promise<boolean>
+   lib/repositories/user-scoped.ts:514  async deleteByCharacterId(characterId: string) : Promise<number>
+
+## getAll  [score=14.45, 4 files, 4 defs]
+   lib/plugins/registry.ts:102  getAll() : LoadedPlugin[]
+   lib/plugins/system-prompt-registry.ts:219  getAll() : LoadedSystemPrompt[]
+   lib/themes/theme-registry.ts:736  getAll() : LoadedTheme[]
+   lib/tools/registry.ts:55  getAll() : ToolDefinition[]
+
+## sanitizeLeafName  [score=14.40, 4 files, 4 defs]
+   lib/file-storage/character-vault-bridge.ts:208  sanitizeLeafName(filename: string) : string
+   lib/file-storage/lantern-store-bridge.ts:148  sanitizeLeafName(filename: string) : string
+   lib/file-storage/project-store-bridge.ts:268  sanitizeLeafName(filename: string) : string
+   lib/file-storage/user-uploads-bridge.ts:162  sanitizeLeafName(filename: string) : string
+
+## resolveUniqueRelativePath  [score=14.40, 4 files, 4 defs]
+   lib/file-storage/character-vault-bridge.ts:215  async resolveUniqueRelativePath(mountPointId: string, desired: string) : Promise<string>
+   lib/file-storage/lantern-store-bridge.ts:155  async resolveUniqueRelativePath(mountPointId: string, desired: string) : Promise<string>
+   lib/file-storage/project-store-bridge.ts:293  async resolveUniqueRelativePath(mountPointId: string, desired: string) : Promise<string>
+   lib/file-storage/user-uploads-bridge.ts:169  async resolveUniqueRelativePath(mountPointId: string, desired: string) : Promise<string>
+
+## exists  [score=14.35, 4 files, 4 defs]
+   lib/api/middleware/auth.ts:219  exists(resource: T | null | undefined) : resource is T
+   lib/database/backends/sqlite/backend.ts:356  async exists(filter: TypedQueryFilter<T>) : Promise<boolean>
+   lib/database/repositories/base.repository.ts:419  async exists(id: string) : Promise<boolean>
+   lib/file-storage/backends/local/index.ts:351  async exists(key: string) : Promise<boolean>
+
+## findByTag  [score=14.30, 4 files, 4 defs]
+   lib/database/repositories/base.repository.ts:510  async findByTag(tagId: string) : Promise<T[]>
+   lib/database/repositories/characters.repository.ts:171  async findByTag(tagId: string) : Promise<Character[]>
+   lib/database/repositories/connection-profiles.repository.ts:50  async findByTag(tagId: string) : Promise<ConnectionProfile[]>
+   lib/repositories/user-scoped.ts:118  async findByTag(tagId: string) : Promise<T[]>
+
+## findByMountPointAndPath  [score=13.65, 4 files, 4 defs]
+   lib/database/repositories/doc-mount-blobs.repository.ts:133  async findByMountPointAndPath(mountPointId: string, relativePath: string) : Promise<DocMountBlobMetadata | null>
+   lib/database/repositories/doc-mount-documents.repository.ts:115  async findByMountPointAndPath(mountPointId: string, relativePath: string) : Promise<DocMountDocument | null>
+   lib/database/repositories/doc-mount-files.repository.ts:153  async findByMountPointAndPath(mountPointId: string, relativePath: string) : Promise<DocMountFile | null>
+   lib/database/repositories/doc-mount-folders.repository.ts:174  async findByMountPointAndPath(mountPointId: string, path: string) : Promise<DocMountFolder | null>
+
+## handleList  [score=13.20, 3 files, 3 defs]
+   app/api/v1/chats/route.ts:956  async handleList(req: NextRequest, context: AuthenticatedContext)
+   app/api/v1/help-chats/route.ts:42  async handleList(_req: NextRequest, context: AuthenticatedContext)
+   app/api/v1/help-docs/route.ts:20  async handleList(_request: NextRequest, _context: AuthenticatedContext)
+
+## handleImport  [score=13.20, 3 files, 3 defs]
+   app/api/v1/api-keys/route.ts:277  async handleImport(req: NextRequest, user: { id: string })
+   app/api/v1/characters/route.ts:517  async handleImport(req: NextRequest, context: AuthenticatedContext)
+   app/api/v1/chats/route.ts:1292  async handleImport(req: NextRequest, context: AuthenticatedContext)
+
+## decorate  [score=13.20, 3 files, 3 defs]
+   lib/background-jobs/handlers/scene-state-tracking.ts:184  decorate(items: { title: string; description?: string | null }[]) : string[]
+   lib/chat/context-manager.ts:982  decorate(items: { title: string; description?: string | null }[]) : string[]
+   lib/wardrobe/avatar-prompt.ts:70  decorate(items: { title: string; description?: string | null }[]) : string[]
+
+## clear  [score=13.20, 3 files, 3 defs]
+   lib/backup/uuid-remapper.ts:158  clear() : void
+   lib/embedding/vector-store.ts:469  clear() : void
+   lib/tools/registry.ts:155  clear() : void
+
+## formatBytes  [score=13.20, 3 files, 3 defs]
+   lib/llm/courier/render-markdown.ts:44  formatBytes(n: number) : string
+   lib/services/file-content-extractor.ts:401  formatBytes(bytes: number) : string
+   lib/tools/capabilities-report.ts:1311  formatBytes(bytes: number) : string
+
+## write  [score=13.05, 4 files, 4 defs]
+   lib/logging/transports/console.ts:20  write(logData: LogData) : void
+   lib/logging/transports/file.ts:121  async write(logData: LogData) : Promise<void>
+   lib/logging/transports/parent-channel.ts:13  write(data: LogData) : void
+   lib/terminal/pty-manager.ts:482  write(id: string, data: string) : boolean
+
+## getMessages  [score=12.80, 3 files, 3 defs]
+   lib/database/repositories/chats-messages.ops.ts:117  async getMessages(chatId: string) : Promise<ChatEvent[]>
+   lib/database/repositories/chats.repository.ts:407  async getMessages(chatId: string) : Promise<ChatEvent[]>
+   lib/repositories/user-scoped.ts:219  async getMessages(chatId: string) : Promise<ChatEvent[]>
+
+## addMessage  [score=12.80, 3 files, 3 defs]
+   lib/database/repositories/chats-messages.ops.ts:164  async addMessage(chatId: string, message: ChatEvent) : Promise<ChatEvent>
+   lib/database/repositories/chats.repository.ts:411  async addMessage(chatId: string, message: ChatEvent) : Promise<ChatEvent>
+   lib/repositories/user-scoped.ts:225  async addMessage(chatId: string, message: ChatEvent) : Promise<ChatEvent>
+
+## deleteMessagesByIds  [score=12.80, 3 files, 3 defs]
+   lib/database/repositories/chats-messages.ops.ts:315  async deleteMessagesByIds(chatId: string, messageIds: string[]) : Promise<number>
+   lib/database/repositories/chats.repository.ts:431  async deleteMessagesByIds(chatId: string, messageIds: string[]) : Promise<number>
+   lib/repositories/user-scoped.ts:237  async deleteMessagesByIds(chatId: string, messageIds: string[]) : Promise<number>
+
+## clearMessages  [score=12.80, 3 files, 3 defs]
+   lib/database/repositories/chats-messages.ops.ts:370  async clearMessages(chatId: string) : Promise<boolean>
+   lib/database/repositories/chats.repository.ts:427  async clearMessages(chatId: string) : Promise<boolean>
+   lib/repositories/user-scoped.ts:231  async clearMessages(chatId: string) : Promise<boolean>
+
+## resetStuckJobs  [score=12.53, 3 files, 3 defs]
+   lib/background-jobs/host/job-dispatcher.ts:457  async resetStuckJobs(timeoutMinutes: number = 10) : Promise<number>
+   lib/background-jobs/processor.ts:61  async resetStuckJobs(timeoutMinutes?: number) : Promise<number>
+   lib/database/repositories/background-jobs.repository.ts:765  async resetStuckJobs(timeoutMinutes: number = 10) : Promise<number>
+
+## parseVersion  [score=12.47, 3 files, 3 defs]
+   lib/plugins/manifest-loader.ts:517  parseVersion(v: string) : number[]
+   lib/plugins/version-checker.ts:53  parseVersion(version: string)
+   lib/themes/registry-client.ts:67  parseVersion(version: string)
+
+## updateEmbedding  [score=12.40, 3 files, 3 defs]
+   lib/database/repositories/conversation-chunks.repository.ts:205  async updateEmbedding(id: string, embedding: Float32Array) : Promise<void>
+   lib/database/repositories/doc-mount-chunks.repository.ts:288  async updateEmbedding(id: string, embedding: Float32Array) : Promise<void>
+   lib/database/repositories/help-docs.repository.ts:133  async updateEmbedding(id: string, embedding: Float32Array) : Promise<void>
+
+## resolveScenarioPath  [score=12.20, 3 files, 3 defs]
+   app/api/v1/projects/[id]/scenarios/[scenarioPath]/route.ts:59  resolveScenarioPath(scenarioPath: string)
+   app/api/v1/scenarios/[scenarioPath]/route.ts:57  resolveScenarioPath(scenarioPath: string, )
+   lib/mount-index/scenarios-common.ts:312  resolveScenarioPath(scenarioPath: string, folderName: string, )
+
+## getState  [score=12.13, 3 files, 3 defs]
+   lib/background-jobs/host/job-dispatcher.ts:54  getState() : DispatcherState
+   lib/background-jobs/host/processor-host.ts:64  getState() : HostState
+   lib/startup/progress.ts:67  getState() : StartupProgressData
+
+## enqueue  [score=11.87, 3 files, 3 defs]
+   app/api/v1/characters/[id]/route.ts:526  enqueue(event: OptimizerProgressEvent)
+   app/api/v1/characters/route.ts:697  enqueue(event: WizardProgressEvent)
+   app/api/v1/system/tools/route.ts:1095  enqueue(event: AIImportProgressEvent)
+
+## findDefault  [score=11.63, 4 files, 6 defs]
+   lib/database/repositories/connection-profiles.repository.ts:57  async findDefault(userId: string) : Promise<ConnectionProfile | null>
+   lib/database/repositories/embedding-profiles.repository.ts:65  async findDefault(userId: string) : Promise<EmbeddingProfile | null>
+   lib/database/repositories/image-profiles.repository.ts:53  async findDefault(userId: string) : Promise<ImageProfile | null>
+   lib/repositories/user-scoped.ts:267  async findDefault() : Promise<ConnectionProfile | null>
+   lib/repositories/user-scoped.ts:308  async findDefault() : Promise<ImageProfile | null>
+   lib/repositories/user-scoped.ts:317  async findDefault() : Promise<EmbeddingProfile | null>
+
+## getTotalTokenUsage  [score=11.53, 3 files, 3 defs]
+   lib/database/repositories/llm-logs.repository.ts:454  async getTotalTokenUsage(userId: string) : Promise<
+   lib/repositories/user-scoped.ts:502  async getTotalTokenUsage() : Promise<
+   lib/services/llm-logging.service.ts:359  async getTotalTokenUsage(userId: string) : Promise<
+
+## handleExport  [score=11.20, 3 files, 3 defs]
+   app/api/v1/api-keys/route.ts:199  async handleExport(req: NextRequest, user: { id: string })
+   app/api/v1/system/tools/route.ts:338  async handleExport(req: NextRequest, context: any)
+   app/api/v1/themes/[themeId]/route.ts:67  async handleExport(themeId: string) : Promise<Response>
+
+## searchMessagesGlobal  [score=11.13, 3 files, 3 defs]
+   lib/database/repositories/chats-search.ops.ts:94  async searchMessagesGlobal(chatIds: string[], searchText: string, limit = 100) : Promise<Array<
+   lib/database/repositories/chats.repository.ts:458  async searchMessagesGlobal(chatIds: string[], searchText: string, limit?: number) : Promise<Array<
+   lib/repositories/user-scoped.ts:243  async searchMessagesGlobal(searchText: string, limit?: number) : Promise<Array<
+
+## isQuilltapPlugin  [score=10.80, 2 files, 2 defs]
+   app/api/v1/plugins/route.ts:51  isQuilltapPlugin(name: string) : boolean
+   lib/plugins/manifest-loader.ts:91  isQuilltapPlugin(name: string) : boolean
+
+## handleGetState  [score=10.80, 2 files, 2 defs]
+   app/api/v1/chats/[id]/actions/state.ts:36  async handleGetState(chatId: string, { user, repos }: AuthenticatedContext) : Promise<NextResponse>
+   app/api/v1/projects/[id]/actions/state.ts:19  async handleGetState(projectId: string, { user, repos }: AuthenticatedContext) : Promise<NextResponse>
+
+## handleSetState  [score=10.80, 2 files, 2 defs]
+   app/api/v1/chats/[id]/actions/state.ts:76  async handleSetState(req: NextRequest, chatId: string, { user, repos }: AuthenticatedContext) : Promise<NextResponse>
+   app/api/v1/projects/[id]/actions/state.ts:39  async handleSetState(req: NextRequest, projectId: string, { user, repos }: AuthenticatedContext) : Promise<NextResponse>
+
+## handleResetState  [score=10.80, 2 files, 2 defs]
+   app/api/v1/chats/[id]/actions/state.ts:109  async handleResetState(chatId: string, { user, repos }: AuthenticatedContext) : Promise<NextResponse>
+   app/api/v1/projects/[id]/actions/state.ts:72  async handleResetState(projectId: string, { user, repos }: AuthenticatedContext) : Promise<NextResponse>
+
+======================================================================
+TOP STEM CLUSTERS (similar name variants across files)
+======================================================================
+
+## stem='delete'  variants=['delete', 'deleteByCharacterAndPlugin', 'deleteByCharacterId', 'deleteByChatId', 'deleteByEntity', 'deleteByFileId']  [score=80.46, 37 files, 68 defs]
+   lib/database/repositories/background-jobs.repository.ts:430  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/background-jobs.repository.ts:585  async deleteByTypesAndStatuses(types: BackgroundJobType[], statuses: BackgroundJobStatus[], ) : Promise<number>
+   lib/database/repositories/character-plugin-data.repository.ts:136  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/character-plugin-data.repository.ts:189  async deleteByCharacterAndPlugin(characterId: string, pluginName: string) : Promise<boolean>
+   lib/database/repositories/character-plugin-data.repository.ts:208  async deleteByCharacterId(characterId: string) : Promise<number>
+   lib/database/repositories/character-plugin-data.repository.ts:232  async deleteByPlugin(pluginName: string) : Promise<number>
+   lib/database/repositories/characters.repository.ts:266  async delete(id: string) : Promise<boolean>
+   lib/database/repositories/chat-documents.repository.ts:54  async delete(id: string) : Promise<boolean>
+   ... and 60 more
+
+## stem='update'  variants=['update', 'updateForCharacter', 'updateForUser']  [score=73.80, 34 files, 37 defs]
+   lib/database/repositories/background-jobs.repository.ts:310  async update(id: string, data: Partial<BackgroundJob>) : Promise<BackgroundJob | null>
+   lib/database/repositories/character-plugin-data.repository.ts:116  async update(id: string, data: Partial<CharacterPluginData>) : Promise<CharacterPluginData | null>
+   lib/database/repositories/characters.repository.ts:232  async update(id: string, data: Partial<Character>) : Promise<Character | null>
+   lib/database/repositories/chat-documents.repository.ts:50  async update(id: string, data: Partial<ChatDocument>) : Promise<ChatDocument | null>
+   lib/database/repositories/chat-settings.repository.ts:89  async update(id: string, data: Partial<ChatSettings>) : Promise<ChatSettings | null>
+   lib/database/repositories/chat-settings.repository.ts:141  async updateForUser(userId: string, data: Partial<ChatSettings>) : Promise<ChatSettings | null>
+   lib/database/repositories/chats.repository.ts:275  async update(id: string, data: Partial<ChatMetadata>) : Promise<ChatMetadata | null>
+   lib/database/repositories/connection-profiles.repository.ts:105  async update(id: string, data: Partial<ConnectionProfile>) : Promise<ConnectionProfile | null>
+   ... and 29 more
+
+## stem='findAll'  variants=['findAll', 'findAllForChat', 'findAllForUser', 'findAllWithEmbeddings', 'findAllWithEmbeddingsByMountPointIds']  [score=73.26, 34 files, 41 defs]
+   lib/database/repositories/background-jobs.repository.ts:55  async findAll() : Promise<BackgroundJob[]>
+   lib/database/repositories/character-plugin-data.repository.ts:33  async findAll() : Promise<CharacterPluginData[]>
+   lib/database/repositories/characters.repository.ts:51  async findAll() : Promise<Character[]>
+   lib/database/repositories/chat-documents.repository.ts:39  async findAll() : Promise<ChatDocument[]>
+   lib/database/repositories/chat-settings.repository.ts:50  async findAll() : Promise<ChatSettings[]>
+   lib/database/repositories/chats.repository.ts:144  async findAll() : Promise<ChatMetadata[]>
+   lib/database/repositories/connection-profiles.repository.ts:43  async findAll() : Promise<ConnectionProfile[]>
+   lib/database/repositories/conversation-annotations.repository.ts:37  async findAll() : Promise<ConversationAnnotation[]>
+   ... and 33 more
+
+## stem='create'  variants=['create', 'createForUser', 'createFromVault']  [score=65.71, 31 files, 34 defs]
+   lib/database/repositories/background-jobs.repository.ts:251  async create(data: Omit<BackgroundJob, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<BackgroundJob>
+   lib/database/repositories/character-plugin-data.repository.ts:89  async create(data: Omit<CharacterPluginData, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<CharacterPluginData>
+   lib/database/repositories/characters.repository.ts:182  async create(data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<Character>
+   lib/database/repositories/chat-settings.repository.ts:65  async create(data: Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<ChatSettings>
+   lib/database/repositories/chat-settings.repository.ts:128  async createForUser(userId: string, data: Omit<ChatSettings, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) : Promise<ChatSettings>
+   lib/database/repositories/chats.repository.ts:216  async create(data: Omit<ChatMetadataInput, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<ChatMetadata>
+   lib/database/repositories/connection-profiles.repository.ts:81  async create(data: Omit<ConnectionProfile, 'id' | 'createdAt' | 'updatedAt'>, options?: CreateOptions) : Promise<ConnectionProfile>
+   lib/database/repositories/doc-mount-blobs.repository.ts:203  async create(input: CreateBlobInput) : Promise<DocMountBlobMetadata>
+   ... and 26 more
+
+## stem='getStats'  variants=['getStats', 'getStatsByProfileId']  [score=24.67, 9 files, 9 defs]
+   lib/database/repositories/background-jobs.repository.ts:444  async getStats(userId?: string) : Promise<QueueStats>
+   lib/database/repositories/embedding-status.repository.ts:380  async getStatsByProfileId(profileId: string) : Promise<
+   lib/embedding/vector-store.ts:560  getStats()
+   lib/mount-index/mount-chunk-cache.ts:107  getStats()
+   lib/plugins/abstract-provider-registry.ts:241  getStats()
+   lib/plugins/registry.ts:184  getStats()
+   lib/plugins/system-prompt-registry.ts:287  getStats()
+   lib/plugins/tool-registry.ts:449  getStats()
+   ... and 1 more
+
+## stem='handleDelete'  variants=['handleDelete', 'handleDeleteByChatId']  [score=19.33, 6 files, 6 defs]
+   app/api/v1/chats/[id]/handlers/delete.ts:18  async handleDelete(req: NextRequest, ctx: AuthenticatedContext, chatId: string) : Promise<NextResponse>
+   app/api/v1/files/[id]/handlers/delete.ts:4  async handleDelete(request: NextRequest, ctx: AuthenticatedContext, fileId: string) : Promise<NextResponse>
+   app/api/v1/help-chats/[id]/route.ts:169  async handleDelete(_req: NextRequest, context: AuthenticatedContext, id: string) : Promise<NextResponse>
+   app/api/v1/memories/route.ts:1017  async handleDeleteByChatId(req: NextRequest, { user, repos }: { user: { id: string }; repos: any }, chatId: string)
+   app/api/v1/projects/[id]/handlers/delete.ts:28  async handleDelete(req: NextRequest, ctx: AuthenticatedContext, projectId: string) : Promise<NextResponse>
+   app/api/v1/terminals/[id]/route.ts:174  async handleDelete(request: NextRequest, context: RequestContext, params: RouteParams, ) : Promise<NextResponse>
+
+## stem='get'  variants=['get', 'getByCapability', 'getByCategory', 'getByModelHint', 'getByTag']  [score=19.00, 6 files, 10 defs]
+   lib/chat/timestamp-utils.ts:57  get(type: string) : string
+   lib/plugins/registry.ts:116  get(name: string) : LoadedPlugin | null
+   lib/plugins/registry.ts:123  getByCapability(capability: PluginCapability) : LoadedPlugin[]
+   lib/plugins/system-prompt-registry.ts:226  get(promptId: string) : LoadedSystemPrompt | null
+   lib/plugins/system-prompt-registry.ts:247  getByCategory(category: string) : LoadedSystemPrompt[]
+   lib/plugins/system-prompt-registry.ts:256  getByModelHint(modelHint: string) : LoadedSystemPrompt[]
+   lib/terminal/pty-manager.ts:401  get(id: string) : PtySession | undefined
+   lib/themes/theme-registry.ts:743  get(themeId: string) : LoadedTheme | null
+   ... and 2 more
+
+## stem='remove'  variants=['removeFromIndex', 'removeFromQueue', 'removeFromRegistry', 'removeFromRoster', 'removeFromSlot']  [score=17.67, 6 files, 6 defs]
+   lib/chat/turn-manager/queue.ts:32  removeFromQueue(currentState: TurnState, participantId: string) : TurnState
+   lib/database/repositories/projects.repository.ts:199  async removeFromRoster(projectId: string, characterId: string) : Promise<Project | null>
+   lib/plugins/installer.ts:579  async removeFromRegistry(baseDir: string, packageName: string) : Promise<void>
+   lib/repositories/user-scoped.ts:404  async removeFromRoster(projectId: string, characterId: string) : Promise<Project | null>
+   lib/themes/bundle-loader.ts:118  async removeFromIndex(themeId: string) : Promise<void>
+   lib/wardrobe/outfit-displacement.ts:110  async removeFromSlot(repos: DisplacementRepos, chatId: string, characterId: string, slot: WardrobeItemType, itemId?: string, ) : Promise<EquippedSlots>
+
+## stem='upsert'  variants=['upsert', 'upsertByEntity', 'upsertByPath', 'upsertByProfileId', 'upsertForUserPlugin']  [score=16.97, 7 files, 7 defs]
+   lib/database/repositories/character-plugin-data.repository.ts:160  async upsert(characterId: string, pluginName: string, data: unknown) : Promise<CharacterPluginData>
+   lib/database/repositories/conversation-annotations.repository.ts:111  async upsert(input: ConversationAnnotationInput) : Promise<ConversationAnnotation>
+   lib/database/repositories/conversation-chunks.repository.ts:130  async upsert(input: ConversationChunkInput) : Promise<ConversationChunk>
+   lib/database/repositories/embedding-status.repository.ts:210  async upsertByEntity(entityType: EmbeddableEntityType, entityId: string, profileId: string, data: Partial<Omit<EmbeddingStatus, 'id' | 'createdAt' | 'updatedAt' | 'entityType' | 'entityId' | 'profileId'>>) : Promise<EmbeddingStatus>
+   lib/database/repositories/help-docs.repository.ts:102  async upsertByPath(path: string, data: Omit<HelpDoc, 'id' | 'createdAt' | 'updatedAt' | 'embedding'>) : Promise<HelpDoc>
+   lib/database/repositories/plugin-config.repository.ts:169  async upsertForUserPlugin(userId: string, pluginName: string, config: Record<string, unknown>) : Promise<PluginConfig>
+   lib/database/repositories/tfidf-vocabulary.repository.ts:165  async upsertByProfileId(profileId: string, data: Omit<TfidfVocabulary, 'id' | 'createdAt' | 'updatedAt'>) : Promise<TfidfVocabulary>
+
+## stem='getApiKey'  variants=['getApiKey', 'getApiKeyForProfile', 'getApiKeyForProvider', 'getApiKeyForSelection']  [score=15.80, 5 files, 5 defs]
+   lib/embedding/embedding-service.ts:117  async getApiKeyForProfile(profile: EmbeddingProfile, userId: string) : Promise<string | null>
+   lib/llm/pricing-fetcher.ts:305  async getApiKeyForProvider(provider: Provider, profiles: ConnectionProfile[], userId: string) : Promise<
+   lib/memory/cheap-llm-tasks/core-execution.ts:66  async getApiKeyForSelection(selection: CheapLLMSelection, userId: string) : Promise<string | null>
+   lib/services/auto-configure.service.ts:121  async getApiKey(profile: ConnectionProfile, userId: string) : Promise<string>
+   lib/services/dangerous-content/gatekeeper.service.ts:111  async getApiKeyForSelection(selection: CheapLLMSelection, userId: string) : Promise<string | null>
+
+## stem='add'  variants=['addToIndex', 'addToQueue', 'addToRoster', 'addToSlot']  [score=15.00, 5 files, 5 defs]
+   lib/chat/turn-manager/queue.ts:14  addToQueue(currentState: TurnState, participantId: string) : TurnState
+   lib/database/repositories/projects.repository.ts:146  async addToRoster(projectId: string, characterId: string) : Promise<Project | null>
+   lib/repositories/user-scoped.ts:392  async addToRoster(projectId: string, characterId: string) : Promise<Project | null>
+   lib/themes/bundle-loader.ts:110  async addToIndex(entry: ThemeBundleIndexEntry) : Promise<void>
+   lib/wardrobe/outfit-displacement.ts:83  async addToSlot(repos: DisplacementRepos, chatId: string, characterId: string, slot: WardrobeItemType, item: { id: string; types: WardrobeItemType[] }, ) : Promise<EquippedSlots>
+
+## stem='findRecent'  variants=['findRecent', 'findRecentByImportanceTier', 'findRecentByType', 'findRecentForChat']  [score=14.97, 5 files, 6 defs]
+   lib/database/repositories/background-jobs.repository.ts:83  async findRecentByType(type: BackgroundJobType, limit: number) : Promise<BackgroundJob[]>
+   lib/database/repositories/chat-documents.repository.ts:99  async findRecentForChat(chatId: string, limit = 5) : Promise<ChatDocument[]>
+   lib/database/repositories/llm-logs.repository.ts:279  async findRecent(userId: string, limit: number = 20) : Promise<LLMLog[]>
+   lib/database/repositories/memories.repository.ts:327  async findRecent(characterId: string, limit: number = 10) : Promise<Memory[]>
+   lib/database/repositories/memories.repository.ts:379  async findRecentByImportanceTier(characterId: string, limits: { high?: number; medium?: number; low?: number } = {}) : Promise<
+   lib/repositories/user-scoped.ts:489  async findRecent(limit?: number) : Promise<LLMLog[]>
+
+## stem='clear'  variants=['clear', 'clearFromDatabase']  [score=14.10, 4 files, 4 defs]
+   lib/backup/uuid-remapper.ts:158  clear() : void
+   lib/embedding/vector-store.ts:469  clear() : void
+   lib/services/chat-message/compression-cache.service.ts:219  async clearFromDatabase(chatId: string, participantId?: string) : Promise<void>
+   lib/tools/registry.ts:155  clear() : void
+
+## stem='count'  variants=['count', 'countByCharacterId', 'countByChatId', 'countByMessageId', 'countBySourceMessageId', 'countBySourceMessageIds']  [score=13.40, 4 files, 10 defs]
+   lib/database/repositories/base.repository.ts:404  async count(filter?: TypedQueryFilter<T>) : Promise<number>
+   lib/database/repositories/llm-logs.repository.ts:418  async countByUserId(userId: string) : Promise<number>
+   lib/database/repositories/llm-logs.repository.ts:436  async countByType(userId: string, type: LLMLogType) : Promise<number>
+   lib/database/repositories/llm-logs.repository.ts:490  async countByMessageId(messageId: string) : Promise<number>
+   lib/database/repositories/memories.repository.ts:627  async countByCharacterId(characterId: string) : Promise<number>
+   lib/database/repositories/memories.repository.ts:887  async countBySourceMessageId(sourceMessageId: string) : Promise<number>
+   lib/database/repositories/memories.repository.ts:904  async countBySourceMessageIds(sourceMessageIds: string[]) : Promise<number>
+   lib/database/repositories/memories.repository.ts:943  async countByChatId(chatId: string) : Promise<number>
+   ... and 2 more
+
+## stem='sleep'  variants=['sleep', 'sleepSync']  [score=12.87, 3 files, 3 defs]
+   lib/database/backends/sqlite/mount-index-client.ts:85  sleepSync(ms: number) : void
+   lib/file-storage/backends/local/retry.ts:73  sleep(ms: number) : Promise<void>
+   lib/startup/db-encryption-state.ts:44  sleepSync(ms: number) : void
+
+## stem='write'  variants=['write', 'writeToFile']  [score=12.20, 4 files, 5 defs]
+   lib/logging/transports/console.ts:20  write(logData: LogData) : void
+   lib/logging/transports/file.ts:121  async write(logData: LogData) : Promise<void>
+   lib/logging/transports/file.ts:131  async writeToFile(stem: Stem, content: string) : Promise<void>
+   lib/logging/transports/parent-channel.ts:13  write(data: LogData) : void
+   lib/terminal/pty-manager.ts:482  write(id: string, data: string) : boolean
+
+## stem='blob'  variants=['blobToDataUrl', 'blobToEmbedding', 'blobToFloat32']  [score=12.20, 3 files, 3 defs]
+   lib/clipboard-utils.ts:22  blobToDataUrl(blob: Blob) : Promise<string>
+   lib/database/backends/sqlite/json-columns.ts:312  blobToEmbedding(blob: Buffer) : Float32Array
+   lib/embedding/reapply-profile.ts:89  blobToFloat32(blob: Buffer) : Float32Array
+
+## stem='estimateTokens'  variants=['estimateTokens', 'estimateTokensForJob']  [score=11.53, 3 files, 3 defs]
+   app/api/v1/system/tools/route.ts:73  estimateTokensForJob(job: BackgroundJob) : number
+   lib/mount-index/chunker.ts:36  estimateTokens(text: string) : number
+   lib/tokens/token-counter.ts:81  estimateTokens(text: string, provider?: Provider) : number
+
+## stem='load'  variants=['load', 'loadFromDatabase']  [score=11.45, 3 files, 4 defs]
+   lib/embedding/vector-store.ts:62  load() : Promise<void>
+  save(): Promise<void>
+  addVector(id: string, embedding: Float32Array, metadata: VectorMetadata): Promise<void>
+  removeVector(id: string): Promise<boolean>
+  updateVector(id: string, embedding: Float32Array): Promise<boolean>
+  hasVector(id: string): boolean
+  readonly size: number
+  getDimensions(): number | null
+  search(queryEmbedding: Float32Array, limit?: number, filter?: (metadata: VectorMetadata) => boolean): VectorSearchResult[]
+  getAllEntries(): VectorEntry[]
+  clear(): void
+}
+
+/**
+ * Database-backed vector store for a single character
+ * Uses in-memory storage with incremental database persistence
+ */
+export class CharacterVectorStore implements ICharacterVectorStore
+   lib/embedding/vector-store.ts:94  async load() : Promise<void>
+   lib/help-search.ts:33  async loadFromDatabase() : Promise<void>
+   lib/services/chat-message/compression-cache.service.ts:172  async loadFromDatabase(chatId: string, participantId?: string) : Promise<PersistedCompressionCache | null>
+
+## stem='search'  variants=['search', 'searchByContent', 'searchByContentAboutCharacter']  [score=10.95, 3 files, 4 defs]
+   lib/database/repositories/memories.repository.ts:247  async searchByContent(characterId: string, query: string) : Promise<Memory[]>
+   lib/database/repositories/memories.repository.ts:1177  async searchByContentAboutCharacter(characterId: string, aboutCharacterId: string, query: string) : Promise<Memory[]>
+   lib/help-search.ts:97  async search(queryEmbedding: Float32Array, limit: number = 5, query?: string, ) : Promise<HelpSearchResult[]>
+   lib/repositories/user-scoped.ts:364  async searchByContent(characterId: string, query: string) : Promise<Memory[]>
+
+## stem='list'  variants=['list', 'listByMountPoint']  [score=10.87, 3 files, 3 defs]
+   lib/database/repositories/doc-mount-blobs.repository.ts:156  async listByMountPoint(mountPointId: string, options: { folder?: string } = {}) : Promise<DocMountBlobMetadata[]>
+   lib/file-storage/backends/local/index.ts:492  async list(prefix: string, maxKeys?: number) : Promise<string[]>
+   lib/terminal/pty-manager.ts:405  list() : PtySessionMeta[]
+
+## stem='stripTextBlockMarkers'  variants=['stripTextBlockMarkers', 'stripTextBlockMarkersFromResponse']  [score=10.80, 2 files, 2 defs]
+   lib/services/chat-message/pseudo-tool.service.ts:165  stripTextBlockMarkersFromResponse(response: string) : string
+   lib/tools/text-block-parser.ts:342  stripTextBlockMarkers(response: string) : string
+
+## stem='ensureDir'  variants=['ensureDir', 'ensureDirSync']  [score=10.80, 2 files, 2 defs]
+   lib/background-jobs/host/job-dispatcher.ts:419  ensureDirSync(dir: string) : void
+   lib/tools/shell/shell-handler.ts:120  ensureDir(dirPath: string) : void
+
+## stem='getModelPricing'  variants=['getModelPricing', 'getModelPricingFromRegistry']  [score=10.55, 3 files, 4 defs]
+   lib/llm/pricing-fetcher.ts:432  async getModelPricing(provider: Provider, modelId: string, userId: string) : Promise<ModelPricing | null>
+   lib/llm/pricing.ts:188  getModelPricingFromRegistry(provider: Provider, modelId: string) : ModelPricing | null
+   lib/plugins/provider-registry.ts:301  getModelPricing(providerName: string, modelId: string)
+   lib/plugins/provider-registry.ts:543  getModelPricing(providerName: string, modelId: string)
+
+## stem='send'  variants=['send', 'sendToChild', 'sendToProvider']  [score=10.53, 3 files, 3 defs]
+   app/api/v1/chats/[id]/actions/memories.ts:245  send(obj: unknown) : boolean
+   lib/background-jobs/host/processor-host.ts:358  sendToChild(msg: ParentToChildMessage) : boolean
+   lib/memory/cheap-llm-tasks/core-execution.ts:97  async sendToProvider(selection: CheapLLMSelection, messages: LLMMessage[], userId: string, taskType?: string, chatId?: string, messageId?: string, maxTokens?: number, characterId?: string) : Promise<ProviderResponse>
+
+## stem='considerTitleUpdate'  variants=['considerTitleUpdate', 'considerTitleUpdateAsync']  [score=10.30, 2 files, 2 defs]
+   lib/chat/context-summary.ts:624  async considerTitleUpdateAsync(chatId: string, userId: string, connectionProfile: ConnectionProfile, cheapLLMSettings: CheapLLMSettings, availableProfiles: ConnectionProfile[], currentInterchange: number) : Promise<void>
+   lib/memory/cheap-llm-tasks/chat-tasks.ts:534  async considerTitleUpdate(currentTitle: string, recentMessages: ChatMessage[], existingSummaryOrTitle: string | null, selection: CheapLLMSelection, userId: string, chatId?: string) : Promise<CheapLLMTaskResult<
+
+## stem='check'  variants=['checkForUpdates', 'checkForUpdatesWithMetadata']  [score=10.13, 2 files, 3 defs]
+   lib/plugins/version-checker.ts:143  async checkForUpdates() : Promise<PluginUpdateInfo[]>
+   lib/plugins/version-checker.ts:286  async checkForUpdatesWithMetadata() : Promise<EnhancedPluginUpdateInfo[]>
+   lib/themes/registry-client.ts:551  async checkForUpdates() : Promise<ThemeUpdate[]>
+
+## stem='findPending'  variants=['findPendingByProfileId', 'findPendingForChat', 'findPendingForEntity']  [score=10.07, 2 files, 3 defs]
+   lib/database/repositories/background-jobs.repository.ts:129  async findPendingForChat(chatId: string) : Promise<BackgroundJob[]>
+   lib/database/repositories/background-jobs.repository.ts:153  async findPendingForEntity(entityId: string) : Promise<BackgroundJob[]>
+   lib/database/repositories/embedding-status.repository.ts:118  async findPendingByProfileId(profileId: string) : Promise<EmbeddingStatus[]>
+
+## stem='handleInstall'  variants=['handleInstall', 'handleInstallFromRegistryAction', 'handleInstallFromUrl']  [score=10.05, 2 files, 4 defs]
+   app/api/v1/plugins/route.ts:132  async handleInstall(req: NextRequest, context: any)
+   app/api/v1/themes/route.ts:173  async handleInstall(request: NextRequest)
+   app/api/v1/themes/route.ts:237  async handleInstallFromUrl(request: NextRequest)
+   app/api/v1/themes/route.ts:363  async handleInstallFromRegistryAction(request: NextRequest)
+
+## stem='findActive'  variants=['findActiveByChatId', 'findActiveForChat']  [score=9.90, 2 files, 2 defs]
+   lib/database/repositories/chat-documents.repository.ts:66  async findActiveForChat(chatId: string) : Promise<ChatDocument | null>
+   lib/database/repositories/terminal-sessions.repository.ts:119  async findActiveByChatId(chatId: string) : Promise<TerminalSession[]>
+
+## stem='enqueueEmbeddingJobs'  variants=['enqueueEmbeddingJobs', 'enqueueEmbeddingJobsForMountPoint']  [score=9.90, 2 files, 2 defs]
+   lib/mount-index/embedding-scheduler.ts:25  async enqueueEmbeddingJobsForMountPoint(mountPointId: string) : Promise<number>
+   lib/mount-index/scan-runner.ts:145  async enqueueEmbeddingJobs(mountPointId: string) : Promise<void>
+
+## stem='mime'  variants=['mimeForDocument', 'mimeForMountFile']  [score=9.80, 2 files, 2 defs]
+   app/api/v1/mount-points/[id]/blobs/[...path]/route.ts:31  mimeForDocument(doc: DocMountDocument) : string
+   app/api/v1/projects/[id]/actions/files.ts:24  mimeForMountFile(file: DocMountFile) : string
+
+## stem='findApiKey'  variants=['findApiKeyById', 'findApiKeyByIdAndUserId']  [score=9.80, 2 files, 3 defs]
+   lib/database/repositories/connection-profiles.repository.ts:265  async findApiKeyById(id: string) : Promise<ApiKey | null>
+   lib/database/repositories/connection-profiles.repository.ts:287  async findApiKeyByIdAndUserId(id: string, userId: string) : Promise<ApiKey | null>
+   lib/repositories/user-scoped.ts:275  async findApiKeyById(id: string) : Promise<ApiKey | null>
+
+## stem='sha256'  variants=['sha256OfBuffer', 'sha256OfString']  [score=9.73, 2 files, 3 defs]
+   lib/mount-index/conversion.ts:63  sha256OfBuffer(buffer: Buffer) : string
+   lib/mount-index/conversion.ts:67  sha256OfString(content: string) : string
+   lib/mount-index/database-store.ts:50  sha256OfString(content: string) : string
+
+## stem='decryptPepper'  variants=['decryptPepper', 'decryptPepperFromFile']  [score=9.40, 2 files, 2 defs]
+   lib/startup/dbkey.ts:209  decryptPepperFromFile(data: DbKeyFileData, passphrase: string) : string | null
+   lib/startup/pepper-vault.ts:118  decryptPepper(data: EncryptedPepperData, passphrase: string) : string | null
+
+## stem='processTurn'  variants=['processTurn', 'processTurnForMemory']  [score=9.30, 2 files, 2 defs]
+   app/api/v1/chats/[id]/actions/memories.ts:271  async processTurn(i: number) : Promise<void>
+   lib/memory/memory-processor.ts:264  async processTurnForMemory(ctx: TurnMemoryExtractionContext) : Promise<TurnMemoryProcessingResult>
+
+## stem='readFile'  variants=['readFile', 'readFileWithMtime']  [score=9.30, 2 files, 2 defs]
+   lib/doc-edit/path-resolver.ts:518  async readFileWithMtime(target: ReadWriteTarget) : Promise<
+   lib/images-v2.ts:213  async readFile(fileId: string) : Promise<Buffer>
+
+## stem='findOne'  variants=['findOne', 'findOneByFilter']  [score=9.30, 2 files, 2 defs]
+   lib/database/backends/sqlite/backend.ts:82  async findOne(filter: TypedQueryFilter<T>, options?: QueryOptions) : Promise<T | null>
+   lib/database/repositories/base.repository.ts:275  async findOneByFilter(filter: TypedQueryFilter<T>) : Promise<T | null>
+
+## stem='merge'  variants=['mergeWithDefaultTagStyle', 'mergeWithDefaultTheme']  [score=9.30, 2 files, 2 defs]
+   lib/tags/styles.ts:12  mergeWithDefaultTagStyle(style?: Partial<TagVisualStyle> | null) : TagVisualStyle
+   lib/themes/utils.ts:379  mergeWithDefaultTheme(partial: Partial<ThemeTokens>) : ThemeTokens
+
+## stem='convert'  variants=['convertToPlainText', 'convertToPngBlob', 'convertToWebP']  [score=9.20, 3 files, 3 defs]
+   lib/clipboard-utils.ts:39  convertToPngBlob(blob: Blob) : Promise<Blob>
+   lib/files/webp-conversion.ts:82  async convertToWebP(buffer: Buffer, mimeType: string, filename: string, ) : Promise<WebPConversionResult>
+   lib/mount-index/converters/index.ts:18  async convertToPlainText(absolutePath: string, fileType: SupportedFileType, ) : Promise<string>

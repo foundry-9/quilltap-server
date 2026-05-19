@@ -6,6 +6,7 @@
  */
 
 import { logger } from '@/lib/logger';
+import { parseVersion, compareVersions } from '@/lib/utils/semver';
 import { getInstalledPlugins } from './installer';
 import { getLatestVersion as getLatestVersionFromRegistry } from './registry-client';
 
@@ -40,54 +41,6 @@ export interface EnhancedPluginUpdateInfo extends PluginUpdateInfo {
   npmUrl: string;
   /** Changelog URL derived from repository */
   changelogUrl?: string;
-}
-
-// ============================================================================
-// VERSION UTILITIES
-// ============================================================================
-
-/**
- * Parse a semver version string into major, minor, patch components
- * Handles versions with or without 'v' prefix and pre-release suffixes
- */
-function parseVersion(version: string): { major: number; minor: number; patch: number } | null {
-  // Remove 'v' prefix if present
-  const cleaned = version.replace(/^v/, '');
-  // Extract just the major.minor.patch part (ignore pre-release suffixes)
-  const match = cleaned.match(/^(\d+)\.(\d+)\.(\d+)/);
-  if (!match) {
-    return null;
-  }
-  return {
-    major: parseInt(match[1], 10),
-    minor: parseInt(match[2], 10),
-    patch: parseInt(match[3], 10),
-  };
-}
-
-/**
- * Compare two semver versions
- * Returns: -1 if a < b, 0 if a === b, 1 if a > b
- */
-function compareVersions(a: string, b: string): number {
-  const parsedA = parseVersion(a);
-  const parsedB = parseVersion(b);
-
-  if (!parsedA || !parsedB) {
-    // Fall back to string comparison if parsing fails
-    return a.localeCompare(b);
-  }
-
-  if (parsedA.major !== parsedB.major) {
-    return parsedA.major < parsedB.major ? -1 : 1;
-  }
-  if (parsedA.minor !== parsedB.minor) {
-    return parsedA.minor < parsedB.minor ? -1 : 1;
-  }
-  if (parsedA.patch !== parsedB.patch) {
-    return parsedA.patch < parsedB.patch ? -1 : 1;
-  }
-  return 0;
 }
 
 /**

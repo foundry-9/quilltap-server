@@ -13,6 +13,53 @@ import { encodeStatusEvent } from './streaming.service'
 
 const logger = createServiceLogger('ToolExecutionService')
 
+// Tools whose results are inherently per-character (memories, conversation
+// transcripts). Whispered to the calling character regardless of chat settings —
+// peer characters' LLM contexts never see the body.
+const ALWAYS_PRIVATE_TOOLS = new Set<string>([
+  'search',
+  'read_conversation',
+])
+
+// Vault-read tools. Whispered to the calling character UNLESS the chat has
+// `allowCrossCharacterVaultReads` enabled (the operator's "characters share
+// each other's vaults" mode), in which case the result is public.
+const VAULT_READ_TOOLS = new Set<string>([
+  'doc_read_file',
+  'doc_list_files',
+  'doc_grep',
+  'doc_read_heading',
+  'doc_read_frontmatter',
+  'doc_read_blob',
+  'doc_list_blobs',
+  'doc_open_document',
+])
+
+/**
+ * Per-chat context used to decide whether a tool result should be whispered.
+ */
+export interface ToolWhisperContext {
+  userParticipantId: string | null
+  allowCrossCharacterVaultReads: boolean
+}
+
+/**
+ * Decide the `targetParticipantIds` for a tool-result message.
+ * Returning null leaves the message public.
+ */
+function computeToolMessageTargets(
+  toolName: string,
+  whisperContext: ToolWhisperContext | undefined
+): string[] | null {
+  if (!whisperContext) return null
+  const isAlwaysPrivate = ALWAYS_PRIVATE_TOOLS.has(toolName)
+  const isVaultRead = VAULT_READ_TOOLS.has(toolName)
+  const shouldWhisper = isAlwaysPrivate
+    || (isVaultRead && !whisperContext.allowCrossCharacterVaultReads)
+  if (!shouldWhisper) return null
+  return whisperContext.userParticipantId ? [whisperContext.userParticipantId] : []
+}
+
 /**
  * Stream controller interface for sending tool updates
  */
@@ -77,75 +124,13 @@ export async function processToolCalls(
       }
     }
 
-    // Handle sudo approval requirement
-    if (toolResult.requiresSudoApproval) {
-      logger.info('Sudo command requires approval, sending to frontend', {
-        toolName: toolResult.toolName,
-        pendingSudoCommand: toolResult.pendingSudoCommand,
-      })
-
-      controller.enqueue(
-        encoder.encode(
-          `data: ${JSON.stringify({
-            toolResult: {
-              index: toolIndex,
-              name: toolResult.toolName,
-              success: false,
-              requiresSudoApproval: true,
-              pendingSudoCommand: toolResult.pendingSudoCommand,
-              status: 'pending_approval',
-            },
-          })}\n\n`
-        )
-      )
-
-      toolMessages.push({
-        toolName: toolResult.toolName,
-        success: true,
-        content: 'Sudo command sent to user for approval. Waiting for response.',
-        arguments: toolCall.arguments,
-        callId: toolCall.callId,
-        metadata: toolResult.metadata,
-      })
-      continue
-    }
-
-    // Handle workspace acknowledgement requirement
-    if (toolResult.requiresWorkspaceAcknowledgement) {
-      logger.info('Workspace acknowledgement required, sending to frontend', {
-        toolName: toolResult.toolName,
-      })
-
-      controller.enqueue(
-        encoder.encode(
-          `data: ${JSON.stringify({
-            toolResult: {
-              index: toolIndex,
-              name: toolResult.toolName,
-              success: false,
-              requiresWorkspaceAcknowledgement: true,
-              status: 'pending_acknowledgement',
-            },
-          })}\n\n`
-        )
-      )
-
-      toolMessages.push({
-        toolName: toolResult.toolName,
-        success: true,
-        content: 'Workspace acknowledgement required. Waiting for user confirmation.',
-        arguments: toolCall.arguments,
-        callId: toolCall.callId,
-        metadata: toolResult.metadata,
-      })
-      continue
-    }
-
     let resultText: string
     if (!toolResult.success) {
       resultText = `Error: ${toolResult.error || 'Unknown error'}${toolResult.message ? ` - ${toolResult.message}` : ''}`
     } else if (toolResult.toolName === 'generate_image') {
       resultText = `Generated ${(toolResult.result as unknown[])?.length || 1} image(s)`
+    } else if (toolResult.toolName === 'attach_image') {
+      resultText = `Attached ${(toolResult.result as unknown[])?.length || 1} kept image(s)`
     } else {
       resultText = JSON.stringify(toolResult.result, null, 2)
     }
@@ -188,22 +173,30 @@ export async function saveToolMessages(
   _userId: string,
   toolMessages: ToolMessage[],
   generatedImagePaths: GeneratedImage[],
-  characterId?: string
+  characterId?: string,
+  participantId?: string,
+  whisperContext?: ToolWhisperContext
 ): Promise<{ firstToolMessageId: string | null; generatedImageIds: string[] }> {
   let firstToolMessageId: string | null = null
   const generatedImageIds: string[] = generatedImagePaths.map(img => img.id)
 
   for (const toolMsg of toolMessages) {
     const toolMessageId = crypto.randomUUID()
-    // Include image IDs as attachments on the tool message
-    const toolAttachments = toolMsg.toolName === 'generate_image'
+    // Include image IDs as attachments on the tool message. attach_image
+    // resurfaces previously-kept images via the same generatedImagePaths
+    // pipeline as generate_image, so its descriptors get attached too.
+    const toolAttachments = (toolMsg.toolName === 'generate_image' || toolMsg.toolName === 'attach_image')
       ? generatedImageIds
       : []
+
+    const targetParticipantIds = computeToolMessageTargets(toolMsg.toolName, whisperContext)
 
     const toolMessage = {
       id: toolMessageId,
       type: 'message' as const,
       role: 'TOOL' as const,
+      participantId: participantId ?? null,
+      targetParticipantIds,
       content: JSON.stringify({
         toolName: toolMsg.toolName,
         success: toolMsg.success,
@@ -280,5 +273,6 @@ export function createToolContext(
     projectId: projectId || undefined,
     browserUserAgent,
     loadedMemories,
+    pendingWardrobeAnnouncements: new Set<string>(),
   }
 }

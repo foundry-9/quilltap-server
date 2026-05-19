@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import ImageDetailModal from '../ImageDetailModal'
-import { ImageUploadDialog } from '../image-upload-dialog'
 import { GalleryControls } from './GalleryControls'
 import { GalleryEmpty } from './GalleryEmpty'
 import { GalleryGrid } from './GalleryGrid'
@@ -22,12 +21,11 @@ export function EmbeddedPhotoGallery({
 }: EmbeddedPhotoGalleryProps) {
   const [thumbnailSizeIndex, setThumbnailSizeIndex] = useState(DEFAULT_THUMBNAIL_INDEX)
   const [selectedIndex, setSelectedIndex] = useState(-1)
-  const [showOnlyTagged, setShowOnlyTagged] = useState(true)
-  const [updatingTag, setUpdatingTag] = useState<string | null>(null)
   const [settingAvatar, setSettingAvatar] = useState<string | null>(null)
-  const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [deletingImage, setDeletingImage] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const {
     allImages,
@@ -36,19 +34,14 @@ export function EmbeddedPhotoGallery({
     missingImages,
     fetchImages,
     handleImageError,
-    isImageTagged,
-    handleToggleTag,
     handleSetAvatar,
     handleClearAvatar,
-    handleDeleteImage
+    handleDeleteImage,
+    handleUpload,
   } = useGalleryData(entityId, entityType)
 
   const thumbnailSize = THUMBNAIL_SIZES[thumbnailSizeIndex]
-  const images = showOnlyTagged
-    ? allImages.filter(img =>
-        img.tags?.some(tag => tag.tagId === entityId && tag.tagType === entityType.toUpperCase())
-      )
-    : allImages
+  const images = allImages
   const selectedImage = selectedIndex >= 0 ? images[selectedIndex] : null
 
   useEffect(() => {
@@ -66,17 +59,7 @@ export function EmbeddedPhotoGallery({
     if (selectedIndex < images.length - 1) setSelectedIndex(selectedIndex + 1)
   }
 
-  const handleToggleTagClick = async (e: React.MouseEvent, image: any) => {
-    e.stopPropagation()
-    setUpdatingTag(image.id)
-    try {
-      await handleToggleTag(image, entityName)
-    } finally {
-      setUpdatingTag(null)
-    }
-  }
-
-  const handleSetAvatarClick = async (e: React.MouseEvent, image: any) => {
+  const handleSetAvatarClick = async (e: React.MouseEvent, image: GalleryImage) => {
     e.stopPropagation()
     if (!onAvatarChange) return
     setSettingAvatar(image.id)
@@ -92,11 +75,13 @@ export function EmbeddedPhotoGallery({
     try {
       await handleClearAvatar(currentAvatarId, onAvatarChange)
     } catch (error) {
-      console.error('Error clearing avatar:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Error clearing avatar:', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
-  const handleDeleteImageClick = async (e: React.MouseEvent, image: any) => {
+  const handleDeleteImageClick = async (e: React.MouseEvent, image: GalleryImage) => {
     e.stopPropagation()
     if (confirmDelete !== image.id) {
       setConfirmDelete(image.id)
@@ -112,6 +97,26 @@ export function EmbeddedPhotoGallery({
     }
   }
 
+  const handleUploadButtonClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const ok = await handleUpload(file)
+      if (ok && onRefresh) {
+        await onRefresh()
+      }
+    } finally {
+      setUploading(false)
+      // Reset so the same file can be re-selected.
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -120,18 +125,11 @@ export function EmbeddedPhotoGallery({
     )
   }
 
-  const taggedCount = allImages.filter(img =>
-    img.tags?.some(tag => tag.tagId === entityId && tag.tagType === entityType.toUpperCase())
-  ).length
-
   return (
     <div>
       <GalleryControls
-        taggedCount={taggedCount}
         totalCount={images.length}
-        showOnlyTagged={showOnlyTagged}
-        onFilterToggle={setShowOnlyTagged}
-        onUploadClick={() => setShowUploadDialog(true)}
+        onUploadClick={handleUploadButtonClick}
         onClearAvatarClick={handleClearAvatarClick}
         thumbnailSize={thumbnailSize}
         thumbnailSizeIndex={thumbnailSizeIndex}
@@ -141,22 +139,28 @@ export function EmbeddedPhotoGallery({
         hasAvatarSet={!!(onAvatarChange && currentAvatarId)}
       />
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelected}
+        disabled={uploading}
+        className="hidden"
+      />
+
       {images.length === 0 ? (
-        <GalleryEmpty showOnlyTagged={showOnlyTagged} entityName={entityName} />
+        <GalleryEmpty showOnlyTagged={false} entityName={entityName} />
       ) : (
         <GalleryGrid
           images={images}
           thumbnailSize={thumbnailSize}
           currentAvatarId={currentAvatarId}
           missingImages={missingImages}
-          updatingTag={updatingTag}
           settingAvatar={settingAvatar}
           deletingImage={deletingImage}
           confirmDelete={confirmDelete}
-          isImageTagged={isImageTagged}
           onImageClick={(index) => setSelectedIndex(index)}
           onImageError={handleImageError}
-          onToggleTag={handleToggleTagClick}
           onSetAvatar={handleSetAvatarClick}
           onDeleteImage={handleDeleteImageClick}
           entityName={entityName}
@@ -167,7 +171,18 @@ export function EmbeddedPhotoGallery({
         <ImageDetailModal
           isOpen={true}
           onClose={() => setSelectedIndex(-1)}
-          image={selectedImage}
+          image={{
+            id: selectedImage.id,
+            filename: selectedImage.filename,
+            filepath: selectedImage.filepath,
+            url: selectedImage.url,
+            mimeType: selectedImage.mimeType ?? 'image/webp',
+            size: selectedImage.size,
+            width: selectedImage.width,
+            height: selectedImage.height,
+            createdAt: selectedImage.createdAt,
+            tags: [],
+          }}
           onPrev={selectedIndex > 0 ? handlePrevious : undefined}
           onNext={selectedIndex < images.length - 1 ? handleNext : undefined}
           onAvatarSet={() => {
@@ -176,17 +191,6 @@ export function EmbeddedPhotoGallery({
           }}
         />
       )}
-
-      <ImageUploadDialog
-        isOpen={showUploadDialog}
-        onClose={() => setShowUploadDialog(false)}
-        onSuccess={() => {
-          setShowUploadDialog(false)
-          fetchImages()
-        }}
-        contextType='CHARACTER'
-        contextId={entityId}
-      />
     </div>
   )
 }

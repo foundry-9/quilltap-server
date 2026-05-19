@@ -18,12 +18,16 @@ const createArchetypeSchema = z.object({
   types: z.array(WardrobeItemTypeEnum).min(1, 'At least one type is required'),
   appropriateness: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
+  /**
+   * IDs of other items this composite bundles. Empty/omitted = leaf item.
+   * Cycle rejection is enforced by the repository.
+   */
+  componentItemIds: z.array(z.string()).optional(),
 });
 
 // GET /api/v1/wardrobe
 export const GET = createAuthenticatedHandler(async (req, { repos }) => {
   try {
-    logger.debug('[Wardrobe Archetypes v1] Fetching all archetype items');
 
     const archetypeItems = await repos.wardrobe.findArchetypes();
     return NextResponse.json({ wardrobeItems: archetypeItems });
@@ -42,16 +46,12 @@ export const POST = createAuthenticatedHandler(async (req, { repos }) => {
   const body = await req.json();
   const validatedData = createArchetypeSchema.parse(body);
 
-  logger.debug('[Wardrobe Archetypes v1] Creating archetype item', {
-    title: validatedData.title,
-    types: validatedData.types,
-  });
-
   const item = await repos.wardrobe.create({
     characterId: null,
     title: validatedData.title,
     description: validatedData.description ?? null,
     types: validatedData.types,
+    componentItemIds: validatedData.componentItemIds ?? [],
     appropriateness: validatedData.appropriateness ?? null,
     isDefault: validatedData.isDefault ?? false,
     migratedFromClothingRecordId: null,

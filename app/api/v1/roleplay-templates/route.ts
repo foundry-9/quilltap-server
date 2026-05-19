@@ -102,10 +102,6 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     let renderingPatterns = body.renderingPatterns || [];
     if ((!renderingPatterns || renderingPatterns.length === 0) && (templateDelimiters.length > 0 || narrationDelimiters)) {
       renderingPatterns = generateRenderingPatterns(templateDelimiters, narrationDelimiters as string | [string, string]);
-      logger.debug('Auto-generated rendering patterns from delimiters', {
-        delimiterCount: templateDelimiters.length,
-        patternCount: renderingPatterns.length,
-      });
     }
 
     // Create template

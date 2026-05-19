@@ -13,6 +13,7 @@
  */
 
 import fs from 'fs';
+import { sleepSync } from '../utils/sleep';
 import { logger as migrationLogger } from '../../migrations/lib/logger';
 
 const log = migrationLogger.child({ context: 'db-encryption-state' });
@@ -21,56 +22,127 @@ const log = migrationLogger.child({ context: 'db-encryption-state' });
 const SQLITE_MAGIC = 'SQLite format 3\0';
 
 /**
- * Check whether a database file is encrypted (SQLCipher) or plaintext.
+ * Tri-state result from {@link getDatabaseEncryptionState}.
  *
- * Reads the first 16 bytes of the file and compares them against the
- * standard SQLite header magic string. If the bytes don't match, the
- * file is presumed to be encrypted.
- *
- * @param dbPath - Absolute path to the database file
- * @returns true if the file exists and appears to be encrypted, false if
- *          it's plaintext SQLite or doesn't exist
+ * `unknown` is returned when we can't read the header reliably — typically a
+ * transient EAGAIN/EBUSY from a flaky filesystem (iCloud Drive evicting pages,
+ * VirtioFS bind-mount inside Docker on macOS, etc.). Callers MUST treat
+ * `unknown` as "do nothing destructive" — never as "plaintext, please convert."
  */
-export function isDatabaseEncrypted(dbPath: string): boolean {
-  log.debug('Checking database encryption state', { path: dbPath });
+export type DatabaseEncryptionState = 'encrypted' | 'plaintext' | 'unknown';
 
-  if (!fs.existsSync(dbPath)) {
-    log.debug('Database file does not exist', { path: dbPath });
-    return false;
-  }
+/** Read errors that are worth retrying — file is there but transiently unreadable. */
+const TRANSIENT_FS_CODES = new Set(['EAGAIN', 'EBUSY', 'EWOULDBLOCK', 'EINTR']);
 
-  try {
-    const fd = fs.openSync(dbPath, 'r');
+const HEADER_READ_MAX_ATTEMPTS = 5;
+const HEADER_READ_BACKOFF_MS = [50, 150, 400, 800, 1500];
+
+function isTransientFsError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === 'string' && TRANSIENT_FS_CODES.has(code);
+}
+
+
+/**
+ * Read the first 16 bytes of a file, retrying on transient errors.
+ *
+ * Returns the bytes actually read (may be < 16 if the file is short), or
+ * throws after exhausting retries on a transient error, or rethrows
+ * immediately on a non-transient error (EACCES, EIO, etc.).
+ */
+function readHeaderWithRetry(dbPath: string): Buffer {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < HEADER_READ_MAX_ATTEMPTS; attempt++) {
+    let fd: number | null = null;
     try {
+      fd = fs.openSync(dbPath, 'r');
       const header = Buffer.alloc(16);
       const bytesRead = fs.readSync(fd, header, 0, 16, 0);
-
-      if (bytesRead < 16) {
-        log.debug('Database file too small to determine encryption state', {
-          path: dbPath,
-          bytesRead,
-        });
-        return false;
+      return bytesRead < 16 ? header.subarray(0, bytesRead) : header;
+    } catch (err) {
+      lastErr = err;
+      if (!isTransientFsError(err)) {
+        throw err;
       }
-
-      const headerStr = header.toString('utf8');
-      const isEncrypted = headerStr !== SQLITE_MAGIC;
-
-      log.debug('Database encryption state determined', {
+      const backoff = HEADER_READ_BACKOFF_MS[attempt] ?? 1500;
+      log.warn('Transient error reading database header — retrying', {
         path: dbPath,
-        isEncrypted,
-        headerPrefix: isEncrypted ? '(encrypted)' : 'SQLite format 3',
+        attempt: attempt + 1,
+        maxAttempts: HEADER_READ_MAX_ATTEMPTS,
+        backoffMs: backoff,
+        error: err instanceof Error ? err.message : String(err),
       });
-
-      return isEncrypted;
+      sleepSync(backoff);
     } finally {
-      fs.closeSync(fd);
+      if (fd !== null) {
+        try { fs.closeSync(fd); } catch { /* ignore */ }
+      }
     }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error(`Exhausted retries reading database header: ${String(lastErr)}`);
+}
+
+/**
+ * Determine whether a database file is encrypted, plaintext, or unknown.
+ *
+ * Retries the header read on transient filesystem errors (EAGAIN/EBUSY) up
+ * to {@link HEADER_READ_MAX_ATTEMPTS} times before giving up and returning
+ * `unknown`. This matters on iCloud Drive bind-mounts inside Docker on
+ * macOS, where the file provider can briefly return EAGAIN while pages are
+ * materialized — earlier versions of this code treated that as "plaintext"
+ * and went on to attempt a destructive in-place re-encryption.
+ *
+ * @param dbPath - Absolute path to the database file
+ * @returns `'encrypted'`, `'plaintext'`, or `'unknown'`
+ */
+export function getDatabaseEncryptionState(dbPath: string): DatabaseEncryptionState {
+
+  if (!fs.existsSync(dbPath)) {
+    return 'plaintext';
+  }
+
+  let header: Buffer;
+  try {
+    header = readHeaderWithRetry(dbPath);
   } catch (error) {
     log.error('Failed to check database encryption state', {
       path: dbPath,
       error: error instanceof Error ? error.message : String(error),
     });
-    return false;
+    return 'unknown';
   }
+
+  if (header.length < 16) {
+    // A file shorter than the SQLite header isn't a usable SQLite DB in
+    // either mode. Treat as plaintext so callers that gate on
+    // `state === 'plaintext'` don't get stuck — the open/migration path
+    // downstream will surface a more meaningful error.
+    return 'plaintext';
+  }
+
+  const headerStr = header.toString('utf8');
+  const encrypted = headerStr !== SQLITE_MAGIC;
+
+  return encrypted ? 'encrypted' : 'plaintext';
+}
+
+/**
+ * Check whether a database file is encrypted (SQLCipher) or plaintext.
+ *
+ * Boolean wrapper around {@link getDatabaseEncryptionState}. Maps `unknown`
+ * to `false` to preserve the historical signature, but **callers that may
+ * act destructively on the result** (e.g. running an in-place re-encryption
+ * conversion) should call {@link getDatabaseEncryptionState} directly and
+ * branch on `unknown` explicitly — otherwise a transient read error gets
+ * silently treated as "plaintext, please re-encrypt."
+ *
+ * @param dbPath - Absolute path to the database file
+ * @returns true if the file appears to be encrypted, false otherwise
+ *          (including when the state is unknown — see warning above)
+ */
+export function isDatabaseEncrypted(dbPath: string): boolean {
+  return getDatabaseEncryptionState(dbPath) === 'encrypted';
 }

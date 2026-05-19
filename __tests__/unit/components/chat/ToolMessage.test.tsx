@@ -40,10 +40,9 @@ describe('ToolMessage', () => {
     }) as unknown as typeof fetch
   })
 
-  it('renders a wardrobe preset summary in the embedded tool view', () => {
+  it('renders a wardrobe preset summary with actor attribution', () => {
     render(
       <ToolMessage
-        embedded
         character={{ id: 'char-1', name: 'Riya' }}
         message={{
           id: 'msg-1',
@@ -64,7 +63,7 @@ describe('ToolMessage', () => {
 
     expect(screen.getByText('Applied an outfit preset.')).toBeInTheDocument()
     expect(screen.getByText('Wearing a velvet coat and riding boots.')).toBeInTheDocument()
-    expect(screen.getByText('Riya requested')).toBeInTheDocument()
+    expect(screen.getByText('Riya ran')).toBeInTheDocument()
   })
 
   it('copies generated images using a normalized leading-slash path', async () => {

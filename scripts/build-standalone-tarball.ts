@@ -16,7 +16,7 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, readdirSync, statSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
 const PROJECT_ROOT = join(__dirname, '..');
@@ -62,7 +62,7 @@ console.log(`    Output:  ${tarballName}`);
 console.log('');
 
 // Step 1: Clean staging directory
-console.log('==> Step 1/7: Cleaning staging directory');
+console.log('==> Step 1/8: Cleaning staging directory');
 if (existsSync(STAGING_DIR)) {
   rmSync(STAGING_DIR, { recursive: true, force: true });
 }
@@ -70,15 +70,15 @@ mkdirSync(STAGING_DIR, { recursive: true });
 
 if (!skipBuild) {
   // Step 2: Build plugins
-  console.log('==> Step 2/7: Building plugins');
+  console.log('==> Step 2/8: Building plugins');
   run('npm run build:plugins', 'Building plugins');
 
   // Step 3: Build Next.js standalone
-  console.log('==> Step 3/7: Building Next.js (standalone output)');
-  run('npx next build --webpack', 'Building Next.js');
+  console.log('==> Step 3/8: Building Next.js (standalone output)');
+  run('npx next build', 'Building Next.js');
 } else {
-  console.log('==> Step 2/7: Skipping plugin build (--skip-build)');
-  console.log('==> Step 3/7: Skipping Next.js build (--skip-build)');
+  console.log('==> Step 2/8: Skipping plugin build (--skip-build)');
+  console.log('==> Step 3/8: Skipping Next.js build (--skip-build)');
 }
 
 // Verify standalone output exists
@@ -88,11 +88,35 @@ if (!existsSync(NEXT_STANDALONE)) {
 }
 
 // Step 4: Copy standalone output
-console.log('==> Step 4/7: Copying .next/standalone/ to staging');
+console.log('==> Step 4/8: Copying .next/standalone/ to staging');
 copyDir(`${NEXT_STANDALONE}/.`, STAGING_DIR);
 
-// Step 5: Copy static assets and public files
-console.log('==> Step 5/7: Copying static assets and public files');
+// Step 4.5: Overlay our custom server entry, terminal WS handler, and child
+// entry onto the staged standalone tree, then drop the bootstrap shim over
+// Next's auto-generated server.js. Single source of truth for esbuild flags
+// and the child's externals list lives in scripts/build-standalone-overlay.mjs
+// — the same script is invoked from the local Dockerfile and the CI release
+// workflow's build-app step, so the three call sites can't drift.
+//
+// Skip when the staged tree already carries overlay outputs. The CI release
+// workflow's build-app step runs the overlay against .next/standalone/ before
+// uploading the artifact; the build-standalone job that consumes it never runs
+// `npm ci`, so re-running esbuild here would fail to resolve project deps
+// (zod, yauzl, @quilltap/*). Local `next build` flows still hit the overlay
+// because Next doesn't produce server-impl.js itself.
+const overlaySentinel = join(STAGING_DIR, 'server-impl.js');
+if (existsSync(overlaySentinel)) {
+  console.log('==> Step 5/8: Overlay outputs already present in staged tree (skipping)');
+} else {
+  console.log('==> Step 5/8: Overlaying custom server entries onto staged standalone tree');
+  run(
+    `node "${join(PROJECT_ROOT, 'scripts', 'build-standalone-overlay.mjs')}" "${STAGING_DIR}"`,
+    'Running build-standalone-overlay.mjs against staging',
+  );
+}
+
+// Step 6: Copy static assets and public files
+console.log('==> Step 6/8: Copying static assets and public files');
 const staticDest = join(STAGING_DIR, '.next', 'static');
 mkdirSync(staticDest, { recursive: true });
 copyDir(`${NEXT_STATIC}/.`, staticDest);
@@ -103,8 +127,8 @@ if (existsSync(PUBLIC_DIR)) {
   copyDir(`${PUBLIC_DIR}/.`, publicDest);
 }
 
-// Step 6: Copy bundled plugins and strip native modules
-console.log('==> Step 6/7: Copying plugins and stripping native modules');
+// Step 7: Copy bundled plugins and strip native modules
+console.log('==> Step 7/8: Copying plugins and stripping native modules');
 if (existsSync(PLUGINS_DIST)) {
   const pluginsDest = join(STAGING_DIR, 'plugins', 'dist');
   mkdirSync(pluginsDest, { recursive: true });
@@ -116,7 +140,18 @@ if (existsSync(standaloneNodeModules)) {
   // Remove native-only modules — they'll be resolved from the npm package's node_modules.
   // NOTE: sharp's JS wrapper and its pure-JS dependency @img/colour are kept in the
   // tarball. Only the platform-specific native binaries (@img/sharp-*, @img/sharp-libvips-*)
-  // and better-sqlite3 (entirely native) are stripped.
+  // and the platform-specific native module better-sqlite3 are stripped.
+  // They're reinstalled on the user's machine via npm install, which compiles them for the target platform.
+  //
+  // node-pty is intentionally NOT stripped: it ships cross-platform prebuilds
+  // (darwin-arm64, darwin-x64, win32-arm64, win32-x64) inside the package, so
+  // it can ride along in the tarball and Just Work on every Electron-shell
+  // target platform. The Electron shell launches standalone/server.js
+  // directly without going through bin/quilltap.js, so it can't rely on the
+  // CLI's linkNativeModules step to wire node-pty in. For the npx-quilltap
+  // path, linkNativeModules will replace the tarball-shipped copy with a
+  // symlink to the npm-installed one (which is rebuilt against the user's
+  // Node ABI on Linux where no prebuild exists).
   const nativeModulesToStrip = ['better-sqlite3'];
   for (const mod of nativeModulesToStrip) {
     const modPath = join(standaloneNodeModules, mod);
@@ -150,6 +185,19 @@ if (existsSync(standaloneNodeModules)) {
     }
   }
 
+  // Remove @napi-rs/canvas-* platform-specific native packages but keep the JS
+  // wrapper (@napi-rs/canvas) and pure-JS siblings like @napi-rs/wasm-runtime.
+  const napiDir = join(standaloneNodeModules, '@napi-rs');
+  if (existsSync(napiDir)) {
+    for (const entry of readdirSync(napiDir)) {
+      if (entry.startsWith('canvas-')) {
+        const entryPath = join(napiDir, entry);
+        rmSync(entryPath, { recursive: true, force: true });
+        console.log(`    Stripped: @napi-rs/${entry}`);
+      }
+    }
+  }
+
   // Clean up unnecessary files to reduce size
   const cleanDir = (dir: string): void => {
     if (!existsSync(dir)) return;
@@ -173,8 +221,8 @@ if (existsSync(standaloneNodeModules)) {
   cleanDir(standaloneNodeModules);
 }
 
-// Step 7: Create tarball
-console.log('==> Step 7/7: Creating tarball');
+// Step 8: Create tarball
+console.log('==> Step 8/8: Creating tarball');
 // Remove old tarball if it exists
 if (existsSync(tarballPath)) {
   rmSync(tarballPath, { force: true });

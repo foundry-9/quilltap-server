@@ -146,16 +146,18 @@ CREATE TABLE "characters" (
   "id" TEXT PRIMARY KEY,
   "userId" TEXT NOT NULL,
   "name" TEXT NOT NULL,
-  "title" TEXT,
-  "description" TEXT,
-  "personality" TEXT,
+  "title" TEXT,                           -- The user's or character's own private label/framing (e.g. "the protagonist", "the rival"). Not how others refer to them.
+  "identity" TEXT,                        -- Surface-level public-knowledge view: name, station, occupation, reputation. What strangers know on sight.
+  "description" TEXT,                     -- Acquaintance-perceivable behaviour, mannerisms, verbal patterns. NOT physical (see physicalDescriptions).
+  "manifesto" TEXT,                       -- The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Synced as `manifesto.md` in the character vault.
+  "personality" TEXT,                     -- The character's own self-knowledge — internal driver of speech and behaviour.
   "scenario" TEXT,                        -- DEPRECATED: use scenarios instead
   "scenarios" TEXT DEFAULT '[]',          -- JSON array of { id, title, content, createdAt, updatedAt }
   "firstMessage" TEXT,
   "exampleDialogues" TEXT,
   "systemPrompts" TEXT DEFAULT '[]',
   "avatarUrl" TEXT,
-  "defaultImageId" TEXT,
+  "defaultImageId" TEXT,                  -- Vault link id (doc_mount_file_links.id) of the character's portrait. Pre-photos-Phase-3 this was a legacy files.id; the photo-gallery cutover translates every value to the matching vault link id by sha256.
   "defaultConnectionProfileId" TEXT,
   "defaultPartnerId" TEXT,
   "defaultRoleplayTemplateId" TEXT,
@@ -166,7 +168,7 @@ CREATE TABLE "characters" (
   "controlledBy" TEXT DEFAULT 'llm',
   "partnerLinks" TEXT DEFAULT '[]',
   "tags" TEXT DEFAULT '[]',
-  "avatarOverrides" TEXT DEFAULT '[]',
+  "avatarOverrides" TEXT DEFAULT '[]',    -- JSON array of { chatId, imageId } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
   "physicalDescriptions" TEXT DEFAULT '[]',
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL,
@@ -182,7 +184,7 @@ CREATE TABLE "characters" (
   "canDressThemselves" INTEGER DEFAULT NULL,
   "canCreateOutfits" INTEGER DEFAULT NULL,
   "characterDocumentMountPointId" TEXT DEFAULT NULL,
-  "readPropertiesFromDocumentStore" INTEGER DEFAULT NULL,  -- when 1, pronouns/aliases/title/firstMessage/talkativeness are read from the linked vault's properties.json
+  "readPropertiesFromDocumentStore" INTEGER DEFAULT NULL,  -- when 1, pronouns/aliases/title/firstMessage/talkativeness are read from the linked vault's properties.json; identity/description/personality/exampleDialogues are read from their respective .md files
   "systemTransparency" INTEGER DEFAULT NULL  -- when 1 (true), this character may inspect "the Staff" — the chat-level toggles for self_inventory, Staff messages (Lantern/Aurora/Librarian/Prospero/Host), and character vaults still apply. When NULL or 0 (false), the character cannot see Staff messages, the self_inventory tool is withheld, and all character vaults (own + peers) are hidden from doc_* tools — a hard override on top of chat/project settings. Default NULL (opaque).
 );
 
@@ -199,6 +201,7 @@ CREATE TABLE "wardrobe_items" (
   "title" TEXT NOT NULL,
   "description" TEXT,
   "types" TEXT NOT NULL DEFAULT '[]',
+  "componentItemIds" TEXT DEFAULT NULL,
   "appropriateness" TEXT,
   "isDefault" INTEGER DEFAULT 0,
   "migratedFromClothingRecordId" TEXT,
@@ -211,22 +214,11 @@ CREATE TABLE "wardrobe_items" (
 CREATE INDEX "idx_wardrobe_items_character" ON "wardrobe_items"("characterId");
 ```
 
-### outfit_presets
+`componentItemIds` is a JSON array of other wardrobe item ids. An empty array (or NULL, treated identically) means a leaf item; a populated array means a composite — equipping the item stores its own id but at read time `expandComposites` resolves the components transitively (cycle-tolerant, depth-capped). Cycles are rejected at save time by `WardrobeRepository`.
 
-```sql
-CREATE TABLE "outfit_presets" (
-  "id" TEXT PRIMARY KEY,
-  "characterId" TEXT,
-  "name" TEXT NOT NULL,
-  "description" TEXT,
-  "slots" TEXT NOT NULL,
-  "createdAt" TEXT NOT NULL,
-  "updatedAt" TEXT NOT NULL,
-  FOREIGN KEY ("characterId") REFERENCES "characters"("id") ON DELETE CASCADE
-);
+### outfit_presets — REMOVED in 4.5
 
-CREATE INDEX "idx_outfit_presets_character" ON "outfit_presets"("characterId");
-```
+The `outfit_presets` table was eliminated; named outfit bundles are now expressed as composite `wardrobe_items` rows whose `componentItemIds` references the constituent items. Migrations `migrate-outfit-presets-to-composites-v1` and `drop-outfit-presets-table-v1` perform the fold-and-drop. A snapshot of the table content is written to `<dataDir>/backup/pre-drop-outfit-presets.json` before the drop.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -235,6 +227,7 @@ CREATE INDEX "idx_outfit_presets_character" ON "outfit_presets"("characterId");
 | title | TEXT | Display name of the item |
 | description | TEXT | Detailed description for prompts and image generation |
 | types | TEXT (JSON array) | Coverage slots: `["top"]`, `["bottom"]`, `["top","bottom"]` for dresses, etc. |
+| componentItemIds | TEXT (JSON array, nullable) | Other wardrobe item ids this composite bundles. Empty/NULL = leaf item. Cycles rejected on save. |
 | appropriateness | TEXT | Context tags: "casual", "formal", "intimate", etc. |
 | isDefault | INTEGER | 1 = part of character's default outfit |
 | migratedFromClothingRecordId | TEXT (UUID) | Tracks provenance from legacy clothingRecords migration |
@@ -287,6 +280,11 @@ CREATE TABLE "chats" (
   "messageCount" INTEGER DEFAULT 0,
   "lastMessageAt" TEXT,
   "lastRenameCheckInterchange" INTEGER DEFAULT 0,
+  "compactionGeneration" INTEGER DEFAULT 0,
+  "lastSummaryTurn" INTEGER DEFAULT 0,
+  "lastSummaryTokens" INTEGER DEFAULT 0,
+  "lastFullRebuildTurn" INTEGER DEFAULT 0,
+  "summaryAnchorMessageIds" TEXT DEFAULT '[]',
   "isPaused" INTEGER DEFAULT 0,
   "isManuallyRenamed" INTEGER DEFAULT 0,
   "impersonatingParticipantIds" TEXT DEFAULT '[]',
@@ -322,7 +320,7 @@ CREATE TABLE "chats" (
   "renderedMarkdown" TEXT DEFAULT NULL,
   "equippedOutfit" TEXT DEFAULT NULL,
   "pendingOutfitNotifications" TEXT DEFAULT NULL,
-  "characterAvatars" TEXT DEFAULT NULL,
+  "characterAvatars" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { imageId, generatedAt, afterMessageCount } } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
   "avatarGenerationEnabled" INTEGER DEFAULT NULL,
   "alertCharactersOfLanternImages" INTEGER DEFAULT NULL,
   "chatType" TEXT DEFAULT 'salon',
@@ -330,7 +328,13 @@ CREATE TABLE "chats" (
   "scenarioText" TEXT DEFAULT NULL,
   "documentMode" TEXT DEFAULT 'normal',
   "dividerPosition" INTEGER DEFAULT 45,
-  "allowCrossCharacterVaultReads" INTEGER DEFAULT 0
+  "terminalMode" TEXT DEFAULT 'normal',
+  "activeTerminalSessionId" TEXT DEFAULT NULL,
+  "rightPaneVerticalSplit" INTEGER DEFAULT 50,
+  "allowCrossCharacterVaultReads" INTEGER DEFAULT 0,
+  "compiledIdentityStacks" TEXT DEFAULT NULL,
+  "courierCheckpoints" TEXT DEFAULT NULL,
+  "commonplaceSceneCache" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");
@@ -357,6 +361,38 @@ CREATE TABLE "chat_documents" (
 CREATE INDEX "idx_chat_documents_chatId" ON "chat_documents" ("chatId");
 CREATE UNIQUE INDEX "idx_chat_documents_unique" ON "chat_documents" ("chatId", "filePath", "scope", "mountPoint");
 ```
+
+### terminal_sessions
+
+```sql
+CREATE TABLE "terminal_sessions" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "label" TEXT,
+  "shell" TEXT NOT NULL,
+  "cwd" TEXT NOT NULL,
+  "startedAt" TEXT NOT NULL,
+  "exitedAt" TEXT,
+  "exitCode" INTEGER,
+  "transcriptPath" TEXT,
+  FOREIGN KEY ("chatId") REFERENCES "chats" ("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_terminal_sessions_chatId" ON "terminal_sessions" ("chatId");
+CREATE INDEX "idx_terminal_sessions_startedAt" ON "terminal_sessions" ("startedAt" DESC);
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| chatId | TEXT (UUID) | Chat this session belongs to; cascade deletes when chat is deleted |
+| label | TEXT (nullable) | Optional user-provided label for the session |
+| shell | TEXT | Shell executable name (e.g., `bash`, `zsh`) |
+| cwd | TEXT | Working directory when session was started |
+| startedAt | TEXT (ISO 8601) | Session creation timestamp |
+| exitedAt | TEXT (ISO 8601, nullable) | Session exit timestamp; `null` if session is still active |
+| exitCode | INTEGER (nullable) | Process exit code; `null` if session is still active |
+| transcriptPath | TEXT (nullable) | Relative path to transcript file if recorded; `null` if not recorded |
 
 ### conversation_annotations
 
@@ -452,7 +488,15 @@ CREATE TABLE "chat_messages" (
   "dangerFlags" TEXT DEFAULT NULL,
   "targetParticipantIds" TEXT DEFAULT NULL,
   "isSilentMessage" INTEGER DEFAULT NULL,
-  "systemSender" TEXT DEFAULT NULL
+  "systemSender" TEXT DEFAULT NULL,
+  "hostEvent" TEXT DEFAULT NULL,
+  "systemKind" TEXT DEFAULT NULL,
+  "summaryAnchor" TEXT DEFAULT NULL,
+  "customAnnouncer" TEXT DEFAULT NULL,
+  "pendingExternalPrompt" TEXT DEFAULT NULL,
+  "pendingExternalAttachments" TEXT DEFAULT NULL,
+  "pendingExternalPromptFull" TEXT DEFAULT NULL,
+  "opaqueContent" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");
@@ -471,13 +515,15 @@ CREATE TABLE "chat_settings" (
   "tagStyles" TEXT DEFAULT '{}',
   "cheapLLMSettings" TEXT DEFAULT '{}',
   "imageDescriptionProfileId" TEXT,
+  "uncensoredImageDescriptionProfileId" TEXT, -- added in 4.4 (add-uncensored-image-description-profile-field-v1): vision-LLM fallback used when the primary refuses
   "defaultRoleplayTemplateId" TEXT,
   "themePreference" TEXT DEFAULT '{}',
   "sidebarWidth" INTEGER DEFAULT 256,
   "defaultTimestampConfig" TEXT DEFAULT '{}',
   "memoryCascadePreferences" TEXT DEFAULT '{}',
   "autoHousekeepingSettings" TEXT DEFAULT '{"enabled":false,"perCharacterCap":2000,"perCharacterCapOverrides":{},"autoMergeSimilarThreshold":0.9,"mergeSimilar":false}',
-  "memoryExtractionLimits" TEXT DEFAULT '{"enabled":false,"maxPerHour":20,"softStartFraction":0.7,"softFloor":0.7}',
+  "memoryExtractionLimits" TEXT DEFAULT '{"enabled":false,"maxPerHour":20,"softStartFraction":0.7,"softFloor":0.7}', -- DEPRECATED in 4.4: superseded by instance_settings['memoryExtractionLimits']; column retained for backwards compat
+  "memoryExtractionConcurrency" INTEGER DEFAULT 1, -- DEPRECATED at introduction in 4.4: superseded by instance_settings['memoryExtractionConcurrency']; column retained for backwards compat
   "tokenDisplaySettings" TEXT DEFAULT '{}',
   "contextCompressionSettings" TEXT DEFAULT '{}',
   "llmLoggingSettings" TEXT DEFAULT '{}',
@@ -525,7 +571,9 @@ CREATE TABLE "connection_profiles" (
   "modelClass" TEXT DEFAULT NULL,
   "maxContext" INTEGER DEFAULT NULL,
   "maxTokens" INTEGER DEFAULT NULL,
-  "supportsImageUpload" INTEGER DEFAULT 0
+  "supportsImageUpload" INTEGER DEFAULT 0,
+  "transport" TEXT NOT NULL DEFAULT 'api',
+  "courierDeltaMode" INTEGER DEFAULT 1
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);
@@ -687,6 +735,14 @@ CREATE INDEX "idx_memories_createdAt" ON "memories" ("createdAt" DESC);
 CREATE INDEX "idx_memories_projectId" ON "memories" ("projectId");
 ```
 
+`aboutCharacterId` semantics: the character the memory is *about*. Three buckets are valid:
+
+- `aboutCharacterId === characterId` — self-referential memory (the holder's own knowledge of themselves; produced by the character-extraction pass in `lib/memory/memory-processor.ts`).
+- `aboutCharacterId !== characterId` — inter-character memory (the holder remembers something about another character — including a user-controlled persona, in which case `characters.controlledBy === 'user'` for the about-target).
+- `aboutCharacterId IS NULL` — legacy / ambiguous. New auto-extracted memories should not produce nulls; the `align-about-character-id-v1` migration (v4.4.0) backfilled existing nulls per the name-presence rule.
+
+`createMemoryWithGate` (the chokepoint for AUTO writes) applies a name-presence safety net before insert: when `aboutCharacterId` differs from the holder, the about-character's `name + aliases` (plus `user` / `the user` for `controlledBy: 'user'` characters) must appear in `summary + content`; otherwise `aboutCharacterId` is collapsed to the holder. Manual memories bypass the safety net.
+
 ### prompt_templates
 
 ```sql
@@ -788,6 +844,8 @@ CREATE TABLE "embedding_profiles" (
   "baseUrl" TEXT,
   "modelName" TEXT NOT NULL,
   "dimensions" INTEGER,
+  "truncateToDimensions" INTEGER DEFAULT NULL,
+  "normalizeL2" INTEGER DEFAULT 1,
   "isDefault" INTEGER DEFAULT 0,
   "tags" TEXT DEFAULT '[]',
   "createdAt" TEXT NOT NULL,
@@ -948,6 +1006,15 @@ CREATE TABLE "instance_settings" (
 );
 ```
 
+Known keys (others may be present from migrations / startup hooks):
+- `highest_app_version` — startup version guard (string).
+- `wardrobe_folder_migrated_v1`, `wardrobe_json_refreshed_v1` — one-shot startup migration flags ("true").
+- `memoryExtractionConcurrency` (4.4+) — integer 1–32. Per-instance MEMORY_EXTRACTION job concurrency cap. Read by `lib/background-jobs/processor.ts` at startup; updated by `POST /api/v1/memories?action=extraction-concurrency`.
+- `memoryExtractionLimits` (4.4+) — JSON: `{enabled, maxPerHour, softStartFraction, softFloor}`. Per-instance memory extraction rate limits. Read by `lib/background-jobs/handlers/memory-extraction.ts` and the dry-run extraction route; updated by `POST /api/v1/memories?action=extraction-limits-config`. Migrated from `chat_settings.memoryExtractionLimits` for SINGLE_USER_ID by `migrate-extraction-knobs-to-instance-settings-v1`.
+- `lanternBackgroundsMountPointId` (4.3+) — UUID of the global "Lantern Backgrounds" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/file-storage/lantern-store-bridge.ts`; written by `provision-lantern-backgrounds-mount-v1`. Used to land story-background job output and generic `generate_image` tool output when no project context is available.
+- `userUploadsMountPointId` (4.4+) — UUID of the global "Quilltap Uploads" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/file-storage/user-uploads-bridge.ts`; written by `provision-user-uploads-mount-v1`. Used for every project-less file write: chat attachments, paste/drag-drop images, the Files-tab uploader, capabilities-report exports, and backup-restore replay of project-less files. Replaces the legacy `<filesDir>/_general/` namespace as the catch-all destination.
+- `generalMountPointId` (4.4+) — UUID of the global "Quilltap General" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/mount-index/general-scenarios.ts`; written by `provision-general-mount-v1`. Houses the instance-wide `Scenarios/` folder offered alongside project- and character-specific scenarios in every non-help New Chat dialog. Managed via `/api/v1/scenarios` and the `/scenarios` page.
+
 ### quilltap_meta
 
 ```sql
@@ -1008,6 +1075,7 @@ CREATE TABLE "llm_logs" (
   "response" TEXT NOT NULL,
   "usage" TEXT,
   "cacheUsage" TEXT,
+  "requestHashes" TEXT,
   "durationMs" INTEGER,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
@@ -1083,41 +1151,73 @@ CREATE INDEX IF NOT EXISTS "idx_doc_mount_folders_mp_path"
   ON "doc_mount_folders" ("mountPointId", "path");
 ```
 
-Folder rows are populated only for `database`-backed mount points. Filesystem-backed mounts continue to derive folder structure from the OS; their `folderId` columns on `doc_mount_files`/`doc_mount_documents` are always NULL. The unique index on (mountPointId, COALESCE(parentId, ''), name) enforces one folder per parent per name; the COALESCE is required because SQLite treats each NULL as distinct in UNIQUE constraints.
+Folder rows are populated only for `database`-backed mount points. Filesystem-backed mounts continue to derive folder structure from the OS; their `folderId` column on `doc_mount_file_links` is always NULL. The unique index on (mountPointId, COALESCE(parentId, ''), name) enforces one folder per parent per name; the COALESCE is required because SQLite treats each NULL as distinct in UNIQUE constraints.
 
 ### doc_mount_files
 
 ```sql
 CREATE TABLE IF NOT EXISTS "doc_mount_files" (
   "id" TEXT PRIMARY KEY,
-  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
-  "relativePath" TEXT NOT NULL,
-  "fileName" TEXT NOT NULL,
-  "fileType" TEXT NOT NULL,
   "sha256" TEXT NOT NULL,
   "fileSizeBytes" INTEGER NOT NULL,
-  "lastModified" TEXT NOT NULL,
+  "fileType" TEXT NOT NULL,
   "source" TEXT NOT NULL DEFAULT 'filesystem',
-  "folderId" TEXT,
-  "conversionStatus" TEXT NOT NULL DEFAULT 'pending',
-  "conversionError" TEXT,
-  "plainTextLength" INTEGER,
-  "chunkCount" INTEGER NOT NULL DEFAULT 0,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS "idx_doc_mount_files_sha256" ON "doc_mount_files" ("sha256");
 ```
 
-`fileType` is one of `'pdf'`, `'docx'`, `'markdown'`, `'txt'`, `'json'`, `'jsonl'`, or `'blob'`. `'blob'` is the catch-all for arbitrary binaries stored via the upload endpoint that have no extracted text representation (images, audio, archives, etc.) — their bytes live in `doc_mount_blobs` and the mirror row exists so the tree, listing, and delete paths treat them uniformly. `'pdf'` and `'docx'` blob-backed rows carry a non-null `plainTextLength` once their `doc_mount_blobs.extractedText` is populated.
+A `doc_mount_files` row is the **content identity** for a set of bytes — one row per file's bytes, regardless of how many mount points reference them. Per-mount metadata (relativePath, fileName, folderId, conversion lifecycle, extracted text) lives on `doc_mount_file_links`; bytes for database-backed files live in `doc_mount_documents` (text) or `doc_mount_blobs` (binary), keyed by `fileId`.
 
-`source` is `'filesystem'` when the bytes live on disk (filesystem/obsidian mounts) or `'database'` when they live in `doc_mount_documents`. The column is added by `DocMountFilesRepository` on first access for legacy mount-index databases that predate database-backed stores. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores; filesystem-backed stores always leave it NULL. The column is added by in-repo `ALTER TABLE` on first access.
+`fileType` is one of `'pdf'`, `'docx'`, `'markdown'`, `'txt'`, `'json'`, `'jsonl'`, or `'blob'`. `'blob'` is the catch-all for arbitrary binaries with no extracted text representation (images, audio, archives, etc.) — their bytes live in `doc_mount_blobs`. `source` is `'filesystem'` when the bytes live on disk (one link per file enforced at the repo layer) or `'database'` when they live in `doc_mount_documents` / `doc_mount_blobs` (any number of links allowed — hard-linkable).
+
+Writers call `findOrCreateByContent(sha256, ...)` rather than `create` directly: if a content row with the matching sha already exists, its UUID is reused so any existing links continue to resolve correctly. The `sha256` INDEX is not UNIQUE because pre-refactor databases may carry duplicate sha rows from the days when every (mountPoint, relativePath) was its own file row; the migration deliberately leaves them in place rather than collapsing.
+
+### doc_mount_file_links
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_file_links" (
+  "id" TEXT PRIMARY KEY,
+  "fileId" TEXT NOT NULL REFERENCES "doc_mount_files"("id") ON DELETE CASCADE,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id") ON DELETE CASCADE,
+  "relativePath" TEXT NOT NULL,
+  "fileName" TEXT NOT NULL,
+  "folderId" TEXT,
+  "originalFileName" TEXT,
+  "originalMimeType" TEXT,
+  "description" TEXT NOT NULL DEFAULT '',
+  "descriptionUpdatedAt" TEXT,
+  "conversionStatus" TEXT NOT NULL DEFAULT 'pending',
+  "conversionError" TEXT,
+  "plainTextLength" INTEGER,
+  "extractedText" TEXT,
+  "extractedTextSha256" TEXT,
+  "extractionStatus" TEXT NOT NULL DEFAULT 'none',
+  "extractionError" TEXT,
+  "chunkCount" INTEGER NOT NULL DEFAULT 0,
+  "lastModified" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_file_links_mp_path"
+  ON "doc_mount_file_links" ("mountPointId", "relativePath");
+CREATE INDEX IF NOT EXISTS "idx_doc_mount_file_links_fileId"
+  ON "doc_mount_file_links" ("fileId");
+CREATE INDEX IF NOT EXISTS "idx_doc_mount_file_links_mountPointId"
+  ON "doc_mount_file_links" ("mountPointId");
+```
+
+One row per visible location of a file (i.e. the hard link). Multiple link rows may point at the same `doc_mount_files` row, meaning the same bytes appear at multiple `(mountPointId, relativePath)` tuples. Per-consumer extraction state (conversion lifecycle, extracted text, chunk count) lives here so two consumers hard-linking the same content can re-extract or re-caption independently.
+
+The UNIQUE index on `(mountPointId, relativePath)` enforces "one file per location" — what used to be advisory in app code. Deleting a link via `DocMountFileLinksRepository.deleteWithGC` cascades to chunks (FK), and if it was the last link for its file the file row gets dropped (cascading to documents/blobs). `sweepOrphanedFiles()` is the defense-in-depth GC for writers that bypass the helper.
 
 ### doc_mount_chunks
 
 ```sql
 CREATE TABLE IF NOT EXISTS "doc_mount_chunks" (
   "id" TEXT PRIMARY KEY,
-  "fileId" TEXT NOT NULL REFERENCES "doc_mount_files"("id"),
+  "linkId" TEXT NOT NULL REFERENCES "doc_mount_file_links"("id") ON DELETE CASCADE,
   "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
   "chunkIndex" INTEGER NOT NULL,
   "content" TEXT NOT NULL,
@@ -1129,7 +1229,7 @@ CREATE TABLE IF NOT EXISTS "doc_mount_chunks" (
 );
 ```
 
-The `embedding` column stores Float32 arrays as BLOBs (same format as `conversation_chunks.embedding`).
+Chunks are keyed by **linkId**, not by fileId — every hard link to a file maintains its own chunk + embedding set so consumers can re-extract independently. The `embedding` column stores Float32 arrays as BLOBs (same format as `conversation_chunks.embedding`). `mountPointId` is denormalized off the link row for fast per-mount queries.
 
 ### project_doc_mount_links
 
@@ -1150,55 +1250,39 @@ Note: `projectId` references the `projects` table in the main database. Cross-da
 ```sql
 CREATE TABLE IF NOT EXISTS "doc_mount_documents" (
   "id" TEXT PRIMARY KEY,
-  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
-  "relativePath" TEXT NOT NULL,
-  "fileName" TEXT NOT NULL,
-  "fileType" TEXT NOT NULL,
+  "fileId" TEXT NOT NULL REFERENCES "doc_mount_files"("id") ON DELETE CASCADE,
   "content" TEXT NOT NULL,
   "contentSha256" TEXT NOT NULL,
   "plainTextLength" INTEGER NOT NULL,
-  "folderId" TEXT,
-  "lastModified" TEXT NOT NULL,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_documents_mp_path"
-  ON "doc_mount_documents" ("mountPointId", "relativePath");
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_documents_fileId"
+  ON "doc_mount_documents" ("fileId");
 ```
 
-Text content for database-backed mount points. Every row is mirrored in `doc_mount_files` (with `source='database'`) so existing scanning, search, and embedding paths treat it identically to on-disk files. `fileType` is one of `'markdown'`, `'txt'`, `'json'`, or `'jsonl'`. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores. The column is added by in-repo `ALTER TABLE` on first access.
+Text content for database-backed files. Content-addressable: one document row per `doc_mount_files` row (UNIQUE on `fileId`). Per-link metadata (relativePath, fileName, folderId, lastModified) lives on `doc_mount_file_links` — multiple hard links may reference the same document. Cascade off `doc_mount_files` reaps the document when the last link goes away. `contentSha256` mirrors `doc_mount_files.sha256` for sanity.
 
 ### doc_mount_blobs
 
 ```sql
 CREATE TABLE IF NOT EXISTS "doc_mount_blobs" (
   "id" TEXT PRIMARY KEY,
-  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
-  "relativePath" TEXT NOT NULL,
-  "originalFileName" TEXT NOT NULL,
-  "originalMimeType" TEXT NOT NULL,
-  "storedMimeType" TEXT NOT NULL,
-  "sizeBytes" INTEGER NOT NULL,
+  "fileId" TEXT NOT NULL REFERENCES "doc_mount_files"("id") ON DELETE CASCADE,
   "sha256" TEXT NOT NULL,
-  "description" TEXT NOT NULL DEFAULT '',
-  "descriptionUpdatedAt" TEXT,
-  "extractedText" TEXT,
-  "extractedTextSha256" TEXT,
-  "extractionStatus" TEXT NOT NULL DEFAULT 'none',
-  "extractionError" TEXT,
+  "sizeBytes" INTEGER NOT NULL,
+  "storedMimeType" TEXT NOT NULL,
   "data" BLOB NOT NULL,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_blobs_mp_path"
-  ON "doc_mount_blobs" ("mountPointId", "relativePath");
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_blobs_fileId"
+  ON "doc_mount_blobs" ("fileId");
 ```
 
-Binary assets for **any** mount point type. Bitmap images are transcoded to WebP on upload using the `sharp` dependency; already-WebP uploads, SVG, and all other MIME types are stored as-is. `originalMimeType` preserves the uploaded format while `storedMimeType` is what `data` actually contains. `description` is user-supplied alt-text / transcript consumed by the embedding pipeline.
+Binary assets for **any** mount point type. Content-addressable: one blob row per `doc_mount_files` row (UNIQUE on `fileId`). Per-link metadata (relativePath, originalFileName, originalMimeType, description, extractedText) lives on `doc_mount_file_links` so a hard-linked image can carry different descriptions or extraction results in two different mounts without disturbing the bytes themselves. Bitmap images are transcoded to WebP on upload using `sharp`; already-WebP uploads, SVG, and other MIME types are stored as-is. `storedMimeType` is what `data` actually contains.
 
-`extractedText` is the plain-text representation of the blob's bytes, populated for PDF and DOCX uploads via the buffer-native converters. `extractedTextSha256` tracks drift between the text and what has been chunked. `extractionStatus` is one of `'none'` (no converter applies — images, arbitrary binaries), `'pending'` (conversion in progress), `'converted'` (text extracted successfully), `'failed'` (converter raised or returned empty), or `'skipped'` (conversion explicitly bypassed). `extractionError` stores the failure reason when `extractionStatus='failed'`. The four extraction columns are added by in-repo `ALTER TABLE` on first access, so upgrading instances pick them up transparently.
-
-Every database-backed blob is mirrored into `doc_mount_files` with `source='database'` and `fileType` set to `'pdf'` / `'docx'` (when `extractedText` is populated) or `'blob'` (arbitrary binary with no text). This keeps the tree, search, chunking, and embedding pipelines uniform across native-text documents and blobs. The mirror row's `sha256` and `fileSizeBytes` track the blob's original bytes; `plainTextLength` tracks the extracted text.
+Cascade off `doc_mount_files` reaps the blob row (and its bytes) when the last link goes away. The extraction lifecycle (`extractedText`, `extractedTextSha256`, `extractionStatus`, `extractionError`) is no longer on this table — it moved to `doc_mount_file_links` so each consumer can override.
 
 ---
 

@@ -3,8 +3,9 @@
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
-import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { showSuccessToast } from '@/lib/toast'
 import { FormActions } from '@/components/ui/FormActions'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 interface Tag {
   id: string
@@ -140,19 +141,19 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
               <label htmlFor="content" className="block qt-text-label mb-1">
                 Full Content *
               </label>
-              <textarea
-                id="content"
-                name="content"
-                value={form.formData.content}
-                onChange={form.handleChange}
-                required
-                rows={6}
-                placeholder="The complete memory content..."
-                className="qt-textarea"
-              />
-              <p className="mt-1 qt-text-xs">
+              <p className="mb-2 qt-text-xs">
                 The full details of what this character should remember.
               </p>
+              <MarkdownLexicalEditor
+                value={form.formData.content}
+                onChange={(value) => form.handleChange({
+                  target: { name: 'content', value },
+                } as unknown as React.ChangeEvent<HTMLTextAreaElement>)}
+                remountKey={memory?.id ?? 'new'}
+                namespace="MemoryEditor.content"
+                ariaLabel="Memory content"
+                minHeight="10rem"
+              />
             </div>
 
             <div>

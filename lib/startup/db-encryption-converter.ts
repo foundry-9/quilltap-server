@@ -35,7 +35,6 @@ function removeWalFiles(dbPath: string): void {
   for (const suffix of ['-wal', '-shm']) {
     const filePath = dbPath + suffix;
     if (fs.existsSync(filePath)) {
-      log.debug('Removing WAL/SHM file', { path: filePath });
       fs.unlinkSync(filePath);
     }
   }
@@ -69,13 +68,11 @@ export function convertDatabaseToEncrypted(dbPath: string, pepper: string): void
 
   try {
     // Step 1: Create backup of the original (safety net for rollback)
-    log.debug('Creating backup of plaintext database');
     fs.copyFileSync(dbPath, backupPath);
 
     // Step 2: Create a working copy that is free of external file locks.
     // iCloud sync, Spotlight, and other macOS services may hold file
     // coordination locks on the original; the working copy avoids those.
-    log.debug('Creating working copy for encryption');
     fs.copyFileSync(dbPath, workingPath);
 
     // Also copy WAL/SHM if they exist so the working copy is consistent
@@ -87,11 +84,8 @@ export function convertDatabaseToEncrypted(dbPath: string, pepper: string): void
     }
 
     // Step 3: Open the working copy and checkpoint WAL → DELETE journal mode
-    log.debug('Opening working copy');
     db = new Database(workingPath);
     db.pragma('busy_timeout = 5000');
-
-    log.debug('Checkpointing WAL and switching to DELETE journal mode');
     db.pragma('wal_checkpoint(TRUNCATE)');
     db.pragma('journal_mode = DELETE');
 
@@ -99,7 +93,6 @@ export function convertDatabaseToEncrypted(dbPath: string, pepper: string): void
     removeWalFiles(workingPath);
 
     // Step 4: Encrypt the working copy in-place using PRAGMA rekey
-    log.debug('Encrypting working copy via PRAGMA rekey');
     db.pragma(`rekey = "x'${keyHex}'"`);
 
     // Leave the converted database in TRUNCATE journal mode. The next normal
@@ -107,7 +100,6 @@ export function convertDatabaseToEncrypted(dbPath: string, pepper: string): void
     // TRUNCATE; WAL only when SQLITE_WAL_MODE=true), but TRUNCATE is the safe
     // resting state since cloud-synced data directories don't tolerate WAL
     // auxiliary files well.
-    log.debug('Setting TRUNCATE journal mode on converted database');
     db.pragma('journal_mode = TRUNCATE');
 
     // Step 5: Close
@@ -115,7 +107,6 @@ export function convertDatabaseToEncrypted(dbPath: string, pepper: string): void
     db = null;
 
     // Step 6: Verify by reopening with key
-    log.debug('Verifying encrypted database');
     const verifyDb = new Database(workingPath);
     verifyDb.pragma(`key = "x'${keyHex}'"`);
     const result = verifyDb.prepare('SELECT count(*) as cnt FROM sqlite_master').get() as { cnt: number };
@@ -124,7 +115,6 @@ export function convertDatabaseToEncrypted(dbPath: string, pepper: string): void
     // Step 7: Replace the original with the encrypted working copy.
     // Remove the original's WAL/SHM files first since the encrypted
     // copy starts fresh with its own WAL.
-    log.debug('Replacing original with encrypted copy');
     removeWalFiles(dbPath);
     fs.renameSync(workingPath, dbPath);
 

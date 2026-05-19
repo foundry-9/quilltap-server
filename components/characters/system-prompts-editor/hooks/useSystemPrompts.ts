@@ -25,7 +25,6 @@ export interface UseSystemPromptsReturn {
   isModalOpen: boolean
   editingPrompt: CharacterSystemPrompt | null
   formData: PromptFormData
-  showPreview: boolean
   previewPrompt: CharacterSystemPrompt | null
   deleteConfirm: string | null
   showImportModal: boolean
@@ -39,7 +38,6 @@ export interface UseSystemPromptsReturn {
   openEditModal: (prompt: CharacterSystemPrompt) => void
   openImportModal: () => void
   closeModal: () => void
-  setShowPreview: (show: boolean) => void
   setPreviewPrompt: (prompt: CharacterSystemPrompt | null) => void
   setDeleteConfirm: (id: string | null) => void
   setShowImportModal: (show: boolean) => void
@@ -64,7 +62,6 @@ export function useSystemPrompts(
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingPrompt, setEditingPrompt] = useState<CharacterSystemPrompt | null>(null)
   const [formData, setFormData] = useState<PromptFormData>(INITIAL_FORM_DATA)
-  const [showPreview, setShowPreview] = useState(false)
 
   // Import modal state
   const [showImportModal, setShowImportModal] = useState(false)
@@ -111,7 +108,6 @@ export function useSystemPrompts(
       ...INITIAL_FORM_DATA,
       isDefault: prompts.length === 0, // First prompt is default
     })
-    setShowPreview(false)
     setIsModalOpen(true)
   }
 
@@ -122,7 +118,6 @@ export function useSystemPrompts(
       content: prompt.content,
       isDefault: prompt.isDefault,
     })
-    setShowPreview(false)
     setIsModalOpen(true)
   }
 
@@ -130,7 +125,6 @@ export function useSystemPrompts(
     setIsModalOpen(false)
     setEditingPrompt(null)
     setFormData(INITIAL_FORM_DATA)
-    setShowPreview(false)
   }
 
   const handleImport = (content: string, suggestedName: string) => {
@@ -257,7 +251,6 @@ export function useSystemPrompts(
     isModalOpen,
     editingPrompt,
     formData,
-    showPreview,
     previewPrompt,
     deleteConfirm,
     showImportModal,
@@ -270,7 +263,6 @@ export function useSystemPrompts(
       setShowImportModal(true)
     },
     closeModal,
-    setShowPreview,
     setPreviewPrompt,
     setDeleteConfirm,
     setShowImportModal,

@@ -50,6 +50,10 @@ function createMockRepositories(): RepositoryContainer {
       findById: jest.fn(),
       findByLinkedTo: jest.fn(),
     },
+    docMountFileLinks: {
+      findByIdWithContent: jest.fn().mockResolvedValue(null),
+      findByIdsWithContent: jest.fn().mockResolvedValue([]),
+    },
     tags: {
       findByIds: jest.fn(),
       findById: jest.fn(),
@@ -107,7 +111,7 @@ describe('chat-enrichment.service', () => {
         defaultImageId: 'img-1',
         defaultImage: {
           id: 'img-1',
-          filepath: '/files/img-1',
+          filepath: '/api/v1/files/img-1',
           url: null,
         },
         tags: ['tag-1', 'tag-2'],

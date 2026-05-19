@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import FileBrowser, { type FileInfo } from '@/components/files/FileBrowser'
+import { formatBytes } from '@/lib/utils/format-bytes'
 
 interface DocumentPickerModalProps {
   isOpen: boolean
@@ -361,14 +362,6 @@ export default function DocumentPickerModal({
     return currentFolder.split('/')
   }, [currentFolder])
 
-  // Format file size for display
-  const formatSize = (bytes?: number) => {
-    if (!bytes) return ''
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
   return (
     <BaseModal
       isOpen={isOpen}
@@ -665,7 +658,7 @@ export default function DocumentPickerModal({
                           </div>
                           {file.size != null && (
                             <span className="text-xs qt-text-muted flex-shrink-0">
-                              {formatSize(file.size)}
+                              {file.size != null ? formatBytes(file.size) : ''}
                             </span>
                           )}
                         </button>

@@ -151,18 +151,11 @@ describe('HelpSearch', () => {
       expect(results).toEqual([])
     })
 
-    it('should skip docs with dimension mismatch and log debug', async () => {
+    it('should skip docs with dimension mismatch', async () => {
       // Docs have 4-dimensional embeddings, query has 2 dimensions
       const results = await helpSearch.search([1, 0])
 
       expect(results).toEqual([])
-      expect(mockedLogger.debug).toHaveBeenCalledWith(
-        'Skipping help doc with dimension mismatch',
-        expect.objectContaining({
-          context: 'help-search',
-          expected: 2,
-        })
-      )
     })
 
     it('should skip docs with null or empty embeddings', async () => {
@@ -175,6 +168,66 @@ describe('HelpSearch', () => {
       const results = await helpSearch.search([0, 0, 1, 0])
       expect(results.length).toBe(1)
       expect(results[0].document.id).toBe('doc-2')
+    })
+
+    describe('literal-phrase boost', () => {
+      it('boosts a doc whose title contains the trimmed query verbatim', async () => {
+        // Two docs, both at 0.5 cosine, but only doc-0 has the literal title hit.
+        mockFindAllWithEmbeddings.mockResolvedValue([
+          {
+            ...mockHelpDocs[0],
+            title: 'The Sunlit Archives',
+            content: 'Boring body.',
+            embedding: [0.5, 0.5, 0, 0],
+          },
+          {
+            ...mockHelpDocs[1],
+            title: 'Unrelated guide',
+            content: 'More boring body.',
+            embedding: [0.5, 0.5, 0, 0],
+          },
+        ])
+
+        const results = await helpSearch.search([1, 0, 0, 0], 5, 'sunlit archives')
+
+        expect(results.length).toBe(2)
+        expect(results[0].document.id).toBe('doc-0')
+        // Cosine 0.5 + (1-0.5)/2 = 0.75 for the literal hit.
+        expect(results[0].score).toBeCloseTo(0.75, 5)
+        // Other doc keeps raw cosine 0.5.
+        expect(results[1].score).toBeCloseTo(0.5, 5)
+      })
+
+      it('skips the boost when the trimmed query is below 8 characters', async () => {
+        mockFindAllWithEmbeddings.mockResolvedValue([
+          {
+            ...mockHelpDocs[0],
+            title: 'About cats',
+            content: 'cat cat cat',
+            embedding: [0.5, 0, 0, 0],
+          },
+        ])
+
+        const results = await helpSearch.search([1, 0, 0, 0], 5, 'cat')
+        expect(results.length).toBe(1)
+        // Phrase too short to qualify; no boost applied.
+        expect(results[0].score).toBeCloseTo(0.5, 5)
+      })
+
+      it('does not boost when no query is supplied', async () => {
+        mockFindAllWithEmbeddings.mockResolvedValue([
+          {
+            ...mockHelpDocs[0],
+            title: 'The Sunlit Archives',
+            content: 'A note about the sunlit archives.',
+            embedding: [0.5, 0, 0, 0],
+          },
+        ])
+
+        const results = await helpSearch.search([1, 0, 0, 0]) // no query arg
+        expect(results.length).toBe(1)
+        expect(results[0].score).toBeCloseTo(0.5, 5)
+      })
     })
   })
 

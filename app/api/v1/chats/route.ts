@@ -18,20 +18,20 @@ import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
 import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/memory-recap';
 import { getModelContextLimit } from '@/lib/llm/model-context-data';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { z } from 'zod';
 import type { ChatEvent, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
 import { TimestampConfigSchema } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   OutfitSelectionSchema,
-  EMPTY_EQUIPPED_SLOTS,
-  type EquippedSlots,
   type OutfitSelection,
-  type WardrobeItem,
 } from '@/lib/schemas/wardrobe.types';
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } from '@/lib/llm/cheap-llm';
-import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
+import {
+  applyOutfitSelections,
+  buildCheapLLMConfig,
+  type OutfitSelectionContext,
+} from '@/lib/wardrobe/apply-outfit-selections';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import {
   enrichParticipantSummary,
@@ -45,6 +45,20 @@ import {
   type MultiCharacterImportOptions,
   type LegacyImportOptions,
 } from '@/lib/import/sillytavern-import-service';
+import {
+  postHostAddAnnouncement,
+  postHostScenarioAnnouncement,
+  postHostUserCharacterAnnouncement,
+} from '@/lib/services/host-notifications/writer';
+import { postOpeningOutfitWhisper } from '@/lib/services/aurora-notifications/writer';
+import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import {
+  loadProsperoProjectContext,
+  loadProsperoGeneralContext,
+  postProsperoContextAnnouncement,
+} from '@/lib/services/prospero-notifications/writer';
+import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
+import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
 
 type Repos = RepositoryContainer;
 const CHAT_GET_ACTIONS = ['has-dangerous'] as const;
@@ -78,11 +92,27 @@ const createChatSchema = z.object({
    * and `scenarioId`. Requires `projectId` to also be set.
    */
   projectScenarioPath: z.string().max(500).optional(),
+  /**
+   * Relative path of a general scenario file (`Scenarios/<filename>.md`) inside the
+   * instance-wide "Quilltap General" mount. Lower precedence than `projectScenarioPath`
+   * — only consulted when no higher-precedence scenario field is set. Does NOT require
+   * `projectId`: general scenarios apply to project-less chats too.
+   */
+  generalScenarioPath: z.string().max(500).optional(),
   timestampConfig: TimestampConfigSchema.optional(),
   projectId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
   outfitSelections: z.array(OutfitSelectionSchema).optional(), // Per-character outfit selections for chat start
   avatarGenerationEnabled: z.boolean().optional(), // Enable auto-generated character avatars on outfit changes
+  /**
+   * When set, the new chat is a "change of venue" continuation of an existing
+   * chat: the source chat's most recent Librarian summary plus every later
+   * message are replayed into the new chat (with participant IDs remapped),
+   * turn state is replicated, and Host bubbles linking the two chats are
+   * posted in both. The auto-generated first character message is skipped.
+   * The source chat must belong to the same user.
+   */
+  continuationFromChatId: z.uuid().optional(),
 });
 
 // ============================================================================
@@ -212,180 +242,16 @@ async function buildAllParticipants(
   return { participants: builtParticipants, tags: allTagIds, firstCharacter: firstLLMCharacter, firstImageProfileId };
 }
 
-// ============================================================================
-// Outfit Resolution Helpers
-// ============================================================================
-
 /**
- * Resolve the default outfit for a character from their wardrobe items marked as default.
- * Maps each default item's coverage types to the corresponding equipped slot.
- * If multiple items cover the same slot, the first one found wins.
+ * Write the SYSTEM prompt message at the head of a freshly-created chat.
+ * Split out from `createInitialMessages` so the continuation flow can
+ * interleave the carryover backfill between this and the scenario-and-staff
+ * phase.
  */
-async function resolveDefaultOutfit(characterId: string, repos: Repos): Promise<EquippedSlots> {
-  const defaultItems = await repos.wardrobe.findDefaultsForCharacter(characterId);
-
-  if (defaultItems.length === 0) {
-    logger.debug('[Chats v1] No default wardrobe items found for character', { characterId });
-    return { ...EMPTY_EQUIPPED_SLOTS };
-  }
-
-  const slots: EquippedSlots = { ...EMPTY_EQUIPPED_SLOTS };
-
-  for (const item of defaultItems) {
-    for (const slotType of item.types) {
-      if (slotType in slots && slots[slotType as keyof EquippedSlots] === null) {
-        slots[slotType as keyof EquippedSlots] = item.id;
-      }
-    }
-  }
-
-  logger.debug('[Chats v1] Resolved default outfit for character', {
-    characterId,
-    defaultItemCount: defaultItems.length,
-    slots,
-  });
-
-  return slots;
-}
-
-/**
- * Context needed for LLM-based outfit selection during chat creation.
- */
-interface OutfitSelectionContext {
-  userId: string;
-  scenarioText?: string | null;
-  cheapLLMConfig?: CheapLLMConfig;
-}
-
-/**
- * Apply outfit selections to a newly created chat.
- * Processes each selection based on its mode:
- * - 'default': Load default wardrobe items and map to slots
- * - 'manual': Use the provided slot assignments directly
- * - 'none': Set all slots to null (EMPTY_EQUIPPED_SLOTS)
- * - 'llm_choose': Ask a cheap LLM to pick an outfit, fall back to defaults on failure
- */
-async function applyOutfitSelections(
-  chatId: string,
-  selections: OutfitSelection[],
-  repos: Repos,
-  context?: OutfitSelectionContext,
-): Promise<void> {
-  for (const selection of selections) {
-    const { characterId, mode } = selection;
-
-    switch (mode) {
-      case 'default': {
-        const slots = await resolveDefaultOutfit(characterId, repos);
-        await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-        logger.debug('[Chats v1] Applied default outfit for character', { chatId, characterId });
-        break;
-      }
-
-      case 'manual': {
-        const slots = selection.slots || EMPTY_EQUIPPED_SLOTS;
-        await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-        logger.debug('[Chats v1] Applied manual outfit for character', { chatId, characterId, slots });
-        break;
-      }
-
-      case 'none': {
-        await repos.chats.setEquippedOutfit(chatId, characterId, { ...EMPTY_EQUIPPED_SLOTS });
-        logger.debug('[Chats v1] Applied empty outfit for character', { chatId, characterId });
-        break;
-      }
-
-      case 'llm_choose': {
-        // Ask a cheap LLM to pick an outfit based on character + scenario context
-        // Falls back to default outfit on any failure
-        let applied = false;
-
-        if (context) {
-          try {
-            const character = await repos.characters.findById(characterId);
-            const wardrobeItems = await repos.wardrobe.findByCharacterId(characterId);
-
-            if (character && wardrobeItems.length > 0) {
-              // Get a cheap LLM provider for the selection task
-              const allProfiles = await repos.connections.findAll();
-              const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-
-              if (defaultProfile) {
-                const cheapSelection = getCheapLLMProvider(
-                  defaultProfile,
-                  context.cheapLLMConfig || DEFAULT_CHEAP_LLM_CONFIG,
-                  allProfiles,
-                  false, // ollamaAvailable
-                );
-
-                logger.debug('[Chats v1] Requesting LLM outfit selection', {
-                  chatId,
-                  characterId,
-                  characterName: character.name,
-                  wardrobeItemCount: wardrobeItems.length,
-                  provider: cheapSelection.provider,
-                  model: cheapSelection.modelName,
-                });
-
-                const result = await chooseLLMOutfit(
-                  character.name,
-                  character.personality || null,
-                  wardrobeItems,
-                  context.scenarioText || null,
-                  cheapSelection,
-                  context.userId,
-                  chatId,
-                );
-
-                if (result.success && result.result) {
-                  await repos.chats.setEquippedOutfit(chatId, characterId, result.result);
-                  applied = true;
-                  logger.debug('[Chats v1] Applied LLM-chosen outfit for character', {
-                    chatId,
-                    characterId,
-                    slots: result.result,
-                  });
-                } else {
-                  logger.warn('[Chats v1] LLM outfit selection failed, falling back to defaults', {
-                    chatId,
-                    characterId,
-                    error: result.error,
-                  });
-                }
-              }
-            }
-          } catch (error) {
-            logger.warn('[Chats v1] Error during LLM outfit selection, falling back to defaults', {
-              chatId,
-              characterId,
-              error: getErrorMessage(error, 'Unknown error'),
-            });
-          }
-        }
-
-        // Fallback: use default outfit if LLM selection failed or wasn't attempted
-        if (!applied) {
-          const slots = await resolveDefaultOutfit(characterId, repos);
-          await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-          logger.debug('[Chats v1] Applied default outfit as fallback for llm_choose', { chatId, characterId });
-        }
-        break;
-      }
-
-      default:
-        logger.warn('[Chats v1] Unknown outfit selection mode', { chatId, characterId, mode });
-        break;
-    }
-  }
-}
-
-async function createInitialMessages(
+async function writeSystemPromptMessage(
   chatId: string,
   context: ChatContext,
-  participants: ChatParticipantBaseInput[],
-  userId: string,
   repos: Repos,
-  projectId?: string | null
 ): Promise<void> {
   const systemMessage: ChatEvent = {
     type: 'message',
@@ -396,6 +262,158 @@ async function createInitialMessages(
     createdAt: new Date().toISOString(),
   };
   await repos.chats.addMessage(chatId, systemMessage);
+}
+
+interface ScenarioAndStaffOptions {
+  /**
+   * Skip the auto-generated first character message. Set true on the
+   * continuation flow — a chat that's "picking up where the last one left
+   * off" should not open with a fresh "Hello, ${userName}!" greeting.
+   */
+  skipFirstMessage?: boolean;
+}
+
+async function createInitialMessagesScenarioAndStaff(
+  chatId: string,
+  context: ChatContext,
+  participants: ChatParticipantBaseInput[],
+  userId: string,
+  repos: Repos,
+  projectId?: string | null,
+  scenarioText?: string | null,
+  options: ScenarioAndStaffOptions = {},
+): Promise<void> {
+  // Phase E: emit Prospero project-and-general-context whisper at chat-start.
+  // When a project is attached, the project's description / instructions /
+  // linked document stores ride along with the always-on Quilltap General
+  // shelf reminder in a single Prospero message; without a project, only the
+  // general shelf is named. Replaces the per-turn `## Project Context` block
+  // previously injected via the system prompt. The cadence-based
+  // re-injection (every N messages) is handled by the orchestrator.
+  try {
+    const projectContext = projectId ? await loadProsperoProjectContext(projectId) : null;
+    const generalContext = await loadProsperoGeneralContext();
+    if (projectContext || generalContext) {
+      await postProsperoContextAnnouncement({
+        chatId,
+        project: projectContext,
+        general: generalContext,
+      });
+    }
+  } catch (error) {
+    logger.warn('[Chats v1] Failed to post chat-start Prospero context whisper', {
+      chatId,
+      projectId,
+      error: getErrorMessage(error, 'Unknown error'),
+    });
+  }
+
+  // Phase C: emit Host whispers establishing the opening state — scenario,
+  // user-character intro, and (in multi-character chats) a welcome for each
+  // LLM-controlled character so the others learn about them. These replace
+  // the corresponding sections that previously lived in the per-turn system
+  // prompt.
+  if (scenarioText && scenarioText.trim().length > 0) {
+    await postHostScenarioAnnouncement({ chatId, scenarioText });
+  }
+
+  if (context.userCharacter) {
+    await postHostUserCharacterAnnouncement({
+      chatId,
+      userCharacterName: context.userCharacter.name,
+      userCharacterDescription: context.userCharacter.description ?? null,
+    });
+  }
+
+  const llmCharacterParticipants = participants.filter(
+    (p) => p.type === 'CHARACTER' && p.controlledBy !== 'user' && p.characterId,
+  );
+  if (llmCharacterParticipants.length > 1) {
+    for (const participant of llmCharacterParticipants) {
+      const character = await repos.characters.findById(participant.characterId as string);
+      if (character) {
+        await postHostAddAnnouncement({
+          chatId,
+          character,
+          participantId: participant.id,
+          initialStatus: participant.status,
+        });
+      }
+    }
+  }
+
+  // Aurora establishes how every character in the chat is dressed at the opening
+  // of the chat — including the user-controlled character — and, when avatar
+  // generation is enabled for the chat, kicks off avatar (re)generation for each
+  // of them. Outfit selection has already been applied for every character by
+  // handleCreate before this runs, so equippedOutfit is populated.
+  const allCharacterParticipants = participants.filter(
+    (p) => p.type === 'CHARACTER' && p.characterId,
+  );
+  for (const participant of allCharacterParticipants) {
+    try {
+      const characterId = participant.characterId as string;
+      const character = await repos.characters.findById(characterId);
+      if (!character) continue;
+
+      const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
+      if (!equippedSlots) continue;
+
+      const equippedItemIds = (
+        [
+          ...equippedSlots.top,
+          ...equippedSlots.bottom,
+          ...equippedSlots.footwear,
+          ...equippedSlots.accessories,
+        ] as string[]
+      ).filter((id) => typeof id === 'string' && id.length > 0);
+      const equippedItemsData = equippedItemIds.length > 0
+        ? await repos.wardrobe.findByIds(equippedItemIds)
+        : [];
+      const equippedItemsMap = new Map(equippedItemsData.map((item) => [item.id, item]));
+
+      const titlesFor = (slot: keyof typeof equippedSlots): string[] => {
+        const ids = equippedSlots[slot];
+        if (!ids || ids.length === 0) return [];
+        const titles: string[] = [];
+        for (const id of ids) {
+          const title = equippedItemsMap.get(id)?.title;
+          if (title) titles.push(title);
+        }
+        return titles;
+      };
+
+      const outfit = {
+        top: titlesFor('top'),
+        bottom: titlesFor('bottom'),
+        footwear: titlesFor('footwear'),
+        accessories: titlesFor('accessories'),
+      };
+
+      await postOpeningOutfitWhisper({
+        chatId,
+        characterName: character.name,
+        outfit,
+      });
+
+      await triggerAvatarGenerationIfEnabled(repos, {
+        userId,
+        chatId,
+        characterId,
+        callerContext: '[Chats v1] chat-open',
+      });
+    } catch (error) {
+      logger.warn('[Chats v1] Failed to post opening outfit whisper', {
+        chatId,
+        characterId: participant.characterId,
+        error: getErrorMessage(error, 'Unknown error'),
+      });
+    }
+  }
+
+  if (options.skipFirstMessage) {
+    return;
+  }
 
   let firstMessageContent = (context.firstMessage || '').trim();
 
@@ -424,7 +442,33 @@ async function createInitialMessages(
     attachments: [],
     createdAt: new Date().toISOString(),
   };
-  await repos.chats.addMessage(chatId, firstMessage);}
+  await repos.chats.addMessage(chatId, firstMessage);
+}
+
+/**
+ * Backwards-compatible wrapper for the legacy non-continuation call site.
+ * Writes the system prompt and then runs the scenario-and-staff phase.
+ */
+async function createInitialMessages(
+  chatId: string,
+  context: ChatContext,
+  participants: ChatParticipantBaseInput[],
+  userId: string,
+  repos: Repos,
+  projectId?: string | null,
+  scenarioText?: string | null,
+): Promise<void> {
+  await writeSystemPromptMessage(chatId, context, repos);
+  await createInitialMessagesScenarioAndStaff(
+    chatId,
+    context,
+    participants,
+    userId,
+    repos,
+    projectId,
+    scenarioText,
+  );
+}
 
 async function autoGenerateFirstMessage(
   chatId: string,
@@ -734,6 +778,21 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   const body = await req.json();
   const validatedData = createChatSchema.parse(body);
 
+  // Permission-check the continuation source up front, before doing any
+  // create work. The user-scoped repos.chats.findById returns null for chats
+  // that don't belong to the current user, which is exactly the rejection
+  // we want.
+  if (validatedData.continuationFromChatId) {
+    const sourceChat = await repos.chats.findById(validatedData.continuationFromChatId);
+    if (!sourceChat) {
+      logger.warn('[Chats v1] continuationFromChatId references a chat not owned by current user', {
+        userId: user.id,
+        continuationFromChatId: validatedData.continuationFromChatId,
+      });
+      return notFound('Source chat');
+    }
+  }
+
   const buildResult = await buildAllParticipants(validatedData.participants, user.id, repos);
   if ('error' in buildResult) {
     return badRequest(buildResult.error);
@@ -782,6 +841,17 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
           });
         }
       }
+    }
+  }
+  if (!resolvedScenario && validatedData.generalScenarioPath) {
+    const { resolveGeneralScenarioBody } = await import('@/lib/mount-index/general-scenarios');
+    const body = await resolveGeneralScenarioBody(validatedData.generalScenarioPath);
+    if (body) {
+      resolvedScenario = body;
+    } else {
+      logger.warn('[Chats v1] generalScenarioPath did not resolve to a body', {
+        generalScenarioPath: validatedData.generalScenarioPath,
+      });
     }
   }
 
@@ -866,20 +936,11 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
   // Apply outfit selections to the newly created chat
   // If no selections provided, apply 'default' mode for all LLM-controlled participants
-  // Build cheap LLM config from chat settings for outfit selection
-  const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings
-    ? {
-      ...DEFAULT_CHEAP_LLM_CONFIG,
-      strategy: chatSettings.cheapLLMSettings.strategy,
-      fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
-      userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
-      defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
-    }
-    : DEFAULT_CHEAP_LLM_CONFIG;
   const outfitContext: OutfitSelectionContext = {
     userId: user.id,
     scenarioText: resolvedScenario,
-    cheapLLMConfig,
+    cheapLLMConfig: buildCheapLLMConfig(chatSettings),
+    sourceChatId: validatedData.continuationFromChatId ?? null,
   };
   try {
     if (validatedData.outfitSelections && validatedData.outfitSelections.length > 0) {
@@ -898,11 +959,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       ];
 
       await applyOutfitSelections(chat.id, allSelections, repos, outfitContext);
-      logger.debug('[Chats v1] Applied outfit selections (explicit + defaults for uncovered participants)', {
-        chatId: chat.id,
-        explicitCount: validatedData.outfitSelections.length,
-        defaultBackfillCount: missingCharacterIds.length,
-      });
     } else {
       // Default behavior: apply default outfits for all character participants (LLM and user-controlled)
       const allCharacterIds = participantsWithTimestamps
@@ -915,10 +971,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
           mode: 'default' as const,
         }));
         await applyOutfitSelections(chat.id, defaultSelections, repos, outfitContext);
-        logger.debug('[Chats v1] Applied default outfit selections for all participants', {
-          chatId: chat.id,
-          characterIds: allCharacterIds,
-        });
       }
     }
   } catch (error) {
@@ -929,20 +981,69 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     });
   }
 
-  await createInitialMessages(
-    chat.id,
-    chatContext,
-    participantsWithTimestamps,
-    user.id,
-    repos,
-    validatedData.projectId || null
-  );
+  // Phase H: precompile the per-participant identity stack for the new chat
+  // so the per-turn buildSystemPrompt can hit the cache from the very first
+  // user message. Failure to compile is non-fatal — buildSystemPrompt's
+  // read-through fallback rebuilds fresh on miss.
+  try {
+    await compileAllIdentityStacks(chat);
+  } catch (error) {
+    logger.warn('[Chats v1] Failed to compile identity stacks at chat creation', {
+      chatId: chat.id,
+      error: getErrorMessage(error, 'Unknown error'),
+    });
+  }
+
+  if (validatedData.continuationFromChatId) {
+    // Continuation flow: prelude (system prompt) → backfill from source +
+    // turn-state replication + cross-link bubbles → scenario/staff
+    // (Prospero, Host scenario, Host adds, Aurora outfits, avatar gen),
+    // skipping the auto first message.
+    await writeSystemPromptMessage(chat.id, chatContext, repos);
+    try {
+      await applyChatContinuation({
+        newChatId: chat.id,
+        sourceChatId: validatedData.continuationFromChatId,
+        userId: user.id,
+        repos,
+      });
+    } catch (error) {
+      logger.error('[Chats v1] applyChatContinuation failed', {
+        chatId: chat.id,
+        sourceChatId: validatedData.continuationFromChatId,
+        error: getErrorMessage(error),
+      }, error instanceof Error ? error : undefined);
+    }
+    await createInitialMessagesScenarioAndStaff(
+      chat.id,
+      chatContext,
+      participantsWithTimestamps,
+      user.id,
+      repos,
+      validatedData.projectId || null,
+      resolvedScenario || null,
+      { skipFirstMessage: true },
+    );
+  } else {
+    await createInitialMessages(
+      chat.id,
+      chatContext,
+      participantsWithTimestamps,
+      user.id,
+      repos,
+      validatedData.projectId || null,
+      resolvedScenario || null,
+    );
+  }
 
   const enrichedParticipants = await Promise.all(
     chat.participants.map((p) => enrichParticipantSummary(p, repos))
   );
 
-  logger.info('[Chats v1] Chat created', { chatId: chat.id });
+  logger.info('[Chats v1] Chat created', {
+    chatId: chat.id,
+    continuationFromChatId: validatedData.continuationFromChatId ?? null,
+  });
 
   return NextResponse.json({ chat: { ...chat, participants: enrichedParticipants } }, { status: 201 });
 }

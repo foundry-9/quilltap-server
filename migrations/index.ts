@@ -14,6 +14,7 @@ import {
   waitForDatabaseReady,
   detectDatabaseBackend,
 } from './lib/database-utils';
+import { beginMigration, endMigration } from './lib/progress';
 import { loadMigrationState, isMigrationCompleted, recordCompletedMigration } from './state';
 import type { Migration, MigrationResult, MigrationState, MigrationRunResult } from './types';
 
@@ -152,6 +153,7 @@ export class MigrationRunner {
         migrationId: migration.id,
         description: migration.description,
       });
+      beginMigration(migration.id);
 
       try {
         const result = await migration.run();
@@ -175,6 +177,7 @@ export class MigrationRunner {
             message: result.message,
           });
           // Stop on first failure - critical migrations must succeed
+          endMigration();
           break;
         }
       } catch (error) {
@@ -197,8 +200,10 @@ export class MigrationRunner {
 
         failed.push(migration.id);
         // Stop on exception
+        endMigration();
         break;
       }
+      endMigration();
     }
 
     const totalDurationMs = Date.now() - startTime;

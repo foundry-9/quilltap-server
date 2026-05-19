@@ -13,9 +13,13 @@ import { createHash } from 'node:crypto';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import {
+  getCharacterVaultStore,
+  writeCharacterAvatarToVault,
+} from '@/lib/file-storage/character-vault-bridge';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import type { CharacterAvatarGenerationPayload } from '../queue-service';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { convertToWebP } from '@/lib/files/webp-conversion';
@@ -30,7 +34,7 @@ import {
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
-import { describeOutfit } from '@/lib/wardrobe/outfit-description';
+import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 
 /**
@@ -89,40 +93,17 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  // 4. Build appearance description from physical descriptions + equipped wardrobe
-  const appearanceParts: string[] = [];
+  // 4. Build portrait prompt — 3/4 head-and-shoulders crop, no scenario context.
+  // Scenario text is deliberately excluded: it often mentions other characters
+  // or narrative elements that cause image models to depict multiple people.
+  // The fitting-room override (when present) takes priority over the chat's
+  // stored equipped state — the operator may be previewing an outfit that
+  // hasn't been committed to the chat.
+  const equippedSlots = payload.equippedSlotsOverride
+    ?? await repos.chats.getEquippedOutfitForCharacter(payload.chatId, payload.characterId);
+  const { prompt, hasAppearance, leafCounts } = await buildCharacterAvatarPrompt(repos, character, { equippedSlots });
 
-  // Physical descriptions
-  const physicalDescriptions = character.physicalDescriptions || [];
-  if (physicalDescriptions.length > 0) {
-    const desc = physicalDescriptions[0]; // Use first/default description
-    const descText = desc.mediumPrompt || desc.shortPrompt || desc.longPrompt
-      || desc.completePrompt || desc.fullDescription || '';
-    if (descText) {
-      appearanceParts.push(descText);
-    }
-  }
-
-  // Equipped wardrobe items — use canonical describeOutfit utility
-  const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, payload.characterId);
-  if (equippedSlots) {
-    const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
-    const items = equippedItemIds.length > 0 ? await repos.wardrobe.findByIds(equippedItemIds) : [];
-    const findTitle = (slot: string): string | null => {
-      const itemId = equippedSlots[slot as keyof typeof equippedSlots];
-      if (!itemId) return null;
-      const item = items.find(i => i.id === itemId);
-      return item ? (item.description ? `${item.title} (${item.description})` : item.title) : null;
-    };
-    appearanceParts.push(describeOutfit({
-      top: findTitle('top'),
-      bottom: findTitle('bottom'),
-      footwear: findTitle('footwear'),
-      accessories: findTitle('accessories'),
-    }));
-  }
-
-  if (appearanceParts.length === 0) {
+  if (!hasAppearance) {
     logger.warn('[CharacterAvatar] No appearance data available, skipping', {
       context: 'background-jobs.character-avatar',
       jobId: job.id,
@@ -130,19 +111,6 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     });
     return;
   }
-
-  // 5. Build portrait prompt — 3/4 shot from thighs up, no scenario context
-  // Scenario text is deliberately excluded: it often mentions other characters
-  // or narrative elements that cause image models to depict multiple people.
-  const appearanceText = appearanceParts.join('. ');
-  const prompt = `Solo portrait of a single person: ${character.name}. Show exactly one figure, from the thighs up, three-quarter view. ${appearanceText}. Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
-
-  logger.debug('[CharacterAvatar] Generated portrait prompt', {
-    context: 'background-jobs.character-avatar',
-    jobId: job.id,
-    promptLength: prompt.length,
-    promptPreview: prompt.substring(0, 200),
-  });
 
   // 6. Concierge check — classify the prompt for dangerous content
   const chatSettings = await repos.chatSettings.findByUserId(job.userId) ?? undefined;
@@ -256,7 +224,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     const genDurationMs = Date.now() - genStartTime;
     const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
 
-    logLLMCall({
+    await logLLMCall({
       userId: job.userId,
       type: 'IMAGE_GENERATION',
       chatId: payload.chatId,
@@ -270,18 +238,12 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
       },
       durationMs: genDurationMs,
-    }).catch(err => {
-      logger.warn('[CharacterAvatar] Failed to log image generation to LLM Inspector', {
-        context: 'background-jobs.character-avatar',
-        jobId: job.id,
-        error: getErrorMessage(err),
-      });
     });
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     const genDurationMs = Date.now() - genStartTime;
 
-    logLLMCall({
+    await logLLMCall({
       userId: job.userId,
       type: 'IMAGE_GENERATION',
       chatId: payload.chatId,
@@ -296,7 +258,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         error: errorMessage,
       },
       durationMs: genDurationMs,
-    }).catch(() => { /* never block on logging */ });
+    });
 
     logger.error('[CharacterAvatar] Image generation failed', {
       context: 'background-jobs.character-avatar',
@@ -345,27 +307,68 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   const folderProjectId = chat.projectId ?? null;
 
   try {
-    const uploadResult = await fileStorageManager.uploadFile({
-      filename: originalFilename,
-      content: buffer,
-      contentType: mimeType,
-      projectId: folderProjectId,
-      folderPath: '/character-avatars/',
-    });
+    // Route history avatars into the character vault when there's no project
+    // context to route them through. The vault is provisioned at character
+    // creation and re-asserted by startup backfill; if it is somehow missing
+    // we refuse to write rather than leak bytes into the catch-all _general/.
+    //
+    // The handler runs in the forked job child whose DB connection is readonly
+    // and whose writes are buffered (no read-your-writes), so we cannot
+    // ensureCharacterVault() inline here — the parent's character-create flow
+    // (or the startup backfill) is responsible for provisioning.
+    let storageKey: string;
+    let fileProjectId: string | null;
+    let fileFolderPath: string | null;
+    let usedVault = false;
 
-    // Ensure /character-avatars/ folder record exists for the project (or general)
-    const existingFolder = await repos.folders.findByPath(job.userId, '/character-avatars/', folderProjectId);
-    if (!existingFolder) {
-      await repos.folders.create({
-        userId: job.userId,
-        path: '/character-avatars/',
-        name: 'character-avatars',
-        parentFolderId: null,
-        projectId: folderProjectId,
+    if (!folderProjectId) {
+      const vault = await getCharacterVaultStore(payload.characterId);
+      if (!vault) {
+        throw new Error(
+          `Character ${payload.characterId} has no linked database-backed vault; cannot persist wardrobe avatar.`,
+        );
+      }
+      const written = await writeCharacterAvatarToVault({
+        characterId: payload.characterId,
+        kind: 'history',
+        filename: originalFilename,
+        content: buffer,
+        contentType: mimeType,
+        description: `${character.name} — wardrobe portrait`,
       });
+      storageKey = written.storageKey;
+      fileProjectId = null;
+      fileFolderPath = null;
+      usedVault = true;
+    } else {
+      const uploadResult = await fileStorageManager.uploadFile({
+        filename: originalFilename,
+        content: buffer,
+        contentType: mimeType,
+        projectId: folderProjectId,
+        folderPath: '/character-avatars/',
+      });
+      storageKey = uploadResult.storageKey;
+      fileProjectId = folderProjectId;
+      fileFolderPath = '/character-avatars/';
     }
 
-    // Create file metadata record
+    // The legacy `folders` table backs the pre-Scriptorium file tree UI. It's
+    // only meaningful for disk-backed (or project-mount-backed) writes; vault
+    // writes own their folder structure inside doc_mount_folders.
+    if (!usedVault) {
+      const existingFolder = await repos.folders.findByPath(job.userId, '/character-avatars/', fileProjectId);
+      if (!existingFolder) {
+        await repos.folders.create({
+          userId: job.userId,
+          path: '/character-avatars/',
+          name: 'character-avatars',
+          parentFolderId: null,
+          projectId: fileProjectId,
+        });
+      }
+    }
+
     await repos.files.create({
       userId: job.userId,
       sha256,
@@ -382,9 +385,9 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       generationRevisedPrompt: imageData.revisedPrompt || null,
       description: `${character.name} — wardrobe portrait`,
       tags: [payload.characterId],
-      storageKey: uploadResult.storageKey,
-      projectId: folderProjectId,
-      folderPath: '/character-avatars/',
+      storageKey,
+      projectId: fileProjectId,
+      folderPath: fileFolderPath,
     }, { id: fileId });
 
     logger.info('[CharacterAvatar] Avatar image saved', {
@@ -439,5 +442,6 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     chatId: payload.chatId,
     fileId,
     kind: { kind: 'avatar', characterName: character.name },
+    prompt,
   });
 }

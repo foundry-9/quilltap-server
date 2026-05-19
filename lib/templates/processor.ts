@@ -7,6 +7,7 @@ export interface TemplateContext {
   // Character data
   char?: string // Character name
   description?: string // Character description
+  manifesto?: string // Character manifesto
   personality?: string // Character personality
   scenario?: string // Current scenario
 
@@ -87,6 +88,7 @@ export function buildTemplateContext({
   character: {
     name: string
     description?: string | null
+    manifesto?: string | null
     personality?: string | null
     scenarios?: Array<{ id: string; title: string; content: string }> | null
     exampleDialogues?: string | null
@@ -102,6 +104,7 @@ export function buildTemplateContext({
     // Character data
     char: character.name,
     description: character.description || '',
+    manifesto: character.manifesto || '',
     personality: character.personality || '',
     scenario: scenario || '',
 
@@ -144,6 +147,7 @@ export function processCharacterTemplates({
   character: {
     name: string
     description?: string | null
+    manifesto?: string | null
     personality?: string | null
     scenarios?: Array<{ id: string; title: string; content: string }> | null
     firstMessage?: string | null
@@ -157,6 +161,7 @@ export function processCharacterTemplates({
   systemPrompt?: string | null
 }): {
   description: string
+  manifesto: string
   personality: string
   scenario: string
   firstMessage: string
@@ -167,6 +172,7 @@ export function processCharacterTemplates({
 
   return {
     description: processTemplate(character.description || '', context),
+    manifesto: processTemplate(character.manifesto || '', context),
     personality: processTemplate(character.personality || '', context),
     scenario: processTemplate(scenario || '', context),
     firstMessage: processTemplate(character.firstMessage || '', context),

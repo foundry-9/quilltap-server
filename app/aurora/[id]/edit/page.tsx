@@ -6,7 +6,7 @@ import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { EntityTabs, Tab } from '@/components/tabs'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { ClothingRecordList } from '@/components/clothing-records'
-import { WardrobeItemList } from '@/components/wardrobe'
+import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor'
 import { AIWizardModal, type GeneratedCharacterData, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
@@ -15,6 +15,7 @@ import { useCharacterEdit } from './hooks'
 import { CharacterBasicInfo } from './components'
 import type { CharacterScenario } from './types'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../../shared/wizard-text-fields'
 
 /**
  * Tab configuration for character edit page
@@ -35,6 +36,17 @@ const EDIT_CHARACTER_TABS: Tab[] = [
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'wardrobe',
+    label: 'Wardrobe',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11 3.5 16.5a1 1 0 0 0 .5 1.85h16a1 1 0 0 0 .5-1.85L12 11z" />
       </svg>
     ),
   },
@@ -74,6 +86,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     showAvatarSelector,
     showUploadDialog,
     avatarRefreshKey,
+    externalUpdateCount,
     handleChange,
     handleAliasesChange,
     handlePronounsChange,
@@ -89,21 +102,22 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     toggleAvatarSelector,
     toggleUploadDialog,
     fetchCharacter,
+    bumpExternalUpdateCount,
     isNpc,
   } = useCharacterEdit(id)
 
   const [showWizard, setShowWizard] = useState(false)
   const [physicalDescriptionsRefreshKey, setPhysicalDescriptionsRefreshKey] = useState(0)
-  const [wardrobeRefreshKey, setWardrobeRefreshKey] = useState(0)
+  const wardrobeDialog = useWardrobeDialogOptional()
 
   // Wrap the sync-from-vault handler so the child lists that fetch their own
-  // data (physical descriptions, wardrobe items, outfit presets) re-query
-  // after the DB is updated. handleSyncPropertiesFromVault itself refetches
-  // the character row; these lists hang off refreshKey props instead.
+  // data (physical descriptions, etc.) re-query after the DB is updated.
+  // handleSyncPropertiesFromVault itself refetches the character row; the
+  // physical descriptions list hangs off a refreshKey prop. The wardrobe
+  // dialog manages its own loading.
   const handleSyncPropertiesFromVaultAndRefreshLists = async () => {
     await handleSyncPropertiesFromVault()
     setPhysicalDescriptionsRefreshKey((prev) => prev + 1)
-    setWardrobeRefreshKey((prev) => prev + 1)
   }
 
   // The reverse direction doesn't change the DB, but when the overlay is on,
@@ -113,28 +127,23 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   const handleSyncPropertiesToVaultAndRefreshLists = async () => {
     await handleSyncPropertiesToVault()
     setPhysicalDescriptionsRefreshKey((prev) => prev + 1)
-    setWardrobeRefreshKey((prev) => prev + 1)
   }
 
 
   // Handle applying wizard-generated data
   const handleWizardApply = async (data: GeneratedCharacterData) => {
     // Apply text fields by creating synthetic events
-    const fieldsToApply: Array<{ name: string; value: string }> = []
-
-    if (data.name) fieldsToApply.push({ name: 'name', value: data.name })
-    if (data.title) fieldsToApply.push({ name: 'title', value: data.title })
-    if (data.description) fieldsToApply.push({ name: 'description', value: data.description })
-    if (data.personality) fieldsToApply.push({ name: 'personality', value: data.personality })
-    if (data.exampleDialogues) fieldsToApply.push({ name: 'exampleDialogues', value: data.exampleDialogues })
-    if (data.systemPrompt) fieldsToApply.push({ name: 'systemPrompt', value: data.systemPrompt })
-
-    // Apply each field
-    for (const field of fieldsToApply) {
+    const textEntries = getGeneratedCharacterTextEntries(data)
+    for (const field of textEntries) {
       const syntheticEvent = {
-        target: { name: field.name, value: field.value },
+        target: { name: field.field, value: field.value },
       } as React.ChangeEvent<HTMLInputElement>
       handleChange(syntheticEvent)
+    }
+    // Remount markdown editors so they pick up the wizard-written values
+    // instead of staying on whatever was on screen before.
+    if (textEntries.length > 0) {
+      bumpExternalUpdateCount()
     }
 
     // Handle physical description if generated
@@ -196,7 +205,6 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       }
       if (wardrobeItemsSaved > 0) {
         showSuccessToast(`${wardrobeItemsSaved} wardrobe item${wardrobeItemsSaved > 1 ? 's' : ''} created`)
-        setWardrobeRefreshKey((prev) => prev + 1)
       }
     }
 
@@ -328,6 +336,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                     characterId={id}
                     formData={formData}
                     hasLinkedVault={!!character?.characterDocumentMountPointId}
+                    externalUpdateCount={externalUpdateCount}
                     onChange={handleChange}
                     onAliasesChange={handleAliasesChange}
                     onPronounsChange={handlePronounsChange}
@@ -348,6 +357,26 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                   />
                 )
 
+              case 'wardrobe':
+                return (
+                  <div className="space-y-2">
+                    <p className="qt-text-small qt-text-secondary">
+                      The wardrobe is managed in the global Wardrobe dialog so
+                      you can drop in from anywhere — including from inside a
+                      chat — and edit, layer, or save outfits without leaving
+                      the page you&apos;re on.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => wardrobeDialog?.open({ characterId: id })}
+                      disabled={!wardrobeDialog}
+                      className="qt-button-primary"
+                    >
+                      Open wardrobe for {character?.name || 'this character'}
+                    </button>
+                  </div>
+                )
+
               case 'descriptions':
                 return (
                   <div className="space-y-8">
@@ -358,10 +387,6 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                     />
                     <ClothingRecordList
                       entityId={id}
-                    />
-                    <WardrobeItemList
-                      characterId={id}
-                      refreshKey={wardrobeRefreshKey}
                     />
                   </div>
                 )
@@ -434,12 +459,8 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
         characterId={id}
         characterName={character?.name || ''}
         currentData={{
-          title: formData.title,
-          description: formData.description,
-          personality: formData.personality,
+          ...buildWizardCurrentData(formData),
           scenarios: formData.scenarios,
-          exampleDialogues: formData.exampleDialogues,
-          systemPrompt: formData.systemPrompt,
         }}
         onApply={handleWizardApply}
       />

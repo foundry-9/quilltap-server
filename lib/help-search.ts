@@ -7,6 +7,11 @@
  */
 
 import { cosineSimilarity } from '@/lib/embedding/embedding-service'
+import {
+  applyLiteralBoost,
+  containsLiteralPhrase,
+  getLiteralPhrase,
+} from '@/lib/embedding/literal-boost'
 import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
 import { ensureHelpDocsSynced } from '@/lib/help/help-doc-sync'
@@ -78,11 +83,22 @@ export class HelpSearch {
    * Search for documents similar to the query embedding.
    * Loads embedded docs from the database and computes cosine similarity.
    *
+   * If `query` is supplied and trimmed length ≥ LITERAL_BOOST_MIN_PHRASE_LENGTH,
+   * documents whose title or content contains the query verbatim
+   * (case-insensitive) get their cosine score boosted halfway to 1.0 — a
+   * literal-text match shouldn't be outranked by a slightly-stronger
+   * pure-vector neighbour.
+   *
    * @param queryEmbedding - The embedding vector for the search query
    * @param limit - Maximum number of results to return (default: 5)
+   * @param query - Original query text for the literal-phrase boost (optional)
    * @returns Array of search results sorted by similarity score (highest first)
    */
-  async search(queryEmbedding: Float32Array, limit: number = 5): Promise<HelpSearchResult[]> {
+  async search(
+    queryEmbedding: Float32Array,
+    limit: number = 5,
+    query?: string,
+  ): Promise<HelpSearchResult[]> {
     const repos = getRepositories()
     const embeddedDocs = await repos.helpDocs.findAllWithEmbeddings()
 
@@ -90,6 +106,8 @@ export class HelpSearch {
       logger.warn('No embedded help docs available for search', { context: 'help-search' })
       return []
     }
+
+    const literalPhrase = getLiteralPhrase(query)
 
     // Calculate similarity scores
     const results: HelpSearchResult[] = []
@@ -101,14 +119,14 @@ export class HelpSearch {
 
       // Validate dimension match
       if (queryEmbedding.length !== doc.embedding.length) {
-        logger.debug('Skipping help doc with dimension mismatch', {
-          context: 'help-search',
-          docId: doc.id,
-          expected: queryEmbedding.length,
-          actual: doc.embedding.length,
-        })
         continue
       }
+
+      const rawScore = cosineSimilarity(queryEmbedding, doc.embedding)
+      const literalHit = literalPhrase
+        ? containsLiteralPhrase(doc.title, literalPhrase) ||
+          containsLiteralPhrase(doc.content, literalPhrase)
+        : false
 
       results.push({
         document: {
@@ -118,7 +136,7 @@ export class HelpSearch {
           url: doc.url,
           content: doc.content,
         },
-        score: cosineSimilarity(queryEmbedding, doc.embedding),
+        score: literalHit ? applyLiteralBoost(rawScore) : rawScore,
       })
     }
 

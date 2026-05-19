@@ -114,7 +114,7 @@ export async function runMemoryGate(
 
   let embeddingResult: Awaited<ReturnType<typeof generateEmbeddingForUser>>
   try {
-    embeddingResult = await generateEmbeddingForUser(embeddingText, userId, embeddingProfileId)
+    embeddingResult = await generateEmbeddingForUser(embeddingText, userId, embeddingProfileId, { priority: 'background' })
   } catch (firstError) {
     const firstMsg = firstError instanceof EmbeddingError
       ? firstError.message
@@ -123,7 +123,7 @@ export async function runMemoryGate(
 
     try {
       await new Promise(resolve => setTimeout(resolve, EMBEDDING_RETRY_DELAY_MS))
-      embeddingResult = await generateEmbeddingForUser(embeddingText, userId, embeddingProfileId)
+      embeddingResult = await generateEmbeddingForUser(embeddingText, userId, embeddingProfileId, { priority: 'background' })
       debugInfo.push('[Gate] Embedding retry succeeded')
     } catch (secondError) {
       const secondMsg = secondError instanceof EmbeddingError
@@ -278,7 +278,8 @@ export async function reinforceMemory(
       const embeddingResult = await generateEmbeddingForUser(
         `${updatedMemory.summary}\n\n${updatedMemory.content}`,
         userId,
-        embeddingProfileId
+        embeddingProfileId,
+        { priority: 'background' }
       )
 
       await repos.memories.updateForCharacter(

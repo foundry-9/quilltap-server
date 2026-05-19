@@ -347,15 +347,25 @@ export function calculateCurrentTimestamp(config: TimestampConfig, timezone?: st
  *
  * @param config - Timestamp configuration
  * @param isInitialMessage - Whether this is the first message in the conversation
+ * @param minutesSinceLastAnnouncement - For EVERY_N_MINUTES mode: minutes elapsed since the
+ *   most recent Host timestamp announcement in this chat. Pass `null` when no prior
+ *   announcement exists (or the caller cannot resolve it); the timestamp will fire.
  * @returns Whether timestamp should be injected
  */
 export function shouldInjectTimestamp(
   config: TimestampConfig | null | undefined,
-  isInitialMessage: boolean
+  isInitialMessage: boolean,
+  minutesSinceLastAnnouncement?: number | null
 ): boolean {
   if (!config || config.mode === 'NONE') return false
   if (config.mode === 'START_ONLY') return isInitialMessage
   if (config.mode === 'EVERY_MESSAGE') return true
+  if (config.mode === 'EVERY_N_MINUTES') {
+    if (isInitialMessage) return true
+    if (minutesSinceLastAnnouncement === null || minutesSinceLastAnnouncement === undefined) return true
+    const interval = config.intervalMinutes ?? 15
+    return minutesSinceLastAnnouncement >= interval
+  }
   return false
 }
 

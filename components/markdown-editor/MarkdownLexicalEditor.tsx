@@ -4,17 +4,18 @@
  * MarkdownLexicalEditor — reusable Lexical-based markdown editor.
  *
  * Self-contained: composer + standard plugin set + formatting toolbar +
- * markdown bidirectional bridge. Designed for forms (project scenarios,
- * future settings panels) that want the same editing affordances the
- * Salon's Document Mode provides without inheriting its chat-specific
- * integrations (line gutter, doc_focus tool plugin, source toggle).
+ * markdown bidirectional bridge, plus the same "edit source" toggle the
+ * Salon's Document Mode offers. Designed for forms (character fields,
+ * project scenarios, settings panels) that want the same editing
+ * affordances without inheriting Document Mode's chat-specific bits
+ * (line gutter, doc_focus tool plugin).
  *
  * Lower-level building blocks (MarkdownBridgePlugin, FormattingCommandPlugin,
  * FormattingToolbar, COMPOSER_TRANSFORMERS, composerTheme) live alongside
  * Document Mode in components/chat/lexical and are reused verbatim.
  */
 
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
 import { ContentEditable } from '@lexical/react/LexicalContentEditable'
@@ -53,16 +54,25 @@ interface MarkdownLexicalEditorProps {
   /** Identifier for the LexicalComposer namespace (debugging/devtools) */
   namespace?: string
   ariaLabel?: string
+  /**
+   * Show the "Edit markdown source" toggle button in the toolbar. Defaults
+   * to true. Set false for callers that should never expose raw source.
+   */
+  showSourceToggle?: boolean
+  /** Minimum height of the editor body. Accepts any CSS height value. */
+  minHeight?: string
 }
 
 function EditorBody({
   value,
   onChange,
   disabled,
+  minHeight,
 }: {
   value: string
   onChange: (value: string) => void
   disabled: boolean
+  minHeight: string
 }) {
   const [editor] = useLexicalComposerContext()
 
@@ -77,7 +87,7 @@ function EditorBody({
           <ContentEditable
             className="qt-doc-editor-area qt-lexical-contenteditable"
             aria-label="Markdown editor"
-            style={{ lineHeight: '1.6', minHeight: '12rem' }}
+            style={{ lineHeight: '1.6', minHeight }}
           />
         }
         ErrorBoundary={LexicalErrorBoundary}
@@ -100,11 +110,17 @@ function EditorBody({
 function ToolbarSlot({
   roleplayTemplateId,
   disabled,
+  showSource,
+  sourceTextareaRef,
   onContentChange,
+  onToggleSource,
 }: {
   roleplayTemplateId?: string | null
   disabled: boolean
+  showSource: boolean
+  sourceTextareaRef: React.RefObject<HTMLTextAreaElement | null>
   onContentChange: (value: string) => void
+  onToggleSource?: () => void
 }) {
   const [editor] = useLexicalComposerContext()
   return (
@@ -113,7 +129,10 @@ function ToolbarSlot({
         roleplayTemplateId={roleplayTemplateId}
         editor={editor}
         disabled={disabled}
+        showSource={showSource}
+        sourceTextareaRef={sourceTextareaRef}
         setInput={onContentChange}
+        onToggleSource={onToggleSource}
       />
     </div>
   )
@@ -128,7 +147,16 @@ export default function MarkdownLexicalEditor({
   className,
   namespace = 'MarkdownLexicalEditor',
   ariaLabel,
+  showSourceToggle = true,
+  minHeight = '12rem',
 }: MarkdownLexicalEditorProps) {
+  const [showSource, setShowSource] = useState(false)
+  // Bumped each time the user leaves source mode, so the LexicalComposer
+  // remounts and the MarkdownBridge re-parses the (possibly textarea-edited)
+  // value. MarkdownBridgePlugin only reads initialMarkdown on first mount.
+  const [sourceLeaveCount, setSourceLeaveCount] = useState(0)
+  const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
+
   const initialConfig = useMemo(
     () => ({
       namespace,
@@ -151,24 +179,63 @@ export default function MarkdownLexicalEditor({
       },
     }),
     // Lexical's initialConfig is read once at mount; we force re-mount via
-    // the `key` on LexicalComposer below when remountKey changes.
+    // the `key` on LexicalComposer below when remountKey or the source-leave
+    // counter changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   )
 
+  const toggleSourceMode = useCallback(() => {
+    setShowSource((prev) => {
+      if (prev) setSourceLeaveCount((n) => n + 1)
+      return !prev
+    })
+  }, [])
+
+  const composerKey = `${remountKey ?? 'default'}-${sourceLeaveCount}`
+
+  const frameClassName = [
+    'rounded-lg border qt-border-default qt-bg-card qt-shadow-sm overflow-hidden',
+    'focus-within:outline-none focus-within:ring-2 focus-within:ring-ring',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div className={className} aria-label={ariaLabel}>
-      <LexicalComposer key={remountKey ?? 'default'} initialConfig={initialConfig}>
+    <div className={frameClassName} aria-label={ariaLabel}>
+      <LexicalComposer key={composerKey} initialConfig={initialConfig}>
         <ToolbarSlot
           roleplayTemplateId={roleplayTemplateId}
           disabled={disabled}
+          showSource={showSource}
+          sourceTextareaRef={sourceTextareaRef}
           onContentChange={onChange}
+          onToggleSource={showSourceToggle ? toggleSourceMode : undefined}
         />
-        <div className="qt-doc-editor-with-gutter">
-          <div className="flex-1">
-            <EditorBody value={value} onChange={onChange} disabled={disabled} />
+        {showSource ? (
+          <textarea
+            ref={sourceTextareaRef}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+            spellCheck={false}
+            aria-label={ariaLabel ? `${ariaLabel} (markdown source)` : 'Markdown source'}
+            className="w-full px-3 py-2 font-mono text-sm qt-text-primary bg-transparent border-0 outline-none resize-y"
+            style={{ lineHeight: '1.6', minHeight }}
+          />
+        ) : (
+          <div className="qt-doc-editor-with-gutter">
+            <div className="flex-1">
+              <EditorBody
+                value={value}
+                onChange={onChange}
+                disabled={disabled}
+                minHeight={minHeight}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </LexicalComposer>
     </div>
   )

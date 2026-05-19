@@ -747,6 +747,22 @@
   --qt-warning-box-bg: hsl(var(--warning-900) / 0.15);
   --qt-warning-box-border: hsl(var(--warning-100) / 0.3);
   --qt-warning-box-fg: hsl(var(--warning-100));
+
+  /* ================================================================
+     TERMINAL VARIABLES — charcoal pane to match the theme
+     Earl Grey runs near-monochrome; the terminal stays in the same
+     family so it sits naturally inside the chat stream.
+     ================================================================ */
+  --qt-terminal-bg: hsl(0 0% 8%);
+  --qt-terminal-fg: hsl(0 0% 92%);
+  --qt-terminal-cursor: hsl(211 100% 65%);
+  --qt-terminal-selection: hsl(211 100% 50% / 0.28);
+  --qt-terminal-chrome-bg: hsl(0 0% 13%);
+  --qt-terminal-chrome-border: hsl(0 0% 100% / 0.12);
+  --qt-terminal-chrome-fg: hsl(0 0% 88%);
+  --qt-terminal-chrome-muted-fg: hsl(0 0% 60%);
+  --qt-terminal-closed-badge-bg: hsl(0 0% 18%);
+  --qt-terminal-closed-badge-fg: hsl(0 0% 80%);
 }
 
 /* ============================================================================

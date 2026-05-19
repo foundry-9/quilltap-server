@@ -24,23 +24,6 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
   }
 
   /**
-   * Find a project by ID
-   * @param id The project ID
-   * @returns Promise<Project | null> The project if found, null otherwise
-   */
-  async findById(id: string): Promise<Project | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all projects
-   * @returns Promise<Project[]> Array of all projects
-   */
-  async findAll(): Promise<Project[]> {
-    return this._findAll();
-  }
-
-  /**
    * Create a new project
    * @param data The project data (without id, createdAt, updatedAt)
    * @param options Optional CreateOptions to specify ID and createdAt (for sync)

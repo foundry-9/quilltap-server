@@ -461,6 +461,44 @@
   --qt-warning-box-bg: color-mix(in srgb, var(--color-warning) 8%, transparent);
   --qt-warning-box-border: color-mix(in srgb, var(--color-warning) 30%, transparent);
   --qt-warning-box-fg: var(--color-warning);
+
+  /* Terminal variables — the terminal carries its own (dark) identity
+     regardless of the surrounding theme's light/dark mode. Themes may
+     override these to make the terminal pane match a parchment scroll,
+     a CRT, etc. */
+  --qt-terminal-bg: #1a1a1a;
+  --qt-terminal-fg: #e6e6e6;
+  --qt-terminal-cursor: #e6e6e6;
+  --qt-terminal-selection: rgba(255, 255, 255, 0.2);
+  --qt-terminal-ansi-black: #000000;
+  --qt-terminal-ansi-red: #cd3131;
+  --qt-terminal-ansi-green: #0dbc79;
+  --qt-terminal-ansi-yellow: #e5e510;
+  --qt-terminal-ansi-blue: #2472c8;
+  --qt-terminal-ansi-magenta: #bc3fbc;
+  --qt-terminal-ansi-cyan: #11a8cd;
+  --qt-terminal-ansi-white: #e5e5e5;
+  --qt-terminal-ansi-bright-black: #666666;
+  --qt-terminal-ansi-bright-red: #f14c4c;
+  --qt-terminal-ansi-bright-green: #23d18b;
+  --qt-terminal-ansi-bright-yellow: #f5f543;
+  --qt-terminal-ansi-bright-blue: #3b8eea;
+  --qt-terminal-ansi-bright-magenta: #d670d6;
+  --qt-terminal-ansi-bright-cyan: #29b8db;
+  --qt-terminal-ansi-bright-white: #e5e5e5;
+
+  --qt-terminal-chrome-bg: color-mix(in srgb, var(--qt-terminal-bg) 78%, var(--qt-terminal-fg) 6%);
+  --qt-terminal-chrome-border: color-mix(in srgb, var(--qt-terminal-bg) 55%, var(--qt-terminal-fg) 22%);
+  --qt-terminal-chrome-fg: var(--qt-terminal-fg);
+  --qt-terminal-chrome-muted-fg: color-mix(in srgb, var(--qt-terminal-fg) 55%, transparent);
+  --qt-terminal-closed-badge-bg: color-mix(in srgb, var(--qt-terminal-bg) 50%, var(--qt-terminal-fg) 18%);
+  --qt-terminal-closed-badge-fg: var(--qt-terminal-fg);
+
+  /* In-chat terminal embed (nests inside chat bubbles, uses surrounding theme) */
+  --qt-terminal-embed-bg: var(--color-card);
+  --qt-terminal-embed-border: var(--color-border);
+  --qt-terminal-embed-header-bg: var(--color-muted);
+  --qt-terminal-embed-header-border: var(--color-border);
 }
 
 /* ==========================================================================
@@ -1406,11 +1444,15 @@
 }
 
 .qt-bg-primary {
-  background-color: var(--color-background);
+  background-color: var(--color-primary);
+}
+
+.qt-bg-accent {
+  background-color: var(--color-accent);
 }
 
 .qt-bg-secondary {
-  background-color: var(--color-muted);
+  background-color: var(--color-secondary);
 }
 
 .qt-bg-card {
@@ -1419,6 +1461,31 @@
 
 .qt-border {
   border-color: var(--color-border);
+}
+
+/* Solid status backgrounds (full opacity) — used for severity bars, status pips */
+.qt-bg-success {
+  background-color: var(--color-success);
+}
+
+.qt-bg-warning {
+  background-color: var(--color-warning);
+}
+
+.qt-bg-info {
+  background-color: var(--color-info);
+}
+
+.qt-bg-destructive {
+  background-color: var(--color-destructive);
+}
+
+.qt-bg-muted-foreground {
+  background-color: var(--color-muted-foreground);
+}
+
+.qt-text-on-accent {
+  color: var(--color-accent-foreground);
 }
 
 /* ==========================================================================
@@ -1478,6 +1545,32 @@
   background-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
 }
 
+.qt-bg-destructive\/60 {
+  background-color: color-mix(in srgb, var(--color-destructive) 60%, transparent);
+}
+
+/* Success backgrounds — extra opacity steps */
+.qt-bg-success\/40 {
+  background-color: color-mix(in srgb, var(--color-success) 40%, transparent);
+}
+
+.qt-bg-success\/60 {
+  background-color: color-mix(in srgb, var(--color-success) 60%, transparent);
+}
+
+/* Muted-foreground backgrounds with opacity — used for inactive pips */
+.qt-bg-muted-foreground\/30 {
+  background-color: color-mix(in srgb, var(--color-muted-foreground) 30%, transparent);
+}
+
+.qt-bg-muted-foreground\/60 {
+  background-color: color-mix(in srgb, var(--color-muted-foreground) 60%, transparent);
+}
+
+.hover\:qt-bg-muted-foreground\/60:hover {
+  background-color: color-mix(in srgb, var(--color-muted-foreground) 60%, transparent);
+}
+
 /* Text color utilities */
 .qt-text-warning {
   color: var(--color-warning);
@@ -1531,6 +1624,14 @@
 
 .qt-border-info\/30 {
   border-color: color-mix(in srgb, var(--color-info) 30%, transparent);
+}
+
+.qt-border-success\/20 {
+  border-color: color-mix(in srgb, var(--color-success) 20%, transparent);
+}
+
+.qt-border-success\/40 {
+  border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
 }
 
 /* Hover utilities */
@@ -2286,4 +2387,84 @@
 .qt-navbar-link-active {
   background-color: var(--qt-navbar-link-active-bg);
   color: var(--color-primary);
+}
+
+/* ==========================================================================
+   TERMINAL COMPONENTS
+   In-chat embed, pop-out page, and Terminal Mode pane.
+   Themes can override --qt-terminal-* and --qt-terminal-chrome-* tokens.
+   ========================================================================== */
+
+.qt-terminal-surface {
+  background-color: var(--qt-terminal-bg);
+}
+
+.qt-terminal-embed {
+  background-color: var(--qt-terminal-embed-bg);
+  border: 1px solid var(--qt-terminal-embed-border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.qt-terminal-embed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background-color: var(--qt-terminal-embed-header-bg);
+  border-bottom: 1px solid var(--qt-terminal-embed-header-border);
+}
+
+.qt-terminal-embed-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  background-color: var(--qt-terminal-embed-header-bg);
+  border-top: 1px solid var(--qt-terminal-embed-header-border);
+}
+
+.qt-terminal-popout-page {
+  background-color: var(--qt-terminal-bg);
+  color: var(--qt-terminal-chrome-fg);
+}
+
+.qt-terminal-popout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background-color: var(--qt-terminal-chrome-bg);
+  border-bottom: 1px solid var(--qt-terminal-chrome-border);
+  color: var(--qt-terminal-chrome-fg);
+}
+
+.qt-terminal-popout-link {
+  color: var(--qt-terminal-chrome-fg);
+}
+
+.qt-terminal-popout-link:hover {
+  text-decoration: underline;
+}
+
+.qt-terminal-popout-title {
+  color: var(--qt-terminal-chrome-fg);
+  font-weight: 500;
+}
+
+.qt-terminal-popout-separator {
+  color: var(--qt-terminal-chrome-muted-fg);
+}
+
+.qt-terminal-closed-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 0.25rem;
+  background-color: var(--qt-terminal-closed-badge-bg);
+  color: var(--qt-terminal-closed-badge-fg);
 }

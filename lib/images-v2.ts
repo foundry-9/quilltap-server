@@ -8,6 +8,7 @@ import { extname } from 'node:path';
 import fetch from 'node-fetch';
 import { getRepositories } from './repositories/factory';
 import { fileStorageManager } from './file-storage/manager';
+import { writeUserUploadToMountStore } from './file-storage/user-uploads-bridge';
 import type { FileEntry, FileSource, FileCategory } from './schemas/types';
 import { logger } from './logger';
 import { getInheritedTags, mergeTags } from './files/tag-inheritance';
@@ -52,10 +53,6 @@ async function getImageDimensions(buffer: Buffer, _mimeType: string): Promise<{ 
     const metadata = await sharp(buffer).metadata();
     return { width: metadata.width, height: metadata.height };
   } catch (error) {
-    logger.debug('Failed to extract image dimensions, returning undefined', {
-      context: 'images-v2.getImageDimensions',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return { width: undefined, height: undefined };
   }
 }
@@ -113,11 +110,6 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
       buffer = converted.buffer;
       mimeType = converted.mimeType;
       originalFilename = converted.filename;
-      logger.debug('Auto-converted image to WebP in createFile', {
-        context: 'images-v2.createFile',
-        originalFilename: params.originalFilename,
-        newFilename: originalFilename,
-      });
     }
   }
 
@@ -155,11 +147,14 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   // Generate a new file ID
   const fileId = crypto.randomUUID();
 
-  // Upload to storage
-  const { storageKey } = await fileStorageManager.uploadFile({
+  // images-v2 covers paste/drag-drop image uploads and URL imports — neither
+  // ever carries a projectId, so route directly into the Quilltap Uploads
+  // mount under images/ rather than the catch-all _general/.
+  const { storageKey } = await writeUserUploadToMountStore({
     filename: originalFilename,
     content: buffer,
     contentType: mimeType,
+    subfolder: 'images',
   });
   // Inherit tags from linked entities and merge with any explicitly provided tags
   const inheritedTags = await getInheritedTags(linkedTo, userId);

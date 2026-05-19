@@ -207,32 +207,6 @@ export {
   type SelfInventoryToolContext,
 } from './handlers/self-inventory-handler';
 
-// Shell Interactivity Tools
-export {
-  shellChdirToolDefinition,
-  shellExecSyncToolDefinition,
-  shellExecAsyncToolDefinition,
-  shellAsyncResultToolDefinition,
-  shellSudoSyncToolDefinition,
-  shellCpHostToolDefinition,
-  getAllShellToolDefinitions,
-  SHELL_TOOL_NAMES,
-  isShellTool,
-  type ShellToolName,
-  type ShellToolContext,
-  type ShellToolOutput,
-  type ShellCommandResult,
-  type ShellAsyncCommandResult,
-  type ShellSessionState,
-} from './shell';
-
-export {
-  executeShellTool,
-  executeSudoCommand,
-  formatShellResults,
-  ShellError,
-} from './shell';
-
 // Plugin-Based Tool Builder (Phase 3)
 export {
   buildToolsForProvider,
@@ -268,6 +242,20 @@ export {
   WardrobeUpdateOutfitError,
   type WardrobeUpdateOutfitToolContext,
 } from './handlers/wardrobe-update-outfit-handler';
+
+export {
+  wardrobeChangeItemToolDefinition,
+  validateWardrobeChangeItemInput,
+  type WardrobeChangeItemToolInput,
+  type WardrobeChangeItemToolOutput,
+} from './wardrobe-change-item-tool';
+
+export {
+  executeWardrobeChangeItemTool,
+  formatWardrobeChangeItemResults,
+  WardrobeChangeItemError,
+  type WardrobeChangeItemToolContext,
+} from './handlers/wardrobe-change-item-handler';
 
 export {
   wardrobeCreateItemToolDefinition,
@@ -373,6 +361,11 @@ export { docReadBlobTool, validateDocReadBlobInput, type DocReadBlobInput, type 
 export { docListBlobsTool, validateDocListBlobsInput, type DocListBlobsInput, type DocListBlobsOutput, type DocBlobSummary } from './doc-list-blobs-tool';
 export { docDeleteBlobTool, validateDocDeleteBlobInput, type DocDeleteBlobInput, type DocDeleteBlobOutput } from './doc-delete-blob-tool';
 
+// Photo Album Tools (character vault photos/ folder)
+export { keepImageTool, validateKeepImageInput, type KeepImageInput, type KeepImageOutput } from './keep-image-tool';
+export { listImagesTool, validateListImagesInput, type ListImagesInput, type ListImagesOutput, type ListedImage } from './list-images-tool';
+export { attachImageTool, validateAttachImageInput, type AttachImageInput, type AttachedImageDescriptor } from './attach-image-tool';
+
 // Document UI Tools (Scriptorium Phase 3.5)
 export { docOpenDocumentTool, validateDocOpenDocumentInput, type DocOpenDocumentInput, type DocOpenDocumentOutput } from './doc-open-document-tool';
 export { docCloseDocumentTool, validateDocCloseDocumentInput, type DocCloseDocumentInput, type DocCloseDocumentOutput } from './doc-close-document-tool';
@@ -385,3 +378,26 @@ export {
   DOC_EDIT_TOOL_NAMES,
   type DocEditToolContext,
 } from './handlers/doc-edit-handler';
+
+// Terminal Tools (Prospero Phase 2)
+export {
+  terminalReadToolDefinition,
+  validateTerminalReadInput,
+  type TerminalReadInput,
+  type TerminalReadOutput,
+} from './terminal-read-tool';
+
+export {
+  terminalListToolDefinition,
+  validateTerminalListInput,
+  type TerminalListInput,
+  type TerminalListOutput,
+} from './terminal-list-tool';
+
+export {
+  executeTerminalReadTool,
+  executeTerminalListTool,
+  formatTerminalReadResults,
+  formatTerminalListResults,
+  TerminalToolError,
+} from './handlers/terminal-handler';

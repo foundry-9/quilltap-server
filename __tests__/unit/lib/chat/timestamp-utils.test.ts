@@ -181,6 +181,50 @@ describe('timestamp-utils', () => {
       expect(shouldInjectTimestamp(null, true)).toBe(false)
       expect(shouldInjectTimestamp(undefined, false)).toBe(false)
     })
+
+    describe('EVERY_N_MINUTES mode', () => {
+      const buildConfig = (intervalMinutes: number = 15): TimestampConfig => ({
+        mode: 'EVERY_N_MINUTES',
+        format: 'FRIENDLY',
+        useFictionalTime: false,
+        autoPrepend: true,
+        intervalMinutes,
+      })
+
+      it('should always fire on the initial message regardless of interval', () => {
+        expect(shouldInjectTimestamp(buildConfig(15), true, 0)).toBe(true)
+        expect(shouldInjectTimestamp(buildConfig(15), true, 2)).toBe(true)
+      })
+
+      it('should fire when no prior announcement exists (null or undefined)', () => {
+        expect(shouldInjectTimestamp(buildConfig(15), false, null)).toBe(true)
+        expect(shouldInjectTimestamp(buildConfig(15), false, undefined)).toBe(true)
+      })
+
+      it('should suppress when fewer minutes than the configured interval have elapsed', () => {
+        expect(shouldInjectTimestamp(buildConfig(15), false, 0)).toBe(false)
+        expect(shouldInjectTimestamp(buildConfig(15), false, 14.9)).toBe(false)
+      })
+
+      it('should fire when elapsed minutes meet or exceed the configured interval', () => {
+        expect(shouldInjectTimestamp(buildConfig(15), false, 15)).toBe(true)
+        expect(shouldInjectTimestamp(buildConfig(15), false, 42)).toBe(true)
+      })
+
+      it('should fall back to a 15-minute default when intervalMinutes is missing', () => {
+        const config = { ...buildConfig(15) } as TimestampConfig
+        delete (config as { intervalMinutes?: number }).intervalMinutes
+        expect(shouldInjectTimestamp(config, false, 14)).toBe(false)
+        expect(shouldInjectTimestamp(config, false, 15)).toBe(true)
+      })
+
+      it('should honour a custom interval', () => {
+        expect(shouldInjectTimestamp(buildConfig(5), false, 4)).toBe(false)
+        expect(shouldInjectTimestamp(buildConfig(5), false, 5)).toBe(true)
+        expect(shouldInjectTimestamp(buildConfig(60), false, 30)).toBe(false)
+        expect(shouldInjectTimestamp(buildConfig(60), false, 75)).toBe(true)
+      })
+    })
   })
 
   describe('formatTimestampForSystemPrompt', () => {

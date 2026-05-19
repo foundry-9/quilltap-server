@@ -197,6 +197,11 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
           physicalDescriptions: data.physicalDescriptions ?? [],
           systemPrompts: data.systemPrompts ?? [],
           scenarios: data.scenarios ?? [],
+          // New characters default to vault-backed properties. The vault is
+          // provisioned synchronously by callers; if provisioning fails the
+          // overlay short-circuits on the missing mount point and the row
+          // values are used until the next startup backfill.
+          readPropertiesFromDocumentStore: data.readPropertiesFromDocumentStore ?? true,
         } as Omit<Character, 'id' | 'createdAt' | 'updatedAt'>;
 
         const character = await this._create(characterData, options);

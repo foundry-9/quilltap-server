@@ -35,19 +35,20 @@ export { VectorIndicesRepository } from './vector-indices.repository';
 export { TfidfVocabularyRepository } from './tfidf-vocabulary.repository';
 export { EmbeddingStatusRepository } from './embedding-status.repository';
 export { WardrobeRepository } from './wardrobe.repository';
-export { OutfitPresetsRepository } from './outfit-presets.repository';
 export { CharacterPluginDataRepository } from './character-plugin-data.repository';
 export { ConversationAnnotationsRepository } from './conversation-annotations.repository';
 export { ConversationChunksRepository } from './conversation-chunks.repository';
 export { HelpDocsRepository } from './help-docs.repository';
 export { DocMountPointsRepository } from './doc-mount-points.repository';
 export { DocMountFilesRepository } from './doc-mount-files.repository';
+export { DocMountFileLinksRepository } from './doc-mount-file-links.repository';
 export { DocMountFoldersRepository } from './doc-mount-folders.repository';
 export { DocMountChunksRepository } from './doc-mount-chunks.repository';
 export { DocMountDocumentsRepository } from './doc-mount-documents.repository';
 export { DocMountBlobsRepository } from './doc-mount-blobs.repository';
 export { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
 export { ChatDocumentsRepository } from './chat-documents.repository';
+export { TerminalSessionsRepository } from './terminal-sessions.repository';
 
 // Import all repository classes for container
 import { BackgroundJobsRepository } from './background-jobs.repository';
@@ -72,19 +73,20 @@ import { VectorIndicesRepository } from './vector-indices.repository';
 import { TfidfVocabularyRepository } from './tfidf-vocabulary.repository';
 import { EmbeddingStatusRepository } from './embedding-status.repository';
 import { WardrobeRepository } from './wardrobe.repository';
-import { OutfitPresetsRepository } from './outfit-presets.repository';
 import { CharacterPluginDataRepository } from './character-plugin-data.repository';
 import { ConversationAnnotationsRepository } from './conversation-annotations.repository';
 import { ConversationChunksRepository } from './conversation-chunks.repository';
 import { HelpDocsRepository } from './help-docs.repository';
 import { DocMountPointsRepository } from './doc-mount-points.repository';
 import { DocMountFilesRepository } from './doc-mount-files.repository';
+import { DocMountFileLinksRepository } from './doc-mount-file-links.repository';
 import { DocMountFoldersRepository } from './doc-mount-folders.repository';
 import { DocMountChunksRepository } from './doc-mount-chunks.repository';
 import { DocMountDocumentsRepository } from './doc-mount-documents.repository';
 import { DocMountBlobsRepository } from './doc-mount-blobs.repository';
 import { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
 import { ChatDocumentsRepository } from './chat-documents.repository';
+import { TerminalSessionsRepository } from './terminal-sessions.repository';
 
 /**
  * Container interface for all repository instances.
@@ -114,19 +116,20 @@ export interface RepositoryContainer {
   tfidfVocabularies: TfidfVocabularyRepository;
   embeddingStatus: EmbeddingStatusRepository;
   wardrobe: WardrobeRepository;
-  outfitPresets: OutfitPresetsRepository;
   characterPluginData: CharacterPluginDataRepository;
   conversationAnnotations: ConversationAnnotationsRepository;
   conversationChunks: ConversationChunksRepository;
   helpDocs: HelpDocsRepository;
   docMountPoints: DocMountPointsRepository;
   docMountFiles: DocMountFilesRepository;
+  docMountFileLinks: DocMountFileLinksRepository;
   docMountFolders: DocMountFoldersRepository;
   docMountChunks: DocMountChunksRepository;
   docMountDocuments: DocMountDocumentsRepository;
   docMountBlobs: DocMountBlobsRepository;
   projectDocMountLinks: ProjectDocMountLinksRepository;
   chatDocuments: ChatDocumentsRepository;
+  terminalSessions: TerminalSessionsRepository;
 }
 
 /**
@@ -168,19 +171,20 @@ export function createRepositories(): RepositoryContainer {
       tfidfVocabularies: new TfidfVocabularyRepository(),
       embeddingStatus: new EmbeddingStatusRepository(),
       wardrobe: new WardrobeRepository(),
-      outfitPresets: new OutfitPresetsRepository(),
       characterPluginData: new CharacterPluginDataRepository(),
       conversationAnnotations: new ConversationAnnotationsRepository(),
       conversationChunks: new ConversationChunksRepository(),
       helpDocs: new HelpDocsRepository(),
       docMountPoints: new DocMountPointsRepository(),
       docMountFiles: new DocMountFilesRepository(),
+      docMountFileLinks: new DocMountFileLinksRepository(),
       docMountFolders: new DocMountFoldersRepository(),
       docMountChunks: new DocMountChunksRepository(),
       docMountDocuments: new DocMountDocumentsRepository(),
       docMountBlobs: new DocMountBlobsRepository(),
       projectDocMountLinks: new ProjectDocMountLinksRepository(),
       chatDocuments: new ChatDocumentsRepository(),
+      terminalSessions: new TerminalSessionsRepository(),
     };
     return repositories;
   } catch (error) {

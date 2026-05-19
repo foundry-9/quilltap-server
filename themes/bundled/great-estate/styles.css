@@ -396,6 +396,40 @@
   --qt-warning-box-bg: hsl(43 75% 55% / 0.1);
   --qt-warning-box-border: hsl(20 35% 30% / 0.35);
   --qt-warning-box-fg: hsl(43 70% 40%);
+
+  /* ==========================================================================
+     TERMINAL VARIABLES — walnut study with a brass-tinted readout
+     The terminal looks like a teletype tucked into a manor library:
+     deep mahogany pane, warm cream/amber text, candlelit gold accents.
+     ========================================================================== */
+  --qt-terminal-bg: hsl(20 30% 8%);
+  --qt-terminal-fg: hsl(38 25% 88%);
+  --qt-terminal-cursor: hsl(43 80% 60%);
+  --qt-terminal-selection: hsl(43 75% 55% / 0.28);
+  --qt-terminal-ansi-black: hsl(20 25% 14%);
+  --qt-terminal-ansi-red: hsl(0 65% 58%);
+  --qt-terminal-ansi-green: hsl(142 50% 52%);
+  --qt-terminal-ansi-yellow: hsl(43 80% 60%);
+  --qt-terminal-ansi-blue: hsl(210 65% 60%);
+  --qt-terminal-ansi-magenta: hsl(320 55% 65%);
+  --qt-terminal-ansi-cyan: hsl(180 55% 56%);
+  --qt-terminal-ansi-white: hsl(38 18% 84%);
+  --qt-terminal-ansi-bright-black: hsl(20 18% 40%);
+  --qt-terminal-ansi-bright-red: hsl(0 75% 70%);
+  --qt-terminal-ansi-bright-green: hsl(142 55% 62%);
+  --qt-terminal-ansi-bright-yellow: hsl(43 85% 70%);
+  --qt-terminal-ansi-bright-blue: hsl(210 75% 70%);
+  --qt-terminal-ansi-bright-magenta: hsl(320 65% 74%);
+  --qt-terminal-ansi-bright-cyan: hsl(180 65% 68%);
+  --qt-terminal-ansi-bright-white: hsl(38 25% 96%);
+
+  /* Chrome — mahogany frame with gold leaf border */
+  --qt-terminal-chrome-bg: hsl(20 25% 11%);
+  --qt-terminal-chrome-border: hsl(43 60% 30%);
+  --qt-terminal-chrome-fg: hsl(38 22% 84%);
+  --qt-terminal-chrome-muted-fg: hsl(38 12% 58%);
+  --qt-terminal-closed-badge-bg: hsl(20 22% 18%);
+  --qt-terminal-closed-badge-fg: hsl(43 65% 72%);
 }
 
 /* ============================================================================

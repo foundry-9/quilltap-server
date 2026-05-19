@@ -16,7 +16,9 @@ const INITIAL_FORM_DATA: CharacterFormData = {
   aliases: [],
   pronouns: null,
   title: '',
+  identity: '',
   description: '',
+  manifesto: '',
   personality: '',
   scenarios: [],
   firstMessage: '',
@@ -46,6 +48,7 @@ export function useCharacterEdit(id: string) {
     formData: INITIAL_FORM_DATA,
     originalFormData: INITIAL_FORM_DATA,
     avatarRefreshKey: 0,
+    externalUpdateCount: 0,
   })
 
   /**
@@ -70,7 +73,9 @@ export function useCharacterEdit(id: string) {
           aliases: char.aliases || [],
           pronouns: char.pronouns || null,
           title: char.title || '',
+          identity: char.identity || '',
           description: char.description || '',
+          manifesto: char.manifesto || '',
           personality: char.personality || '',
           scenarios: char.scenarios || [],
           firstMessage: char.firstMessage || '',
@@ -89,6 +94,7 @@ export function useCharacterEdit(id: string) {
           formData: initialFormData,
           originalFormData: initialFormData,
           loading: false,
+          externalUpdateCount: prev.externalUpdateCount + 1,
         }
       })
     } catch (err) {
@@ -124,6 +130,18 @@ export function useCharacterEdit(id: string) {
       formData: { ...prev.formData, [e.target.name]: e.target.value },
     }))
   }
+
+  /**
+   * Force the markdown editors to remount with the current formData values.
+   * Call after any code path that writes fields without going through user
+   * input (e.g. the AI wizard apply flow firing synthetic events).
+   */
+  const bumpExternalUpdateCount = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      externalUpdateCount: prev.externalUpdateCount + 1,
+    }))
+  }, [])
 
   /**
    * Handle aliases array changes
@@ -432,6 +450,7 @@ export function useCharacterEdit(id: string) {
     toggleAvatarSelector,
     clearAvatar,
     fetchCharacter,
+    bumpExternalUpdateCount,
     hasChanges,
   }
 }

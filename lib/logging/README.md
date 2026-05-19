@@ -66,8 +66,8 @@ LOG_FILE_PATH="./logs"
 # Max file size in bytes before rotation (default: 10MB)
 LOG_FILE_MAX_SIZE="10485760"
 
-# Max number of rotated files to keep (default: 5)
-LOG_FILE_MAX_FILES="5"
+# Max number of rotated backups per stem (default: 10 → .0.log through .9.log)
+LOG_FILE_MAX_FILES="10"
 ```
 
 ## File Structure
@@ -91,10 +91,18 @@ Outputs logs to stdout/stderr using the appropriate console method for each log 
 ### File Transport
 
 Writes logs to files with automatic rotation:
-- **combined.log** - All log entries
-- **error.log** - Error-level logs only
-- Rotates when files exceed max size (combined.log.1, combined.log.2, etc.)
-- Automatically deletes old rotated files beyond max count
+- **combined.log** - All log entries (active file)
+- **error.log** - Error-level logs only (active file)
+- Rotates when files exceed max size. Backups use the `<stem>.<N>.log`
+  pattern, where `.0.log` is the newest backup and `.<maxFiles-1>.log` is
+  the oldest. With the default `maxFiles=10`, the rotation produces
+  `combined.0.log` through `combined.9.log` (same shape for `error`).
+- On startup, sweeps the log directory for stray files in the combined/error
+  family that don't match the active or rotated names — leftovers from older
+  `<stem>.log.<N>` rotations, iCloud sync conflicts (`combined 2.log`,
+  `combined.log.9 2`), and Finder duplicates (`combined(2).log`). Unrelated
+  files (terminal transcripts, `quilltap-stdout/stderr.log`, `startup.log`,
+  `embedded-server.log`, etc.) are never touched.
 - Newline-delimited JSON format for easy parsing
 
 ## Adding New Transports

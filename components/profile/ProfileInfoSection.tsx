@@ -1,24 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import { formatDateTime } from '@/lib/format-time'
+import { CheckIcon } from '@/components/ui/icons'
 import { UserProfile } from './types'
 
 export interface ProfileInfoSectionProps {
   profile: UserProfile
 }
 
-/**
- * Format a date string for display
- */
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Never'
-  return new Date(dateStr).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDateTime(dateStr, { monthStyle: 'long' }) || 'Never'
 }
 
 /**
@@ -42,25 +34,6 @@ function CopyIcon({ className }: { className?: string }) {
 }
 
 /**
- * Check icon SVG
- */
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  )
-}
-
-/**
  * Single info field with optional copy button
  */
 function InfoField({
@@ -72,17 +45,8 @@ function InfoField({
   value: string
   copyable?: boolean
 }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy to clipboard', { error: err })
-    }
-  }
+  const { copied, copy } = useCopyToClipboard()
+  const handleCopy = () => copy(value)
 
   return (
     <div className="flex items-center justify-between py-3 border-b qt-border-default last:border-b-0">

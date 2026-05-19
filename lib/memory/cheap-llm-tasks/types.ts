@@ -6,14 +6,14 @@ import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 
 /**
- * Candidate memory extracted from a conversation
+ * Candidate memory extracted from a conversation. Extractor prompts set the
+ * significance bar internally and only return memories that meet it; there is
+ * no "significant: false" path any more.
  */
 export interface MemoryCandidate {
-  /** Whether the message contains something significant worth remembering */
-  significant: boolean
-  /** Full memory content (if significant) */
+  /** Full memory content */
   content?: string
-  /** Brief 1-sentence summary (if significant) */
+  /** Brief 1-sentence summary */
   summary?: string
   /** Keywords for text-based search */
   keywords?: string[]

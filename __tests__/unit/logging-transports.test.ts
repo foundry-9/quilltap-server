@@ -269,6 +269,7 @@ describe('FileTransport', () => {
     appendFile: jest.SpiedFunction<typeof fs.appendFile>;
     rename: jest.SpiedFunction<typeof fs.rename>;
     unlink: jest.SpiedFunction<typeof fs.unlink>;
+    readdir: jest.SpiedFunction<typeof fs.readdir>;
   };
   let consoleSpy: {
     error: jest.SpiedFunction<typeof console.error>;
@@ -284,6 +285,7 @@ describe('FileTransport', () => {
       appendFile: jest.spyOn(fs, 'appendFile').mockResolvedValue(undefined),
       rename: jest.spyOn(fs, 'rename').mockResolvedValue(undefined),
       unlink: jest.spyOn(fs, 'unlink').mockResolvedValue(undefined),
+      readdir: jest.spyOn(fs, 'readdir').mockResolvedValue([] as any),
     };
 
     // Spy on console.error for error handling
@@ -299,6 +301,7 @@ describe('FileTransport', () => {
     fsSpies.appendFile.mockRestore();
     fsSpies.rename.mockRestore();
     fsSpies.unlink.mockRestore();
+    fsSpies.readdir.mockRestore();
     consoleSpy.error.mockRestore();
   });
 
@@ -359,6 +362,100 @@ describe('FileTransport', () => {
 
       // Should log error to console but not throw
       expect(consoleSpy.error).toHaveBeenCalled();
+    });
+  });
+
+  describe('Stray-log purge on init', () => {
+    it('should delete files that do not match the allowed combined/error names', async () => {
+      const maxFiles = 10;
+      fsSpies.readdir.mockResolvedValueOnce([
+        // allowed:
+        'combined.log',
+        'combined.0.log',
+        'combined.9.log',
+        'error.log',
+        'error.3.log',
+        // garbage we should clean up:
+        'combined 2.log',
+        'combined 11.log',
+        'combined(2).log',
+        'combined.log.5',
+        'combined.log.6 2',
+        'combined.log(1).3',
+        'error.log.10',
+        // unrelated files we MUST NOT touch:
+        'quilltap-stderr.log',
+        'quilltap-stdout.log',
+        'startup.log',
+        'stdout.log',
+        'embedded-server.log',
+        'errors.log', // starts with "error" but the next char is alphanumeric
+        'terminals',
+      ] as any);
+
+      const transport = new FileTransport(tempDir, 10485760, maxFiles);
+
+      // Wait for initialization
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const unlinkedPaths = fsSpies.unlink.mock.calls.map((c) => c[0]);
+      const expectedDeletions = [
+        'combined 2.log',
+        'combined 11.log',
+        'combined(2).log',
+        'combined.log.5',
+        'combined.log.6 2',
+        'combined.log(1).3',
+        'error.log.10',
+      ].map((name) => join(tempDir, name));
+
+      for (const path of expectedDeletions) {
+        expect(unlinkedPaths).toContain(path);
+      }
+
+      const protectedPaths = [
+        'combined.log',
+        'combined.0.log',
+        'combined.9.log',
+        'error.log',
+        'error.3.log',
+        'quilltap-stderr.log',
+        'quilltap-stdout.log',
+        'startup.log',
+        'stdout.log',
+        'embedded-server.log',
+        'errors.log',
+        'terminals',
+      ].map((name) => join(tempDir, name));
+
+      for (const path of protectedPaths) {
+        expect(unlinkedPaths).not.toContain(path);
+      }
+    });
+
+    it('should tolerate readdir failures during purge', async () => {
+      fsSpies.readdir.mockRejectedValueOnce(new Error('Permission denied'));
+
+      const transport = new FileTransport(tempDir);
+
+      // Wait for initialization
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Should not throw and should still initialize stat tracking
+      expect(fsSpies.stat).toHaveBeenCalled();
+    });
+
+    it('should tolerate unlink failures during purge', async () => {
+      fsSpies.readdir.mockResolvedValueOnce(['combined.log.5'] as any);
+      fsSpies.unlink.mockRejectedValueOnce(new Error('Permission denied'));
+
+      const transport = new FileTransport(tempDir);
+
+      // Wait for initialization
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Should not throw and should still initialize stat tracking
+      expect(fsSpies.stat).toHaveBeenCalled();
     });
   });
 
@@ -539,9 +636,9 @@ describe('FileTransport', () => {
 
       await transport.write(largeLog);
 
-      // Should attempt to remove the oldest file
+      // Should attempt to remove the oldest backup (.<maxFiles-1>.log)
       expect(fsSpies.unlink).toHaveBeenCalledWith(
-        join(tempDir, `combined.log.${maxFiles}`)
+        join(tempDir, `combined.${maxFiles - 1}.log`)
       );
     });
 
@@ -564,10 +661,10 @@ describe('FileTransport', () => {
 
       await transport.write(largeLog);
 
-      // Should rename current log to .1
+      // Should rename current log to .0.log (newest backup)
       expect(fsSpies.rename).toHaveBeenCalledWith(
         join(tempDir, 'combined.log'),
-        join(tempDir, 'combined.log.1')
+        join(tempDir, 'combined.0.log')
       );
     });
 

@@ -46,14 +46,6 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
   // Abstract method implementations
   // ============================================================================
 
-  async findById(id: string): Promise<HelpDoc | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<HelpDoc[]> {
-    return this._findAll();
-  }
-
   async create(
     data: Omit<HelpDoc, 'id' | 'createdAt' | 'updatedAt'>,
     options?: import('./base.repository').CreateOptions
@@ -107,11 +99,6 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
       async () => {
         const existing = await this.findByPath(path);
         if (existing) {
-          logger.debug('Updating existing help doc', {
-            context: 'HelpDocsRepository.upsertByPath',
-            id: existing.id,
-            path,
-          });
 
           const updated = await this._update(existing.id, {
             title: data.title,
@@ -122,11 +109,6 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
           if (!updated) throw new Error(`Failed to update help doc: ${path}`);
           return updated;
         }
-
-        logger.debug('Creating new help doc', {
-          context: 'HelpDocsRepository.upsertByPath',
-          path,
-        });
 
         return this._create(data as Omit<HelpDoc, 'id' | 'createdAt' | 'updatedAt'>);
       },
@@ -150,12 +132,6 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
         if (!updated) {
           throw new Error(`Help doc not found for embedding update: ${id}`);
         }
-
-        logger.debug('Updated embedding for help doc', {
-          context: 'HelpDocsRepository.updateEmbedding',
-          id,
-          embeddingLength: embedding.length,
-        });
       },
       'Error updating help doc embedding',
       { id }
@@ -176,11 +152,6 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
           { $set: { embedding: null, updatedAt: this.getCurrentTimestamp() } }
         );
 
-        logger.debug('Cleared all help doc embeddings', {
-          context: 'HelpDocsRepository.clearAllEmbeddings',
-          modifiedCount: result.modifiedCount,
-        });
-
         return result.modifiedCount;
       },
       'Error clearing all help doc embeddings',
@@ -198,10 +169,6 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
     await this.safeQuery(
       async () => {
         await this._update(id, { embedding: null } as Partial<HelpDoc>);
-        logger.debug('Cleared embedding for help doc', {
-          context: 'HelpDocsRepository.clearAllEmbeddingsForDoc',
-          id,
-        });
       },
       'Error clearing help doc embedding',
       { id }

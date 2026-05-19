@@ -306,39 +306,41 @@ describe('Context Manager', () => {
     }
 
     it('should build prompt from character data', () => {
-      const prompt = buildSystemPrompt(character as any)
+      const prompt = buildSystemPrompt({ character: character as any })
       expect(prompt).toContain('You are a helpful assistant')
       expect(prompt).toContain('Friendly and helpful')
     })
 
-    it('should include persona information', () => {
+    it('does not inline persona/user-character info into the system prompt (moved to Host whisper in Phase C)', () => {
       const persona = { name: 'John', description: 'A curious user' }
-      const prompt = buildSystemPrompt(character as any, persona)
-      expect(prompt).toContain('John')
-      expect(prompt).toContain('curious user')
+      const prompt = buildSystemPrompt({ character: character as any, userCharacter: persona })
+      expect(prompt).not.toContain('John')
+      expect(prompt).not.toContain('curious user')
     })
 
     it('processes template variables across roleplay and persona sections', () => {
       const persona = { name: 'Alex', description: 'A curious tester' }
       const roleplayTemplate = { systemPrompt: 'Stay in {{char}} mindset when talking to {{user}}.' }
       const toolInstructions = 'Tools should mention {{char}} assisting {{user}}.'
-      const prompt = buildSystemPrompt(
-        {
+      const prompt = buildSystemPrompt({
+        character: {
           ...character,
           personality: '{{char}} is thoughtful',
           scenarios: [{ id: 'test-scenario-id', title: 'Default', content: '{{char}} meets {{user}} under the stars', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }],
           exampleDialogues: '{{char}}: Hello {{user}}',
         } as any,
-        persona,
-        undefined,
+        userCharacter: persona,
         roleplayTemplate,
-        toolInstructions
-      )
+        toolInstructions,
+      })
 
       expect(prompt).toContain('Stay in Test Character mindset when talking to Alex.')
       expect(prompt).toContain('Test Character is thoughtful')
-      expect(prompt).toContain('Test Character meets Alex under the stars')
       expect(prompt).toContain('Tools should mention Test Character assisting Alex.')
+      // Phase C: scenario text is no longer inlined into the system prompt — it
+      // ships as a Host whisper now — so 'meets Alex under the stars' will not
+      // appear here.
+      expect(prompt).not.toContain('meets Alex under the stars')
       expect(prompt).not.toContain('{{char}}')
       expect(prompt).not.toContain('{{user}}')
     })
@@ -367,17 +369,55 @@ describe('Context Manager', () => {
         ],
       }
 
-      const prompt = buildSystemPrompt(
-        multiPromptCharacter as any,
-        persona,
-        undefined,
-        null,
-        undefined,
-        'prompt-alt'
-      )
+      const prompt = buildSystemPrompt({
+        character: multiPromptCharacter as any,
+        userCharacter: persona,
+        roleplayTemplate: null,
+        selectedSystemPromptId: 'prompt-alt',
+      })
 
       expect(prompt).toContain('Test Character must protect Jordan at all costs.')
       expect(prompt).not.toContain('Default prompt')
+    })
+
+    it('uses precompiledIdentityStack verbatim and skips the rebuild', () => {
+      const prompt = buildSystemPrompt({
+        character: character as any,
+        precompiledIdentityStack: '## Frozen Identity\nThis is a precompiled stack.',
+      })
+      expect(prompt).toContain('## Frozen Identity')
+      expect(prompt).toContain('This is a precompiled stack.')
+      // The character's actual prompt content should NOT be rebuilt when a
+      // precompiled stack is supplied.
+      expect(prompt).not.toContain('You are a helpful assistant')
+      expect(prompt).not.toContain('Friendly and helpful')
+    })
+
+    it('falls back to a fresh build when precompiledIdentityStack is empty', () => {
+      const prompt = buildSystemPrompt({
+        character: character as any,
+        precompiledIdentityStack: '',
+      })
+      // Empty cache → rebuild. The character's prompt content is restored.
+      expect(prompt).toContain('You are a helpful assistant')
+      expect(prompt).toContain('Friendly and helpful')
+    })
+
+    it('appends roleplay template, tool instructions, and tool reinforcement after the identity stack', () => {
+      const prompt = buildSystemPrompt({
+        character: character as any,
+        precompiledIdentityStack: '## Frozen Identity\nstatic.',
+        roleplayTemplate: { systemPrompt: 'Format: bullet points.' },
+        toolInstructions: 'Tools available: foo, bar.',
+      })
+      const idx = prompt.indexOf('## Frozen Identity')
+      const rpIdx = prompt.indexOf('Format: bullet points.')
+      const toolIdx = prompt.indexOf('Tools available: foo, bar.')
+      expect(idx).toBeGreaterThanOrEqual(0)
+      expect(rpIdx).toBeGreaterThan(idx)
+      expect(toolIdx).toBeGreaterThan(rpIdx)
+      // Tool reinforcement uses character pronouns (defaults to 'they').
+      expect(prompt).toContain('they CALLS them')
     })
   })
 
@@ -420,7 +460,10 @@ describe('Context Manager', () => {
     it('should format memories with header', () => {
       const { content } = formatMemoriesForContext(mockMemories, 1000, 'OPENAI')
       expect(content).toContain('## Relevant Memories')
-      expect(content).toContain('prefers coffee')
+      // Whisper lines now carry the full memory.content (not summary), so we
+      // assert against the content body — "User likes coffee" — rather than
+      // the summary text.
+      expect(content).toContain('User likes coffee')
     })
 
     it('should return empty for no memories', () => {
@@ -918,47 +961,132 @@ describe('Context Manager', () => {
         messagesWithParticipants,
       })
 
-      expect(repoMock.memories.findByCharacterAboutCharacters).toHaveBeenCalledWith('char-a', expect.arrayContaining(['char-b', 'char-user']))
-      expect(result.messages[0].content).toContain('## Memories About Other Characters')
+      expect(repoMock.memories.findByCharacterAboutCharacters).toHaveBeenCalledWith(
+        'char-a',
+        expect.arrayContaining(['char-b', 'char-user']),
+        expect.any(Number),
+      )
+      // Phase B: inter-character memories now ride inline on the new user
+      // message body (plain "you also recall about the others present" framing
+      // for the LLM) rather than concatenated onto the system prompt. The
+      // Commonplace Book persona-voiced version is persisted separately.
+      const userMsg = result.messages[result.messages.length - 1]
+      expect(userMsg.role).toBe('user')
+      expect(userMsg.content).toContain('You also recall about the others present')
+      expect(userMsg.content).toContain('## Memories About Other Characters')
+    })
+
+    it('ignores summary/system messages when scanning off-scene mentions', async () => {
+      const offSceneCharacter: Character = {
+        ...characterA,
+        id: 'char-c',
+        name: 'Morgan',
+      }
+      const repoMock = {
+        characters: {
+          findByUserId: jest.fn().mockResolvedValue([characterA, characterB, characterUser, offSceneCharacter]),
+        },
+        chats: {
+          getMessages: jest.fn().mockResolvedValue([
+            {
+              type: 'message',
+              role: 'ASSISTANT',
+              systemSender: 'commonplaceBook',
+              content: 'Morgan should help here.',
+              createdAt: timestamp,
+            },
+            {
+              type: 'message',
+              role: 'USER',
+              content: 'Let us keep going.',
+              createdAt: timestamp,
+            },
+          ]),
+          addMessage: jest.fn(),
+        },
+        memories: {
+          findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]),
+        },
+      }
+      mockedGetRepositories.mockReturnValue(repoMock as any)
+      mockedSearchMemories.mockResolvedValue([])
+
+      const result = await buildContext({
+        provider: 'OPENAI',
+        modelName: 'gpt-4o',
+        userId: 'user',
+        character: characterA,
+        userCharacter: { name: 'Alex', description: 'Curious' },
+        chat: {
+          id: 'chat-1',
+          userId: 'user',
+          participants: allParticipants,
+          title: 'Test Chat',
+          contextSummary: 'Morgan was discussed in summary text only.',
+          sillyTavernMetadata: null,
+          tags: [],
+          messageCount: 2,
+          lastMessageAt: timestamp,
+          lastRenameCheckInterchange: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+        existingMessages: [
+          { role: 'USER', content: 'Hello', id: 'm1' },
+          { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+        ],
+        newUserMessage: 'Ready for the next task?',
+        embeddingProfileId: null,
+        skipMemories: true,
+        maxMemories: 1,
+        minMemoryImportance: 0.3,
+        respondingParticipant: participantA,
+        allParticipants,
+        participantCharacters,
+        messagesWithParticipants: [
+          { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+          { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+        ],
+      })
+
+      expect(repoMock.chats.getMessages).toHaveBeenCalledTimes(1)
+      expect(repoMock.chats.addMessage).not.toHaveBeenCalled()
+      expect(result.messages.some(m => m.role === 'assistant' && m.content.includes('Off-Scene Character Mentioned'))).toBe(false)
     })
   })
 
   describe('buildIdentityReinforcement', () => {
-    it('produces a single-character reminder with character and user names', () => {
-      const result = buildIdentityReinforcement('Artemis', 'Alex')
+    it('produces a reminder anchored on the character name', () => {
+      const result = buildIdentityReinforcement('Artemis')
       expect(result).toContain('## Identity Reminder')
       expect(result).toContain('You are Artemis.')
       expect(result).toContain('Respond only as Artemis.')
-      expect(result).toContain('Alex or any other character')
       expect(result).not.toContain('{{char}}')
       expect(result).not.toContain('{{user}}')
     })
 
-    it('defaults user name to "User" when not provided', () => {
+    it('uses a fully static "any other character" phrasing — no inline list', () => {
+      // The reminder is now emitted as a separate, fully-static second system
+      // message. It must NOT name individual participants (those used to live
+      // here as a comma-separated list and bisected provider prompt caching);
+      // participant attribution comes from Host roster announcements + each
+      // history message's `name` field instead.
       const result = buildIdentityReinforcement('Artemis')
-      expect(result).toContain('User or any other character')
+      expect(result).toContain('Do not write dialogue, actions, or thoughts for any other character.')
+      expect(result).not.toMatch(/Do not write dialogue.*?for [A-Z][a-z]+,/)
+    })
+
+    it('produces byte-identical output across calls for the same character', () => {
+      const a = buildIdentityReinforcement('Friday')
+      const b = buildIdentityReinforcement('Friday')
+      expect(a).toBe(b)
     })
 
     it('instructs LLM not to prefix response with character name', () => {
-      const result = buildIdentityReinforcement('Friday', 'Alex')
+      const result = buildIdentityReinforcement('Friday')
       expect(result).toContain('Do not prefix or label your response with your name')
       expect(result).toContain('[Friday]')
       expect(result).toContain('Friday:')
-    })
-
-    it('lists other participant names in multi-character mode', () => {
-      const result = buildIdentityReinforcement('Artemis', 'Alex', ['Luna', 'Orion'])
-      expect(result).toContain('Luna')
-      expect(result).toContain('Orion')
-      expect(result).toContain('Alex')
-      expect(result).toContain('You are Artemis.')
-    })
-
-    it('uses single-character format when otherParticipantNames is empty', () => {
-      const result = buildIdentityReinforcement('Artemis', 'Alex', [])
-      expect(result).toContain('Alex or any other character')
-      // Should not contain any participant name listing (no "Luna", "Orion", etc.)
-      expect(result).toContain('Do not write dialogue, actions, or thoughts for Alex or any other character.')
     })
   })
 })

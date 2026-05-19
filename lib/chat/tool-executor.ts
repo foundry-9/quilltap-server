@@ -68,12 +68,6 @@ import {
   type WhisperToolContext,
 } from '@/lib/tools/handlers/whisper-handler';
 import {
-  executeShellTool,
-  formatShellResults,
-  isShellTool,
-  type ShellToolContext,
-} from '@/lib/tools/shell';
-import {
   executeDocEditTool,
   formatDocEditResults,
   isDocEditTool,
@@ -90,6 +84,11 @@ import {
   formatWardrobeUpdateOutfitResults,
   type WardrobeUpdateOutfitToolContext,
 } from '@/lib/tools/handlers/wardrobe-update-outfit-handler';
+import {
+  executeWardrobeChangeItemTool,
+  formatWardrobeChangeItemResults,
+  type WardrobeChangeItemToolContext,
+} from '@/lib/tools/handlers/wardrobe-change-item-handler';
 import {
   executeWardrobeCreateItemTool,
   formatWardrobeCreateItemResults,
@@ -115,6 +114,14 @@ import {
   formatDeleteAnnotationResults,
   type DeleteAnnotationToolContext,
 } from '@/lib/tools/handlers/delete-annotation-handler';
+import {
+  executeTerminalReadTool,
+  executeTerminalListTool,
+  formatTerminalReadResults,
+  formatTerminalListResults,
+  TerminalToolError,
+  type TerminalToolError as TerminalToolErrorType,
+} from '@/lib/tools/handlers/terminal-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -130,16 +137,6 @@ export interface ToolResult {
   error?: string;
   /** Human-readable error message with more details than the error code */
   message?: string;
-  /** For sudo_sync: indicates user approval is required */
-  requiresSudoApproval?: boolean;
-  /** For sudo_sync: the pending command details */
-  pendingSudoCommand?: {
-    command: string;
-    parameters?: string[];
-    timeout_ms?: number;
-  };
-  /** For shell tools: indicates workspace acknowledgement is required */
-  requiresWorkspaceAcknowledgement?: boolean;
   metadata?: {
     provider?: string;
     model?: string;
@@ -179,6 +176,15 @@ export interface ToolExecutionContext {
   browserUserAgent?: string;
   /** Memories loaded into this turn's prompt, for introspection tools. */
   loadedMemories?: LoadedMemoriesContext;
+  /**
+   * Character IDs whose wardrobe was modified during this turn. Wardrobe tool
+   * handlers add to this Set instead of enqueuing Aurora announcements
+   * immediately; the orchestrator drains it once at end-of-turn so a single
+   * response with N wardrobe edits produces one announcement, not N. When
+   * absent (legacy callers without orchestrator threading), handlers fall
+   * back to immediate enqueue.
+   */
+  pendingWardrobeAnnouncements?: Set<string>;
 }
 
 /**
@@ -223,17 +229,14 @@ const BUILT_IN_TOOLS = new Set<string>([
   'search',
   // Wardrobe tools
   'list_wardrobe',
-  'update_outfit_item',
+  'wardrobe_set_outfit',
+  'wardrobe_change_item',
   'create_wardrobe_item',
-  // Shell interactivity tools
-  'chdir',
-  'exec_sync',
-  'exec_async',
-  'async_result',
-  'sudo_sync',
-  'cp_host',
   // Document editing / management / UI tools — Scriptorium Phase 3.3+
   ...DOC_EDIT_TOOL_NAMES,
+  // Terminal tools — Prospero Phase 2
+  'terminal_read',
+  'terminal_list',
 ]);
 
 export async function executeToolCallWithContext(
@@ -648,19 +651,47 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle update_outfit_item
-    if (toolCall.name === 'update_outfit_item') {
+    // Handle wardrobe_set_outfit (composite outfits only)
+    if (toolCall.name === 'wardrobe_set_outfit') {
       const wardrobeContext: WardrobeUpdateOutfitToolContext = {
         userId,
         chatId,
         characterId: characterId || '',
+        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
       };
 
       const result = await executeWardrobeUpdateOutfitTool(toolCall.arguments, wardrobeContext);
       const formattedResult = formatWardrobeUpdateOutfitResults(result);
 
       return {
-        toolName: 'update_outfit_item',
+        toolName: 'wardrobe_set_outfit',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          action: result.action,
+          item: result.item,
+          slots_affected: result.slots_affected,
+          current_state: result.current_state,
+          coverage_summary: result.coverage_summary,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle wardrobe_change_item (atomic items only)
+    if (toolCall.name === 'wardrobe_change_item') {
+      const wardrobeContext: WardrobeChangeItemToolContext = {
+        userId,
+        chatId,
+        characterId: characterId || '',
+        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+      };
+
+      const result = await executeWardrobeChangeItemTool(toolCall.arguments, wardrobeContext);
+      const formattedResult = formatWardrobeChangeItemResults(result);
+
+      return {
+        toolName: 'wardrobe_change_item',
         success: result.success,
         result: result.success ? {
           formattedText: formattedResult,
@@ -817,6 +848,7 @@ export async function executeToolCallWithContext(
         userId,
         characterId,
         embeddingProfileId,
+        projectId: context.projectId,
       };
 
       const result = await executeSearchScriptoriumTool(toolCall.arguments, searchContext);
@@ -895,51 +927,6 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle shell interactivity tools
-    if (isShellTool(toolCall.name)) {
-      const shellContext: ShellToolContext = {
-        userId,
-        chatId,
-        projectId: context.projectId,
-        characterId,
-      };
-
-      const result = await executeShellTool(toolCall.name, toolCall.arguments, shellContext);
-
-      // Handle sudo approval requirement
-      if (result.requiresSudoApproval) {
-        return {
-          toolName: toolCall.name,
-          success: false,
-          result: null,
-          error: 'Sudo command requires user approval',
-          requiresSudoApproval: true,
-          pendingSudoCommand: result.pendingSudoCommand,
-        };
-      }
-
-      // Handle workspace acknowledgement requirement
-      if (result.requiresWorkspaceAcknowledgement) {
-        return {
-          toolName: toolCall.name,
-          success: false,
-          result: null,
-          error: 'Workspace acknowledgement required',
-          requiresWorkspaceAcknowledgement: true,
-        };
-      }
-
-      return {
-        toolName: toolCall.name,
-        success: result.success,
-        result: result.success ? {
-          formattedText: formatShellResults(result),
-          ...result.result,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
     // Handle document editing tools (Scriptorium Phase 3.3)
     if (isDocEditTool(toolCall.name)) {
       const docEditContext: DocEditToolContext = {
@@ -951,6 +938,19 @@ export async function executeToolCallWithContext(
 
       const result = await executeDocEditTool(toolCall.name, toolCall.arguments, docEditContext);
 
+      // attach_image returns an array of image descriptors (mirroring
+      // generate_image) so processToolCalls' generated-image collector
+      // picks them up. Pass the array through unchanged rather than
+      // spreading it into a Record like the rest of the doc-edit tools.
+      if (toolCall.name === 'attach_image') {
+        return {
+          toolName: toolCall.name,
+          success: result.success,
+          result: result.success ? (result.result ?? null) : null,
+          error: result.success ? undefined : result.error,
+        };
+      }
+
       return {
         toolName: toolCall.name,
         success: result.success,
@@ -960,6 +960,105 @@ export async function executeToolCallWithContext(
         } : null,
         error: result.success ? undefined : result.error,
       };
+    }
+
+    // Handle terminal_read (read terminal scrollback)
+    if (toolCall.name === 'terminal_read') {
+      const terminalReadContext = {
+        userId,
+        chatId,
+        config: {},
+      };
+
+      try {
+        // Import validators at the point of use to avoid circular imports
+        const { validateTerminalReadInput } = await import('@/lib/tools/terminal-read-tool');
+
+        if (!validateTerminalReadInput(toolCall.arguments)) {
+          return {
+            toolName: 'terminal_read',
+            success: false,
+            result: null,
+            error: 'Invalid arguments for terminal_read: sessionId is required',
+          };
+        }
+
+        const result = await executeTerminalReadTool(toolCall.arguments, terminalReadContext);
+        const formattedResult = formatTerminalReadResults(result);
+
+        return {
+          toolName: 'terminal_read',
+          success: true,
+          result: {
+            formattedText: formattedResult,
+            sessionId: result.sessionId,
+            shell: result.shell,
+            cwd: result.cwd,
+            status: result.status,
+            exitCode: result.exitCode,
+            lines: result.lines,
+            totalLines: result.totalLines,
+            startLine: result.startLine,
+            endLine: result.endLine,
+            truncated: result.truncated,
+            scrollback: result.scrollback,
+            ...(result.rawScrollback !== undefined ? { rawScrollback: result.rawScrollback } : {}),
+          },
+          error: undefined,
+        };
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error reading terminal';
+        return {
+          toolName: 'terminal_read',
+          success: false,
+          result: null,
+          error: errorMsg,
+        };
+      }
+    }
+
+    // Handle terminal_list (list terminal sessions)
+    if (toolCall.name === 'terminal_list') {
+      const terminalListContext = {
+        userId,
+        chatId,
+        config: {},
+      };
+
+      try {
+        // Import validator at the point of use to avoid circular imports
+        const { validateTerminalListInput } = await import('@/lib/tools/terminal-list-tool');
+
+        if (!validateTerminalListInput(toolCall.arguments)) {
+          return {
+            toolName: 'terminal_list',
+            success: false,
+            result: null,
+            error: 'Invalid arguments for terminal_list',
+          };
+        }
+
+        const result = await executeTerminalListTool(toolCall.arguments, terminalListContext);
+        const formattedResult = formatTerminalListResults(result);
+
+        return {
+          toolName: 'terminal_list',
+          success: true,
+          result: {
+            formattedText: formattedResult,
+            sessions: result.sessions,
+          },
+          error: undefined,
+        };
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error listing terminals';
+        return {
+          toolName: 'terminal_list',
+          success: false,
+          result: null,
+          error: errorMsg,
+        };
+      }
     }
 
     // Unknown tool

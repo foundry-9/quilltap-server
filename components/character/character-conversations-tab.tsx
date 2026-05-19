@@ -3,52 +3,20 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
-import { ChatCard, type ChatCardData } from '@/components/chat/ChatCard'
+import { ChatCard } from '@/components/chat/ChatCard'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
+import {
+  confirmAndDeleteChat,
+  transformCharacterChatToCardData,
+  type CharacterChatShape,
+} from '@/lib/chat-utils'
 
-interface Message {
-  id: string
-  role: 'USER' | 'ASSISTANT' | 'SYSTEM'
-  content: string
-  createdAt: string
-}
-
-interface Chat {
-  id: string
-  title: string | null
-  updatedAt: string
-  lastMessageAt?: string
+type Chat = CharacterChatShape & {
   character?: {
     id: string
     name: string
-  }
-  userCharacter?: {
-    id: string
-    name: string
-    title?: string | null
-  } | null
-  project?: {
-    id: string
-    name: string
-  } | null
-  storyBackground?: {
-    id: string
-    filepath: string
-  } | null
-  messages: Message[]
-  tags?: Array<{
-    tag: {
-      id: string
-      name: string
-    }
-  }>
-  isDangerousChat?: boolean
-  scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
-  _count?: {
-    messages: number
-    memories?: number
   }
 }
 
@@ -60,39 +28,6 @@ interface CharacterConversationsTabProps {
 }
 
 const CHATS_PER_PAGE = 10
-
-/**
- * Get preview text from messages
- */
-function getPreviewText(messages: Message[]): string | null {
-  const lastMessage = messages[messages.length - 1]
-  if (!lastMessage) return null
-  const content = lastMessage.content.replace(/\n/g, ' ').trim()
-  return content.length > 100 ? content.slice(0, 100) + '...' : content
-}
-
-/**
- * Transform API chat data to ChatCardData format
- */
-function transformChatToCardData(chat: Chat): ChatCardData {
-  return {
-    id: chat.id,
-    title: chat.title,
-    messageCount: chat._count?.messages ?? chat.messages.length,
-    memoryCount: chat._count?.memories ?? 0,
-    // No participants for character view - avatars not shown
-    participants: [],
-    tags: chat.tags,
-    updatedAt: chat.updatedAt,
-    lastMessageAt: chat.lastMessageAt,
-    project: chat.project || null,
-    userCharacter: chat.userCharacter || null,
-    previewText: getPreviewText(chat.messages),
-    storyBackgroundUrl: chat.storyBackground?.filepath || null,
-    isDangerousChat: chat.isDangerousChat === true,
-    scriptoriumStatus: chat.scriptoriumStatus || 'none',
-  }
-}
 
 export function CharacterConversationsTab({ characterId, characterName, refreshKey }: CharacterConversationsTabProps) {
   const [chats, setChats] = useState<Chat[]>([])
@@ -193,15 +128,8 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
   }
 
   const deleteChat = async (chatId: string) => {
-    const confirmed = await showConfirmation('Are you sure you want to delete this chat?')
-    if (!confirmed) return
-
-    try {
-      const res = await fetch(`/api/v1/chats/${chatId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete chat')
+    if (await confirmAndDeleteChat(chatId)) {
       setChats(chats.filter(c => c.id !== chatId))
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to delete chat')
     }
   }
 
@@ -427,7 +355,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
           {visibleChats.map((chat) => (
             <ChatCard
               key={chat.id}
-              chat={transformChatToCardData(chat)}
+              chat={transformCharacterChatToCardData(chat)}
               showAvatars={false}
               showProject={true}
               showPreview={true}

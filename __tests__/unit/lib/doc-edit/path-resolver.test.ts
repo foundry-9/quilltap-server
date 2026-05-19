@@ -31,8 +31,14 @@ jest.mock('@/lib/paths', () => ({
   getFilesDir: () => getFilesDirMock(),
 }));
 
+const projectsFindByIdMock = jest.fn<(id: string) => Promise<{ id: string; officialMountPointId: string | null } | null>>();
+const docMountPointsFindByIdMock = jest.fn<(id: string) => Promise<unknown>>();
+
 jest.mock('@/lib/repositories/factory', () => ({
-  getRepositories: jest.fn(),
+  getRepositories: () => ({
+    projects: { findById: projectsFindByIdMock },
+    docMountPoints: { findById: docMountPointsFindByIdMock },
+  }),
 }));
 
 jest.mock('@/lib/mount-index/database-store', () => ({
@@ -74,6 +80,10 @@ beforeEach(async () => {
   );
 
   getFilesDirMock.mockReturnValue(linkedFilesDir);
+  // Default: project has no official mount, so scope:project falls through
+  // to the legacy filesystem layout that these tests exercise. Individual
+  // tests can override to verify the official-mount dispatch path.
+  projectsFindByIdMock.mockResolvedValue({ id: PROJECT_ID, officialMountPointId: null });
 });
 
 afterEach(async () => {
@@ -81,6 +91,8 @@ afterEach(async () => {
   const parent = path.dirname(realRoot);
   await fs.rm(parent, { recursive: true, force: true });
   getFilesDirMock.mockReset();
+  projectsFindByIdMock.mockReset();
+  docMountPointsFindByIdMock.mockReset();
 });
 
 describe('resolveDocEditPath — project scope under a symlinked data directory', () => {
@@ -127,6 +139,101 @@ describe('resolveDocEditPath — project scope under a symlinked data directory'
     await expect(
       resolveDocEditPath('project', '/etc/passwd', { projectId: PROJECT_ID }),
     ).rejects.toBeInstanceOf(PathResolutionError);
+  });
+});
+
+describe('resolveDocEditPath — project scope dispatches through officialMountPointId', () => {
+  // The migration to database-backed project stores left scope:project pointed
+  // at the legacy filesystem in path-resolver, so writes via doc_write_file
+  // landed in <filesDir>/<projectId>/ while the Document Mode UI read from
+  // the database mount. These tests pin the new behavior: when the project
+  // has an officialMountPointId, scope:project dispatches through that mount.
+
+  const OFFICIAL_MOUNT_ID = 'mp-official-123';
+
+  it('returns a database-backed ResolvedPath when the official mount is database-backed', async () => {
+    projectsFindByIdMock.mockResolvedValue({
+      id: PROJECT_ID,
+      officialMountPointId: OFFICIAL_MOUNT_ID,
+    });
+    docMountPointsFindByIdMock.mockResolvedValue({
+      id: OFFICIAL_MOUNT_ID,
+      name: 'Project Files: Test',
+      mountType: 'database',
+      basePath: '',
+      enabled: true,
+    });
+
+    const resolved = await resolveDocEditPath(
+      'project',
+      'Scenarios/Good Morning.md',
+      { projectId: PROJECT_ID },
+    );
+
+    expect(resolved.scope).toBe('project');
+    expect(resolved.mountType).toBe('database');
+    expect(resolved.mountPointId).toBe(OFFICIAL_MOUNT_ID);
+    expect(resolved.relativePath).toBe('Scenarios/Good Morning.md');
+    // Database-backed paths intentionally have no absolutePath — callers
+    // dispatch on mountType to route through the database-store module.
+    expect(resolved.absolutePath).toBe('');
+  });
+
+  it('returns a filesystem ResolvedPath under the mount basePath when the official mount is filesystem-backed', async () => {
+    const customBase = path.join(realRoot, 'custom-mount');
+    await fs.mkdir(path.join(customBase, 'sub'), { recursive: true });
+    await fs.writeFile(path.join(customBase, 'sub', 'note.md'), 'hi', 'utf-8');
+
+    projectsFindByIdMock.mockResolvedValue({
+      id: PROJECT_ID,
+      officialMountPointId: OFFICIAL_MOUNT_ID,
+    });
+    docMountPointsFindByIdMock.mockResolvedValue({
+      id: OFFICIAL_MOUNT_ID,
+      name: 'Filesystem Mount',
+      mountType: 'filesystem',
+      basePath: customBase,
+      enabled: true,
+    });
+
+    const resolved = await resolveDocEditPath(
+      'project',
+      'sub/note.md',
+      { projectId: PROJECT_ID },
+    );
+
+    expect(resolved.scope).toBe('project');
+    expect(resolved.mountType).toBe('filesystem');
+    expect(resolved.mountPointId).toBe(OFFICIAL_MOUNT_ID);
+    // The resolver realpaths both base and joined paths — match against
+    // the realpath of the expected location so macOS /var ↔ /private/var
+    // symlink resolution doesn't trip the equality check.
+    const expectedAbsolute = await fs.realpath(path.join(customBase, 'sub', 'note.md'));
+    expect(resolved.absolutePath).toBe(expectedAbsolute);
+    const contents = await fs.readFile(resolved.absolutePath, 'utf-8');
+    expect(contents).toBe('hi');
+  });
+
+  it('falls back to the legacy <filesDir>/<projectId>/ layout when the official mount is missing or disabled', async () => {
+    projectsFindByIdMock.mockResolvedValue({
+      id: PROJECT_ID,
+      officialMountPointId: OFFICIAL_MOUNT_ID,
+    });
+    // Mount lookup returns null — e.g. the FK was set but the row was later
+    // hard-deleted. Resolver should keep the project working via the legacy fs.
+    docMountPointsFindByIdMock.mockResolvedValue(null);
+
+    const resolved = await resolveDocEditPath(
+      'project',
+      'Folio Drafts/the-third-arrives.md',
+      { projectId: PROJECT_ID },
+    );
+
+    expect(resolved.scope).toBe('project');
+    expect(resolved.mountType).toBeUndefined();
+    expect(resolved.mountPointId).toBeUndefined();
+    const contents = await fs.readFile(resolved.absolutePath, 'utf-8');
+    expect(contents).toBe('concierge prose');
   });
 });
 

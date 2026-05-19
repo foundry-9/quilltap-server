@@ -17,7 +17,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 
 // Import the module under test AFTER mocking
 import {
-  extractMemoryFromMessage,
+  extractOtherMemoriesFromTurn,
   summarizeChat,
   titleChat,
   updateContextSummary,
@@ -25,7 +25,37 @@ import {
   batchExtractMemories,
   type MemoryCandidate,
   type ChatMessage,
+  type OtherSubjectInput,
 } from '@/lib/memory/cheap-llm-tasks'
+import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript'
+
+/**
+ * Build a TurnTranscript fixture for the user-pass extraction tests.
+ * Single character + single user message — matches the shape the prior
+ * per-message tests exercised.
+ */
+function makeTurnTranscript(opts: {
+  userMessage: string | null
+  userCharacterName?: string
+  characterName: string
+  characterText: string
+}): TurnTranscript {
+  return {
+    turnOpenerMessageId: opts.userMessage === null ? null : 'turn-opener-id',
+    userMessage: opts.userMessage,
+    userCharacterId: opts.userCharacterName ? 'user-char-id' : undefined,
+    userCharacterName: opts.userCharacterName,
+    userCharacterPronouns: null,
+    characterSlices: [{
+      characterId: 'char-1',
+      characterName: opts.characterName,
+      characterPronouns: null,
+      text: opts.characterText,
+      contributingMessageIds: ['assistant-id-1'],
+    }],
+    latestAssistantMessageId: 'assistant-id-1',
+  }
+}
 
 // Mock provider instance
 const mockSendMessage = jest.fn()
@@ -94,35 +124,52 @@ describe('Cheap LLM Tasks Service', () => {
     })
   })
 
-  describe('extractMemoryFromMessage', () => {
-    it('should extract a significant memory', async () => {
-      const memoryResponse = {
-        significant: true,
-        content: 'User mentioned they have a cat named Whiskers',
-        summary: 'User has a cat named Whiskers',
-        keywords: ['cat', 'pet', 'Whiskers'],
-        importance: 0.7,
-      }
+  describe('extractOtherMemoriesFromTurn (multi-subject)', () => {
+    const userSubject: OtherSubjectInput = {
+      id: 'user-char-id',
+      name: 'John',
+      pronouns: null,
+      isUser: true,
+      canonBlock: 'ALREADY ESTABLISHED about John\nThe operator.',
+    }
 
+    const callExtract = (
+      transcript: TurnTranscript,
+      subjects: OtherSubjectInput[] = [userSubject],
+      selection = testSelection,
+    ) =>
+      extractOtherMemoriesFromTurn(
+        transcript,
+        'char-1',
+        subjects,
+        selection,
+        testUserId,
+      )
+
+    it('routes a single-subject extraction back to the subject id', async () => {
       mockSendMessage.mockResolvedValue({
-        content: JSON.stringify(memoryResponse),
+        content: JSON.stringify([{
+          subjectIndex: 1,
+          content: 'User mentioned they have a cat named Whiskers',
+          summary: 'User has a cat named Whiskers',
+          keywords: ['cat', 'pet', 'Whiskers'],
+          importance: 0.7,
+        }]),
         usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'I need to go feed my cat Whiskers',
-        'That sounds like a lovely cat! I hope Whiskers enjoys their meal.',
-        'PARTICIPANTS:\n- USER: John\n- CHARACTER: Luna',
-        'Luna',
-        'John',
-        testSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'I need to go feed my cat Whiskers',
+        userCharacterName: 'John',
+        characterName: 'Luna',
+        characterText: 'That sounds like a lovely cat! I hope Whiskers enjoys their meal.',
+      })
+
+      const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      // Result is now an array of significant candidates
-      expect(result.result).toEqual([{
-        significant: true,
+      const map = result.result as Map<string, MemoryCandidate[]>
+      expect(map.get('user-char-id')).toEqual([{
         content: 'User mentioned they have a cat named Whiskers',
         summary: 'User has a cat named Whiskers',
         keywords: ['cat', 'pet', 'Whiskers'],
@@ -131,144 +178,290 @@ describe('Cheap LLM Tasks Service', () => {
       expect(result.usage).toEqual({ promptTokens: 100, completionTokens: 50, totalTokens: 150 })
     })
 
-    it('should handle non-significant exchanges', async () => {
+    it('splits items across subjects by 1-based subjectIndex', async () => {
+      const otherSubject: OtherSubjectInput = {
+        id: 'char-2',
+        name: 'Beatrice',
+        pronouns: null,
+        isUser: false,
+        canonBlock: 'ALREADY ESTABLISHED about Beatrice\nA stoic engineer.',
+      }
+
       mockSendMessage.mockResolvedValue({
-        content: '{ "significant": false }',
+        content: JSON.stringify([
+          { subjectIndex: 1, content: 'About John', summary: 'john', keywords: [], importance: 0.6 },
+          { subjectIndex: 2, content: 'About Beatrice', summary: 'beatrice', keywords: [], importance: 0.6 },
+        ]),
+        usage: { promptTokens: 80, completionTokens: 30, totalTokens: 110 },
+      })
+
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hi everyone',
+        userCharacterName: 'John',
+        characterName: 'Luna',
+        characterText: 'Welcome.',
+      })
+
+      const result = await extractOtherMemoriesFromTurn(
+        transcript,
+        'char-1',
+        [userSubject, otherSubject],
+        testSelection,
+        testUserId,
+      )
+
+      expect(result.success).toBe(true)
+      const map = result.result as Map<string, MemoryCandidate[]>
+      expect(map.get('user-char-id')?.[0]?.content).toBe('About John')
+      expect(map.get('char-2')?.[0]?.content).toBe('About Beatrice')
+    })
+
+    it('drops items whose subjectIndex is missing or out of range', async () => {
+      mockSendMessage.mockResolvedValue({
+        content: JSON.stringify([
+          { content: 'no index', summary: 'a', keywords: [], importance: 0.6 },
+          { subjectIndex: 99, content: 'out of range', summary: 'b', keywords: [], importance: 0.6 },
+          { subjectIndex: 1, content: 'ok', summary: 'c', keywords: [], importance: 0.6 },
+        ]),
+        usage: null,
+      })
+
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hi',
+        userCharacterName: 'John',
+        characterName: 'Luna',
+        characterText: 'Hello.',
+      })
+
+      const result = await callExtract(transcript)
+      expect(result.success).toBe(true)
+      const map = result.result as Map<string, MemoryCandidate[]>
+      expect(map.get('user-char-id')).toEqual([
+        { content: 'ok', summary: 'c', keywords: [], importance: 0.6 },
+      ])
+    })
+
+    it('handles an empty array response (no significant memories surfaced)', async () => {
+      mockSendMessage.mockResolvedValue({
+        content: '[]',
         usage: { promptTokens: 50, completionTokens: 10, totalTokens: 60 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'Hello!',
-        'Hi there! How are you?',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: Luna',
-        'Luna',
-        undefined,
-        testSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hello!',
+        userCharacterName: 'John',
+        characterName: 'Luna',
+        characterText: 'Hi there! How are you?',
+      })
+
+      const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      // Non-significant candidates are filtered out, returning empty array
-      expect(result.result).toEqual([])
+      const map = result.result as Map<string, MemoryCandidate[]>
+      expect(map.get('user-char-id')).toEqual([])
     })
 
-    it('should handle JSON wrapped in markdown code blocks', async () => {
+    it('handles JSON wrapped in markdown code blocks', async () => {
       mockSendMessage.mockResolvedValue({
-        content: '```json\n{ "significant": true, "content": "Test", "summary": "Test summary", "keywords": [], "importance": 0.5 }\n```',
+        content: '```json\n[{ "subjectIndex": 1, "content": "Test", "summary": "Test summary", "keywords": [], "importance": 0.5 }]\n```',
         usage: { promptTokens: 50, completionTokens: 30, totalTokens: 80 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'Test message',
-        'Test response',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
-        testSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'Test message',
+        userCharacterName: 'John',
+        characterName: 'TestChar',
+        characterText: 'Test response',
+      })
+
+      const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      // Backward compat: single object wrapped in array, filtered to significant only
-      expect(result.result).toHaveLength(1)
-      expect(result.result?.[0]?.content).toBe('Test')
+      const map = result.result as Map<string, MemoryCandidate[]>
+      expect(map.get('user-char-id')).toHaveLength(1)
+      expect(map.get('user-char-id')?.[0]?.content).toBe('Test')
     })
 
-    it('should handle malformed JSON gracefully', async () => {
+    it('handles malformed JSON gracefully', async () => {
       mockSendMessage.mockResolvedValue({
         content: 'This is not valid JSON',
         usage: { promptTokens: 50, completionTokens: 10, totalTokens: 60 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'Test',
-        'Response',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
-        testSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'Test',
+        userCharacterName: 'John',
+        characterName: 'TestChar',
+        characterText: 'Response',
+      })
+
+      const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      // Malformed JSON returns empty array
-      expect(result.result).toEqual([])
+      const map = result.result as Map<string, MemoryCandidate[]>
+      expect(map.get('user-char-id')).toEqual([])
     })
 
-    it('should work with local Ollama provider', async () => {
+    it('works with local Ollama provider', async () => {
       mockSendMessage.mockResolvedValue({
-        content: '{ "significant": false }',
+        content: '[]',
         usage: { promptTokens: 50, completionTokens: 10, totalTokens: 60 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'Hello',
-        'Hi',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
-        localSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hello',
+        userCharacterName: 'John',
+        characterName: 'TestChar',
+        characterText: 'Hi',
+      })
+
+      const result = await callExtract(transcript, undefined, localSelection)
 
       expect(result.success).toBe(true)
       expect(createLLMProvider).toHaveBeenCalledWith('OLLAMA', 'http://localhost:11434')
     })
 
-    it('should return error when no API key available', async () => {
+    it('returns an error when no API key is available', async () => {
       mockFindById.mockResolvedValue({ id: 'test-profile-id', apiKeyId: null })
 
-      const result = await extractMemoryFromMessage(
-        'Hello',
-        'Hi',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
-        testSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hello',
+        userCharacterName: 'John',
+        characterName: 'TestChar',
+        characterText: 'Hi',
+      })
+
+      const result = await callExtract(transcript)
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('No API key')
     })
 
-    it('caps significant candidates at HARD_CANDIDATE_CAP when LLM overshoots', async () => {
-      // LLM returns 12 significant + 2 non-significant; parser must return only 5.
-      const candidates = [
-        ...Array.from({ length: 12 }, (_, i) => ({
-          significant: true,
-          content: `Fact ${i}`,
-          summary: `Summary ${i}`,
-          keywords: ['k'],
-          importance: 0.6,
-        })),
-        { significant: false, content: 'noise', summary: 'noise', keywords: [], importance: 0.2 },
-        { significant: false, content: 'noise2', summary: 'noise2', keywords: [], importance: 0.2 },
-      ]
+    it('returns empty (no LLM call) when the observer is not in the transcript', async () => {
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hello',
+        userCharacterName: 'John',
+        characterName: 'TestChar',
+        characterText: 'Hi',
+      })
+
+      const result = await extractOtherMemoriesFromTurn(
+        transcript,
+        'unknown-observer',
+        [userSubject],
+        testSelection,
+        testUserId,
+      )
+
+      expect(result.success).toBe(true)
+      const map = result.result as Map<string, MemoryCandidate[]>
+      expect(map.get('user-char-id')).toEqual([])
+      expect(mockSendMessage).not.toHaveBeenCalled()
+    })
+
+    it('returns empty (no LLM call) when the subjects list is empty', async () => {
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hello',
+        userCharacterName: 'John',
+        characterName: 'TestChar',
+        characterText: 'Hi',
+      })
+
+      const result = await extractOtherMemoriesFromTurn(
+        transcript,
+        'char-1',
+        [],
+        testSelection,
+        testUserId,
+      )
+
+      expect(result.success).toBe(true)
+      expect((result.result as Map<string, MemoryCandidate[]>).size).toBe(0)
+      expect(mockSendMessage).not.toHaveBeenCalled()
+    })
+
+    it('caps candidates per subject when the LLM overshoots', async () => {
+      // 12 items, all targeting subject 1 — hard cap is 2 per subject so
+      // only the first 2 should land in the bucket.
+      const candidates = Array.from({ length: 12 }, (_, i) => ({
+        subjectIndex: 1,
+        content: `Fact ${i}`,
+        summary: `Summary ${i}`,
+        keywords: ['k'],
+        importance: 0.6,
+      }))
 
       mockSendMessage.mockResolvedValue({
         content: JSON.stringify(candidates),
         usage: { promptTokens: 100, completionTokens: 500, totalTokens: 600 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'User message',
-        'Assistant message',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
+      const transcript = makeTurnTranscript({
+        userMessage: 'User message',
+        userCharacterName: 'John',
+        characterName: 'TestChar',
+        characterText: 'Assistant message',
+      })
+
+      const result = await extractOtherMemoriesFromTurn(
+        transcript,
+        'char-1',
+        [userSubject],
         testSelection,
         testUserId,
         undefined,
         undefined,
-        undefined,
-        128000 // large output budget would otherwise allow 16 candidates
+        128000, // large output budget would otherwise raise the cap
       )
 
       expect(result.success).toBe(true)
-      expect(result.result).toHaveLength(5)
-      // All returned candidates are significant
-      expect(result.result?.every(c => c.significant)).toBe(true)
+      const map = result.result as Map<string, MemoryCandidate[]>
+      expect(map.get('user-char-id')).toHaveLength(2)
+    })
+
+    it('injects every subject canon block into the system prompt', async () => {
+      mockSendMessage.mockResolvedValue({
+        content: '[]',
+        usage: { promptTokens: 50, completionTokens: 10, totalTokens: 60 },
+      })
+
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hi',
+        userCharacterName: 'John',
+        characterName: 'Luna',
+        characterText: 'Hello.',
+      })
+
+      const otherSubject: OtherSubjectInput = {
+        id: 'char-2',
+        name: 'Beatrice',
+        pronouns: null,
+        isUser: false,
+        canonBlock: 'ALREADY ESTABLISHED about Beatrice\nReads philosophy.',
+      }
+
+      await extractOtherMemoriesFromTurn(
+        transcript,
+        'char-1',
+        [
+          { ...userSubject, canonBlock: 'ALREADY ESTABLISHED about John\nLikes jazz.' },
+          otherSubject,
+        ],
+        testSelection,
+        testUserId,
+      )
+
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: 'system',
+              content: expect.stringMatching(/Likes jazz[\s\S]*Reads philosophy/),
+            }),
+          ]),
+        }),
+        'decrypted-api-key',
+      )
     })
   })
 
@@ -470,14 +663,10 @@ describe('Cheap LLM Tasks Service', () => {
 
       const batchResponse: MemoryCandidate[] = [
         {
-          significant: true,
           content: 'User favorite color is blue',
           summary: 'Favorite color: blue',
           keywords: ['color', 'blue', 'favorite'],
           importance: 0.6,
-        },
-        {
-          significant: false,
         },
       ]
 
@@ -494,9 +683,8 @@ describe('Cheap LLM Tasks Service', () => {
       )
 
       expect(result.success).toBe(true)
-      expect(result.result).toHaveLength(2)
-      expect(result.result![0].significant).toBe(true)
-      expect(result.result![1].significant).toBe(false)
+      expect(result.result).toHaveLength(1)
+      expect(result.result![0].content).toBe('User favorite color is blue')
     })
 
     it('should handle malformed batch response', async () => {
@@ -521,14 +709,25 @@ describe('Cheap LLM Tasks Service', () => {
     it('should handle LLM provider errors gracefully', async () => {
       mockSendMessage.mockRejectedValue(new Error('API rate limit exceeded'))
 
-      const result = await extractMemoryFromMessage(
-        'Test',
-        'Response',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
+      const transcript = makeTurnTranscript({
+        userMessage: 'Test',
+        userCharacterName: 'John',
+        characterName: 'TestChar',
+        characterText: 'Response',
+      })
+
+      const result = await extractOtherMemoriesFromTurn(
+        transcript,
+        'char-1',
+        [{
+          id: 'user-char-id',
+          name: 'John',
+          pronouns: null,
+          isUser: true,
+          canonBlock: 'CANON',
+        }],
         testSelection,
-        testUserId
+        testUserId,
       )
 
       expect(result.success).toBe(false)

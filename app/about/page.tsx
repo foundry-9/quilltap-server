@@ -62,7 +62,7 @@ export default function AboutPage() {
             />
           </a>
           <a
-            href="https://discord.com/channels/1476289075152556205/1476290238187049184"
+            href="https://discord.gg/6enCeQxY"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -92,7 +92,7 @@ export default function AboutPage() {
           The Concierge (alternative content provision and routing), Pascal the Croupier (gaming &amp; RNG),
           Calliope (themes), The Scriptorium (external document stores), The Librarian (Document Mode and file announcements),
           The Host (Salon participation announcements), Saquel Ytzama, the Keeper of Secrets (encryption and key management),
-          and The Foundry (architecture) &mdash; all extensible through a plugin system.
+          Ariel (terminals in the Salon), and The Foundry (architecture) &mdash; all extensible through a plugin system.
         </p>
         <p className="qt-text-primary">
           <BrandName /> runs as a native desktop application on macOS and Windows, powered by a lightweight
@@ -163,6 +163,10 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Ariel &ndash; Terminals</strong> &ndash; live PTY shell sessions hosted directly inside a Salon chat, with character-readable scrollback and a dedicated Terminal Mode pane</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
             <span><strong>The Foundry &ndash; Architecture</strong> &ndash; unified settings hub, plugin system for themes, providers, templates, tools, search, and storage</span>
           </li>
           <li className="flex items-start gap-2">
@@ -189,7 +193,7 @@ export default function AboutPage() {
         <h2 className="qt-heading-3 mb-4">The Machinery Behind the Curtain</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 qt-text-primary">
           <div>
-            <span className="font-medium">Runtime:</span> Node.js 22+
+            <span className="font-medium">Runtime:</span> Node.js 24+
           </div>
           <div>
             <span className="font-medium">Framework:</span> Next.js 16+

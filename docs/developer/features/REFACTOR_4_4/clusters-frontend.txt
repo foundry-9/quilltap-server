@@ -1,0 +1,448 @@
+=== AREA: frontend ===
+Total signatures: 1564
+Unique names: 1254
+Names appearing in >=2 files: 126
+
+======================================================================
+TOP EXACT-NAME CLUSTERS (same function name across files)
+======================================================================
+
+## handleClose  [score=44.00, 18 files, 18 defs]
+   components/characters/ai-wizard/AIWizardModal.tsx:80  handleClose()
+   components/characters/optimizer/CharacterOptimizerModal.tsx:107  handleClose()
+   components/chat/FileConflictDialog.tsx:96  handleClose()
+   components/images/avatar-selector.tsx:57  handleClose()
+   components/images/image-generation-dialog.tsx:178  handleClose()
+   components/images/image-upload-dialog.tsx:92  handleClose()
+   components/import/import-wizard.tsx:228  handleClose()
+   components/settings/api-keys/ApiKeyModal.tsx:119  handleClose()
+   components/settings/api-keys/ExportKeysDialog.tsx:25  handleClose()
+   components/settings/connection-profiles/ProfileModal.tsx:150  handleClose()
+   ... and 8 more
+
+## handleSubmit  [score=35.53, 15 files, 15 defs]
+   app/aurora/[id]/edit/hooks/useCharacterEdit.ts:271  async handleSubmit(e: React.FormEvent) : Promise<boolean>
+   app/aurora/new/page.tsx:116  async handleSubmit(e: React.FormEvent)
+   app/prospero/components/CreateProjectDialog.tsx:17  handleSubmit(e: React.FormEvent<HTMLFormElement>)
+   app/scriptorium/components/CreateDocumentStoreDialog.tsx:28  handleSubmit(e: React.FormEvent<HTMLFormElement>)
+   app/scriptorium/components/DeconvertToFilesystemDialog.tsx:28  handleSubmit(e: React.FormEvent<HTMLFormElement>)
+   app/scriptorium/components/EditDocumentStoreDialog.tsx:29  handleSubmit(e: React.FormEvent<HTMLFormElement>)
+   app/setup/profile/page.tsx:40  async handleSubmit()
+   components/chat/BulkCharacterReplaceModal.tsx:134  async handleSubmit()
+   components/chat/ChatProjectModal.tsx:107  handleSubmit()
+   components/image-profiles/ImageProfileForm.tsx:242  async handleSubmit(e: React.FormEvent)
+   ... and 5 more
+
+## handleKeyDown  [score=34.80, 14 files, 15 defs]
+   app/aurora/[id]/edit/components/CharacterBasicInfo.tsx:30  handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>)
+   app/salon/[id]/page.tsx:712  handleKeyDown(e: KeyboardEvent)
+   components/chat/ChatCard.tsx:228  handleKeyDown(e: React.KeyboardEvent)
+   components/chat/ChatRenameModal.tsx:129  handleKeyDown(e: React.KeyboardEvent)
+   components/chat/CreateNPCDialog.tsx:88  handleKeyDown(e: KeyboardEvent)
+   components/files/FolderManagement/CreateFolderModal.tsx:85  handleKeyDown(e: React.KeyboardEvent)
+   components/files/FolderManagement/RenameModal.tsx:125  handleKeyDown(e: React.KeyboardEvent)
+   components/search/search-bar.tsx:35  handleKeyDown(e: KeyboardEvent)
+   components/search/search-bar.tsx:127  handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>)
+   components/search/search-dialog.tsx:226  handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>)
+   ... and 5 more
+
+## formatDate  [score=27.60, 10 files, 10 defs]
+   components/characters/LLMLogsSection.tsx:26  formatDate(dateString: string) : string
+   components/chat/ChatCard.tsx:159  formatDate(dateString: string, useRelative: boolean) : string
+   components/chat/FileConflictDialog.tsx:57  formatDate(dateString: string) : string
+   components/memory/memory-card.tsx:52  formatDate(dateString: string)
+   components/profile/ProfileInfoSection.tsx:13  formatDate(dateStr: string | null) : string
+   components/tools/capabilities-report-card.tsx:129  formatDate(dateString: string) : string
+   components/tools/import-export/utils.ts:17  formatDate(dateString: string) : string
+   components/tools/llm-logs-card.tsx:27  formatDate(dateString: string) : string
+   components/tools/tasks-queue/TaskItem.tsx:31  formatDate(dateString: string) : string
+   components/tools/tasks-queue/index.tsx:37  formatDate(dateString: string) : string
+
+## handleSave  [score=27.40, 10 files, 10 defs]
+   components/characters/system-prompts-editor/hooks/useSystemPrompts.ts:139  async handleSave()
+   components/chat/ChatRenameModal.tsx:82  async handleSave()
+   components/clothing-records/clothing-record-editor.tsx:39  async handleSave()
+   components/physical-descriptions/physical-description-editor.tsx:60  async handleSave()
+   components/profile/ProfileEditSection.tsx:71  async handleSave()
+   components/scenarios/ScenarioEditorModal.tsx:79  async handleSave()
+   components/settings/AutoLockSettingsCard.tsx:55  async handleSave(newConfig: AutoLockConfig)
+   components/settings/roleplay-templates/hooks/useRoleplayTemplates.ts:164  async handleSave()
+   components/state/StateEditorModal.tsx:78  async handleSave()
+   components/wardrobe/wardrobe-item-editor.tsx:308  async handleSave() : Promise<void>
+
+## handleDelete  [score=23.56, 9 files, 9 defs]
+   app/prospero/page.tsx:28  async handleDelete()
+   app/scriptorium/page.tsx:59  async handleDelete()
+   components/characters/system-prompts-editor/hooks/useSystemPrompts.ts:187  async handleDelete(promptId: string)
+   components/chat/ImageModal.tsx:131  async handleDelete()
+   components/scenarios/ScenariosManager.tsx:92  async handleDelete(scenario: Scenario)
+   components/settings/embedding-profiles/ProfileList.tsx:63  async handleDelete(id: string)
+   components/settings/image-profiles-tab.tsx:104  async handleDelete(id: string)
+   components/settings/roleplay-templates/hooks/useRoleplayTemplates.ts:227  async handleDelete(templateId: string)
+   components/tools/delete-data-card.tsx:80  async handleDelete()
+
+## formatBytes  [score=22.00, 7 files, 7 defs]
+   app/prospero/[id]/components/DocumentStoresCard.tsx:43  formatBytes(bytes: number) : string
+   app/prospero/[id]/components/FilesCard.tsx:52  formatBytes(bytes: number) : string
+   app/prospero/[id]/components/FilesTab.tsx:30  formatBytes(bytes: number) : string
+   app/salon/[id]/components/CourierBubble.tsx:13  formatBytes(n: number) : string
+   app/scriptorium/[id]/components/FileTable.tsx:24  formatBytes(bytes: number) : string
+   app/scriptorium/[id]/page.tsx:16  formatBytes(bytes: number) : string
+   app/scriptorium/components/DocumentStoreCard.tsx:71  formatBytes(bytes: number) : string
+
+## handleEscape  [score=22.00, 7 files, 7 defs]
+   app/aurora/[id]/view/components/ExternalPromptDialog.tsx:119  handleEscape(e: KeyboardEvent)
+   app/aurora/[id]/view/components/ExternalPromptResultDialog.tsx:22  handleEscape(e: KeyboardEvent)
+   components/alert-dialog.tsx:15  handleEscape(e: KeyboardEvent)
+   components/character-delete-dialog.tsx:42  handleEscape(e: KeyboardEvent)
+   components/characters/ai-wizard/AIWizardModal.tsx:62  handleEscape(e: KeyboardEvent)
+   components/characters/optimizer/CharacterOptimizerModal.tsx:99  handleEscape(e: KeyboardEvent)
+   components/search/search-dialog.tsx:152  handleEscape(e: KeyboardEvent)
+
+## FolderIcon  [score=20.57, 7 files, 7 defs]
+   app/prospero/[id]/components/FilesCard.tsx:44  FolderIcon({ className }: { className?: string })
+   app/prospero/[id]/components/ProjectDetailHeader.tsx:21  FolderIcon({ className }: { className?: string })
+   app/prospero/components/ProjectCard.tsx:21  FolderIcon({ className }: { className?: string })
+   app/scriptorium/components/DirectoryPicker.tsx:32  FolderIcon({ className }: { className?: string })
+   components/chat/ChatCard.tsx:109  FolderIcon({ className, color }: { className?: string; color?: string | null })
+   components/homepage/ProjectItem.tsx:16  FolderIcon({ className, color }: { className?: string; color?: string | null })
+   components/profile/DataDirectorySection.tsx:21  FolderIcon({ className }: { className?: string })
+
+## handleCancel  [score=20.00, 6 files, 6 defs]
+   app/aurora/[id]/edit/hooks/useCharacterEdit.ts:313  async handleCancel()
+   app/scriptorium/components/DirectoryPicker.tsx:94  handleCancel()
+   components/chat/SelectLLMProfileDialog.tsx:101  handleCancel()
+   components/image-profiles/ImageProfileModal.tsx:44  handleCancel()
+   components/new-chat/NewChatModal.tsx:153  handleCancel()
+   components/state/StateEditorModal.tsx:154  handleCancel()
+
+## handleConfirm  [score=20.00, 6 files, 6 defs]
+   components/character-delete-dialog.tsx:70  handleConfirm()
+   components/chat/SelectLLMProfileDialog.tsx:91  handleConfirm()
+   components/images/avatar-selector.tsx:40  async handleConfirm()
+   components/images/image-generation-dialog.tsx:173  handleConfirm()
+   components/tools/memory-regenerate-card.tsx:79  async handleConfirm()
+   components/ui/MemoryCascadeDialog.tsx:47  handleConfirm()
+
+## handleToggle  [score=19.86, 7 files, 7 defs]
+   components/chat/RngDropdown.tsx:168  handleToggle()
+   components/chat/SpeakerSelector.tsx:70  handleToggle()
+   components/dashboard/nav-user-menu-quick-hide.tsx:33  handleToggle(tagId: string, tagName: string, wasHidden: boolean)
+   components/layout/left-sidebar/profile-menu.tsx:92  handleToggle()
+   components/layout/left-sidebar/sidebar-section.tsx:49  handleToggle()
+   components/settings/AutoLockSettingsCard.tsx:92  handleToggle(enabled: boolean)
+   components/setup-wizard/steps/ProviderSelectionStep.tsx:51  handleToggle(providerId: string)
+
+## fetchProfiles  [score=19.83, 6 files, 6 defs]
+   app/aurora/new/page.tsx:103  async fetchProfiles()
+   components/characters/ai-wizard/hooks/useAIWizard.ts:74  async fetchProfiles()
+   components/chat/SelectLLMProfileDialog.tsx:60  async fetchProfiles()
+   components/image-profiles/ImageProfilePicker.tsx:43  async fetchProfiles()
+   components/settings/ai-import/hooks/useAIImport.ts:74  async fetchProfiles()
+   hooks/useConnectionProfiles.ts:15  async fetchProfiles() : Promise<ConnectionProfileInfo[]>
+
+## formatFileSize  [score=18.00, 5 files, 5 defs]
+   components/chat/FileConflictDialog.tsx:48  formatFileSize(bytes: number) : string
+   components/files/types.ts:52  formatFileSize(bytes: number) : string
+   components/import/import-wizard.tsx:61  formatFileSize(bytes: number) : string
+   components/tools/capabilities-report-card.tsx:121  formatFileSize(bytes: number) : string
+   components/tools/import-export/utils.ts:6  formatFileSize(bytes: number) : string
+
+## footer  [score=17.20, 5 files, 5 defs]
+   components/characters/system-prompts-editor/PreviewModal.tsx:30  footer(<div className="flex justify-end gap-3">
+      <button
+        type="button"
+        onClick={onClose}
+        className="qt-button-secondary"
+      >
+        Close
+      </button>
+      <button
+        type="button"
+        onClick={()
+   components/chat/AllLLMPauseModal.tsx:71  footer(<div className="flex flex-col gap-3">
+      {/* Continue options */}
+      <div className="flex gap-2">
+        <button
+          onClick={()
+   components/chat/FileConflictDialog.tsx:101  footer(<div className="flex flex-col sm:flex-row justify-end gap-2">
+      <button
+        onClick={handleClose}
+        disabled={resolving}
+        className="qt-button qt-button-secondary"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={()
+   components/settings/prompts/PreviewModal.tsx:26  footer(<div className="flex justify-end gap-3 flex-wrap">
+      <button
+        type="button"
+        onClick={()
+   components/state/StateEditorModal.tsx:163  footer(<div className="flex justify-between gap-2">
+      <div>
+        {!showResetConfirm && hasState && (
+          <button
+            onClick={()
+
+## getAvatarSrc  [score=17.17, 6 files, 6 defs]
+   app/aurora/[id]/edit/hooks/useCharacterEdit.ts:378  getAvatarSrc() : string | null
+   app/aurora/[id]/view/components/CharacterHeader.tsx:38  getAvatarSrc()
+   app/aurora/page.tsx:83  getAvatarSrc(character: Character) : string | null
+   components/new-chat/CharacterPickerPanel.tsx:23  getAvatarSrc(character: Character) : string | null
+   components/profile/ProfileEditSection.tsx:132  getAvatarSrc()
+   components/ui/Avatar.tsx:72  getAvatarSrc(src: string | AvatarImageSource | null | undefined) : string | null
+
+## handleSelect  [score=16.60, 5 files, 5 defs]
+   app/scriptorium/components/DirectoryPicker.tsx:87  handleSelect()
+   components/chat/SpeakerSelector.tsx:60  handleSelect(participantId: string)
+   components/help-chat/HelpEntityPicker.tsx:114  handleSelect(id: string)
+   components/new-chat/CharacterPickerPanel.tsx:91  handleSelect(character: Character)
+   components/settings/model-selector.tsx:103  handleSelect(model: string)
+
+## handleCopy  [score=15.60, 4 files, 4 defs]
+   app/aurora/[id]/view/components/ExternalPromptResultDialog.tsx:30  async handleCopy()
+   app/setup/page.tsx:147  async handleCopy()
+   components/alert-dialog.tsx:23  async handleCopy()
+   components/profile/ProfileInfoSection.tsx:76  async handleCopy()
+
+## fetchData  [score=15.60, 4 files, 4 defs]
+   app/aurora/[id]/view/components/ExternalPromptDialog.tsx:69  async fetchData()
+   components/help-chat/HelpGuideTab.tsx:59  async fetchData()
+   components/new-chat/hooks/useNewChat.ts:120  async fetchData()
+   components/tools/search-replace/steps/ScopeSelectionStep.tsx:48  async fetchData()
+
+## handleGenerate  [score=15.20, 4 files, 4 defs]
+   app/aurora/[id]/view/components/ExternalPromptDialog.tsx:127  async handleGenerate()
+   app/generate-image/page.tsx:94  async handleGenerate()
+   components/chat/GenerateImageDialog.tsx:92  async handleGenerate()
+   components/chat/StandaloneGenerateImageDialog.tsx:62  async handleGenerate()
+
+## handleCloseModal  [score=15.20, 4 files, 4 defs]
+   components/settings/api-keys-tab.tsx:110  handleCloseModal()
+   components/settings/embedding-profiles/index.tsx:70  handleCloseModal()
+   components/settings/image-profiles-tab.tsx:123  handleCloseModal()
+   components/tools/llm-logs-card.tsx:22  handleCloseModal()
+
+## fetchProviders  [score=15.10, 4 files, 4 defs]
+   components/image-profiles/ImageProfileForm.tsx:97  async fetchProviders()
+   components/settings/api-keys/ApiKeyModal.tsx:54  async fetchProviders()
+   components/setup-wizard/wizard-api.ts:15  async fetchProviders() : Promise<ProviderInfo[]>
+   hooks/useProviders.ts:18  async fetchProviders() : Promise<ProviderInfo[]>
+
+## handleCardClick  [score=14.85, 4 files, 4 defs]
+   app/aurora/page.tsx:161  handleCardClick(e: React.MouseEvent, characterId: string)
+   app/prospero/components/ProjectsGrid.tsx:21  handleCardClick(e: React.MouseEvent, projectId: string)
+   app/scriptorium/components/DocumentStoresGrid.tsx:35  handleCardClick(e: React.MouseEvent, storeId: string)
+   components/chat/ChatCard.tsx:210  handleCardClick(e: React.MouseEvent)
+
+## CloseIcon  [score=14.80, 4 files, 4 defs]
+   app/prospero/[id]/components/CharactersCard.tsx:33  CloseIcon({ className }: { className?: string })
+   app/prospero/[id]/components/CharactersTab.tsx:16  CloseIcon({ className }: { className?: string })
+   app/prospero/[id]/components/ChatsTab.tsx:17  CloseIcon({ className }: { className?: string })
+   components/chat/ChatCard.tsx:133  CloseIcon({ className }: { className?: string })
+
+## ImageIcon  [score=14.80, 4 files, 4 defs]
+   app/prospero/[id]/components/FilesCard.tsx:28  ImageIcon({ className }: { className?: string })
+   app/prospero/[id]/components/FilesTab.tsx:14  ImageIcon({ className }: { className?: string })
+   app/prospero/[id]/components/ImageGenerationCard.tsx:30  ImageIcon({ className }: { className?: string })
+   components/homepage/QuickActionsRow.tsx:46  ImageIcon({ className }: { className?: string })
+
+## handleModelSelect  [score=14.80, 4 files, 4 defs]
+   components/settings/embedding-profiles/ProfileForm.tsx:52  handleModelSelect(modelId: string)
+   components/settings/embedding-profiles/ProfileModal.tsx:60  handleModelSelect(modelId: string)
+   components/setup-wizard/steps/EmbeddingProviderStep.tsx:79  handleModelSelect(modelId: string)
+   components/setup-wizard/steps/ImageProviderStep.tsx:66  handleModelSelect(modelId: string)
+
+## handleProviderChange  [score=14.70, 4 files, 4 defs]
+   components/image-profiles/ImageProfileForm.tsx:187  handleProviderChange(e: React.ChangeEvent<HTMLSelectElement>)
+   components/settings/connection-profiles/ProfileModal.tsx:184  handleProviderChange(newProvider: string)
+   components/settings/embedding-profiles/ProfileForm.tsx:140  handleProviderChange(e: React.ChangeEvent<HTMLSelectElement>)
+   components/settings/embedding-profiles/ProfileModal.tsx:144  handleProviderChange(e: React.ChangeEvent<HTMLSelectElement>)
+
+## handleChange  [score=14.35, 4 files, 4 defs]
+   app/aurora/[id]/edit/hooks/useCharacterEdit.ts:127  handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>)
+   app/aurora/new/page.tsx:224  handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>)
+   components/image-profiles/ImageProfileParameters.tsx:14  handleChange(key: string, value: any)
+   hooks/useFormState.ts:51  handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>)
+
+## handler  [score=14.00, 4 files, 5 defs]
+   app/salon/[id]/page.tsx:617  handler(event: Event)
+   app/salon/[id]/page.tsx:630  handler(event: Event)
+   components/providers/content-width-provider.tsx:74  handler(event: StorageEvent)
+   components/providers/quick-hide-provider.tsx:119  handler(event: StorageEvent)
+   components/providers/theme/theme-utils.ts:61  handler(e: MediaQueryListEvent | Event)
+
+## TrashIcon  [score=13.20, 3 files, 3 defs]
+   app/prospero/components/ProjectCard.tsx:32  TrashIcon({ className }: { className?: string })
+   app/scriptorium/components/DocumentStoreCard.tsx:31  TrashIcon({ className }: { className?: string })
+   components/chat/ChatCard.tsx:125  TrashIcon({ className }: { className?: string })
+
+## handleMarkdownFieldChange  [score=13.20, 3 files, 3 defs]
+   app/aurora/[id]/edit/components/CharacterBasicInfo.tsx:99  handleMarkdownFieldChange(name: string)
+   app/aurora/new/page.tsx:233  handleMarkdownFieldChange(name: string)
+   components/physical-descriptions/physical-description-editor.tsx:55  handleMarkdownFieldChange(name: string)
+
+## handleStart  [score=13.20, 3 files, 3 defs]
+   components/characters/optimizer/CharacterOptimizerModal.tsx:113  async handleStart()
+   components/new-chat/NewChatModal.tsx:161  async handleStart()
+   components/tools/memory-backfill-card.tsx:48  async handleStart()
+
+## formatSize  [score=12.87, 3 files, 3 defs]
+   app/salon/[id]/components/DocumentPickerModal.tsx:365  formatSize(bytes?: number)
+   components/files/OrphanCleanupModal.tsx:12  formatSize(bytes: number) : string
+   components/settings/ai-import/AIImportWizard.tsx:107  formatSize(bytes: number) : string
+
+## charCountClass  [score=12.87, 3 files, 3 defs]
+   components/clothing-records/clothing-record-editor.tsx:70  charCountClass(current: number, max: number)
+   components/physical-descriptions/physical-description-editor.tsx:101  charCountClass(current: number, max: number)
+   components/wardrobe/wardrobe-item-editor.tsx:370  charCountClass(current: number, max: number) : string
+
+## handleDownload  [score=12.80, 3 files, 3 defs]
+   app/aurora/[id]/view/components/ExternalPromptResultDialog.tsx:48  handleDownload()
+   components/chat/ChatGalleryImageViewModal.tsx:103  async handleDownload()
+   components/chat/ImageModal.tsx:55  async handleDownload()
+
+## insertPlaceholder  [score=12.80, 3 files, 3 defs]
+   app/generate-image/page.tsx:64  insertPlaceholder(text: string)
+   components/chat/GenerateImageDialog.tsx:61  insertPlaceholder(text: string)
+   components/chat/StandaloneGenerateImageDialog.tsx:41  insertPlaceholder(text: string)
+
+## handleModalSuccess  [score=12.80, 3 files, 3 defs]
+   components/settings/api-keys-tab.tsx:114  handleModalSuccess()
+   components/settings/embedding-profiles/index.tsx:75  async handleModalSuccess()
+   components/settings/image-profiles-tab.tsx:128  handleModalSuccess()
+
+## getStepNumber  [score=12.80, 3 files, 3 defs]
+   components/tools/export-dialog.tsx:33  getStepNumber() : number
+   components/tools/import-dialog.tsx:31  getStepNumber() : number
+   components/tools/restore/RestoreDialog.tsx:53  getStepNumber() : number
+
+## CheckIcon  [score=12.80, 3 files, 3 defs]
+   components/characters/optimizer/CharacterOptimizerModal.tsx:28  CheckIcon({ className }: { className?: string })
+   components/profile/DataDirectorySection.tsx:81  CheckIcon({ className }: { className?: string })
+   components/profile/ProfileInfoSection.tsx:47  CheckIcon({ className }: { className?: string })
+
+## LoadingSpinner  [score=12.70, 4 files, 4 defs]
+   components/settings/appearance/index.tsx:27  LoadingSpinner()
+   components/tools/import-export/components/LoadingSpinner.tsx:6  LoadingSpinner({ className = 'w-6 h-6' }: { className?: string })
+   components/tools/restore/RestoreDialog.tsx:7  LoadingSpinner({ size = 4 }: { size?: number })
+   components/tools/restore/RestoreProgress.tsx:28  LoadingSpinner()
+
+## load  [score=12.55, 3 files, 4 defs]
+   components/setup-wizard/ProviderWizard.tsx:75  async load()
+   components/wardrobe/wardrobe-control-dialog.tsx:168  async load() : Promise<void>
+   components/wardrobe/wardrobe-control-dialog.tsx:194  async load() : Promise<void>
+   components/wardrobe/wardrobe-item-editor.tsx:142  async load() : Promise<void>
+
+## handleRemove  [score=12.53, 3 files, 3 defs]
+   components/image-profiles/ImageProfileParameters.tsx:20  handleRemove(key: string)
+   components/new-chat/CharacterPickerPanel.tsx:112  handleRemove(characterId: string)
+   components/tags/tag-badge.tsx:24  handleRemove(event: MouseEvent<HTMLButtonElement>)
+
+## onDoc  [score=12.40, 3 files, 3 defs]
+   components/wardrobe/equipped-slot-row.tsx:58  onDoc(e: MouseEvent) : void
+   components/wardrobe/wardrobe-control-dialog.tsx:720  onDoc(e: MouseEvent) : void
+   components/wardrobe/wardrobe-item-row.tsx:88  onDoc(e: MouseEvent) : void
+
+## onKey  [score=12.40, 3 files, 3 defs]
+   components/wardrobe/equipped-slot-row.tsx:71  onKey(e: KeyboardEvent) : void
+   components/wardrobe/wardrobe-control-dialog.tsx:725  onKey(e: KeyboardEvent) : void
+   components/wardrobe/wardrobe-item-row.tsx:112  onKey(e: KeyboardEvent) : void
+
+## getStatusColor  [score=12.13, 3 files, 3 defs]
+   components/settings/ai-import/AIImportWizard.tsx:306  getStatusColor(status: StepProgress['status']) : string
+   components/tools/tasks-queue/TaskDetails.tsx:23  getStatusColor(status: string) : string
+   components/tools/tasks-queue/TaskItem.tsx:52  getStatusColor(status: string) : string
+
+## formatTokens  [score=12.13, 3 files, 3 defs]
+   components/chat/LLMInspectorEntry.tsx:42  formatTokens(log: LLMLog) : string
+   components/tools/tasks-queue/TaskItem.tsx:22  formatTokens(tokens: number) : string
+   components/tools/tasks-queue/index.tsx:27  formatTokens(tokens: number) : string
+
+## ChatIcon  [score=11.53, 3 files, 3 defs]
+   app/settings/page.tsx:40  ChatIcon()
+   components/homepage/QuickActionsRow.tsx:15  ChatIcon({ className }: { className?: string })
+   components/layout/left-sidebar/collapsed-nav.tsx:139  ChatIcon({ className }: { className?: string })
+
+## handleFormSubmit  [score=11.53, 3 files, 3 defs]
+   components/memory/memory-editor.tsx:47  async handleFormSubmit(e: React.FormEvent)
+   components/settings/connection-profiles/ProfileModal.tsx:142  async handleFormSubmit()
+   components/settings/embedding-profiles/ProfileForm.tsx:62  async handleFormSubmit(e: React.FormEvent)
+
+## handleModeChange  [score=11.53, 3 files, 3 defs]
+   components/chat/InsertAnnouncementDialog.tsx:180  handleModeChange(next: Mode)
+   components/settings/chat-settings/components/TimestampConfigCard.tsx:55  handleModeChange(mode: TimestampMode)
+   components/wardrobe/wardrobe-item-editor.tsx:265  handleModeChange(next: EditorMode) : void
+
+## handleOpenModal  [score=11.13, 3 files, 3 defs]
+   components/settings/api-keys-tab.tsx:106  handleOpenModal()
+   components/settings/embedding-profiles/index.tsx:65  handleOpenModal()
+   components/settings/image-profiles-tab.tsx:118  handleOpenModal(profile?: ImageProfile)
+
+## DatabaseIcon  [score=10.80, 2 files, 2 defs]
+   app/prospero/[id]/components/DocumentStoresCard.tsx:22  DatabaseIcon({ className }: { className?: string })
+   app/scriptorium/components/DocumentStoreCard.tsx:21  DatabaseIcon({ className }: { className?: string })
+
+## encodePathSegment  [score=10.80, 2 files, 2 defs]
+   app/prospero/[id]/hooks/useProjectScenarios.ts:69  encodePathSegment(p: string) : string
+   app/scenarios/hooks/useGeneralScenarios.ts:28  encodePathSegment(p: string) : string
+
+## transformChatToCardData  [score=10.80, 2 files, 2 defs]
+   app/salon/page.tsx:64  transformChatToCardData(chat: Chat) : ChatCardData
+   components/character/character-conversations-tab.tsx:77  transformChatToCardData(chat: Chat) : ChatCardData
+
+## deleteChat  [score=10.80, 2 files, 2 defs]
+   app/salon/page.tsx:151  async deleteChat(id: string)
+   components/character/character-conversations-tab.tsx:194  async deleteChat(chatId: string)
+
+## handleScroll  [score=10.80, 2 files, 2 defs]
+   app/salon/[id]/hooks/useAutoScroll.ts:150  handleScroll()
+   components/search/search-dialog.tsx:207  handleScroll()
+
+## handleWizardApply  [score=10.80, 2 files, 2 defs]
+   app/aurora/[id]/edit/page.tsx:134  async handleWizardApply(data: GeneratedCharacterData)
+   app/aurora/new/page.tsx:54  handleWizardApply(data: GeneratedCharacterData)
+
+## handleUpdate  [score=10.80, 2 files, 2 defs]
+   app/scriptorium/[id]/page.tsx:72  async handleUpdate(id: string, data: UpdateDocumentStoreData)
+   app/scriptorium/page.tsx:52  async handleUpdate(id: string, data: UpdateDocumentStoreData)
+
+## ChevronUpIcon  [score=10.80, 2 files, 2 defs]
+   app/scriptorium/components/DirectoryPicker.tsx:40  ChevronUpIcon({ className }: { className?: string })
+   components/layout/left-sidebar/profile-menu.tsx:61  ChevronUpIcon({ className }: { className?: string })
+
+## PencilIcon  [score=10.80, 2 files, 2 defs]
+   app/scriptorium/[id]/page.tsx:40  PencilIcon({ className }: { className?: string })
+   app/scriptorium/components/DocumentStoreCard.tsx:39  PencilIcon({ className }: { className?: string })
+
+## RefreshIcon  [score=10.80, 2 files, 2 defs]
+   app/scriptorium/[id]/page.tsx:32  RefreshIcon({ className }: { className?: string })
+   app/scriptorium/components/DocumentStoreCard.tsx:47  RefreshIcon({ className }: { className?: string })
+
+======================================================================
+TOP STEM CLUSTERS (similar name variants across files)
+======================================================================
+
+## stem='handleCopy'  variants=['handleCopy', 'handleCopyToClipboard']  [score=20.00, 6 files, 6 defs]
+   app/aurora/[id]/view/components/ExternalPromptResultDialog.tsx:30  async handleCopy()
+   app/setup/page.tsx:147  async handleCopy()
+   components/alert-dialog.tsx:23  async handleCopy()
+   components/chat/ChatGalleryImageViewModal.tsx:93  async handleCopyToClipboard()
+   components/chat/ImageModal.tsx:65  async handleCopyToClipboard()
+   components/profile/ProfileInfoSection.tsx:76  async handleCopy()
+
+## stem='fetchModels'  variants=['fetchModels', 'fetchModelsForEdit']  [score=11.20, 3 files, 3 defs]
+   components/image-profiles/ImageProfileForm.tsx:131  async fetchModels()
+   components/settings/connection-profiles/ProfileModal.tsx:72  async fetchModelsForEdit()
+   components/setup-wizard/wizard-api.ts:76  async fetchModels(provider: string, apiKeyId?: string, baseUrl?: string) : Promise<string[]>
+
+## stem='handleSyncProperties'  variants=['handleSyncPropertiesFromVault', 'handleSyncPropertiesFromVaultAndRefreshLists', 'handleSyncPropertiesToVault', 'handleSyncPropertiesToVaultAndRefreshLists']  [score=10.80, 2 files, 4 defs]
+   app/aurora/[id]/edit/hooks/useCharacterEdit.ts:226  async handleSyncPropertiesFromVault()
+   app/aurora/[id]/edit/hooks/useCharacterEdit.ts:250  async handleSyncPropertiesToVault()
+   app/aurora/[id]/edit/page.tsx:118  async handleSyncPropertiesFromVaultAndRefreshLists()
+   app/aurora/[id]/edit/page.tsx:127  async handleSyncPropertiesToVaultAndRefreshLists()
+
+## stem='getCharacter'  variants=['getCharacterForMessage', 'getCharacterForParticipant']  [score=9.30, 2 files, 2 defs]
+   app/salon/[id]/components/VirtualizedMessageList.tsx:148  getCharacterForMessage(message: Message) : CharacterData | undefined
+   components/help-chat/HelpChatMessageList.tsx:62  getCharacterForParticipant(participantId: string | null | undefined) : CharacterInfo | null

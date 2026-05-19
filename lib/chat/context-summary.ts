@@ -8,15 +8,80 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { updateContextSummary, summarizeChat, ChatMessage, generateTitleFromSummary, considerTitleUpdate, considerHelpChatTitleUpdate, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
+import { foldChatSummary, ChatMessage, generateTitleFromSummary, considerTitleUpdate, considerHelpChatTitleUpdate, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
-import { Provider, ConnectionProfile, CheapLLMSettings } from '@/lib/schemas/types'
+import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent } from '@/lib/schemas/types'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { queueStoryBackgroundIfEnabled } from '@/lib/background-jobs/handlers/title-update'
+import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
+
+/**
+ * Rolling-window summarization cadence.
+ *
+ * The chat-message LLM call sees `[running summary] + [last 5–10 turns]`. The
+ * running summary lives as a Librarian whisper at the head of the kept
+ * messages. Older USER + character messages get dropped from the LLM context
+ * once a fold has covered them. Knobs:
+ *
+ *   - FOLD_TURN_BATCH: number of turns folded per fire (5).
+ *   - FOLD_TAIL_FLOOR: minimum recent turns kept verbatim (5).
+ *   - FOLD_TRIGGER_DELTA: turns of accumulated tail before a fold fires
+ *     (FOLD_TAIL_FLOOR + FOLD_TURN_BATCH = 10). When `currentTurn -
+ *     lastFoldedTurn > FOLD_TRIGGER_DELTA`, fold the next 5 turns.
+ *   - T_HARD_TURN_THRESHOLD: periodic full from-scratch rebuild (50). Cheap
+ *     insurance against accumulated paraphrase drift across many folds.
+ *
+ * `chat.lastSummaryTurn` is reused as the fold anchor (semantically:
+ * "lastFoldedTurn" — the turn number through which the running summary has
+ * already absorbed content). `chat.compactionGeneration` bumps on every fold
+ * so the Librarian-whisper sweep and Phase 3 frozen-memory archive cache
+ * invalidate together. `chat.lastFullRebuildTurn` anchors the T_hard window.
+ */
+export const FOLD_TURN_BATCH = 5
+export const FOLD_TAIL_FLOOR = 5
+export const FOLD_TRIGGER_DELTA = FOLD_TAIL_FLOOR + FOLD_TURN_BATCH
+export const T_HARD_TURN_THRESHOLD = 50
+
+export type SummarizationGateDecision = 'skip' | 'fold' | 'hard'
+
+export interface SummarizationGateInputs {
+  /** Current interchange count (output of calculateInterchangeCount). */
+  currentTurn: number
+  /** Turn through which the running summary has already absorbed content. */
+  lastFoldedTurn: number
+  /** Turn at which the last from-scratch rebuild fired. */
+  lastFullRebuildTurn: number
+}
+
+/**
+ * Decide whether to skip, fold the next batch, or do a full rebuild.
+ * Pure function — no side effects.
+ */
+export function evaluateSummarizationGate(
+  inputs: SummarizationGateInputs,
+): SummarizationGateDecision {
+  const { currentTurn, lastFoldedTurn, lastFullRebuildTurn } = inputs
+
+  // Below the floor + batch threshold, no fold needs to happen — the LLM still
+  // sees the full conversation as recent tail.
+  if (currentTurn <= FOLD_TRIGGER_DELTA) return 'skip'
+
+  // T_hard wins over the regular fold path. A from-scratch rebuild implicitly
+  // satisfies any fold that was due.
+  if (currentTurn - lastFullRebuildTurn >= T_HARD_TURN_THRESHOLD) {
+    return 'hard'
+  }
+
+  if (currentTurn - lastFoldedTurn > FOLD_TRIGGER_DELTA) {
+    return 'fold'
+  }
+
+  return 'skip'
+}
 
 /**
  * Calculates the number of interchanges in a chat
@@ -162,8 +227,68 @@ export async function chatNeedsSummary(
   return { needsSummary: false }
 }
 
+interface FoldedTurn {
+  /** 1-indexed turn number. */
+  turnNumber: number
+  /** USER + non-staff ASSISTANT messages composing this turn, chronological. */
+  messages: MessageEvent[]
+  /** IDs of those messages, for summaryAnchorMessageIds. */
+  ids: string[]
+}
+
 /**
- * Generate or update a context summary for a chat
+ * Walk chat history in chronological order, grouping messages into turns.
+ * A turn begins on a USER message; trailing non-staff ASSISTANT messages
+ * before the next USER message belong to that turn. Staff-authored messages
+ * (`systemSender` set) are excluded from summary input but do not affect
+ * turn numbering. ASSISTANT-only greeting messages before any USER message
+ * are folded into turn 1.
+ */
+export function partitionMessagesIntoTurns(allMessages: ChatEvent[]): FoldedTurn[] {
+  const turns: FoldedTurn[] = []
+  let currentTurn: FoldedTurn | null = null
+  let leadingAssistant: { messages: MessageEvent[]; ids: string[] } | null = null
+
+  for (const msg of allMessages) {
+    if (msg.type !== 'message') continue
+    const m = msg as MessageEvent
+    if (m.role !== 'USER' && m.role !== 'ASSISTANT') continue
+    if (m.systemSender) continue
+
+    if (m.role === 'USER') {
+      const turnNumber = turns.length + 1
+      const startMessages = leadingAssistant ? [...leadingAssistant.messages, m] : [m]
+      const startIds = leadingAssistant ? [...leadingAssistant.ids, m.id] : [m.id]
+      currentTurn = { turnNumber, messages: startMessages, ids: startIds }
+      turns.push(currentTurn)
+      leadingAssistant = null
+    } else if (currentTurn) {
+      currentTurn.messages.push(m)
+      currentTurn.ids.push(m.id)
+    } else {
+      leadingAssistant = leadingAssistant ?? { messages: [], ids: [] }
+      leadingAssistant.messages.push(m)
+      leadingAssistant.ids.push(m.id)
+    }
+  }
+
+  return turns
+}
+
+function turnsToChatMessages(turns: FoldedTurn[]): ChatMessage[] {
+  const result: ChatMessage[] = []
+  for (const t of turns) {
+    for (const m of t.messages) {
+      result.push({ role: m.role.toLowerCase() as 'user' | 'assistant', content: m.content })
+    }
+  }
+  return result
+}
+
+/**
+ * Generate or update a context summary for a chat using the rolling-window
+ * fold cadence. Caller is expected to have run the gate (or to set
+ * `forceRegenerate` for an unconditional T_hard rebuild).
  */
 export async function generateContextSummary(
   options: GenerateSummaryOptions
@@ -180,21 +305,11 @@ export async function generateContextSummary(
   const repos = getRepositories()
 
   try {
-    // Get chat
     const chat = await repos.chats.findById(chatId)
     if (!chat) {
       return { success: false, error: 'Chat not found', wasGenerated: false }
     }
 
-    // Check if we need to generate (unless forced)
-    if (!forceRegenerate && chat.contextSummary) {
-      const needsCheck = await chatNeedsSummary(chatId, connectionProfile.provider, connectionProfile.modelName)
-      if (!needsCheck.needsSummary) {
-        return { success: true, summary: chat.contextSummary, wasGenerated: false }
-      }
-    }
-
-    // Get cheap LLM provider - convert null values to undefined for compatibility
     let cheapLLM = getCheapLLMProvider(
       connectionProfile,
       {
@@ -210,7 +325,6 @@ export async function generateContextSummary(
       return { success: false, error: 'No cheap LLM provider available', wasGenerated: false }
     }
 
-    // For dangerous chats, use uncensored provider to avoid content refusals
     if (chat.isDangerousChat === true) {
       const chatSettingsForDanger = await repos.chatSettings.findByUserId(userId)
       const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettingsForDanger)
@@ -222,163 +336,184 @@ export async function generateContextSummary(
       )
     }
 
-    // Get messages
-    const messages = await repos.chats.getMessages(chatId)
-    const conversationMessages: ChatMessage[] = messages
-      .filter(msg => msg.type === 'message')
-      .filter(msg => {
-        const role = (msg as { role: string }).role
-        return role === 'USER' || role === 'ASSISTANT'
-      })
-      .map(msg => ({
-        role: (msg as { role: string }).role.toLowerCase() as 'user' | 'assistant',
-        content: (msg as { content: string }).content,
-      }))
+    const allChatMessages = await repos.chats.getMessages(chatId)
+    const allTurns = partitionMessagesIntoTurns(allChatMessages)
+    const currentTurn = allTurns.length
 
-    if (conversationMessages.length === 0) {
+    if (currentTurn === 0) {
       return { success: false, error: 'No messages to summarize', wasGenerated: false }
     }
 
-    let result: SummaryGenerationResult
+    const lastFoldedTurn = chat.lastSummaryTurn ?? 0
 
-    // If we have an existing summary, update it with recent messages
-    if (chat.contextSummary && !forceRegenerate) {
-      // Only summarize messages that came after the summary was likely generated
-      // Take the last 20 messages for incremental update
-      const recentMessages = conversationMessages.slice(-20)
-
-      const updateResult = await updateContextSummary(
-        chat.contextSummary,
-        recentMessages,
-        cheapLLM,
-        userId,
-        chatId
-      )
-
-      if (updateResult.success && updateResult.result) {
-        result = {
-          success: true,
-          summary: updateResult.result,
-          wasGenerated: true,
-          usage: updateResult.usage,
-        }
-      } else {
-        // Fall back to full regeneration
-        const fullResult = await summarizeChat(conversationMessages, cheapLLM, userId, chatId)
-
-        if (fullResult.success && fullResult.result) {
-          result = {
-            success: true,
-            summary: fullResult.result,
-            wasGenerated: true,
-            usage: fullResult.usage,
-          }
-        } else {
-          return {
-            success: false,
-            error: fullResult.error || 'Failed to generate summary',
-            wasGenerated: false,
-          }
-        }
-      }
+    // Decide what range of turns to fold. T_hard absorbs everything up to the
+    // tail floor in a single from-scratch call; the regular fold path takes
+    // the next FOLD_TURN_BATCH turns and updates the prior summary.
+    const isHardRebuild = forceRegenerate
+    let foldFromTurn: number
+    let foldThroughTurn: number
+    if (isHardRebuild) {
+      foldFromTurn = 1
+      foldThroughTurn = Math.max(1, currentTurn - FOLD_TAIL_FLOOR)
     } else {
-      // Generate new summary from scratch
-      const summaryResult = await summarizeChat(conversationMessages, cheapLLM, userId, chatId)
+      foldFromTurn = lastFoldedTurn + 1
+      foldThroughTurn = Math.min(lastFoldedTurn + FOLD_TURN_BATCH, currentTurn - FOLD_TAIL_FLOOR)
+    }
 
-      if (summaryResult.success && summaryResult.result) {
-        result = {
-          success: true,
-          summary: summaryResult.result,
-          wasGenerated: true,
-          usage: summaryResult.usage,
-        }
-      } else {
-        return {
-          success: false,
-          error: summaryResult.error || 'Failed to generate summary',
-          wasGenerated: false,
-        }
+    if (foldThroughTurn < foldFromTurn) {
+      return { success: false, error: 'Not enough turns to fold', wasGenerated: false }
+    }
+
+    const turnsToFold = allTurns.slice(foldFromTurn - 1, foldThroughTurn)
+    const newTurnsContent = turnsToChatMessages(turnsToFold)
+
+    if (newTurnsContent.length === 0) {
+      return { success: false, error: 'No content in turns to fold', wasGenerated: false }
+    }
+
+    const priorSummary = isHardRebuild ? null : (chat.contextSummary ?? null)
+
+    const foldResult = await foldChatSummary(
+      { priorSummary, newTurns: newTurnsContent },
+      cheapLLM,
+      userId,
+      chatId,
+    )
+
+    if (!foldResult.success || !foldResult.result) {
+      return {
+        success: false,
+        error: foldResult.error || 'Failed to fold summary',
+        wasGenerated: false,
       }
     }
 
-    // Save summary to chat
-    if (result.success && result.summary) {
-      await repos.chats.update(chatId, {
-        contextSummary: result.summary,
-        updatedAt: new Date().toISOString(),
-      })
+    const newSummary: string = foldResult.result
+    const result: SummaryGenerationResult = {
+      success: true,
+      summary: newSummary,
+      wasGenerated: true,
+      usage: foldResult.usage,
+    }
 
-      // Also save as a context-summary event in the chat
-      const summaryEvent = {
-        type: 'context-summary' as const,
-        id: crypto.randomUUID(),
-        context: result.summary,
-        createdAt: new Date().toISOString(),
-      }
-      await repos.chats.addMessage(chatId, summaryEvent)
+    const newGeneration = (chat.compactionGeneration ?? 0) + 1
+    const newLastFoldedTurn = foldThroughTurn
 
-      // Create system event for context summary token tracking
-      if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {
-        try {
-          const costResult = await estimateMessageCost(
-            cheapLLM.provider,
-            cheapLLM.modelName,
-            result.usage.promptTokens,
-            result.usage.completionTokens,
-            userId
-          )
-          await createContextSummaryEvent(
-            chatId,
-            result.usage,
-            cheapLLM.provider,
-            cheapLLM.modelName,
-            costResult.cost
-          )
-        } catch (e) {
-          logger.error('[Context Summary] Failed to create system event:', {}, e instanceof Error ? e : new Error(String(e)))
-        }
-      }
+    // Anchor every conversation message in turns 1 through newLastFoldedTurn
+    // so the edit-aware invalidation hook clears the summary when a covered
+    // message is touched. Recompute (don't append) so the set is always
+    // consistent with the current fold boundary.
+    const summaryAnchorMessageIds = allTurns
+      .slice(0, newLastFoldedTurn)
+      .flatMap(t => t.ids)
 
-      // Generate a title from the summary using the cheap LLM
-      // Help chats get practical, descriptive titles; regular chats get literary ones
-      try {
-        const titleResult = chat.chatType === 'help'
-          ? await generateHelpChatTitleFromSummary(result.summary, cheapLLM, userId, chatId)
-          : await generateTitleFromSummary(result.summary, cheapLLM, userId, chatId)
-        if (titleResult.success && titleResult.result) {
-          await repos.chats.update(chatId, {
-            title: titleResult.result,
-            updatedAt: new Date().toISOString(),
-          })
-          logger.info(`[Context Summary] Generated title for chat ${chatId}: ${titleResult.result}`)
+    await repos.chats.update(chatId, {
+      contextSummary: newSummary,
+      compactionGeneration: newGeneration,
+      lastSummaryTurn: newLastFoldedTurn,
+      summaryAnchorMessageIds,
+      ...(isHardRebuild ? { lastFullRebuildTurn: currentTurn } : {}),
+      updatedAt: new Date().toISOString(),
+    })
 
-          // Create system event for title generation token tracking
-          if (titleResult.usage && (titleResult.usage.promptTokens > 0 || titleResult.usage.completionTokens > 0)) {
-            try {
-              const titleCostResult = await estimateMessageCost(
-                cheapLLM.provider,
-                cheapLLM.modelName,
-                titleResult.usage.promptTokens,
-                titleResult.usage.completionTokens,
-                userId
-              )
-              await createTitleGenerationEvent(
-                chatId,
-                titleResult.usage,
-                cheapLLM.provider,
-                cheapLLM.modelName,
-                titleCostResult.cost
-              )
-            } catch (e) {
-              logger.error('[Context Summary] Failed to create title generation system event:', {}, e instanceof Error ? e : new Error(String(e)))
-            }
+    const summaryEvent = {
+      type: 'context-summary' as const,
+      id: crypto.randomUUID(),
+      context: newSummary,
+      createdAt: new Date().toISOString(),
+    }
+    await repos.chats.addMessage(chatId, summaryEvent)
+
+    // Sweep prior Librarian summary whispers from older generations, then
+    // post the fresh one. Whispers from the new generation are left
+    // untouched. Legacy unanchored whispers are identified by content prefix.
+    try {
+      const refreshedMessages = await repos.chats.getMessages(chatId)
+      const priorSummaryIds = refreshedMessages
+        .filter((m): m is MessageEvent => m.type === 'message')
+        .filter(m => {
+          if (m.systemSender !== 'librarian') return false
+          if (m.summaryAnchor) {
+            return m.summaryAnchor.compactionGeneration < newGeneration
           }
-        } else {
-          logger.warn(`[Context Summary] Failed to generate title for chat ${chatId}: ${titleResult.error}`)
-        }
-      } catch (titleError) {
-        logger.error(`[Context Summary] Error generating title for chat ${chatId}:`, {}, titleError instanceof Error ? titleError : new Error(String(titleError)))
+          return typeof m.content === 'string' && m.content.startsWith(SUMMARY_CONTENT_PREFIX)
+        })
+        .map(m => m.id)
+
+      if (priorSummaryIds.length > 0) {
+        const removed = await repos.chats.deleteMessagesByIds(chatId, priorSummaryIds)
+        logger.info('[Context Summary] Swept prior broadcast summary whispers', {
+          chatId, removed, newGeneration,
+        })
       }
+
+      await postLibrarianSummaryAnnouncement({
+        chatId,
+        summary: newSummary,
+        targetParticipantIds: null,
+        summaryAnchor: { compactionGeneration: newGeneration },
+      })
+    } catch (e) {
+      logger.error('[Context Summary] Failed to post broadcast summary whisper:', { chatId }, e instanceof Error ? e : new Error(String(e)))
+    }
+
+    if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {
+      try {
+        const costResult = await estimateMessageCost(
+          cheapLLM.provider,
+          cheapLLM.modelName,
+          result.usage.promptTokens,
+          result.usage.completionTokens,
+          userId
+        )
+        await createContextSummaryEvent(
+          chatId,
+          result.usage,
+          cheapLLM.provider,
+          cheapLLM.modelName,
+          costResult.cost
+        )
+      } catch (e) {
+        logger.error('[Context Summary] Failed to create system event:', {}, e instanceof Error ? e : new Error(String(e)))
+      }
+    }
+
+    try {
+      const titleResult = chat.chatType === 'help'
+        ? await generateHelpChatTitleFromSummary(newSummary, cheapLLM, userId, chatId)
+        : await generateTitleFromSummary(newSummary, cheapLLM, userId, chatId)
+      if (titleResult.success && titleResult.result) {
+        await repos.chats.update(chatId, {
+          title: titleResult.result,
+          updatedAt: new Date().toISOString(),
+        })
+        logger.info(`[Context Summary] Generated title for chat ${chatId}: ${titleResult.result}`)
+
+        if (titleResult.usage && (titleResult.usage.promptTokens > 0 || titleResult.usage.completionTokens > 0)) {
+          try {
+            const titleCostResult = await estimateMessageCost(
+              cheapLLM.provider,
+              cheapLLM.modelName,
+              titleResult.usage.promptTokens,
+              titleResult.usage.completionTokens,
+              userId
+            )
+            await createTitleGenerationEvent(
+              chatId,
+              titleResult.usage,
+              cheapLLM.provider,
+              cheapLLM.modelName,
+              titleCostResult.cost
+            )
+          } catch (e) {
+            logger.error('[Context Summary] Failed to create title generation system event:', {}, e instanceof Error ? e : new Error(String(e)))
+          }
+        }
+      } else {
+        logger.warn(`[Context Summary] Failed to generate title for chat ${chatId}: ${titleResult.error}`)
+      }
+    } catch (titleError) {
+      logger.error(`[Context Summary] Error generating title for chat ${chatId}:`, {}, titleError instanceof Error ? titleError : new Error(String(titleError)))
     }
 
     return result
@@ -388,6 +523,60 @@ export async function generateContextSummary(
       error: error instanceof Error ? error.message : 'Unknown error',
       wasGenerated: false,
     }
+  }
+}
+
+
+/**
+ * Edit/delete invalidation hook. When a conversation message is edited or
+ * deleted, clear the running summary if the changed message ID was part of
+ * the set that fed it. Resets `lastSummaryTurn` (the fold anchor) and
+ * `lastFullRebuildTurn` so the next fold rebuilds from scratch. Bumps
+ * `compactionGeneration` so downstream caches and Librarian-whisper sweeps
+ * refresh in step.
+ *
+ * Called with one or more message IDs (a single edit, or the swipe-group
+ * IDs the delete path collects). Returns true when the summary was
+ * invalidated; false when none of the IDs were covered.
+ */
+export async function invalidateContextSummaryIfMessageCovered(
+  chatId: string,
+  messageIds: string[],
+): Promise<boolean> {
+  if (messageIds.length === 0) return false
+  const repos = getRepositories()
+
+  try {
+    const chat = await repos.chats.findById(chatId)
+    if (!chat || !chat.contextSummary) return false
+
+    const covered = chat.summaryAnchorMessageIds ?? []
+    if (covered.length === 0) return false
+
+    const coveredSet = new Set(covered)
+    const intersects = messageIds.some(id => coveredSet.has(id))
+    if (!intersects) return false
+
+    await repos.chats.update(chatId, {
+      contextSummary: null,
+      summaryAnchorMessageIds: [],
+      compactionGeneration: (chat.compactionGeneration ?? 0) + 1,
+      lastSummaryTurn: 0,
+      lastFullRebuildTurn: 0,
+      updatedAt: new Date().toISOString(),
+    })
+
+    logger.info('[Context Summary] Invalidated on covered message change', {
+      chatId,
+      changedMessageCount: messageIds.length,
+      coveredCount: covered.length,
+      newGeneration: (chat.compactionGeneration ?? 0) + 1,
+    })
+    return true
+  } catch (error) {
+    logger.error('[Context Summary] Invalidation hook failed', { chatId },
+      error instanceof Error ? error : new Error(String(error)))
+    return false
   }
 }
 
@@ -612,36 +801,29 @@ export async function checkAndGenerateSummaryIfNeeded(
     })
   }
 
-  // Regenerate context summary on the same schedule as title/background checks,
-  // or when the token-based heuristic says we need one
-  if (isAtTitleCheckpoint && chat.contextSummary) {
-    // At a title checkpoint with an existing summary — force regeneration to keep
-    // the summary current (used by danger classification and story backgrounds)
-    logger.info(`[Context Summary] Regenerating summary at interchange ${currentInterchange} for chat ${chatId}`)
+  const decision = evaluateSummarizationGate({
+    currentTurn: currentInterchange,
+    lastFoldedTurn: chat.lastSummaryTurn ?? 0,
+    lastFullRebuildTurn: chat.lastFullRebuildTurn ?? 0,
+  })
+
+  if (decision !== 'skip') {
+    logger.info('[Context Summary] Gate fired', {
+      chatId,
+      decision,
+      currentInterchange,
+      lastFoldedTurn: chat.lastSummaryTurn ?? 0,
+      lastFullRebuildTurn: chat.lastFullRebuildTurn ?? 0,
+    })
     generateContextSummaryAsync({
       userId,
       chatId,
       connectionProfile,
       cheapLLMSettings,
       availableProfiles,
-      forceRegenerate: true,
+      forceRegenerate: decision === 'hard',
     })
   } else {
-    // Original token-count-based summary check (for first-time generation)
-    const needsCheck = await chatNeedsSummary(chatId, provider, modelName)
-
-    if (needsCheck.needsSummary) {
-      logger.info(`[Context Summary] Chat ${chatId} needs summary: ${needsCheck.reason}`)
-
-      // Generate in background to not block the response
-      generateContextSummaryAsync({
-        userId,
-        chatId,
-        connectionProfile,
-        cheapLLMSettings,
-        availableProfiles,
-      })
-    }
   }
 }
 

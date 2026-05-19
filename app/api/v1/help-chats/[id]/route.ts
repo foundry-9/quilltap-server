@@ -49,7 +49,6 @@ async function verifyHelpChat(
   const chat = await repos.chats.findById(id);
 
   if (!chat) {
-    logger.debug('Help chat not found', { chatId: id, userId: user.id });
     return notFound('Help chat');
   }
 

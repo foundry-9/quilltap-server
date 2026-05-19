@@ -93,6 +93,22 @@ interface MarkdownBridgePluginProps {
   setInput: (value: string) => void
   /** Initial markdown to populate the editor on mount */
   initialMarkdown?: string
+  /**
+   * When true, strip Lexical's automatic `\*` escapes on export so literal
+   * asterisks survive as `*` rather than `\*`. Safe because
+   * [[composer-transformers]] excludes ITALIC_STAR / BOLD_ITALIC_STAR, so
+   * single `*` is not a formatting tag.
+   */
+  preserveAsterisks?: boolean
+}
+
+/**
+ * Strip Lexical's `\*` escapes from exported markdown. Only `\*` is touched;
+ * `\_`, `` \` ``, `\~` stay escaped because those characters *are* active
+ * formatting tags in our transformer set.
+ */
+function stripAsteriskEscapes(markdown: string): string {
+  return markdown.replace(/\\\*/g, '*')
 }
 
 /**
@@ -108,6 +124,7 @@ export function MarkdownBridgePlugin({
   input,
   setInput,
   initialMarkdown,
+  preserveAsterisks = false,
 }: MarkdownBridgePluginProps) {
   const [editor] = useLexicalComposerContext()
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -140,7 +157,8 @@ export function MarkdownBridgePlugin({
       if (tags.has('external-sync')) return
 
       editorState.read(() => {
-        const markdown = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
+        const raw = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
+        const markdown = preserveAsterisks ? stripAsteriskEscapes(raw) : raw
 
         // Debounce parent state updates (16ms, ~1 frame)
         if (debounceTimerRef.current) {
@@ -152,7 +170,7 @@ export function MarkdownBridgePlugin({
         }, 16)
       })
     })
-  }, [editor, setInput])
+  }, [editor, setInput, preserveAsterisks])
 
   // Detect when parent clears input (e.g., after submission) and clear editor.
   // We know it's an external clear when input becomes '' but we didn't send ''

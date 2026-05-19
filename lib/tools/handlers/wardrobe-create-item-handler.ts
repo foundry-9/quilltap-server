@@ -1,19 +1,29 @@
 /**
  * Create Wardrobe Item Tool Handler
  *
- * Creates new wardrobe items and optionally equips them immediately.
- * Supports gifting items to other characters in the chat via the
- * optional `recipient` parameter.
+ * Creates new wardrobe items — leaf or composite — and optionally equips
+ * them immediately. Supports gifting items to other characters in the chat
+ * via the optional `recipient` parameter.
+ *
+ * Composite items are built by supplying `component_item_ids` and/or
+ * `component_titles`. The handler resolves both, dedupes, computes the
+ * `types` union from the components' types (overriding any LLM-supplied
+ * `types`), and persists the new item with the resolved `componentItemIds`.
+ * Cycles are rejected by `WardrobeRepository.create` before the row lands.
  */
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import type { WardrobeCreateItemToolInput, WardrobeCreateItemToolOutput } from '../wardrobe-create-item-tool';
+import type {
+  WardrobeCreateItemToolInput,
+  WardrobeCreateItemToolOutput,
+} from '../wardrobe-create-item-tool';
 import { validateWardrobeCreateItemInput } from '../wardrobe-create-item-tool';
-import type { WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import type { WardrobeItem, WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types';
-import { equipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
+import { equipItem } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { unionTypes } from '@/lib/wardrobe/composite-types';
 
 export interface WardrobeCreateItemToolContext {
   userId: string;
@@ -22,7 +32,7 @@ export interface WardrobeCreateItemToolContext {
 }
 
 export class WardrobeCreateItemError extends Error {
-  constructor(message: string, public code: 'VALIDATION_ERROR' | 'EXECUTION_ERROR') {
+  constructor(message: string, public code: 'VALIDATION_ERROR' | 'EXECUTION_ERROR' | 'NOT_FOUND') {
     super(message);
     this.name = 'WardrobeCreateItemError';
   }
@@ -35,7 +45,7 @@ export class WardrobeCreateItemError extends Error {
 async function resolveRecipientFromChat(
   chatId: string,
   recipientName: string,
-  callingCharacterId: string,
+  _callingCharacterId: string,
 ): Promise<{ characterId: string; characterName: string } | null> {
   const repos = getRepositories();
   const chat = await repos.chats.findById(chatId);
@@ -48,18 +58,13 @@ async function resolveRecipientFromChat(
 
   if (!participants || !Array.isArray(participants)) return null;
 
-  // Normalize the search name for case-insensitive matching
   const normalizedSearch = recipientName.trim().toLowerCase();
 
-  // Search through active participants for a character name match
   for (const participant of participants) {
-    // Skip removed participants
     if (participant.status === 'removed') continue;
-
     const charId = participant.characterId;
     if (!charId) continue;
 
-    // Look up the character record to get the name
     const character = await repos.characters.findById(charId);
     if (!character) continue;
 
@@ -72,11 +77,74 @@ async function resolveRecipientFromChat(
 }
 
 /**
+ * Resolve component item references (IDs and/or titles) for a given character
+ * into a deduplicated, ordered list of wardrobe items. ID matches are
+ * preferred over title matches; unknown references throw.
+ */
+async function resolveComponentItems(
+  characterId: string,
+  componentIds: string[] | undefined,
+  componentTitles: string[] | undefined,
+): Promise<WardrobeItem[]> {
+  const ids = componentIds ?? [];
+  const titles = componentTitles ?? [];
+  if (ids.length === 0 && titles.length === 0) return [];
+
+  const repos = getRepositories();
+  const charItems = await repos.wardrobe.findByCharacterId(characterId, true);
+  const itemsById = new Map(charItems.map((i) => [i.id, i]));
+  const itemsByTitle = new Map<string, WardrobeItem>();
+  for (const i of charItems) {
+    const key = i.title.trim().toLowerCase();
+    if (!itemsByTitle.has(key)) itemsByTitle.set(key, i);
+  }
+
+  const seen = new Set<string>();
+  const resolved: WardrobeItem[] = [];
+
+  for (const id of ids) {
+    const item = itemsById.get(id);
+    if (!item) {
+      // Try archetype lookup (characterId === null) for the id, since shared
+      // items aren't in findByCharacterId.
+      const archetype = await repos.wardrobe.findById(id);
+      if (archetype && archetype.characterId == null) {
+        if (!seen.has(archetype.id)) {
+          seen.add(archetype.id);
+          resolved.push(archetype);
+        }
+        continue;
+      }
+      throw new WardrobeCreateItemError(
+        `Component item with ID "${id}" was not found in this character's wardrobe`,
+        'NOT_FOUND',
+      );
+    }
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      resolved.push(item);
+    }
+  }
+
+  for (const title of titles) {
+    const item = itemsByTitle.get(title.trim().toLowerCase());
+    if (!item) {
+      throw new WardrobeCreateItemError(
+        `Component item titled "${title}" was not found in this character's wardrobe`,
+        'NOT_FOUND',
+      );
+    }
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      resolved.push(item);
+    }
+  }
+
+  return resolved;
+}
+
+/**
  * Execute the create wardrobe item tool
- *
- * @param input - The tool input parameters
- * @param context - Execution context including user ID, chat ID, and character ID
- * @returns Tool output with created item details and optional equipped state
  */
 export async function executeWardrobeCreateItemTool(
   input: unknown,
@@ -85,7 +153,6 @@ export async function executeWardrobeCreateItemTool(
   const repos = getRepositories();
 
   try {
-    // Validate input
     if (!validateWardrobeCreateItemInput(input)) {
       logger.warn('Wardrobe create item tool validation failed', {
         context: 'wardrobe-create-item-handler',
@@ -99,11 +166,23 @@ export async function executeWardrobeCreateItemTool(
         item_id: '',
         title: '',
         equipped: false,
-        error: 'Invalid input: title (string) and types (non-empty array of valid slot types) are required',
+        error:
+          'Invalid input: title (string) is required. Either supply types ' +
+          '(non-empty array of valid slot types) for a leaf item, or ' +
+          'component_item_ids / component_titles for a composite item.',
       };
     }
 
-    const { title, description, types, appropriateness, equip_now, recipient } = input;
+    const {
+      title,
+      description,
+      types,
+      appropriateness,
+      equip_now,
+      recipient,
+      component_item_ids,
+      component_titles,
+    } = input;
 
     // Resolve the target character — defaults to the calling character
     let targetCharacterId = context.characterId;
@@ -134,82 +213,72 @@ export async function executeWardrobeCreateItemTool(
 
       targetCharacterId = resolved.characterId;
       recipientName = resolved.characterName;
-
-      logger.debug('Resolved gift recipient', {
-        context: 'wardrobe-create-item-handler',
-        recipientName: resolved.characterName,
-        recipientCharacterId: resolved.characterId,
-        callingCharacterId: context.characterId,
-      });
     }
 
-    logger.debug('Creating wardrobe item', {
-      context: 'wardrobe-create-item-handler',
-      userId: context.userId,
-      chatId: context.chatId,
-      characterId: context.characterId,
+    // Resolve components against the target character's wardrobe so a gifted
+    // composite references items in the recipient's collection. If components
+    // are supplied, the new item is a composite; types is computed from the
+    // union and overrides any LLM-supplied `types`.
+    const components = await resolveComponentItems(
       targetCharacterId,
-      recipientName,
-      title,
-      types,
-      equipNow: equip_now,
-    });
+      component_item_ids,
+      component_titles,
+    );
 
-    // Create the wardrobe item for the target character
+    const isComposite = components.length > 0;
+    let resolvedTypes: WardrobeItemType[];
+    if (isComposite) {
+      resolvedTypes = unionTypes(components);
+      if (resolvedTypes.length === 0) {
+        // Defensive: components should always cover at least one slot.
+        throw new WardrobeCreateItemError(
+          'Composite components do not cover any slots — this should not happen',
+          'VALIDATION_ERROR',
+        );
+      }
+      if (types && types.length > 0) {
+        const provided = (types as WardrobeItemType[]).slice().sort().join(',');
+        const computed = resolvedTypes.slice().sort().join(',');
+        if (provided !== computed) {
+        }
+      }
+    } else {
+      resolvedTypes = (types as WardrobeItemType[]) ?? [];
+    }
+
+    const componentItemIds = components.map((c) => c.id);
+
+    // Cycle detection lives in the repository — if an LLM somehow contrived a
+    // cycle by composing items that already point back to the new item's
+    // (pre-existing) parents, the create will throw with a descriptive message.
     const newItem = await repos.wardrobe.create({
       characterId: targetCharacterId,
       title,
       description: description || null,
-      types: types as WardrobeItemType[],
+      types: resolvedTypes,
+      componentItemIds,
       appropriateness: appropriateness || null,
       isDefault: false,
-    });
-
-    logger.debug('Wardrobe item created', {
-      context: 'wardrobe-create-item-handler',
-      userId: context.userId,
-      targetCharacterId,
-      recipientName,
-      itemId: newItem.id,
-      title: newItem.title,
     });
 
     let equipped = false;
     let currentState: EquippedSlots | undefined;
 
-    // Equip immediately if requested
     if (equip_now) {
-      logger.debug('Equipping new wardrobe item', {
-        context: 'wardrobe-create-item-handler',
-        userId: context.userId,
-        chatId: context.chatId,
-        targetCharacterId,
-        itemId: newItem.id,
-        slots: newItem.types,
-      });
 
-      // Equip on the target character (may be a gift recipient)
-      await equipWithDisplacement(repos, context.chatId, targetCharacterId, newItem);
+      // For both leaf and composite items, `equipItem` replaces every slot in
+      // `newItem.types` with `[newItem.id]`. Composites are stored as their
+      // own id; expansion to leaf garments happens at read time.
+      await equipItem(repos, context.chatId, targetCharacterId, newItem);
 
       equipped = true;
 
-      // Load current state after equipping
       const chat = await repos.chats.findById(context.chatId);
       if (chat) {
         const equippedOutfit = (chat as Record<string, unknown>).equippedOutfit as Record<string, EquippedSlots> | undefined;
         currentState = equippedOutfit?.[targetCharacterId] || { ...EMPTY_EQUIPPED_SLOTS };
       }
 
-      logger.debug('Wardrobe item equipped', {
-        context: 'wardrobe-create-item-handler',
-        userId: context.userId,
-        chatId: context.chatId,
-        targetCharacterId,
-        itemId: newItem.id,
-        currentState,
-      });
-
-      // Trigger avatar generation for the target character if enabled
       await triggerAvatarGenerationIfEnabled(repos, {
         userId: context.userId,
         chatId: context.chatId,
@@ -227,6 +296,8 @@ export async function executeWardrobeCreateItemTool(
       recipientName,
       itemId: newItem.id,
       title: newItem.title,
+      isComposite,
+      componentCount: componentItemIds.length,
       equipped,
     });
 
@@ -235,10 +306,31 @@ export async function executeWardrobeCreateItemTool(
       item_id: newItem.id,
       title: newItem.title,
       equipped,
+      is_composite: isComposite,
+      resolved_types: resolvedTypes,
+      ...(componentItemIds.length > 0 ? { resolved_component_item_ids: componentItemIds } : {}),
       ...(recipientName ? { recipient_name: recipientName } : {}),
       ...(currentState ? { current_state: currentState } : {}),
     };
   } catch (error) {
+    if (error instanceof WardrobeCreateItemError) {
+      logger.warn('Wardrobe create item error', {
+        context: 'wardrobe-create-item-handler',
+        userId: context.userId,
+        chatId: context.chatId,
+        characterId: context.characterId,
+        code: error.code,
+        message: error.message,
+      });
+      return {
+        success: false,
+        item_id: '',
+        title: '',
+        equipped: false,
+        error: error.message,
+      };
+    }
+
     logger.error('Wardrobe create item tool execution failed', {
       context: 'wardrobe-create-item-handler',
       userId: context.userId,
@@ -258,9 +350,6 @@ export async function executeWardrobeCreateItemTool(
 
 /**
  * Format wardrobe create item results for inclusion in conversation context
- *
- * @param output - Wardrobe create item tool output to format
- * @returns Formatted string suitable for LLM context and display
  */
 export function formatWardrobeCreateItemResults(output: WardrobeCreateItemToolOutput): string {
   if (!output.success) {
@@ -271,14 +360,25 @@ export function formatWardrobeCreateItemResults(output: WardrobeCreateItemToolOu
     ? ` for ${output.recipient_name}`
     : '';
 
-  const parts: string[] = [`Created wardrobe item "${output.title}" (${output.item_id})${recipientNote}`];
+  const kindLabel = output.is_composite ? 'composite outfit' : 'wardrobe item';
+  const parts: string[] = [`Created ${kindLabel} "${output.title}" (${output.item_id})${recipientNote}`];
+
+  if (output.is_composite && output.resolved_component_item_ids?.length) {
+    parts.push(
+      `- Bundles ${output.resolved_component_item_ids.length} item${output.resolved_component_item_ids.length === 1 ? '' : 's'}; covers ${(output.resolved_types ?? []).join(', ')}`,
+    );
+  }
 
   if (output.equipped) {
     parts.push(`- Equipped immediately${recipientNote ? ` on ${output.recipient_name}` : ''}`);
 
     if (output.current_state) {
       const slotSummary = WARDROBE_SLOT_TYPES
-        .map((slot) => `  ${slot}: ${output.current_state![slot] || '(empty)'}`)
+        .map((slot) => {
+          const ids = output.current_state![slot];
+          const label = !ids || ids.length === 0 ? '(empty)' : ids.join(', ');
+          return `  ${slot}: ${label}`;
+        })
         .join('\n');
       parts.push(`- Current outfit:\n${slotSummary}`);
     }

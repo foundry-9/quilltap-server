@@ -6,25 +6,17 @@
  */
 
 import type { Character, ChatParticipantBase, TimestampConfig } from '@/lib/schemas/types'
-import { isParticipantPresent, type ParticipantStatus } from '@/lib/schemas/types'
-import { calculateCurrentTimestamp, shouldInjectTimestamp, formatTimestampForSystemPrompt } from '@/lib/chat/timestamp-utils'
-import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter'
+import { type ParticipantStatus } from '@/lib/schemas/types'
+import { calculateCurrentTimestamp, shouldInjectTimestamp } from '@/lib/chat/timestamp-utils'
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
-import { describeOutfit } from '@/lib/wardrobe/outfit-description'
 
 /**
- * Wardrobe context for system prompt rendering.
- * Renders slot-based "Current Outfit" and "Available Wardrobe" sections.
- */
-export interface WardrobeContext {
-  /** Currently equipped items, keyed by slot name (e.g. "top", "footwear") */
-  equippedItems: Record<string, { title: string; description?: string | null }>
-  /** All wardrobe items for this character (used to show non-equipped alternatives) */
-  wardrobeItems: Array<{ id: string; title: string; types: string[]; appropriateness?: string | null }>
-}
-
-/**
- * Other participant info for multi-character system prompts
+ * Other participant info for multi-character system prompts.
+ *
+ * Phase C moved the multi-character roster out of the system prompt and into
+ * Host whispers in the transcript, but this type is still consumed by the
+ * orchestrator → context-builder pipeline for non-prompt purposes (mentioned-
+ * characters scan, identity reinforcement names) so it stays exported.
  */
 export interface OtherParticipantInfo {
   name: string
@@ -37,52 +29,33 @@ export interface OtherParticipantInfo {
 }
 
 /**
- * Project context for system prompts
+ * Inputs that uniquely determine a character's static identity stack within a
+ * given chat. The stack is the bulk of the per-turn system prompt — identity
+ * preamble, base prompt, personality, aliases, pronouns, physical appearance,
+ * example dialogues — with `{{user}}` / `{{scenario}}` / `{{persona}}`
+ * resolved at compile time.
+ *
+ * Phase H caches the result of `buildIdentityStack` on
+ * `chats.compiledIdentityStacks` keyed by participantId, so the per-turn
+ * `buildSystemPrompt` can skip the rebuild work and the LLM provider sees a
+ * stable cache-friendly prefix.
  */
-export interface ProjectContext {
-  name: string
-  description?: string | null
-  instructions?: string | null
+export interface BuildIdentityStackOptions {
+  character: Character
+  userCharacter?: { name: string; description: string } | null
+  selectedSystemPromptId?: string | null
+  scenarioText?: string | null
 }
 
 /**
- * Build the system prompt for a character
- * Supports both single-character and multi-character scenarios
- * Processes {{char}}, {{user}}, and other template variables in all prompts
+ * Build just the static character-identity portion of the system prompt,
+ * with chat-level template variables resolved. The result is suitable for
+ * caching across turns within a chat.
  */
-export function buildSystemPrompt(
-  character: Character,
-  userCharacter?: { name: string; description: string } | null,
-  /** For multi-character chats: info about other participants */
-  otherParticipants?: OtherParticipantInfo[],
-  /** Roleplay template to prepend (formatting instructions) */
-  roleplayTemplate?: { systemPrompt: string } | null,
-  /** Tool instructions (native tool rules or text-block tool instructions) */
-  toolInstructions?: string,
-  /** Selected system prompt ID from character's systemPrompts array */
-  selectedSystemPromptId?: string | null,
-  /** Timestamp configuration for injection */
-  timestampConfig?: TimestampConfig | null,
-  /** Whether this is the first message (for START_ONLY mode) */
-  isInitialMessage?: boolean,
-  /** Project context to include in system prompt */
-  projectContext?: ProjectContext | null,
-  /** Resolved IANA timezone name for timestamp formatting */
-  timezone?: string,
-  /** Status change notifications to include (e.g., "Alice is now silent") */
-  statusChangeNotifications?: string[],
-  /** The responding character's own participation status */
-  respondingCharacterStatus?: 'active' | 'silent' | 'absent' | 'removed',
-  /** Scenario text override (from chat-level scenario selection) */
-  scenarioText?: string | null,
-  /** Wardrobe context for slot-based outfit rendering */
-  wardrobeContext?: WardrobeContext | null,
-  /** Outfit change notifications from manual sidebar changes (separate from status changes for prominence) */
-  outfitChangeNotifications?: string[]
-): string {
+export function buildIdentityStack(options: BuildIdentityStackOptions): string {
+  const { character, userCharacter, selectedSystemPromptId, scenarioText } = options
   const parts: string[] = []
 
-  // Build template context for {{char}}, {{user}}, etc. replacement
   const templateContext: TemplateContext = {
     char: character.name,
     user: userCharacter?.name || 'User',
@@ -92,195 +65,168 @@ export function buildSystemPrompt(
     persona: userCharacter?.description || '',
   }
 
-  // Identity preamble: establish who the character is from the very first tokens.
-  // This anchors the LLM's identity before any formatting, tool, or project instructions.
-  // The identity reinforcement at the end of the prompt bookends this.
+  // Identity preamble — anchors the LLM's identity from the very first tokens.
   parts.push(processTemplate(
     '## Character Identity\nYou are {{char}}. Everything that follows defines who you are and how you behave. Stay in character at all times.',
     templateContext
   ))
 
-  // Outfit change notifications — placed immediately after identity for maximum prominence
-  // These must survive system prompt truncation, so they go early
-  if (outfitChangeNotifications && outfitChangeNotifications.length > 0) {
-    parts.push(
-      '## ⚠️ Outfit Change Notice\n' +
-      'IMPORTANT — The following outfit changes were just made. Acknowledge and incorporate these changes immediately:\n' +
-      outfitChangeNotifications.map(n => `- ${n}`).join('\n')
-    )
-  }
-
-  // Handle timestamp injection
-  if (timestampConfig && shouldInjectTimestamp(timestampConfig, isInitialMessage ?? false)) {
-    const timestamp = calculateCurrentTimestamp(timestampConfig, timezone)
-
-    if (timestampConfig.autoPrepend) {
-      // Add timestamp as the first part of the system prompt
-      parts.push(formatTimestampForSystemPrompt(timestamp, true))
-    } else {
-      // Add to template context for {{timestamp}} variable
-      templateContext.timestamp = timestamp.formatted
-    }
-  }
-
-  // Roleplay template system prompt (formatting instructions) - prepended first
-  // Process templates to replace {{char}} and {{user}}
-  if (roleplayTemplate?.systemPrompt) {
-    const processedRoleplayPrompt = processTemplate(roleplayTemplate.systemPrompt, templateContext)
-
-    parts.push(processedRoleplayPrompt)
-  }
-
-  // Tool instructions (native tool rules or text-block tool instructions)
-  // Added after roleplay template so tool usage instructions are seen early
-  // Note: These typically don't contain {{char}}/{{user}} but process anyway for consistency
-  if (toolInstructions) {
-    const processedToolInstructions = processTemplate(toolInstructions, templateContext)
-
-    parts.push(processedToolInstructions)
-  }
-
-  // Project context (if chat is associated with a project)
-  // Added before character's system prompt so project instructions set the context
-  if (projectContext) {
-    const projectParts: string[] = [`## Project Context: ${projectContext.name}`]
-
-    if (projectContext.description) {
-      projectParts.push(projectContext.description)
-    }
-
-    if (projectContext.instructions) {
-      const processedInstructions = processTemplate(projectContext.instructions, templateContext)
-      projectParts.push(`\n### Project Instructions\n${processedInstructions}`)
-    }
-
-    parts.push(projectParts.join('\n'))
-  }
-
-  // Base system prompt - priority: selected prompt > default systemPrompt
-  // Check for selected system prompt from character's prompts array
+  // Base system prompt — selected > default > nothing.
   let systemPromptContent: string | null = null
-
   if (selectedSystemPromptId && character.systemPrompts) {
     const selectedPrompt = character.systemPrompts.find(p => p.id === selectedSystemPromptId)
     if (selectedPrompt) {
       systemPromptContent = selectedPrompt.content
-
-    } else {
-
     }
   }
-
-  // Fall back to default prompt in array, then legacy systemPrompt field
   if (!systemPromptContent && character.systemPrompts) {
     const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
     if (defaultPrompt) {
       systemPromptContent = defaultPrompt.content
-
     }
   }
-
   if (systemPromptContent) {
-    // Process templates in the system prompt content
-    const processedSystemPrompt = processTemplate(systemPromptContent, templateContext)
-    parts.push(processedSystemPrompt)
-  } else {
-
+    parts.push(processTemplate(systemPromptContent, templateContext))
   }
 
-  // Character personality - process templates
+  if (character.manifesto) {
+    parts.push(`\n## Character Manifesto\n${processTemplate(character.manifesto, templateContext)}`)
+  }
+
   if (character.personality) {
-    const processedPersonality = processTemplate(character.personality, templateContext)
-    parts.push(`\n## Character Personality\n${processedPersonality}`)
+    parts.push(`\n## Character Personality\n${processTemplate(character.personality, templateContext)}`)
   }
 
-  // Character aliases - let the LLM know about alternate names
   if (character.aliases && character.aliases.length > 0) {
     parts.push(`\n## Character Aliases\nThis character also goes by: ${character.aliases.join(', ')}\nOther characters and the user may refer to them by any of these names.`)
   }
 
-  // Character pronouns - let the LLM know what pronouns to use
   if (character.pronouns) {
     parts.push(`\n## Character Pronouns\nThis character's pronouns are: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Always use these pronouns when referring to this character.`)
   }
 
-  // Physical descriptions - appearance context for the LLM
   if (character.physicalDescriptions && character.physicalDescriptions.length > 0) {
     const descriptionLines = character.physicalDescriptions.map(desc => {
-      const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : '';
+      const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : ''
       const descText = desc.shortPrompt || desc.mediumPrompt || desc.longPrompt
-        || desc.completePrompt || desc.fullDescription || '';
-      if (!descText) return null;
-      return `- "${desc.name}"${contextNote}: ${descText}`;
-    }).filter(Boolean);
+        || desc.completePrompt || desc.fullDescription || ''
+      if (!descText) return null
+      return `- "${desc.name}"${contextNote}: ${descText}`
+    }).filter(Boolean)
 
     if (descriptionLines.length > 0) {
-      parts.push(`\n## Physical Appearance\n${descriptionLines.join('\n')}`);
+      parts.push(`\n## Physical Appearance\n${descriptionLines.join('\n')}`)
     }
   }
 
-  // Wardrobe / clothing context for the LLM (slot-based wardrobe system)
-  if (wardrobeContext) {
-    const { equippedItems, wardrobeItems } = wardrobeContext
-
-    // Current Outfit section — use canonical describeOutfit utility
-    const formatItem = (slot: string): string | null => {
-      const item = equippedItems[slot]
-      if (!item) return null
-      return item.description ? `${item.title} (${item.description})` : item.title
-    }
-    const outfitDescription = describeOutfit({
-      top: formatItem('top'),
-      bottom: formatItem('bottom'),
-      footwear: formatItem('footwear'),
-      accessories: formatItem('accessories'),
-    })
-    parts.push(`\n## Current Outfit\n${outfitDescription}`)
-
-    // Available Wardrobe section — non-equipped items, token-efficient
-    // Collect IDs of equipped items so we can exclude them
-    const equippedIds = new Set<string>()
-    for (const slot of Object.keys(equippedItems)) {
-      // Find the wardrobe item that matches the equipped title for this slot
-      const equipped = equippedItems[slot]
-      if (equipped) {
-        const match = wardrobeItems.find(w => w.title === equipped.title)
-        if (match) equippedIds.add(match.id)
-      }
-    }
-
-    const availableItems = wardrobeItems.filter(w => !equippedIds.has(w.id))
-    if (availableItems.length > 0) {
-      // Keep it compact — titles only, no descriptions, to minimize token usage
-      const displayItems = availableItems.slice(0, 15)
-      const availableLines = displayItems.map(item => `- ${item.title}`)
-      let section = `\n## Available Wardrobe\n${availableLines.join('\n')}`
-      if (availableItems.length > 15) {
-        section += `\n(and ${availableItems.length - 15} more items — use list_wardrobe to browse)`
-      }
-      parts.push(section)
-    }
-  }
-
-  // Scenario/setting - use first scenario in the array, process templates
-  // A scenario describes the environment, setting, and circumstances of the interaction —
-  // it provides context for where the conversation takes place without changing who the character is.
-  const scenarioContent = scenarioText || character.scenarios?.[0]?.content
-  if (scenarioContent) {
-    const processedScenario = processTemplate(scenarioContent, templateContext)
-    parts.push(`\n## Scenario\nThe following describes the setting and circumstances of this interaction. Stay in character as defined above — the scenario provides environmental context, not a change in personality.\n\n${processedScenario}`)
-  }
-
-  // Example dialogues for style reference - process templates
   if (character.exampleDialogues) {
-    const processedDialogues = processTemplate(character.exampleDialogues, templateContext)
-    parts.push(`\n## Example Dialogue Style\n${processedDialogues}`)
+    parts.push(`\n## Example Dialogue Style\n${processTemplate(character.exampleDialogues, templateContext)}`)
   }
 
-  // Character-voiced tool reinforcement (only when tools are available)
-  // Placed after character personality/scenario/dialogues so the LLM has full
-  // character context before being reminded to actually invoke tools in-character.
-  // Uses character's actual pronouns when available.
+  return parts.join('\n\n').trim()
+}
+
+/**
+ * Build the system prompt for a character.
+ *
+ * After the Phase A–G refactor, the per-turn system prompt only carries the
+ * character's identity stack (preamble, base prompt, personality, aliases,
+ * pronouns, physical appearance, example dialogue) plus the chat-level
+ * roleplay template, tool instructions, and tool reinforcement. Everything
+ * dynamic — scenario, user-character intro, multi-character roster, status,
+ * silent-mode rule, status-change notes, project context, current outfit /
+ * wardrobe, outfit-change notices, conversation summary, memory tail,
+ * timestamp — has been moved to Staff-authored whispers in the transcript.
+ *
+ * Phase H: the static identity-stack portion may be supplied via
+ * `precompiledIdentityStack`; when present it replaces the rebuild. This is
+ * the cache-hit path. When absent, the stack is built fresh (read-through
+ * fallback) using the same `buildIdentityStack` helper.
+ */
+export interface BuildSystemPromptOptions {
+  character: Character
+  userCharacter?: { name: string; description: string } | null
+  /** Roleplay template to prepend (formatting instructions). */
+  roleplayTemplate?: { systemPrompt: string } | null
+  /** Tool instructions (native tool rules or text-block tool instructions). */
+  toolInstructions?: string
+  /** Selected system prompt ID from the character's `systemPrompts` array. */
+  selectedSystemPromptId?: string | null
+  /** Timestamp configuration. Used only for the `{{timestamp}}` template variable path. */
+  timestampConfig?: TimestampConfig | null
+  /** Whether this is the first message (for START_ONLY timestamp mode). */
+  isInitialMessage?: boolean
+  /** Resolved IANA timezone name for timestamp formatting. */
+  timezone?: string
+  /** Scenario text used to feed the `{{scenario}}` template variable. */
+  scenarioText?: string | null
+  /** Phase H: precompiled identity-stack from `chats.compiledIdentityStacks`. */
+  precompiledIdentityStack?: string | null
+}
+
+export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
+  const {
+    character,
+    userCharacter,
+    roleplayTemplate,
+    toolInstructions,
+    selectedSystemPromptId,
+    timestampConfig,
+    isInitialMessage,
+    timezone,
+    scenarioText,
+    precompiledIdentityStack,
+  } = options
+
+  const parts: string[] = []
+
+  // Phase H: prefer the precompiled identity stack when supplied. Falls back
+  // to building fresh so the function is safe to call on chats that haven't
+  // had their stack compiled yet (legacy chats, missing key in the map).
+  const identityStack = precompiledIdentityStack
+    && precompiledIdentityStack.trim().length > 0
+    ? precompiledIdentityStack
+    : buildIdentityStack({ character, userCharacter, selectedSystemPromptId, scenarioText })
+
+  // Template context for the per-turn additions (roleplay template, tool
+  // instructions, tool reinforcement). The {{user}}/{{scenario}}/{{persona}}
+  // substitutions in the identity stack are already resolved by the time we
+  // get here (either via build-time compile or via the fallback path above).
+  const templateContext: TemplateContext = {
+    char: character.name,
+    user: userCharacter?.name || 'User',
+    description: character.description || '',
+    personality: character.personality || '',
+    scenario: scenarioText || character.scenarios?.[0]?.content || '',
+    persona: userCharacter?.description || '',
+  }
+
+  // Phase G: timestamp template variable path remains for character/template
+  // content that wants to inline the time directly. Only kicks in when
+  // timestampConfig.autoPrepend is false (the auto-prepend path is now a
+  // Host whisper).
+  if (timestampConfig && shouldInjectTimestamp(timestampConfig, isInitialMessage ?? false)) {
+    if (!timestampConfig.autoPrepend) {
+      const timestamp = calculateCurrentTimestamp(timestampConfig, timezone)
+      templateContext.timestamp = timestamp.formatted
+    }
+  }
+
+  // Lead with the identity stack — bulk of the prompt, cache-friendly.
+  parts.push(identityStack)
+
+  // Roleplay template (chat-level formatting instructions).
+  if (roleplayTemplate?.systemPrompt) {
+    parts.push(processTemplate(roleplayTemplate.systemPrompt, templateContext))
+  }
+
+  // Tool instructions (per-turn dynamic — varies with enabled tools, danger
+  // routing, provider tool support).
+  if (toolInstructions) {
+    parts.push(processTemplate(toolInstructions, templateContext))
+  }
+
+  // Character-voiced tool reinforcement (only when tools are available).
   if (toolInstructions) {
     const subject = character.pronouns?.subject || 'they'
     const toolReinforcement = processTemplate(
@@ -288,53 +234,6 @@ export function buildSystemPrompt(
       templateContext
     )
     parts.push(toolReinforcement)
-  }
-
-  // User character information if provided (single-character mode)
-  // In multi-character mode, the user character is included in otherParticipants
-  if (userCharacter && (!otherParticipants || otherParticipants.length === 0)) {
-    parts.push(`\n## User Character\nYou are speaking with ${userCharacter.name}. ${userCharacter.description}`)
-  }
-
-  // Multi-character context section
-  if (otherParticipants && otherParticipants.length > 0) {
-    const multiCharSection = buildMultiCharacterContextSection(
-      otherParticipants,
-      character.name
-    )
-    if (multiCharSection) {
-      parts.push(multiCharSection)
-    }
-  }
-
-  // Your own status reminder — so the LLM always knows its participation mode
-  if (respondingCharacterStatus && otherParticipants && otherParticipants.length > 0) {
-    parts.push(`## Your Current Status\nYour participation status is: **${respondingCharacterStatus}**.`)
-  }
-
-  // Silent mode instructions for the responding character
-  if (respondingCharacterStatus === 'silent') {
-    parts.push(
-      '## Silent Mode Active\n' +
-      'You are currently in SILENT mode. You are present in the scene but MUST NOT speak out loud — ' +
-      'no dialogue that others can hear. You may:\n' +
-      '- Have inner thoughts and internal monologue (use *italics* or describe as thoughts)\n' +
-      '- Take physical actions (gestures, movements, facial expressions)\n' +
-      '- React emotionally or physically to what others say and do\n\n' +
-      'You MUST NOT:\n' +
-      '- Speak any dialogue out loud\n' +
-      '- Whisper, murmur, or make any vocal sounds others could hear\n' +
-      '- Communicate verbally in any way'
-    )
-  }
-
-  // Status change notifications
-  if (statusChangeNotifications && statusChangeNotifications.length > 0) {
-    parts.push(
-      '## Recent Status Changes\n' +
-      'The following changes have occurred since your last turn:\n' +
-      statusChangeNotifications.map(n => `- ${n}`).join('\n')
-    )
   }
 
   return parts.join('\n\n').trim()
@@ -382,39 +281,24 @@ export function buildOtherParticipantsInfo(
 }
 
 /**
- * Build an identity reinforcement block to append at the very end of the system prompt.
- * This reminds the LLM which character it is playing and who it must NOT write for,
- * placed as close to the generation boundary as possible for maximum compliance.
+ * Build an identity reinforcement block emitted as a separate, fully-static
+ * system message. The text deliberately avoids naming individual participants
+ * — those join/leave the chat via Host announcements that already live in the
+ * conversation history, and every history message carries `name` attribution
+ * — so this block can sit downstream of a prompt-cache breakpoint without
+ * invalidating it on participant changes.
  */
 export function buildIdentityReinforcement(
   characterName: string,
-  userName: string = 'User',
-  otherParticipantNames?: string[]
 ): string {
-  const hasOtherParticipants = otherParticipantNames && otherParticipantNames.length > 0
+  // WHY static: any inline list of "other participants" is the kind of
+  // turn-variable content that bisects provider prompt caching. The model
+  // already knows who is in the scene from Host roster announcements and
+  // per-message name attribution; the reminder only needs to emphasise
+  // staying in {{char}}'s voice.
+  const template = `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for any other character. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.\nDo not prefix or label your response with your name (e.g., do not start with "[{{char}}]" or "{{char}}:"). Simply respond in character directly.`
 
-  // Build the "do not write for" list
-  let doNotWriteFor: string
-  if (hasOtherParticipants) {
-    // Multi-character: explicitly name other participants plus the user
-    const allOthers = [...otherParticipantNames, userName]
-    if (allOthers.length === 1) {
-      doNotWriteFor = allOthers[0]
-    } else {
-      const last = allOthers[allOthers.length - 1]
-      const rest = allOthers.slice(0, -1)
-      doNotWriteFor = `${rest.join(', ')}, ${last}, or any other character`
-    }
-  } else {
-    doNotWriteFor = `{{user}} or any other character`
-  }
-
-  const template = `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for ${doNotWriteFor}. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.\nDo not prefix or label your response with your name (e.g., do not start with "[{{char}}]" or "{{char}}:"). Simply respond in character directly.`
-
-  const result = processTemplate(template, {
+  return processTemplate(template, {
     char: characterName,
-    user: userName,
   })
-
-  return result
 }

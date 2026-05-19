@@ -19,6 +19,8 @@ const updateWardrobeItemSchema = z.object({
   types: z.array(WardrobeItemTypeEnum).min(1).optional(),
   appropriateness: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
+  /** Replace this item's composite components (use `[]` to demote to a leaf). */
+  componentItemIds: z.array(z.string()).optional(),
 });
 
 // GET /api/v1/characters/[id]/wardrobe/[itemId]
@@ -36,8 +38,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; itemId: string
       if (!item || item.characterId !== id) {
         return notFound('Wardrobe item');
       }
-
-      logger.debug('[Wardrobe v1] Fetched wardrobe item', { characterId: id, itemId });
 
       return NextResponse.json({ wardrobeItem: item });
     } catch (error) {
@@ -63,12 +63,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; itemId: string
 
     const body = await req.json();
     const validatedData = updateWardrobeItemSchema.parse(body);
-
-    logger.debug('[Wardrobe v1] Updating wardrobe item', {
-      characterId: id,
-      itemId,
-      fields: Object.keys(validatedData),
-    });
 
     const item = await repos.wardrobe.update(itemId, validatedData);
 
@@ -100,11 +94,11 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; itemId: str
         return notFound('Wardrobe item');
       }
 
-      // Clean up references before deleting
+      // Clean up equipped references before deleting. Composite items that
+      // reference this item via `componentItemIds` are intentionally left as-is;
+      // expand-time resolution drops unknown ids without surfacing an error.
       try {
         await repos.chats.removeEquippedItemFromAllChats(itemId);
-        await repos.outfitPresets.removeItemFromPresets(itemId);
-        logger.debug('[Wardrobe v1] Cleaned up equipped references', { characterId: id, itemId });
       } catch (cleanupError) {
         logger.warn('[Wardrobe v1] Cleanup of equipped references had issues, proceeding with delete', {
           characterId: id,

@@ -16,8 +16,12 @@ import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { successResponse, notFound, badRequest, serverError, forbidden } from '@/lib/api/responses';
 
+// Post-photos-Phase-3: 'CHARACTER' tag is no longer accepted here. Character
+// galleries are sourced from each character's vault `photos/` folder via
+// /api/v1/characters/[id]/photos — tagging an image-v2 row with a character
+// id no longer affects what the Aurora gallery surfaces.
 const addTagSchema = z.object({
-  tagType: z.enum(['CHARACTER', 'CHAT', 'THEME']),
+  tagType: z.enum(['CHAT', 'THEME']),
   tagId: z.string(),
 });
 
@@ -308,17 +312,12 @@ async function handleRemoveTag(req: NextRequest, user: any, repos: any, imageId:
 // ============================================================================
 
 async function verifyTaggedEntity(
-  tagType: 'CHARACTER' | 'CHAT' | 'THEME',
+  tagType: 'CHAT' | 'THEME',
   tagId: string,
   userId: string,
   repos: any
 ): Promise<NextResponse | null> {
-  if (tagType === 'CHARACTER') {
-    const character = await repos.characters.findById(tagId);
-    if (!character) {
-      return notFound('Character');
-    }
-  } else if (tagType === 'CHAT') {
+  if (tagType === 'CHAT') {
     const chat = await repos.chats.findById(tagId);
     if (!chat) {
       return notFound('Chat');

@@ -34,8 +34,9 @@ import type {
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
 } from '@/lib/export/types';
-import type { Tag, Memory, MessageEvent } from '@/lib/schemas/types';
+import type { Tag, Memory, MessageEvent, ConversationAnnotation } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 
 const logger = baseLogger.child({ module: 'import:quilltap-import-stream' });
 
@@ -75,6 +76,9 @@ export async function assembleExportFromStream(
   const documents: ExportedDocumentStoreDocument[] = [];
   const blobs: ExportedDocumentStoreBlob[] = [];
   const projectLinks: ExportedProjectDocMountLink[] = [];
+
+  const conversationAnnotations: ConversationAnnotation[] = [];
+  const chatDocuments: ChatDocument[] = [];
 
   const blobAccumulators = new Map<string, BlobAccumulator>();
   const blobKey = (mountPointId: string, sha256: string) =>
@@ -200,6 +204,16 @@ export async function assembleExportFromStream(
 
       case 'memory':
         memories.push((record as { data: Memory }).data);
+        break;
+
+      case 'conversation_annotation':
+        conversationAnnotations.push(
+          (record as { data: ConversationAnnotation }).data
+        );
+        break;
+
+      case 'chat_document':
+        chatDocuments.push((record as { data: ChatDocument }).data);
         break;
 
       case 'doc_mount_point':
@@ -337,6 +351,8 @@ export async function assembleExportFromStream(
     documents,
     blobs,
     projectLinks,
+    conversationAnnotations,
+    chatDocuments,
   });
 
   return {
@@ -366,6 +382,8 @@ interface CollectedArrays {
   documents: ExportedDocumentStoreDocument[];
   blobs: ExportedDocumentStoreBlob[];
   projectLinks: ExportedProjectDocMountLink[];
+  conversationAnnotations: ConversationAnnotation[];
+  chatDocuments: ChatDocument[];
 }
 
 function buildExportDataForType(
@@ -382,6 +400,8 @@ function buildExportDataForType(
       return {
         chats: c.chats,
         ...(c.memories.length > 0 && { memories: c.memories }),
+        ...(c.conversationAnnotations.length > 0 && { conversationAnnotations: c.conversationAnnotations }),
+        ...(c.chatDocuments.length > 0 && { chatDocuments: c.chatDocuments }),
       };
     case 'roleplay-templates':
       return { roleplayTemplates: c.roleplayTemplates };

@@ -429,6 +429,10 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     return this.messagesOps.clearMessages(chatId);
   }
 
+  async deleteMessagesByIds(chatId: string, messageIds: string[]): Promise<number> {
+    return this.messagesOps.deleteMessagesByIds(chatId, messageIds);
+  }
+
   // ============================================================================
   // SEARCH AND REPLACE OPERATIONS (delegated to ChatSearchReplaceOps)
   // ============================================================================
@@ -472,7 +476,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       async () => {
         const chat = await this.findById(chatId);
         if (!chat || !chat.equippedOutfit) {
-          logger.debug('No equipped outfit found for chat', { chatId, context: 'wardrobe' });
           return null;
         }
         return chat.equippedOutfit as EquippedOutfitState;
@@ -491,53 +494,12 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       async () => {
         const state = await this.getEquippedOutfit(chatId);
         if (!state || !state[characterId]) {
-          logger.debug('No equipped outfit found for character in chat', {
-            chatId, characterId, context: 'wardrobe',
-          });
           return null;
         }
         return state[characterId];
       },
       'Failed to get equipped outfit for character',
       { chatId, characterId, context: 'wardrobe' },
-      null
-    );
-  }
-
-  /**
-   * Update a single equipped slot for a character in a chat
-   */
-  async updateEquippedSlot(
-    chatId: string,
-    characterId: string,
-    slot: string,
-    itemId: string | null
-  ): Promise<EquippedSlots | null> {
-    return this.safeQuery(
-      async () => {
-        const existing = await this.getEquippedOutfit(chatId);
-        const state: EquippedOutfitState = existing ?? {};
-
-        const characterSlots: EquippedSlots = state[characterId] ?? {
-          top: null,
-          bottom: null,
-          footwear: null,
-          accessories: null,
-        };
-
-        (characterSlots as Record<string, string | null>)[slot] = itemId;
-        state[characterId] = characterSlots;
-
-        await this.update(chatId, { equippedOutfit: state } as Partial<ChatMetadata>);
-
-        logger.debug('Updated equipped slot', {
-          chatId, characterId, slot, itemId, context: 'wardrobe',
-        });
-
-        return characterSlots;
-      },
-      'Failed to update equipped slot',
-      { chatId, characterId, slot, itemId, context: 'wardrobe' },
       null
     );
   }
@@ -558,10 +520,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         state[characterId] = slots;
 
         await this.update(chatId, { equippedOutfit: state } as Partial<ChatMetadata>);
-
-        logger.debug('Set equipped outfit for character', {
-          chatId, characterId, slots, context: 'wardrobe',
-        });
 
         return slots;
       },
@@ -595,8 +553,9 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           for (const characterId of Object.keys(state)) {
             const slots = state[characterId];
             for (const slotKey of WARDROBE_SLOT_TYPES) {
-              if (slots[slotKey] === itemId) {
-                slots[slotKey] = null;
+              const before = slots[slotKey] ?? [];
+              if (before.includes(itemId)) {
+                slots[slotKey] = before.filter((id) => id !== itemId);
                 chatModified = true;
               }
             }
@@ -605,11 +564,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           if (chatModified) {
             await this.update(chat.id, { equippedOutfit: state } as Partial<ChatMetadata>);
             modifiedCount++;
-            logger.debug('Removed deleted wardrobe item from chat equipped outfit', {
-              chatId: chat.id,
-              removedItemId: itemId,
-              context: 'wardrobe',
-            });
           }
         }
 

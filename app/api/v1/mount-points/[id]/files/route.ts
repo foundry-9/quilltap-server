@@ -18,15 +18,10 @@ import { listFilesystemFolders } from '@/lib/mount-index/scanner';
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
-      logger.debug('[Mount Points v1] Listing files for mount point', {
-        mountPointId: id,
-        userId: user.id,
-      });
 
       const mountPoint = await repos.docMountPoints.findById(id);
 
       if (!mountPoint) {
-        logger.debug('[Mount Points v1] Mount point not found for file listing', { mountPointId: id });
         return notFound('Mount point');
       }
 
@@ -54,13 +49,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       const folders = Array.from(folderSet);
-
-      logger.debug('[Mount Points v1] Found files for mount point', {
-        mountPointId: id,
-        fileCount: files.length,
-        folderCount: folders.length,
-        mountType: mountPoint.mountType,
-      });
 
       return NextResponse.json({ files, folders });
     } catch (error) {

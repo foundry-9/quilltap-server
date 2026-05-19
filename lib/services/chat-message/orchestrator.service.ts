@@ -14,9 +14,9 @@ import {
 import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
-import type { MessageEvent, ConnectionProfile, ChatMetadataBase, Character, ChatSettings } from '@/lib/schemas/types'
+import type { MessageEvent, ConnectionProfile } from '@/lib/schemas/types'
 
-import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState, ToolProcessingResult } from './types'
+import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState } from './types'
 
 import {
   resolveRespondingParticipant,
@@ -27,26 +27,28 @@ import {
   loadAndProcessFiles,
   buildMessageContext,
 } from './context-builder.service'
-import type { ProjectContext } from '@/lib/chat/context-manager'
 import {
-  processToolCalls,
+  loadProsperoProjectContext,
+  loadProsperoGeneralContext,
+  postProsperoContextAnnouncement,
+} from '@/lib/services/prospero-notifications/writer'
+import { postLibrarianUploadAnnouncement } from '@/lib/services/librarian-notifications/writer'
+import {
   saveToolMessages,
-  detectToolCallsInResponse,
   createToolContext,
+  type ToolWhisperContext,
 } from './tool-execution.service'
 import {
   buildTools,
-  streamMessage,
   encodeDebugInfo,
   encodeFallbackInfo,
-  encodeContentChunk,
   encodeDoneEvent,
   encodeErrorEvent,
-  encodeKeepAlive,
   encodeStatusEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
+import { dispatchCourierTransport } from './courier-transport.service'
 import {
   buildNativeToolSystemInstructions,
   determineEnabledToolOptions,
@@ -65,19 +67,14 @@ import {
   triggerSceneStateTracking,
   triggerConversationRender,
 } from './memory-trigger.service'
-import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
+import { flushPendingWardrobeAnnouncements } from '@/lib/tools/handlers/wardrobe-handler-shared'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
-import { attemptRequestLimitRecovery } from './recovery.service'
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { extractMemorySearchKeywords, stripToolArtifacts, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
-import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
-import {
-  getCachedCompression,
-  triggerAsyncCompression,
-  invalidateCompressionCache,
-  type CachedCompressionResponse,
-} from './compression-cache.service'
+import { runPreContextPreCompute } from './pre-compute.service'
+import { runTextToolPass } from './text-tool-loop.service'
+import { findPreviousResponseId, makePreservePartialOnError, runPrimaryStream } from './primary-stream.service'
+import { runNativeToolLoop } from './native-tool-loop.service'
 import {
   detectAndConvertRngPatterns,
   type RngToolCall,
@@ -85,14 +82,10 @@ import {
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 import {
   finalizeMessageResponse,
-  saveAssistantMessage,
 } from './message-finalizer.service'
-import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import {
   resolveAgentModeSetting,
   buildAgentModeInstructions,
-  buildForceFinalMessage,
-  generateIterationSummary,
   type ResolvedAgentMode,
 } from './agent-mode-resolver.service'
 import { resolveUserIdentity } from './user-identity-resolver.service'
@@ -279,9 +272,14 @@ async function processMessage(
     characterId: character.id,
   }))
 
+  // The Courier (manual / clipboard transport): no API key, no plugin call.
+  // Detected here so the API-key check, tool build, and streamMessage block
+  // can all short-circuit later.
+  const isCourierTransport = connectionProfile.transport === 'courier'
+
   // Validate API key for providers that require it
   let apiKey = ''
-  if (requiresApiKey(connectionProfile.provider)) {
+  if (!isCourierTransport && requiresApiKey(connectionProfile.provider)) {
     if (!rawApiKey) {
       throw new Error('No API key configured for this connection profile')
     }
@@ -437,26 +435,35 @@ async function processMessage(
   const existingMessages = await repos.chats.getMessages(chatId)
 
   // ============================================================================
-  // Project Context Injection
+  // Project + General Context Re-injection (Phase E: Prospero whisper)
   // ============================================================================
-  // Use project loaded earlier for agent mode resolution
-  let projectContext: ProjectContext | null = null
+  // The chat-start whisper is posted by `createInitialMessages` when the chat
+  // is created. Here we handle the cadence-based refresh: every
+  // `projectContextReinjectInterval` messages we post a fresh Prospero
+  // context whisper into the transcript so the LLM keeps the project's
+  // description / instructions / linked stores in mind alongside the
+  // always-on Quilltap General shelf. Project info and the shared shelf ride
+  // in a single message so Prospero speaks once per cadence rather than
+  // twice. The `projectContext` parameter on the system-prompt builder is
+  // now unused; the system-prompt block was dropped along with this rewire.
 
-  if (project && (project.description || project.instructions)) {
-    // Calculate if we should inject project context this message
-    // Default interval matches windowSize (5), can be configured to 0 to disable
-    const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
-    const messageCount = existingMessages.filter(m => m.type === 'message').length
+  const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
+  const messageCount = existingMessages.filter(m => m.type === 'message').length
+  // Skip messageCount === 0 — chat-start handles the initial emit. Cadence
+  // re-injects at multiples of N thereafter.
+  const shouldInjectContext = reinjectInterval > 0 && messageCount > 0 && messageCount % reinjectInterval === 0
 
-    // Inject on first message (count 0) or every N messages after that
-    // Using messageCount because the new user message hasn't been saved yet
-    const shouldInject = reinjectInterval > 0 && (messageCount === 0 || messageCount % reinjectInterval === 0)
-
-    if (shouldInject) {
-      projectContext = {
-        name: project.name,
-        description: project.description,
-        instructions: project.instructions,
+  if (shouldInjectContext) {
+    const projectContext = project ? await loadProsperoProjectContext(project.id) : null
+    const generalContext = await loadProsperoGeneralContext()
+    if (projectContext || generalContext) {
+      const posted = await postProsperoContextAnnouncement({
+        chatId,
+        project: projectContext,
+        general: generalContext,
+      })
+      if (posted) {
+        existingMessages.push(posted)
       }
     }
   }
@@ -579,6 +586,25 @@ async function processMessage(
       await repos.files.addLink(file.id, userMessageId)
     }
 
+    // Surface uploaded image UUIDs in the chat transcript so the LLM has the
+    // handle required to call `keep_image` / `attach_image` on them. Parallels
+    // the Lantern's avatar/background announcements; the user's own message
+    // already carries the image bytes, so this whisper is text-only.
+    const imageUploads = fileProcessing.attachedFiles
+      .filter(f => f.mimeType.toLowerCase().startsWith('image/'))
+      .map(f => ({ fileId: f.id, filename: f.filename }))
+    if (imageUploads.length > 0) {
+      try {
+        await postLibrarianUploadAnnouncement({ chatId, uploads: imageUploads })
+      } catch (announceError) {
+        logger.warn('Failed to post Librarian upload announcement', {
+          chatId,
+          uploadCount: imageUploads.length,
+          error: announceError instanceof Error ? announceError.message : String(announceError),
+        })
+      }
+    }
+
     // Attach dangerFlags to the saved user message
     if (dangerFlags && dangerFlags.length > 0) {
       try {
@@ -617,22 +643,9 @@ async function processMessage(
     await repos.chats.update(chatId, { forceToolsOnNextMessage: false })
   }
 
-  // Check for pending outfit change notifications (visible to ALL characters in the chat)
-  // These are set when a user manually changes a character's outfit via the sidebar
-  let outfitChangeNotifications: string[] = []
-  const pendingOutfitNotifications = chat.pendingOutfitNotifications as Record<string, string> | null
-  if (pendingOutfitNotifications && Object.keys(pendingOutfitNotifications).length > 0) {
-    outfitChangeNotifications = Object.values(pendingOutfitNotifications)
-    logger.info('[Orchestrator] Delivering pending outfit change notifications', {
-      context: 'wardrobe',
-      chatId,
-      characterId: character?.id,
-      notificationCount: outfitChangeNotifications.length,
-      notifications: outfitChangeNotifications,
-    })
-    // Clear all pending notifications — every character sees them on next turn
-    await repos.chats.update(chatId, { pendingOutfitNotifications: null })
-  }
+  // Phase D: outfit changes now ride as Aurora whispers in the transcript
+  // (see `handleWardrobeOutfitAnnouncement` and `postOutfitChangeWhisper`),
+  // so the per-turn `pendingOutfitNotifications` flush is no longer needed.
 
   // Check tool options
   const enabledToolOptions = determineEnabledToolOptions(
@@ -655,10 +668,6 @@ async function processMessage(
       const mountLinks = await repos.projectDocMountLinks.findByProjectId(chat.projectId)
       documentEditingEnabled = mountLinks.length > 0
     } catch (mountLinkError) {
-      logger.debug('[Orchestrator] Failed to check mount point links for doc editing tools', {
-        projectId: chat.projectId,
-        error: mountLinkError instanceof Error ? mountLinkError.message : String(mountLinkError),
-      })
     }
   }
 
@@ -671,31 +680,46 @@ async function processMessage(
     ? (chat.disabledTools ?? [])
     : Array.from(new Set([...(chat.disabledTools ?? []), 'self_inventory']))
 
-  // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
-  // Always pass disabledTools and disabledToolGroups for filtering
-  const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
-    streamingState.effectiveProfile,
-    imageProfileId,
-    imageProfile,
-    userId,
-    chat.projectId ?? undefined, // projectId - enables project_info tool
-    compressionEnabled, // requestFullContext - enable the tool when compression is active
-    effectiveDisabledTools,
-    chat.disabledToolGroups ?? [],
-    agentMode.enabled, // agentModeEnabled - enables submit_final_response tool
-    isMultiCharacter, // isMultiCharacter - enables whisper tool
-    helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
-    canDressThemselves, // canDressThemselves - enables list_wardrobe and update_outfit_item
-    canCreateOutfits, // canCreateOutfits - enables create_wardrobe_item
-    documentEditingEnabled // documentEditingEnabled - enables doc_* editing tools
-  )
+  // The Courier transport exposes no tools (the external LLM cannot reach
+  // them) and injects no tool instructions into the system prompt. Skip the
+  // whole tool-build step in that case.
+  const isEffectiveCourier = streamingState.effectiveProfile.transport === 'courier'
 
-  const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools)
+  let tools: unknown[] = []
+  let modelSupportsNativeTools = false
+  let useNativeWebSearch = false
+  if (!isEffectiveCourier) {
+    // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
+    // Always pass disabledTools and disabledToolGroups for filtering
+    const builtTools = await buildTools(
+      streamingState.effectiveProfile,
+      imageProfileId,
+      imageProfile,
+      userId,
+      chat.projectId ?? undefined, // projectId - enables project_info tool
+      compressionEnabled, // requestFullContext - enable the tool when compression is active
+      effectiveDisabledTools,
+      chat.disabledToolGroups ?? [],
+      agentMode.enabled, // agentModeEnabled - enables submit_final_response tool
+      isMultiCharacter, // isMultiCharacter - enables whisper tool
+      helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
+      canDressThemselves, // canDressThemselves - enables list_wardrobe and update_outfit_item
+      canCreateOutfits, // canCreateOutfits - enables create_wardrobe_item
+      documentEditingEnabled // documentEditingEnabled - enables doc_* editing tools
+    )
+    tools = builtTools.tools
+    modelSupportsNativeTools = builtTools.modelSupportsNativeTools
+    useNativeWebSearch = builtTools.useNativeWebSearch
+  }
+
+  const useTextBlockTools = !isEffectiveCourier && checkShouldUseTextBlockTools(modelSupportsNativeTools)
   const actualTools = useTextBlockTools ? [] : tools
 
   // Build tool instructions (text-block or native tool rules)
   let toolInstructions: string | undefined
-  if (useTextBlockTools) {
+  if (isEffectiveCourier) {
+    toolInstructions = undefined
+  } else if (useTextBlockTools) {
     const textBlockOptions = determineTextBlockToolOptions(
       imageProfileId,
       streamingState.effectiveProfile.allowWebSearch,
@@ -722,188 +746,24 @@ async function processMessage(
   // Async Pre-Compression + Proactive Memory Recall (run in parallel)
   // ============================================================================
 
-  // Compression check task
-  const compressionTask = async (): Promise<CachedCompressionResponse | undefined> => {
-    if (compressionEnabled && !bypassCompression) {
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'compressing',
-        message: 'Checking context cache...',
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      // Count only visible USER/ASSISTANT messages to match what triggerAsyncCompression
-      // uses (via extractVisibleConversation). Using a broader filter (type === 'message')
-      // inflates the count and causes the dynamic window to grow excessively.
-      const visibleMessages = extractVisibleConversation(existingMessages)
-      const actualMessageCount = visibleMessages.length
-      const participantIdForCache = isMultiCharacter ? characterParticipant.id : undefined
-      const result = await getCachedCompression(chatId, actualMessageCount, participantIdForCache)
-      if (result) {
-        logger.info('Using cached compression from async pre-computation', {
-          chatId,
-          messageCount: actualMessageCount,
-          cachedMessageCount: result.cachedMessageCount,
-          isFallback: result.isFallback,
-          savings: result.result.compressionDetails?.totalSavings,
-        })
-      }
-      return result
-    } else if (bypassCompression) {
-      invalidateCompressionCache(chatId)
-    }
-    return undefined
-  }
-
-  // Proactive memory recall task
-  const proactiveRecallTask = async (): Promise<SemanticSearchResult[] | undefined> => {
-    if (!cheapLLMSelection || !character.id) return undefined
-
-    // Filter to actual message events with proper type narrowing
-    const messageEvents = existingMessages
-      .filter((m): m is MessageEvent => m.type === 'message' && 'role' in m && 'content' in m)
-
-    // Find messages since this character last spoke
-    const characterMessages = messageEvents.filter(
-      m => m.role === 'ASSISTANT' && m.participantId === characterParticipant.id
-    )
-
-    if (characterMessages.length === 0) {
-      return undefined
-    }
-
-    // Character has spoken before - find all messages after the last one
-    const lastCharacterMessage = characterMessages[characterMessages.length - 1]
-    const lastCharacterMessageIndex = messageEvents.lastIndexOf(lastCharacterMessage)
-    const messagesSinceLastSpoke = messageEvents
-      .slice(lastCharacterMessageIndex + 1)
-      .filter(m => m.role === 'USER' || m.role === 'ASSISTANT')
-
-    // Include the new user message that was just saved but isn't in the existingMessages snapshot
-    if (!isContinueMode && content) {
-      messagesSinceLastSpoke.push({
-        role: 'USER',
-        content,
-      } as MessageEvent)
-    }
-
-    if (messagesSinceLastSpoke.length === 0) {
-      return undefined
-    }
-
-    // Status: analyzing conversation for keywords
-    safeEnqueue(controller, encodeStatusEvent(encoder, {
-      stage: 'recalling_keywords',
-      message: 'Analyzing recent conversation...',
-      characterName: character.name,
-      characterId: character.id,
-    }))
-
-    // For dangerous chats, use uncensored provider for keyword extraction
-    let recallSelection = cheapLLMSelection
-    if (chat.isDangerousChat) {
-      recallSelection = resolveUncensoredCheapLLMSelection(
-        cheapLLMSelection,
-        true,
-        dangerSettings,
-        allProfiles
-      )
-      if (recallSelection !== cheapLLMSelection) {
-        logger.debug('[ProactiveRecall] Using uncensored provider for memory keyword extraction', {
-          chatId,
-          originalProvider: cheapLLMSelection.provider,
-          uncensoredProvider: recallSelection.provider,
-        })
-      }
-    }
-
-    // Extract keywords via cheap LLM, stripping tool artifacts from assistant messages
-    const keywordResult = await extractMemorySearchKeywords(
-      messagesSinceLastSpoke.reduce<Array<{ role: 'user' | 'assistant' | 'system'; content: string }>>((acc, m) => {
-        const role = m.role.toLowerCase() as 'user' | 'assistant' | 'system'
-        if (role === 'assistant') {
-          const cleaned = stripToolArtifacts(m.content || '')
-          if (cleaned) acc.push({ role, content: cleaned })
-        } else {
-          acc.push({ role, content: m.content || '' })
-        }
-        return acc
-      }, []),
-      character.name,
-      recallSelection,
-      userId,
-      chatId
-    )
-
-    if (!keywordResult.success || !keywordResult.result || keywordResult.result.length === 0) {
-      return undefined
-    }
-
-    // Status: searching memories
-    safeEnqueue(controller, encodeStatusEvent(encoder, {
-      stage: 'recalling_memories',
-      message: `Searching ${character.name}'s memories...`,
-      characterName: character.name,
-      characterId: character.id,
-    }))
-
-    // Search memories using extracted keywords
-    const searchQuery = keywordResult.result.join(' ')
-    try {
-      const memoryResults = await searchMemoriesSemantic(
-        character.id,
-        searchQuery,
-        {
-          userId,
-          limit: 20,
-          minImportance: 0.3,
-        }
-      )
-
-      if (memoryResults.length > 0) {
-        const results = memoryResults.slice(0, 10)
-        return results
-      }
-    } catch (error) {
-      logger.warn('Proactive memory recall: memory search failed, falling back to default', {
-        chatId,
-        characterId: character.id,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-
-    return undefined
-  }
-
-  // Run compression check and proactive recall in parallel
-  const tParallelStart = performance.now()
-  const [cachedCompressionResponse, preSearchedMemories] = await Promise.all([
-    compressionTask(),
-    proactiveRecallTask(),
-  ])
-  const tParallelEnd = performance.now()
-  logger.debug('[Orchestrator] Parallel compression + proactive recall complete', {
+  const { cachedCompressionResponse, preSearchedMemories, stopKeepAlive } = await runPreContextPreCompute({
     chatId,
-    durationMs: Math.round(tParallelEnd - tParallelStart),
-    hadCachedCompression: !!cachedCompressionResponse,
-    preSearchedMemoriesCount: preSearchedMemories?.length ?? 0,
+    userId,
+    chat,
+    character,
+    characterParticipant,
+    isMultiCharacter,
+    isContinueMode,
+    content,
+    existingMessages,
+    compressionEnabled,
+    bypassCompression,
+    cheapLLMSelection,
+    dangerSettings,
+    allProfiles,
+    controller,
+    encoder,
   })
-
-  // Start keep-alive pings during context building (especially important during compression)
-  // This prevents proxy/load balancer timeouts during long compression operations
-  let keepAliveInterval: ReturnType<typeof setInterval> | null = null
-  if (compressionEnabled && !cachedCompressionResponse) {
-
-    keepAliveInterval = setInterval(() => {
-      if (!safeEnqueue(controller, encodeKeepAlive(encoder))) {
-        // Stream closed, stop the interval
-        if (keepAliveInterval) {
-          clearInterval(keepAliveInterval)
-          keepAliveInterval = null
-        }
-      }
-    }, 15000) // Send ping every 15 seconds
-  }
 
   // Send status update for context gathering
   safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -913,7 +773,6 @@ async function processMessage(
     characterId: character.id,
   }))
 
-  const tBuildContextStart = performance.now()
   const { builtContext, formattedMessages, isInitialMessage } = await buildMessageContext(
     {
       repos,
@@ -930,8 +789,6 @@ async function processMessage(
       toolInstructions,
       newUserMessage: finalUserMessageContent,
       isContinueMode,
-      // Project context (injected at configured interval)
-      projectContext,
       // Context compression options
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,
       cheapLLMSelection,
@@ -944,17 +801,6 @@ async function processMessage(
       // Memory recap: uncensored fallback for dangerous chats
       uncensoredFallbackOptions: (chat.isDangerousChat && dangerSettings && cheapLLMSelection)
         ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
-        : undefined,
-      // Extract status change notifications from recent system events
-      statusChangeNotifications: isMultiCharacter
-        ? existingMessages
-            .filter(m => m.type === 'system' && (m as Record<string, unknown>).systemEventType === 'STATUS_CHANGE')
-            .map(m => (m as Record<string, unknown>).description as string)
-            .filter(Boolean)
-        : undefined,
-      // Outfit change notifications (separate from status changes for prominence)
-      outfitChangeNotifications: outfitChangeNotifications.length > 0
-        ? outfitChangeNotifications
         : undefined,
       // Status callback for budget-driven compression phases
       onStatusChange: (stage: string, message: string) => {
@@ -969,18 +815,9 @@ async function processMessage(
     existingMessages,
     fileProcessing.attachmentsToSend
   )
-  const tBuildContextEnd = performance.now()
-  logger.debug('[Orchestrator] buildMessageContext complete', {
-    chatId,
-    durationMs: Math.round(tBuildContextEnd - tBuildContextStart),
-    formattedMessageCount: formattedMessages.length,
-  })
 
   // Stop keep-alive pings after context building completes
-  if (keepAliveInterval) {
-    clearInterval(keepAliveInterval)
-    keepAliveInterval = null
-  }
+  stopKeepAlive()
 
   // Update status now that context building is done — prevents
   // "Calculating context budget..." from lingering through pre-send setup
@@ -990,6 +827,31 @@ async function processMessage(
     characterName: character.name,
     characterId: character.id,
   }))
+
+  // ============================================================================
+  // The Courier (manual / clipboard transport) — short-circuit before tool /
+  // streaming machinery. The dispatch service renders the assembled request
+  // as Markdown, persists a placeholder assistant message, pauses the chat,
+  // and emits SSE events. Turn chaining is halted by isPaused=true; the paste
+  // resolver clears the pause when the user submits a reply.
+  // ============================================================================
+  if (isEffectiveCourier) {
+    return dispatchCourierTransport({
+      repos,
+      chatId,
+      chat,
+      character,
+      characterParticipant,
+      userParticipantId,
+      isMultiCharacter,
+      participantCharacters,
+      resolvedIdentity,
+      formattedMessages,
+      streaming: streamingState,
+      controller,
+      encoder,
+    })
+  }
 
   // Create tool context. Memories loaded into the prompt are forwarded so
   // introspection tools (self_inventory) can report the exact slate the LLM
@@ -1150,719 +1012,138 @@ async function processMessage(
   // Pre-generate assistant message ID so logs can reference it
   const preGeneratedAssistantMessageId = crypto.randomUUID()
 
-  // Shared helper: when any of the six streamMessage callsites in this function
-  // fails mid-stream, preserve whatever accumulated in streamingState.fullResponse
-  // to the DB with an OOC marker before re-throwing. Idempotent: the first call
-  // that finds content writes it; subsequent calls (if the same id was already
-  // written) are swallowed so the original error still propagates.
-  let partialPreserved = false
-  const preservePartialOnError = async (error: unknown): Promise<void> => {
-    if (partialPreserved) return
-    if (!streamingState.hasStartedStreaming || streamingState.fullResponse.length === 0) {
-      logger.debug('No partial content to preserve after upstream error', {
-        chatId,
-        hasStartedStreaming: streamingState.hasStartedStreaming,
-        fullResponseLength: streamingState.fullResponse.length,
-      })
-      return
-    }
-    partialPreserved = true
-    const errorReason = error instanceof Error ? error.message : String(error)
-    const normalizedPartial = normalizeContentBlockFormat(streamingState.fullResponse)
-    const cleanedPartial = stripCharacterNamePrefix(normalizedPartial, character.name, character.aliases)
-    const preservedContent = `${cleanedPartial.trimEnd()}\n\n{{OOC: stream ended abruptly (${errorReason})}}`
+  // Idempotent partial-response preserver shared across every streamMessage
+  // callsite for this turn. First call that finds streamed content writes
+  // it to the DB with an OOC marker; subsequent calls no-op so the original
+  // error still propagates.
+  const preservePartialOnError = makePreservePartialOnError({
+    repos,
+    chatId,
+    character,
+    characterParticipant,
+    streaming: streamingState,
+    preGeneratedAssistantMessageId,
+  })
 
-    try {
-      const preservedMessageId = await saveAssistantMessage(
-        repos,
-        chatId,
-        character,
-        characterParticipant,
-        preservedContent,
-        streamingState.usage,
-        streamingState.rawResponse,
-        streamingState.thoughtSignature,
-        [],
-        [],
-        preGeneratedAssistantMessageId,
-        streamingState.effectiveProfile.provider,
-        streamingState.effectiveProfile.modelName
-      )
-      logger.info('Preserved partial streamed response after upstream error', {
-        chatId,
-        messageId: preservedMessageId,
-        characterId: character.id,
-        characterName: character.name,
-        provider: streamingState.effectiveProfile.provider,
-        model: streamingState.effectiveProfile.modelName,
-        partialLength: streamingState.fullResponse.length,
-        error: errorReason,
-      })
-    } catch (persistError) {
-      logger.error('Failed to persist partial streamed response', {
-        chatId,
-        characterId: character.id,
-        error: persistError instanceof Error ? persistError.message : String(persistError),
-        originalError: errorReason,
-      })
-    }
+  const previousResponseId = findPreviousResponseId(
+    streamingState.effectiveProfile.provider,
+    existingMessages as MessageEvent[]
+  )
+
+  const primaryStreamResult = await runPrimaryStream({
+    repos,
+    chatId,
+    userId,
+    chat,
+    character,
+    characterParticipant,
+    userParticipantId,
+    isMultiCharacter,
+    formattedMessages,
+    modelParams,
+    actualTools,
+    useNativeWebSearch,
+    previousResponseId,
+    preGeneratedAssistantMessageId,
+    attachedFiles: fileProcessing.attachedFiles,
+    originalMessage: options.content,
+    connectionProfile,
+    streaming: streamingState,
+    controller,
+    encoder,
+    preservePartialOnError,
+  })
+
+  if (primaryStreamResult.earlyReturn) {
+    return primaryStreamResult.earlyReturn
   }
 
-  // Extract previous response ID for conversation chaining (OpenAI Responses API)
-  // This allows OpenAI to use its internal cache, reducing input token costs
-  let previousResponseId: string | undefined
-  if (streamingState.effectiveProfile.provider === 'OPENAI') {
-    // Find the last assistant message with a Responses API ID
-    for (let i = existingMessages.length - 1; i >= 0; i--) {
-      const msg = existingMessages[i]
-      if (msg.type === 'message' && msg.role === 'ASSISTANT' && msg.rawResponse) {
-        const raw = msg.rawResponse as Record<string, unknown>
-        if (typeof raw.id === 'string' && raw.id.startsWith('resp_')) {
-          previousResponseId = raw.id
-          break
-        }
-      }
-    }
-  }
+  // Process tool calls (native function-calling loop, agent-mode submit_final_response,
+  // ghost-wrap guardrail, max-turns force-final pass all live in the sibling service).
+  const toolMessages: ToolMessage[] = []
+  const generatedImagePaths: GeneratedImage[] = []
+  await runNativeToolLoop({
+    repos,
+    chatId,
+    userId,
+    character,
+    characterParticipant,
+    preGeneratedAssistantMessageId,
+    agentMode,
+    formattedMessages,
+    modelParams,
+    actualTools,
+    useNativeWebSearch,
+    toolContext,
+    streaming: streamingState,
+    toolMessages,
+    generatedImagePaths,
+    controller,
+    encoder,
+    preservePartialOnError,
+  })
 
-  // Send status update for sending to LLM
-  safeEnqueue(controller, encodeStatusEvent(encoder, {
-    stage: 'sending',
-    message: `Sending to ${character.name}...`,
-    characterName: character.name,
-    characterId: character.id,
-  }))
-
-  // hasStartedStreaming is tracked in streamingState
-
-  try {
-    for await (const chunk of streamMessage({
-      messages: formattedMessages,
-      connectionProfile: streamingState.effectiveProfile,
-      apiKey: streamingState.effectiveApiKey,
-      modelParams,
-      tools: actualTools,
-      useNativeWebSearch,
-      userId,
-      messageId: preGeneratedAssistantMessageId,
-      chatId,
-      characterId: character.id,
-      previousResponseId,
-    })) {
-      if (chunk.content) {
-        // Send streaming status on first content
-        if (!streamingState.hasStartedStreaming) {
-          safeEnqueue(controller, encodeStatusEvent(encoder, {
-            stage: 'streaming',
-            message: `${character.name} is responding...`,
-            characterName: character.name,
-            characterId: character.id,
-          }))
-          streamingState.hasStartedStreaming = true
-        }
-        streamingState.fullResponse += chunk.content
-        controller.enqueue(encodeContentChunk(encoder, chunk.content))
-      }
-
-      if (chunk.done) {
-        streamingState.usage = chunk.usage || null
-        streamingState.cacheUsage = chunk.cacheUsage || null
-        streamingState.attachmentResults = chunk.attachmentResults || null
-        streamingState.rawResponse = chunk.rawResponse
-        if (chunk.thoughtSignature) {
-          streamingState.thoughtSignature = chunk.thoughtSignature
-
-        }
-      }
-    }
-  } catch (streamingError) {
-    // Check if this is a tool-unsupported error (e.g., Gemini 3 doesn't support function calling)
-    // Retry the same request without tools before falling through to other recovery paths
-    if (isToolUnsupportedError(streamingError) && actualTools.length > 0) {
-      logger.warn('Model does not support function calling, retrying without tools', {
-        chatId,
-        provider: streamingState.effectiveProfile.provider,
-        model: streamingState.effectiveProfile.modelName,
-        toolCount: actualTools.length,
-        error: streamingError instanceof Error ? streamingError.message : String(streamingError),
-      })
-
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'sending',
-        message: `Retrying without tools for ${character.name}...`,
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      try {
-        for await (const chunk of streamMessage({
-          messages: formattedMessages,
-          connectionProfile: streamingState.effectiveProfile,
-          apiKey: streamingState.effectiveApiKey,
-          modelParams,
-          tools: [],
-          useNativeWebSearch,
-          userId,
-          messageId: preGeneratedAssistantMessageId,
-          chatId,
-        })) {
-          if (chunk.content) {
-            if (!streamingState.hasStartedStreaming) {
-              safeEnqueue(controller, encodeStatusEvent(encoder, {
-                stage: 'streaming',
-                message: `${character.name} is responding...`,
-                characterName: character.name,
-                characterId: character.id,
-              }))
-              streamingState.hasStartedStreaming = true
-            }
-            streamingState.fullResponse += chunk.content
-            controller.enqueue(encodeContentChunk(encoder, chunk.content))
-          }
-
-          if (chunk.done) {
-            streamingState.usage = chunk.usage || null
-            streamingState.cacheUsage = chunk.cacheUsage || null
-            streamingState.attachmentResults = chunk.attachmentResults || null
-            streamingState.rawResponse = chunk.rawResponse
-            if (chunk.thoughtSignature) {
-              streamingState.thoughtSignature = chunk.thoughtSignature
-            }
-          }
-        }
-
-        logger.info('Tool-unsupported retry succeeded. Consider configuring text-block tools for this model.', {
-          chatId,
-          provider: streamingState.effectiveProfile.provider,
-          model: streamingState.effectiveProfile.modelName,
-          responseLength: streamingState.fullResponse.length,
-        })
-      } catch (retryError) {
-        logger.error('Tool-unsupported retry also failed', {
-          chatId,
-          provider: streamingState.effectiveProfile.provider,
-          model: streamingState.effectiveProfile.modelName,
-          error: retryError instanceof Error ? retryError.message : String(retryError),
-        })
-        await preservePartialOnError(retryError)
-        throw retryError
-      }
-    }
-    // Check if this is a recoverable request error (token limit, PDF pages, etc.)
-    else if (isRecoverableRequestError(streamingError)) {
-      logger.info('Recoverable request error detected, attempting recovery', {
-        chatId,
-        provider: streamingState.effectiveProfile.provider,
-        model: streamingState.effectiveProfile.modelName,
-        attachmentCount: fileProcessing.attachedFiles.length,
-        error: streamingError instanceof Error ? streamingError.message : String(streamingError),
-      })
-
-      const recoveryResult = await attemptRequestLimitRecovery({
-        controller,
-        encoder,
-        character,
-        connectionProfile: streamingState.effectiveProfile,
-        apiKey: streamingState.effectiveApiKey,
-        attachedFiles: fileProcessing.attachedFiles,
-        originalMessage: options.content,
-        error: streamingError,
-        repos,
-        chatId,
-        userId,
-        characterParticipantId: characterParticipant.id,
-      })
-
-      if (recoveryResult.success) {
-        logger.info('Request limit recovery successful', {
-          chatId,
-          messageId: recoveryResult.messageId,
-          isStaticFallback: recoveryResult.isStaticFallback,
-        })
-        // Recovery has handled everything - return without chaining
-        return {
-          isMultiCharacter,
-          hasContent: true,
-          messageId: recoveryResult.messageId || null,
-          userParticipantId,
-          isPaused: chat.isPaused,
-        }
-      }
-
-      // Recovery failed, re-throw the original error
-      logger.warn('Request limit recovery failed, propagating error', { chatId })
-    }
-
-    // Not a recoverable error or recovery failed. Preserve any partial content
-    // streamed before the upstream connection dropped.
-    await preservePartialOnError(streamingError)
-    throw streamingError
-  }
-
-  // Process tool calls
-  let toolMessages: ToolMessage[] = []
-  let generatedImagePaths: GeneratedImage[] = []
-  let currentMessages = [...formattedMessages]
-  let currentResponse = streamingState.fullResponse
-  let currentRawResponse = streamingState.rawResponse
-  // Use agent mode max turns if enabled, otherwise default to 5
-  const effectiveMaxTurns = agentMode.enabled ? agentMode.maxTurns : 5
-  let toolIterations = 0
-  let agentModeCompleted = false
-  let agentFinalResponse: string | undefined
-
-  // Tool call loop
-  while (currentRawResponse && toolIterations < effectiveMaxTurns) {
-    const toolCalls = detectToolCallsInResponse(currentRawResponse, streamingState.effectiveProfile.provider)
-
-    if (toolCalls.length === 0) break
-
-    // Check if this is the submit_final_response tool in agent mode
-    const submitFinalCall = agentMode.enabled
-      ? toolCalls.find(tc => tc.name === 'submit_final_response')
-      : undefined
-
-    // Guardrail: if the model calls submit_final_response on iteration 0, as the only
-    // tool, and with no accompanying prose, it is almost always ghost-wrapping work from
-    // a previous (already-concluded) turn rather than responding to the current user
-    // message. Reject it, synthesize a failure tool-result, and let the loop re-prompt
-    // for a conversational reply.
-    const isGhostWrapUp =
-      !!submitFinalCall &&
-      toolIterations === 0 &&
-      toolCalls.length === 1 &&
-      !(currentResponse && currentResponse.trim().length > 0)
-
-    if (submitFinalCall && !isGhostWrapUp) {
-      // Agent mode completion - extract final response
-      const args = submitFinalCall.arguments as { response?: string; summary?: string; confidence?: number }
-      agentFinalResponse = args.response || currentResponse
-      agentModeCompleted = true
-
-      // Send agent completion event
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'agent_completed',
-        message: 'Agent completed task',
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      logger.info('Agent mode completed via submit_final_response', {
-        chatId,
-        iterations: toolIterations,
-        responseLength: agentFinalResponse?.length,
-        summary: args.summary,
-        confidence: args.confidence,
-      })
-
-      // Use the final response as the full response
-      streamingState.fullResponse = agentFinalResponse
-      break
-    }
-
-    toolIterations++
-
-    // Send agent iteration event if in agent mode
-    if (agentMode.enabled) {
-      const toolNames = toolCalls.map(tc => tc.name)
-      const iterationSummary = generateIterationSummary(toolIterations, toolNames, currentResponse)
-
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'agent_iteration',
-        message: iterationSummary,
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      // Update agent turn count in database
-      await repos.chats.update(chatId, { agentTurnCount: toolIterations })
-    }
-
-    let results: ToolProcessingResult
-    if (isGhostWrapUp && submitFinalCall) {
-      logger.info('[AgentMode] Rejecting iteration-0 submit_final_response with no prior work this turn', {
-        chatId,
-        rejectedResponseLength: (submitFinalCall.arguments as { response?: string }).response?.length,
-      })
-      results = {
-        toolMessages: [{
-          toolName: 'submit_final_response',
-          success: false,
-          content: "Rejected: submit_final_response was called on the first iteration without any accompanying task work or conversational prose this turn. The previous turn already concluded — do not re-wrap completed work. Respond to the user's current message directly, in character, as natural prose. You may use memory or other tools first if helpful, but only call submit_final_response after completing fresh agentic work that warrants a structured summary.",
-          callId: submitFinalCall.callId,
-          arguments: submitFinalCall.arguments,
-        }],
-        generatedImagePaths: [],
-      }
-    } else {
-      // Per-tool status updates are now emitted inside processToolCalls
-      results = await processToolCalls(toolCalls, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
-    }
-    toolMessages = [...toolMessages, ...results.toolMessages]
-    generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
-
-    // Add assistant message with tool call to conversation
-    // Include toolCalls metadata so providers can reconstruct the native assistant turn
-    const hasCallIds = toolCalls.some(tc => tc.callId)
-    const assistantToolCalls = hasCallIds
-      ? toolCalls.filter(tc => tc.callId).map(tc => ({
-          id: tc.callId!,
-          type: 'function' as const,
-          function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
-        }))
-      : undefined
-
-    if (currentResponse && currentResponse.trim().length > 0) {
-      currentMessages = [
-        ...currentMessages,
-        { role: 'assistant' as const, content: currentResponse, thoughtSignature: streamingState.thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
-      ]
-    } else {
-      currentMessages = [
-        ...currentMessages,
-        { role: 'assistant' as const, content: '', thoughtSignature: streamingState.thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
-      ]
-    }
-
-    // Add tool results — use native 'tool' role when callId is available, text fallback otherwise
-    for (const toolMsg of results.toolMessages) {
-      if (toolMsg.callId) {
-        currentMessages = [
-          ...currentMessages,
-          { role: 'tool' as const, content: toolMsg.content, toolCallId: toolMsg.callId, name: toolMsg.toolName, thoughtSignature: undefined }
-        ]
-      } else {
-        currentMessages = [
-          ...currentMessages,
-          { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, name: undefined }
-        ]
-      }
-    }
-
-    // Update status after tool processing — prevents "Running X..." from
-    // lingering through message assembly and the follow-up LLM call
-    safeEnqueue(controller, encodeStatusEvent(encoder, {
-      stage: 'sending',
-      message: `Sending to ${character.name}...`,
-      characterName: character.name,
-      characterId: character.id,
-    }))
-
-    // Continue conversation with tool results
-    currentResponse = ''
-    currentRawResponse = null
-
-    let emittedStreamingStatus = false
-    try {
-      for await (const chunk of streamMessage({
-        messages: currentMessages,
-        connectionProfile: streamingState.effectiveProfile,
-        apiKey: streamingState.effectiveApiKey,
-        modelParams,
-        tools: actualTools,
-        useNativeWebSearch,
-        userId,
-        messageId: preGeneratedAssistantMessageId,
-        chatId,
-        characterId: character.id,
-      })) {
-        if (chunk.content) {
-          // Emit streaming status on first content in this tool iteration
-          if (!emittedStreamingStatus) {
-            emittedStreamingStatus = true
-            safeEnqueue(controller, encodeStatusEvent(encoder, {
-              stage: 'streaming',
-              message: `${character.name} is responding...`,
-              characterName: character.name,
-              characterId: character.id,
-            }))
-          }
-          currentResponse += chunk.content
-          streamingState.fullResponse += chunk.content
-          controller.enqueue(encodeContentChunk(encoder, chunk.content))
-        }
-
-        if (chunk.done) {
-          streamingState.usage = chunk.usage || null
-          streamingState.cacheUsage = chunk.cacheUsage || null
-          streamingState.attachmentResults = chunk.attachmentResults || null
-          currentRawResponse = chunk.rawResponse
-          streamingState.rawResponse = chunk.rawResponse
-          if (chunk.thoughtSignature) {
-            streamingState.thoughtSignature = chunk.thoughtSignature
-          }
-        }
-      }
-    } catch (toolLoopStreamError) {
-      await preservePartialOnError(toolLoopStreamError)
-      throw toolLoopStreamError
-    }
-
-    // If the LLM returned tool calls without any content (silent tool use),
-    // emit a processing status so the user knows something is happening
-    if (!emittedStreamingStatus && currentRawResponse) {
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'processing_tools',
-        message: `${character.name} is using tools...`,
-        characterName: character.name,
-        characterId: character.id,
-      }))
-    }
-  }
-
-  // Handle max iterations reached
-  if (toolIterations >= effectiveMaxTurns && !agentModeCompleted) {
-    if (agentMode.enabled) {
-      // Force final response in agent mode
-      logger.info('Agent mode max turns reached, forcing final response', {
-        chatId,
-        iterations: toolIterations,
-        maxTurns: effectiveMaxTurns,
-      })
-
-      // Send force final event
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'agent_force_final',
-        message: 'Requesting final response...',
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      // Add force final message and make one more LLM call
-      const forceFinalMessage = buildForceFinalMessage()
-      currentMessages = [
-        ...currentMessages,
-        { role: 'assistant' as const, content: currentResponse, thoughtSignature: streamingState.thoughtSignature, name: undefined },
-        { role: 'user' as const, content: forceFinalMessage, thoughtSignature: undefined, name: undefined }
-      ]
-
-      // Make one final call with force message
-      try {
-        for await (const chunk of streamMessage({
-          messages: currentMessages,
-          connectionProfile: streamingState.effectiveProfile,
-          apiKey: streamingState.effectiveApiKey,
-          modelParams,
-          tools: actualTools,
-          useNativeWebSearch,
-          userId,
-          messageId: preGeneratedAssistantMessageId,
-          chatId,
-        })) {
-          if (chunk.content) {
-            streamingState.fullResponse += chunk.content
-            controller.enqueue(encodeContentChunk(encoder, chunk.content))
-          }
-
-          if (chunk.done) {
-            streamingState.usage = chunk.usage || null
-            streamingState.cacheUsage = chunk.cacheUsage || null
-            streamingState.attachmentResults = chunk.attachmentResults || null
-            streamingState.rawResponse = chunk.rawResponse
-            if (chunk.thoughtSignature) {
-              streamingState.thoughtSignature = chunk.thoughtSignature
-            }
-
-            // Check if the final call includes submit_final_response
-            if (chunk.rawResponse) {
-              const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, streamingState.effectiveProfile.provider)
-              const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
-              if (submitCall) {
-                const args = submitCall.arguments as { response?: string }
-                if (args.response) {
-                  streamingState.fullResponse = args.response
-                }
-              }
-            }
-          }
-        }
-      } catch (forceFinalStreamError) {
-        await preservePartialOnError(forceFinalStreamError)
-        throw forceFinalStreamError
-      }
-    } else {
-      logger.warn('Max tool iterations reached', { iterations: toolIterations, chatId })
-    }
-  }
-
-  // Process text tool calls via provider plugin (catches spontaneous XML emissions)
-  // Each plugin knows which formats its models emit (e.g., DeepSeek <function_calls>, Gemini <tool_use>)
+  // Phase 19: provider-native text tool markers (catches spontaneous XML
+  // emissions like DeepSeek's <function_calls> or Gemini's <tool_use>). Each
+  // plugin knows which formats its models emit; no-op when the plugin
+  // doesn't implement the detector or the response is empty.
   const providerPlugin = getProvider(streamingState.effectiveProfile.provider)
-  if (streamingState.fullResponse && providerPlugin?.hasTextToolMarkers?.(streamingState.fullResponse)) {
-    const textToolCallRequests = providerPlugin.parseTextToolCalls?.(streamingState.fullResponse) ?? []
-
-    if (textToolCallRequests.length > 0) {
-      logger.info('Detected text tool calls in response (via plugin)', {
-        count: textToolCallRequests.length,
-        tools: textToolCallRequests.map(tc => tc.name),
-        provider: streamingState.effectiveProfile.provider,
-      })
-
-      // Per-tool status updates are now emitted inside processToolCalls
-      const results = await processToolCalls(textToolCallRequests, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
-      toolMessages = [...toolMessages, ...results.toolMessages]
-      generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
-
-      const strippedResponse = providerPlugin.stripTextToolMarkers?.(streamingState.fullResponse) ?? streamingState.fullResponse
-
-      // Add stripped response and tool results to conversation
-      currentMessages = [...formattedMessages]
-      if (strippedResponse.trim()) {
-        currentMessages.push({
-          role: 'assistant' as const,
-          content: strippedResponse,
-          thoughtSignature: streamingState.thoughtSignature,
-          name: undefined,
-        })
-      }
-
-      for (const toolMsg of results.toolMessages) {
-        currentMessages.push({
-          role: 'user' as const,
-          content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`,
-          thoughtSignature: undefined,
-          name: undefined,
-        })
-      }
-
-      // Update status after tool processing
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'sending',
-        message: `Sending to ${character.name}...`,
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      // Continue conversation with tool results
-      let continuationResponse = ''
-      try {
-        for await (const chunk of streamMessage({
-          messages: currentMessages,
-          connectionProfile: streamingState.effectiveProfile,
-          apiKey: streamingState.effectiveApiKey,
-          modelParams,
-          tools: actualTools,
-          useNativeWebSearch,
-          userId,
-          messageId: preGeneratedAssistantMessageId,
-          chatId,
-        })) {
-          if (chunk.content) {
-            continuationResponse += chunk.content
-            controller.enqueue(encodeContentChunk(encoder, chunk.content))
-          }
-
-          if (chunk.done) {
-            streamingState.usage = chunk.usage || null
-            streamingState.cacheUsage = chunk.cacheUsage || null
-            streamingState.rawResponse = chunk.rawResponse
-            if (chunk.thoughtSignature) {
-              streamingState.thoughtSignature = chunk.thoughtSignature
-            }
-          }
-        }
-      } catch (textToolContinuationError) {
-        // Reconstruct combined response so the preserved message reflects what
-        // the user actually saw streamed (stripped initial + partial continuation).
-        streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-        await preservePartialOnError(textToolContinuationError)
-        throw textToolContinuationError
-      }
-
-      streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-      // Strip any remaining text tool markers from the continuation
-      if (providerPlugin.stripTextToolMarkers) {
-        streamingState.fullResponse = providerPlugin.stripTextToolMarkers(streamingState.fullResponse)
-      }
-    }
+  if (providerPlugin?.hasTextToolMarkers && providerPlugin.parseTextToolCalls && providerPlugin.stripTextToolMarkers) {
+    const pluginHasMarkers = providerPlugin.hasTextToolMarkers
+    const pluginParse = providerPlugin.parseTextToolCalls
+    const pluginStrip = providerPlugin.stripTextToolMarkers
+    await runTextToolPass({
+      chatId,
+      userId,
+      character,
+      preGeneratedAssistantMessageId,
+      strategy: {
+        name: 'provider-text-markers',
+        hasMarkers: pluginHasMarkers,
+        parse: pluginParse,
+        strip: pluginStrip,
+      },
+      formattedMessages,
+      modelParams,
+      continuationTools: actualTools,
+      continuationUseNativeWebSearch: useNativeWebSearch,
+      toolContext,
+      streaming: streamingState,
+      toolMessages,
+      generatedImagePaths,
+      controller,
+      encoder,
+      preservePartialOnError,
+    })
   }
 
-  // Process text-block tool calls (runs for ALL providers, like XML parsing)
-  // Text-block format: [[TOOL_NAME param="value"]]content[[/TOOL_NAME]]
-  if (streamingState.fullResponse && hasTextBlockMarkers(streamingState.fullResponse)) {
-    const textBlockToolCalls = parseTextBlocksFromResponse(streamingState.fullResponse)
-
-    if (textBlockToolCalls.length > 0) {
-      logger.info('Detected text-block tool calls in response', {
-        count: textBlockToolCalls.length,
-        tools: textBlockToolCalls.map(tc => tc.name),
-      })
-
-      // Per-tool status updates are now emitted inside processToolCalls
-      const results = await processToolCalls(textBlockToolCalls, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
-      toolMessages = [...toolMessages, ...results.toolMessages]
-      generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
-
-      const strippedResponse = stripTextBlockMarkersFromResponse(streamingState.fullResponse)
-
-      // Add stripped response and tool results to conversation
-      currentMessages = [...formattedMessages]
-      if (strippedResponse.trim()) {
-        currentMessages.push({
-          role: 'assistant' as const,
-          content: strippedResponse,
-          thoughtSignature: streamingState.thoughtSignature,
-          name: undefined,
-        })
-      }
-
-      for (const toolMsg of results.toolMessages) {
-        currentMessages.push({
-          role: 'user' as const,
-          content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`,
-          thoughtSignature: undefined,
-          name: undefined,
-        })
-      }
-
-      // Update status after tool processing
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'sending',
-        message: `Sending to ${character.name}...`,
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      // Continue conversation with tool results
-      let continuationResponse = ''
-      try {
-        for await (const chunk of streamMessage({
-          messages: currentMessages,
-          connectionProfile: streamingState.effectiveProfile,
-          apiKey: streamingState.effectiveApiKey,
-          modelParams,
-          tools: useTextBlockTools ? [] : actualTools,
-          useNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
-          userId,
-          messageId: preGeneratedAssistantMessageId,
-          chatId,
-        })) {
-          if (chunk.content) {
-            continuationResponse += chunk.content
-            controller.enqueue(encodeContentChunk(encoder, chunk.content))
-          }
-
-          if (chunk.done) {
-            streamingState.usage = chunk.usage || null
-            streamingState.cacheUsage = chunk.cacheUsage || null
-            streamingState.rawResponse = chunk.rawResponse
-            if (chunk.thoughtSignature) {
-              streamingState.thoughtSignature = chunk.thoughtSignature
-            }
-          }
-        }
-      } catch (textBlockContinuationError) {
-        streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-        streamingState.fullResponse = stripTextBlockMarkersFromResponse(streamingState.fullResponse)
-        await preservePartialOnError(textBlockContinuationError)
-        throw textBlockContinuationError
-      }
-
-      streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-      // Strip any remaining text-block markers from the continuation
-      streamingState.fullResponse = stripTextBlockMarkersFromResponse(streamingState.fullResponse)
-    }
-  }
+  // Phase 20: text-block tool calls (`[[TOOL_NAME ...]]content[[/TOOL_NAME]]`),
+  // runs for ALL providers. When useTextBlockTools is on, the continuation
+  // suppresses native tools and web search so the model can't re-emit the
+  // markers it just had stripped.
+  await runTextToolPass({
+    chatId,
+    userId,
+    character,
+    preGeneratedAssistantMessageId,
+    strategy: {
+      name: 'text-block',
+      hasMarkers: hasTextBlockMarkers,
+      parse: parseTextBlocksFromResponse,
+      strip: stripTextBlockMarkersFromResponse,
+    },
+    formattedMessages,
+    modelParams,
+    continuationTools: useTextBlockTools ? [] : actualTools,
+    continuationUseNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
+    toolContext,
+    streaming: streamingState,
+    toolMessages,
+    generatedImagePaths,
+    controller,
+    encoder,
+    preservePartialOnError,
+  })
 
   const contentWasFlaggedDangerous = !!(dangerFlags && dangerFlags.length > 0)
   const { uncensoredRetryAttempted, sameProviderRetryAttempted } = await attemptEmptyResponseRecovery({
@@ -1885,6 +1166,12 @@ async function processMessage(
 
   // Save assistant message
   let assistantMessageId: string | null = null
+
+  // End-of-turn drain: collapse any wardrobe edits this character made into a
+  // single Aurora announcement per affected character, regardless of which
+  // terminal branch we exit through. The handlers add to the Set instead of
+  // enqueuing per-edit; here we fire one job each and clear.
+  await flushPendingWardrobeAnnouncements(toolContext)
 
   if (streamingState.fullResponse && streamingState.fullResponse.trim().length > 0) {
     return finalizeMessageResponse({
@@ -1923,13 +1210,19 @@ async function processMessage(
     })
   } else if (toolMessages.length > 0) {
     // Save tool messages even without text response
+    const toolWhisperContext: ToolWhisperContext = {
+      userParticipantId,
+      allowCrossCharacterVaultReads: chat.allowCrossCharacterVaultReads === true,
+    }
     const toolSaveResult = await saveToolMessages(
       repos,
       chatId,
       userId,
       toolMessages,
       generatedImagePaths,
-      character.id
+      character.id,
+      characterParticipant.id,
+      toolWhisperContext
     )
 
     await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })

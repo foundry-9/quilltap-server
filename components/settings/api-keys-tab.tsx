@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
+import { useModalState } from '@/hooks/useModalState'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { getErrorMessage } from '@/lib/error-utils'
 import LoadingState from '@/components/ui/LoadingState'
@@ -26,7 +27,6 @@ interface ApiKey {
 }
 
 export default function ApiKeysTab() {
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [testingKeyId, setTestingKeyId] = useState<string | null>(null)
@@ -36,6 +36,12 @@ export default function ApiKeysTab() {
   const { data, isLoading, error: loadError, mutate: mutateKeys } = useSWR<{ apiKeys: ApiKey[]; count: number }>(
     '/api/v1/api-keys'
   )
+  const {
+    isOpen: isModalOpen,
+    openModal: handleOpenModal,
+    closeModal: handleCloseModal,
+    handleSuccess: handleModalSuccess,
+  } = useModalState(() => mutateKeys())
   const apiKeys = data?.apiKeys ?? []
   const deleteKey = useAsyncOperation<void>()
   const testKey = useAsyncOperation<{ valid: boolean; error?: string }>()
@@ -102,18 +108,6 @@ export default function ApiKeysTab() {
     }
 
     setTestingKeyId(null)
-  }
-
-  const handleOpenModal = () => {
-    setIsModalOpen(true)
-  }
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false)
-  }
-
-  const handleModalSuccess = () => {
-    mutateKeys()
   }
 
   const handleOpenExportDialog = () => {
@@ -186,7 +180,7 @@ export default function ApiKeysTab() {
             </button>
             <button
               type="button"
-              onClick={handleOpenModal}
+              onClick={() => handleOpenModal()}
               className="qt-button-secondary qt-button-sm"
             >
               + Add API Key
@@ -200,7 +194,7 @@ export default function ApiKeysTab() {
             description="Add one to get started."
             action={{
               label: 'Add API Key',
-              onClick: handleOpenModal,
+              onClick: () => handleOpenModal(),
             }}
           />
         ) : (

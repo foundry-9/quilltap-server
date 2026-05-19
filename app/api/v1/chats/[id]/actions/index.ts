@@ -13,19 +13,20 @@ export {
   handleAddParticipantAction,
   handleUpdateParticipantAction,
   handleRemoveParticipantAction,
+  handleRebuildSystemPromptAction,
 } from './participants';
 export { handleTurnAction } from './turn';
 export { handleGetAvatars, handleSetAvatar, handleRemoveAvatar } from './avatars';
 export { handleBulkReattribute } from './bulk';
 export { handleAddToolResult, handleUpdateToolSettings } from './tools';
-export { handleQueueMemories } from './memories';
+export { handleQueueMemories, handleExtractMemoriesDryRun } from './memories';
 export { handleRng } from './rng';
 export { handleRunTool } from './run-tool';
 export { handleGetState, handleSetState, handleResetState } from './state';
 export { handleToggleAgentMode } from './agent-mode';
 export { handleRegenerateBackground } from './story-background';
 export { handleReclassifyDanger } from './danger-classification';
-export { handleGetOutfit, handleEquipSlot } from './outfit';
+export { handleGetOutfit, handleGetOutfitSummary, handleEquipSlot } from './outfit';
 export { handleToggleAvatarGeneration } from './toggle-avatar-generation';
 export { handleRegenerateAvatar } from './regenerate-avatar';
 export { handleRenderConversation } from './render-conversation';
@@ -39,3 +40,7 @@ export {
   handleRenameDocument,
   handleDeleteDocument,
 } from './documents';
+export { handleInsertAnnouncement } from './announcement';
+export { handleAnnouncementPreview } from './announcement-preview';
+export { handleGetPhotoAlbums } from './photo-albums';
+export type { PhotoAlbumOption, PhotoAlbumKind } from './photo-albums';

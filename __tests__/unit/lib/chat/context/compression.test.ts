@@ -33,7 +33,7 @@ const {
   shouldApplyCompression,
   splitMessagesForCompression,
   applyContextCompression,
-  buildCompressedSystemMessage,
+  buildCompressedHistoryBlock,
 } = require('@/lib/chat/context/compression') as typeof import('@/lib/chat/context/compression')
 
 import type { CompressibleMessage, ContextCompressionOptions } from '@/lib/chat/context/compression'
@@ -309,53 +309,31 @@ describe('Context Compression', () => {
     })
   })
 
-  describe('buildCompressedSystemMessage', () => {
-    const fullSystemPrompt = 'You are Luna, a friendly AI assistant who loves helping users.'
-
-    it('returns full system prompt when no compressed content', () => {
-      const result = buildCompressedSystemMessage(undefined, undefined, fullSystemPrompt)
-      expect(result).toBe(fullSystemPrompt)
+  describe('buildCompressedHistoryBlock', () => {
+    it('returns null when there is no compressed history', () => {
+      expect(buildCompressedHistoryBlock(undefined)).toBeNull()
     })
 
-    it('returns full system prompt even when compressed system prompt is provided (system prompt compression disabled)', () => {
-      // System prompt compression is disabled — the compressed system prompt arg is ignored
-      const compressedSystem = 'Luna: friendly AI assistant.'
-      const result = buildCompressedSystemMessage(undefined, compressedSystem, fullSystemPrompt)
-      // Always uses the full system prompt now
-      expect(result).toBe(fullSystemPrompt)
-    })
-
-    it('uses full system prompt with compressed history', () => {
+    it('returns the wrapped history block when compression has run', () => {
       const compressedHistory = 'User asked about weather, Luna responded helpfully.'
-      const result = buildCompressedSystemMessage(compressedHistory, undefined, fullSystemPrompt)
+      const result = buildCompressedHistoryBlock(compressedHistory)
 
-      expect(result).toContain(fullSystemPrompt)
-      expect(result).toContain('Conversation Context')
-      expect(result).toContain(compressedHistory)
-    })
-
-    it('uses full system prompt when both compressed history and compressed system are provided', () => {
-      // System prompt compression is disabled — always uses fullSystemPrompt, not compressedSystem
-      const compressedHistory = 'User asked about weather.'
-      const compressedSystem = 'Luna: friendly assistant.'
-
-      const result = buildCompressedSystemMessage(compressedHistory, compressedSystem, fullSystemPrompt)
-
-      // Always uses full system prompt, not the compressed version
-      expect(result).toContain(fullSystemPrompt)
-      expect(result).toContain('Conversation Context')
-      expect(result).toContain(compressedHistory)
-      // The compressed system prompt is ignored
-      expect(result).not.toContain(compressedSystem)
-    })
-
-    it('includes proper section headers for compressed history', () => {
-      const compressedHistory = 'Summary of earlier conversation.'
-      const result = buildCompressedSystemMessage(compressedHistory, undefined, fullSystemPrompt)
-
+      expect(result).not.toBeNull()
       expect(result).toContain('## Conversation Context (Compressed Summary of Earlier Messages)')
       expect(result).toContain('following is a summary of the earlier conversation')
       expect(result).toContain('Recent messages follow this summary')
+      expect(result).toContain(compressedHistory)
+    })
+
+    it('does not include the persona prompt — that lives in its own system block', () => {
+      const compressedHistory = 'Summary of earlier conversation.'
+      const result = buildCompressedHistoryBlock(compressedHistory)
+
+      // The persona/system prompt must stay byte-stable across turns, so the
+      // compressed-history block returns only the wrapped history. The caller
+      // emits it as a separate system message after the persona prompt.
+      expect(result).not.toContain('You are')
+      expect(result).not.toContain('assistant who loves helping')
     })
   })
 })

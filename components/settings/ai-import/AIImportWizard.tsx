@@ -15,6 +15,7 @@ import {
   type AIImportStepName,
   type StepProgress,
 } from './types';
+import { formatBytes } from '@/lib/utils/format-bytes';
 import type { QuilltapExport } from '@/lib/export/types';
 
 // ============================================================================
@@ -105,12 +106,6 @@ function SourceMaterialStep({
     [onUploadFiles]
   );
 
-  const formatSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   return (
     <div className="space-y-4">
       <div>
@@ -147,7 +142,7 @@ function SourceMaterialStep({
           <div className="mt-3 space-y-2">
             {uploadedFiles.map((file) => (
               <div key={file.id} className="flex items-center justify-between qt-bg-muted rounded px-3 py-2">
-                <span className="qt-text-small truncate mr-2">{file.name} ({formatSize(file.size)})</span>
+                <span className="qt-text-small truncate mr-2">{file.name} ({formatBytes(file.size)})</span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

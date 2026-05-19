@@ -16,33 +16,73 @@ interface AvatarGenerationParams {
   characterId: string;
   /** Identifies the call site in log messages (e.g. 'wardrobe-create-item-handler') */
   callerContext: string;
+  /**
+   * One-shot override: use this image profile instead of the chat's default.
+   * The chat's stored `imageProfileId` is NOT mutated. Used when the user
+   * picks a non-default model from the wardrobe dialog.
+   */
+  imageProfileIdOverride?: string | null;
+  /**
+   * One-shot equipped-slots override: when set, the avatar prompt is built
+   * from these slots instead of whatever is stored on the chat. Used by the
+   * dialog's "fitting room" — a transient outfit composition that has not
+   * been committed to the chat's equipped state.
+   */
+  equippedSlotsOverride?: {
+    top: string[];
+    bottom: string[];
+    footwear: string[];
+    accessories: string[];
+  } | null;
 }
 
+export type AvatarGenerationResult =
+  | { queued: true }
+  | { queued: false; reason: 'chat-not-found' | 'no-image-profile' | 'error'; message: string };
+
 /**
- * Trigger avatar generation if the chat has avatarGenerationEnabled.
- * Resolves the image profile from the chat-level setting or falls back to default.
- * Failures are caught and logged — they must not propagate to the caller.
+ * Unconditionally trigger avatar generation. Resolves the image profile from
+ * the override first, then chat-level setting, then global default. Used by
+ * the manual regenerate-avatar button — the chat-level toggle does NOT gate
+ * this path. Returns a structured result so callers can surface failures
+ * (e.g. "no image profile configured") to the user.
  */
-export async function triggerAvatarGenerationIfEnabled(
+export async function triggerAvatarGeneration(
   repos: ReturnType<typeof getRepositories>,
   params: AvatarGenerationParams
-): Promise<void> {
-  const { userId, chatId, characterId, callerContext } = params;
+): Promise<AvatarGenerationResult> {
+  const {
+    userId,
+    chatId,
+    characterId,
+    callerContext,
+    imageProfileIdOverride,
+    equippedSlotsOverride,
+  } = params;
 
   try {
     const chat = await repos.chats.findById(chatId);
-    if (!chat?.avatarGenerationEnabled) {
-      logger.debug('Avatar generation not enabled for chat, skipping', {
-        context: callerContext,
-        chatId,
-      });
-      return;
+    if (!chat) {
+      return { queued: false, reason: 'chat-not-found', message: 'Chat not found.' };
     }
 
-    // Resolve image profile: chat-level first, then default
+    // Resolve image profile: explicit override → chat-level → global default
     let imageProfileId: string | null = null;
 
-    if (chat.imageProfileId) {
+    if (imageProfileIdOverride) {
+      const profile = await repos.imageProfiles.findById(imageProfileIdOverride);
+      if (profile) {
+        imageProfileId = profile.id;
+      } else {
+        logger.warn('Avatar generation override profile not found, falling back', {
+          context: callerContext,
+          chatId,
+          imageProfileIdOverride,
+        });
+      }
+    }
+
+    if (!imageProfileId && chat.imageProfileId) {
       const profile = await repos.imageProfiles.findById(chat.imageProfileId);
       if (profile) {
         imageProfileId = profile.id;
@@ -58,31 +98,57 @@ export async function triggerAvatarGenerationIfEnabled(
     }
 
     if (!imageProfileId) {
-      logger.debug('No image profile available for avatar generation, skipping', {
-        context: callerContext,
-        chatId,
-        characterId,
-      });
-      return;
+      return {
+        queued: false,
+        reason: 'no-image-profile',
+        message: 'No image profile is configured. Set one in Settings → Images before generating avatars.',
+      };
     }
 
     await enqueueCharacterAvatarGeneration(userId, {
       chatId,
       characterId,
       imageProfileId,
+      ...(equippedSlotsOverride ? { equippedSlotsOverride } : {}),
     });
 
-    logger.debug('Avatar generation enqueued after outfit change', {
+    return { queued: true };
+  } catch (error) {
+    logger.warn('Failed to enqueue avatar generation', {
       context: callerContext,
       chatId,
       characterId,
-      imageProfileId,
+      error: error instanceof Error ? error.message : String(error),
     });
+    return {
+      queued: false,
+      reason: 'error',
+      message: error instanceof Error ? error.message : 'Failed to queue avatar generation.',
+    };
+  }
+}
+
+/**
+ * Trigger avatar generation only if the chat has avatarGenerationEnabled.
+ * Used by automatic triggers (wardrobe changes etc.) where the user has
+ * opted in to auto-regeneration. Failures are swallowed — automatic paths
+ * must never affect the caller's result.
+ */
+export async function triggerAvatarGenerationIfEnabled(
+  repos: ReturnType<typeof getRepositories>,
+  params: AvatarGenerationParams
+): Promise<void> {
+  try {
+    const chat = await repos.chats.findById(params.chatId);
+    if (!chat?.avatarGenerationEnabled) {
+      return;
+    }
+    await triggerAvatarGeneration(repos, params);
   } catch (error) {
     logger.warn('Failed to enqueue avatar generation after outfit change', {
-      context: callerContext,
-      chatId,
-      characterId,
+      context: params.callerContext,
+      chatId: params.chatId,
+      characterId: params.characterId,
       error: error instanceof Error ? error.message : String(error),
     });
   }

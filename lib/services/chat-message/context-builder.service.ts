@@ -6,15 +6,14 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { buildContext, type MessageWithParticipant, type BuiltContext, type ProjectContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
+import { buildContext, type MessageWithParticipant, type BuiltContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
-import { modelSupportsPrefill } from '@/lib/plugins/provider-registry'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
-import { getErrorMessage } from '@/lib/errors'
+import { getErrorMessage } from '@/lib/error-utils'
 import {
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,
@@ -52,8 +51,6 @@ export interface BuildMessageContextOptions {
   toolInstructions?: string
   newUserMessage?: string
   isContinueMode: boolean
-  /** Project context if chat is in a project */
-  projectContext?: ProjectContext | null
   /** Context compression settings (if enabled) */
   contextCompressionSettings?: ContextCompressionSettings | null
   /** Cheap LLM selection for compression (required if compression is enabled) */
@@ -73,10 +70,6 @@ export interface BuildMessageContextOptions {
   generateMemoryRecap?: boolean
   /** Uncensored fallback options for memory recap in dangerous chats */
   uncensoredFallbackOptions?: UncensoredFallbackOptions
-  /** Status change notifications to include in prompt */
-  statusChangeNotifications?: string[]
-  /** Outfit change notifications from manual sidebar changes */
-  outfitChangeNotifications?: string[]
   /** Optional callback to emit status events during context building phases */
   onStatusChange?: (stage: string, message: string) => void
 }
@@ -172,10 +165,15 @@ export async function loadAndProcessFiles(
     }
   }
 
-  // Filter out attachments that were processed via fallback
+  // Keep an attachment only when the provider natively supports it
+  // (processFileAttachmentFallback returns type 'unsupported' with no error
+  // in that case). Text/image_description results replace the attachment
+  // with prefix text; 'unsupported' with an error means fallback was
+  // attempted and failed — sending the raw bytes anyway would just trip the
+  // provider's "no image input" rejection, so drop it.
   const attachmentsToSend = fileAttachments.filter((_, idx) => {
     const fallback = fallbackResults[idx]
-    return !fallback || (fallback.type !== 'text' && fallback.type !== 'image_description')
+    return !fallback || (fallback.type === 'unsupported' && !fallback.error)
   })
 
   return {
@@ -355,7 +353,7 @@ export function buildConversationMessages(
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -371,7 +369,6 @@ export async function buildMessageContext(
     chatSettings,
     toolInstructions,
     newUserMessage,
-    projectContext,
     contextCompressionSettings,
     cheapLLMSelection,
     bypassCompression,
@@ -382,21 +379,74 @@ export async function buildMessageContext(
     uncensoredFallbackOptions,
   } = options
 
-  // System transparency override: opaque characters (systemTransparency != true)
-  // never see Staff (Lantern/Aurora/Librarian/Prospero/Host) messages in their
-  // LLM context, regardless of any chat- or project-level toggle. We strip them
-  // here so every downstream consumer (compression, attribution, attachment
-  // scan) operates on the same filtered view.
-  const filteredExistingMessages = character.systemTransparency === true
-    ? existingMessages
-    : existingMessages.filter(m => !m.systemSender)
-  if (filteredExistingMessages.length !== existingMessages.length) {
-    logger.debug('Filtered Staff (systemSender) messages out of opaque character context', {
-      characterId: character.id,
-      removedCount: existingMessages.length - filteredExistingMessages.length,
-      keptCount: filteredExistingMessages.length,
-    })
+  // Drop persisted Commonplace Book whispers from LLM context. They live in
+  // the transcript for UI visibility, but recall is recomputed per turn and
+  // inlined into the new user message body — past whispers piling up across
+  // turns would just bloat the context window with stale recall. This filter
+  // applies regardless of system transparency.
+  const cmpbStrippedCount = existingMessages.filter(m => m.systemSender === 'commonplaceBook').length
+  const messagesWithoutCmpb = cmpbStrippedCount > 0
+    ? existingMessages.filter(m => m.systemSender !== 'commonplaceBook')
+    : existingMessages
+  if (cmpbStrippedCount > 0) {
   }
+
+  // Drop TOOL whispers the responding character isn't a target of. Operator-
+  // only Prospero runs (run-tool with `private: true`) target the userId, so
+  // no character participant ever matches and the message is filtered out of
+  // every context. Multi-character mode also runs `filterWhisperMessages`
+  // downstream — this filter just makes sure single-character context honors
+  // the same rule.
+  const respondingParticipantId = characterParticipant?.id
+  const messagesAfterWhisperFilter = respondingParticipantId
+    ? messagesWithoutCmpb.filter(m => {
+        if (m.role !== 'TOOL') return true
+        const targets = m.targetParticipantIds
+        if (!targets || targets.length === 0) return true
+        if (m.participantId === respondingParticipantId) return true
+        return targets.includes(respondingParticipantId)
+      })
+    : messagesWithoutCmpb
+
+  // System transparency: when any non-user-character participant in this chat
+  // has systemTransparency !== true, the whole chat goes "opaque-anywhere" —
+  // every character's LLM context reads Staff messages with the persona-free
+  // `opaqueContent` body in place of `content`, AND has `systemSender`
+  // stripped so the message arrives as a generic assistant line. This
+  // preserves a shared reality across participants: no character should hear
+  // the Staff by name when a companion can't. The user character (controlledBy
+  // === 'user') does NOT count toward the test — they stay transparent by
+  // default. The salon UI is unaffected (the human user always sees Staff-
+  // attributed messages with their full persona voicing and avatars).
+  //
+  // Doc-side gates on `character.systemTransparency` (self_inventory tool
+  // availability, peer-vault visibility in doc_* handlers) remain per-character
+  // and are unrelated to this swap.
+  const llmParticipants = chat.participants.filter(
+    p => p.controlledBy !== 'user' && p.status !== 'removed'
+  )
+  let isOpaqueAnywhere: boolean
+  if (isMultiCharacter && participantCharacters) {
+    isOpaqueAnywhere = llmParticipants.some(p => {
+      const c = participantCharacters.get(p.characterId)
+      // Unknown character record → treat as opaque (safer default — better to
+      // hide Staff names from one transparent companion than to leak them to
+      // an opaque one whose record didn't load).
+      return !c || c.systemTransparency !== true
+    })
+  } else {
+    // Single-character mode: the only LLM-controlled non-user character is
+    // `character` itself.
+    isOpaqueAnywhere = character.systemTransparency !== true
+  }
+
+  const filteredExistingMessages = isOpaqueAnywhere
+    ? messagesAfterWhisperFilter.map(m => {
+        if (!m.systemSender) return m
+        const body = m.opaqueContent ?? m.content
+        return { ...m, systemSender: null, content: body }
+      })
+    : messagesAfterWhisperFilter
 
   // Build conversation messages
   const { conversationMessages, messagesWithParticipants } = buildConversationMessages(
@@ -445,10 +495,12 @@ export async function buildMessageContext(
     roleplayTemplate,
     embeddingProfileId: undefined, // always use default embedding profile
     skipMemories: false,
-    maxMemories: 18,
     minMemoryImportance: 0.5,
     // Multi-character context building options
-    respondingParticipant: isMultiCharacter ? characterParticipant : undefined,
+    // Phase H: pass the responding participant in both single- and multi-
+    // character chats so the system-prompt compiler cache can hit on
+    // single-char chats too.
+    respondingParticipant: characterParticipant,
     allParticipants: isMultiCharacter ? chat.participants : undefined,
     participantCharacters: isMultiCharacter ? participantCharacters : undefined,
     messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
@@ -458,8 +510,6 @@ export async function buildMessageContext(
     timestampConfig,
     isInitialMessage,
     timezone,
-    // Project context
-    projectContext,
     // Connection profile (for budget-driven compression)
     connectionProfile,
     // Context compression
@@ -473,10 +523,6 @@ export async function buildMessageContext(
     // Memory recap (chat start or character join)
     generateMemoryRecap: shouldGenerateRecap,
     uncensoredFallbackOptions,
-    // Status change notifications
-    statusChangeNotifications: options.statusChangeNotifications,
-    // Outfit change notifications
-    outfitChangeNotifications: options.outfitChangeNotifications,
     // Status callback for streaming events
     onStatusChange: options.onStatusChange,
   })
@@ -503,12 +549,15 @@ export async function buildMessageContext(
   // Additionally surface image attachments from Lantern notifications
   // (story background, avatar regeneration, or the generate_image tool).
   // Without this, vision-capable providers would only see the announcement
-  // text but not the actual image. We piggy-back on the existing
-  // attachments-on-last-user-turn mechanism so non-vision providers still
-  // get the text fallback, and the collector scopes the set to images this
-  // character hasn't seen yet so they aren't re-delivered every turn.
+  // text but not the actual image. For non-vision profiles, each loaded
+  // attachment is run through processFileAttachmentFallback so the
+  // description text is prepended to the last user turn and the raw image
+  // is dropped — same machinery loadAndProcessFiles uses for user uploads.
+  // Without that step, non-vision providers (e.g. DeepSeek via OpenRouter)
+  // reject the request because they're being handed images they can't read.
   const ASSISTANT_IMAGE_LOOKBACK = 6
   let mergedAttachmentsToSend: unknown[] = attachmentsToSend
+  let lanternImagePrefix = ''
   try {
     // If this is a joining character without history access and they have
     // not yet responded, clamp the walk to messages posted after they joined.
@@ -533,7 +582,37 @@ export async function buildMessageContext(
         provider: connectionProfile.provider,
       })
       if (extra.length > 0) {
-        mergedAttachmentsToSend = [...attachmentsToSend, ...extra]
+        const lanternAttachmentsToKeep: typeof extra = []
+        for (const fileAttachment of extra) {
+          const fileMetadata = {
+            id: fileAttachment.id,
+            filepath: fileAttachment.filepath ?? `/api/v1/files/${fileAttachment.id}`,
+            filename: fileAttachment.filename,
+            mimeType: fileAttachment.mimeType,
+            size: fileAttachment.size,
+          }
+          const fallbackResult = await processFileAttachmentFallback(
+            fileMetadata,
+            fileAttachment,
+            connectionProfile,
+            options.repos,
+            userId,
+          )
+          const prefix = formatFallbackAsMessagePrefix(fallbackResult)
+          if (prefix) {
+            lanternImagePrefix += prefix
+          }
+          // Mirror the loadAndProcessFiles filter: only keep the raw
+          // attachment when the provider natively supports it. If the
+          // fallback failed, dropping the bytes avoids the provider's
+          // "no image input" rejection downstream.
+          if (fallbackResult.type === 'unsupported' && !fallbackResult.error) {
+            lanternAttachmentsToKeep.push(fileAttachment)
+          }
+        }
+        if (lanternAttachmentsToKeep.length > 0) {
+          mergedAttachmentsToSend = [...attachmentsToSend, ...lanternAttachmentsToKeep]
+        }
       }
     }
   } catch (err) {
@@ -544,17 +623,21 @@ export async function buildMessageContext(
 
   // Prepare final messages for LLM
   const formattedMessages = formattedContextMessages.map((msg, idx) => {
-    if (idx === formattedContextMessages.length - 1 && msg.role === 'user' && mergedAttachmentsToSend.length > 0) {
+    const isLastUserMessage = idx === formattedContextMessages.length - 1 && msg.role === 'user'
+    const content = isLastUserMessage && lanternImagePrefix
+      ? lanternImagePrefix + msg.content
+      : msg.content
+    if (isLastUserMessage && mergedAttachmentsToSend.length > 0) {
       return {
         role: msg.role,
-        content: msg.content,
+        content,
         attachments: mergedAttachmentsToSend,
         name: msg.name,
       }
     }
     return {
       role: msg.role,
-      content: msg.content,
+      content,
       thoughtSignature: msg.thoughtSignature ?? undefined,
       name: msg.name,
     }
@@ -563,29 +646,13 @@ export async function buildMessageContext(
   // In multi-character chats, anchor the model's response to the correct
   // character identity. The [Name] prefix is stripped by
   // stripCharacterNamePrefix() downstream.
+  //
+  // Anthropic 4.6+ rejects requests that end with an assistant message, and
+  // older Claude models follow a system instruction reliably enough that we
+  // use the same path for every Anthropic model rather than maintain a
+  // per-model allowlist.
   if (isMultiCharacter) {
-    const prefillSupported = modelSupportsPrefill(
-      connectionProfile.provider,
-      connectionProfile.modelName
-    )
-
-    if (prefillSupported) {
-      // Traditional approach: append an assistant prefill message to force
-      // the LLM to continue as the designated character.
-      formattedMessages.push({
-        role: 'assistant',
-        content: `[${character.name}]`,
-        thoughtSignature: undefined,
-        name: undefined,
-      })
-    } else {
-      // For models that don't support assistant prefill (e.g., Claude 4.6),
-      // add an explicit instruction to the system prompt instead.
-      logger.debug('Model does not support assistant prefill, using system prompt instruction', {
-        provider: connectionProfile.provider,
-        model: connectionProfile.modelName,
-        character: character.name,
-      })
+    if (connectionProfile.provider === 'ANTHROPIC') {
       const systemIdx = formattedMessages.findIndex(m => m.role === 'system')
       if (systemIdx >= 0) {
         formattedMessages[systemIdx] = {
@@ -594,6 +661,13 @@ export async function buildMessageContext(
             `\n\nIMPORTANT: You are ${character.name}. Always begin your response with [${character.name}] to identify yourself.`,
         }
       }
+    } else {
+      formattedMessages.push({
+        role: 'assistant',
+        content: `[${character.name}]`,
+        thoughtSignature: undefined,
+        name: undefined,
+      })
     }
   }
 
