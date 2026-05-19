@@ -2,6 +2,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { resolveDataDirAndPassphrase, loadDbKey, openMountIndexDb } = require('./db-helpers');
 
 const RESET = '\x1b[0m';
@@ -21,40 +22,56 @@ Quilltap Document Store Tool
 
 Usage: quilltap docs <subcommand> [options]
 
-Subcommands:
+Read subcommands:
   list                                   List all mount points
-  show <id>                              Details for one mount point
-  files <id> [--folder <path>]           List files in a mount
-  read <id> <relativePath>               Print file contents to stdout
-  read --rendered <id> <relativePath>    Print extracted plaintext to stdout
-  export <id> <outputDir>                Export an entire mount to a directory
-  scan <id>                              Trigger a rescan via the running server
+  show <mount>                           Details for one mount point
+  files <mount> [--folder <path>]        List files in a mount
+  read <mount> <relativePath>            Print file contents to stdout
+  read --rendered <mount> <relativePath> Print extracted plaintext to stdout
+  export <mount> <outputDir>             Export an entire mount to a directory
+  scan <mount>                           Trigger a rescan via the running server
+
+Write subcommands (server required for database-backed mounts):
+  write [--force] <mount> <path> [file]  Write a file from <file> or stdin
+  delete <mount> <path>                  Idempotent file delete
+  mkdir <mount> <path>                   Idempotent folder create
+  move <srcMount> <srcPath> <dstMount> <dstPath>           Move file (hard-link when possible)
+  copy [--force] <srcMount> <srcPath> <dstMount> <dstPath> Copy file (hard-link unless --force)
+
+<mount> may be a mount name or UUID. Names are case-insensitive; ambiguous
+names print candidates and exit non-zero.
 
 Options:
   -d, --data-dir <path>     Override data directory
   -i, --instance <name>     Use a registered instance (see 'quilltap instances')
   --passphrase <pass>       Decrypt .dbkey if peppered
   --port <number>           Server port for API calls (default: 3000)
-  --json                    Machine-readable output (list/show/files/scan)
+  --json                    Machine-readable output
   --rendered                For 'read': output extracted plaintext
   --folder <path>           For 'files': narrow to a folder prefix
   --force                   For 'read': dump binary to TTY anyway
+                            For 'write': overwrite existing destination
+                            For 'copy':  overwrite + force a real byte copy
+                                         (skips the default hard-link path)
   -h, --help                Show this help
 
 Read-only operations (list, show, files, read, export) open the mount-index
-database directly. Write operations (scan) require the Quilltap server to be
-running on the chosen --port.
+database directly. Write operations talk to the running Quilltap server when
+available (so reindex/embed kicks off automatically); they fall back to
+filesystem-only writes when the server is down, and report what the index
+will see after the next 'docs scan'.
+
+Verification: every write computes a SHA-256 on both ends and compares them
+before reporting success. Hard-linked files match trivially.
 
 Examples:
-  quilltap docs list
-  quilltap docs list --json
-  quilltap docs show <mount-id>
-  quilltap docs files <mount-id> --folder notes/2026
-  quilltap docs read <mount-id> notes/today.md
-  quilltap docs read --rendered <mount-id> papers/foo.pdf
-  quilltap docs read <mount-id> images/avatar.webp > /tmp/avatar.webp
-  quilltap docs export <mount-id> /tmp/quilltap-mount-backup
-  quilltap docs scan <mount-id>
+  quilltap docs write notes today.md < draft.md
+  quilltap docs write --force notes today.md draft.md
+  quilltap docs delete notes today.md
+  quilltap docs mkdir notes 2026/may
+  quilltap docs move drafts foo.md notes 2026/foo.md
+  quilltap docs copy notes today.md archive 2026-05/today.md
+  quilltap docs copy --force notes today.md archive copy.md
 `);
 }
 
@@ -115,13 +132,39 @@ async function openDb(flags) {
   return { db, dataDir };
 }
 
-function requireMount(db, id) {
-  const row = db.prepare('SELECT * FROM doc_mount_points WHERE id = ?').get(id);
-  if (!row) {
-    console.error(`No mount point found with id ${id}`);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function requireMount(db, spec) {
+  if (!spec) {
+    console.error('Error: mount name or id is required');
     process.exit(1);
   }
-  return row;
+  if (UUID_RE.test(spec)) {
+    const row = db.prepare('SELECT * FROM doc_mount_points WHERE id = ?').get(spec);
+    if (!row) {
+      console.error(`No mount point found with id ${spec}`);
+      process.exit(1);
+    }
+    return row;
+  }
+  const rows = db.prepare(
+    `SELECT * FROM doc_mount_points
+     WHERE LOWER(name) = LOWER(?)
+     ORDER BY name COLLATE NOCASE`
+  ).all(spec);
+  if (rows.length === 0) {
+    console.error(`No mount point found with name "${spec}"`);
+    process.exit(1);
+  }
+  if (rows.length > 1) {
+    console.error(`Ambiguous mount name "${spec}" matches multiple mounts:`);
+    for (const r of rows) {
+      console.error(`  ${r.id}  ${r.name}  (${r.mountType})`);
+    }
+    console.error('Pass the UUID instead.');
+    process.exit(1);
+  }
+  return rows[0];
 }
 
 function formatBytes(n) {
@@ -581,6 +624,535 @@ async function handleScan(flags, id) {
 }
 
 // ----------------------------------------------------------------------------
+// Helpers shared by write/delete/mkdir/move/copy
+// ----------------------------------------------------------------------------
+
+function sha256OfBuffer(buf) {
+  return crypto.createHash('sha256').update(buf).digest('hex');
+}
+
+function isConnectionRefused(err) {
+  if (!err) return false;
+  const code = err.cause && err.cause.code ? err.cause.code : err.code;
+  return (
+    code === 'ECONNREFUSED' ||
+    code === 'ENOTFOUND' ||
+    code === 'EHOSTUNREACH' ||
+    code === 'ECONNRESET'
+  );
+}
+
+async function tryFetch(url, init) {
+  try {
+    return { ok: true, res: await fetch(url, init) };
+  } catch (err) {
+    if (isConnectionRefused(err)) {
+      return { ok: false, err };
+    }
+    throw err;
+  }
+}
+
+async function readBodyJson(res) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function actionUrl(port, mountId, action) {
+  return `http://localhost:${port}/api/v1/mount-points/${encodeURIComponent(mountId)}?action=${action}`;
+}
+
+function unwrap(body) {
+  if (body && typeof body === 'object' && 'data' in body) return body.data;
+  return body;
+}
+
+// ----------------------------------------------------------------------------
+// Direct (offline) helpers — filesystem-only fallback used when the server is
+// unreachable. Database-mount writes always require the server because the
+// index updates need the server's reindex / embed pipeline.
+// ----------------------------------------------------------------------------
+
+function requireServerForDb(mount, action) {
+  if (mount.mountType === 'database') {
+    console.error(
+      `Cannot ${action} on database-backed mount "${mount.name}" without the Quilltap server.`
+    );
+    console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+    process.exit(1);
+  }
+}
+
+function loadMountBasePath(db, mountId) {
+  const row = db.prepare(
+    'SELECT basePath FROM doc_mount_points WHERE id = ?'
+  ).get(mountId);
+  if (!row || !row.basePath) {
+    throw new Error(`Mount ${mountId} has no basePath`);
+  }
+  return row.basePath;
+}
+
+function fsAbsolute(basePath, relativePath) {
+  const abs = path.resolve(basePath, relativePath);
+  const base = path.resolve(basePath);
+  const withSep = base.endsWith(path.sep) ? base : base + path.sep;
+  if (abs !== base && !abs.startsWith(withSep)) {
+    throw new Error(`Path escapes mount boundary: ${relativePath}`);
+  }
+  return abs;
+}
+
+// ----------------------------------------------------------------------------
+// write
+// ----------------------------------------------------------------------------
+
+async function readWriteSource(filename) {
+  if (filename) {
+    const resolved = filename.startsWith('~')
+      ? path.join(require('os').homedir(), filename.slice(1))
+      : path.resolve(filename);
+    if (!fs.existsSync(resolved)) {
+      throw new Error(`Source file not found: ${resolved}`);
+    }
+    return fs.readFileSync(resolved);
+  }
+  if (process.stdin.isTTY) {
+    throw new Error('No source file given and stdin is a TTY. Pipe content or pass a filename.');
+  }
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  if (chunks.length === 0) {
+    throw new Error('Empty stdin payload');
+  }
+  return Buffer.concat(chunks);
+}
+
+async function writeViaHttp(port, mountId, relativePath, data, force) {
+  const form = new FormData();
+  const blob = new Blob([data]);
+  form.append('file', blob, path.posix.basename(relativePath));
+  form.append('path', relativePath);
+  form.append('force', force ? 'true' : 'false');
+  const attempt = await tryFetch(actionUrl(port, mountId, 'write-file'), {
+    method: 'POST',
+    body: form,
+  });
+  if (!attempt.ok) return { reachable: false };
+  const body = await readBodyJson(attempt.res);
+  if (!attempt.res.ok) {
+    const msg = body && body.error ? body.error : `HTTP ${attempt.res.status}`;
+    const code = body && body.code ? body.code : null;
+    return { reachable: true, ok: false, status: attempt.res.status, error: msg, code };
+  }
+  return { reachable: true, ok: true, result: unwrap(body) };
+}
+
+async function handleWrite(flags, positional) {
+  const force = flags.force;
+  const [mountSpec, relativePath, filename] = positional;
+  if (!mountSpec || !relativePath) {
+    console.error('Usage: quilltap docs write [--force] <mount> <path> [filename]');
+    process.exit(1);
+  }
+
+  const data = await readWriteSource(filename);
+  const sourceSha = sha256OfBuffer(data);
+
+  const { db } = await openDb(flags);
+  let mount;
+  try {
+    mount = requireMount(db, mountSpec);
+  } finally {
+    db.close();
+  }
+
+  const http = await writeViaHttp(flags.port, mount.id, relativePath, data, force);
+  if (http.reachable) {
+    if (!http.ok) {
+      console.error(`Write failed: ${http.error}`);
+      process.exit(http.code === 'DEST_EXISTS' ? 2 : 1);
+    }
+    const r = http.result;
+    if (r.sha256 !== sourceSha) {
+      console.error(`Checksum mismatch: source ${sourceSha} != dest ${r.sha256}`);
+      process.exit(1);
+    }
+    if (flags.json) {
+      process.stdout.write(JSON.stringify({ ...r, sourceSha256: sourceSha }, null, 2) + '\n');
+      return;
+    }
+    console.log(`${GREEN}Wrote${RESET} ${mount.name}:${r.destPath} (${formatBytes(r.sizeBytes)}, sha=${r.sha256.slice(0, 12)}…)`);
+    return;
+  }
+
+  // Direct fallback — filesystem mounts only.
+  requireServerForDb(mount, 'write');
+
+  const { db: db2 } = await openDb(flags);
+  let basePath;
+  try {
+    basePath = loadMountBasePath(db2, mount.id);
+  } finally {
+    db2.close();
+  }
+  const abs = fsAbsolute(basePath, relativePath);
+  if (fs.existsSync(abs) && !force) {
+    console.error(`Destination already exists: ${relativePath}. Use --force to overwrite.`);
+    process.exit(2);
+  }
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, data);
+  const destSha = sha256OfBuffer(fs.readFileSync(abs));
+  if (destSha !== sourceSha) {
+    console.error(`Checksum mismatch after write: source ${sourceSha} != dest ${destSha}`);
+    process.exit(1);
+  }
+  if (flags.json) {
+    process.stdout.write(JSON.stringify({
+      sha256: destSha,
+      sourceSha256: sourceSha,
+      sizeBytes: data.length,
+      destPath: relativePath,
+      mountPointId: mount.id,
+      mode: 'direct',
+    }, null, 2) + '\n');
+    return;
+  }
+  console.log(`${GREEN}Wrote${RESET} ${mount.name}:${relativePath} (${formatBytes(data.length)}, sha=${destSha.slice(0, 12)}…) ${DIM}[direct mode — run 'quilltap docs scan' once the server is back]${RESET}`);
+}
+
+// ----------------------------------------------------------------------------
+// delete
+// ----------------------------------------------------------------------------
+
+async function deleteViaHttp(port, mountId, relativePath) {
+  const attempt = await tryFetch(actionUrl(port, mountId, 'delete-file'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: relativePath }),
+  });
+  if (!attempt.ok) return { reachable: false };
+  const body = await readBodyJson(attempt.res);
+  if (!attempt.res.ok) {
+    const msg = body && body.error ? body.error : `HTTP ${attempt.res.status}`;
+    return { reachable: true, ok: false, status: attempt.res.status, error: msg };
+  }
+  return { reachable: true, ok: true, result: unwrap(body) };
+}
+
+async function handleDelete(flags, positional) {
+  const [mountSpec, relativePath] = positional;
+  if (!mountSpec || !relativePath) {
+    console.error('Usage: quilltap docs delete <mount> <path>');
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let mount;
+  try {
+    mount = requireMount(db, mountSpec);
+  } finally {
+    db.close();
+  }
+
+  const http = await deleteViaHttp(flags.port, mount.id, relativePath);
+  if (http.reachable) {
+    if (!http.ok) {
+      console.error(`Delete failed: ${http.error}`);
+      process.exit(1);
+    }
+    const r = http.result;
+    if (flags.json) {
+      process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+      return;
+    }
+    if (r.deleted) {
+      console.log(`${GREEN}Deleted${RESET} ${mount.name}:${r.path}`);
+    } else {
+      console.log(`${DIM}No-op${RESET} ${mount.name}:${r.path} (did not exist)`);
+    }
+    return;
+  }
+
+  requireServerForDb(mount, 'delete');
+
+  const { db: db2 } = await openDb(flags);
+  let basePath;
+  try {
+    basePath = loadMountBasePath(db2, mount.id);
+  } finally {
+    db2.close();
+  }
+  const abs = fsAbsolute(basePath, relativePath);
+  let existed = false;
+  try {
+    fs.unlinkSync(abs);
+    existed = true;
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  if (fs.existsSync(abs)) {
+    console.error(`Delete verification failed: path still present at ${abs}`);
+    process.exit(1);
+  }
+  if (flags.json) {
+    process.stdout.write(JSON.stringify({
+      deleted: existed,
+      path: relativePath,
+      mountPointId: mount.id,
+      mode: 'direct',
+    }, null, 2) + '\n');
+    return;
+  }
+  if (existed) {
+    console.log(`${GREEN}Deleted${RESET} ${mount.name}:${relativePath} ${DIM}[direct mode]${RESET}`);
+  } else {
+    console.log(`${DIM}No-op${RESET} ${mount.name}:${relativePath} (did not exist) ${DIM}[direct mode]${RESET}`);
+  }
+}
+
+// ----------------------------------------------------------------------------
+// mkdir
+// ----------------------------------------------------------------------------
+
+async function mkdirViaHttp(port, mountId, relativePath) {
+  const url = `http://localhost:${port}/api/v1/mount-points/${encodeURIComponent(mountId)}/folders`;
+  const attempt = await tryFetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: relativePath }),
+  });
+  if (!attempt.ok) return { reachable: false };
+  const body = await readBodyJson(attempt.res);
+  if (!attempt.res.ok) {
+    const msg = body && body.error ? body.error : `HTTP ${attempt.res.status}`;
+    return { reachable: true, ok: false, status: attempt.res.status, error: msg };
+  }
+  return { reachable: true, ok: true, result: unwrap(body) };
+}
+
+async function handleMkdir(flags, positional) {
+  const [mountSpec, relativePath] = positional;
+  if (!mountSpec || !relativePath) {
+    console.error('Usage: quilltap docs mkdir <mount> <path>');
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let mount;
+  try {
+    mount = requireMount(db, mountSpec);
+  } finally {
+    db.close();
+  }
+
+  const http = await mkdirViaHttp(flags.port, mount.id, relativePath);
+  if (http.reachable) {
+    if (!http.ok) {
+      console.error(`mkdir failed: ${http.error}`);
+      process.exit(1);
+    }
+    if (flags.json) {
+      process.stdout.write(JSON.stringify(http.result, null, 2) + '\n');
+      return;
+    }
+    console.log(`${GREEN}Folder ready${RESET} ${mount.name}:${http.result.path ?? relativePath}`);
+    return;
+  }
+
+  requireServerForDb(mount, 'mkdir');
+
+  const { db: db2 } = await openDb(flags);
+  let basePath;
+  try {
+    basePath = loadMountBasePath(db2, mount.id);
+  } finally {
+    db2.close();
+  }
+  const abs = fsAbsolute(basePath, relativePath);
+  fs.mkdirSync(abs, { recursive: true });
+  if (!fs.existsSync(abs)) {
+    console.error(`mkdir verification failed: ${abs} does not exist after creation`);
+    process.exit(1);
+  }
+  if (flags.json) {
+    process.stdout.write(JSON.stringify({
+      path: relativePath,
+      mountPointId: mount.id,
+      mode: 'direct',
+    }, null, 2) + '\n');
+    return;
+  }
+  console.log(`${GREEN}Folder ready${RESET} ${mount.name}:${relativePath} ${DIM}[direct mode]${RESET}`);
+}
+
+// ----------------------------------------------------------------------------
+// move / copy
+// ----------------------------------------------------------------------------
+
+async function fileOpViaHttp(port, action, sourceMountId, body) {
+  const attempt = await tryFetch(actionUrl(port, sourceMountId, action), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!attempt.ok) return { reachable: false };
+  const resBody = await readBodyJson(attempt.res);
+  if (!attempt.res.ok) {
+    const msg = resBody && resBody.error ? resBody.error : `HTTP ${attempt.res.status}`;
+    const code = resBody && resBody.code ? resBody.code : null;
+    return { reachable: true, ok: false, status: attempt.res.status, error: msg, code };
+  }
+  return { reachable: true, ok: true, result: unwrap(resBody) };
+}
+
+async function directFsFileOp({ flags, sourceMount, srcPath, destMount, dstPath, action, force }) {
+  if (sourceMount.mountType === 'database' || destMount.mountType === 'database') {
+    console.error(
+      `Cannot ${action} between/with database-backed mounts without the Quilltap server.`
+    );
+    console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let srcBase, dstBase;
+  try {
+    srcBase = loadMountBasePath(db, sourceMount.id);
+    dstBase = loadMountBasePath(db, destMount.id);
+  } finally {
+    db.close();
+  }
+  const srcAbs = fsAbsolute(srcBase, srcPath);
+  const dstAbs = fsAbsolute(dstBase, dstPath);
+
+  if (!fs.existsSync(srcAbs)) {
+    console.error(`Source not found: ${srcPath}`);
+    process.exit(1);
+  }
+  if (fs.existsSync(dstAbs)) {
+    if (action === 'copy' && !force) {
+      console.error(`Destination already exists: ${dstPath}. Use --force to overwrite.`);
+      process.exit(2);
+    }
+    if (action === 'move') {
+      console.error(`Destination already exists: ${dstPath}. Move will not overwrite.`);
+      process.exit(2);
+    }
+    fs.unlinkSync(dstAbs);
+  }
+  fs.mkdirSync(path.dirname(dstAbs), { recursive: true });
+
+  const sourceSha = sha256OfBuffer(fs.readFileSync(srcAbs));
+  let strategy;
+  if (action === 'move') {
+    try {
+      fs.renameSync(srcAbs, dstAbs);
+      strategy = 'rename';
+    } catch (err) {
+      if (err.code !== 'EXDEV') throw err;
+      fs.copyFileSync(srcAbs, dstAbs);
+      fs.unlinkSync(srcAbs);
+      strategy = 'byte-copy';
+    }
+  } else if (force) {
+    fs.copyFileSync(srcAbs, dstAbs);
+    strategy = 'byte-copy';
+  } else {
+    try {
+      fs.linkSync(srcAbs, dstAbs);
+      strategy = 'fs-link';
+    } catch (err) {
+      if (err.code !== 'EXDEV') throw err;
+      fs.copyFileSync(srcAbs, dstAbs);
+      strategy = 'byte-copy';
+    }
+  }
+
+  const destSha = sha256OfBuffer(fs.readFileSync(dstAbs));
+  if (destSha !== sourceSha) {
+    console.error(`Checksum mismatch after ${action}: ${sourceSha} != ${destSha}`);
+    process.exit(1);
+  }
+  return {
+    strategy,
+    sourceSha256: sourceSha,
+    destSha256: destSha,
+    sizeBytes: fs.statSync(dstAbs).size,
+    sourcePath: srcPath,
+    destPath: dstPath,
+    sourceMountPointId: sourceMount.id,
+    destMountPointId: destMount.id,
+    mode: 'direct',
+  };
+}
+
+async function handleFileOp(flags, positional, action) {
+  const [srcMountSpec, srcPath, dstMountSpec, dstPath] = positional;
+  if (!srcMountSpec || !srcPath || !dstMountSpec || !dstPath) {
+    const flagHint = action === 'copy' ? '[--force] ' : '';
+    console.error(`Usage: quilltap docs ${action} ${flagHint}<srcMount> <srcPath> <dstMount> <dstPath>`);
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let sourceMount, destMount;
+  try {
+    sourceMount = requireMount(db, srcMountSpec);
+    destMount = requireMount(db, dstMountSpec);
+  } finally {
+    db.close();
+  }
+
+  const http = await fileOpViaHttp(flags.port, `${action}-file`, sourceMount.id, {
+    sourcePath: srcPath,
+    destMountPointId: destMount.id,
+    destPath: dstPath,
+    ...(action === 'copy' ? { force: !!flags.force } : {}),
+  });
+  if (http.reachable) {
+    if (!http.ok) {
+      console.error(`${action} failed: ${http.error}`);
+      process.exit(http.code === 'DEST_EXISTS' ? 2 : 1);
+    }
+    const r = http.result;
+    if (r.sourceSha256 !== r.destSha256) {
+      console.error(`Checksum mismatch: source ${r.sourceSha256} != dest ${r.destSha256}`);
+      process.exit(1);
+    }
+    if (flags.json) {
+      process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+      return;
+    }
+    const verb = action === 'move' ? 'Moved' : 'Copied';
+    console.log(`${GREEN}${verb}${RESET} ${sourceMount.name}:${r.sourcePath} → ${destMount.name}:${r.destPath} ${DIM}(${r.strategy}, ${formatBytes(r.sizeBytes)}, sha=${r.destSha256.slice(0, 12)}…)${RESET}`);
+    return;
+  }
+
+  const result = await directFsFileOp({
+    flags,
+    sourceMount,
+    srcPath,
+    destMount,
+    dstPath,
+    action,
+    force: !!flags.force,
+  });
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    return;
+  }
+  const verb = action === 'move' ? 'Moved' : 'Copied';
+  console.log(`${GREEN}${verb}${RESET} ${sourceMount.name}:${result.sourcePath} → ${destMount.name}:${result.destPath} ${DIM}(${result.strategy}, ${formatBytes(result.sizeBytes)}, sha=${result.destSha256.slice(0, 12)}…) [direct mode — run 'quilltap docs scan' once the server is back]${RESET}`);
+}
+
+// ----------------------------------------------------------------------------
 // dispatch
 // ----------------------------------------------------------------------------
 
@@ -621,6 +1193,21 @@ async function docsCommand(args) {
         break;
       case 'scan':
         await handleScan(flags, positional[0]);
+        break;
+      case 'write':
+        await handleWrite(flags, positional);
+        break;
+      case 'delete':
+        await handleDelete(flags, positional);
+        break;
+      case 'mkdir':
+        await handleMkdir(flags, positional);
+        break;
+      case 'move':
+        await handleFileOp(flags, positional, 'move');
+        break;
+      case 'copy':
+        await handleFileOp(flags, positional, 'copy');
         break;
       default:
         console.error(`Unknown docs subcommand: ${verb}`);

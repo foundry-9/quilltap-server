@@ -25,6 +25,7 @@ import {
   validateDeconvertTarget,
 } from '@/lib/mount-index/conversion';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
+import { copyFile, moveFile, writeFile, deleteFile, FileOpError } from '@/lib/mount-index/file-ops';
 
 // ============================================================================
 // Schemas
@@ -402,12 +403,204 @@ async function handleDeconvert(
   }
 }
 
+// ============================================================================
+// Move / Copy Actions
+// ============================================================================
+
+const moveFileSchema = z.object({
+  sourcePath: z.string().min(1),
+  destMountPointId: z.string().min(1),
+  destPath: z.string().min(1),
+});
+
+const copyFileSchema = moveFileSchema.extend({
+  force: z.boolean().optional(),
+});
+
+function fileOpStatus(err: FileOpError): number {
+  switch (err.code) {
+    case 'MOUNT_NOT_FOUND':
+    case 'SOURCE_NOT_FOUND':
+      return 404;
+    case 'DEST_EXISTS':
+      return 409;
+    case 'INVALID_PATH':
+    case 'UNSUPPORTED':
+      return 400;
+    case 'VERIFY_FAILED':
+    default:
+      return 500;
+  }
+}
+
+async function handleMoveFile(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const parsed = moveFileSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest('Move requires sourcePath, destMountPointId, and destPath');
+  }
+  try {
+    const result = await moveFile({
+      sourceMountPointId: id,
+      sourcePath: parsed.data.sourcePath,
+      destMountPointId: parsed.data.destMountPointId,
+      destPath: parsed.data.destPath,
+    });
+    logger.info('[Mount Points v1] Moved file', {
+      ...result,
+      userId: user.id,
+    });
+    return successResponse(result);
+  } catch (err) {
+    if (err instanceof FileOpError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: fileOpStatus(err) }
+      );
+    }
+    logger.error(
+      '[Mount Points v1] Error moving file',
+      { mountPointId: id },
+      err instanceof Error ? err : undefined
+    );
+    return serverError('Failed to move file');
+  }
+}
+
+async function handleCopyFile(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const parsed = copyFileSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest('Copy requires sourcePath, destMountPointId, and destPath');
+  }
+  try {
+    const result = await copyFile({
+      sourceMountPointId: id,
+      sourcePath: parsed.data.sourcePath,
+      destMountPointId: parsed.data.destMountPointId,
+      destPath: parsed.data.destPath,
+      force: parsed.data.force,
+    });
+    logger.info('[Mount Points v1] Copied file', {
+      ...result,
+      userId: user.id,
+    });
+    return successResponse(result);
+  } catch (err) {
+    if (err instanceof FileOpError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: fileOpStatus(err) }
+      );
+    }
+    logger.error(
+      '[Mount Points v1] Error copying file',
+      { mountPointId: id },
+      err instanceof Error ? err : undefined
+    );
+    return serverError('Failed to copy file');
+  }
+}
+
+async function handleWriteFile(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  try {
+    const contentType = req.headers.get('content-type') || '';
+    if (!contentType.includes('multipart/form-data')) {
+      return badRequest('Expected multipart/form-data');
+    }
+    const form = await req.formData();
+    const file = form.get('file');
+    const relativePath = String(form.get('path') ?? '').trim();
+    const force = String(form.get('force') ?? '').toLowerCase() === 'true';
+    if (!(file instanceof File)) {
+      return badRequest('Missing "file" field in multipart body');
+    }
+    if (!relativePath) {
+      return badRequest('Missing "path" field');
+    }
+    const data = Buffer.from(await file.arrayBuffer());
+    const result = await writeFile({
+      mountPointId: id,
+      relativePath,
+      data,
+      force,
+    });
+    logger.info('[Mount Points v1] Wrote file', {
+      ...result,
+      userId: user.id,
+    });
+    return successResponse(result);
+  } catch (err) {
+    if (err instanceof FileOpError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: fileOpStatus(err) }
+      );
+    }
+    logger.error(
+      '[Mount Points v1] Error writing file',
+      { mountPointId: id },
+      err instanceof Error ? err : undefined
+    );
+    return serverError('Failed to write file');
+  }
+}
+
+async function handleDeleteFile(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const relativePath = typeof body?.path === 'string' ? body.path.trim() : '';
+    if (!relativePath) {
+      return badRequest('Missing "path" field');
+    }
+    const result = await deleteFile({ mountPointId: id, relativePath });
+    logger.info('[Mount Points v1] Deleted file', {
+      ...result,
+      userId: user.id,
+    });
+    return successResponse(result);
+  } catch (err) {
+    if (err instanceof FileOpError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: fileOpStatus(err) }
+      );
+    }
+    logger.error(
+      '[Mount Points v1] Error deleting file',
+      { mountPointId: id },
+      err instanceof Error ? err : undefined
+    );
+    return serverError('Failed to delete file');
+  }
+}
+
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   (req, ctx, { id }) => {
     const dispatch = withActionDispatch<{ id: string }>({
       scan: handleScan,
       convert: handleConvert,
       deconvert: handleDeconvert,
+      'move-file': handleMoveFile,
+      'copy-file': handleCopyFile,
+      'write-file': handleWriteFile,
+      'delete-file': handleDeleteFile,
     });
     return dispatch(req, ctx, { id });
   }

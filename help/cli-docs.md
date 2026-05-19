@@ -10,24 +10,44 @@ A second arrival in the same release: the `quilltap db --mount-points` flag, whi
 
 ## Two Modes of Operation
 
-The new commands operate in one of two modes, chosen automatically depending on what you ask for:
+The commands operate in one of two modes, chosen automatically depending on what you ask for:
 
 - **Direct database access** — Listing mount points, inspecting one in detail, enumerating files, reading a file's contents, and exporting a whole mount to a directory all open the encrypted `quilltap-mount-index.db` file directly. The Quilltap server need not be running, and indeed any number of these commands may be issued against an instance whose server is taking the afternoon off.
-- **Through the running server** — Triggering a rescan requires the embedding pipeline, the watchers, and the rest of the apparatus, so `quilltap docs scan` makes a polite HTTP request to the server (defaulting to `http://localhost:3000`; pass `--port` for a non-default arrangement). If the server has not been started, the command will say so plainly.
+- **Through the running server** — Triggering a rescan, writing or deleting files, creating folders, moving and copying — these need the embedding pipeline, the watchers, and the rest of the apparatus, so the CLI makes a polite HTTP request to the server (defaulting to `http://localhost:3000`; pass `--port` for a non-default arrangement). If the server cannot be reached, write commands fall back to a best-effort filesystem-only mode for filesystem-backed mounts, and politely refuse the like for database-backed mounts (where the index machinery is indispensable).
 
 Semantic search remains, for the moment, only available through the chat interface and the API. A future arrival may add `quilltap docs search` once the embedding pipeline is plumbed into the CLI; until then, ask a character to consult their commonplace book in the usual way.
+
+## Wherever Mount Names Appear
+
+Anywhere a `<mount>` argument is called for, you may furnish either a name (case-insensitive, exactly as it appears in the Scriptorium) or a UUID. Should a name be ambiguous — the unfortunate fate of, say, three mounts called *Notes* — the CLI will print the candidates with their UUIDs and stand down rather than guess.
 
 ## The Subcommands
 
 ```text
-quilltap docs list                                  # All mount points (table)
-quilltap docs show <id>                             # One mount, with live counts
-quilltap docs files <id> [--folder <path>]          # Files in a mount
-quilltap docs read <id> <relativePath>              # Raw bytes/text → stdout
-quilltap docs read --rendered <id> <relativePath>   # Extracted plaintext → stdout
-quilltap docs export <id> <outputDir>               # Whole mount → a directory
-quilltap docs scan <id>                             # Rescan via the running server
+# Read
+quilltap docs list                                   # All mount points (table)
+quilltap docs show <mount>                           # One mount, with live counts
+quilltap docs files <mount> [--folder <path>]        # Files in a mount
+quilltap docs read <mount> <relativePath>            # Raw bytes/text → stdout
+quilltap docs read --rendered <mount> <relativePath> # Extracted plaintext → stdout
+quilltap docs export <mount> <outputDir>             # Whole mount → a directory
+quilltap docs scan <mount>                           # Rescan via the running server
+
+# Write
+quilltap docs write [--force] <mount> <path> [file]  # Stdin or file → mount
+quilltap docs delete <mount> <path>                  # Idempotent file delete
+quilltap docs mkdir <mount> <path>                   # Idempotent folder create
+quilltap docs move <srcMount> <srcPath> <dstMount> <dstPath>           # Move (hard-link where possible)
+quilltap docs copy [--force] <srcMount> <srcPath> <dstMount> <dstPath> # Copy (hard-link unless --force)
 ```
+
+### Hard Links, Byte Copies, and Verification
+
+`move` and `copy` use hard links whenever they can — between two database-backed mounts, by way of a new entry in the `doc_mount_file_links` table pointing at the same content row; between two filesystem mounts on the same device, by way of `link(2)`. When that is impossible — across storage types, across devices, or simply because you asked for `copy --force` — the CLI falls back to a real byte copy.
+
+Every write — `write`, `move`, and `copy` alike — computes a SHA-256 on both ends and refuses to declare success unless the two digests agree. Hard-linked files match trivially; byte copies match because the bytes were faithfully transcribed.
+
+`write` and `copy` both honour `--force`. For `write`, the flag means "overwrite the destination if it already exists." For `copy`, it additionally means "skip the hard-link path and copy bytes for real."
 
 ### Raw vs. Rendered
 
@@ -64,6 +84,25 @@ quilltap docs export 0123abcd-... ~/backups/quilltap-mount-2026-04-25
 
 # Trigger a rescan (server must be running)
 quilltap docs scan 0123abcd-...
+
+# Write a Markdown file from a local draft, refusing to overwrite
+quilltap docs write notes today.md draft.md
+
+# Same, but pipe it in from stdin (and force-overwrite)
+cat draft.md | quilltap docs write --force notes today.md
+
+# Idempotent folder creation — running twice is harmless
+quilltap docs mkdir notes 2026/may
+
+# Move a file from drafts to notes, hard-linking where the data model allows
+quilltap docs move drafts foo.md notes 2026/foo.md
+
+# Copy with a hard link (default), then again forcing a real byte copy
+quilltap docs copy notes today.md archive 2026-05/today.md
+quilltap docs copy --force notes today.md archive 2026-05/today.copy.md
+
+# Idempotent delete
+quilltap docs delete notes today.md
 ```
 
 ## SQL Against the Mount-Index Database
@@ -83,12 +122,13 @@ The `--data-dir` and `--passphrase` flags work identically to the standard `db` 
 | Flag | Purpose |
 | --- | --- |
 | `-d, --data-dir <path>` | Use a non-default data directory |
+| `-i, --instance <name>` | Use a registered instance (see `quilltap instances`) |
 | `--passphrase <pass>` | Decrypt a peppered `.dbkey` file |
-| `--port <number>` | Server port for `scan` (default 3000) |
-| `--json` | Machine-readable output for `list`, `show`, `files`, `scan` |
+| `--port <number>` | Server port for write commands (default 3000) |
+| `--json` | Machine-readable output |
 | `--rendered` | For `read`: extracted plaintext instead of raw bytes |
 | `--folder <path>` | For `files`: narrow to a folder prefix |
-| `--force` | For `read`: dump binary to TTY anyway |
+| `--force` | For `read`: dump binary to TTY anyway; for `write`: overwrite; for `copy`: overwrite and force a byte copy |
 | `-h, --help` | Per-subcommand help text |
 
 ## In-Chat Navigation

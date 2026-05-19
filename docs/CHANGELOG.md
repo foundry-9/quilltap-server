@@ -4,6 +4,25 @@
 
 ### 4.5-dev
 
+#### `quilltap docs` — write subcommands (write/delete/mkdir/move/copy)
+
+New CLI verbs that mutate document mounts in addition to the existing read-only set. Mount arguments accept either the mount name (case-insensitive) or its UUID; ambiguous names print candidates and exit non-zero.
+
+- `write [--force] <mount> <path> [file]` — write bytes from a local file or stdin; refuses to overwrite without `--force`.
+- `delete <mount> <path>` — idempotent (no-op if the path is already gone).
+- `mkdir <mount> <path>` — idempotent; creates parent folders as needed.
+- `move <srcMount> <srcPath> <dstMount> <dstPath>` — hard-links where the storage layout allows (DB↔DB shares a content row by `fileId`; FS↔FS on the same device uses `fs.rename`); falls back to a byte copy across storage types or devices.
+- `copy [--force] <srcMount> <srcPath> <dstMount> <dstPath>` — same hard-link semantics. `--force` overwrites and skips the hard-link path for a real byte copy (FS↔FS only; DB content is sha-deduplicated regardless).
+
+Every write computes a SHA-256 on both ends and refuses to declare success unless the digests match. The CLI talks to the running server when reachable (so reindex/embed kicks off automatically); when the server is down it falls back to direct filesystem writes for filesystem-backed mounts, and errors out for database-backed mounts.
+
+Implementation:
+
+- New server-side helper `lib/mount-index/file-ops.ts` with `moveFile`, `copyFile`, `writeFile`, and `deleteFile`. Centralizes the four storage-type combinations (FS→FS, DB→DB, and the two cross-storage directions), hard-link primitives, byte-copy fallbacks, and pre/post sha verification. Exposes `FileOpError` with structured codes (`SOURCE_NOT_FOUND`, `DEST_EXISTS`, `INVALID_PATH`, `VERIFY_FAILED`, etc.).
+- New actions on `POST /api/v1/mount-points/[id]`: `move-file`, `copy-file`, `write-file`, `delete-file`.
+- CLI changes in `packages/quilltap/lib/docs-commands.js`: `handleWrite`, `handleDelete`, `handleMkdir`, and `handleFileOp` (shared by move/copy). `requireMount` now resolves either a name or a UUID; existing read subcommands inherit that.
+- Help: `help/cli-docs.md` describes the new subcommands, hard-link semantics, and verification policy.
+
 #### `quilltap instances` — named-instance registry for the CLI
 
 New CLI subcommand and `--instance <name>` flag. The CLI now stores a per-user registry of named Quilltap instances (path + optional database passphrase) at `~/Library/Application Support/Quilltap/instances.json` on macOS (`~/.quilltap/instances.json` on Linux, `%APPDATA%\Quilltap\instances.json` on Windows). Once an instance is registered, every subcommand that accepts `--data-dir` will also accept `--instance Friday` — the CLI translates it to the correct data directory and supplies the stored passphrase if one is set.
