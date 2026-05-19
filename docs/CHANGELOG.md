@@ -4,6 +4,16 @@
 
 ### 4.5-dev
 
+#### `quilltap db optimize` — basic database maintenance
+
+New CLI verb that runs `VACUUM`, `ANALYZE`, and `PRAGMA optimize` against the encrypted SQLite databases. Reclaims free pages and refreshes query-planner stats.
+
+Usage: `quilltap db optimize` (all three databases) or `quilltap db optimize <main|llm-logs|mount-points>` (one). Default with no positional argument hits all three. `--json` is supported. Per-database output shows before/after file size and per-step timing, plus a total-reclaimed summary across all targets.
+
+Refuses to run while the instance lock is actively held (live PID on this host, or a fresh VM heartbeat). Proceeds when the lock is absent or stale. Lock state is inspected via the new shared helper `packages/quilltap/lib/lock-helpers.js` (`getLockStatus(dataDir)`), which encapsulates the PID/`verifyPidIsNode`/heartbeat logic previously inlined in `bin/quilltap.js`.
+
+Implementation lives in `packages/quilltap/lib/db-commands.js` (`cmdOptimize`, wired into the `VERBS` table; `pepper` is now exposed on the verb-dispatch ctx so optimize can open writable handles via the existing `openMainDb` / `openLlmLogsDb` / `openMountIndexDb` helpers). Help text in `bin/quilltap.js` `printDbHelp()` and the "Database Protection" help page describe the new verb.
+
 #### `quilltap db` high-level subcommands
 
 `packages/quilltap` gains a verb-based layer on top of the existing flag/SQL CLI so common drill-downs no longer require hand-written SQL. New file `packages/quilltap/lib/db-commands.js`; `bin/quilltap.js` dispatches to it when `args[0]` matches a known verb, otherwise the legacy flag path runs unchanged.

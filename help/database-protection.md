@@ -75,6 +75,22 @@ npx quilltap db --llm-logs --tables
 npx quilltap db --data-dir /path/to/data --tables
 ```
 
+### Tidying Up the Premises
+
+From time to time — particularly after a great churn of message deletion, log pruning, or document-store reshuffling — the databases will accumulate unused pages and grow stale query-planner statistics. A spot of housekeeping reclaims the disk space and restores the planner's wits:
+
+```bash
+# VACUUM + ANALYZE + PRAGMA optimize on every database
+npx quilltap db optimize
+
+# Or operate on a single database
+npx quilltap db optimize main
+npx quilltap db optimize llm-logs
+npx quilltap db optimize mount-points
+```
+
+The command refuses to proceed while a Quilltap instance still has the database in its grasp — VACUUM rewrites the entire file, an operation which brooks no concurrent writers. Stop the running instance first (or, in the case of a stale lock left behind by a previous crash, consult `quilltap db --lock-status` and `--lock-clean`).
+
 ## Three-Database Architecture
 
 Quilltap stores your data across three separate database files:

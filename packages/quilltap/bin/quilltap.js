@@ -712,6 +712,11 @@ Subcommands (high-level shortcuts; auto-pick the right database):
   log <id>                    Full request/response of a single LLM log
   memories --character <id>   Memories held by a character
                               (flags: --about <id|name> --source AUTO|MANUAL)
+  optimize [target...]        Run maintenance (VACUUM + ANALYZE + PRAGMA optimize)
+                              on the named databases, or all of them if no
+                              target is given. Targets: main, llm-logs,
+                              mount-points (or "all"). Refuses to run while a
+                              live Quilltap instance holds the lock.
   Most subcommands also accept --json and --limit N.
 
 Low-level options (legacy; still supported):
@@ -741,6 +746,8 @@ Examples:
   quilltap db messages --chat <id> --last 50 --full    # recent messages
   quilltap db logs --chat "physical prompts"           # llm logs for a chat
   quilltap db log <log-id>                             # full request/response
+  quilltap db optimize                                 # VACUUM + ANALYZE all DBs
+  quilltap db optimize llm-logs                        # only the LLM logs DB
   quilltap db --tables
   quilltap db "SELECT count(*) FROM characters"
   quilltap db --count messages

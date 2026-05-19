@@ -1,6 +1,9 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { openMainDb, openLlmLogsDb, openMountIndexDb } = require('./db-helpers');
+const { getLockStatus } = require('./lock-helpers');
 
 // Tables grouped by domain for `db schema` (with-no-arg) overview, and for
 // DB-routing when a verb names a specific table. Keep this list short — it's
@@ -684,6 +687,158 @@ function cmdMemories(args, ctx) {
   }
 }
 
+// ---------- verb: optimize ----------
+
+const OPTIMIZE_TARGETS = {
+  'main':         { filename: 'quilltap.db',              label: 'main' },
+  'llm-logs':     { filename: 'quilltap-llm-logs.db',     label: 'llm-logs' },
+  'mount-points': { filename: 'quilltap-mount-index.db',  label: 'mount-points' },
+};
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function formatDuration(ms) {
+  if (ms < 1000) return `${ms} ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(2)} s`;
+  return `${(ms / 60_000).toFixed(2)} min`;
+}
+
+function fileSize(filePath) {
+  try {
+    return fs.statSync(filePath).size;
+  } catch {
+    return 0;
+  }
+}
+
+function cmdOptimize(args, ctx) {
+  const { flags, positional } = parseSubArgs(args);
+  const json = asBool(flags.json);
+
+  // Resolve target list
+  let targets;
+  if (positional.length === 0 || (positional.length === 1 && positional[0] === 'all')) {
+    targets = Object.keys(OPTIMIZE_TARGETS);
+  } else {
+    targets = positional.map(p => {
+      if (!OPTIMIZE_TARGETS[p]) {
+        const allowed = Object.keys(OPTIMIZE_TARGETS).join(' | ');
+        throw new Error(`Unknown optimize target '${p}'. Allowed: ${allowed} | all`);
+      }
+      return p;
+    });
+  }
+
+  // Refuse to proceed if any instance is actively holding the lock.
+  const lockStatus = getLockStatus(ctx.dataDir);
+  if (lockStatus.state === 'active' || lockStatus.state === 'suspect') {
+    const msg = lockStatus.state === 'active'
+      ? `Database is currently in use — ${lockStatus.reason}.\n` +
+        `Stop the running Quilltap instance before optimizing, then try again.\n` +
+        `(See \`quilltap db --lock-status\` for details.)`
+      : `Lock file ${lockStatus.reason}.\n` +
+        `This may be a stale lock from a reused PID. Inspect it with\n` +
+        `\`quilltap db --lock-status\` and clean it up with \`quilltap db --lock-clean\` if safe.`;
+    const err = new Error(msg);
+    err.locked = true;
+    throw err;
+  }
+  if (lockStatus.state === 'corrupt') {
+    throw new Error(
+      `Lock file at ${lockStatus.lockPath} is corrupt. Inspect it manually or clean with ` +
+      `\`quilltap db --lock-clean\`, then retry.`,
+    );
+  }
+
+  const results = [];
+  for (const key of targets) {
+    const target = OPTIMIZE_TARGETS[key];
+    const dbPath = path.join(ctx.dataDir, target.filename);
+    if (!fs.existsSync(dbPath)) {
+      if (!json) console.log(`Skipping ${target.label}: ${dbPath} not found.`);
+      results.push({ target: target.label, skipped: true, reason: 'not found' });
+      continue;
+    }
+    const result = optimizeOneDb(key, dbPath, ctx);
+    results.push(result);
+  }
+
+  if (json) {
+    printJson({ results });
+    return;
+  }
+
+  // Final summary
+  const totalSaved = results
+    .filter(r => !r.skipped && r.sizeBefore != null && r.sizeAfter != null)
+    .reduce((acc, r) => acc + (r.sizeBefore - r.sizeAfter), 0);
+  if (totalSaved > 0) {
+    console.log('');
+    console.log(`Total reclaimed: ${formatBytes(totalSaved)}`);
+  }
+}
+
+function optimizeOneDb(key, dbPath, ctx) {
+  const target = OPTIMIZE_TARGETS[key];
+  const opener = key === 'main' ? openMainDb : key === 'llm-logs' ? openLlmLogsDb : openMountIndexDb;
+
+  console.log('');
+  console.log(`── ${target.label}  (${dbPath}) ──`);
+  const sizeBefore = fileSize(dbPath);
+  console.log(`  size before: ${formatBytes(sizeBefore)}`);
+
+  let db;
+  try {
+    db = opener(ctx.dataDir, ctx.pepper, { readonly: false });
+  } catch (err) {
+    console.log(`  open failed: ${err.message}`);
+    return { target: target.label, skipped: true, reason: err.message };
+  }
+
+  const steps = [];
+  function runStep(name, fn) {
+    const t0 = Date.now();
+    let info = '';
+    try {
+      info = fn() || '';
+    } catch (err) {
+      const elapsed = Date.now() - t0;
+      console.log(`  ${name}: FAILED after ${formatDuration(elapsed)} — ${err.message}`);
+      steps.push({ name, ok: false, ms: elapsed, error: err.message });
+      throw err;
+    }
+    const elapsed = Date.now() - t0;
+    console.log(`  ${name}: ${formatDuration(elapsed)}${info ? ` (${info})` : ''}`);
+    steps.push({ name, ok: true, ms: elapsed });
+  }
+
+  try {
+    runStep('VACUUM',          () => { db.exec('VACUUM'); });
+    runStep('ANALYZE',         () => { db.exec('ANALYZE'); });
+    runStep('PRAGMA optimize', () => { db.pragma('optimize'); });
+  } catch {
+    try { db.close(); } catch {}
+    return { target: target.label, skipped: false, sizeBefore, sizeAfter: fileSize(dbPath), steps };
+  } finally {
+    try { db.close(); } catch {}
+  }
+
+  const sizeAfter = fileSize(dbPath);
+  const delta = sizeBefore - sizeAfter;
+  const deltaStr = delta === 0
+    ? 'no change'
+    : delta > 0
+      ? `reclaimed ${formatBytes(delta)}`
+      : `grew by ${formatBytes(-delta)}`;
+  console.log(`  size after:  ${formatBytes(sizeAfter)}  (${deltaStr})`);
+  return { target: target.label, skipped: false, sizeBefore, sizeAfter, steps };
+}
+
 // ---------- dispatch ----------
 
 const VERBS = {
@@ -695,6 +850,7 @@ const VERBS = {
   message: cmdMessage,
   log: cmdLog,
   memories: cmdMemories,
+  optimize: cmdOptimize,
 };
 
 function isVerb(arg) {
@@ -711,6 +867,7 @@ function runVerb(args, ctx) {
 function makeCtx(dataDir, pepper) {
   return {
     dataDir,
+    pepper,
     openMain:   () => openMainDb(dataDir, pepper, { readonly: true }),
     openLogs:   () => openLlmLogsDb(dataDir, pepper, { readonly: true }),
     openMounts: () => openMountIndexDb(dataDir, pepper, { readonly: true }),
