@@ -5,7 +5,13 @@ const { fork, exec, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { getCacheDir, isCacheValid, ensureStandalone } = require('../lib/download-manager');
-const { resolveDataDir, promptPassphrase, loadDbKey } = require('../lib/db-helpers');
+const {
+  resolveDataDir,
+  resolveDataDirAndPassphrase,
+  promptPassphrase,
+  loadDbKey,
+} = require('../lib/db-helpers');
+const { resolveInstance } = require('../lib/instances');
 
 const PACKAGE_DIR = path.resolve(__dirname, '..');
 
@@ -20,6 +26,7 @@ function parseArgs(argv) {
   const opts = {
     port: 3000,
     dataDir: '',
+    instance: '',
     open: false,
     help: false,
     version: false,
@@ -41,6 +48,10 @@ function parseArgs(argv) {
       case '--data-dir':
       case '-d':
         opts.dataDir = args[++i];
+        break;
+      case '--instance':
+      case '-i':
+        opts.instance = args[++i];
         break;
       case '--open':
       case '-o':
@@ -79,11 +90,13 @@ Subcommands:
   db                            Query encrypted databases
   themes                        Manage theme bundles
   docs                          Inspect, read, and export document mounts
+  instances                     Register / inspect named Quilltap instances
   memory-diff <chatId>          Dump existing memories and dry-run re-extraction for a chat
 
 Options:
   -p, --port <number>     Port to listen on (default: 3000)
   -d, --data-dir <path>   Data directory (default: platform-specific)
+  -i, --instance <name>   Use a registered instance (see 'quilltap instances')
   -o, --open              Open browser after server starts
   -v, --version           Show version number
   --update                Force re-download of application files
@@ -346,7 +359,20 @@ async function main() {
     HOSTNAME: '0.0.0.0',
   };
 
-  if (opts.dataDir) {
+  if (opts.dataDir && opts.instance) {
+    console.error('Error: Specify either --instance or --data-dir, not both.');
+    process.exit(1);
+  }
+  if (opts.instance) {
+    try {
+      const inst = resolveInstance(opts.instance);
+      env.QUILLTAP_DATA_DIR = inst.path;
+      opts.dataDir = inst.path; // surfaced in the startup banner below
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  } else if (opts.dataDir) {
     env.QUILLTAP_DATA_DIR = path.resolve(opts.dataDir);
   }
 
@@ -726,6 +752,8 @@ Low-level options (legacy; still supported):
   --llm-logs            Target the LLM logs database
   --mount-points        Target the document mount-index database
   --data-dir <path>     Override data directory (pass instance root)
+  -i, --instance <name> Use a registered instance from instances.json
+                        (see 'quilltap instances --help')
   --passphrase <pass>   Provide passphrase for encrypted .dbkey
   -h, --help            Show this help
 
@@ -763,25 +791,38 @@ async function dbCommand(args) {
   //      to the new high-level commands without touching the legacy path.
   const { isVerb, runVerb, makeCtx } = require('../lib/db-commands');
 
-  // Strip --data-dir / --passphrase out so they can appear anywhere on the line,
-  // including before or after the verb.
+  // Strip --data-dir / --passphrase / --instance out so they can appear anywhere
+  // on the line, including before or after the verb.
   const cleaned = [];
   let dataDirOverride = '';
   let passphrase = '';
+  let instanceName = '';
   for (let j = 0; j < args.length; j++) {
     const a = args[j];
     if (a === '--data-dir' || a === '-d') { dataDirOverride = args[++j]; continue; }
     if (a === '--passphrase') { passphrase = args[++j]; continue; }
+    if (a === '--instance' || a === '-i') { instanceName = args[++j]; continue; }
     cleaned.push(a);
   }
 
   // Find first non-flag arg to test for verb
   const firstPositional = cleaned.find(a => !a.startsWith('-'));
   if (firstPositional && isVerb(firstPositional)) {
-    const dataDir = resolveDataDir(dataDirOverride);
+    let resolved;
+    try {
+      resolved = resolveDataDirAndPassphrase({
+        dataDir: dataDirOverride,
+        instance: instanceName,
+        passphrase,
+      });
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+    const dataDir = resolved.dataDir;
     let pepper;
     try {
-      pepper = await loadDbKey(dataDir, passphrase);
+      pepper = await loadDbKey(dataDir, resolved.passphrase);
     } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
@@ -837,7 +878,19 @@ async function dbCommand(args) {
     process.exit(0);
   }
 
-  const dataDir = resolveDataDir(dataDirOverride);
+  let legacyResolved;
+  try {
+    legacyResolved = resolveDataDirAndPassphrase({
+      dataDir: dataDirOverride,
+      instance: instanceName,
+      passphrase,
+    });
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+  const dataDir = legacyResolved.dataDir;
+  passphrase = legacyResolved.passphrase;
 
   // ---- Instance lock commands (no database open required) ----
   if (lockStatus || lockClean || lockOverride) {
@@ -1004,6 +1057,12 @@ if (process.argv[2] === 'db') {
 } else if (process.argv[2] === 'docs') {
   const { docsCommand } = require('../lib/docs-commands');
   docsCommand(process.argv.slice(3));
+} else if (process.argv[2] === 'instances') {
+  const { instancesCommand } = require('../lib/instances-commands');
+  instancesCommand(process.argv.slice(3)).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
 } else if (process.argv[2] === 'memory-diff') {
   const { memoryDiffCommand } = require('../lib/memory-diff-command');
   memoryDiffCommand(process.argv.slice(3)).catch(err => {

@@ -24,6 +24,31 @@ function resolveDataDir(overrideDir) {
   return path.join(home, '.quilltap', 'data');
 }
 
+// Resolve the data dir + database passphrase a subcommand should use, given
+// the raw flag values it parsed. `--instance Foo` looks up the registry; an
+// explicit `--data-dir` or `--passphrase` still wins so callers can override.
+// Errors out if both `--instance` and `--data-dir` were supplied — these
+// configure the same thing two different ways and must not silently disagree.
+function resolveDataDirAndPassphrase({ dataDir, instance, passphrase }) {
+  if (dataDir && instance) {
+    throw new Error('Specify either --instance or --data-dir, not both.');
+  }
+  if (instance) {
+    const { resolveInstance } = require('./instances');
+    const inst = resolveInstance(instance);
+    return {
+      dataDir: path.join(inst.path, 'data'),
+      passphrase: passphrase || inst.passphrase || '',
+      instanceName: inst.name,
+    };
+  }
+  return {
+    dataDir: resolveDataDir(dataDir),
+    passphrase: passphrase || '',
+    instanceName: null,
+  };
+}
+
 function promptPassphrase(prompt) {
   return new Promise((resolve, reject) => {
     const readline = require('readline');
@@ -158,6 +183,7 @@ function openMountIndexDb(dataDir, pepper, opts = {}) {
 
 module.exports = {
   resolveDataDir,
+  resolveDataDirAndPassphrase,
   promptPassphrase,
   loadDbKey,
   openEncryptedDb,

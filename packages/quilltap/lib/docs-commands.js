@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { resolveDataDir, loadDbKey, openMountIndexDb } = require('./db-helpers');
+const { resolveDataDirAndPassphrase, loadDbKey, openMountIndexDb } = require('./db-helpers');
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -32,6 +32,7 @@ Subcommands:
 
 Options:
   -d, --data-dir <path>     Override data directory
+  -i, --instance <name>     Use a registered instance (see 'quilltap instances')
   --passphrase <pass>       Decrypt .dbkey if peppered
   --port <number>           Server port for API calls (default: 3000)
   --json                    Machine-readable output (list/show/files/scan)
@@ -60,6 +61,7 @@ Examples:
 function parseFlags(args) {
   const flags = {
     dataDir: '',
+    instance: '',
     passphrase: '',
     port: 3000,
     json: false,
@@ -74,6 +76,7 @@ function parseFlags(args) {
     const a = args[i];
     switch (a) {
       case '-d': case '--data-dir': flags.dataDir = args[++i]; break;
+      case '-i': case '--instance': flags.instance = args[++i]; break;
       case '--passphrase': flags.passphrase = args[++i]; break;
       case '--port': {
         const p = parseInt(args[++i], 10);
@@ -102,8 +105,12 @@ function parseFlags(args) {
 }
 
 async function openDb(flags) {
-  const dataDir = resolveDataDir(flags.dataDir);
-  const pepper = await loadDbKey(dataDir, flags.passphrase);
+  const { dataDir, passphrase } = resolveDataDirAndPassphrase({
+    dataDir: flags.dataDir,
+    instance: flags.instance,
+    passphrase: flags.passphrase,
+  });
+  const pepper = await loadDbKey(dataDir, passphrase);
   const db = openMountIndexDb(dataDir, pepper, { readonly: true });
   return { db, dataDir };
 }

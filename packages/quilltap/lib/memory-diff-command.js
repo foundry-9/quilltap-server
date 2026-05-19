@@ -13,7 +13,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { resolveDataDir, loadDbKey } = require('./db-helpers');
+const { resolveDataDirAndPassphrase, loadDbKey } = require('./db-helpers');
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -39,6 +39,7 @@ so the comparison is non-destructive.
 
 Options:
   -d, --data-dir <path>      Override data directory (instance root)
+  -i, --instance <name>      Use a registered instance (see 'quilltap instances')
       --passphrase <pass>    Decrypt .dbkey if peppered
       --port <number>        Server port for API calls (default: 3000)
       --out <dir>            Output directory (default: cwd)
@@ -58,6 +59,7 @@ Examples:
 function parseFlags(args) {
   const flags = {
     dataDir: '',
+    instance: '',
     passphrase: '',
     port: 3000,
     out: process.cwd(),
@@ -72,6 +74,10 @@ function parseFlags(args) {
       case '-d':
       case '--data-dir':
         flags.dataDir = args[++i];
+        break;
+      case '-i':
+      case '--instance':
+        flags.instance = args[++i];
         break;
       case '--passphrase':
         flags.passphrase = args[++i];
@@ -128,7 +134,11 @@ function tryParseJsonColumn(value, fallback) {
  * columns are parsed; the binary `embedding` column is dropped from output.
  */
 async function readExistingMemories(flags, chatId) {
-  const dataDir = resolveDataDir(flags.dataDir);
+  const { dataDir, passphrase } = resolveDataDirAndPassphrase({
+    dataDir: flags.dataDir,
+    instance: flags.instance,
+    passphrase: flags.passphrase,
+  });
   const dbPath = path.join(dataDir, 'quilltap.db');
   if (!fs.existsSync(dbPath)) {
     console.error(`Database not found: ${dbPath}`);
@@ -137,7 +147,7 @@ async function readExistingMemories(flags, chatId) {
 
   let pepper;
   try {
-    pepper = await loadDbKey(dataDir, flags.passphrase);
+    pepper = await loadDbKey(dataDir, passphrase);
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);

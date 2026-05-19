@@ -1,0 +1,272 @@
+'use strict';
+
+// CLI entry-point for `quilltap instances <verb> [...]`.
+
+const fs = require('fs');
+const path = require('path');
+const readline = require('readline');
+
+const {
+  getInstancesPath,
+  listInstances,
+  readInstances,
+  resolveInstance,
+  upsertInstance,
+  removeInstance,
+  setInstancePassphrase,
+  verifyPassphrase,
+  expandPath,
+} = require('./instances');
+const { promptPassphrase } = require('./db-helpers');
+
+function printHelp() {
+  console.log(`
+Quilltap Instance Registry
+
+Usage: quilltap instances <verb> [args]
+
+Verbs:
+  list                          List registered instances (default)
+  show <name>                   Show one instance (passphrase status only)
+  path                          Print the path to instances.json
+  add <name> [<path>]           Register an instance (prompts for missing path / passphrase)
+  remove <name>                 Forget an instance (alias: rm, delete)
+  set-passphrase <name>         Change or clear the stored passphrase
+  -h, --help                    This help
+
+Storage: ~/Library/Application Support/Quilltap/instances.json on macOS,
+~/.quilltap/instances.json on Linux, %APPDATA%\\Quilltap\\instances.json on
+Windows. The file is created with mode 0600 and refused to load if group or
+other permissions are set.
+
+Once an instance is registered, every CLI subcommand that accepts --data-dir
+will also accept --instance <name>:
+
+  quilltap --instance Friday                # start the server pointed at Friday
+  quilltap db --instance Ignite schema characters
+  quilltap docs --instance Lebanon list
+
+Examples:
+  quilltap instances add Friday ~/iCloud/Quilltap/Friday
+  quilltap instances add Ignite ~/iCloud/Quilltap/Ignite     # prompts for passphrase
+  quilltap instances set-passphrase Ignite                    # prompts hidden
+  quilltap instances remove Friday-External
+  quilltap instances list
+`);
+}
+
+function promptLine(prompt) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(prompt, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
+async function promptHiddenWithConfirm(label) {
+  const first = await promptPassphrase(`${label}: `);
+  if (!first) return '';
+  const second = await promptPassphrase(`${label} (confirm): `);
+  if (first !== second) {
+    throw new Error('Passphrases did not match.');
+  }
+  return first;
+}
+
+function formatRow(name, instancePath, hasPassphrase) {
+  const tag = hasPassphrase ? '[passphrase set]' : '[no passphrase]';
+  return `  ${name.padEnd(20)}  ${tag.padEnd(18)}  ${instancePath}`;
+}
+
+function cmdList() {
+  const entries = listInstances();
+  console.log(`Instances file: ${getInstancesPath()}`);
+  if (entries.length === 0) {
+    console.log('No instances registered. Add one with `quilltap instances add <name>`.');
+    return;
+  }
+  console.log('');
+  console.log(`  ${'NAME'.padEnd(20)}  ${'PASSPHRASE'.padEnd(18)}  PATH`);
+  for (const entry of entries) {
+    console.log(formatRow(entry.name, entry.path, entry.hasPassphrase));
+  }
+}
+
+function cmdShow(name) {
+  if (!name) {
+    console.error('Usage: quilltap instances show <name>');
+    process.exit(1);
+  }
+  const inst = resolveInstance(name);
+  console.log(`Name:        ${inst.name}`);
+  console.log(`Path:        ${inst.path}`);
+  console.log(`Passphrase:  ${inst.passphrase ? 'set' : 'not set'}`);
+
+  const dataDir = path.join(inst.path, 'data');
+  const dbkey = path.join(dataDir, 'quilltap.dbkey');
+  const mainDb = path.join(dataDir, 'quilltap.db');
+  console.log(`Data dir:    ${dataDir}${fs.existsSync(dataDir) ? '' : ' (missing)'}`);
+  console.log(`.dbkey:      ${fs.existsSync(dbkey) ? 'present' : 'missing'}`);
+  console.log(`quilltap.db: ${fs.existsSync(mainDb) ? 'present' : 'missing'}`);
+}
+
+function cmdPath() {
+  console.log(getInstancesPath());
+}
+
+async function cmdAdd(args) {
+  const [rawName, rawPath] = args;
+  let name = rawName;
+  let instancePath = rawPath;
+
+  if (!name) {
+    name = (await promptLine('Instance name: ')).trim();
+    if (!name) {
+      console.error('Aborted: no name provided.');
+      process.exit(1);
+    }
+  }
+  if (!instancePath) {
+    instancePath = (await promptLine(`Path for "${name}" (instance root, contains data/files/logs): `)).trim();
+    if (!instancePath) {
+      console.error('Aborted: no path provided.');
+      process.exit(1);
+    }
+  }
+
+  const expanded = expandPath(instancePath);
+  if (!fs.existsSync(expanded)) {
+    const proceed = (await promptLine(`Path "${expanded}" does not exist. Save anyway? [y/N] `)).trim().toLowerCase();
+    if (proceed !== 'y' && proceed !== 'yes') {
+      console.error('Aborted.');
+      process.exit(1);
+    }
+  }
+
+  const wantPass = (await promptLine('Record a passphrase for this instance? [y/N] ')).trim().toLowerCase();
+  let passphrase = '';
+  if (wantPass === 'y' || wantPass === 'yes') {
+    passphrase = await promptHiddenWithConfirm('Passphrase');
+    if (!passphrase) {
+      console.log('Empty passphrase — not recording one.');
+    } else {
+      const state = await verifyPassphrase(expanded, passphrase);
+      if (state === 'valid') {
+        console.log('Passphrase verified against .dbkey.');
+      } else if (state === 'wrong') {
+        console.error('Passphrase does not unlock this instance\'s .dbkey. Not saving.');
+        process.exit(1);
+      } else if (state === 'no-encryption') {
+        console.error('This instance\'s .dbkey does not require a passphrase. Not saving.');
+        process.exit(1);
+      } else if (state === 'no-dbkey') {
+        console.log('No .dbkey on disk yet — passphrase will be saved without verification.');
+      }
+    }
+  }
+
+  const key = upsertInstance(name, { instancePath, passphrase });
+  console.log(`Saved instance "${key}" → ${getInstancesPath()}`);
+}
+
+function cmdRemove(args) {
+  const [name] = args;
+  if (!name) {
+    console.error('Usage: quilltap instances remove <name>');
+    process.exit(1);
+  }
+  const key = removeInstance(name);
+  console.log(`Removed instance "${key}".`);
+}
+
+async function cmdSetPassphrase(args) {
+  const [name] = args;
+  if (!name) {
+    console.error('Usage: quilltap instances set-passphrase <name>');
+    process.exit(1);
+  }
+  const inst = resolveInstance(name);
+
+  const wantClear = (await promptLine('Clear stored passphrase? [y/N] ')).trim().toLowerCase();
+  if (wantClear === 'y' || wantClear === 'yes') {
+    setInstancePassphrase(inst.name, '');
+    console.log(`Cleared passphrase for "${inst.name}".`);
+    return;
+  }
+
+  const passphrase = await promptHiddenWithConfirm('New passphrase');
+  if (!passphrase) {
+    console.log('Empty passphrase — not changing the existing entry. Use the "clear" prompt above to remove it.');
+    return;
+  }
+
+  const state = await verifyPassphrase(inst.path, passphrase);
+  if (state === 'valid') {
+    console.log('Passphrase verified against .dbkey.');
+  } else if (state === 'wrong') {
+    console.error('Passphrase does not unlock this instance\'s .dbkey. Not saving.');
+    process.exit(1);
+  } else if (state === 'no-encryption') {
+    console.error('This instance\'s .dbkey does not require a passphrase. Not saving.');
+    process.exit(1);
+  } else if (state === 'no-dbkey') {
+    console.log('No .dbkey on disk yet — passphrase will be saved without verification.');
+  }
+
+  setInstancePassphrase(inst.name, passphrase);
+  console.log(`Updated passphrase for "${inst.name}".`);
+}
+
+async function instancesCommand(args) {
+  if (args.length === 0) {
+    cmdList();
+    return;
+  }
+  const verb = args[0];
+  const rest = args.slice(1);
+
+  try {
+    switch (verb) {
+      case '-h':
+      case '--help':
+      case 'help':
+        printHelp();
+        return;
+      case 'list':
+      case 'ls':
+        cmdList();
+        return;
+      case 'show':
+        cmdShow(rest[0]);
+        return;
+      case 'path':
+      case 'where':
+        cmdPath();
+        return;
+      case 'add':
+      case 'create':
+        await cmdAdd(rest);
+        return;
+      case 'remove':
+      case 'rm':
+      case 'delete':
+        cmdRemove(rest);
+        return;
+      case 'set-passphrase':
+      case 'passphrase':
+        await cmdSetPassphrase(rest);
+        return;
+      default:
+        console.error(`Unknown instances verb: ${verb}`);
+        console.error('Run "quilltap instances --help" for usage.');
+        process.exit(1);
+    }
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+module.exports = { instancesCommand };

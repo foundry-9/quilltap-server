@@ -4,6 +4,25 @@
 
 ### 4.5-dev
 
+#### `quilltap instances` — named-instance registry for the CLI
+
+New CLI subcommand and `--instance <name>` flag. The CLI now stores a per-user registry of named Quilltap instances (path + optional database passphrase) at `~/Library/Application Support/Quilltap/instances.json` on macOS (`~/.quilltap/instances.json` on Linux, `%APPDATA%\Quilltap\instances.json` on Windows). Once an instance is registered, every subcommand that accepts `--data-dir` will also accept `--instance Friday` — the CLI translates it to the correct data directory and supplies the stored passphrase if one is set.
+
+Verbs:
+
+- `quilltap instances list` (default) — table of registered instances with path and whether a passphrase is stored
+- `quilltap instances add <name> [<path>]` — register an instance; prompts (hidden, with confirmation) for an optional passphrase and verifies it against the instance's `.dbkey` before saving
+- `quilltap instances remove <name>` — forget an instance
+- `quilltap instances set-passphrase <name>` — change or clear the stored passphrase; same verification as add
+- `quilltap instances show <name>` — print path + whether a passphrase is set + presence of `data/`, `.dbkey`, `quilltap.db`
+- `quilltap instances path` — print the path to `instances.json`
+
+The file contains plaintext passphrases, so the read path refuses to load it unless it is owned by the current user and has POSIX permissions with no group/other bits set (mode `0o600` or stricter). Failure prints the exact `chmod 600 <path>` to run. Writes go through a temp-file-then-rename with mode `0o600` from creation so the file never exists with looser bits. The check is skipped on Windows.
+
+`--instance` works with the server launcher (`quilltap --instance Friday` to start the server pointed at Friday's data directory) and the `db`, `docs`, `themes`, and `memory-diff` subcommands. `--instance` and `--data-dir` are mutually exclusive — supplying both errors out. The passphrase resolution chain is now: explicit `--passphrase` > stored passphrase from `--instance` > `QUILLTAP_DB_PASSPHRASE` env var > interactive hidden prompt.
+
+Implementation: `packages/quilltap/lib/instances.js` (registry I/O, permission check, passphrase verification), `packages/quilltap/lib/instances-commands.js` (CLI surface), `resolveDataDirAndPassphrase()` added to `packages/quilltap/lib/db-helpers.js`, and `--instance` wiring in `bin/quilltap.js`, `lib/docs-commands.js`, `lib/theme-commands.js`, and `lib/memory-diff-command.js`.
+
 #### `quilltap db optimize` — basic database maintenance
 
 New CLI verb that runs `VACUUM`, `ANALYZE`, and `PRAGMA optimize` against the encrypted SQLite databases. Reclaims free pages and refreshes query-planner stats.

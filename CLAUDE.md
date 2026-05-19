@@ -208,6 +208,7 @@ Rules for adding or updating these assets:
     - LLM logs DB: `npx quilltap db --llm-logs --tables`
     - Mount-index DB: `npx quilltap db --mount-points --tables`
   - Custom data dir: `npx quilltap db --data-dir ~/iCloud/Quilltap/Friday <subcommand-or-sql>` — pass the **instance root**, not the `data/` subdirectory. The CLI appends `data/quilltap.db` itself, so `--data-dir ~/iCloud/Quilltap/Friday/data` will fail looking for `data/data/quilltap.db`.
+  - Named instances: register an instance once with `npx quilltap instances add <name> <path>` (and optionally a passphrase, prompted hidden and verified against the `.dbkey` before saving) and then every subcommand accepts `--instance <name>` in place of `--data-dir`. The registry lives at `~/Library/Application Support/Quilltap/instances.json` (mode 0600 enforced). See `npx quilltap instances --help`.
   - SQLite columns are **camelCase**, mirroring the Zod/TypeScript types (e.g. `createdAt`, `updatedAt`, `chatType`, `messageCount`, `projectId`) — not `snake_case`. When in doubt, run `npx quilltap db schema <table>` (the modern equivalent of `PRAGMA table_info(<table>);`) or check [DDL.md](docs/developer/DDL.md).
   - All information about the databases, including schema and how to query them, can be found in [DDL.md](docs/developer/DDL.md).
 - This is built in Next.js 16+, so don't look in middleware.ts, but consider proxy.ts, for things you would expect there.
