@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 4.4-dev
+### 4.4.0
 
 #### tag-for-release: merge release branch back into main
 
