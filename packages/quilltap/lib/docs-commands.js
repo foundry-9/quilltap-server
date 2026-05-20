@@ -16,6 +16,34 @@ const CYAN = '\x1b[36m';
 const TEXT_FILE_TYPES = new Set(['markdown', 'txt', 'json', 'jsonl']);
 const BINARY_FILE_TYPES = new Set(['pdf', 'docx', 'blob']);
 
+// Single-character markers for the `ls` "text" column:
+//   =   raw bytes are already textual (markdown/txt/json/jsonl)
+//   T   separately-extracted plaintext is stored on the link row
+//   ~   extraction queued or in progress
+//   !   extraction attempted and failed
+//   -   no extracted text and the file is not text-native
+function textColumnMarker(fileType, extractionStatus) {
+  if (TEXT_FILE_TYPES.has(fileType)) return '=';
+  switch (extractionStatus) {
+    case 'converted': return 'T';
+    case 'pending':   return '~';
+    case 'failed':    return '!';
+    case 'skipped':
+    case 'none':
+    default:          return '-';
+  }
+}
+
+// Single-character markers for the `ls` "emb" column:
+//   Y   every chunk on this file has an embedding
+//   ~   chunks exist but none / only some have an embedding (queued or partial)
+//   -   no chunks at all
+function embedColumnMarker(chunkCount, embeddedChunkCount) {
+  if (!chunkCount) return '-';
+  if (embeddedChunkCount === chunkCount) return 'Y';
+  return '~';
+}
+
 function printDocsHelp() {
   console.log(`
 Quilltap Document Store Tool
@@ -26,6 +54,7 @@ Read subcommands:
   list                                   List all mount points
   show <mount>                           Details for one mount point
   files <mount> [--folder <path>]        List files in a mount
+  ls|dir <mount> [path] [--links]        ls-style listing of one folder (or file)
   read <mount> <relativePath>            Print file contents to stdout
   read --rendered <mount> <relativePath> Print extracted plaintext to stdout
   export <mount> <outputDir>             Export an entire mount to a directory
@@ -49,6 +78,8 @@ Options:
   --json                    Machine-readable output
   --rendered                For 'read': output extracted plaintext
   --folder <path>           For 'files': narrow to a folder prefix
+  --links                   For 'ls' / 'dir': under each file with more than
+                            one hard link, list the other mount/path entries
   --force                   For 'read': dump binary to TTY anyway
                             For 'write': overwrite existing destination
                             For 'copy':  overwrite + force a real byte copy
@@ -65,6 +96,9 @@ Verification: every write computes a SHA-256 on both ends and compares them
 before reporting success. Hard-linked files match trivially.
 
 Examples:
+  quilltap docs ls notes
+  quilltap docs ls notes 2026/may --links
+  quilltap docs dir notes today.md --json
   quilltap docs write notes today.md < draft.md
   quilltap docs write --force notes today.md draft.md
   quilltap docs delete notes today.md
@@ -85,6 +119,7 @@ function parseFlags(args) {
     rendered: false,
     folder: '',
     force: false,
+    links: false,
     help: false,
   };
   const positional = [];
@@ -108,6 +143,7 @@ function parseFlags(args) {
       case '--rendered': flags.rendered = true; break;
       case '--folder': flags.folder = args[++i]; break;
       case '--force': flags.force = true; break;
+      case '--links': flags.links = true; break;
       case '-h': case '--help': flags.help = true; break;
       default:
         if (a.startsWith('-')) {
@@ -322,6 +358,311 @@ async function handleFiles(flags, id) {
       status: r.conversionStatus,
     }));
     console.table(display);
+  } finally {
+    db.close();
+  }
+}
+
+// ----------------------------------------------------------------------------
+// ls / dir
+// ----------------------------------------------------------------------------
+
+function normalizeLsPath(p) {
+  if (!p) return '';
+  // Strip leading/trailing slashes; treat '.' and '/' as root.
+  const trimmed = p.replace(/^\/+|\/+$/g, '');
+  if (trimmed === '.' || trimmed === '') return '';
+  return trimmed;
+}
+
+function formatLsDate(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso.slice(0, 16);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const LS_FILE_COLUMNS = `
+  l.id AS linkId, l.fileId, l.relativePath, l.fileName, l.lastModified,
+  l.extractionStatus, l.extractedTextSha256, l.chunkCount,
+  f.fileType, f.fileSizeBytes, f.source, f.sha256,
+  (SELECT COUNT(*) FROM doc_mount_file_links WHERE fileId = l.fileId) AS linkCount,
+  (SELECT COUNT(*) FROM doc_mount_chunks
+    WHERE linkId = l.id AND embedding IS NOT NULL) AS embeddedChunkCount
+`;
+
+function resolveLsTarget(db, mountId, normalizedPath) {
+  if (!normalizedPath) return { kind: 'root', path: '' };
+
+  // Exact file match wins — handles the single-file display mode.
+  const file = db.prepare(`
+    SELECT ${LS_FILE_COLUMNS}
+    FROM doc_mount_file_links l
+    JOIN doc_mount_files f ON f.id = l.fileId
+    WHERE l.mountPointId = ? AND l.relativePath = ?
+  `).get(mountId, normalizedPath);
+  if (file) return { kind: 'file', file };
+
+  // Explicit folder row.
+  const folder = db.prepare(
+    `SELECT id, name, path, parentId, createdAt, updatedAt
+     FROM doc_mount_folders WHERE mountPointId = ? AND path = ?`
+  ).get(mountId, normalizedPath);
+  if (folder) return { kind: 'folder', folder, path: normalizedPath };
+
+  // Implicit folder — files or subfolders live under this path even though
+  // no doc_mount_folders row exists for it (or the folderId on links is
+  // null due to upstream drift). Mirrors how `docs files --folder` matches.
+  const hasFiles = db.prepare(`
+    SELECT 1 FROM doc_mount_file_links
+    WHERE mountPointId = ? AND relativePath LIKE ? LIMIT 1
+  `).get(mountId, normalizedPath + '/%');
+  const hasFolders = db.prepare(`
+    SELECT 1 FROM doc_mount_folders
+    WHERE mountPointId = ? AND path LIKE ? LIMIT 1
+  `).get(mountId, normalizedPath + '/%');
+  if (hasFiles || hasFolders) return { kind: 'folder', folder: null, path: normalizedPath };
+
+  return { kind: 'none' };
+}
+
+function fetchLsRows(db, mountId, parentPath) {
+  // parentPath: '' = mount root, else "Knowledge" or "foo/bar" etc.
+  // We filter by path-prefix rather than folderId / parentId so we stay
+  // honest about what the filesystem (or docs read/files) actually sees,
+  // even when folderId on a link row drifts to NULL behind our back.
+  const folders = parentPath === ''
+    ? db.prepare(`
+        SELECT id, name, path, createdAt, updatedAt
+        FROM doc_mount_folders
+        WHERE mountPointId = ?
+          AND path NOT LIKE '%/%'
+        ORDER BY name COLLATE NOCASE
+      `).all(mountId)
+    : db.prepare(`
+        SELECT id, name, path, createdAt, updatedAt
+        FROM doc_mount_folders
+        WHERE mountPointId = ?
+          AND path LIKE ?
+          AND path NOT LIKE ?
+        ORDER BY name COLLATE NOCASE
+      `).all(mountId, parentPath + '/%', parentPath + '/%/%');
+
+  const files = parentPath === ''
+    ? db.prepare(`
+        SELECT ${LS_FILE_COLUMNS}
+        FROM doc_mount_file_links l
+        JOIN doc_mount_files f ON f.id = l.fileId
+        WHERE l.mountPointId = ?
+          AND l.relativePath NOT LIKE '%/%'
+        ORDER BY l.fileName COLLATE NOCASE
+      `).all(mountId)
+    : db.prepare(`
+        SELECT ${LS_FILE_COLUMNS}
+        FROM doc_mount_file_links l
+        JOIN doc_mount_files f ON f.id = l.fileId
+        WHERE l.mountPointId = ?
+          AND l.relativePath LIKE ?
+          AND l.relativePath NOT LIKE ?
+        ORDER BY l.fileName COLLATE NOCASE
+      `).all(mountId, parentPath + '/%', parentPath + '/%/%');
+
+  return { folders, files };
+}
+
+function fetchLinksForFiles(db, fileIds) {
+  if (fileIds.length === 0) return new Map();
+  const placeholders = fileIds.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT l.fileId, l.relativePath, l.mountPointId, m.name AS mountName
+    FROM doc_mount_file_links l
+    JOIN doc_mount_points m ON m.id = l.mountPointId
+    WHERE l.fileId IN (${placeholders})
+    ORDER BY m.name COLLATE NOCASE, l.relativePath COLLATE NOCASE
+  `).all(...fileIds);
+  const byFile = new Map();
+  for (const r of rows) {
+    if (!byFile.has(r.fileId)) byFile.set(r.fileId, []);
+    byFile.get(r.fileId).push({
+      mountPointId: r.mountPointId,
+      mountName: r.mountName,
+      relativePath: r.relativePath,
+    });
+  }
+  return byFile;
+}
+
+async function handleLs(flags, mountSpec, rawPath) {
+  if (!mountSpec) {
+    console.error('Usage: quilltap docs ls <mount> [path] [--links]');
+    process.exit(1);
+  }
+  const { db } = await openDb(flags);
+  try {
+    const mount = requireMount(db, mountSpec);
+    const normalizedPath = normalizeLsPath(rawPath);
+    const target = resolveLsTarget(db, mount.id, normalizedPath);
+
+    let folders = [];
+    let files = [];
+    let singleFile = false;
+
+    if (target.kind === 'none') {
+      console.error(`No file or folder at "${normalizedPath || '/'}" in mount ${mount.name}`);
+      process.exit(1);
+    } else if (target.kind === 'root') {
+      ({ folders, files } = fetchLsRows(db, mount.id, ''));
+    } else if (target.kind === 'folder') {
+      ({ folders, files } = fetchLsRows(db, mount.id, target.path));
+    } else {
+      // Single-file mode: just show this one entry. linkCount / embeddedChunkCount
+      // are already populated by LS_FILE_COLUMNS via resolveLsTarget.
+      files = [target.file];
+      singleFile = true;
+    }
+
+    // Always fetch links for JSON; for text, only when --links was passed.
+    const wantLinks = flags.json || flags.links;
+    const multiLinkFileIds = wantLinks
+      ? files.filter((f) => f.linkCount > 1).map((f) => f.fileId)
+      : [];
+    const linksByFile = fetchLinksForFiles(db, multiLinkFileIds);
+
+    if (flags.json) {
+      const out = [];
+      for (const folder of folders) {
+        out.push({
+          type: 'folder',
+          name: folder.name,
+          path: folder.path,
+          createdAt: folder.createdAt,
+          updatedAt: folder.updatedAt,
+        });
+      }
+      for (const file of files) {
+        const others = linksByFile.get(file.fileId);
+        const links = others && others.length > 0
+          ? others
+          : [{
+              mountPointId: mount.id,
+              mountName: mount.name,
+              relativePath: file.relativePath,
+            }];
+        out.push({
+          type: 'file',
+          name: file.fileName,
+          relativePath: file.relativePath,
+          fileType: file.fileType,
+          source: file.source,
+          fileSizeBytes: file.fileSizeBytes,
+          sha256: file.sha256,
+          lastModified: file.lastModified,
+          linkCount: file.linkCount,
+          textRepresentation: {
+            kind: TEXT_FILE_TYPES.has(file.fileType) ? 'inline' : 'extracted',
+            extractionStatus: file.extractionStatus,
+            hasExtractedText: !!file.extractedTextSha256,
+          },
+          embedding: {
+            chunkCount: file.chunkCount || 0,
+            embeddedChunkCount: file.embeddedChunkCount || 0,
+            fullyEmbedded: (file.chunkCount || 0) > 0
+              && file.chunkCount === file.embeddedChunkCount,
+          },
+          links,
+        });
+      }
+      process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+      return;
+    }
+
+    if (!singleFile && folders.length === 0 && files.length === 0) {
+      console.log('(empty)');
+      return;
+    }
+
+    // Header line so the columns are self-describing.
+    const headerRow = {
+      type: 'T',
+      links: 'links',
+      size: 'size',
+      modified: 'modified',
+      text: 'text',
+      emb: 'emb',
+      name: 'name',
+      isHeader: true,
+    };
+    const dataRows = [];
+    for (const folder of folders) {
+      dataRows.push({
+        type: 'd',
+        links: '-',
+        size: '-',
+        modified: formatLsDate(folder.updatedAt || folder.createdAt),
+        text: '-',
+        emb: '-',
+        name: folder.name + '/',
+      });
+    }
+    for (const file of files) {
+      dataRows.push({
+        type: '-',
+        links: String(file.linkCount),
+        size: formatBytes(file.fileSizeBytes || 0),
+        modified: formatLsDate(file.lastModified),
+        text: textColumnMarker(file.fileType, file.extractionStatus),
+        emb: embedColumnMarker(file.chunkCount, file.embeddedChunkCount),
+        name: singleFile ? file.relativePath : file.fileName,
+        fileId: file.fileId,
+        relativePath: file.relativePath,
+      });
+    }
+
+    const widths = {
+      type: 1,
+      links: Math.max(headerRow.links.length, ...dataRows.map((r) => r.links.length)),
+      size: Math.max(headerRow.size.length, ...dataRows.map((r) => r.size.length)),
+      modified: Math.max(headerRow.modified.length, ...dataRows.map((r) => r.modified.length)),
+      text: Math.max(headerRow.text.length, ...dataRows.map((r) => r.text.length)),
+      emb: Math.max(headerRow.emb.length, ...dataRows.map((r) => r.emb.length)),
+    };
+
+    const renderLine = (r, dim) => {
+      const cells = [
+        r.type,
+        r.links.padStart(widths.links),
+        r.size.padStart(widths.size),
+        r.modified.padEnd(widths.modified),
+        r.text.padStart(widths.text),
+        r.emb.padStart(widths.emb),
+        r.name,
+      ];
+      const line = cells.join('  ');
+      return dim ? `${DIM}${line}${RESET}` : line;
+    };
+
+    console.log(renderLine(headerRow, true));
+    for (const r of dataRows) {
+      console.log(renderLine(r, false));
+      if (flags.links && r.type === '-') {
+        const others = (linksByFile.get(r.fileId) || []).filter(
+          (l) => !(l.mountPointId === mount.id && l.relativePath === r.relativePath)
+        );
+        if (others.length > 0) {
+          // Indent past type+links+size+modified+text+emb columns
+          // (6 cells, 5 separators of 2 spaces each).
+          const indentWidth = widths.type + widths.links + widths.size
+            + widths.modified + widths.text + widths.emb + 6 * 2;
+          const indent = ' '.repeat(indentWidth);
+          for (const link of others) {
+            const sameMount = link.mountPointId === mount.id;
+            const display = sameMount ? link.relativePath : `${link.mountName}:${link.relativePath}`;
+            console.log(`${indent}${DIM}→ ${display}${RESET}`);
+          }
+        }
+      }
+    }
   } finally {
     db.close();
   }
@@ -1169,6 +1510,10 @@ async function docsCommand(args) {
         break;
       case 'files':
         await handleFiles(flags, positional[0]);
+        break;
+      case 'ls':
+      case 'dir':
+        await handleLs(flags, positional[0], positional[1]);
         break;
       case 'read':
         await handleRead(flags, positional[0], positional[1]);

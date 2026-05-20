@@ -28,6 +28,7 @@ Anywhere a `<mount>` argument is called for, you may furnish either a name (case
 quilltap docs list                                   # All mount points (table)
 quilltap docs show <mount>                           # One mount, with live counts
 quilltap docs files <mount> [--folder <path>]        # Files in a mount
+quilltap docs ls <mount> [path] [--links]            # POSIX-flavoured listing (alias: dir)
 quilltap docs read <mount> <relativePath>            # Raw bytes/text → stdout
 quilltap docs read --rendered <mount> <relativePath> # Extracted plaintext → stdout
 quilltap docs export <mount> <outputDir>             # Whole mount → a directory
@@ -49,6 +50,32 @@ Every write — `write`, `move`, and `copy` alike — computes a SHA-256 on both
 
 `write` and `copy` both honour `--force`. For `write`, the flag means "overwrite the destination if it already exists." For `copy`, it additionally means "skip the hard-link path and copy bytes for real."
 
+### A POSIX-flavoured Listing — `ls` and `dir`
+
+`quilltap docs ls <mount> [path]` (with the alias `dir`, for those who came up on the other side of the operating-system aisle) produces a listing arranged after the long-form `ls -l`: a type indicator, a hard-link count, the file size, the last-modified timestamp, two slim status columns (about text extraction and embedding state), and the entry's name. Folders carry a trailing slash and report `-` for the numeric/state columns, since folders in this universe are not first-class hard-link targets. Without a `[path]` argument, the listing is rooted at the top of the mount; with one, you may name either a folder (to inspect its contents) or a file (to inspect it alone).
+
+The `links` column counts the hard-link siblings to the underlying content row — every `doc_mount_file_links` entry that shares the file's `fileId`. A file with a `links` of `1` is unique. A `2` indicates one other entry somewhere; a `20` indicates considerable popularity.
+
+The `text` column describes the file's textual representation, in a single character:
+
+| Mark | Meaning |
+| --- | --- |
+| `=` | The raw bytes already are the text. Markdown, plain text, JSON, and JSON-Lines all wear this badge. |
+| `T` | A separate plaintext extraction is stored on the link row (for PDFs, DOCX, image descriptions, and the like). |
+| `~` | An extraction is pending — the kettle is on, as it were. |
+| `!` | An extraction was attempted and failed. |
+| `-` | No text is available for this file, and none is needed. |
+
+The `emb` column reports whether the file's chunks carry embedding vectors:
+
+| Mark | Meaning |
+| --- | --- |
+| `Y` | Every chunk on this file has an embedding. The semantic search is well-fed. |
+| `~` | Chunks exist but the embeddings are still being generated, or only some are present. |
+| `-` | No chunks at all — either because the file is unindexed or because it is binary with no extracted text. |
+
+Add `--links` to expand, beneath each multi-linked file, the inventory of its siblings: each one printed as `mountName:relativePath`, with the mount name discreetly omitted when the sibling lives in the same mount as the current listing. In JSON mode, the `links` array is always reported in full — every sibling, with mount UUID, mount name, and relative path — regardless of whether `--links` is passed; the JSON also reports `textRepresentation` and `embedding` objects with the underlying `extractionStatus`, `chunkCount`, `embeddedChunkCount`, and `fullyEmbedded` fields rather than the compact single-character marks.
+
 ### Raw vs. Rendered
 
 `docs read` outputs whatever bytes are stored — a Markdown file produces its Markdown source, a PDF produces its binary header and all that follows. `docs read --rendered` instead outputs the plaintext that was extracted for embedding: for a PDF or DOCX, that is the text the chunker actually saw; for a Markdown or plain-text file, raw and rendered are the same.
@@ -69,6 +96,12 @@ quilltap docs show 0123abcd-...
 
 # All files in a particular folder of a mount
 quilltap docs files 0123abcd-... --folder research/2026
+
+# A POSIX-flavoured listing of the same folder
+quilltap docs ls 0123abcd-... research/2026
+
+# … and again, expanding every multi-linked file to show its siblings
+quilltap docs ls 0123abcd-... research/2026 --links
 
 # Read a Markdown file
 quilltap docs read 0123abcd-... notes/today.md
@@ -128,6 +161,7 @@ The `--data-dir` and `--passphrase` flags work identically to the standard `db` 
 | `--json` | Machine-readable output |
 | `--rendered` | For `read`: extracted plaintext instead of raw bytes |
 | `--folder <path>` | For `files`: narrow to a folder prefix |
+| `--links` | For `ls` / `dir`: expand siblings under each multi-linked file |
 | `--force` | For `read`: dump binary to TTY anyway; for `write`: overwrite; for `copy`: overwrite and force a byte copy |
 | `-h, --help` | Per-subcommand help text |
 

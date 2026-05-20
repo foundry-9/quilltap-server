@@ -4,6 +4,31 @@
 
 ### 4.5-dev
 
+#### `quilltap docs ls` / `dir` — POSIX-style folder listing with hard-link counts
+
+New read subcommand that lists one folder (or one file) in `ls -l` style:
+
+```text
+T  links     size  modified          text  emb  name
+d      -        -  2026-04-18 11:49     -    -  Wardrobe/
+-      2   3.4 KB  2026-05-11 13:47     =    Y  Manifesto.md
+-     20      0 B  2026-05-18 10:04     =    -  example-dialogues.md
+-      2  71.7 KB  2026-05-15 13:30     T    Y  2026-03-24T06-24-23.319Z-kept.webp
+```
+
+- `<mount> [path]`: path defaults to the mount root; `/` and `.` are treated as root. A path that resolves to a single file shows just that file.
+- The `links` column reports how many `doc_mount_file_links` rows share the same `fileId` — i.e., how many hard-linked siblings the underlying content row has across the entire mount-index DB. Folders show `-`.
+- The `text` column is a single-character marker for the file's textual representation: `=` raw bytes are already textual (markdown/txt/json/jsonl); `T` separately-extracted plaintext is stored on the link row (`extractionStatus = 'converted'`); `~` extraction is pending; `!` extraction failed; `-` no extracted text and the file is not text-native.
+- The `emb` column is a single-character marker for chunk embeddings: `Y` every chunk has an embedding; `~` chunks exist but only some / none are embedded yet; `-` no chunks at all.
+- `--links` expands each file with `linkCount > 1` to print the sibling list as indented arrows. Same-mount siblings are shown as bare paths; cross-mount siblings are prefixed with `mountName:`.
+- `--json` always emits the full `links` array (mount UUID, mount name, relative path) regardless of `--links` — there is no display-noise advantage to omitting the current mount in machine output. JSON also includes `textRepresentation` (`kind`, `extractionStatus`, `hasExtractedText`) and `embedding` (`chunkCount`, `embeddedChunkCount`, `fullyEmbedded`) objects per file.
+- Folders are listed before files; within each group, ordering is case-insensitive by name.
+- `dir` is an alias for `ls`.
+
+Membership filtering uses path-prefix matching on `relativePath` / `path` rather than `folderId` / `parentId`, because `doc_mount_file_links.folderId` is observed to drift to NULL on existing instances — multiple `Knowledge/*.md` files in Friday's "Quilltap General" mount had `folderId = NULL`, which made the folderId-based query return only the one row that still carried the correct pointer. Path-prefix matching produces the same answer `docs files --folder` already gives and is unaffected by that drift. Single-file lookups go by exact `relativePath` match. An implicit-folder fallback (no `doc_mount_folders` row but children exist under the prefix) keeps a path like `quilltap docs ls <mount> Knowledge` working even on instances where the folder row itself is missing.
+
+Read-only — opens the mount-index DB directly, so it works with or without the server running.
+
 #### `quilltap docs` — accept global flags before the verb
 
 `quilltap docs --instance Friday read <mount> <path>` (and other docs invocations with `--instance`, `--data-dir`, `--passphrase`, `--port`, `--json`, etc. placed before the subcommand) failed with `Unknown docs subcommand: --instance`. The dispatcher took `args[0]` as the verb before parsing flags, so any flag in front of the verb was treated as the subcommand. Fixed by parsing flags across the entire arg list first, then shifting the first positional as the verb — matching how `db`, `themes`, and `memory-diff` already behave.
