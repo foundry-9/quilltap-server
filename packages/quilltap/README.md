@@ -89,6 +89,109 @@ Quilltap stores its database, files, and logs in a platform-specific directory:
 
 Override with `--data-dir` or the `QUILLTAP_DATA_DIR` environment variable.
 
+## Database Tool
+
+The encrypted SQLite databases (main, LLM logs, mount index) can be queried directly via `quilltap db`. There are two modes: high-level subcommands that auto-pick the right database and resolve characters/chats/projects by name, and a low-level path for arbitrary SQL.
+
+### Subcommands
+
+```bash
+quilltap db schema                          # Tables grouped by domain
+quilltap db schema chat_messages            # Columns, indexes, DDL.md link
+quilltap db schema --grep memory            # Find tables/columns by substring
+
+quilltap db find character Friday           # Resolve a name to a UUID (fuzzy)
+quilltap db find chat "physical prompts"
+quilltap db find project "Quilltap"
+
+quilltap db chats --character Friday        # All chats containing a character
+quilltap db chats --project "Quilltap"      # All chats in a project
+quilltap db messages --chat <id|title> --last 50 --full
+quilltap db logs --chat <id|title>          # LLM logs for a chat
+quilltap db logs --message <id>             # LLM logs for a single message
+quilltap db logs --character Friday         # LLM logs by character
+quilltap db logs --tail 20                  # Recent LLM logs
+
+quilltap db message <id>                    # Full content of one message
+quilltap db log <id> [--field request|response|both]
+quilltap db memories --character Friday [--about Amy] [--source AUTO]
+```
+
+### Maintenance and Snapshots
+
+```bash
+quilltap db optimize                        # VACUUM + ANALYZE + PRAGMA optimize (all DBs)
+quilltap db optimize main                   # one DB; refuses while server is running
+
+quilltap db backup                          # online snapshot of all three DBs
+quilltap db backup main --out /tmp/snap     # one DB to a chosen directory
+quilltap db backup --json                   # parseable per-target sizes + durations
+
+quilltap db integrity                       # cipher_integrity_check + integrity_check
+quilltap db integrity llm-logs              # one DB; exit 0 ok, 1 issues, 2 open failure
+```
+
+`backup` and `integrity` are safe to run while the server is up; `optimize` refuses while a live lock is held. Backups default to `<dataDir>/backups/<timestamp>/` and inherit the source's encryption key transparently.
+
+Most subcommands accept `--json` (for piping) and `--limit N`. Names are case-insensitive; aliases are searched alongside character names. Ambiguous matches print all candidates and exit non-zero.
+
+### Low-level options
+
+```bash
+quilltap db --tables                                # List tables in active DB
+quilltap db --count chat_messages                   # Row count
+quilltap db "SELECT id FROM characters LIMIT 5"     # Raw SQL
+quilltap db --repl                                  # Interactive prompt
+quilltap db --llm-logs --tables                     # Target the LLM logs DB
+quilltap db --mount-points --tables                 # Target the mount index DB
+```
+
+In the REPL, `.cols <table>` and `.find <text>` mirror the subcommand helpers.
+
+## Document Stores (Scriptorium)
+
+`quilltap docs` exposes the document-store machinery from the command line. Read-only verbs open the mount-index DB directly and work without the server; write and pipeline verbs talk to the running server via `/api/v1/mount-points/[id]`.
+
+```bash
+# Read
+quilltap docs list                              # All mounts
+quilltap docs show <mount>                      # One mount, with counts
+quilltap docs ls <mount> [path] [--links]       # POSIX-flavoured listing (alias: dir)
+quilltap docs read [--rendered] <mount> <path>  # File contents → stdout
+quilltap docs export <mount> <outputDir>        # Mount → directory
+quilltap docs find <pattern>                    # Substring match on file names (--mount, --ext, --type, --limit)
+quilltap docs grep <pattern>                    # Substring match on extracted text (--mount, --ignore-case, -l, --max, --context)
+quilltap docs status                            # Per-mount extraction + embedding rollup (--mount, --top)
+
+# Server-required
+quilltap docs scan <mount>                                    # Trigger a rescan
+quilltap docs reindex <mount> [path] [--force]                # Re-extract + re-chunk
+quilltap docs embed <mount> [path] [--force] [--wait]         # Enqueue embedding jobs
+quilltap docs write [--force] <mount> <path> [file]           # Stdin or file → mount
+quilltap docs delete <mount> <path>                           # Idempotent delete
+quilltap docs mkdir <mount> <path>                            # Idempotent folder create
+quilltap docs move <srcMount> <srcPath> <dstMount> <dstPath>  # Move (hard-link when possible)
+quilltap docs copy [--force] <srcMount> <srcPath> <dstMount> <dstPath>
+```
+
+Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous names print candidates and exit non-zero. `--json` is supported by every verb; `reindex` and `embed` refuse to run without a reachable server.
+
+## Memories
+
+`quilltap memories` exposes the same Commonplace Book that each character carries — searchable, sortable, graphable, but never writable. All verbs open the main encrypted DB read-only.
+
+```bash
+quilltap memories ls                                                   # All holders, default sort: reinforcedImportance DESC
+quilltap memories ls --character Ariadne --sort created --limit 10     # One holder, newest first
+quilltap memories find "concrete examples"                             # Substring match on summary (--in content|both)
+quilltap memories grep -i --max 3 --context 1 "concrete examples"      # Pattern search inside content, with snippets
+quilltap memories show <id|prefix> [--depth N] [--no-related]          # Full record + related-memory neighbourhood
+quilltap memories tree <id|prefix> [--depth N] [--max-nodes N]         # ASCII walk of the bidirectional related-memory graph
+quilltap memories status [--character <name|id>]                       # Per-holder rollup + dangling-edge check
+```
+
+Shared filter flags apply to `ls`, `find`, `grep`, and `status` where they make sense: `--character`, `--about` (with `self` / `none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`. Sort flags (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, plus `-r` to reverse) apply to `ls`, `find`, and `grep`. Names accept fuzzy substrings; ambiguous names print candidates and exit 2. `--json` is supported by every verb. The legacy `quilltap db memories --character <name>` verb remains undisturbed.
+
 ## Theme Management
 
 The CLI includes theme management commands:
@@ -105,6 +208,81 @@ quilltap themes update                  # Check for theme updates
 quilltap themes registry list           # List configured registries
 quilltap themes registry add <url>      # Add a registry source
 ```
+
+## Shell Completion
+
+Tab-completion for bash, zsh, and fish. Pick the block that matches your shell.
+
+### Bash
+
+Append the generated script to `~/.bashrc`:
+
+```bash
+quilltap completion bash >> ~/.bashrc
+```
+
+Or drop it into a system completion directory:
+
+```bash
+quilltap completion bash > /usr/local/etc/bash_completion.d/quilltap
+# Linux with admin rights: /etc/bash_completion.d/quilltap
+```
+
+Restart the shell, or `source ~/.bashrc`.
+
+### Zsh
+
+Two reasonable ways to wire this up; pick one.
+
+**Option A — one line in `.zshrc`** (simpler; adds noticeable shell-startup latency because `quilltap` runs every time you open a new shell):
+
+```zsh
+# In ~/.zshrc:
+source <(quilltap completion zsh)
+```
+
+**Option B — canonical `fpath` setup** (faster; what zsh expects):
+
+```zsh
+# In ~/.zshrc, before compinit runs:
+fpath=(~/.zsh/completions $fpath)
+autoload -Uz compinit
+compinit
+```
+
+Then once, from any shell:
+
+```zsh
+mkdir -p ~/.zsh/completions
+quilltap completion zsh > ~/.zsh/completions/_quilltap
+```
+
+The leading underscore on `_quilltap` is the zsh convention — it tells `compinit` this is a completion definition file rather than a regular autoloaded function.
+
+**oh-my-zsh users:** the framework runs `compinit` for you, so either set the `fpath` line *before* the framework loads, or delete the cache (`rm -f ~/.zcompdump*`) after dropping the file in and start a new shell. The more idiomatic location under oh-my-zsh is:
+
+```zsh
+mkdir -p ~/.oh-my-zsh/custom/plugins/quilltap
+quilltap completion zsh > ~/.oh-my-zsh/custom/plugins/quilltap/_quilltap
+# then add `quilltap` to the plugins=(...) line in ~/.zshrc
+```
+
+### Fish
+
+```fish
+quilltap completion fish > ~/.config/fish/completions/quilltap.fish
+```
+
+Fish picks new completion files up automatically — no shell restart needed.
+
+### What gets completed
+
+- **Subcommands**: `quilltap d<TAB>` → `db docs`
+- **Sub-verbs per namespace**: `quilltap db s<TAB>` → `schema show`
+- **Instance names**: `quilltap --instance Fr<TAB>` → registered instances
+- **Mount names**: `quilltap docs ls --mount Qu<TAB>` → mount points in the active instance
+
+Dynamic completions shell out to `quilltap`'s own subcommands. If the active instance is encrypted and no passphrase is reachable, the completion silently returns nothing rather than prompting in the middle of a tab.
 
 ## Requirements
 

@@ -21,6 +21,8 @@ import {
   reinforceMemory,
   linkRelatedMemories,
   calculateReinforcedImportance,
+  deleteMemoryWithUnlink,
+  deleteMemoriesWithUnlinkBatch,
 } from './memory-gate'
 import { calculateEffectiveWeight } from './memory-weighting'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
@@ -506,8 +508,14 @@ export async function deleteMemoryWithVector(
 ): Promise<boolean> {
   const repos = getRepositories()
 
-  // Delete from repository
-  const deleted = await repos.memories.deleteForCharacter(characterId, memoryId)
+  // Confirm ownership before going through the chokepoint, which is
+  // characterId-agnostic.
+  const existing = await repos.memories.findById(memoryId)
+  if (!existing || existing.characterId !== characterId) {
+    return false
+  }
+
+  const deleted = await deleteMemoryWithUnlink(memoryId)
   if (!deleted) {
     return false
   }
@@ -1097,8 +1105,10 @@ export async function deleteMemoriesBySourceMessageWithVectors(
     }
   }
 
-  // Delete the memories from the database
-  const deleted = await repos.memories.deleteBySourceMessageId(sourceMessageId)
+  // Delete the memories through the chokepoint so neighbours' relatedMemoryIds
+  // get scrubbed before the rows go away.
+  const allMemoryIds = memories.map(m => m.id)
+  const deleted = await deleteMemoriesWithUnlinkBatch(allMemoryIds)
 
   logger.info('[Memory] Cascade deleted memories for source message', {
     sourceMessageId,
@@ -1123,24 +1133,55 @@ export async function deleteMemoriesBySourceMessagesWithVectors(
     return { deleted: 0, vectorsRemoved: 0 }
   }
 
-  let totalDeleted = 0
-  let totalVectorsRemoved = 0
+  const repos = getRepositories()
 
-  // Process each message - could be optimized with bulk operations but
-  // vector stores are per-character so we need the grouping logic
+  // Gather every memory across the whole swipe group up front, so the chokepoint
+  // scan only sweeps the relatedMemoryIds column once for the entire batch.
+  const allMemories: Memory[] = []
   for (const sourceMessageId of sourceMessageIds) {
-    const result = await deleteMemoriesBySourceMessageWithVectors(sourceMessageId)
-    totalDeleted += result.deleted
-    totalVectorsRemoved += result.vectorsRemoved
+    const slice = await repos.memories.findBySourceMessageId(sourceMessageId)
+    allMemories.push(...slice)
   }
+  if (allMemories.length === 0) {
+    return { deleted: 0, vectorsRemoved: 0 }
+  }
+
+  const memoryIdsByCharacter = new Map<string, string[]>()
+  for (const memory of allMemories) {
+    const existing = memoryIdsByCharacter.get(memory.characterId) || []
+    existing.push(memory.id)
+    memoryIdsByCharacter.set(memory.characterId, existing)
+  }
+
+  let vectorsRemoved = 0
+  for (const [characterId, memoryIds] of memoryIdsByCharacter) {
+    try {
+      const vectorStore = await getCharacterVectorStore(characterId)
+      for (const memoryId of memoryIds) {
+        if (vectorStore.hasVector(memoryId)) {
+          await vectorStore.removeVector(memoryId)
+          vectorsRemoved++
+        }
+      }
+      await vectorStore.save()
+    } catch (error) {
+      logger.warn('[Memory] Failed to remove vectors for character during swipe-group cascade', {
+        characterId,
+        memoryCount: memoryIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const totalDeleted = await deleteMemoriesWithUnlinkBatch(allMemories.map(m => m.id))
 
   logger.info('[Memory] Bulk cascade deleted memories for swipe group', {
     messageCount: sourceMessageIds.length,
     totalDeleted,
-    totalVectorsRemoved,
+    totalVectorsRemoved: vectorsRemoved,
   })
 
-  return { deleted: totalDeleted, vectorsRemoved: totalVectorsRemoved }
+  return { deleted: totalDeleted, vectorsRemoved }
 }
 
 /**
@@ -1188,7 +1229,8 @@ export async function deleteMemoriesByChatIdWithVectors(
     }
   }
 
-  const deleted = await repos.memories.deleteByChatId(chatId)
+  const allMemoryIds = memories.map(m => m.id)
+  const deleted = await deleteMemoriesWithUnlinkBatch(allMemoryIds)
 
   logger.info('[Memory] Cascade deleted memories for chat', {
     chatId,
