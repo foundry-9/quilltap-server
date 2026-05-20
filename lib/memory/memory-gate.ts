@@ -431,8 +431,6 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
   }
   if (neighbours.length >= SINGLE_DELETE_NEIGHBOUR_WARN) {
     logger.warn('[MemoryGate] deleteMemoryWithUnlink touched an unusually large neighbour set', logFields)
-  } else {
-    logger.debug('[MemoryGate] deleteMemoryWithUnlink completed', logFields)
   }
 
   return deleted
@@ -508,8 +506,6 @@ export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promis
   }
   if (neighboursTouched >= BATCH_DELETE_NEIGHBOUR_WARN) {
     logger.warn('[MemoryGate] deleteMemoriesWithUnlinkBatch touched an unusually large neighbour set', logFields)
-  } else {
-    logger.debug('[MemoryGate] deleteMemoriesWithUnlinkBatch completed', logFields)
   }
 
   return deleted
