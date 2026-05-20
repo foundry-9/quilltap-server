@@ -32,7 +32,7 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
             />
           </svg>
         </div>
-        <h3 className="text-lg font-semibold text-foreground">
+        <h3 className="qt-heading-4 text-foreground">
           Import Complete
         </h3>
       </div>

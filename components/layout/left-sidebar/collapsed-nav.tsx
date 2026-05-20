@@ -10,6 +10,7 @@
  */
 
 import Image from 'next/image'
+import { ChatIcon } from '@/components/ui/icons'
 
 /**
  * Prospero icon (compass and blueprint — overarching design)
@@ -115,9 +116,9 @@ function ScriptoriumIcon({ className }: { className?: string }) {
 }
 
 /**
- * Chat/message icon
+ * Photos icon (framed picture — for the user's photo gallery)
  */
-function ChatIcon({ className }: { className?: string }) {
+function PhotosIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -128,7 +129,28 @@ function ChatIcon({ className }: { className?: string }) {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8.5" cy="10.5" r="1.5" />
+      <path d="M21 17l-5.5-5.5L9 18" />
+    </svg>
+  )
+}
+
+/**
+ * Scenarios icon (clipboard with a checkmark — for the general scenarios page)
+ */
+function ScenariosNavIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
     </svg>
   )
 }
@@ -146,6 +168,8 @@ const navItems: NavItem[] = [
   { id: 'files', label: 'Files', tooltip: 'View all files', href: '/files', icon: FileIcon },
   { id: 'scriptorium', label: 'The Scriptorium', tooltip: 'View document stores', href: '/scriptorium', icon: ScriptoriumIcon },
   { id: 'characters', label: 'Characters', tooltip: 'View all characters', href: '/aurora', icon: CharacterIcon },
+  { id: 'photos', label: 'My Photos', tooltip: "Your saved photo gallery", href: '/photos', icon: PhotosIcon },
+  { id: 'scenarios', label: 'Scenarios', tooltip: 'Manage general scenarios', href: '/scenarios', icon: ScenariosNavIcon },
   { id: 'chats', label: 'Chats', tooltip: 'View all chats', href: '/salon', icon: ChatIcon },
 ]
 

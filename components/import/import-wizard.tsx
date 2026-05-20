@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { formatBytes } from '@/lib/utils/format-bytes'
 import { SpeakerMapper } from './speaker-mapper'
 import { MemoryCreationDialog } from './memory-creation-dialog'
 import {
@@ -57,12 +58,6 @@ function getStepIndex(step: WizardStep): number {
   if (step === 'file-select' || step === 'analyzing') return 0
   if (step === 'mapping' || step === 'importing') return 1
   return 2
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 /**
@@ -301,7 +296,7 @@ export function ImportWizard({
               </p>
               <p className="qt-text-secondary text-sm mt-1">
                 {selectedFile
-                  ? formatFileSize(selectedFile.size)
+                  ? formatBytes(selectedFile.size)
                   : 'or click to browse'}
               </p>
             </div>
@@ -504,7 +499,7 @@ export function ImportWizard({
                 <div key={s.key} className="flex items-center gap-1 flex-1">
                   <div className="flex items-center gap-2 flex-1">
                     <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 transition-colors ${
+                      className={`w-6 h-6 rounded-full flex items-center justify-center qt-text-label-xs flex-shrink-0 transition-colors ${
                         i < currentStepIndex
                           ? 'bg-primary text-primary-foreground'
                           : i === currentStepIndex

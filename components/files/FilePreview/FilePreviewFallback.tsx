@@ -8,7 +8,8 @@
 
 import { useEffect } from 'react'
 import { getFileIcon } from '../FileThumbnail'
-import { FileInfo, formatFileSize, formatFileDate, getFileTypeLabel } from '../types'
+import { FileInfo, formatFileDate, getFileTypeLabel } from '../types'
+import { formatBytes } from '@/lib/utils/format-bytes'
 
 interface FilePreviewFallbackProps {
   /** The file to show */
@@ -38,7 +39,7 @@ export default function FilePreviewFallback({
       {/* File metadata */}
       <div className="qt-text-secondary space-y-1 mb-6">
         <p>{getFileTypeLabel(file.mimeType)}</p>
-        <p>{formatFileSize(file.size)}</p>
+        <p>{formatBytes(file.size)}</p>
         <p>Added {formatFileDate(file.createdAt)}</p>
       </div>
 

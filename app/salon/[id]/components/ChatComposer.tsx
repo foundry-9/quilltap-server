@@ -74,11 +74,13 @@ interface ChatComposerProps {
   onGenerateImageClick: () => void
   onLibraryFileClick: () => void
   onStandaloneGenerateImageClick: () => void
+  onInsertAnnouncementClick: () => void
   onAddCharacterClick: () => void
   onSettingsClick: () => void
   onRenameClick?: () => void
   onProjectClick?: () => void
   projectName?: string | null
+  onContinueChatClick?: () => void
   onDeleteChatMemoriesClick: () => void
   onReextractMemoriesClick: () => void
   onSearchReplaceClick?: () => void
@@ -96,6 +98,10 @@ interface ChatComposerProps {
   onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
   /** Current roleplay template narration delimiters (e.g. '*' or ['[', ']']) */
   narrationDelimiters?: NarrationDelimiters
+  /** Callback to open a new terminal session */
+  onOpenTerminalClick?: () => void
+  /** Whether Terminal Mode is currently active (hides the open-terminal button) */
+  isTerminalModeActive?: boolean
 }
 
 export function ChatComposer({
@@ -140,11 +146,13 @@ export function ChatComposer({
   onGenerateImageClick,
   onLibraryFileClick,
   onStandaloneGenerateImageClick,
+  onInsertAnnouncementClick,
   onAddCharacterClick,
   onSettingsClick,
   onRenameClick,
   onProjectClick,
   projectName,
+  onContinueChatClick,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
   onSearchReplaceClick,
@@ -159,6 +167,8 @@ export function ChatComposer({
   hideStopButton = false,
   onPendingToolResult,
   narrationDelimiters,
+  onOpenTerminalClick,
+  isTerminalModeActive,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
@@ -254,7 +264,7 @@ export function ChatComposer({
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
             )}
-            <span className="text-sm font-medium">{toolExecutionStatus.message}</span>
+            <span className="qt-label">{toolExecutionStatus.message}</span>
           </div>
         )}
 
@@ -352,6 +362,7 @@ export function ChatComposer({
           onRenameClick={onRenameClick}
           onProjectClick={onProjectClick}
           projectName={projectName}
+          onContinueChatClick={onContinueChatClick}
           onAddCharacterClick={onAddCharacterClick}
           onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
           onReextractMemoriesClick={onReextractMemoriesClick}
@@ -412,6 +423,7 @@ export function ChatComposer({
               uploadingFile={uploadingFile}
               onLibraryFileClick={onLibraryFileClick}
               onStandaloneGenerateImageClick={onStandaloneGenerateImageClick}
+              onInsertAnnouncementClick={onInsertAnnouncementClick}
               chatId={id}
               onPendingToolResult={onPendingToolResult}
               disabled={sending || !hasActiveCharacters}
@@ -466,6 +478,23 @@ export function ChatComposer({
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Open Terminal button */}
+              {onOpenTerminalClick && !isTerminalModeActive && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onOpenTerminalClick()
+                  }}
+                  className="qt-chat-toolbar-button"
+                  title="Open terminal"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </button>
               )}

@@ -8,25 +8,6 @@ export interface ReattributeDialogState {
   currentParticipantId: string | null
 }
 
-export interface SudoApprovalState {
-  isOpen: boolean
-  pendingSudoCommand: {
-    command: string
-    parameters?: string[]
-    timeout_ms?: number
-  }
-  /** The participant ID that made the sudo request, so we can trigger them to continue */
-  respondingParticipantId?: string
-}
-
-export interface WorkspaceAcknowledgementState {
-  isOpen: boolean
-  /** The tool name that triggered the acknowledgement requirement */
-  toolName?: string
-  /** The participant ID, so we can trigger them to continue */
-  respondingParticipantId?: string
-}
-
 export interface SelectLLMProfileDialogState {
   isOpen: boolean
   participantId: string
@@ -45,6 +26,7 @@ export function useModalState() {
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [chatProjectModalOpen, setChatProjectModalOpen] = useState(false)
+  const [continueChatModalOpen, setContinueChatModalOpen] = useState(false)
   const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
@@ -56,6 +38,7 @@ export function useModalState() {
   const [allLLMPauseModalOpen, setAllLLMPauseModalOpen] = useState(false)
   const [libraryFilePickerOpen, setLibraryFilePickerOpen] = useState(false)
   const [standaloneGenerateImageOpen, setStandaloneGenerateImageOpen] = useState(false)
+  const [insertAnnouncementOpen, setInsertAnnouncementOpen] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showParticipantSidebar, setShowParticipantSidebar] = useState(true)
 
@@ -63,8 +46,6 @@ export function useModalState() {
   const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
   const [reattributeDialogState, setReattributeDialogState] = useState<ReattributeDialogState | null>(null)
   const [selectLLMProfileDialogState, setSelectLLMProfileDialogState] = useState<SelectLLMProfileDialogState | null>(null)
-  const [sudoApprovalState, setSudoApprovalState] = useState<SudoApprovalState | null>(null)
-  const [workspaceAcknowledgementState, setWorkspaceAcknowledgementState] = useState<WorkspaceAcknowledgementState | null>(null)
 
 
   // Convenience open/close helpers
@@ -74,6 +55,8 @@ export function useModalState() {
   const closeChatSettings = useCallback(() => setChatSettingsModalOpen(false), [])
   const openChatProject = useCallback(() => setChatProjectModalOpen(true), [])
   const closeChatProject = useCallback(() => setChatProjectModalOpen(false), [])
+  const openContinueChat = useCallback(() => setContinueChatModalOpen(true), [])
+  const closeContinueChat = useCallback(() => setContinueChatModalOpen(false), [])
   const openRename = useCallback(() => setRenameModalOpen(true), [])
   const closeRename = useCallback(() => setRenameModalOpen(false), [])
   const openGenerateImage = useCallback(() => setGenerateImageDialogOpen(true), [])
@@ -94,6 +77,8 @@ export function useModalState() {
   const closeLibraryFilePicker = useCallback(() => setLibraryFilePickerOpen(false), [])
   const openStandaloneGenerateImage = useCallback(() => setStandaloneGenerateImageOpen(true), [])
   const closeStandaloneGenerateImage = useCallback(() => setStandaloneGenerateImageOpen(false), [])
+  const openInsertAnnouncement = useCallback(() => setInsertAnnouncementOpen(true), [])
+  const closeInsertAnnouncement = useCallback(() => setInsertAnnouncementOpen(false), [])
 
   return {
     // Simple boolean modals
@@ -101,6 +86,7 @@ export function useModalState() {
     toolPaletteOpen, setToolPaletteOpen,
     chatSettingsModalOpen,
     chatProjectModalOpen,
+    continueChatModalOpen,
     renameModalOpen,
     generateImageDialogOpen,
     addCharacterDialogOpen,
@@ -117,13 +103,12 @@ export function useModalState() {
     modalImage, setModalImage,
     reattributeDialogState, setReattributeDialogState,
     selectLLMProfileDialogState, setSelectLLMProfileDialogState,
-    sudoApprovalState, setSudoApprovalState,
-    workspaceAcknowledgementState, setWorkspaceAcknowledgementState,
 
     // Convenience helpers
     openGallery, closeGallery,
     openChatSettings, closeChatSettings,
     openChatProject, closeChatProject,
+    openContinueChat, closeContinueChat,
     openRename, closeRename,
     openGenerateImage, closeGenerateImage,
     openAddCharacter, closeAddCharacter,
@@ -136,5 +121,7 @@ export function useModalState() {
     openLibraryFilePicker, closeLibraryFilePicker,
     standaloneGenerateImageOpen,
     openStandaloneGenerateImage, closeStandaloneGenerateImage,
+    insertAnnouncementOpen,
+    openInsertAnnouncement, closeInsertAnnouncement,
   }
 }

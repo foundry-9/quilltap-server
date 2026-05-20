@@ -2,12 +2,15 @@
 
 import { useState } from 'react'
 import { TagEditor } from '@/components/tags/tag-editor'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { CharacterFormData, CharacterScenario } from '../types'
 
 interface CharacterBasicInfoProps {
   characterId: string
   formData: CharacterFormData
   hasLinkedVault: boolean
+  /** Bumped when formData is replaced externally; forces editor remount. */
+  externalUpdateCount: number
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
   onAliasesChange: (aliases: string[]) => void
   onPronounsChange: (pronouns: { subject: string; object: string; possessive: string } | null) => void
@@ -74,6 +77,7 @@ export function CharacterBasicInfo({
   characterId,
   formData,
   hasLinkedVault,
+  externalUpdateCount,
   onChange,
   onAliasesChange,
   onPronounsChange,
@@ -89,6 +93,15 @@ export function CharacterBasicInfo({
   // the database row, keeping the form and vault in step automatically.
   const toggleDisabled = !hasLinkedVault && !overlayOn
 
+  // Adapter so MarkdownLexicalEditor's (value: string) => void onChange feeds
+  // the parent's event-based handleChange (same synthetic-event shape used by
+  // the AI wizard's apply flow).
+  const handleMarkdownFieldChange = (name: string) => (value: string) => {
+    onChange({
+      target: { name, value },
+    } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+  }
+
   return (
     <div className="space-y-6">
       {/* System Transparency Switch */}
@@ -97,7 +110,7 @@ export function CharacterBasicInfo({
           <div className="flex-1">
             <label
               htmlFor="systemTransparency"
-              className="block text-sm font-medium text-foreground"
+              className="block qt-text-label"
             >
               System transparency
             </label>
@@ -143,18 +156,19 @@ export function CharacterBasicInfo({
           <div className="flex-1">
             <label
               htmlFor="readPropertiesFromDocumentStore"
-              className="block text-sm font-medium text-foreground"
+              className="block qt-text-label"
             >
               Read this character&rsquo;s core fields from the Scriptorium vault
             </label>
             <p className="text-xs qt-text-secondary mt-1">
               When on, the character&rsquo;s basic properties (aliases, pronouns, title, first
-              message, talkativeness), description, personality, example dialogues, first physical
+              message, talkativeness), description, manifesto, personality, example dialogues, first physical
               description plus its prompts, named system prompt variants, named scenarios, and
               wardrobe items plus outfit presets are all read live from files inside the linked
               Scriptorium vault
               (<code className="mx-1">properties.json</code>,
               <code className="mx-1">description.md</code>,
+              <code className="mx-1">manifesto.md</code>,
               <code className="mx-1">personality.md</code>,
               <code className="mx-1">example-dialogues.md</code>,
               <code className="mx-1">physical-description.md</code>,
@@ -224,7 +238,7 @@ export function CharacterBasicInfo({
 
       {/* Name Field */}
       <div>
-        <label htmlFor="name" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="name" className="block qt-text-label mb-2">
           Name *
         </label>
         <input
@@ -240,7 +254,7 @@ export function CharacterBasicInfo({
 
       {/* Aliases Field */}
       <div>
-        <label className="block text-sm font-medium mb-2 text-foreground">
+        <label className="block qt-text-label mb-2">
           Aliases (Optional)
         </label>
         <p className="text-xs qt-text-secondary mb-2">
@@ -272,7 +286,7 @@ export function CharacterBasicInfo({
 
       {/* Pronouns Field */}
       <div>
-        <label className="block text-sm font-medium mb-2 text-foreground">
+        <label className="block qt-text-label mb-2">
           Pronouns (Optional)
         </label>
         <p className="text-xs qt-text-secondary mb-2">
@@ -337,7 +351,7 @@ export function CharacterBasicInfo({
 
       {/* Title Field */}
       <div>
-        <label htmlFor="title" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="title" className="block qt-text-label mb-2">
           Title (Optional)
         </label>
         <input
@@ -347,46 +361,86 @@ export function CharacterBasicInfo({
           value={formData.title}
           onChange={onChange}
           className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="e.g., Student, Teacher, Narrator"
+          placeholder="Your private label for this character — e.g., the protagonist, the rival, the love interest. Not how strangers refer to them."
+        />
+      </div>
+
+      {/* Identity Field */}
+      <div>
+        <label htmlFor="identity" className="block qt-text-label mb-2">
+          Identity (Optional)
+        </label>
+        <p className="text-xs qt-text-secondary mb-2">
+          What strangers know about the character on sight or by reputation &mdash; name, station, occupation, public reputation. The shallow first impression.
+        </p>
+        <MarkdownLexicalEditor
+          value={formData.identity}
+          onChange={handleMarkdownFieldChange('identity')}
+          remountKey={externalUpdateCount}
+          namespace="CharacterBasicInfo.identity"
+          ariaLabel="Identity"
+          minHeight="6rem"
         />
       </div>
 
       {/* Description Field */}
       <div>
-        <label htmlFor="description" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="description" className="block qt-text-label mb-2">
           Description (Optional)
         </label>
-        <textarea
-          id="description"
-          name="description"
+        <p className="text-xs qt-text-secondary mb-2">
+          How acquaintances perceive the character &mdash; behaviour, mannerisms, verbal patterns. Not physical appearance.
+        </p>
+        <MarkdownLexicalEditor
           value={formData.description}
-          onChange={onChange}
-          rows={4}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="Describe the character's appearance, background, and key traits"
+          onChange={handleMarkdownFieldChange('description')}
+          remountKey={externalUpdateCount}
+          namespace="CharacterBasicInfo.description"
+          ariaLabel="Description"
+          minHeight="8rem"
+        />
+      </div>
+
+      {/* Manifesto Field */}
+      <div>
+        <label htmlFor="manifesto" className="block qt-text-label mb-2">
+          Manifesto (Optional)
+        </label>
+        <p className="text-xs qt-text-secondary mb-2">
+          The foundational tenets of this character &mdash; the basic truths that anchor everything else. What this character is, at root.
+        </p>
+        <MarkdownLexicalEditor
+          value={formData.manifesto}
+          onChange={handleMarkdownFieldChange('manifesto')}
+          remountKey={externalUpdateCount}
+          namespace="CharacterBasicInfo.manifesto"
+          ariaLabel="Manifesto"
+          minHeight="8rem"
         />
       </div>
 
       {/* Personality Field */}
       <div>
-        <label htmlFor="personality" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="personality" className="block qt-text-label mb-2">
           Personality (Optional)
         </label>
-        <textarea
-          id="personality"
-          name="personality"
+        <p className="text-xs qt-text-secondary mb-2">
+          What the character knows about themselves. The internal driver of speech and behaviour. Other characters don&rsquo;t see it unless shared.
+        </p>
+        <MarkdownLexicalEditor
           value={formData.personality}
-          onChange={onChange}
-          rows={4}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="Describe the character's personality traits and behavioral patterns"
+          onChange={handleMarkdownFieldChange('personality')}
+          remountKey={externalUpdateCount}
+          namespace="CharacterBasicInfo.personality"
+          ariaLabel="Personality"
+          minHeight="8rem"
         />
       </div>
 
       {/* Scenarios Field */}
       <div>
         <div className="flex justify-between items-center mb-2">
-          <label className="block text-sm font-medium text-foreground">
+          <label className="block qt-text-label">
             Scenarios (Optional)
           </label>
           <button
@@ -467,19 +521,20 @@ export function CharacterBasicInfo({
                     </svg>
                   </button>
                 </div>
-                <textarea
+                <MarkdownLexicalEditor
                   value={scenario.content}
-                  onChange={(e) => {
+                  onChange={(value) => {
                     const updated = formData.scenarios.map((s, i) =>
                       i === index
-                        ? { ...s, content: e.target.value, updatedAt: new Date().toISOString() }
+                        ? { ...s, content: value, updatedAt: new Date().toISOString() }
                         : s
                     )
                     onScenariosChange(updated)
                   }}
-                  rows={3}
-                  placeholder="Describe the setting and context for this scenario"
-                  className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                  remountKey={`${scenario.id}-${externalUpdateCount}`}
+                  namespace={`CharacterBasicInfo.scenario.${scenario.id}`}
+                  ariaLabel="Scenario content"
+                  minHeight="6rem"
                 />
               </div>
             ))}
@@ -489,49 +544,55 @@ export function CharacterBasicInfo({
 
       {/* First Message Field */}
       <div>
-        <label htmlFor="firstMessage" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="firstMessage" className="block qt-text-label mb-2">
           First Message (Optional)
         </label>
-        <textarea
-          id="firstMessage"
-          name="firstMessage"
+        <p className="text-xs qt-text-secondary mb-2">
+          The character&rsquo;s opening message to start conversations.
+        </p>
+        <MarkdownLexicalEditor
           value={formData.firstMessage}
-          onChange={onChange}
-          rows={3}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="The character's opening message to start conversations"
+          onChange={handleMarkdownFieldChange('firstMessage')}
+          remountKey={externalUpdateCount}
+          namespace="CharacterBasicInfo.firstMessage"
+          ariaLabel="First message"
+          minHeight="6rem"
         />
       </div>
 
       {/* Example Dialogues Field */}
       <div>
-        <label htmlFor="exampleDialogues" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="exampleDialogues" className="block qt-text-label mb-2">
           Example Dialogues (Optional)
         </label>
-        <textarea
-          id="exampleDialogues"
-          name="exampleDialogues"
+        <p className="text-xs qt-text-secondary mb-2">
+          Example conversations to guide the AI&rsquo;s responses.
+        </p>
+        <MarkdownLexicalEditor
           value={formData.exampleDialogues}
-          onChange={onChange}
-          rows={6}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="Example conversations to guide the AI's responses"
+          onChange={handleMarkdownFieldChange('exampleDialogues')}
+          remountKey={externalUpdateCount}
+          namespace="CharacterBasicInfo.exampleDialogues"
+          ariaLabel="Example dialogues"
+          minHeight="12rem"
         />
       </div>
 
       {/* System Prompt Field */}
       <div>
-        <label htmlFor="systemPrompt" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="systemPrompt" className="block qt-text-label mb-2">
           System Prompt (Optional)
         </label>
-        <textarea
-          id="systemPrompt"
-          name="systemPrompt"
+        <p className="text-xs qt-text-secondary mb-2">
+          Custom system instructions (will be combined with auto-generated prompt).
+        </p>
+        <MarkdownLexicalEditor
           value={formData.systemPrompt}
-          onChange={onChange}
-          rows={4}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder="Custom system instructions (will be combined with auto-generated prompt)"
+          onChange={handleMarkdownFieldChange('systemPrompt')}
+          remountKey={externalUpdateCount}
+          namespace="CharacterBasicInfo.systemPrompt"
+          ariaLabel="System prompt"
+          minHeight="8rem"
         />
       </div>
 

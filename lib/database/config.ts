@@ -33,14 +33,32 @@ export type DatabaseBackendType = z.infer<typeof DatabaseBackendTypeSchema>;
 export const SQLiteConfigSchema = z.object({
   /** Path to the SQLite database file */
   path: z.string().min(1),
-  /** Enable WAL (Write-Ahead Logging) mode for better concurrency */
-  walMode: z.boolean().default(true),
+  /**
+   * Enable WAL (Write-Ahead Logging) mode.
+   *
+   * Defaults to false. WAL keeps a separate `.db-wal` (and `.db-shm`) file
+   * alongside the main database; if those files sync to a cloud provider
+   * (iCloud Drive, Dropbox, OneDrive, Google Drive) out of order with the
+   * main `.db`, the database can become corrupt or lose recent writes. Since
+   * many users put their Quilltap data directory inside a synced folder,
+   * single-file journal modes are the safe default.
+   *
+   * Set the SQLITE_WAL_MODE=true env var to opt back into WAL — appropriate
+   * when the data directory lives on a fast local SSD that is not synced.
+   */
+  walMode: z.boolean().default(false),
   /** Busy timeout in milliseconds */
   busyTimeout: z.int().positive().default(5000),
   /** Enable foreign key constraints */
   foreignKeys: z.boolean().default(true),
-  /** Journal mode (only used if walMode is false) */
-  journalMode: z.enum(['delete', 'truncate', 'persist', 'memory', 'off']).default('delete'),
+  /**
+   * Journal mode used when walMode is false.
+   *
+   * `truncate` keeps the rollback journal in a single auxiliary file that
+   * is truncated to zero on each commit, avoiding the multi-file sync
+   * hazard of WAL while staying faster than `delete` on most filesystems.
+   */
+  journalMode: z.enum(['delete', 'truncate', 'persist', 'memory', 'off']).default('truncate'),
   /** Synchronous mode */
   synchronous: z.enum(['off', 'normal', 'full', 'extra']).default('full'),
   /** Cache size in KB (negative for KB, positive for pages) */
@@ -130,7 +148,7 @@ export function loadSQLiteConfig(): SQLiteConfig {
 
   return SQLiteConfigSchema.parse({
     path: dbPath,
-    walMode: process.env.SQLITE_WAL_MODE !== 'false',
+    walMode: process.env.SQLITE_WAL_MODE === 'true',
     busyTimeout: process.env.SQLITE_BUSY_TIMEOUT
       ? parseInt(process.env.SQLITE_BUSY_TIMEOUT, 10)
       : undefined,
@@ -159,7 +177,7 @@ export function loadLLMLogsConfig(): SQLiteConfig {
 
   return SQLiteConfigSchema.parse({
     path: dbPath,
-    walMode: process.env.SQLITE_WAL_MODE !== 'false',
+    walMode: process.env.SQLITE_WAL_MODE === 'true',
     busyTimeout: process.env.SQLITE_BUSY_TIMEOUT
       ? parseInt(process.env.SQLITE_BUSY_TIMEOUT, 10)
       : undefined,
@@ -187,7 +205,7 @@ export function loadMountIndexConfig(): SQLiteConfig {
 
   return SQLiteConfigSchema.parse({
     path: dbPath,
-    walMode: process.env.SQLITE_WAL_MODE !== 'false',
+    walMode: process.env.SQLITE_WAL_MODE === 'true',
     busyTimeout: process.env.SQLITE_BUSY_TIMEOUT
       ? parseInt(process.env.SQLITE_BUSY_TIMEOUT, 10)
       : undefined,

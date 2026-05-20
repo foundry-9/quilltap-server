@@ -4,6 +4,7 @@ import { useRoleplayTemplates } from './hooks/useRoleplayTemplates'
 import { TemplateCard } from './TemplateCard'
 import { EMPTY_DELIMITER } from './types'
 import type { DelimiterFormEntry } from './types'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 /** Known CSS style options for delimiter entries */
 const STYLE_OPTIONS = [
@@ -99,7 +100,7 @@ export default function RoleplayTemplatesTab() {
 
       {/* Default Template Section */}
       <section className="border qt-border-default rounded-lg p-4 qt-bg-card">
-        <h2 className="text-lg font-semibold mb-2">Default Template</h2>
+        <h2 className="qt-heading-4 mb-2">Default Template</h2>
         <p className="qt-text-small mb-4">
           This template will be applied to all new chats by default. You can override it per-character or per-chat.
         </p>
@@ -130,7 +131,7 @@ export default function RoleplayTemplatesTab() {
 
       {/* Built-in Templates Section */}
       <section>
-        <h2 className="text-xl font-semibold mb-2">Built-in Templates</h2>
+        <h2 className="qt-heading-3 mb-2">Built-in Templates</h2>
         <p className="qt-text-small mb-4">
           These templates are provided by Quilltap and cannot be modified. You can copy them to create your own version.
         </p>
@@ -158,7 +159,7 @@ export default function RoleplayTemplatesTab() {
       <section>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-xl font-semibold">My Templates</h2>
+            <h2 className="qt-heading-3">My Templates</h2>
             <p className="qt-text-small mt-1">
               Custom templates you&apos;ve created for your roleplay sessions.
             </p>
@@ -201,7 +202,7 @@ export default function RoleplayTemplatesTab() {
         <div className="qt-dialog-overlay">
           <div className="bg-background border qt-border-default rounded-lg qt-shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
             <div className="p-6">
-              <h2 className="text-xl font-semibold mb-4">
+              <h2 className="qt-heading-3 mb-4">
                 {editingTemplate ? 'Edit Template' : 'Create Template'}
               </h2>
 
@@ -244,17 +245,18 @@ export default function RoleplayTemplatesTab() {
                   <label className="qt-label mb-1">
                     LLM Prompt <span className="qt-text-destructive">*</span>
                   </label>
-                  <textarea
-                    value={formData.systemPrompt}
-                    onChange={(e) => setFormData(prev => ({ ...prev, systemPrompt: e.target.value }))}
-                    rows={12}
-                    placeholder="Enter the formatting instructions that will be prepended to character system prompts..."
-                    className="qt-textarea w-full font-mono text-sm"
-                  />
-                  <p className="qt-text-xs mt-1">
-                    This will be prepended to the character&apos;s system prompt when this template is selected.
+                  <p className="qt-text-xs mb-2">
+                    The formatting instructions prepended to the character&rsquo;s system prompt when this template is selected.
                     You can use placeholders like {'{{char}}'} and {'{{user}}'}.
                   </p>
+                  <MarkdownLexicalEditor
+                    value={formData.systemPrompt}
+                    onChange={(value) => setFormData(prev => ({ ...prev, systemPrompt: value }))}
+                    remountKey={editingTemplate?.id ?? 'new'}
+                    namespace="RoleplayTemplate.systemPrompt"
+                    ariaLabel="Template LLM prompt"
+                    minHeight="14rem"
+                  />
                 </div>
 
                 <div>
@@ -503,7 +505,7 @@ export default function RoleplayTemplatesTab() {
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h2 className="text-xl font-semibold">{previewTemplate.name}</h2>
+                  <h2 className="qt-heading-3">{previewTemplate.name}</h2>
                   {previewTemplate.description && (
                     <p className="qt-text-small mt-1">
                       {previewTemplate.description}

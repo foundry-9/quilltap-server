@@ -17,10 +17,8 @@
 import { useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
-import { OutfitIndicator } from '@/components/wardrobe/outfit-indicator'
+import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
-import type { EquippedSlots } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItemSummary } from '@/app/salon/[id]/hooks/useOutfit'
 
 // Special constant for user impersonation selection
 const USER_IMPERSONATION_VALUE = '__user__'
@@ -95,19 +93,19 @@ interface ParticipantCardProps {
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
   // System prompt selection (from character's named systemPrompts[])
   onSystemPromptChange?: (participantId: string, promptId: string | null) => void
+  /** Force-rebuild the chat-level cached system prompt (identity stack) for
+   *  this participant — picks up edits to the underlying character that the
+   *  compiler doesn't auto-invalidate (manifesto, personality, prompt content,
+   *  etc.). */
+  onRebuildSystemPrompt?: (participantId: string) => void
   // Inline settings controls
   onActiveChange?: (participantId: string, isActive: boolean) => void
   onStatusChange?: (participantId: string, status: 'active' | 'silent' | 'absent' | 'removed') => void
   // Whisper support
   onWhisper?: (participantId: string) => void
-  // Outfit display
-  equippedSlots?: EquippedSlots | null
-  equippedItems?: Record<string, { title: string } | null>
-  wardrobeItems?: WardrobeItemSummary[]
-  onEquipSlot?: (participantId: string, slot: string, itemId: string | null) => void
-  outfitLoading?: boolean
-  // Gift wardrobe item
-  onGiftItem?: (participantId: string) => void
+  /** Optional chat ID — passed through to the Wardrobe dialog so it can
+   *  surface the chat's "wearing now" pane when summoned from this card. */
+  chatId?: string
   // Avatar regeneration
   onRegenerateAvatar?: (participantId: string) => void
   // Danger state — when the Concierge has flagged this chat
@@ -138,18 +136,15 @@ export function ParticipantCard({
   connectionProfiles,
   onConnectionProfileChange,
   onSystemPromptChange,
+  onRebuildSystemPrompt,
   onActiveChange,
   onStatusChange,
   onWhisper,
-  equippedSlots,
-  equippedItems,
-  wardrobeItems,
-  onEquipSlot,
-  outfitLoading,
-  onGiftItem,
+  chatId,
   onRegenerateAvatar,
   isDangerousChat = false,
 }: ParticipantCardProps) {
+  const wardrobeDialog = useWardrobeDialogOptional()
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
   )
@@ -297,46 +292,69 @@ export function ParticipantCard({
       )}
 
       <div className="qt-participant-card-header">
-        {/* Avatar */}
-        <div className="flex-shrink-0 relative">
-          <Avatar
-            name={name}
-            src={entity}
-            size="md"
-            isActive={isCurrentTurn}
-            styleOverride="RECTANGULAR"
-          />
-          {/* Status overlay icon — visible even when sidebar is collapsed */}
-          {participantStatus === 'silent' && (
-            <div className="qt-participant-status-overlay qt-participant-status-overlay-silent" title="Silent">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-              </svg>
+        {/* Avatar + tool buttons (regenerate / wardrobe) stacked below it */}
+        <div className="flex-shrink-0 flex flex-col items-center gap-1">
+          <div className="relative">
+            <Avatar
+              name={name}
+              src={entity}
+              size="md"
+              isActive={isCurrentTurn}
+              styleOverride="RECTANGULAR"
+            />
+            {/* Status overlay icon — visible even when sidebar is collapsed */}
+            {participantStatus === 'silent' && (
+              <div className="qt-participant-status-overlay qt-participant-status-overlay-silent" title="Silent">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+              </div>
+            )}
+            {participantStatus === 'absent' && (
+              <div className="qt-participant-status-overlay qt-participant-status-overlay-absent" title="Absent">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                </svg>
+              </div>
+            )}
+          </div>
+          {(onRegenerateAvatar || (isCharacter && participant.character?.id && wardrobeDialog)) && (
+            <div className="qt-participant-avatar-tools">
+              {onRegenerateAvatar && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onRegenerateAvatar(participant.id)
+                  }}
+                  className="qt-participant-avatar-tool-button"
+                  title={`Regenerate avatar for ${name}`}
+                  aria-label={`Regenerate avatar for ${name}`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                  </svg>
+                </button>
+              )}
+              {isCharacter && participant.character?.id && wardrobeDialog && (
+                <button
+                  type="button"
+                  onClick={() => wardrobeDialog.open({
+                    characterId: participant.character!.id,
+                    ...(chatId ? { chatId } : {}),
+                  })}
+                  className="qt-participant-avatar-tool-button"
+                  title={`Open ${name}'s wardrobe`}
+                  aria-label={`Open ${name}'s wardrobe`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 9V7.5a2 2 0 1 1 2 2" />
+                    <path d="M12 9L3 16h18L12 9z" />
+                  </svg>
+                </button>
+              )}
             </div>
-          )}
-          {participantStatus === 'absent' && (
-            <div className="qt-participant-status-overlay qt-participant-status-overlay-absent" title="Absent">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-              </svg>
-            </div>
-          )}
-          {/* Regenerate avatar button — small camera icon below avatar */}
-          {onRegenerateAvatar && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onRegenerateAvatar(participant.id)
-              }}
-              className="qt-participant-avatar-regenerate"
-              title={`Regenerate avatar for ${name}`}
-              aria-label={`Regenerate avatar for ${name}`}
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-              </svg>
-            </button>
           )}
         </div>
 
@@ -412,39 +430,44 @@ export function ParticipantCard({
             )
           )}
 
-          {/* System prompt dropdown — shown for LLM-controlled characters whose
-              character has one or more named system prompts. Changing this
-              takes effect immediately on the next generation. */}
-          {isCharacter && !isUserParticipant && !isUserControlledCharacter && onSystemPromptChange && entity && (participant.character?.systemPrompts?.length ?? 0) > 0 && (
-            <div className="mt-1">
-              <select
-                value={participant.selectedSystemPromptId || ''}
-                onChange={handleSystemPromptChangeEvent}
-                className="qt-select qt-select-sm w-full"
-                title="System prompt"
-                aria-label={`System prompt for ${name}`}
-              >
-                <option value="">Use default prompt</option>
-                {participant.character!.systemPrompts!.map((prompt) => (
-                  <option key={prompt.id} value={prompt.id}>
-                    {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
-                  </option>
-                ))}
-              </select>
+          {/* System prompt row — dropdown (when the character has named prompts)
+              and/or a manual rebuild button. The dropdown picks which named
+              prompt is used; the rebuild button force-recompiles the cached
+              identity stack from the latest character data so edits to
+              manifesto/personality/prompt content show up without waiting for
+              another invalidation trigger. */}
+          {isCharacter && !isUserParticipant && !isUserControlledCharacter && entity && (onSystemPromptChange || onRebuildSystemPrompt) && (
+            <div className="mt-1 flex items-center gap-1">
+              {onSystemPromptChange && (participant.character?.systemPrompts?.length ?? 0) > 0 && (
+                <select
+                  value={participant.selectedSystemPromptId || ''}
+                  onChange={handleSystemPromptChangeEvent}
+                  className="qt-select qt-select-sm flex-1 min-w-0"
+                  title="System prompt"
+                  aria-label={`System prompt for ${name}`}
+                >
+                  <option value="">Use default prompt</option>
+                  {participant.character!.systemPrompts!.map((prompt) => (
+                    <option key={prompt.id} value={prompt.id}>
+                      {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {onRebuildSystemPrompt && (
+                <button
+                  type="button"
+                  onClick={() => onRebuildSystemPrompt(participant.id)}
+                  className="qt-button qt-button-secondary qt-button-sm py-1 px-1.5 flex-shrink-0"
+                  title="Rebuild system prompt from latest character data"
+                  aria-label={`Rebuild system prompt for ${name}`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              )}
             </div>
-          )}
-
-          {/* Outfit indicator for all characters with wardrobe data */}
-          {isCharacter && onEquipSlot && (equippedSlots || (wardrobeItems && wardrobeItems.length > 0) || outfitLoading) && (
-            <OutfitIndicator
-              characterId={participant.character?.id || ''}
-              equippedSlots={equippedSlots ?? null}
-              equippedItems={equippedItems ?? {}}
-              wardrobeItems={wardrobeItems ?? []}
-              onEquipSlot={(slot, itemId) => onEquipSlot(participant.id, slot, itemId)}
-              isLoading={outfitLoading}
-              onGiftItem={onGiftItem ? () => onGiftItem(participant.id) : undefined}
-            />
           )}
 
           {/* Talkativeness slider for characters */}

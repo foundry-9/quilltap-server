@@ -234,7 +234,7 @@ export function ProviderBadge({
   const finalLabel = label || badge.label
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full qt-text-label-xs ${badge.bg} ${badge.text}`}>
       <ProviderIcon provider={provider} className="h-3 w-3" iconData={iconData} />
       {finalLabel}
     </span>

@@ -76,7 +76,7 @@ export function SpeakerMapper({
       >
         {/* Speaker info header */}
         <div className="flex items-center gap-2 mb-3">
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+          <span className={`inline-flex items-center px-2 py-1 rounded qt-text-label-xs ${
             isUser
               ? 'qt-bg-success/10 qt-text-success'
               : 'qt-bg-primary/10 text-primary'

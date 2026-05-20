@@ -5,7 +5,10 @@
 
 import { createHash } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
-import { fileStorageManager } from '@/lib/file-storage/manager';
+import {
+  getLanternBackgroundsStore,
+  writeLanternBackgroundToMountStore,
+} from '@/lib/file-storage/lantern-store-bridge';
 
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
@@ -30,7 +33,7 @@ import {
 } from '@/lib/image-gen/appearance-resolution';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import {
   resolveDangerousContentSettings,
@@ -42,6 +45,7 @@ import {
   resolveImageProviderForDangerousContent,
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 
 /**
  * Execution context for image generation tool
@@ -129,14 +133,22 @@ async function saveGeneratedImage(
     // Generate a new file ID
     const fileId = crypto.randomUUID();
 
-    // Upload to file storage
-    const uploadResult = await fileStorageManager.uploadFile({
+    // Generic image-tool output goes into the Lantern Backgrounds mount under
+    // `tool/`. The mount is provisioned by provision-lantern-backgrounds-mount-v1;
+    // refuse to write rather than leak bytes into the catch-all _general/ space.
+    const lantern = await getLanternBackgroundsStore();
+    if (!lantern) {
+      throw new Error(
+        'Lantern Backgrounds mount is not provisioned; cannot persist generate_image output.',
+      );
+    }
+    const written = await writeLanternBackgroundToMountStore({
       filename: originalFilename,
       content: buffer,
       contentType: finalMimeType,
-      projectId: null,
-      folderPath: '/',
+      subfolder: 'tool',
     });
+    const uploadResult: { storageKey: string } = { storageKey: written.storageKey };
     // Inherit tags from linked entities (e.g., the chat)
     const inheritedTags = await getInheritedTags(linkedTo, userId);
 
@@ -774,7 +786,10 @@ async function resolveAppearances(
           context.callingParticipantId
         );
 
-        // Build appearance inputs from resolved placeholders, enriched with equipped wardrobe items
+        // Build appearance inputs from resolved placeholders, enriched with
+        // equipped wardrobe items. Equipped slots are arrays-per-slot and may
+        // contain composite items; resolveEquippedOutfitForCharacter expands
+        // composites and returns per-slot leaf items.
         const repos = getRepositories();
         const appearanceInputs: AppearanceResolutionInput[] = [];
         for (const p of resolvedPlaceholders.filter(p => p.entityId && p.descriptions?.length)) {
@@ -783,19 +798,15 @@ async function resolveAppearances(
             try {
               const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(context.chatId, p.entityId);
               if (equippedSlots) {
-                const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
-                if (equippedItemIds.length > 0) {
-                  const items = await repos.wardrobe.findByIds(equippedItemIds);
-                  const itemsMap = new Map(items.map(item => [item.id, item]));
-                  equippedWardrobeItems = [];
-                  for (const [slot, itemId] of Object.entries(equippedSlots)) {
-                    if (itemId) {
-                      const item = itemsMap.get(itemId);
-                      if (item) {
-                        equippedWardrobeItems.push({ slot, title: item.title, description: item.description });
-                      }
-                    }
+                const resolved = await resolveEquippedOutfitForCharacter(repos, p.entityId, equippedSlots);
+                const flat: Array<{ slot: string; title: string; description?: string | null }> = [];
+                for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
+                  for (const item of resolved.leafItemsBySlot[slot]) {
+                    flat.push({ slot, title: item.title, description: item.description });
                   }
+                }
+                if (flat.length > 0) {
+                  equippedWardrobeItems = flat;
                 }
               }
             } catch (err) {

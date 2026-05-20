@@ -20,6 +20,13 @@ import {
   closeSQLite,
   ensureSQLiteDataDir,
 } from '../../migrations/lib/database-utils';
+import {
+  type EncryptedPepperBundle,
+  type PepperCryptoParams,
+  decryptPepperWithParams,
+  encryptPepperWithParams,
+  hashPepper,
+} from './pepper-crypto';
 
 // ============================================================================
 // Types
@@ -39,23 +46,20 @@ interface StoredPepper {
   created_at: string;
 }
 
-interface EncryptedPepperData {
-  salt: string;
-  iv: string;
-  ciphertext: string;
-  authTag: string;
-}
+type EncryptedPepperData = EncryptedPepperBundle;
 
 // ============================================================================
 // Constants (match lib/encryption.ts)
 // ============================================================================
 
-const ALGORITHM = 'aes-256-gcm';
-const KEY_LENGTH = 32; // 256 bits
-const IV_LENGTH = 16; // 128 bits
-const SALT_LENGTH = 32; // 256 bits
-const PBKDF2_ITERATIONS = 100000;
-const PBKDF2_DIGEST = 'sha256';
+const CRYPTO_PARAMS: PepperCryptoParams = {
+  algorithm: 'aes-256-gcm',
+  keyLength: 32, // 256 bits
+  ivLength: 16, // 128 bits
+  saltLength: 32, // 256 bits
+  kdfIterations: 100000,
+  kdfDigest: 'sha256',
+};
 
 // Internal passphrase used when the user skips setting one
 const INTERNAL_PASSPHRASE = '__quilltap_no_passphrase__';
@@ -83,53 +87,12 @@ function setCurrentPepperState(state: PepperState): void {
 // Crypto Helpers
 // ============================================================================
 
-/**
- * Hash a pepper using SHA-256 for verification
- */
-function hashPepper(pepper: string): string {
-  return crypto.createHash('sha256').update(pepper).digest('hex');
-}
-
-/**
- * Encrypt a pepper with a passphrase using AES-256-GCM
- */
 function encryptPepper(pepper: string, passphrase: string): EncryptedPepperData {
-  const salt = crypto.randomBytes(SALT_LENGTH);
-  const key = crypto.pbkdf2Sync(passphrase, new Uint8Array(salt), PBKDF2_ITERATIONS, KEY_LENGTH, PBKDF2_DIGEST);
-  const iv = crypto.randomBytes(IV_LENGTH);
-
-  const cipher = crypto.createCipheriv(ALGORITHM, new Uint8Array(key), new Uint8Array(iv));
-  let ciphertext = cipher.update(pepper, 'utf8', 'hex');
-  ciphertext += cipher.final('hex');
-  const authTag = cipher.getAuthTag();
-
-  return {
-    salt: salt.toString('hex'),
-    iv: iv.toString('hex'),
-    ciphertext,
-    authTag: authTag.toString('hex'),
-  };
+  return encryptPepperWithParams(pepper, passphrase, CRYPTO_PARAMS);
 }
 
-/**
- * Decrypt a pepper with a passphrase using AES-256-GCM
- * Returns null if decryption fails (wrong passphrase)
- */
 function decryptPepper(data: EncryptedPepperData, passphrase: string): string | null {
-  try {
-    const salt = Buffer.from(data.salt, 'hex');
-    const key = crypto.pbkdf2Sync(passphrase, new Uint8Array(salt), PBKDF2_ITERATIONS, KEY_LENGTH, PBKDF2_DIGEST);
-    const iv = Buffer.from(data.iv, 'hex');
-
-    const decipher = crypto.createDecipheriv(ALGORITHM, new Uint8Array(key), new Uint8Array(iv));
-    decipher.setAuthTag(new Uint8Array(Buffer.from(data.authTag, 'hex')));
-
-    let plaintext = decipher.update(data.ciphertext, 'hex', 'utf8');
-    plaintext += decipher.final('utf8');
-    return plaintext;
-  } catch {
-    return null;
-  }
+  return decryptPepperWithParams(data, passphrase, CRYPTO_PARAMS);
 }
 
 /**

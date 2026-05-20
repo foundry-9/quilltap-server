@@ -32,7 +32,7 @@ export function CharacterDetails({
           <button
             onClick={() => onTemplateReplace('char')}
             disabled={replacingTemplate !== null}
-            className="flex items-center gap-1.5 rounded-lg border qt-border-primary/40 qt-bg-primary/10 px-3 py-2 text-sm font-medium text-primary qt-shadow-sm transition hover:qt-bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border qt-border-primary/40 qt-bg-primary/10 px-3 py-2 qt-label text-primary qt-shadow-sm transition hover:qt-bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
             title={`Replace ${templateCounts.charCount} occurrences of "${character?.name}" with {{char}}`}
           >
             {replacingTemplate === 'char' ? (
@@ -54,7 +54,7 @@ export function CharacterDetails({
           <button
             onClick={() => onTemplateReplace('user')}
             disabled={replacingTemplate !== null}
-            className="flex items-center gap-1.5 rounded-lg border qt-border-success/40 qt-bg-success/10 px-3 py-2 text-sm font-medium qt-text-success qt-shadow-sm transition hover:qt-bg-success/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border qt-border-success/40 qt-bg-success/10 px-3 py-2 qt-label qt-text-success qt-shadow-sm transition hover:qt-bg-success/20 disabled:cursor-not-allowed disabled:opacity-50"
             title={`Replace ${templateCounts.userCount} occurrences of "${defaultPartnerName}" with {{user}}`}
           >
             {replacingTemplate === 'user' ? (
@@ -84,9 +84,24 @@ export function CharacterDetails({
 
       {/* Main Content with Template Highlighting */}
       <div className="space-y-6">
+        {character?.identity && (
+          <div>
+            <h2 className="qt-heading-4 text-foreground mb-2">
+              Identity
+            </h2>
+            <div className="qt-text-small">
+              <TemplateDisplay
+                content={character.identity}
+                characterName={character.name}
+                userCharacterName={defaultPartnerName}
+              />
+            </div>
+          </div>
+        )}
+
         {character?.description && (
           <div>
-            <h2 className="text-lg font-semibold text-foreground mb-2">
+            <h2 className="qt-heading-4 text-foreground mb-2">
               Description
               {(templateCounts.fieldCounts.description?.char > 0 || templateCounts.fieldCounts.description?.user > 0) && (
                 <span className="ml-2 text-xs font-normal qt-text-xs">
@@ -104,9 +119,29 @@ export function CharacterDetails({
           </div>
         )}
 
+        {character?.manifesto && (
+          <div>
+            <h2 className="qt-heading-4 text-foreground mb-2">
+              Manifesto
+              {(templateCounts.fieldCounts.manifesto?.char > 0 || templateCounts.fieldCounts.manifesto?.user > 0) && (
+                <span className="ml-2 text-xs font-normal qt-text-xs">
+                  (template replacements available)
+                </span>
+              )}
+            </h2>
+            <div className="qt-text-small">
+              <TemplateDisplay
+                content={character.manifesto}
+                characterName={character.name}
+                userCharacterName={defaultPartnerName}
+              />
+            </div>
+          </div>
+        )}
+
         {character?.personality && (
           <div>
-            <h2 className="text-lg font-semibold text-foreground mb-2">
+            <h2 className="qt-heading-4 text-foreground mb-2">
               Personality
               {(templateCounts.fieldCounts.personality?.char > 0 || templateCounts.fieldCounts.personality?.user > 0) && (
                 <span className="ml-2 text-xs font-normal qt-text-xs">
@@ -126,13 +161,13 @@ export function CharacterDetails({
 
         {character?.scenarios && character.scenarios.length > 0 && (
           <div>
-            <h2 className="text-lg font-semibold text-foreground mb-2">
+            <h2 className="qt-heading-4 text-foreground mb-2">
               {character.scenarios.length === 1 ? 'Scenario' : 'Scenarios'}
             </h2>
             {character.scenarios.map((scenario) => (
               <div key={scenario.id} className="mb-4">
                 {character.scenarios!.length > 1 && (
-                  <h3 className="text-sm font-medium qt-text-secondary mb-1">{scenario.title}</h3>
+                  <h3 className="qt-label qt-text-secondary mb-1">{scenario.title}</h3>
                 )}
                 <div className="qt-text-small">
                   <TemplateDisplay
@@ -148,7 +183,7 @@ export function CharacterDetails({
 
         {character?.firstMessage && (
           <div>
-            <h2 className="text-lg font-semibold text-foreground mb-2">
+            <h2 className="qt-heading-4 text-foreground mb-2">
               First Message
               {(templateCounts.fieldCounts.firstMessage?.char > 0 || templateCounts.fieldCounts.firstMessage?.user > 0) && (
                 <span className="ml-2 text-xs font-normal qt-text-xs">
@@ -168,7 +203,7 @@ export function CharacterDetails({
 
         {character?.exampleDialogues && (
           <div>
-            <h2 className="text-lg font-semibold text-foreground mb-2">
+            <h2 className="qt-heading-4 text-foreground mb-2">
               Example Dialogues
               {(templateCounts.fieldCounts.exampleDialogues?.char > 0 || templateCounts.fieldCounts.exampleDialogues?.user > 0) && (
                 <span className="ml-2 text-xs font-normal qt-text-xs">

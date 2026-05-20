@@ -6,3 +6,4 @@
 export * from './base';
 export { ConsoleTransport } from './console';
 export { FileTransport } from './file';
+export { ParentChannelTransport } from './parent-channel';

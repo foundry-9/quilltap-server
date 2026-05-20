@@ -7,7 +7,7 @@ import { POST } from '@/app/api/v1/images/route'
 import { getServerSession } from '@/lib/auth/session'
 import { createImageProvider } from '@/lib/llm'
 import { getRepositories, getRepositoriesSafe } from '@/lib/repositories/factory'
-import { fileStorageManager } from '@/lib/file-storage/manager'
+import { writeLanternBackgroundToMountStore } from '@/lib/file-storage/lantern-store-bridge'
 import { getInheritedTags } from '@/lib/files/tag-inheritance'
 import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
 import { NextRequest } from 'next/server'
@@ -22,7 +22,7 @@ const mockGetServerSession = jest.mocked(getServerSession)
 const mockCreateImageProvider = jest.mocked(createImageProvider)
 const mockGetRepositories = jest.mocked(getRepositories)
 const mockGetRepositoriesSafe = jest.mocked(getRepositoriesSafe)
-const mockFileStorageManager = jest.mocked(fileStorageManager)
+const mockWriteLanternBackground = jest.mocked(writeLanternBackgroundToMountStore)
 const mockGetInheritedTags = jest.mocked(getInheritedTags)
 
 // Helper to create a mock NextRequest with action=generate query parameter
@@ -87,7 +87,15 @@ describe('POST /api/v1/images?action=generate', () => {
     mockRepos.files = mockImagesRepo as any
 
     // Setup file storage and tag inheritance mocks (base mocks are in jest.setup.ts, but reset here)
-    mockFileStorageManager.uploadFile.mockResolvedValue({ storageKey: 'mock-storage-key' })
+    mockWriteLanternBackground.mockResolvedValue({
+      storageKey: 'mount-blob:mock-lantern:mock-blob',
+      mountPointId: 'mock-lantern',
+      blobId: 'mock-blob',
+      relativePath: 'tool/mock.webp',
+      storedMimeType: 'image/webp',
+      sizeBytes: 1024,
+      sha256: 'mock-sha256',
+    })
     mockGetInheritedTags.mockResolvedValue([])
   })
 
@@ -247,7 +255,7 @@ describe('POST /api/v1/images?action=generate', () => {
     expect(data.metadata.prompt).toBe('a beautiful landscape')
     expect(data.metadata.provider).toBe('OPENAI')
     expect(mockProvider.generateImage).toHaveBeenCalled()
-    expect(mockFileStorageManager.uploadFile).toHaveBeenCalled()
+    expect(mockWriteLanternBackground).toHaveBeenCalled()
 
     // Verify fields are set correctly
     // Second argument is { id: fileId } to ensure metadata ID matches S3 path

@@ -1,42 +1,29 @@
 'use client'
 
-import { useState } from 'react'
 import useSWR from 'swr'
+import { useModalState } from '@/hooks/useModalState'
 import type { LLMLog } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
+import { formatDateTime } from '@/lib/format-time'
 
 export default function LLMLogsCard() {
-  const [selectedLog, setSelectedLog] = useState<LLMLog | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-
   const { data, isLoading, error: loadError, mutate: mutateLogs } = useSWR<{ logs: LLMLog[] }>(
     '/api/v1/llm-logs?limit=20'
   )
   const logs = data?.logs ?? []
 
-  const handleViewLog = (log: LLMLog) => {
-    setSelectedLog(log)
-    setIsModalOpen(true)
-  }
+  const {
+    isOpen: isModalOpen,
+    payload: selectedLog,
+    openModal,
+    closeModal: handleCloseModal,
+  } = useModalState<LLMLog>()
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false)
-    setSelectedLog(null)
-  }
+  const handleViewLog = (log: LLMLog) => openModal(log)
 
-  const formatDate = (dateString: string): string => {
-    try {
-      return new Date(dateString).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    } catch {
-      return dateString
-    }
-  }
+  const formatDate = (dateString: string): string =>
+    formatDateTime(dateString, { includeYear: false })
 
   const getTypeLabel = (type: string): string => {
     const labels: Record<string, string> = {
@@ -58,7 +45,7 @@ export default function LLMLogsCard() {
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-foreground mb-1">
+          <h2 className="qt-heading-2 text-foreground mb-1">
             LLM Logs
           </h2>
           <p className="qt-text-small">

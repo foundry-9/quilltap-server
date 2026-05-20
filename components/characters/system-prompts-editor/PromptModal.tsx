@@ -1,31 +1,27 @@
 'use client'
 
-import ReactMarkdown from 'react-markdown'
 import { BaseModal } from '@/components/ui/BaseModal'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { CharacterSystemPrompt, PromptFormData } from './types'
 
 interface PromptModalProps {
   isOpen: boolean
   editingPrompt: CharacterSystemPrompt | null
   formData: PromptFormData
-  showPreview: boolean
   saving: boolean
   onClose: () => void
   onSave: () => void
   onFormChange: (field: keyof PromptFormData, value: string | boolean) => void
-  onPreviewToggle: () => void
 }
 
 export function PromptModal({
   isOpen,
   editingPrompt,
   formData,
-  showPreview,
   saving,
   onClose,
   onSave,
   onFormChange,
-  onPreviewToggle,
 }: PromptModalProps) {
   const isDisabled = !formData.name.trim() || !formData.content.trim()
 
@@ -73,34 +69,20 @@ export function PromptModal({
         </div>
 
         <div>
-          <div className="flex justify-between items-center mb-1">
-            <label className="qt-label">
-              Content *
-            </label>
-            <button
-              type="button"
-              onClick={onPreviewToggle}
-              className="qt-link text-xs"
-            >
-              {showPreview ? 'Edit' : 'Preview'}
-            </button>
-          </div>
-          {showPreview ? (
-            <div className="p-4 border qt-border-default rounded-lg qt-bg-muted/30 min-h-[200px] prose prose-sm qt-prose-auto max-w-none">
-              <ReactMarkdown>{formData.content || '*No content*'}</ReactMarkdown>
-            </div>
-          ) : (
-            <textarea
-              value={formData.content}
-              onChange={(e) => onFormChange('content', e.target.value)}
-              placeholder="Enter the system prompt content (Markdown supported)"
-              rows={10}
-              className="qt-textarea font-mono"
-            />
-          )}
-          <p className="mt-1 qt-text-xs">
+          <label className="qt-label">
+            Content *
+          </label>
+          <p className="qt-text-xs mt-1 mb-2">
             Supports Markdown formatting. Use {'{{char}}'} and {'{{user}}'} for character/user name substitution.
           </p>
+          <MarkdownLexicalEditor
+            value={formData.content}
+            onChange={(value) => onFormChange('content', value)}
+            remountKey={editingPrompt?.id ?? 'new'}
+            namespace="CharacterSystemPromptModal.content"
+            ariaLabel="System prompt content"
+            minHeight="12rem"
+          />
         </div>
 
         <div className="flex items-center gap-2">

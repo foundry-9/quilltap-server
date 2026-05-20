@@ -42,11 +42,13 @@ import path from 'path';
 import { randomUUID, createHash } from 'crypto';
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
+import { reportProgress } from '../lib/progress';
 import {
   isSQLiteBackend,
   getSQLiteDatabase,
   sqliteTableExists,
 } from '../lib/database-utils';
+import { alignDocMountPointsSchema } from '../lib/mount-index-schema';
 import { getFilesDir, getMountIndexDatabasePath } from '../../lib/paths';
 import { convertBufferToPlainText } from '../../lib/mount-index/converters';
 import { PROJECT_OWN_STORE_NAME_PREFIX } from '../../lib/mount-index/project-store-naming';
@@ -200,6 +202,10 @@ function ensureMountIndexTables(db: DatabaseType): void {
   for (const sql of TABLE_DDL) {
     db.exec(sql);
   }
+  // Bring older mount-index DBs in line with the current shape — CREATE TABLE
+  // IF NOT EXISTS is a no-op when the table already exists, so columns added
+  // after the original schema (e.g. storeType) must be backfilled here.
+  alignDocMountPointsSchema(db);
 }
 
 function sha256Buffer(buf: Buffer): string {
@@ -358,7 +364,8 @@ async function importProjectDirectory(
   mountDb: DatabaseType,
   projectId: string,
   mountPointId: string,
-  projectDir: string
+  projectDir: string,
+  outerTier?: { current: number; total: number; unit: string }
 ): Promise<ImportCounts> {
   const counts: ImportCounts = {
     textDocuments: 0,
@@ -368,6 +375,7 @@ async function importProjectDirectory(
   };
 
   const files = await walkProjectDirectory(projectDir);
+  let fileIndex = 0;
 
   const insertDocument = mountDb.prepare(
     `INSERT INTO "doc_mount_documents"
@@ -392,6 +400,15 @@ async function importProjectDirectory(
   );
 
   for (const file of files) {
+    fileIndex++;
+    if (outerTier) {
+      reportProgress([
+        outerTier,
+        { current: fileIndex, total: files.length, unit: 'files' },
+      ]);
+    } else {
+      reportProgress(fileIndex, files.length, 'files');
+    }
     try {
       const bytes = await fsPromises.readFile(file.absolutePath);
       const ext = path.extname(file.relativePath);
@@ -636,7 +653,11 @@ export const convertProjectFilesToDocumentStoresMigration: Migration = {
         `DELETE FROM "project_doc_mount_links" WHERE mountPointId = ?`
       );
 
+      let projectIndex = 0;
       for (const project of projects) {
+        projectIndex++;
+        const outerTier = { current: projectIndex, total: projects.length, unit: 'projects' };
+        reportProgress([outerTier]);
         const projectDir = path.join(filesDir, project.id);
         const archiveDir = `${projectDir}_doc_store_archive`;
 
@@ -669,7 +690,8 @@ export const convertProjectFilesToDocumentStoresMigration: Migration = {
             mountDb,
             project.id,
             mountPointId,
-            projectDir
+            projectDir,
+            outerTier
           );
 
           insertLinkStmt.run(randomUUID(), project.id, mountPointId, now, now);

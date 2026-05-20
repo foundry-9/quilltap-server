@@ -199,6 +199,8 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - Temperature: 0-2 (default 1)
 - Supports vision (image) context
 - Token limits vary by model
+- **Verbosity** *(GPT-5 and newer)* — sets how concise or expansive the answer is, on a Low / Medium / High scale. Leaving it at *(model default)* omits the parameter entirely; older models that don't recognise it are unaffected either way.
+- **Reasoning Effort** *(o-series and GPT-5 reasoning models)* — picks how much hidden thinking the model does before it speaks: Minimal, Low, Medium, or High. Non-reasoning models ignore the setting. Background tasks like summarisation are pinned to *Low* regardless of this choice, so a profile set to *High* still won't burn its whole token budget on chores.
 
 ### Anthropic (Claude)
 

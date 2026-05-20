@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, serverError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, errorResponse } from '@/lib/api/responses';
 import {
   impersonateSchema,
   stopImpersonateSchema,
@@ -23,7 +23,14 @@ import { isParticipantPresent } from '@/lib/schemas/types';
 import {
   postHostAddAnnouncement,
   postHostRemoveAnnouncement,
+  postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
+import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
+import {
+  applyOutfitSelections,
+  buildCheapLLMConfig,
+} from '@/lib/wardrobe/apply-outfit-selections';
+import type { OutfitSelection } from '@/lib/schemas/wardrobe.types';
 
 /**
  * Start impersonating a participant
@@ -178,6 +185,55 @@ export async function handleSetActiveSpeaker(
 }
 
 /**
+ * Apply the chosen starting outfit for a freshly-added (or reactivated)
+ * participant. Falls back to `'default'` mode when the caller didn't send
+ * anything — matches the new-chat behavior so the character shows up
+ * dressed in their wardrobe defaults rather than undressed by accident.
+ *
+ * Failures are logged and swallowed: outfit-application should never block
+ * a participant from joining the chat.
+ */
+async function applyOutfitForAddedParticipant(
+  chatId: string,
+  chat: ChatMetadata,
+  characterId: string,
+  outfitSelection: OutfitSelection | undefined,
+  userId: string,
+  repos: AuthenticatedContext['repos'],
+): Promise<void> {
+  const selection: OutfitSelection = outfitSelection ?? {
+    characterId,
+    mode: 'default',
+  };
+
+  try {
+    const chatSettings = await repos.chatSettings.findByUserId(userId);
+    await applyOutfitSelections(
+      chatId,
+      [selection],
+      repos,
+      {
+        userId,
+        scenarioText: chat.scenarioText ?? null,
+        cheapLLMConfig: buildCheapLLMConfig(chatSettings),
+      },
+    );
+    logger.debug('[Chats v1] Outfit applied for added participant', {
+      chatId,
+      characterId,
+      mode: selection.mode,
+    });
+  } catch (error) {
+    logger.error('[Chats v1] Failed to apply outfit for added participant', {
+      chatId,
+      characterId,
+      mode: selection.mode,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
  * Add a new participant to the chat
  */
 export async function handleAddParticipantAction(
@@ -237,8 +293,38 @@ export async function handleAddParticipantAction(
         controlledBy,
       });
 
-      if (reactivatedCharacter) {
-        await postHostAddAnnouncement({ chatId, character: reactivatedCharacter });
+      if (reactivatedCharacter && reactivatedParticipant) {
+        await postHostAddAnnouncement({
+          chatId,
+          character: reactivatedCharacter,
+          participantId: reactivatedParticipant.id,
+          initialStatus: reactivatedParticipant.status,
+        });
+
+        // Phase H: recompile the identity stack for the reactivated
+        // participant in case it had been dropped.
+        try {
+          await compileIdentityStackForParticipant(updatedChat, removedParticipant.id);
+        } catch (error) {
+          logger.warn('[Chats v1] Failed to compile identity stack for reactivated participant', {
+            chatId, participantId: removedParticipant.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      // Reactivation: only re-apply an outfit when the caller explicitly
+      // sent one. Otherwise preserve whatever they had on before they were
+      // removed.
+      if (validatedData.outfitSelection && reactivatedParticipant?.characterId) {
+        await applyOutfitForAddedParticipant(
+          chatId,
+          updatedChat,
+          reactivatedParticipant.characterId,
+          validatedData.outfitSelection,
+          user.id,
+          repos,
+        );
       }
 
       return NextResponse.json({ participant: enrichedParticipant, chat: updatedChat }, { status: 200 });
@@ -248,7 +334,7 @@ export async function handleAddParticipantAction(
   const result = await handleAddParticipant(chatId, validatedData, chat.participants.length, user.id, repos);
 
   if ('error' in result) {
-    if (result.status === 404) return notFound('Resource');
+    if (result.status === 404) return errorResponse(result.error, 404);
     if (result.status === 400) return badRequest(result.error);
     return serverError(result.error);
   }
@@ -268,11 +354,104 @@ export async function handleAddParticipantAction(
     controlledBy: validatedData.controlledBy || 'llm',
   });
 
-  if (addedCharacter) {
-    await postHostAddAnnouncement({ chatId, character: addedCharacter });
+  if (addedCharacter && newParticipant) {
+    await postHostAddAnnouncement({
+      chatId,
+      character: addedCharacter,
+      participantId: newParticipant.id,
+      initialStatus: newParticipant.status,
+    });
+
+    // Phase H: compile the identity stack for the new participant.
+    if (newParticipant) {
+      try {
+        await compileIdentityStackForParticipant(result.chat, newParticipant.id);
+      } catch (error) {
+        logger.warn('[Chats v1] Failed to compile identity stack for added participant', {
+          chatId, participantId: newParticipant.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    if (
+      newParticipant &&
+      validatedData.joinScenario &&
+      !(validatedData.hasHistoryAccess ?? false)
+    ) {
+      await postHostJoinScenarioAnnouncement({
+        chatId,
+        characterName: addedCharacter.name,
+        targetParticipantId: newParticipant.id,
+        joinScenario: validatedData.joinScenario,
+      });
+    }
+  }
+
+  // Apply the chosen starting outfit for the new participant. Defaults to
+  // 'default' mode when the caller didn't supply one, matching the new-chat
+  // flow so the character arrives dressed in their wardrobe defaults.
+  if (validatedData.characterId) {
+    await applyOutfitForAddedParticipant(
+      chatId,
+      result.chat,
+      validatedData.characterId,
+      validatedData.outfitSelection,
+      user.id,
+      repos,
+    );
   }
 
   return NextResponse.json({ participant: enrichedParticipant, chat: result.chat }, { status: 201 });
+}
+
+/**
+ * Force-rebuild the cached identity stack (system prompt prefix) for a single
+ * participant. Used by the Participants sidebar "Rebuild system prompt"
+ * button to pick up edits to the underlying character (manifesto, personality,
+ * named systemPrompts, etc.) that aren't auto-invalidated by the compiler.
+ */
+export async function handleRebuildSystemPromptAction(
+  req: NextRequest,
+  chatId: string,
+  { repos }: AuthenticatedContext,
+): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const participantId = typeof body?.participantId === 'string' ? body.participantId : null;
+  if (!participantId) {
+    return badRequest('participantId is required');
+  }
+
+  const chat = await repos.chats.findById(chatId);
+  if (!chat) return notFound('Chat');
+
+  const participant = chat.participants.find((p) => p.id === participantId);
+  if (!participant) return notFound('Participant');
+
+  if (participant.type !== 'CHARACTER' || participant.controlledBy === 'user') {
+    return badRequest('System prompt rebuild is only available for LLM-controlled characters');
+  }
+
+  let characterName = 'Unknown';
+  if (participant.characterId) {
+    const character = await repos.characters.findById(participant.characterId);
+    if (character) characterName = character.name;
+  }
+
+  try {
+    await compileIdentityStackForParticipant(chat, participantId);
+  } catch (error) {
+    logger.error('[Chats v1] Manual system-prompt rebuild failed', {
+      chatId, participantId, characterName,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serverError('Failed to rebuild system prompt');
+  }
+
+  logger.info('[Chats v1] System prompt rebuilt manually', { chatId, participantId, characterName });
+
+  const refreshedChat = await repos.chats.findById(chatId);
+  return NextResponse.json({ ok: true, chat: refreshedChat ?? chat });
 }
 
 /**
@@ -301,11 +480,6 @@ export async function handleUpdateParticipantAction(
   }
 
   const { participantId, ...updateFields } = validatedData;
-  logger.debug('[Chats v1] Participant update requested', {
-    chatId, participantId, characterName, preStatus,
-    updateFields: Object.keys(updateFields),
-    updates: updateFields,
-  });
 
   const result = await handleParticipantUpdate(chatId, validatedData, user.id, repos);
 
@@ -314,7 +488,7 @@ export async function handleUpdateParticipantAction(
       chatId, participantId, characterName,
       error: result.error, status: result.status,
     });
-    if (result.status === 404) return notFound('Resource');
+    if (result.status === 404) return errorResponse(result.error, 404);
     if (result.status === 400) return badRequest(result.error);
     return serverError(result.error);
   }
@@ -360,10 +534,6 @@ export async function handleRemoveParticipantAction(
   }
   const previousStatus = participantToRemove.status || (participantToRemove.isActive ? 'active' : 'absent');
 
-  logger.debug('[Chats v1] Participant removal requested', {
-    chatId, participantId: validatedData.participantId, characterName, previousStatus,
-  });
-
   const activeCharacters = chat.participants.filter((p) => p.type === 'CHARACTER' && isParticipantPresent(p.status));
   if (activeCharacters.length <= 1 && participantToRemove.type === 'CHARACTER') {
     logger.warn('[Chats v1] Participant removal blocked: last character', {
@@ -380,7 +550,7 @@ export async function handleRemoveParticipantAction(
       chatId, participantId: validatedData.participantId, characterName,
       error: result.error, status: result.status,
     });
-    if (result.status === 404) return notFound('Resource');
+    if (result.status === 404) return errorResponse(result.error, 404);
     if (result.status === 400) return badRequest(result.error);
     return serverError(result.error);
   }
@@ -394,9 +564,6 @@ export async function handleRemoveParticipantAction(
       updateData.activeTypingParticipantId = cleanedIds[0] || null;
     }
     await repos.chats.update(chatId, updateData);
-    logger.debug('[Chats v1] Cleaned up impersonation state for removed participant', {
-      chatId, participantId: validatedData.participantId, characterName,
-    });
   }
 
   logger.info('[Chats v1] Participant removed', {
@@ -405,7 +572,11 @@ export async function handleRemoveParticipantAction(
   });
 
   if (characterName !== 'Unknown') {
-    await postHostRemoveAnnouncement({ chatId, characterName });
+    await postHostRemoveAnnouncement({
+      chatId,
+      characterName,
+      participantId: validatedData.participantId,
+    });
   }
 
   return NextResponse.json({ success: true, chat: result.chat });

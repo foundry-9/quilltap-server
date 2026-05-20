@@ -5,11 +5,13 @@ import Link from 'next/link'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { OutfitSelector } from '@/components/wardrobe'
-import type { OutfitSelection } from '@/components/wardrobe'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardrobe'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import type {
   ConnectionProfile,
+  GeneralScenarioOption,
   ImageProfile,
   NewChatFormState,
   Project,
@@ -17,7 +19,11 @@ import type {
   SelectedCharacter,
   UserControlledCharacter,
 } from './types'
-import { CUSTOM_SCENARIO_VALUE, PROJECT_SCENARIO_PREFIX } from './types'
+import {
+  CUSTOM_SCENARIO_VALUE,
+  GENERAL_SCENARIO_PREFIX,
+  PROJECT_SCENARIO_PREFIX,
+} from './types'
 
 interface NewChatFormProps {
   profiles: ConnectionProfile[]
@@ -30,6 +36,8 @@ interface NewChatFormProps {
   project: Project | null
   /** Project scenarios from `/api/v1/projects/[id]/scenarios`; empty when no project. */
   projectScenarios?: ProjectScenarioOption[]
+  /** General scenarios from `/api/v1/scenarios`; fetched for every non-help chat. */
+  generalScenarios?: GeneralScenarioOption[]
   creating: boolean
   /**
    * When true, renders connection-profile and system-prompt selects inline for a
@@ -37,6 +45,16 @@ interface NewChatFormProps {
    * When false, the caller is expected to render those controls in a picker panel.
    */
   showSingleCharacterControls?: boolean
+  /**
+   * Continuation mode: source chat ID forwarded to OutfitSelector so it can
+   * render the "Same as last conversation" option and default to it.
+   */
+  continuationFromChatId?: string | null
+  /**
+   * Continuation mode: per-character per-slot preview of what each
+   * character was wearing at the end of the source chat.
+   */
+  previousOutfitSummary?: PreviousOutfitSummary | null
 }
 
 export function NewChatForm({
@@ -49,8 +67,11 @@ export function NewChatForm({
   setState,
   project,
   projectScenarios = [],
+  generalScenarios = [],
   creating,
   showSingleCharacterControls = false,
+  continuationFromChatId,
+  previousOutfitSummary,
 }: NewChatFormProps) {
   const { formatCharacterName } = useUserCharacterDisplayName()
 
@@ -67,20 +88,26 @@ export function NewChatForm({
   }, [singleLlm])
 
   const hasProjectScenarios = projectScenarios.length > 0
+  const hasGeneralScenarios = generalScenarios.length > 0
   const hasCharacterScenarios = singleCharacterScenarios && singleCharacterScenarios.length > 0
-  const showScenarioDropdown = hasProjectScenarios || hasCharacterScenarios
+  const showScenarioDropdown = hasProjectScenarios || hasGeneralScenarios || hasCharacterScenarios
 
   const selectedProjectScenario = state.projectScenarioPath
     ? projectScenarios.find((s) => s.path === state.projectScenarioPath)
+    : undefined
+  const selectedGeneralScenario = state.generalScenarioPath
+    ? generalScenarios.find((s) => s.path === state.generalScenarioPath)
     : undefined
   const selectedCharacterScenario = state.scenarioId
     ? singleCharacterScenarios?.find((s) => s.id === state.scenarioId)
     : undefined
   const selectedPreset = selectedProjectScenario
     ? { kind: 'project' as const, content: selectedProjectScenario.body }
-    : selectedCharacterScenario
-      ? { kind: 'character' as const, content: selectedCharacterScenario.content }
-      : null
+    : selectedGeneralScenario
+      ? { kind: 'general' as const, content: selectedGeneralScenario.body }
+      : selectedCharacterScenario
+        ? { kind: 'character' as const, content: selectedCharacterScenario.content }
+        : null
   const showCustomTextarea = !selectedPreset
 
   // The character's own default — used to render the override-visibility note
@@ -98,13 +125,20 @@ export function NewChatForm({
 
   const dropdownValue = selectedProjectScenario
     ? `${PROJECT_SCENARIO_PREFIX}${selectedProjectScenario.path}`
-    : selectedCharacterScenario
-      ? selectedCharacterScenario.id
-      : CUSTOM_SCENARIO_VALUE
+    : selectedGeneralScenario
+      ? `${GENERAL_SCENARIO_PREFIX}${selectedGeneralScenario.path}`
+      : selectedCharacterScenario
+        ? selectedCharacterScenario.id
+        : CUSTOM_SCENARIO_VALUE
 
   const handleScenarioSelectChange = (value: string) => {
     if (value === CUSTOM_SCENARIO_VALUE || value === '') {
-      setState((prev) => ({ ...prev, scenarioId: null, projectScenarioPath: null }))
+      setState((prev) => ({
+        ...prev,
+        scenarioId: null,
+        projectScenarioPath: null,
+        generalScenarioPath: null,
+      }))
       return
     }
     if (value.startsWith(PROJECT_SCENARIO_PREFIX)) {
@@ -112,6 +146,18 @@ export function NewChatForm({
       setState((prev) => ({
         ...prev,
         projectScenarioPath: path,
+        generalScenarioPath: null,
+        scenarioId: null,
+        scenario: '',
+      }))
+      return
+    }
+    if (value.startsWith(GENERAL_SCENARIO_PREFIX)) {
+      const path = value.slice(GENERAL_SCENARIO_PREFIX.length)
+      setState((prev) => ({
+        ...prev,
+        generalScenarioPath: path,
+        projectScenarioPath: null,
         scenarioId: null,
         scenario: '',
       }))
@@ -122,6 +168,7 @@ export function NewChatForm({
       ...prev,
       scenarioId: value,
       projectScenarioPath: null,
+      generalScenarioPath: null,
       scenario: '',
     }))
   }
@@ -132,6 +179,7 @@ export function NewChatForm({
       ...prev,
       scenarioId: characterDefaultScenario.id,
       projectScenarioPath: null,
+      generalScenarioPath: null,
       scenario: '',
     }))
   }
@@ -158,9 +206,15 @@ export function NewChatForm({
   const characterIdForImage = singleCharacterId || selectedCharacters[0]?.character.id || undefined
 
   const outfitCharacters = useMemo(() => {
-    const list = llmSelected.map((sc) => ({ id: sc.character.id, name: sc.character.name }))
+    const list = llmSelected.map((sc) => ({
+      id: sc.character.id,
+      name: sc.character.name,
+      isUserControlled: false,
+    }))
     const userChar = userControlledCharacters.find((c) => c.id === state.selectedUserCharacterId)
-    if (userChar) list.push({ id: userChar.id, name: userChar.name })
+    if (userChar) {
+      list.push({ id: userChar.id, name: userChar.name, isUserControlled: true })
+    }
     return list
   }, [llmSelected, userControlledCharacters, state.selectedUserCharacterId])
 
@@ -321,6 +375,17 @@ export function NewChatForm({
                   ))}
                 </optgroup>
               )}
+              {hasGeneralScenarios && (
+                <optgroup label="General Scenarios">
+                  {generalScenarios.map((s) => (
+                    <option key={`general:${s.path}`} value={`${GENERAL_SCENARIO_PREFIX}${s.path}`}>
+                      {s.name}
+                      {s.isDefault ? ' (general default)' : ''}
+                      {s.description ? ` — ${s.description}` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
               {hasCharacterScenarios && (
                 <optgroup label="Character Scenarios">
                   {singleCharacterScenarios!.map((s) => (
@@ -354,14 +419,13 @@ export function NewChatForm({
             </div>
           )}
           {showCustomTextarea && (
-            <textarea
-              id="new-chat-scenario"
+            <MarkdownLexicalEditor
               value={state.scenario}
-              onChange={(e) => setState((prev) => ({ ...prev, scenario: e.target.value }))}
-              placeholder="Describe the starting scenario for this chat..."
+              onChange={(value) => setState((prev) => ({ ...prev, scenario: value }))}
               disabled={creating}
-              rows={3}
-              className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              namespace="NewChatForm.scenario"
+              ariaLabel="Starting scenario"
+              minHeight="6rem"
             />
           )}
         </div>
@@ -371,6 +435,8 @@ export function NewChatForm({
             characters={outfitCharacters}
             onSelectionsChange={handleOutfitSelectionsChange}
             disabled={creating}
+            sourceChatId={continuationFromChatId ?? null}
+            previousOutfitSummary={previousOutfitSummary ?? null}
           />
         )}
 

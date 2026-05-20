@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { scanMountPoint } from '@/lib/mount-index/scanner';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import { reindexLinks, enqueueEmbeddingJobsScoped } from '@/lib/mount-index/reindex';
 import { detachMountPoint, refreshMountPoint } from '@/lib/mount-index/watcher';
 import {
   convertMountPointToDatabase,
@@ -25,6 +26,7 @@ import {
   validateDeconvertTarget,
 } from '@/lib/mount-index/conversion';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
+import { copyFile, moveFile, writeFile, deleteFile, FileOpError } from '@/lib/mount-index/file-ops';
 
 // ============================================================================
 // Schemas
@@ -48,15 +50,10 @@ const updateMountPointSchema = z.object({
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
-      logger.debug('[Mount Points v1] Getting mount point by ID', {
-        mountPointId: id,
-        userId: user.id,
-      });
 
       const mountPoint = await repos.docMountPoints.findById(id);
 
       if (!mountPoint) {
-        logger.debug('[Mount Points v1] Mount point not found', { mountPointId: id });
         return notFound('Mount point');
       }
 
@@ -65,13 +62,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       const embeddedChunkCount = allChunks.filter(
         c => c.embedding != null && c.embedding.length > 0
       ).length;
-
-      logger.debug('[Mount Points v1] Found mount point', {
-        mountPointId: id,
-        name: mountPoint.name,
-        embeddedChunkCount,
-        totalChunks: allChunks.length,
-      });
 
       return NextResponse.json({
         mountPoint: { ...mountPoint, embeddedChunkCount },
@@ -90,14 +80,9 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
-      logger.debug('[Mount Points v1] Updating mount point', {
-        mountPointId: id,
-        userId: user.id,
-      });
 
       const existing = await repos.docMountPoints.findById(id);
       if (!existing) {
-        logger.debug('[Mount Points v1] Mount point not found for update', { mountPointId: id });
         return notFound('Mount point');
       }
 
@@ -153,14 +138,9 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     try {
-      logger.debug('[Mount Points v1] Deleting mount point', {
-        mountPointId: id,
-        userId: user.id,
-      });
 
       const existing = await repos.docMountPoints.findById(id);
       if (!existing) {
-        logger.debug('[Mount Points v1] Mount point not found for deletion', { mountPointId: id });
         return notFound('Mount point');
       }
 
@@ -174,36 +154,19 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       // Delete associated chunks first
       const chunksDeleted = await repos.docMountChunks.deleteByMountPointId(id);
-      logger.debug('[Mount Points v1] Deleted associated chunks', {
-        mountPointId: id,
-        chunksDeleted,
-      });
 
       // Delete associated files
       const filesDeleted = await repos.docMountFiles.deleteByMountPointId(id);
-      logger.debug('[Mount Points v1] Deleted associated files', {
-        mountPointId: id,
-        filesDeleted,
-      });
 
       // Delete DB-backed document bodies and blobs (no-ops on filesystem mounts).
       const documentsDeleted = await repos.docMountDocuments.deleteByMountPointId(id);
       const blobsDeleted = await repos.docMountBlobs.deleteByMountPointId(id);
-      logger.debug('[Mount Points v1] Deleted DB-backed documents and blobs', {
-        mountPointId: id,
-        documentsDeleted,
-        blobsDeleted,
-      });
 
       // Delete project links
       const links = await repos.projectDocMountLinks.findByMountPointId(id);
       for (const link of links) {
         await repos.projectDocMountLinks.delete(link.id);
       }
-      logger.debug('[Mount Points v1] Deleted project links', {
-        mountPointId: id,
-        linksDeleted: links.length,
-      });
 
       // Delete the mount point itself
       await repos.docMountPoints.delete(id);
@@ -235,14 +198,9 @@ async function handleScan(
   { id }: { id: string }
 ): Promise<NextResponse> {
   try {
-    logger.debug('[Mount Points v1] Scan action triggered', {
-      mountPointId: id,
-      userId: user.id,
-    });
 
     const mountPoint = await repos.docMountPoints.findById(id);
     if (!mountPoint) {
-      logger.debug('[Mount Points v1] Mount point not found for scan', { mountPointId: id });
       return notFound('Mount point');
     }
 
@@ -262,10 +220,6 @@ async function handleScan(
 
     // Enqueue embedding jobs for newly scanned content
     const embeddingJobsEnqueued = await enqueueEmbeddingJobsForMountPoint(id);
-    logger.debug('[Mount Points v1] Embedding jobs enqueued', {
-      mountPointId: id,
-      jobsEnqueued: embeddingJobsEnqueued,
-    });
 
     return successResponse({ scanResult, embeddingJobsEnqueued });
   } catch (error) {
@@ -284,10 +238,6 @@ async function handleConvert(
   { id }: { id: string }
 ): Promise<NextResponse> {
   try {
-    logger.debug('[Mount Points v1] Convert action triggered', {
-      mountPointId: id,
-      userId: user.id,
-    });
 
     const mountPoint = await repos.docMountPoints.findById(id);
     if (!mountPoint) {
@@ -373,10 +323,6 @@ async function handleDeconvert(
   { id }: { id: string }
 ): Promise<NextResponse> {
   try {
-    logger.debug('[Mount Points v1] Deconvert action triggered', {
-      mountPointId: id,
-      userId: user.id,
-    });
 
     const body = await req.json().catch(() => ({}));
     const parsed = deconvertSchema.safeParse(body);
@@ -458,12 +404,289 @@ async function handleDeconvert(
   }
 }
 
+// ============================================================================
+// Move / Copy Actions
+// ============================================================================
+
+const moveFileSchema = z.object({
+  sourcePath: z.string().min(1),
+  destMountPointId: z.string().min(1),
+  destPath: z.string().min(1),
+});
+
+const copyFileSchema = moveFileSchema.extend({
+  force: z.boolean().optional(),
+});
+
+function fileOpStatus(err: FileOpError): number {
+  switch (err.code) {
+    case 'MOUNT_NOT_FOUND':
+    case 'SOURCE_NOT_FOUND':
+      return 404;
+    case 'DEST_EXISTS':
+      return 409;
+    case 'INVALID_PATH':
+    case 'UNSUPPORTED':
+      return 400;
+    case 'VERIFY_FAILED':
+    default:
+      return 500;
+  }
+}
+
+async function handleMoveFile(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const parsed = moveFileSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest('Move requires sourcePath, destMountPointId, and destPath');
+  }
+  try {
+    const result = await moveFile({
+      sourceMountPointId: id,
+      sourcePath: parsed.data.sourcePath,
+      destMountPointId: parsed.data.destMountPointId,
+      destPath: parsed.data.destPath,
+    });
+    logger.info('[Mount Points v1] Moved file', {
+      ...result,
+      userId: user.id,
+    });
+    return successResponse(result);
+  } catch (err) {
+    if (err instanceof FileOpError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: fileOpStatus(err) }
+      );
+    }
+    logger.error(
+      '[Mount Points v1] Error moving file',
+      { mountPointId: id },
+      err instanceof Error ? err : undefined
+    );
+    return serverError('Failed to move file');
+  }
+}
+
+async function handleCopyFile(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const parsed = copyFileSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest('Copy requires sourcePath, destMountPointId, and destPath');
+  }
+  try {
+    const result = await copyFile({
+      sourceMountPointId: id,
+      sourcePath: parsed.data.sourcePath,
+      destMountPointId: parsed.data.destMountPointId,
+      destPath: parsed.data.destPath,
+      force: parsed.data.force,
+    });
+    logger.info('[Mount Points v1] Copied file', {
+      ...result,
+      userId: user.id,
+    });
+    return successResponse(result);
+  } catch (err) {
+    if (err instanceof FileOpError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: fileOpStatus(err) }
+      );
+    }
+    logger.error(
+      '[Mount Points v1] Error copying file',
+      { mountPointId: id },
+      err instanceof Error ? err : undefined
+    );
+    return serverError('Failed to copy file');
+  }
+}
+
+async function handleWriteFile(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  try {
+    const contentType = req.headers.get('content-type') || '';
+    if (!contentType.includes('multipart/form-data')) {
+      return badRequest('Expected multipart/form-data');
+    }
+    const form = await req.formData();
+    const file = form.get('file');
+    const relativePath = String(form.get('path') ?? '').trim();
+    const force = String(form.get('force') ?? '').toLowerCase() === 'true';
+    if (!(file instanceof File)) {
+      return badRequest('Missing "file" field in multipart body');
+    }
+    if (!relativePath) {
+      return badRequest('Missing "path" field');
+    }
+    const data = Buffer.from(await file.arrayBuffer());
+    const result = await writeFile({
+      mountPointId: id,
+      relativePath,
+      data,
+      force,
+    });
+    logger.info('[Mount Points v1] Wrote file', {
+      ...result,
+      userId: user.id,
+    });
+    return successResponse(result);
+  } catch (err) {
+    if (err instanceof FileOpError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: fileOpStatus(err) }
+      );
+    }
+    logger.error(
+      '[Mount Points v1] Error writing file',
+      { mountPointId: id },
+      err instanceof Error ? err : undefined
+    );
+    return serverError('Failed to write file');
+  }
+}
+
+async function handleDeleteFile(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const relativePath = typeof body?.path === 'string' ? body.path.trim() : '';
+    if (!relativePath) {
+      return badRequest('Missing "path" field');
+    }
+    const result = await deleteFile({ mountPointId: id, relativePath });
+    logger.info('[Mount Points v1] Deleted file', {
+      ...result,
+      userId: user.id,
+    });
+    return successResponse(result);
+  } catch (err) {
+    if (err instanceof FileOpError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: fileOpStatus(err) }
+      );
+    }
+    logger.error(
+      '[Mount Points v1] Error deleting file',
+      { mountPointId: id },
+      err instanceof Error ? err : undefined
+    );
+    return serverError('Failed to delete file');
+  }
+}
+
+async function handleReindex(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const mountPoint = await repos.docMountPoints.findById(id);
+  if (!mountPoint) return notFound('Mount point');
+
+  let body: { path?: string; force?: boolean } = {};
+  try {
+    const text = await req.text();
+    if (text) body = JSON.parse(text);
+  } catch (err) {
+    return badRequest(`Invalid JSON body: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  logger.info('[Mount Points v1] Reindex requested', {
+    mountPointId: id,
+    name: mountPoint.name,
+    path: body.path,
+    force: !!body.force,
+  });
+
+  try {
+    const result = await reindexLinks(mountPoint, { path: body.path, force: body.force });
+    return successResponse({
+      mountPointId: id,
+      mountName: mountPoint.name,
+      ...result,
+    });
+  } catch (error) {
+    logger.error(
+      '[Mount Points v1] Reindex failed',
+      { mountPointId: id },
+      error instanceof Error ? error : undefined,
+    );
+    return serverError(`Reindex failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function handleEmbed(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const mountPoint = await repos.docMountPoints.findById(id);
+  if (!mountPoint) return notFound('Mount point');
+
+  let body: { path?: string; force?: boolean } = {};
+  try {
+    const text = await req.text();
+    if (text) body = JSON.parse(text);
+  } catch (err) {
+    return badRequest(`Invalid JSON body: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  logger.info('[Mount Points v1] Embed requested', {
+    mountPointId: id,
+    name: mountPoint.name,
+    path: body.path,
+    force: !!body.force,
+  });
+
+  try {
+    const result = await enqueueEmbeddingJobsScoped(mountPoint, {
+      path: body.path,
+      force: body.force,
+    });
+    return successResponse({
+      mountPointId: id,
+      mountName: mountPoint.name,
+      ...result,
+    });
+  } catch (error) {
+    logger.error(
+      '[Mount Points v1] Embed enqueue failed',
+      { mountPointId: id },
+      error instanceof Error ? error : undefined,
+    );
+    return serverError(`Embed failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   (req, ctx, { id }) => {
     const dispatch = withActionDispatch<{ id: string }>({
       scan: handleScan,
       convert: handleConvert,
       deconvert: handleDeconvert,
+      'move-file': handleMoveFile,
+      'copy-file': handleCopyFile,
+      'write-file': handleWriteFile,
+      'delete-file': handleDeleteFile,
+      reindex: handleReindex,
+      embed: handleEmbed,
     });
     return dispatch(req, ctx, { id });
   }

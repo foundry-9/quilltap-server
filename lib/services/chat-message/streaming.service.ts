@@ -8,10 +8,11 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
 import { buildToolsForProvider, checkModelSupportsTools } from '@/lib/tools'
-import { isShellEnvironment } from '@/lib/paths'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
+import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
+import { buildPromptCacheKey } from '@/lib/llm/cache-key'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
@@ -31,6 +32,7 @@ export interface StreamOptions {
     thoughtSignature?: string
     toolCallId?: string
     toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
+    cacheControl?: { type: 'ephemeral' }
   }>
   connectionProfile: ConnectionProfile
   apiKey: string
@@ -139,7 +141,7 @@ export async function buildTools(
   isMultiCharacter?: boolean,
   /** Whether help tools are enabled for this character (enables help_search and help_settings) */
   helpToolsEnabled?: boolean,
-  /** Whether this character can dress themselves (enables list_wardrobe and update_outfit_item) */
+  /** Whether this character can dress themselves (enables list_wardrobe, wardrobe_set_outfit, and wardrobe_change_item) */
   canDressThemselves?: boolean,
   /** Whether this character can create new outfits (enables create_wardrobe_item) */
   canCreateOutfits?: boolean,
@@ -166,11 +168,6 @@ export async function buildTools(
 
   // Profile-level tool override - if allowToolUse is explicitly false, skip all tools
   if (connectionProfile.allowToolUse === false) {
-    logger.debug('Tools disabled by connection profile setting', {
-      context: 'chat-message.buildTools',
-      profileId: connectionProfile.id,
-      profileName: connectionProfile.name,
-    });
     return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
   }
 
@@ -211,9 +208,9 @@ export async function buildTools(
     helpNavigate: !!helpToolsEnabled,
     wardrobeList: canDressThemselves !== false,
     wardrobeUpdateOutfit: canDressThemselves !== false,
+    wardrobeChangeItem: canDressThemselves !== false,
     wardrobeCreateItem: canCreateOutfits !== false,
     whisper: !!isMultiCharacter,
-    shellInteractivity: isShellEnvironment(),
     documentEditing: !!documentEditingEnabled,
     toolConfigs,
   })
@@ -305,6 +302,7 @@ export async function* streamMessage(
     thoughtSignature: m.thoughtSignature,
     toolCallId: m.toolCallId,
     toolCalls: m.toolCalls,
+    cacheControl: m.cacheControl,
   })) as LLMMessage[]
 
   // Track timing and accumulated content
@@ -315,6 +313,11 @@ export async function* streamMessage(
   let lastUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined
   let lastCacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | undefined
 
+  const promptCacheKey = buildPromptCacheKey(chatId)
+  const profileParametersWithCache: Record<string, unknown> = promptCacheKey
+    ? { ...modelParams, promptCacheKey }
+    : modelParams
+
   for await (const chunk of provider.streamMessage(
     {
       messages: llmMessages,
@@ -324,7 +327,7 @@ export async function* streamMessage(
       topP: modelParams.topP as number | undefined,
       tools: tools.length > 0 ? tools : undefined,
       webSearchEnabled: useNativeWebSearch,
-      profileParameters: modelParams,
+      profileParameters: profileParametersWithCache,
       previousResponseId,
     },
     apiKey
@@ -351,6 +354,7 @@ export async function* streamMessage(
       // Log the LLM call if userId is provided
       if (userId) {
         const durationMs = Date.now() - startTime
+        const requestHashes = computeRequestPrefixHashes(llmMessages, tools.length > 0 ? tools : undefined)
 
         logLLMCall({
           userId,
@@ -375,6 +379,7 @@ export async function* streamMessage(
           },
           usage: lastUsage,
           cacheUsage: lastCacheUsage,
+          requestHashes,
           durationMs,
         }).catch(err => {
           logger.warn('Failed to log LLM call from streaming service', {
@@ -473,6 +478,10 @@ export function encodeDoneEvent(
     provider?: string
     modelName?: string
     isSilentMessage?: boolean
+    /** The Courier: signals that this done event closes a parked placeholder turn,
+     * not an actual streamed response. The Salon should skip its optimistic
+     * assistant-message push and rely on the prior fetchChat() refresh. */
+    pendingExternalTurn?: boolean
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)
@@ -512,6 +521,17 @@ export function encodeStatusEvent(
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ status })}\n\n`)
+}
+
+/**
+ * Encode a Courier "pending external turn" event. The Salon uses this to
+ * surface the placeholder bubble with a copy-out / paste-back affordance.
+ */
+export function encodePendingExternalTurnEvent(
+  encoder: TextEncoder,
+  data: { messageId: string; participantId: string; characterName: string }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ pendingExternalTurn: true, ...data })}\n\n`)
 }
 
 /**

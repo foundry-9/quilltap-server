@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 
 interface ExternalPromptResultDialogProps {
   characterName: string | undefined
@@ -15,36 +16,11 @@ export function ExternalPromptResultDialog({
   prompt,
   onClose,
 }: ExternalPromptResultDialogProps) {
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
 
-  // Escape key handler
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [onClose])
+  useEscapeKey(onClose)
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(prompt)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Fallback for older browsers
-      const textarea = document.createElement('textarea')
-      textarea.value = prompt
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }
+  const handleCopy = () => copy(prompt)
 
   const handleDownload = () => {
     const safeName = (characterName || 'character').replace(/[^a-zA-Z0-9-_ ]/g, '').trim()
@@ -64,13 +40,13 @@ export function ExternalPromptResultDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md md:max-w-3xl rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between mb-4 flex-shrink-0">
-          <h3 className="text-lg font-semibold">
+          <h3 className="qt-heading-4">
             Generated Prompt{characterName ? ` for ${characterName}` : ''}
           </h3>
           <div className="flex items-center gap-2">
             <button
               onClick={handleCopy}
-              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted"
+              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted"
               title="Copy to clipboard"
             >
               {copied ? (
@@ -91,7 +67,7 @@ export function ExternalPromptResultDialog({
             </button>
             <button
               onClick={handleDownload}
-              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted"
+              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted"
               title="Download as Markdown file"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

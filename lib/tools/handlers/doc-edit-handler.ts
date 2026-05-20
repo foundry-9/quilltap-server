@@ -64,10 +64,23 @@ import type { DocWriteBlobInput, DocWriteBlobOutput } from '../doc-write-blob-to
 import type { DocReadBlobInput, DocReadBlobOutput } from '../doc-read-blob-tool';
 import type { DocListBlobsInput, DocListBlobsOutput } from '../doc-list-blobs-tool';
 import type { DocDeleteBlobInput, DocDeleteBlobOutput } from '../doc-delete-blob-tool';
+import type { KeepImageInput, KeepImageOutput } from '../keep-image-tool';
+import type { ListImagesInput, ListImagesOutput, ListedImage } from '../list-images-tool';
+import type { AttachImageInput, AttachedImageDescriptor } from '../attach-image-tool';
+import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.types';
 import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
 import { getRepositories } from '@/lib/database/repositories';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
+import {
+  parseKeptImageFrontmatter,
+  basenameOfRelativePath,
+} from '@/lib/photos/keep-image-markdown';
+import { isPhotosRelativePath, PHOTOS_FOLDER } from '@/lib/photos/photos-paths';
+import { saveImageToAlbum, SaveImageToAlbumError } from '@/lib/photos/save-image-to-album';
+import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
+import { searchDocumentChunks } from '@/lib/mount-index/document-search';
 import {
   postLibrarianOpenAnnouncement,
   postLibrarianDeleteAnnouncement,
@@ -117,6 +130,9 @@ export const DOC_EDIT_TOOL_NAMES = new Set([
   'doc_read_blob',
   'doc_list_blobs',
   'doc_delete_blob',
+  'keep_image',
+  'list_images',
+  'attach_image',
 ]);
 
 /**
@@ -144,7 +160,6 @@ export async function executeDocEditTool(
   input: Record<string, unknown>,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
-  logger.debug('Executing doc-edit tool', { toolName, projectId: context.projectId });
 
   try {
     switch (toolName) {
@@ -194,6 +209,12 @@ export async function executeDocEditTool(
         return await handleListBlobs(input as unknown as DocListBlobsInput, context);
       case 'doc_delete_blob':
         return await handleDeleteBlob(input as unknown as DocDeleteBlobInput, context);
+      case 'keep_image':
+        return await handleKeepImage(input as unknown as KeepImageInput, context);
+      case 'list_images':
+        return await handleListImages(input as unknown as ListImagesInput, context);
+      case 'attach_image':
+        return await handleAttachImage(input as unknown as AttachImageInput, context);
       default:
         return { success: false, error: `Unknown doc-edit tool: ${toolName}` };
     }
@@ -342,11 +363,6 @@ async function buildReadResolutionContext(
 ) {
   const opaque = await actingCharacterIsOpaqueToVaults(context);
   if (opaque) {
-    logger.debug('Acting character is opaque (systemTransparency != true); withholding character-vault access', {
-      chatId: context.chatId,
-      actingCharacterId: context.characterId,
-      mountPointHint: input.mount_point,
-    });
     // No characterId / characterIds → resolver admits only project document
     // stores. Mount-point name lookups for character vaults won't resolve.
     return {
@@ -356,11 +372,6 @@ async function buildReadResolutionContext(
   }
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
   if (peerCharacterIds.length > 0) {
-    logger.debug('Cross-character vault reads enabled; expanding access', {
-      chatId: context.chatId,
-      actingCharacterId: context.characterId,
-      peerCharacterIds,
-    });
   }
   return {
     projectId: context.projectId,
@@ -381,11 +392,6 @@ async function buildWriteResolutionContext(
 ) {
   const opaque = await actingCharacterIsOpaqueToVaults(context);
   if (opaque) {
-    logger.debug('Acting character is opaque (systemTransparency != true); withholding character-vault write access', {
-      chatId: context.chatId,
-      actingCharacterId: context.characterId,
-      mountPointHint: input.mount_point,
-    });
     return {
       projectId: context.projectId,
       mountPoint: input.mount_point,
@@ -401,10 +407,55 @@ async function buildWriteResolutionContext(
 }
 
 /**
- * Trigger re-indexing and embedding for document store files after a write.
+ * Look up the project's "project-official" mount point — the canonical
+ * `scope: 'project'` store. Returns null when the project has no
+ * officialMountPointId, the mount is missing, or it's disabled. Callers can
+ * then fall back to the legacy `<filesDir>/<projectId>/` walk for projects
+ * that haven't been migrated yet.
+ */
+interface OfficialProjectMount {
+  id: string;
+  name: string;
+  basePath: string;
+  mountType: 'filesystem' | 'obsidian' | 'database';
+}
+
+async function resolveOfficialProjectMount(
+  projectId: string | undefined
+): Promise<OfficialProjectMount | null> {
+  if (!projectId) return null;
+  try {
+    const repos = getRepositories();
+    const project = await repos.projects.findById(projectId);
+    if (!project?.officialMountPointId) return null;
+    const mp = await repos.docMountPoints.findById(project.officialMountPointId);
+    if (!mp || !mp.enabled) return null;
+    return {
+      id: mp.id,
+      name: mp.name,
+      basePath: mp.basePath,
+      mountType: mp.mountType,
+    };
+  } catch (err) {
+    logger.warn('Failed to resolve official project mount; treating project as un-migrated', {
+      projectId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * Trigger re-indexing and embedding for any write that lands in a mount
+ * point. The gate is `mountPointId`, not `scope`: a `scope: 'project'`
+ * write into a project's `officialMountPointId` mount needs the same
+ * chunk/embed pass as a `scope: 'document_store'` write, otherwise the
+ * file is invisible to search until the next periodic mount scan. Legacy
+ * filesystem-only projects (no `officialMountPointId`) return without a
+ * `mountPointId` and silently no-op here, as before.
  */
 async function triggerReindexIfNeeded(resolved: ResolvedPath): Promise<void> {
-  if (resolved.scope === 'document_store' && resolved.mountPointId) {
+  if (resolved.mountPointId) {
     const mountPointId = resolved.mountPointId;
     const repos = getRepositories();
     // Fire-and-forget: don't block the tool response on re-indexing
@@ -875,7 +926,6 @@ async function handleGrep(
       }
     } catch {
       // Skip files that can't be read
-      logger.debug('Skipping unreadable file in grep', { path: absolutePath });
     }
   };
 
@@ -913,7 +963,6 @@ async function handleGrep(
 
       await walkRecursive(startDir);
     } catch {
-      logger.debug('Could not walk directory for grep', { dir: startDir });
     }
   };
 
@@ -993,14 +1042,24 @@ async function handleGrep(
   }
 
   // Search project files
+  //
+  // The document-store iteration above already covers the project's official
+  // mount (it's linked via project_doc_mount_links and surfaces through
+  // getAccessibleMountPoints). Falling through to walk the legacy on-disk
+  // directory would either duplicate matches or, post-migration, search a
+  // stale snapshot. We only walk the legacy fs for projects that haven't
+  // been migrated to a database-backed official store yet.
   if (!input.mount_point) {
-    const { getFilesDir } = await import('@/lib/paths');
-    const projectDir = path.join(getFilesDir(), context.projectId);
-    try {
-      await fs.access(projectDir);
-      await walkAndSearch(projectDir, '[project]');
-    } catch {
-      // Project dir doesn't exist, skip
+    const officialMount = await resolveOfficialProjectMount(context.projectId);
+    if (!officialMount) {
+      const { getFilesDir } = await import('@/lib/paths');
+      const projectDir = path.join(getFilesDir(), context.projectId);
+      try {
+        await fs.access(projectDir);
+        await walkAndSearch(projectDir, '[project]');
+      } catch {
+        // Project dir doesn't exist, skip
+      }
     }
   }
 
@@ -1112,7 +1171,6 @@ async function handleListFiles(
       await walkRecursive(startDir);
     } catch {
       // Directory doesn't exist or can't be read
-      logger.debug('Could not list directory', { dir: startDir });
     }
   };
 
@@ -1149,10 +1207,45 @@ async function handleListFiles(
   }
 
   // List project files
+  //
+  // Once a project has been migrated to a database-backed official store,
+  // `scope: 'project'` is an alias for that mount (matches what Prospero
+  // advertises and what resolveProjectPath dispatches to). To avoid reading
+  // a stale on-disk directory from before the migration — or duplicating
+  // entries the document-store branch already emitted — we route through
+  // the official mount when one exists.
   if (shouldIncludeProject) {
-    const { getFilesDir } = await import('@/lib/paths');
-    const projectDir = path.join(getFilesDir(), context.projectId);
-    await collectFiles(projectDir, 'project', undefined, input.folder);
+    const officialMount = await resolveOfficialProjectMount(context.projectId);
+    if (officialMount) {
+      // When listing every scope (no input.scope filter) the document-store
+      // branch above has already enumerated this mount; only emit it again
+      // when scope was explicitly 'project' so the caller sees results.
+      if (input.scope === 'project') {
+        if (officialMount.mountType === 'database') {
+          const dbEntries = await listDatabaseFiles(
+            officialMount.id,
+            input.folder ? { folder: input.folder } : {}
+          );
+          for (const entry of dbEntries) {
+            if (input.pattern && !matchesGlob(entry.fileName, input.pattern)) continue;
+            files.push({
+              path: entry.relativePath,
+              mount_point: officialMount.name,
+              scope: 'project',
+              size: entry.fileSizeBytes,
+              modified: new Date(entry.lastModified).getTime(),
+              kind: entry.kind as 'file' | 'folder' | undefined,
+            });
+          }
+        } else if (officialMount.basePath) {
+          await collectFiles(officialMount.basePath, 'project', officialMount.name, input.folder);
+        }
+      }
+    } else {
+      const { getFilesDir } = await import('@/lib/paths');
+      const projectDir = path.join(getFilesDir(), context.projectId);
+      await collectFiles(projectDir, 'project', undefined, input.folder);
+    }
   }
 
   // List general files
@@ -1668,10 +1761,6 @@ async function resolveActorOrigin(context: DocEditToolContext): Promise<Libraria
       return { kind: 'by-character', characterName: character.name };
     }
   } catch (error) {
-    logger.debug('Could not resolve character name for Librarian attribution', {
-      characterId: context.characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
   }
   return { kind: 'by-user' };
 }
@@ -2104,10 +2193,6 @@ async function handleOpenDocument(
         characterName = character.name;
       }
     } catch (error) {
-      logger.debug('Could not resolve character name for Librarian attribution', {
-        characterId: context.characterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
     }
   }
 
@@ -2195,7 +2280,6 @@ async function handleDocFocus(
   input: DocFocusInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
-  logger.debug('doc_focus requested', { chatId: context.chatId, ...input });
 
   // If clear_focus is true, return immediately
   if (input.clear_focus) {
@@ -2404,4 +2488,444 @@ async function handleDeleteBlob(
     relative_path: input.path,
   };
   return { success: true, result, formattedText: `Deleted blob [${mp.name}] ${input.path}` };
+}
+
+// ============================================================================
+// Photo Album Tools (keep_image / list_images / attach_image)
+//
+// Photos are documents in the character vault — a `photos/` subfolder in the
+// character's mount point. `keep_image` makes a hard link to an existing
+// image binary (dedup by sha256) and writes a Markdown context document
+// (prompt + scene snapshot + caption + tags) as the link's extractedText,
+// so the standard character-vault search picks it up. `list_images` is a
+// thin facade over the existing search infrastructure. `attach_image`
+// resurfaces a kept image into the current outgoing message.
+// ============================================================================
+
+interface ResolvedCharacterVault {
+  characterId: string;
+  characterName: string;
+  mountPointId: string;
+  mountPointName: string;
+}
+
+async function resolveActingCharacterVault(
+  context: DocEditToolContext
+): Promise<ResolvedCharacterVault | null> {
+  if (!context.characterId) return null;
+  const repos = getRepositories();
+  const character = await repos.characters.findById(context.characterId);
+  if (!character) return null;
+  const vault = await getCharacterVaultStore(context.characterId);
+  if (!vault) return null;
+  return {
+    characterId: character.id,
+    characterName: character.name,
+    mountPointId: vault.mountPointId,
+    mountPointName: vault.mountPointName,
+  };
+}
+
+async function findExistingPhotosLinkBySha(
+  mountPointId: string,
+  sha256: string
+): Promise<{ id: string; relativePath: string; createdAt: string } | null> {
+  const repos = getRepositories();
+  const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
+  const collision = links.find(
+    l => l.sha256 === sha256 && isPhotosRelativePath(l.relativePath)
+  );
+  if (!collision) return null;
+  return {
+    id: collision.id,
+    relativePath: collision.relativePath,
+    createdAt: collision.createdAt,
+  };
+}
+
+async function handleKeepImage(
+  input: KeepImageInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: KeepImageOutput; error?: string; formattedText?: string }> {
+  if (!context.characterId) {
+    return { success: false, error: 'keep_image requires a character context' };
+  }
+
+  const vault = await resolveActingCharacterVault(context);
+  if (!vault) {
+    return {
+      success: false,
+      error: 'No database-backed character vault is linked to the acting character',
+    };
+  }
+
+  try {
+    const saved = await saveImageToAlbum({
+      mountPointId: vault.mountPointId,
+      fileId: input.uuid,
+      caption: input.caption ?? null,
+      tags: input.tags ?? [],
+      chatId: context.chatId ?? null,
+      attribution: {
+        name: vault.characterName,
+        id: vault.characterId,
+        role: 'character',
+      },
+    });
+
+    const result: KeepImageOutput = {
+      success: true,
+      mount_point: saved.mountPointName,
+      relative_path: saved.relativePath,
+      link_id: saved.linkId,
+      kept_at: saved.keptAt,
+      file_id: saved.fileId,
+      sha256: saved.sha256,
+    };
+    const formattedCaption = input.caption ? ` ("${input.caption}")` : '';
+    return {
+      success: true,
+      result,
+      formattedText: `Kept image ${saved.fileId} as [${saved.mountPointName}] ${saved.relativePath}${formattedCaption}`,
+    };
+  } catch (err) {
+    if (err instanceof SaveImageToAlbumError) {
+      // Preserve the original keep_image wording so existing LLM behaviour
+      // and any tests that match against the error string still pass.
+      if (err.code === 'ALREADY_SAVED' && err.existingRelativePath && err.existingCreatedAt) {
+        return {
+          success: false,
+          error: `Image already kept by ${vault.characterName} on ${err.existingCreatedAt} as ${err.existingRelativePath}`,
+        };
+      }
+      return { success: false, error: err.message };
+    }
+    throw err;
+  }
+}
+
+interface VisiblePhotoVault {
+  characterId: string;
+  characterName: string;
+  mountPointId: string;
+  mountPointName: string;
+}
+
+async function collectVisiblePhotoVaults(
+  context: DocEditToolContext,
+  selfVault: ResolvedCharacterVault
+): Promise<VisiblePhotoVault[]> {
+  const vaults: VisiblePhotoVault[] = [{
+    characterId: selfVault.characterId,
+    characterName: selfVault.characterName,
+    mountPointId: selfVault.mountPointId,
+    mountPointName: selfVault.mountPointName,
+  }];
+
+  // Honour the Shared Vaults + systemTransparency gate that the rest of the
+  // doc-edit tools use for cross-character reads.
+  const peerIds = await collectPeerCharacterIdsForReads(context);
+  if (peerIds.length === 0) return vaults;
+
+  const repos = getRepositories();
+  for (const peerId of peerIds) {
+    const peer = await repos.characters.findById(peerId);
+    if (!peer) continue;
+    if (peer.systemTransparency !== true) continue;
+    const peerVault = await getCharacterVaultStore(peerId);
+    if (!peerVault) continue;
+    vaults.push({
+      characterId: peer.id,
+      characterName: peer.name,
+      mountPointId: peerVault.mountPointId,
+      mountPointName: peerVault.mountPointName,
+    });
+  }
+  return vaults;
+}
+
+function buildListedImage(
+  link: DocMountFileLinkWithContent,
+  vault: VisiblePhotoVault,
+  generationPromptExcerpt: string,
+  relevanceScore?: number
+): ListedImage {
+  const meta = parseKeptImageFrontmatter(link.extractedText ?? null);
+  const listed: ListedImage = {
+    uuid: link.id,
+    relative_path: link.relativePath,
+    mount_point: vault.mountPointName,
+    linked_by: meta.linkedBy,
+    linked_by_id: meta.linkedById,
+    kept_at: link.createdAt,
+    caption: meta.caption,
+    tags: meta.tags,
+    generation_prompt_excerpt: generationPromptExcerpt,
+  };
+  if (relevanceScore !== undefined) {
+    listed.relevance_score = relevanceScore;
+  }
+  return listed;
+}
+
+function matchesTagFilter(linkTags: string[], filter: string[] | undefined): boolean {
+  if (!filter || filter.length === 0) return true;
+  const lowered = new Set(linkTags.map(t => t.toLowerCase()));
+  return filter.some(f => lowered.has(f.toLowerCase()));
+}
+
+function matchesSavedByFilter(
+  meta: { linkedBy: string | null; linkedById: string | null },
+  filter: string | undefined
+): boolean {
+  if (!filter) return true;
+  const f = filter.toLowerCase();
+  return (
+    (meta.linkedBy?.toLowerCase() === f) ||
+    (meta.linkedById?.toLowerCase() === f)
+  );
+}
+
+function extractPromptExcerpt(extractedText: string | null | undefined): string {
+  if (!extractedText) return '';
+  // Body starts with "## Original prompt\n\n<prompt>\n\n..."; pluck the
+  // paragraph between the heading and the next blank line / heading.
+  const match = extractedText.match(/##\s+Original prompt\s*\n+([^\n][^\n]*(?:\n[^\n#][^\n]*)*)/);
+  if (!match) return '';
+  const para = match[1].trim();
+  return para.length > 200 ? `${para.slice(0, 200).trimEnd()}…` : para;
+}
+
+async function handleListImages(
+  input: ListImagesInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: ListImagesOutput; error?: string; formattedText?: string }> {
+  if (!context.characterId) {
+    return { success: false, error: 'list_images requires a character context' };
+  }
+
+  const selfVault = await resolveActingCharacterVault(context);
+  if (!selfVault) {
+    return {
+      success: false,
+      error: 'No database-backed character vault is linked to the acting character',
+    };
+  }
+
+  const vaults = await collectVisiblePhotoVaults(context, selfVault);
+  const vaultByMountPoint = new Map(vaults.map(v => [v.mountPointId, v]));
+  const mountPointIds = vaults.map(v => v.mountPointId);
+
+  const limit = Math.max(1, Math.min(input.limit ?? 20, 100));
+  const offset = Math.max(0, input.offset ?? 0);
+
+  const repos = getRepositories();
+  const trimmedQuery = input.query?.trim() ?? '';
+  const tagsFilter = input.tags;
+  const savedByFilter = input.saved_by;
+
+  // Branch 1: semantic search across the visible vaults' photos/ folders.
+  if (trimmedQuery.length > 0) {
+    try {
+      const embeddingResult = await generateEmbeddingForUser(trimmedQuery, context.userId);
+      const overscan = Math.max(limit * 3, 30);
+      const hits = await searchDocumentChunks(embeddingResult.embedding, {
+        mountPointIds,
+        pathPrefix: `${PHOTOS_FOLDER}/`,
+        limit: overscan,
+        minScore: 0.3,
+        query: trimmedQuery,
+        applyLiteralPhraseBoost: true,
+      });
+
+      const bestByLink = new Map<string, { score: number; mountPointId: string; relativePath: string }>();
+      for (const hit of hits) {
+        const existing = bestByLink.get(hit.fileId);
+        if (!existing || hit.score > existing.score) {
+          bestByLink.set(hit.fileId, {
+            score: hit.score,
+            mountPointId: hit.mountPointId,
+            relativePath: hit.relativePath,
+          });
+        }
+      }
+
+      const matched: ListedImage[] = [];
+      for (const [_linkId, entry] of bestByLink) {
+        const vault = vaultByMountPoint.get(entry.mountPointId);
+        if (!vault) continue;
+        const link = await repos.docMountFileLinks.findByMountPointAndPath(
+          entry.mountPointId,
+          entry.relativePath
+        );
+        if (!link) continue;
+        if (!isPhotosRelativePath(link.relativePath)) continue;
+        const meta = parseKeptImageFrontmatter(link.extractedText ?? null);
+        if (!matchesTagFilter(meta.tags, tagsFilter)) continue;
+        if (!matchesSavedByFilter(meta, savedByFilter)) continue;
+        const excerpt = extractPromptExcerpt(link.extractedText);
+        matched.push(buildListedImage(link, vault, excerpt, entry.score));
+      }
+
+      matched.sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0));
+      const total = matched.length;
+      const page = matched.slice(offset, offset + limit);
+      const hasMore = offset + limit < total;
+
+      const result: ListImagesOutput = { images: page, total, has_more: hasMore };
+      const formatted = page.length === 0
+        ? `No images matched query "${trimmedQuery}".`
+        : page.map(img => formatListedImageLine(img)).join('\n');
+      return { success: true, result, formattedText: formatted };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn('list_images semantic branch failed; falling back to listing', {
+        error: msg,
+        characterId: context.characterId,
+      });
+      // Fall through to the listing branch on embedding/search failure.
+    }
+  }
+
+  // Branch 2: plain listing of photos/ across visible vaults.
+  const candidates: Array<{ link: DocMountFileLinkWithContent; vault: VisiblePhotoVault }> = [];
+  for (const vault of vaults) {
+    const links = await repos.docMountFileLinks.findByMountPointId(vault.mountPointId);
+    for (const link of links) {
+      if (!isPhotosRelativePath(link.relativePath)) continue;
+      candidates.push({ link, vault });
+    }
+  }
+
+  candidates.sort((a, b) => b.link.createdAt.localeCompare(a.link.createdAt));
+
+  const filtered: ListedImage[] = [];
+  for (const { link, vault } of candidates) {
+    const meta = parseKeptImageFrontmatter(link.extractedText ?? null);
+    if (!matchesTagFilter(meta.tags, tagsFilter)) continue;
+    if (!matchesSavedByFilter(meta, savedByFilter)) continue;
+    const excerpt = extractPromptExcerpt(link.extractedText);
+    filtered.push(buildListedImage(link, vault, excerpt));
+  }
+
+  const total = filtered.length;
+  const page = filtered.slice(offset, offset + limit);
+  const hasMore = offset + limit < total;
+
+  const result: ListImagesOutput = { images: page, total, has_more: hasMore };
+  const formatted = page.length === 0
+    ? 'No images saved yet.'
+    : page.map(img => formatListedImageLine(img)).join('\n');
+  return { success: true, result, formattedText: formatted };
+}
+
+function formatListedImageLine(img: ListedImage): string {
+  const score = img.relevance_score !== undefined ? ` [score ${img.relevance_score.toFixed(2)}]` : '';
+  const tags = img.tags.length > 0 ? ` [${img.tags.join(', ')}]` : '';
+  const caption = img.caption ? `: ${img.caption}` : '';
+  return `  ${img.uuid}  ${img.relative_path}  (kept by ${img.linked_by ?? 'unknown'})${score}${tags}${caption}`;
+}
+
+async function handleAttachImage(
+  input: AttachImageInput,
+  context: DocEditToolContext
+): Promise<{
+  success: boolean;
+  result?: AttachedImageDescriptor[];
+  error?: string;
+  formattedText?: string;
+}> {
+  if (!context.characterId) {
+    return { success: false, error: 'attach_image requires a character context' };
+  }
+
+  const vault = await resolveActingCharacterVault(context);
+  if (!vault) {
+    return {
+      success: false,
+      error: 'No database-backed character vault is linked to the acting character',
+    };
+  }
+
+  const repos = getRepositories();
+
+  // Try the uuid as a link id first; fall back to an image-v2 file uuid that
+  // resolves to a link in *this* character's vault by sha256.
+  let link = await repos.docMountFileLinks.findByIdWithContent(input.uuid);
+
+  if (!link) {
+    const { getImageById } = await import('@/lib/images-v2');
+    const fallbackFileEntry = await getImageById(input.uuid);
+    if (fallbackFileEntry && fallbackFileEntry.category === 'IMAGE') {
+      const collision = await findExistingPhotosLinkBySha(vault.mountPointId, fallbackFileEntry.sha256);
+      if (collision) {
+        link = await repos.docMountFileLinks.findByIdWithContent(collision.id);
+      }
+    }
+  }
+
+  if (!link) {
+    return {
+      success: false,
+      error: `No kept image found for uuid ${input.uuid} in ${vault.characterName}'s vault. Call keep_image first to save it.`,
+    };
+  }
+
+  // Attach is scoped to the caller's own vault. Cross-character attach
+  // requires that character to keep_image first into their own album.
+  if (link.mountPointId !== vault.mountPointId) {
+    return {
+      success: false,
+      error: `Image ${link.id} lives in another character's vault — keep it in your own photos folder first`,
+    };
+  }
+  if (!isPhotosRelativePath(link.relativePath)) {
+    return {
+      success: false,
+      error: `Link ${link.id} is not a kept image (path: ${link.relativePath})`,
+    };
+  }
+
+  const meta = parseKeptImageFrontmatter(link.extractedText ?? null);
+  const filename = basenameOfRelativePath(link.relativePath);
+  const filepath = `/api/v1/mount-points/${link.mountPointId}/blobs/${encodeURI(link.relativePath)}`;
+
+  // Width/height aren't recorded on the mount-index link; opportunistically
+  // join from image-v2 by sha256 so the chat UI can lay out the bubble.
+  let width: number | undefined;
+  let height: number | undefined;
+  try {
+    const sisters = await repos.files.findBySha256(link.sha256);
+    const sister = sisters[0];
+    if (sister?.width != null) width = sister.width;
+    if (sister?.height != null) height = sister.height;
+  } catch {
+    /* best effort — descriptors without dimensions still render */
+  }
+
+  const descriptor: AttachedImageDescriptor = {
+    id: link.id,
+    filename,
+    filepath,
+    mimeType: link.originalMimeType ?? 'application/octet-stream',
+    size: link.fileSizeBytes,
+    width,
+    height,
+    sha256: link.sha256,
+  };
+
+  logger.info('Attached kept image', {
+    linkId: link.id,
+    mountPointId: link.mountPointId,
+    relativePath: link.relativePath,
+    characterId: vault.characterId,
+  });
+
+  const captionFragment = meta.caption ? ` ("${meta.caption}")` : '';
+  const tagsFragment = meta.tags.length > 0 ? ` [${meta.tags.join(', ')}]` : '';
+  return {
+    success: true,
+    result: [descriptor],
+    formattedText: `Attached ${filename} kept by ${meta.linkedBy ?? vault.characterName}${captionFragment}${tagsFragment}`,
+  };
 }

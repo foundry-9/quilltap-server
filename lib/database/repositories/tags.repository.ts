@@ -20,20 +20,6 @@ export class TagsRepository extends UserOwnedBaseRepository<Tag> {
   }
 
   /**
-   * Find a tag by ID
-   */
-  async findById(id: string): Promise<Tag | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all tags
-   */
-  async findAll(): Promise<Tag[]> {
-    return this._findAll();
-  }
-
-  /**
    * Find multiple tags by their IDs in a single query
    * @param ids Array of tag IDs
    * @returns Promise<Tag[]> Array of found tags (may be shorter than input if some IDs don't exist)

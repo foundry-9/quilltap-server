@@ -10,6 +10,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { logger } from '@/lib/logger';
+import { formatBytes } from '@/lib/utils/format-bytes';
 import { getAllPlugins } from '@/lib/plugins/registry';
 import {
   providerRegistry,
@@ -19,7 +20,7 @@ import {
 } from '@/lib/plugins/provider-registry';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
-import { fileStorageManager } from '@/lib/file-storage/manager';
+import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
 import { isDockerEnvironment, isElectronShell, isLimaEnvironment, getDataDir, getElectronShellVersion, getShellCapabilities, getSQLiteDatabasePath, getLLMLogsDatabasePath, getBackupsDir } from '@/lib/paths';
 import { getHasUserPassphrase } from '@/lib/startup/dbkey';
 import { getAllThemes, getThemeStats } from '@/lib/themes/theme-registry';
@@ -28,7 +29,7 @@ import { parseBackupFilename, parseLLMLogsBackupFilename } from '@/lib/database/
 import type { LLMProviderPlugin } from '@/lib/plugins/interfaces/provider-plugin';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
 import type { ChatMetadata } from '@/lib/schemas/chat.types';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 
 // Read version from package.json
 import packageJson from '@/package.json';
@@ -559,8 +560,8 @@ async function collectImagePromptLLMInfo(userId: string): Promise<ImagePromptLLM
 async function collectEmbeddingInfo(userId: string): Promise<EmbeddingInfo> {
   moduleLogger.info('Collecting embedding provider configuration', { userId });
 
-  const repos = getUserRepositories(userId);
-  const defaultProfile = await repos.embeddingProfiles.findDefault();
+  const repos = getRepositories();
+  const defaultProfile = await repos.embeddingProfiles.findDefault(userId);
 
   const info: EmbeddingInfo = {};
   if (defaultProfile) {
@@ -1306,17 +1307,6 @@ export async function generateReportData(userId: string): Promise<CapabilitiesRe
 }
 
 /**
- * Format bytes to human-readable string
- */
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
-}
-
-/**
  * Format USD currency
  */
 function formatUSD(amount: number): string {
@@ -1719,13 +1709,14 @@ export async function generateAndSaveReport(userId: string): Promise<{
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `capabilities-report-${timestamp}.md`;
 
-  // Upload to file storage
+  // The report is always non-project; route it into the Quilltap Uploads
+  // mount under diagnostics/ rather than the catch-all _general/.
   const buffer = Buffer.from(markdown, 'utf-8');
-  const uploadResult = await fileStorageManager.uploadFile({
+  const uploadResult = await writeUserUploadToMountStore({
     filename,
     content: buffer,
     contentType: 'text/markdown',
-    projectId: null,
+    subfolder: 'diagnostics',
   });
 
   moduleLogger.info('Capabilities report saved', {

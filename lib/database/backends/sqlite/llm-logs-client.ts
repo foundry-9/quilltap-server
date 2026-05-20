@@ -65,9 +65,13 @@ export function getLLMLogsSQLiteClient(config: SQLiteConfig): DatabaseType | nul
       moduleLogger.debug('SQLCipher key set on LLM logs database');
     }
 
-    // Configure pragmas (no foreign keys for the logs DB)
+    // Configure pragmas (no foreign keys for the logs DB).
+    // Journal mode defaults to a single-file mode (truncate) for safety on
+    // cloud-synced data directories; WAL is opt-in via SQLITE_WAL_MODE=true.
     if (config.walMode) {
       db.pragma('journal_mode = WAL');
+    } else {
+      db.pragma(`journal_mode = ${config.journalMode}`);
     }
     db.pragma(`synchronous = ${config.synchronous}`);
     db.pragma(`busy_timeout = ${config.busyTimeout}`);

@@ -1,243 +1,385 @@
 /**
  * Chats API v1 - Memory Actions
  *
- * Handles queue-memories action
+ * - queue-memories: enqueues one per-turn MEMORY_EXTRACTION job for every
+ *   USER message in the chat. Each job rebuilds the turn transcript at
+ *   execution time and runs user / self / inter-character extraction passes.
+ *
+ * - extract-memories-dry-run: walks every USER turn inline, runs the same
+ *   per-turn extraction passes with `dryRun: true`, and streams NDJSON
+ *   progress to the client. Nothing is persisted — used by the
+ *   `quilltap memory-diff` developer tool to compare current vs proposed
+ *   extraction without touching the database.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest } from '@/lib/api/responses';
-import { enqueueMemoryExtractionBatch, ensureProcessorRunning, type MessagePair } from '@/lib/background-jobs';
-import { queueMemoriesSchema } from '../schemas';
-import type { MessagePairWithCharacter } from '../types';
+import { badRequest } from '@/lib/api/responses';
+import { enqueueMemoryExtractionBatch, ensureProcessorRunning } from '@/lib/background-jobs';
+import { processTurnForMemory } from '@/lib/memory/memory-processor';
+import { buildTurnTranscript } from '@/lib/services/chat-message/turn-transcript';
+import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { getMemoryExtractionLimits } from '@/lib/instance-settings';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
-import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types';
+import type {
+  Character,
+  ChatMetadata,
+  ChatParticipantBase,
+  MessageEvent,
+} from '@/lib/schemas/types';
 
 /**
- * Queue memory extraction jobs for messages in the chat
+ * Resolve the cheap-LLM connection profile id the user has configured for
+ * memory extraction. Returns null when no valid profile is configured.
  */
-export async function handleQueueMemories(
-  req: NextRequest,
-  chatId: string,
-  chat: ChatMetadata,
-  { user, repos }: AuthenticatedContext
-): Promise<NextResponse> {
-  const body = await req.json();
-  const { characterId, characterName, messagePairs } = queueMemoriesSchema.parse(body);
-
-  // Get cheap LLM settings to determine which connection profile to use
+async function resolveCheapLLMProfileId(
+  ctx: AuthenticatedContext,
+): Promise<string | null> {
+  const { user, repos } = ctx;
   const chatSettings = await repos.chatSettings.findByUserId(user.id);
   const cheapLLMSettings = chatSettings?.cheapLLMSettings;
 
-  // Determine connection profile based on strategy
-  let connectionProfileId: string | null | undefined = null;
-  let profile = null;
-
-  // Try global default first (if set and valid)
   if (cheapLLMSettings?.defaultCheapProfileId) {
-    profile = await repos.connections.findById(cheapLLMSettings.defaultCheapProfileId);
+    const profile = await repos.connections.findById(cheapLLMSettings.defaultCheapProfileId);
     if (profile && profile.userId === user.id) {
-      connectionProfileId = cheapLLMSettings.defaultCheapProfileId;
+      return cheapLLMSettings.defaultCheapProfileId;
     }
   }
 
-  // If no valid global default, use strategy-based selection
-  if (!connectionProfileId && cheapLLMSettings?.strategy === 'USER_DEFINED' && cheapLLMSettings?.userDefinedProfileId) {
-    profile = await repos.connections.findById(cheapLLMSettings.userDefinedProfileId);
+  if (cheapLLMSettings?.strategy === 'USER_DEFINED' && cheapLLMSettings?.userDefinedProfileId) {
+    const profile = await repos.connections.findById(cheapLLMSettings.userDefinedProfileId);
     if (profile && profile.userId === user.id) {
-      connectionProfileId = cheapLLMSettings.userDefinedProfileId;
+      return cheapLLMSettings.userDefinedProfileId;
     }
   }
 
-  if (!connectionProfileId || !profile) {
-    logger.warn('[Chats v1] No valid cheap LLM configured', {
-      userId: user.id,
-      strategy: cheapLLMSettings?.strategy,
-    });
+  return null;
+}
+
+/** Find the user-controlled character participant on a chat (single-user instance). */
+function resolveUserCharacterParticipant(
+  participants: ChatParticipantBase[],
+  participantCharacters: Map<string, Character>,
+): { id: string; name: string; pronouns: Character['pronouns'] | null } | undefined {
+  const userCharParticipant = participants.find(
+    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId,
+  );
+  if (!userCharParticipant || userCharParticipant.type !== 'CHARACTER' || !userCharParticipant.characterId) {
+    return undefined;
+  }
+  const character = participantCharacters.get(userCharParticipant.characterId);
+  if (!character) return undefined;
+  return { id: character.id, name: character.name, pronouns: character.pronouns ?? null };
+}
+
+/**
+ * Queue per-turn memory extraction jobs for every USER message in the chat.
+ *
+ * The legacy version of this action accepted `characterId` / `characterName` /
+ * `messagePairs` to scope the rerun to a specific character. Under the
+ * per-turn model, each job covers the whole turn (every character that
+ * spoke), so character scoping no longer applies — the legacy fields are
+ * still accepted by the schema but ignored here.
+ */
+export async function handleQueueMemories(
+  _req: NextRequest,
+  chatId: string,
+  chat: ChatMetadata,
+  ctx: AuthenticatedContext,
+): Promise<NextResponse> {
+  const { user, repos } = ctx;
+  const connectionProfileId = await resolveCheapLLMProfileId(ctx);
+
+  if (!connectionProfileId) {
+    logger.warn('[Chats v1] No valid cheap LLM configured', { userId: user.id });
     return badRequest('No valid cheap LLM configured. Please set a cheap LLM profile in settings.');
   }
 
-  // Build a map of participantId -> character info for multi-character support
-  const participantCharacterMap = new Map<string, { characterId: string; characterName: string }>();
-  for (const participant of chat.participants) {
-    if (participant.type === 'CHARACTER' && participant.characterId) {
-      const char = await repos.characters.findById(participant.characterId);
-      if (char && char.userId === user.id) {
-        participantCharacterMap.set(participant.id, {
-          characterId: char.id,
-          characterName: char.name,
-        });
-      }
-    }
+  // Walk chat history forward and enqueue one job per non-system USER message.
+  // Each job covers the turn that opens at that user message (the handler
+  // walks forward from there until the next USER to assemble the transcript).
+  const messages = await repos.chats.getMessages(chatId);
+  const turnOpenerIds: string[] = [];
+  for (const m of messages) {
+    if (m.type !== 'message') continue;
+    const event = m as unknown as MessageEvent;
+    if (event.role !== 'USER') continue;
+    if (event.systemSender) continue;
+    turnOpenerIds.push(event.id);
   }
 
-  // Fallback character (the one passed in request, if valid)
-  let fallbackCharacter: { characterId: string; characterName: string } | null = null;
-  if (characterId) {
-    const character = await repos.characters.findById(characterId);
-    if (character && character.userId === user.id) {
-      fallbackCharacter = {
-        characterId: character.id,
-        characterName: characterName || character.name,
-      };
-    }
+  if (turnOpenerIds.length === 0) {
+    return badRequest('No user messages found in this chat — nothing to extract memories from.');
   }
 
-  // Use provided message pairs or build them from chat messages
-  let pairsWithCharacter: MessagePairWithCharacter[];
-
-  if (messagePairs && Array.isArray(messagePairs) && messagePairs.length > 0) {
-    // Use provided pairs with fallback character
-    if (!fallbackCharacter) {
-      return notFound('Character');
-    }
-    pairsWithCharacter = messagePairs.map((pair) => ({
-      ...pair,
-      characterId: fallbackCharacter!.characterId,
-      characterName: fallbackCharacter!.characterName,
-    }));
-  } else {
-    // Build message pairs from chat messages, respecting each message's participantId
-    const messages = await repos.chats.getMessages(chatId);
-    const messageList = messages.filter(
-      (m): m is MessageEvent =>
-        m.type === 'message' && (m.role === 'USER' || m.role === 'ASSISTANT')
-    );
-
-    // Helper to get character name for a participant
-    const getParticipantName = (participantId: string | null | undefined): string => {
-      if (!participantId) return 'Character';
-      const charInfo = participantCharacterMap.get(participantId);
-      return charInfo?.characterName || 'Character';
-    };
-
-    // Helper to get user name for user messages
-    const userCharacterName = 'User';
-
-    pairsWithCharacter = [];
-
-    // Track the index of the last user message
-    let lastUserMessageIndex = -1;
-
-    for (let i = 0; i < messageList.length; i++) {
-      const msg = messageList[i];
-
-      if (msg.role === 'USER') {
-        lastUserMessageIndex = i;
-      } else if (msg.role === 'ASSISTANT' && lastUserMessageIndex >= 0) {
-        // This is an assistant message - create a memory extraction entry
-        const userMessage = messageList[lastUserMessageIndex];
-
-        // Determine which character this assistant message belongs to
-        let targetCharacter = fallbackCharacter;
-        if (msg.participantId) {
-          const participantChar = participantCharacterMap.get(msg.participantId);
-          if (participantChar) {
-            targetCharacter = participantChar;
-          }
-        }
-
-        // Skip if we couldn't determine the character
-        if (!targetCharacter) {
-          logger.warn('[Chats v1] Skipping message - no character found', {
-            chatId,
-            assistantMessageId: msg.id,
-            participantId: msg.participantId,
-          });
-          continue;
-        }
-
-        // Build context: include all messages from last user message to this assistant message
-        let contextContent: string;
-
-        if (i === lastUserMessageIndex + 1) {
-          // Simple case: assistant message directly follows user message
-          contextContent = userMessage.content;
-        } else {
-          // Multi-character case: include intervening messages for context
-          const contextParts: string[] = [];
-          contextParts.push(`${userCharacterName}: ${userMessage.content}`);
-
-          // Add all messages between user message and this assistant message
-          for (let j = lastUserMessageIndex + 1; j < i; j++) {
-            const intermediateMsg = messageList[j];
-            if (intermediateMsg.role === 'ASSISTANT') {
-              const speakerName = getParticipantName(intermediateMsg.participantId);
-              contextParts.push(`${speakerName}: ${intermediateMsg.content}`);
-            }
-          }
-
-          contextContent = contextParts.join('\n\n');
-        }
-
-        pairsWithCharacter.push({
-          userMessageId: userMessage.id,
-          assistantMessageId: msg.id,
-          userContent: contextContent,
-          assistantContent: msg.content,
-          characterId: targetCharacter.characterId,
-          characterName: targetCharacter.characterName,
-        });
-      }
-    }
-  }
-
-  if (pairsWithCharacter.length === 0) {
-    return badRequest('No message pairs found to analyze');
-  }
-
-  // Group pairs by character for efficient batch processing
-  const pairsByCharacter = new Map<string, { characterName: string; pairs: MessagePair[] }>();
-  for (const pair of pairsWithCharacter) {
-    const existing = pairsByCharacter.get(pair.characterId);
-    if (existing) {
-      existing.pairs.push({
-        userMessageId: pair.userMessageId,
-        assistantMessageId: pair.assistantMessageId,
-        userContent: pair.userContent,
-        assistantContent: pair.assistantContent,
-      });
-    } else {
-      pairsByCharacter.set(pair.characterId, {
-        characterName: pair.characterName,
-        pairs: [{
-          userMessageId: pair.userMessageId,
-          assistantMessageId: pair.assistantMessageId,
-          userContent: pair.userContent,
-          assistantContent: pair.assistantContent,
-        }],
-      });
-    }
-  }
-
-  logger.info('[Chats v1] Queueing memory extraction jobs', {
+  logger.info('[Chats v1] Queueing per-turn memory extraction jobs', {
     chatId,
-    characterCount: pairsByCharacter.size,
-    totalPairs: pairsWithCharacter.length,
+    turnCount: turnOpenerIds.length,
   });
 
-  // Queue jobs for each character
-  const allJobIds: string[] = [];
-  for (const [charId, { characterName: charName, pairs }] of pairsByCharacter) {
-    const jobIds = await enqueueMemoryExtractionBatch(
-      user.id,
-      chatId,
-      charId,
-      charName,
-      connectionProfileId,
-      pairs,
-      { priority: 0 } // Low priority for bulk operations
-    );
-    allJobIds.push(...jobIds);
-  }
+  const jobIds = await enqueueMemoryExtractionBatch(
+    user.id,
+    chatId,
+    connectionProfileId,
+    turnOpenerIds,
+    { priority: 0 },
+  );
 
-  // Start the processor if not already running
   ensureProcessorRunning();
+
+  // Reference `chat` so the linter doesn't flag the unused param —
+  // the chat metadata isn't needed under the per-turn model but the route
+  // signature still receives it.
+  void chat;
 
   return NextResponse.json({
     success: true,
-    jobCount: allJobIds.length,
+    jobCount: jobIds.length,
     chatId,
-    characterCount: pairsByCharacter.size,
+    turnCount: turnOpenerIds.length,
+  });
+}
+
+/**
+ * Run the per-turn extraction pipeline against an existing chat without
+ * persisting anything, streaming NDJSON progress events to the client.
+ *
+ * Wire format (one JSON object per line):
+ *   { "type": "start", "chatId": "...", "turnCount": N }
+ *   { "type": "turn", "index": i, "total": N, "sourceMessageId": "...",
+ *     "candidatesAdded": K, "debugLogs": [...] }
+ *   { "type": "candidate", "turnIndex": i, ...ExtractedCandidate }
+ *   { "type": "turn-error", "index": i, "error": "..." }
+ *   { "type": "done", "totalCandidates": M }
+ *
+ * No auth scoping beyond the route's existing authenticated middleware —
+ * Quilltap is single-user per instance and this is a developer tool.
+ */
+export async function handleExtractMemoriesDryRun(
+  req: NextRequest,
+  chatId: string,
+  chat: ChatMetadata,
+  ctx: AuthenticatedContext,
+): Promise<NextResponse> {
+  const { user, repos } = ctx;
+  const connectionProfileId = await resolveCheapLLMProfileId(ctx);
+
+  if (!connectionProfileId) {
+    return badRequest('No valid cheap LLM configured. Please set a cheap LLM profile in settings.');
+  }
+
+  // Bounded turn-parallelism. Defaults to 4: enough to give a noticeable
+  // speedup against cloud providers without crushing a local Ollama. Cap
+  // at 32 to keep the cheap-LLM provider from drowning even when the user
+  // explicitly asks for more.
+  const concurrencyParam = req.nextUrl.searchParams.get('concurrency');
+  let concurrency = 4;
+  if (concurrencyParam !== null) {
+    const parsed = Number.parseInt(concurrencyParam, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      return badRequest('concurrency must be a positive integer');
+    }
+    concurrency = Math.min(parsed, 32);
+  }
+
+  const connectionProfile = await repos.connections.findById(connectionProfileId);
+  if (!connectionProfile) {
+    return badRequest(`Cheap LLM connection profile not found: ${connectionProfileId}`);
+  }
+
+  const chatSettings = await repos.chatSettings.findByUserId(user.id);
+  if (!chatSettings) {
+    return badRequest('Chat settings not found.');
+  }
+
+  const allRawMessages = await repos.chats.getMessages(chatId);
+  const messageEvents = allRawMessages.filter(
+    (m): m is MessageEvent => m.type === 'message',
+  ) as unknown as MessageEvent[];
+
+  const participantCharacters = new Map<string, Character>();
+  for (const participant of chat.participants) {
+    if (participant.type === 'CHARACTER' && participant.characterId) {
+      const character = await repos.characters.findById(participant.characterId);
+      if (character) {
+        participantCharacters.set(participant.characterId, character);
+      }
+    }
+  }
+
+  const userCharacter = resolveUserCharacterParticipant(chat.participants, participantCharacters);
+
+  const turnOpenerIds: string[] = [];
+  for (const event of messageEvents) {
+    if (event.role !== 'USER') continue;
+    if (event.systemSender) continue;
+    turnOpenerIds.push(event.id);
+  }
+
+  if (turnOpenerIds.length === 0) {
+    return badRequest('No user messages found in this chat — nothing to extract memories from.');
+  }
+
+  const availableProfiles = await repos.connections.findByUserId(user.id);
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+  const isDangerousChat = chat.isDangerousChat === true;
+  const memoryExtractionLimits = await getMemoryExtractionLimits();
+
+  logger.info('[Chats v1] Streaming dry-run memory extraction', {
+    chatId,
+    turnCount: turnOpenerIds.length,
+    concurrency,
+  });
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      // Defensive write: a controller closed mid-flight (client disconnect,
+      // response timeout, dev-server reload) would otherwise throw on every
+      // subsequent enqueue, cascade through the per-turn catch, and re-throw
+      // out of the outer catch — flooding the logs with misleading
+      // "Controller is already closed" turn failures. Tracking `closed` lets
+      // the loop bail instead of running 30-60 s of LLM passes for output
+      // that nobody will ever read.
+      let closed = false;
+      const send = (obj: unknown): boolean => {
+        if (closed) return false;
+        try {
+          controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
+          return true;
+        } catch {
+          closed = true;
+          return false;
+        }
+      };
+
+      // Heartbeat keeps the response from going quiet during the first turn's
+      // LLM passes. Without it the underlying socket can be torn down before
+      // the first `candidate`/`turn` event ever fires.
+      const heartbeat = setInterval(() => {
+        send({ type: 'ping', t: Date.now() });
+      }, 5000);
+
+      try {
+        send({ type: 'start', chatId, turnCount: turnOpenerIds.length, concurrency });
+
+        let totalCandidates = 0;
+
+        // Process a single turn. The body is identical to the previous
+        // serial loop body — extracting it into a function lets the worker
+        // pool below pull turns concurrently without duplicating logic.
+        const processTurn = async (i: number): Promise<void> => {
+          const turnOpenerMessageId = turnOpenerIds[i];
+          try {
+            const transcript = buildTurnTranscript(
+              messageEvents,
+              chat.participants,
+              participantCharacters,
+              {
+                turnOpenerMessageId,
+                userCharacterId: userCharacter?.id,
+                userCharacterName: userCharacter?.name,
+                userCharacterPronouns: userCharacter?.pronouns ?? null,
+              },
+            );
+
+            if (transcript.characterSlices.length === 0) {
+              send({
+                type: 'turn',
+                index: i,
+                total: turnOpenerIds.length,
+                sourceMessageId: turnOpenerMessageId,
+                candidatesAdded: 0,
+                debugLogs: ['[Memory] Turn has no character contributions — skipped'],
+              });
+              return;
+            }
+
+            const result = await processTurnForMemory({
+              transcript,
+              participantCharacters,
+              chatId,
+              userId: user.id,
+              connectionProfile,
+              cheapLLMSettings: chatSettings.cheapLLMSettings,
+              availableProfiles,
+              dangerSettings,
+              isDangerousChat,
+              memoryExtractionLimits,
+              dryRun: true,
+            });
+
+            if (closed) return;
+            const candidates = result.extractedCandidates ?? [];
+            for (const candidate of candidates) {
+              send({ type: 'candidate', turnIndex: i, ...candidate });
+            }
+            totalCandidates += candidates.length;
+
+            send({
+              type: 'turn',
+              index: i,
+              total: turnOpenerIds.length,
+              sourceMessageId: result.sourceMessageId,
+              candidatesAdded: candidates.length,
+              debugLogs: result.debugLogs,
+            });
+          } catch (err) {
+            if (closed) return;
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn('[Chats v1] Dry-run turn failed', { chatId, turnOpenerMessageId, error: message });
+            send({
+              type: 'turn-error',
+              index: i,
+              total: turnOpenerIds.length,
+              sourceMessageId: turnOpenerMessageId,
+              error: message,
+            });
+          }
+        };
+
+        // Worker pool: `concurrency` parallel pullers share a cursor over
+        // turnOpenerIds. Each worker grabs the next index, awaits its turn,
+        // then loops. Settles when the cursor is exhausted (or `closed`
+        // flips). NDJSON output is interleaved across turns; the CLI sorts
+        // by `index` when assembling the final extracted.json so this is
+        // safe for the diff workflow.
+        let nextIndex = 0;
+        const worker = async (): Promise<void> => {
+          while (!closed) {
+            const i = nextIndex++;
+            if (i >= turnOpenerIds.length) return;
+            await processTurn(i);
+          }
+        };
+
+        const workerCount = Math.min(concurrency, turnOpenerIds.length);
+        await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+        if (!closed) send({ type: 'done', totalCandidates });
+      } catch (err) {
+        if (!closed) {
+          const message = err instanceof Error ? err.message : String(err);
+          logger.error('[Chats v1] Dry-run stream failed', { chatId }, err instanceof Error ? err : undefined);
+          send({ type: 'fatal', error: message });
+        }
+      } finally {
+        clearInterval(heartbeat);
+        try {
+          controller.close();
+        } catch {
+          // already closed
+        }
+      }
+    },
+  });
+
+  return new NextResponse(stream, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Content-Type-Options': 'nosniff',
+    },
   });
 }

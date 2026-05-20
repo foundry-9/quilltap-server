@@ -211,11 +211,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
                 { userId: oldId } as TypedQueryFilter<any>,
                 { $set: { userId: newId } } as UpdateSpec<unknown>
               );
-              logger.debug('Migrated userId references in table', {
-                context: 'UsersRepository.migrateUserId',
-                table,
-                modifiedCount: result.modifiedCount,
-              });
             } catch (tableError) {
               // Table might not exist yet or might not have userId column — log and continue
               logger.warn('Could not migrate userId in table', {
@@ -283,7 +278,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
         const chatSettings: ChatSettings = chatSettingsDocs[0];
 
         // Create the compound general settings object
-        const now = new Date().toISOString();
+        const now = this.getCurrentTimestamp();
         const generalSettings: GeneralSettings = {
           version: 1,
           user,

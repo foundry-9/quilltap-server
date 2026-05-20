@@ -23,6 +23,10 @@ interface VirtualizedMessageListProps {
   editingMessageId: string | null
   editContent: string
   viewSourceMessageIds: Set<string>
+  /** IDs of system-author messages that the user has explicitly expanded */
+  expandedSystemMessageIds: Set<string>
+  /** Toggle expansion state for a system-author message */
+  onToggleSystemMessageExpanded: (messageId: string) => void
   swipeStates: Record<string, SwipeState>
   setSwipeStates: React.Dispatch<React.SetStateAction<Record<string, SwipeState>>>
   // Appearance
@@ -39,6 +43,8 @@ interface VirtualizedMessageListProps {
   userParticipantId: string | null
   isPaused: boolean
   respondingParticipantId: string | null
+  /** Chat ID for terminal embed rendering */
+  chatId: string
   // Message actions - signatures match useMessageActions return type
   messageActions: {
     startEdit: (message: Message) => void
@@ -66,6 +72,8 @@ interface VirtualizedMessageListProps {
   onRemoveCharacter: (participantId: string) => void
   onReattribute: (messageId: string) => void
   onImageClick: (filepath: string, filename: string, fileId?: string) => void
+  /** Opens the SaveImageDialog for one image attachment on a message. */
+  onSaveImage?: (messageId: string, attachmentId: string) => void
   fetchChat: () => Promise<void>
   // LLM logs
   messagesWithLogs: Set<string>
@@ -100,6 +108,8 @@ export function VirtualizedMessageList({
   editingMessageId,
   editContent,
   viewSourceMessageIds,
+  expandedSystemMessageIds,
+  onToggleSystemMessageExpanded,
   swipeStates,
   setSwipeStates,
   chatSettings,
@@ -114,6 +124,7 @@ export function VirtualizedMessageList({
   userParticipantId,
   isPaused,
   respondingParticipantId,
+  chatId,
   messageActions,
   turnManagement,
   setEditContent,
@@ -122,6 +133,7 @@ export function VirtualizedMessageList({
   onRemoveCharacter,
   onReattribute,
   onImageClick,
+  onSaveImage,
   fetchChat,
   messagesWithLogs,
   onViewLLMLogs,
@@ -165,6 +177,30 @@ export function VirtualizedMessageList({
             const showResendButton = messageActions.canResendMessage(message.id, messageIndex)
 
             if (message.role === 'TOOL') {
+              // Fall back to the most recent ASSISTANT message's participant
+              // when this row has no participantId itself — historical TOOL
+              // rows persisted before character attribution was added are
+              // identifiable by position only.
+              const messageForAvatar = message.systemSender || message.participantId
+                ? message
+                : (() => {
+                    for (let k = messageIndex - 1; k >= 0; k--) {
+                      const prev = messages[k]
+                      if (prev.role === 'ASSISTANT' && prev.participantId) {
+                        return { ...message, participantId: prev.participantId }
+                      }
+                      if (prev.role === 'USER') break
+                    }
+                    return message
+                  })()
+              const avatarData = getMessageAvatar(messageForAvatar)
+              const headerAvatar = avatarData
+                ? {
+                    name: avatarData.name,
+                    avatarUrl: avatarData.avatarUrl ?? null,
+                    defaultImage: avatarData.defaultImage ?? null,
+                  }
+                : null
               return (
                 <div
                   key={message.id}
@@ -180,7 +216,8 @@ export function VirtualizedMessageList({
                 >
                   <ToolMessage
                     message={message}
-                    character={getCharacterForMessage(message)}
+                    character={getCharacterForMessage(messageForAvatar)}
+                    headerAvatar={headerAvatar}
                     onImageClick={(filepath, filename, fileId) => {
                       onImageClick(filepath, filename, fileId)
                     }}
@@ -211,6 +248,10 @@ export function VirtualizedMessageList({
                   isEditing={isEditing}
                   editContent={editContent}
                   viewSourceMessageIds={viewSourceMessageIds}
+                  isSystemMessageCollapsed={
+                    !!message.systemSender && !expandedSystemMessageIds.has(message.id)
+                  }
+                  onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
                   swipeState={swipeState}
                   showResendButton={showResendButton}
                   shouldShowAvatars={shouldShowAvatars()}
@@ -230,6 +271,7 @@ export function VirtualizedMessageList({
                   dangerousContentSettings={chatSettings?.dangerousContentSettings}
                   onOverrideDangerFlag={onOverrideDangerFlag}
                   character={getCharacterForMessage(message)}
+                  chatId={chatId}
                   onEditStart={messageActions.startEdit}
                   onEditSave={messageActions.saveEdit}
                   onEditCancel={messageActions.cancelEdit}
@@ -243,6 +285,7 @@ export function VirtualizedMessageList({
                   onImageClick={(filepath, filename, fileId) => {
                     onImageClick(filepath, filename, fileId)
                   }}
+                  onSaveImage={onSaveImage}
                   onHandleNudge={turnManagement.handleNudge}
                   onHandleQueue={turnManagement.handleQueue}
                   onHandleDequeue={turnManagement.handleDequeue}
@@ -252,6 +295,7 @@ export function VirtualizedMessageList({
                   onReattribute={onReattribute}
                   hasLLMLogs={messagesWithLogs.has(message.id)}
                   onViewLLMLogs={onViewLLMLogs}
+                  onCourierTurnSettled={fetchChat}
                   participantNames={participantNames}
                   isOverheardWhisper={
                     !!(message.targetParticipantIds?.length) &&

@@ -27,6 +27,7 @@ jest.mock('@/lib/repositories/factory', () => ({
 
 jest.mock('@/lib/embedding/embedding-service', () => ({
   generateEmbeddingForUser: jest.fn(),
+  EMBEDDING_MAX_CHARS: 128 * 1024,
 }))
 
 jest.mock('@/lib/embedding/vector-store', () => ({
@@ -126,7 +127,8 @@ describe('handleEmbeddingGenerate — HELP_DOC entity type', () => {
     expect(mockGenerateEmbeddingForUser).toHaveBeenCalledWith(
       `${doc.title}\n\n${doc.content}`,
       'user-1',
-      'profile-1'
+      'profile-1',
+      { priority: 'background' }
     )
     expect(repos.helpDocs.updateEmbedding).toHaveBeenCalledWith('doc-1', fakeEmbedding)
     expect(repos.embeddingStatus.markAsEmbedded).toHaveBeenCalledWith(
@@ -196,7 +198,8 @@ describe('handleEmbeddingGenerate — MOUNT_CHUNK entity type', () => {
     expect(mockGenerateEmbeddingForUser).toHaveBeenCalledWith(
       chunk.content,
       'user-1',
-      'profile-1'
+      'profile-1',
+      { priority: 'background' }
     )
     expect(repos.docMountChunks.updateEmbedding).toHaveBeenCalledWith('chunk-1', fakeEmbedding)
     expect(repos.embeddingStatus.markAsEmbedded).toHaveBeenCalledWith(

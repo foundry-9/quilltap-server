@@ -319,6 +319,43 @@
 
   /* ==========================================================================
      WARNING BOX VARIABLES
+     ========================================================================== */
+  --qt-warning-box-bg: hsl(38 92% 45% / 0.1);
+  --qt-warning-box-border: hsl(38 92% 45% / 0.3);
+  --qt-warning-box-fg: hsl(38 92% 35%);
+
+  /* ==========================================================================
+     TERMINAL VARIABLES — slate console with bright readable text
+     The default theme leans professional, so the terminal stays clean
+     and modern — slate-blue tinted black with a soft glow.
+     ========================================================================== */
+  --qt-terminal-bg: hsl(220 25% 9%);
+  --qt-terminal-fg: hsl(220 15% 92%);
+  --qt-terminal-cursor: hsl(215 90% 70%);
+  --qt-terminal-selection: hsl(215 80% 55% / 0.3);
+  --qt-terminal-ansi-black: hsl(220 22% 14%);
+  --qt-terminal-ansi-red: hsl(0 70% 60%);
+  --qt-terminal-ansi-green: hsl(142 55% 52%);
+  --qt-terminal-ansi-yellow: hsl(38 85% 60%);
+  --qt-terminal-ansi-blue: hsl(215 80% 65%);
+  --qt-terminal-ansi-magenta: hsl(285 60% 68%);
+  --qt-terminal-ansi-cyan: hsl(190 70% 60%);
+  --qt-terminal-ansi-white: hsl(220 15% 88%);
+  --qt-terminal-ansi-bright-black: hsl(220 15% 38%);
+  --qt-terminal-ansi-bright-red: hsl(0 80% 72%);
+  --qt-terminal-ansi-bright-green: hsl(142 60% 64%);
+  --qt-terminal-ansi-bright-yellow: hsl(38 90% 70%);
+  --qt-terminal-ansi-bright-blue: hsl(215 85% 75%);
+  --qt-terminal-ansi-bright-magenta: hsl(285 70% 76%);
+  --qt-terminal-ansi-bright-cyan: hsl(190 80% 72%);
+  --qt-terminal-ansi-bright-white: hsl(220 15% 97%);
+
+  --qt-terminal-chrome-bg: hsl(220 22% 13%);
+  --qt-terminal-chrome-border: hsl(220 18% 28%);
+  --qt-terminal-chrome-fg: hsl(220 12% 88%);
+  --qt-terminal-chrome-muted-fg: hsl(220 8% 60%);
+  --qt-terminal-closed-badge-bg: hsl(220 20% 22%);
+  --qt-terminal-closed-badge-fg: hsl(220 12% 82%);
 }
 
 /* ============================================================================

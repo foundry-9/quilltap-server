@@ -33,7 +33,7 @@ export function SystemPromptsEditor({
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold text-foreground">System Prompts</h3>
+          <h3 className="qt-heading-4 text-foreground">System Prompts</h3>
           <p className="qt-text-small">
             Manage multiple system prompts for {characterName}. Select which one to use when creating or configuring a chat.
           </p>
@@ -87,12 +87,10 @@ export function SystemPromptsEditor({
         isOpen={editor.isModalOpen}
         editingPrompt={editor.editingPrompt}
         formData={editor.formData}
-        showPreview={editor.showPreview}
         saving={editor.saving}
         onClose={editor.closeModal}
         onSave={editor.handleSave}
         onFormChange={handleFormChange}
-        onPreviewToggle={() => editor.setShowPreview(!editor.showPreview)}
       />
 
       {/* Import Modal */}

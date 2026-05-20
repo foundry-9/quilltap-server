@@ -18,7 +18,14 @@ import {
   postHostAddAnnouncement,
   postHostStatusChangeAnnouncement,
   postHostRemoveAnnouncement,
+  postHostSilentModeAnnouncement,
+  postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
+import { postProsperoConnectionProfileChangeAnnouncement } from '@/lib/services/prospero-notifications/writer';
+import {
+  compileAllIdentityStacks,
+  compileIdentityStackForParticipant,
+} from '@/lib/services/system-prompt-compiler/compiler';
 
 type Repos = RepositoryContainer;
 
@@ -125,9 +132,32 @@ export async function handleParticipantUpdate(
     return { error: 'Chat not found', status: 404 };
   }
 
+  const oldParticipant = chat.participants.find((p) => p.id === participantId);
+  const oldConnectionProfileId = oldParticipant?.connectionProfileId ?? null;
+
   const result = await repos.chats.updateParticipant(chatId, participantId, participantData);
   if (!result) {
     return { error: 'Participant not found', status: 404 };
+  }
+
+  if (
+    participantData.connectionProfileId !== undefined &&
+    participantData.connectionProfileId !== oldConnectionProfileId &&
+    oldParticipant?.characterId
+  ) {
+    const character = await repos.characters.findById(oldParticipant.characterId);
+    if (character) {
+      const oldProfile = oldConnectionProfileId
+        ? await repos.connections.findById(oldConnectionProfileId)
+        : null;
+      const newProfile = await repos.connections.findById(participantData.connectionProfileId);
+      await postProsperoConnectionProfileChangeAnnouncement({
+        chatId,
+        characterName: character.name,
+        oldProfileLabel: oldProfile?.name ?? null,
+        newProfileLabel: newProfile?.name ?? null,
+      });
+    }
   }
 
   if (participantData.controlledBy !== undefined) {
@@ -175,7 +205,7 @@ export async function handleParticipantUpdate(
       if (character) {
         await recordStatusChangeEvent(chatId, character.name, oldStatus, newStatus, repos);
         if (newStatus === 'removed') {
-          await postHostRemoveAnnouncement({ chatId, characterName: character.name });
+          await postHostRemoveAnnouncement({ chatId, characterName: character.name, participantId });
         } else if (
           (oldStatus === 'active' || oldStatus === 'silent' || oldStatus === 'absent') &&
           (newStatus === 'active' || newStatus === 'silent' || newStatus === 'absent')
@@ -183,9 +213,29 @@ export async function handleParticipantUpdate(
           await postHostStatusChangeAnnouncement({
             chatId,
             characterName: character.name,
+            participantId,
             oldStatus: oldStatus as ParticipantStatus,
             newStatus,
           });
+
+          // Silent-mode whispers carry the full silent-mode rule directly to
+          // the affected character (private). Replaces the per-turn system
+          // prompt block.
+          if (newStatus === 'silent' && oldStatus !== 'silent') {
+            await postHostSilentModeAnnouncement({
+              chatId,
+              characterName: character.name,
+              targetParticipantId: participantId,
+              transition: 'enter',
+            });
+          } else if (oldStatus === 'silent' && newStatus !== 'silent') {
+            await postHostSilentModeAnnouncement({
+              chatId,
+              characterName: character.name,
+              targetParticipantId: participantId,
+              transition: 'exit',
+            });
+          }
         }
       }
     }
@@ -206,6 +256,7 @@ export async function handleParticipantUpdate(
         await postHostStatusChangeAnnouncement({
           chatId,
           characterName: character.name,
+          participantId,
           oldStatus: oldStatus as ParticipantStatus,
           newStatus: newStatus as ParticipantStatus,
         });
@@ -215,7 +266,45 @@ export async function handleParticipantUpdate(
 
   // Re-fetch to get the latest state after all updates
   const finalChat = await repos.chats.findById(chatId);
+
+  // Phase H: invalidate the precompiled identity stack when the participant's
+  // selected system prompt changes — that's a direct input to the stack
+  // build. Other updates (impersonation, status, etc.) don't change the stack
+  // for this participant, but a new user-controlled participant could affect
+  // {{user}}/{{persona}} for everyone, so when controlledBy flips we
+  // recompile all stacks. Failures are non-fatal (read-through fallback).
+  if (finalChat) {
+    try {
+      if (
+        participantData.selectedSystemPromptId !== undefined &&
+        oldParticipant?.selectedSystemPromptId !== participantData.selectedSystemPromptId
+      ) {
+        await compileIdentityStackForParticipant(finalChat, participantId);
+      }
+      if (participantData.controlledBy !== undefined) {
+        await compileAllIdentityStacks(finalChat);
+      }
+    } catch (error) {
+      logger.warn('[Chats v1] Failed to recompile identity stacks after participant update', {
+        chatId, participantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   return { chat: finalChat || result };
+}
+
+/**
+ * Resolve a fallback connection profile when a character's chosen profile is
+ * missing or stale. Prefers the user's marked default, then the first profile
+ * the user has. Returns null if the user has no profiles at all.
+ */
+async function resolveFallbackConnectionProfile(userId: string, repos: Repos) {
+  const userDefault = await repos.connections.findDefault(userId);
+  if (userDefault) return userDefault;
+  const all = await repos.connections.findByUserId(userId);
+  return all[0] ?? null;
 }
 
 /**
@@ -240,14 +329,40 @@ export async function handleAddParticipant(
   const controlledBy = data.controlledBy || character.controlledBy || 'llm';
   const isUserControlled = controlledBy === 'user';
 
-  if (!isUserControlled && !data.connectionProfileId) {
-    return { error: 'connectionProfileId is required for LLM-controlled CHARACTER participants', status: 400 };
-  }
+  let resolvedConnectionProfileId: string | null = data.connectionProfileId ?? null;
 
-  if (data.connectionProfileId) {
-    const profile = await repos.connections.findById(data.connectionProfileId);
+  if (!isUserControlled) {
+    if (!resolvedConnectionProfileId) {
+      const fallback = await resolveFallbackConnectionProfile(userId, repos);
+      if (!fallback) {
+        return { error: 'connectionProfileId is required for LLM-controlled CHARACTER participants', status: 400 };
+      }
+      resolvedConnectionProfileId = fallback.id;
+      logger.info('[Chats v1] No connectionProfileId provided; using fallback', {
+        characterId: data.characterId,
+        fallbackProfileId: fallback.id,
+        fallbackProfileName: fallback.name,
+      });
+    } else {
+      const profile = await repos.connections.findById(resolvedConnectionProfileId);
+      if (!profile) {
+        const fallback = await resolveFallbackConnectionProfile(userId, repos);
+        if (!fallback) {
+          return { error: 'Connection profile not found and no fallback profile available', status: 404 };
+        }
+        logger.warn('[Chats v1] Stale connectionProfileId; using fallback', {
+          requestedProfileId: resolvedConnectionProfileId,
+          fallbackProfileId: fallback.id,
+          fallbackProfileName: fallback.name,
+          characterId: data.characterId,
+        });
+        resolvedConnectionProfileId = fallback.id;
+      }
+    }
+  } else if (resolvedConnectionProfileId) {
+    const profile = await repos.connections.findById(resolvedConnectionProfileId);
     if (!profile) {
-      return { error: 'Connection profile not found', status: 404 };
+      resolvedConnectionProfileId = null;
     }
   }
 
@@ -255,7 +370,7 @@ export async function handleAddParticipant(
     type: 'CHARACTER',
     characterId: data.characterId,
     controlledBy: controlledBy,
-    connectionProfileId: data.connectionProfileId || null,
+    connectionProfileId: resolvedConnectionProfileId,
     imageProfileId: data.imageProfileId || null,
     displayOrder: data.displayOrder ?? currentParticipantCount,
     isActive: true,
@@ -378,6 +493,12 @@ export async function processChatUpdates(
 
     const result = await repos.chats.update(chatId, validatedData.chat);
     if (result) updatedChat = result;
+
+    // Phase H note: `chat.scenarioText` feeds the {{scenario}} template
+    // variable in the identity stack, so a change to it would normally
+    // require recompiling all stacks. The current updateChatSchema does not
+    // expose `scenarioText`, so there is no path to mutate it after
+    // creation; if one is added, also call `compileAllIdentityStacks` here.
   }
 
   if (validatedData.updateParticipant) {
@@ -400,7 +521,44 @@ export async function processChatUpdates(
     if (validatedData.addParticipant.characterId) {
       const addedCharacter = await repos.characters.findById(validatedData.addParticipant.characterId);
       if (addedCharacter) {
-        await postHostAddAnnouncement({ chatId, character: addedCharacter });
+        const newParticipant = updatedChat.participants.find(
+          (p) =>
+            p.type === 'CHARACTER' &&
+            p.characterId === validatedData.addParticipant?.characterId &&
+            p.status !== 'removed',
+        );
+
+        if (newParticipant) {
+          await postHostAddAnnouncement({
+            chatId,
+            character: addedCharacter,
+            participantId: newParticipant.id,
+            initialStatus: newParticipant.status,
+          });
+        }
+
+        // Phase H: compile the identity stack for the new participant.
+        if (newParticipant) {
+          try {
+            await compileIdentityStackForParticipant(updatedChat, newParticipant.id);
+          } catch (error) {
+            logger.warn('[Chats v1] Failed to compile identity stack for added participant', {
+              chatId, participantId: newParticipant.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+
+        const joinScenario = validatedData.addParticipant.joinScenario;
+        const hasHistoryAccess = validatedData.addParticipant.hasHistoryAccess ?? false;
+        if (joinScenario && !hasHistoryAccess && newParticipant) {
+          await postHostJoinScenarioAnnouncement({
+            chatId,
+            characterName: addedCharacter.name,
+            targetParticipantId: newParticipant.id,
+            joinScenario,
+          });
+        }
       }
     }
   }
@@ -418,7 +576,11 @@ export async function processChatUpdates(
     updatedChat = result.chat;
 
     if (removedCharacterName) {
-      await postHostRemoveAnnouncement({ chatId, characterName: removedCharacterName });
+      await postHostRemoveAnnouncement({
+        chatId,
+        characterName: removedCharacterName,
+        participantId: validatedData.removeParticipantId,
+      });
     }
   }
 

@@ -213,6 +213,25 @@ Save chats for backup or sharing:
 3. Choose export format
 4. File downloads to your computer
 
+### Continuing a Conversation Elsewhere
+
+Now and again the matter under discussion drifts so far afield that the original setting will simply not bear it. The project no longer fits, the scenario has worn thin, and rather than narrate one's way out of it — like a guest pretending the parlour was always the conservatory — one wishes simply to *change venue*.
+
+To do so, open the **Tool Palette** in the input area and choose **Continue Elsewhere**. The familiar new-chat dialog appears, pre-filled with the present project (or none, as the case may be) and the cast of characters now in the room. From there:
+
+1. Adjust the project, characters, scenario, or image profile as you see fit.
+2. Click **Continue**.
+
+Quilltap thereupon does the heavy lifting:
+
+- A fresh chat is created with the chosen project and scenario.
+- The Host posts a brief notice at the top of the new chat linking back to the previous one.
+- The Librarian's most recent summary, together with every message that followed it, is replayed into the new chat — your characters carry on, mid-thought, as though the change of address were a passing remark.
+- The turn order, who is up to speak, and whether the proceedings are paused are all preserved, so nothing in the conversational rhythm is lost.
+- The Host posts a closing notice in the original chat, linking forward to the new venue.
+
+The original chat is not deleted; you may always return to it. But henceforth the canonical thread continues at the new address.
+
 ## Advanced Features
 
 ### Memory Integration

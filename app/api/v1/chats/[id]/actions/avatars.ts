@@ -7,7 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
-import { getFilePath } from '@/lib/api/middleware/file-path';
+import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
+import { getPhotoLinkSummaryBySha256 } from '@/lib/photos/photo-link-summary';
 import { avatarOverrideSchema, removeAvatarSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -34,16 +35,21 @@ export async function handleGetAvatars(
         (character.avatarOverrides || [])
           .filter(override => override.chatId === chatId)
           .map(async (override) => {
-            const fileEntry = await repos.files.findById(override.imageId);
+            const resolved = await resolveCharacterAvatar(override.imageId, repos);
+            const linkSummary = resolved?.sha256
+              ? await getPhotoLinkSummaryBySha256(resolved.sha256, repos)
+              : null;
             return {
               chatId,
               characterId: character.id,
               imageId: override.imageId,
               character: { id: character.id, name: character.name },
-              image: fileEntry ? {
-                id: fileEntry.id,
-                filepath: getFilePath(fileEntry),
+              image: resolved ? {
+                id: resolved.id,
+                filepath: resolved.url,
                 url: null,
+                sha256: resolved.sha256,
+                linkSummary,
               } : null,
             };
           })
@@ -74,9 +80,9 @@ export async function handleSetAvatar(
     return notFound('Character');
   }
 
-  // Verify image exists in repository and belongs to user
-  const fileEntry = await repos.files.findById(imageId);
-  if (!fileEntry) {
+  // Verify image exists (either as a vault link or a legacy files row).
+  const resolved = await resolveCharacterAvatar(imageId, repos);
+  if (!resolved) {
     return notFound('Image');
   }
 
@@ -96,15 +102,20 @@ export async function handleSetAvatar(
 
   await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
 
+  const linkSummary = resolved.sha256
+    ? await getPhotoLinkSummaryBySha256(resolved.sha256, repos)
+    : null;
   const override = {
     chatId,
     characterId,
     imageId,
     character: { id: character.id, name: character.name },
     image: {
-      id: fileEntry.id,
-      filepath: getFilePath(fileEntry),
+      id: resolved.id,
+      filepath: resolved.url,
       url: null,
+      sha256: resolved.sha256,
+      linkSummary,
     },
   };
 

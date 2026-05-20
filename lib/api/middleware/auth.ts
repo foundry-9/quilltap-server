@@ -77,20 +77,28 @@ export type ContextParamsHandler<P = Record<string, string | string[]>, T = Next
   params: P
 ) => Promise<T>;
 
+// ============================================================================
+// Internal helpers
+// ============================================================================
+
+type ContextBuildResult = { context: RequestContext } | { response: NextResponse };
+
 /**
- * Wrap an API route handler with context
+ * Shared context-building logic: ensures server readiness, validates the
+ * session, and resolves the user record. Returns either a ready context or an
+ * early-exit response — callers check which they got before proceeding.
  */
-export async function withContext<T>(
-  handler: ContextHandler<T>
-): Promise<T | NextResponse> {
+async function buildRequestContext(): Promise<ContextBuildResult> {
   try {
     await ensureServerReady();
   } catch (error) {
     if (error instanceof PepperNotReadyError) {
-      return NextResponse.json(
-        { error: 'Setup required', setupUrl: '/setup', pepperState: error.pepperState },
-        { status: 503 }
-      );
+      return {
+        response: NextResponse.json(
+          { error: 'Setup required', setupUrl: '/setup', pepperState: error.pepperState },
+          { status: 503 }
+        ),
+      };
     }
     throw error;
   }
@@ -99,7 +107,7 @@ export async function withContext<T>(
 
   if (!session?.user?.id) {
     contextLogger.error('Failed to get user session');
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return { response: NextResponse.json({ error: 'Internal server error' }, { status: 500 }) };
   }
 
   const repos = await getRepositoriesSafe();
@@ -107,10 +115,25 @@ export async function withContext<T>(
 
   if (!user) {
     contextLogger.warn('User not found', { userId: session.user.id });
-    return NextResponse.json({ error: 'User not found' }, { status: 500 });
+    return { response: NextResponse.json({ error: 'User not found' }, { status: 500 }) };
   }
 
-  return handler({} as NextRequest, { user, repos, session });
+  return { context: { user, repos, session } };
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+/**
+ * Wrap an API route handler with context
+ */
+export async function withContext<T>(
+  handler: ContextHandler<T>
+): Promise<T | NextResponse> {
+  const result = await buildRequestContext();
+  if ('response' in result) return result.response;
+  return handler({} as NextRequest, result.context);
 }
 
 /**
@@ -121,34 +144,9 @@ export async function withContextParams<P extends Record<string, string | string
   params: P,
   handler: ContextParamsHandler<P, T>
 ): Promise<T | NextResponse> {
-  try {
-    await ensureServerReady();
-  } catch (error) {
-    if (error instanceof PepperNotReadyError) {
-      return NextResponse.json(
-        { error: 'Setup required', setupUrl: '/setup', pepperState: error.pepperState },
-        { status: 503 }
-      );
-    }
-    throw error;
-  }
-
-  const session = await getServerSession();
-
-  if (!session?.user?.id) {
-    contextLogger.error('Failed to get user session');
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-
-  const repos = await getRepositoriesSafe();
-  const user = await repos.users.findById(session.user.id);
-
-  if (!user) {
-    contextLogger.warn('User not found', { userId: session.user.id });
-    return NextResponse.json({ error: 'User not found' }, { status: 500 });
-  }
-
-  return handler(request, { user, repos, session }, params);
+  const result = await buildRequestContext();
+  if ('response' in result) return result.response;
+  return handler(request, result.context, params);
 }
 
 /**
@@ -185,34 +183,9 @@ export function createContextHandler(
   ) => Promise<NextResponse>
 ): (request: NextRequest) => Promise<NextResponse> {
   return async (request: NextRequest) => {
-    try {
-      await ensureServerReady();
-    } catch (error) {
-      if (error instanceof PepperNotReadyError) {
-        return NextResponse.json(
-          { error: 'Setup required', setupUrl: '/setup', pepperState: error.pepperState },
-          { status: 503 }
-        );
-      }
-      throw error;
-    }
-
-    const session = await getServerSession();
-
-    if (!session?.user?.id) {
-      contextLogger.error('Failed to get user session');
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-    }
-
-    const repos = await getRepositoriesSafe();
-    const user = await repos.users.findById(session.user.id);
-
-    if (!user) {
-      contextLogger.warn('User not found', { userId: session.user.id });
-      return NextResponse.json({ error: 'User not found' }, { status: 500 });
-    }
-
-    return handleRouteError(request, () => handler(request, { user, repos, session }));
+    const result = await buildRequestContext();
+    if ('response' in result) return result.response;
+    return handleRouteError(request, () => handler(request, result.context));
   };
 }
 
@@ -233,35 +206,10 @@ export function createContextParamsHandler<P extends Record<string, string | str
   context: { params: Promise<P> }
 ) => Promise<NextResponse> {
   return async (request: NextRequest, context: { params: Promise<P> }) => {
-    try {
-      await ensureServerReady();
-    } catch (error) {
-      if (error instanceof PepperNotReadyError) {
-        return NextResponse.json(
-          { error: 'Setup required', setupUrl: '/setup', pepperState: error.pepperState },
-          { status: 503 }
-        );
-      }
-      throw error;
-    }
-
+    const result = await buildRequestContext();
+    if ('response' in result) return result.response;
     const params = await context.params;
-    const session = await getServerSession();
-
-    if (!session?.user?.id) {
-      contextLogger.error('Failed to get user session');
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-    }
-
-    const repos = await getRepositoriesSafe();
-    const user = await repos.users.findById(session.user.id);
-
-    if (!user) {
-      contextLogger.warn('User not found', { userId: session.user.id });
-      return NextResponse.json({ error: 'User not found' }, { status: 500 });
-    }
-
-    return handleRouteError(request, () => handler(request, { user, repos, session }, params));
+    return handleRouteError(request, () => handler(request, result.context, params));
   };
 }
 

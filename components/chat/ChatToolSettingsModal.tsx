@@ -129,7 +129,7 @@ export default function ChatToolSettingsModal({
       <div className="qt-dialog-body">
         {profileToolsDisabled && (
           <div className="qt-warning-box mb-4">
-            <p className="text-sm font-medium">Tools disabled by connection profile</p>
+            <p className="qt-label">Tools disabled by connection profile</p>
             <p className="text-xs mt-1">
               The current connection profile has &ldquo;Allow tool use&rdquo; turned off. No tools will be sent to the LLM regardless of the settings below. To re-enable tools, edit the connection profile in The Forge.
             </p>

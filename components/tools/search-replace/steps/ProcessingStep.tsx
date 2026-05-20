@@ -18,7 +18,7 @@ export function ProcessingStep({ phase }: ProcessingStepProps) {
         {/* Spinner */}
         <div className="w-12 h-12 border-4 qt-border-primary/20 border-t-primary rounded-full animate-spin mb-6" />
 
-        <h3 className="qt-text-primary text-lg font-medium mb-2">
+        <h3 className="qt-text-section mb-2">
           Processing...
         </h3>
 

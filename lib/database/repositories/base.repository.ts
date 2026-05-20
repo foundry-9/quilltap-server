@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { DatabaseCollection, TypedQueryFilter, QueryOptions, UpdateSpec, BaseEntity } from '../interfaces';
 import { getDatabaseAsync, ensureCollection } from '../manager';
 import { logger } from '@/lib/logger';
+import { escapeRegex } from '@/lib/utils/regex';
 import { safeQuery as standaloneSafeQuery, extractErrorMessage } from './safe-query';
 
 // ============================================================================
@@ -148,11 +149,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
    * Generate UUID v4
    */
   protected generateId(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
+    return crypto.randomUUID();
   }
 
   /**
@@ -166,7 +163,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
    * Escape special regex characters in a string for safe use in RegExp construction
    */
   protected escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return escapeRegex(str);
   }
 
   /**
@@ -182,21 +179,35 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   }
 
   // ============================================================================
-  // Abstract Methods (required implementations)
+  // Public CRUD (default implementations — subclasses override when they need
+  // extra behavior such as logging, overlay application, or input shaping)
   // ============================================================================
 
   /**
-   * Find entity by ID
+   * Find entity by ID.
+   *
+   * Default: delegates straight to {@link _findById}. Subclasses override
+   * when they need to apply an overlay, hydrate joins, or otherwise post-
+   * process the row.
    */
-  abstract findById(id: string): Promise<T | null>;
+  async findById(id: string): Promise<T | null> {
+    return this._findById(id);
+  }
 
   /**
-   * Find all entities
+   * Find all entities.
+   *
+   * Default: delegates straight to {@link _findAll}. Subclasses override
+   * when they need filtering, sorting, or overlay application.
    */
-  abstract findAll(): Promise<T[]>;
+  async findAll(): Promise<T[]> {
+    return this._findAll();
+  }
 
   /**
-   * Create a new entity
+   * Create a new entity. Subclasses provide their own implementation —
+   * typically a `safeQuery` wrapper that applies defaults, validates, and
+   * logs around {@link _create}.
    */
   abstract create(
     data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
@@ -204,12 +215,14 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   ): Promise<T>;
 
   /**
-   * Update an entity
+   * Update an entity. Subclasses provide their own implementation —
+   * typically a `safeQuery` wrapper that logs around {@link _update}.
    */
   abstract update(id: string, data: Partial<T>): Promise<T | null>;
 
   /**
-   * Delete an entity
+   * Delete an entity. Subclasses provide their own implementation —
+   * typically a `safeQuery` wrapper that logs around {@link _delete}.
    */
   abstract delete(id: string): Promise<boolean>;
 

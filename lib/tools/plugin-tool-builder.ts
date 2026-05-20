@@ -15,6 +15,7 @@
 import { logger } from '@/lib/logger';
 import { getProvider, getImageProviderConstraints } from '@/lib/plugins/provider-registry';
 import { toolRegistry } from '@/lib/plugins/tool-registry';
+import { canonicalizeUniversalTools } from '@/lib/tools/canonicalize';
 import {
   imageGenerationToolDefinition,
   webSearchToolDefinition,
@@ -28,7 +29,6 @@ import {
   stateToolDefinition,
   selfInventoryToolDefinition,
   whisperToolDefinition,
-  getAllShellToolDefinitions,
 } from '@/lib/tools';
 import {
   readConversationToolDefinition,
@@ -48,6 +48,9 @@ import {
 import {
   wardrobeUpdateOutfitToolDefinition,
 } from '@/lib/tools/wardrobe-update-outfit-tool';
+import {
+  wardrobeChangeItemToolDefinition,
+} from '@/lib/tools/wardrobe-change-item-tool';
 import {
   wardrobeCreateItemToolDefinition,
 } from '@/lib/tools/wardrobe-create-item-tool';
@@ -69,6 +72,15 @@ import { docDeleteFolderTool } from '@/lib/tools/doc-delete-folder-tool';
 import { docOpenDocumentTool } from '@/lib/tools/doc-open-document-tool';
 import { docCloseDocumentTool } from '@/lib/tools/doc-close-document-tool';
 import { docFocusTool } from '@/lib/tools/doc-focus-tool';
+import { keepImageTool } from '@/lib/tools/keep-image-tool';
+import { listImagesTool } from '@/lib/tools/list-images-tool';
+import { attachImageTool } from '@/lib/tools/attach-image-tool';
+import {
+  terminalReadToolDefinition,
+} from '@/lib/tools/terminal-read-tool';
+import {
+  terminalListToolDefinition,
+} from '@/lib/tools/terminal-list-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -186,17 +198,17 @@ export interface BuildToolsOptions {
   /** Whether to enable list_wardrobe tool (gated by canDressThemselves) */
   wardrobeList?: boolean;
 
-  /** Whether to enable update_outfit_item tool (gated by canDressThemselves) */
+  /** Whether to enable wardrobe_set_outfit tool — composite outfits only (gated by canDressThemselves) */
   wardrobeUpdateOutfit?: boolean;
+
+  /** Whether to enable wardrobe_change_item tool — atomic items only (gated by canDressThemselves) */
+  wardrobeChangeItem?: boolean;
 
   /** Whether to enable create_wardrobe_item tool (gated by canCreateOutfits) */
   wardrobeCreateItem?: boolean;
 
   /** Whether to enable submit_final_response tool (for agent mode) */
   agentMode?: boolean;
-
-  /** Whether to enable shell interactivity tools (only in VM/Docker environments) */
-  shellInteractivity?: boolean;
 
   /** Whether to enable document editing tools (Scriptorium Phase 3.3) */
   documentEditing?: boolean;
@@ -254,8 +266,8 @@ export async function buildToolsForProvider(
       whisper: options.whisper,
       wardrobeList: options.wardrobeList,
       wardrobeUpdateOutfit: options.wardrobeUpdateOutfit,
+      wardrobeChangeItem: options.wardrobeChangeItem,
       wardrobeCreateItem: options.wardrobeCreateItem,
-      shellInteractivity: options.shellInteractivity,
       documentEditing: options.documentEditing,
       includePluginTools: options.includePluginTools,
     },
@@ -325,6 +337,10 @@ export async function buildToolsForProvider(
   universalTools.push(deleteAnnotationToolDefinition as UniversalTool);
   universalTools.push(searchScriptoriumToolDefinition as UniversalTool);
 
+  // Terminal tools (always enabled for Prospero - read-only terminal inspection)
+  universalTools.push(terminalListToolDefinition as UniversalTool);
+  universalTools.push(terminalReadToolDefinition as UniversalTool);
+
   // Add whisper tool if enabled (multi-character chats only)
   if (options.whisper) {
     universalTools.push(whisperToolDefinition as UniversalTool);
@@ -336,6 +352,9 @@ export async function buildToolsForProvider(
   }
   if (options.wardrobeUpdateOutfit) {
     universalTools.push(wardrobeUpdateOutfitToolDefinition as UniversalTool);
+  }
+  if (options.wardrobeChangeItem) {
+    universalTools.push(wardrobeChangeItemToolDefinition as UniversalTool);
   }
   if (options.wardrobeCreateItem) {
     universalTools.push(wardrobeCreateItemToolDefinition as UniversalTool);
@@ -366,12 +385,11 @@ export async function buildToolsForProvider(
     universalTools.push(docOpenDocumentTool as UniversalTool);
     universalTools.push(docCloseDocumentTool as UniversalTool);
     universalTools.push(docFocusTool as UniversalTool);
-  }
-
-  // Add shell interactivity tools if enabled (only in VM/Docker environments)
-  if (options.shellInteractivity) {
-    const shellTools = getAllShellToolDefinitions();
-    universalTools.push(...(shellTools as UniversalTool[]));
+    // Photo album tools — same gate as the doc-edit family; they write into
+    // the calling character's vault under photos/.
+    universalTools.push(keepImageTool as UniversalTool);
+    universalTools.push(listImagesTool as UniversalTool);
+    universalTools.push(attachImageTool as UniversalTool);
   }
 
   // Add plugin tools if enabled (defaults to true when not specified)
@@ -390,10 +408,15 @@ export async function buildToolsForProvider(
     return [];
   }
 
+  // Canonicalize: sort alphabetically by name and stable-key JSON Schema.
+  // Required so the cacheable prefix at the front of every provider request
+  // is byte-stable across turns regardless of plugin registration order.
+  const canonicalTools = canonicalizeUniversalTools(universalTools);
+
   // Log the tools being built
   logger_.info('Built universal tools', {
-    count: universalTools.length,
-    toolNames: universalTools.map(t => t.function.name),
+    count: canonicalTools.length,
+    toolNames: canonicalTools.map(t => t.function.name),
   });
 
   // Step 2: Get the provider plugin from registry
@@ -404,14 +427,14 @@ export async function buildToolsForProvider(
       provider: providerName,
     });
     // Backwards compatibility: return tools in OpenAI format if provider not found
-    return universalTools;
+    return canonicalTools;
   }
 
   // Step 3 & 4: Check if plugin has formatTools() method
   if (plugin.formatTools && typeof plugin.formatTools === 'function') {
     try {
       // Call plugin's formatTools with the entire array of tools
-      const formattedTools = plugin.formatTools(universalTools, {
+      const formattedTools = plugin.formatTools(canonicalTools, {
         imageProviderType: options.imageProviderType,
       });
       return formattedTools;
@@ -421,7 +444,7 @@ export async function buildToolsForProvider(
       });
 
       // Step 5: Fallback to old behavior (return tools in OpenAI format)
-      return universalTools;
+      return canonicalTools;
     }
   }
 
@@ -431,5 +454,5 @@ export async function buildToolsForProvider(
     provider: providerName,
   });
 
-  return universalTools;
+  return canonicalTools;
 }

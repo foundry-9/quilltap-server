@@ -5,7 +5,14 @@ const { fork, exec, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { getCacheDir, isCacheValid, ensureStandalone } = require('../lib/download-manager');
-const { resolveDataDir, promptPassphrase, loadDbKey } = require('../lib/db-helpers');
+const {
+  resolveDataDir,
+  resolveDataDirAndPassphrase,
+  printDefaultInstanceHint,
+  promptPassphrase,
+  loadDbKey,
+} = require('../lib/db-helpers');
+const { resolveInstance } = require('../lib/instances');
 
 const PACKAGE_DIR = path.resolve(__dirname, '..');
 
@@ -20,6 +27,7 @@ function parseArgs(argv) {
   const opts = {
     port: 3000,
     dataDir: '',
+    instance: '',
     open: false,
     help: false,
     version: false,
@@ -41,6 +49,10 @@ function parseArgs(argv) {
       case '--data-dir':
       case '-d':
         opts.dataDir = args[++i];
+        break;
+      case '--instance':
+      case '-i':
+        opts.instance = args[++i];
         break;
       case '--open':
       case '-o':
@@ -79,10 +91,14 @@ Subcommands:
   db                            Query encrypted databases
   themes                        Manage theme bundles
   docs                          Inspect, read, and export document mounts
+  memories                      Search, browse, and graph memories
+  instances                     Register / inspect named Quilltap instances
+  memory-diff <chatId>          Dump existing memories and dry-run re-extraction for a chat
 
 Options:
   -p, --port <number>     Port to listen on (default: 3000)
   -d, --data-dir <path>   Data directory (default: platform-specific)
+  -i, --instance <name>   Use a registered instance (see 'quilltap instances')
   -o, --open              Open browser after server starts
   -v, --version           Show version number
   --update                Force re-download of application files
@@ -168,6 +184,19 @@ function ensureNativeModules() {
     }
   }
 
+  // Check node-pty: backs the Ariel terminal feature. Loaded dynamically by
+  // pty-manager in the standalone server, so resolution must succeed and the
+  // native binding's NODE_MODULE_VERSION must match the runtime.
+  try {
+    require('node-pty');
+  } catch (err) {
+    if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
+      needsRebuild.push('node-pty');
+    } else if (err.code === 'MODULE_NOT_FOUND') {
+      needsRebuild.push('node-pty');
+    }
+  }
+
   if (needsRebuild.length === 0) return;
 
   console.log(`  Rebuilding native modules for Node.js ${process.version}...`);
@@ -236,6 +265,28 @@ function linkNativeModules(standaloneDir) {
   const betterSqlite3Dir = resolveModuleDir('better-sqlite3-multiple-ciphers')
                         || resolveModuleDir('better-sqlite3');
   linkModule('better-sqlite3', betterSqlite3Dir);
+
+  // Link node-pty — the standalone tarball strips it (platform-specific),
+  // and pty-manager loads it via a dynamic require, so it needs to resolve
+  // from standaloneDir/node_modules.
+  const nodePtyDir = resolveModuleDir('node-pty');
+  linkModule('node-pty', nodePtyDir);
+  if (nodePtyDir) {
+    // Some npm cache extractions strip the executable bit on spawn-helper,
+    // causing pty.spawn() to fail with `posix_spawnp failed`. Restore it.
+    const prebuildsDir = path.join(nodePtyDir, 'prebuilds');
+    if (fs.existsSync(prebuildsDir)) {
+      try {
+        for (const entry of fs.readdirSync(prebuildsDir, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          const helper = path.join(prebuildsDir, entry.name, 'spawn-helper');
+          if (fs.existsSync(helper)) {
+            try { fs.chmodSync(helper, 0o755); } catch { /* best-effort */ }
+          }
+        }
+      } catch { /* best-effort */ }
+    }
+  }
 
   // Link sharp
   const sharpDir = resolveModuleDir('sharp');
@@ -310,7 +361,20 @@ async function main() {
     HOSTNAME: '0.0.0.0',
   };
 
-  if (opts.dataDir) {
+  if (opts.dataDir && opts.instance) {
+    console.error('Error: Specify either --instance or --data-dir, not both.');
+    process.exit(1);
+  }
+  if (opts.instance) {
+    try {
+      const inst = resolveInstance(opts.instance);
+      env.QUILLTAP_DATA_DIR = inst.path;
+      opts.dataDir = inst.path; // surfaced in the startup banner below
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  } else if (opts.dataDir) {
     env.QUILLTAP_DATA_DIR = path.resolve(opts.dataDir);
   }
 
@@ -654,16 +718,55 @@ function printDbHelp() {
 Quilltap Database Tool
 
 Usage: quilltap db [options] [sql]
+       quilltap db <subcommand> [args]
 
 Query your encrypted Quilltap database directly.
 
-Options:
-  --tables              List all tables
+Subcommands (high-level shortcuts; auto-pick the right database):
+  schema [table]              Schema overview, or details for one table
+  schema --grep <text>        Find tables/columns whose name matches
+  find character [query]      List or look up characters by name/id
+  find chat [query]           List or look up chats by title/id
+  find project [query]        List or look up projects by name/id
+  chats --character <name|id> Chats containing a character
+  chats --project <name|id>   Chats in a project
+  messages --chat <id|title>  Recent messages in a chat
+                              (flags: --last N --full --from <pid> --type <t>)
+  logs --chat <id|title>      LLM logs for a chat
+  logs --message <id>         LLM logs for a single message
+  logs --character <name|id>  LLM logs for a character
+  logs --tail N               Most recent LLM logs
+  message <id>                Full content of a single chat message
+  log <id>                    Full request/response of a single LLM log
+  memories --character <id>   Memories held by a character
+                              (flags: --about <id|name> --source AUTO|MANUAL)
+  optimize [target...]        Run maintenance (VACUUM + ANALYZE + PRAGMA optimize)
+                              on the named databases, or all of them if no
+                              target is given. Targets: main, llm-logs,
+                              mount-points (or "all"). Refuses to run while a
+                              live Quilltap instance holds the lock.
+  backup [target...] [--out <dir>]
+                              Online consistent snapshot of the encrypted
+                              databases. Safe while the server is running.
+                              Default destination: <dataDir>/backups/<timestamp>/.
+                              Each snapshot is re-opened with the same key and
+                              verified with PRAGMA quick_check.
+  integrity [target...]       Run PRAGMA cipher_integrity_check and
+                              PRAGMA integrity_check on the encrypted
+                              databases. Read-only; safe alongside a live
+                              instance. Exit code: 0 ok, 1 issues, 2 open
+                              failure.
+  Most subcommands also accept --json and --limit N.
+
+Low-level options (legacy; still supported):
+  --tables              List all tables in the active database
   --count <table>       Show row count for a table
-  --repl                Interactive SQL prompt
+  --repl                Interactive SQL prompt (extras: .cols, .find)
   --llm-logs            Target the LLM logs database
   --mount-points        Target the document mount-index database
-  --data-dir <path>     Override data directory
+  --data-dir <path>     Override data directory (pass instance root)
+  -i, --instance <name> Use a registered instance from instances.json
+                        (see 'quilltap instances --help')
   --passphrase <pass>   Provide passphrase for encrypted .dbkey
   -h, --help            Show this help
 
@@ -677,22 +780,85 @@ will check the QUILLTAP_DB_PASSPHRASE environment variable, then prompt
 interactively (with hidden input) if a TTY is available.
 
 Examples:
+  quilltap db schema                                   # tables grouped by domain
+  quilltap db schema chat_messages                     # columns + indexes + DDL link
+  quilltap db find character Friday                    # name → uuid
+  quilltap db chats --character Friday                 # all chats with Friday
+  quilltap db messages --chat <id> --last 50 --full    # recent messages
+  quilltap db logs --chat "physical prompts"           # llm logs for a chat
+  quilltap db log <log-id>                             # full request/response
+  quilltap db optimize                                 # VACUUM + ANALYZE all DBs
+  quilltap db optimize llm-logs                        # only the LLM logs DB
+  quilltap db backup                                   # snapshot all DBs to <dataDir>/backups/<ts>/
+  quilltap db backup main --out /tmp/qtap-snap         # snapshot only the main DB
+  quilltap db integrity                                # cipher_integrity_check + integrity_check
   quilltap db --tables
   quilltap db "SELECT count(*) FROM characters"
   quilltap db --count messages
   quilltap db --repl
-  quilltap db --llm-logs --tables
-  quilltap db --mount-points --tables
-  quilltap db --mount-points "SELECT id, name FROM doc_mount_points"
   quilltap db --lock-status
-  quilltap db --lock-clean
   QUILLTAP_DB_PASSPHRASE=secret quilltap db --tables
 `);
 }
 
 async function dbCommand(args) {
+  // ---- Pre-flight: extract dataDir/passphrase, then check for a verb subcommand
+  //      before the legacy flag loop. This lets `quilltap db <verb>` dispatch
+  //      to the new high-level commands without touching the legacy path.
+  const { isVerb, runVerb, makeCtx } = require('../lib/db-commands');
+
+  // Strip --data-dir / --passphrase / --instance out so they can appear anywhere
+  // on the line, including before or after the verb.
+  const cleaned = [];
   let dataDirOverride = '';
   let passphrase = '';
+  let instanceName = '';
+  for (let j = 0; j < args.length; j++) {
+    const a = args[j];
+    if (a === '--data-dir' || a === '-d') { dataDirOverride = args[++j]; continue; }
+    if (a === '--passphrase') { passphrase = args[++j]; continue; }
+    if (a === '--instance' || a === '-i') { instanceName = args[++j]; continue; }
+    cleaned.push(a);
+  }
+
+  // Find first non-flag arg to test for verb
+  const firstPositional = cleaned.find(a => !a.startsWith('-'));
+  if (firstPositional && isVerb(firstPositional)) {
+    let resolved;
+    try {
+      resolved = resolveDataDirAndPassphrase({
+        dataDir: dataDirOverride,
+        instance: instanceName,
+        passphrase,
+      });
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+    printDefaultInstanceHint(resolved);
+    const dataDir = resolved.dataDir;
+    let pepper;
+    try {
+      pepper = await loadDbKey(dataDir, resolved.passphrase);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+    // Re-strip global flags but preserve everything else (verb + its flags)
+    const ctx = makeCtx(dataDir, pepper);
+    try {
+      await runVerb(cleaned, ctx);
+    } catch (err) {
+      if (!err.silent) {
+        console.error(`Error: ${err.message}`);
+      }
+      const code = err.exitCode != null ? err.exitCode : (err.ambiguous ? 2 : 1);
+      process.exit(code);
+    }
+    return;
+  }
+
+  // ---- Legacy flag-based path (unchanged) ----
   let useLlmLogs = false;
   let useMountPoints = false;
   let showTables = false;
@@ -705,25 +871,23 @@ async function dbCommand(args) {
   let lockOverride = false;
 
   let i = 0;
-  while (i < args.length) {
-    switch (args[i]) {
-      case '--data-dir': case '-d': dataDirOverride = args[++i]; break;
-      case '--passphrase': passphrase = args[++i]; break;
+  while (i < cleaned.length) {
+    switch (cleaned[i]) {
       case '--llm-logs': useLlmLogs = true; break;
       case '--mount-points': useMountPoints = true; break;
       case '--tables': showTables = true; break;
-      case '--count': countTable = args[++i]; break;
+      case '--count': countTable = cleaned[++i]; break;
       case '--repl': repl = true; break;
       case '--help': case '-h': showHelp = true; break;
       case '--lock-status': lockStatus = true; break;
       case '--lock-clean': lockClean = true; break;
       case '--lock-override': lockOverride = true; break;
       default:
-        if (args[i].startsWith('-')) {
-          console.error(`Unknown option: ${args[i]}`);
+        if (cleaned[i].startsWith('-')) {
+          console.error(`Unknown option: ${cleaned[i]}`);
           process.exit(1);
         }
-        sql = args[i];
+        sql = cleaned[i];
         break;
     }
     i++;
@@ -734,7 +898,20 @@ async function dbCommand(args) {
     process.exit(0);
   }
 
-  const dataDir = resolveDataDir(dataDirOverride);
+  let legacyResolved;
+  try {
+    legacyResolved = resolveDataDirAndPassphrase({
+      dataDir: dataDirOverride,
+      instance: instanceName,
+      passphrase,
+    });
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+  printDefaultInstanceHint(legacyResolved);
+  const dataDir = legacyResolved.dataDir;
+  passphrase = legacyResolved.passphrase;
 
   // ---- Instance lock commands (no database open required) ----
   if (lockStatus || lockClean || lockOverride) {
@@ -815,7 +992,7 @@ async function dbCommand(args) {
       const readline = require('readline');
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: 'quilltap> ' });
       console.log(`Connected to ${dbPath}`);
-      console.log('Type .tables, .schema <table>, or SQL. Ctrl+D to exit.\n');
+      console.log('Type .tables, .schema <table>, .cols <table>, .find <text>, or SQL. Ctrl+D to exit.\n');
       rl.prompt();
       rl.on('line', (line) => {
         const trimmed = line.trim();
@@ -830,6 +1007,38 @@ async function dbCommand(args) {
             else {
               const row = db.prepare("SELECT sql FROM sqlite_master WHERE name = ?").get(table);
               console.log(row ? row.sql : `Table '${table}' not found`);
+            }
+          } else if (trimmed.startsWith('.cols')) {
+            const table = trimmed.split(/\s+/)[1];
+            if (!table) { console.log('Usage: .cols <table>'); }
+            else {
+              const cols = db.prepare(`PRAGMA table_info("${table.replace(/"/g, '""')}")`).all();
+              if (cols.length === 0) console.log(`Table '${table}' not found`);
+              else console.table(cols.map(c => ({
+                name: c.name, type: c.type,
+                notNull: c.notnull ? 'NOT NULL' : '',
+                default: c.dflt_value === null ? '' : c.dflt_value,
+                pk: c.pk ? 'pk' : '',
+              })));
+            }
+          } else if (trimmed.startsWith('.find')) {
+            const needle = trimmed.slice(5).trim();
+            if (!needle) { console.log('Usage: .find <text>'); }
+            else {
+              const lc = needle.toLowerCase();
+              const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(r => r.name);
+              const matches = [];
+              for (const t of tables) {
+                const tableHit = t.toLowerCase().includes(lc);
+                const cols = db.prepare(`PRAGMA table_info("${t.replace(/"/g, '""')}")`).all();
+                const colHits = cols.filter(c => c.name.toLowerCase().includes(lc)).map(c => c.name);
+                if (tableHit || colHits.length) matches.push({ table: t, tableMatch: tableHit, columns: colHits });
+              }
+              if (matches.length === 0) console.log(`No tables or columns matching '${needle}'`);
+              else for (const m of matches) {
+                const flag = m.tableMatch ? '*' : ' ';
+                console.log(`${flag} ${m.table}${m.columns.length ? '  ' + m.columns.map(c => '.' + c).join(', ') : ''}`);
+              }
             }
           } else {
             const stmt = db.prepare(trimmed);
@@ -869,6 +1078,45 @@ if (process.argv[2] === 'db') {
 } else if (process.argv[2] === 'docs') {
   const { docsCommand } = require('../lib/docs-commands');
   docsCommand(process.argv.slice(3));
+} else if (process.argv[2] === 'memories') {
+  const { memoriesCommand } = require('../lib/memories-commands');
+  memoriesCommand(process.argv.slice(3)).catch(err => {
+    if (!err.silent) {
+      console.error(`Error: ${err.message}`);
+    }
+    const code = err.exitCode != null ? err.exitCode : (err.ambiguous ? 2 : 1);
+    process.exit(code);
+  });
+} else if (process.argv[2] === 'instances') {
+  const { instancesCommand } = require('../lib/instances-commands');
+  instancesCommand(process.argv.slice(3)).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+} else if (process.argv[2] === 'memory-diff') {
+  const { memoryDiffCommand } = require('../lib/memory-diff-command');
+  memoryDiffCommand(process.argv.slice(3)).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+} else if (process.argv[2] === 'completion') {
+  const { completionCommand } = require('../lib/completion-commands');
+  completionCommand(process.argv.slice(3)).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+} else if (process.argv[2] === 'logs') {
+  const { logsCommand } = require('../lib/logs-commands');
+  logsCommand(process.argv.slice(3)).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+} else if (process.argv[2] === 'migrations') {
+  const { migrationsCommand } = require('../lib/migrations-commands');
+  migrationsCommand(process.argv.slice(3)).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
 } else {
   main();
 }

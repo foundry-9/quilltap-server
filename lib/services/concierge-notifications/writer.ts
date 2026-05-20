@@ -14,7 +14,7 @@
 import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import type { MessageEvent } from '@/lib/schemas/types';
 
 export interface ConciergeDangerAnnouncement {
@@ -30,6 +30,14 @@ export function buildDangerContent(): string {
   );
 }
 
+export function buildDangerOpaqueContent(): string {
+  return (
+    "Content advisory: the present conversation — and any adjunct operations it occasions — " +
+    "has been routed to a provider better suited to subjects of its particular character. " +
+    "No interruption is required; proceed at your leisure."
+  );
+}
+
 export async function postConciergeDangerAnnouncement(
   params: ConciergeDangerAnnouncement,
 ): Promise<MessageEvent | null> {
@@ -39,26 +47,25 @@ export async function postConciergeDangerAnnouncement(
 
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
-      logger.debug('[ConciergeNotification] Chat not found, skipping announcement', {
-        context: 'concierge-notifications',
-        chatId,
-      });
       return null;
     }
 
     const messageId = randomUUID();
     const now = new Date().toISOString();
     const content = buildDangerContent();
+    const opaqueContent = buildDangerOpaqueContent();
 
     const message: MessageEvent = {
       type: 'message',
       id: messageId,
       role: 'ASSISTANT',
       content,
+      opaqueContent,
       attachments: [],
       createdAt: now,
       participantId: null,
       systemSender: 'concierge',
+      systemKind: 'danger',
     };
 
     await repos.chats.addMessage(chatId, message);

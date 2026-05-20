@@ -18,7 +18,7 @@ export function DeleteProjectDialog({ open, onClose, onConfirm }: DeleteProjectD
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
-        <h3 className="mb-4 text-lg font-semibold text-foreground">Delete Project</h3>
+        <h3 className="mb-4 qt-heading-4 text-foreground">Delete Project</h3>
         <p className="mb-4 qt-text-small">
           Are you sure you want to delete this project? Chats and files will be disassociated but not deleted.
         </p>

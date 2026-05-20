@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { AlertDialog } from '@/components/alert-dialog'
+import { PromptDialog } from '@/components/prompt-dialog'
 
 /**
  * Shows a styled alert dialog with the given message.
@@ -63,4 +64,58 @@ export function showAlert(message: string, buttons?: string[]): Promise<string |
  */
 export function showConfirmation(message: string): Promise<boolean> {
   return showAlert(message, ['Cancel', 'Confirm']).then((result) => result === 'Confirm')
+}
+
+/**
+ * Shows a styled prompt dialog with a text input.
+ * This is a replacement for the native browser prompt() function.
+ *
+ * @param message - The message to display above the input
+ * @param defaultValue - Optional initial value for the input
+ * @returns A promise that resolves to the entered string when confirmed,
+ *          or `undefined` if the user cancels (Escape, overlay click, or
+ *          the Cancel button).
+ */
+export function showPrompt(message: string, defaultValue?: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div')
+    overlay.setAttribute('role', 'prompt-dialog-overlay')
+    document.body.appendChild(overlay)
+    const overlayRoot = createRoot(overlay)
+
+    const container = document.createElement('div')
+    container.setAttribute('role', 'prompt-dialog-content')
+    document.body.appendChild(container)
+
+    const root = createRoot(container)
+
+    const handleClose = (value: string | undefined) => {
+      root.unmount()
+      overlayRoot.unmount()
+      if (container.parentNode) {
+        container.parentNode.removeChild(container)
+      }
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay)
+      }
+      resolve(value)
+    }
+
+    overlayRoot.render(
+      <button
+        type="button"
+        className="qt-dialog-overlay !p-0 cursor-default border-none z-[100]"
+        onClick={() => handleClose(undefined)}
+        aria-label="Close dialog"
+      />
+    )
+
+    root.render(
+      <PromptDialog
+        message={message}
+        defaultValue={defaultValue}
+        onClose={handleClose}
+      />
+    )
+  })
 }

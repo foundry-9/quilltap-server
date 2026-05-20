@@ -14,12 +14,17 @@ import { getFilePath } from '@/lib/api/middleware/file-path';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { exportSTChatAsJSONL } from '@/lib/sillytavern/chat';
 import { getChatCostBreakdown, getDetailedChatCostBreakdown } from '@/lib/services/cost-estimation.service';
-import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
+import { enrichParticipantDetail, getCharacterDetail } from '@/lib/services/chat-enrichment.service';
 import { renderMarkdownToHtml, canPreRenderMessage } from '@/lib/services/markdown-renderer.service';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
-import { handleGetAvatars, handleGetState, handleGetOutfit } from '../actions';
+import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
+import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums } from '../actions';
+import {
+  getPhotoLinkSummaryBySha256,
+  type PhotoLinkSummary,
+} from '@/lib/photos/photo-link-summary';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 
@@ -107,6 +112,16 @@ export async function handleGet(
     return handleGetOutfit(chatId, ctx);
   }
 
+  // Handle outfit-summary action - equipped outfit with resolved item titles
+  if (action === 'outfit-summary') {
+    return handleGetOutfitSummary(chatId, ctx);
+  }
+
+  // Handle photo-albums action - resolve candidate save targets for an image
+  if (action === 'photo-albums') {
+    return handleGetPhotoAlbums(chatId, ctx);
+  }
+
   // Handle get-background action - returns story background URL for the chat
   if (action === 'get-background') {
     try {
@@ -117,7 +132,7 @@ export async function handleGet(
 
       // Check if the chat has a story background image
       if (!chat.storyBackgroundImageId) {
-        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null });
+        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
       }
 
       // Get the file info to build the URL
@@ -127,14 +142,19 @@ export async function handleGet(
           chatId,
           storyBackgroundImageId: chat.storyBackgroundImageId,
         });
-        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null });
+        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
       }
 
       const backgroundUrl = getFilePath(file);
+      const linkSummary = file.sha256
+        ? await getPhotoLinkSummaryBySha256(file.sha256, repos)
+        : null;
       return NextResponse.json({
         backgroundUrl,
         fileId: file.id,
         filename: file.originalFilename,
+        sha256: file.sha256,
+        linkSummary,
       });
     } catch (error) {
       logger.error('[Chats v1] Failed to get story background', { chatId }, error instanceof Error ? error : undefined);
@@ -169,6 +189,11 @@ export async function handleGet(
     if (!chatMetadata) {
       return notFound('Chat');
     }
+
+    // Sweep terminal sessions whose PTYs were lost across a server restart
+    // (DB row says "live" but ptyManager doesn't have it) and post the close
+    // announcements before we read the message history below.
+    await reconcileTerminalSessionsForChat(chatId);
 
     const enrichedParticipants = await Promise.all(
       chatMetadata.participants.map((p) => enrichParticipantDetail(p, repos, chatId))
@@ -222,12 +247,33 @@ export async function handleGet(
           if (event.type !== 'message') return null;
 
           const linkedFiles = await repos.files.findByLinkedTo(event.id);
-          const attachments: Array<{ id: string; filename: string; filepath: string; mimeType: string }> = linkedFiles.map((file) => ({
-            id: file.id,
-            filename: file.originalFilename,
-            filepath: getFilePath(file),
-            mimeType: file.mimeType,
-          }));
+          // Surface sha256 + linkSummary for every image attachment so the
+          // Salon UI can offer "save to my gallery" affordances and show
+          // a count of where the bytes are hard-linked elsewhere. Non-image
+          // attachments skip the summary lookup to keep the response light.
+          const attachments: Array<{
+            id: string;
+            filename: string;
+            filepath: string;
+            mimeType: string;
+            sha256?: string;
+            linkSummary?: PhotoLinkSummary;
+          }> = await Promise.all(
+            linkedFiles.map(async (file) => {
+              const base = {
+                id: file.id,
+                filename: file.originalFilename,
+                filepath: getFilePath(file),
+                mimeType: file.mimeType,
+              };
+              if (!file.mimeType.startsWith('image/')) return base;
+              return {
+                ...base,
+                sha256: file.sha256,
+                linkSummary: await getPhotoLinkSummaryBySha256(file.sha256, repos),
+              };
+            })
+          );
 
           // Mount-file attachments (Scriptorium documents pinned to a chat
           // via a Librarian announcement) live entirely in event.attachments
@@ -238,21 +284,29 @@ export async function handleGet(
           for (const attachmentId of eventAttachmentIds) {
             if (alreadyResolved.has(attachmentId)) continue;
             try {
-              const mountFile = await repos.docMountFiles.findById(attachmentId);
-              if (!mountFile) continue;
-              const blob = await repos.docMountBlobs.findByMountPointAndPath(
-                mountFile.mountPointId,
-                mountFile.relativePath,
-              );
+              let mountLink = await repos.docMountFileLinks.findByIdWithContent(attachmentId);
+              if (!mountLink) {
+                const links = await repos.docMountFileLinks.findByFileId(attachmentId);
+                mountLink = links[0] ?? null;
+              }
+              if (!mountLink) continue;
+              const blob = await repos.docMountBlobs.findByFileId(mountLink.fileId);
               if (!blob) continue;
-              const url = `/api/v1/mount-points/${mountFile.mountPointId}/blobs/${encodeURI(mountFile.relativePath)}`;
+              const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
+              const isImage = blob.storedMimeType.startsWith('image/');
               attachments.push({
-                id: mountFile.id,
-                filename: blob.originalFileName || mountFile.fileName,
+                id: mountLink.id,
+                filename: mountLink.originalFileName ?? mountLink.fileName,
                 filepath: url,
                 mimeType: blob.storedMimeType,
+                ...(isImage && mountLink.sha256
+                  ? {
+                      sha256: mountLink.sha256,
+                      linkSummary: await getPhotoLinkSummaryBySha256(mountLink.sha256, repos),
+                    }
+                  : {}),
               });
-              alreadyResolved.add(mountFile.id);
+              alreadyResolved.add(mountLink.id);
             } catch (err) {
               logger.warn('[Chats v1] Failed to resolve mount-file attachment', {
                 messageId: event.id,
@@ -303,9 +357,50 @@ export async function handleGet(
             targetParticipantIds: event.targetParticipantIds || null,
             isSilentMessage: event.isSilentMessage || null,
             systemSender: event.systemSender || null,
+            systemKind: event.systemKind || null,
+            customAnnouncer: event.customAnnouncer || null,
+            pendingExternalPrompt: event.pendingExternalPrompt || null,
+            pendingExternalPromptFull: event.pendingExternalPromptFull || null,
+            pendingExternalAttachments: event.pendingExternalAttachments || null,
           };
         })
     ).then((results) => results.filter(Boolean));
+
+    // Resolve off-scene character cards referenced by ad-hoc announcement
+    // bubbles (customAnnouncer.kind === 'character'). The Salon renderer looks
+    // these up by id to render the bubble's avatar/name; the chat's
+    // `participants` array doesn't include them since they aren't participants.
+    const offSceneCharacterIds = new Set<string>();
+    const participantCharacterIds = new Set(
+      chatMetadata.participants
+        .map((p) => p.characterId)
+        .filter((id): id is string => typeof id === 'string'),
+    );
+    for (const m of messages) {
+      const id = m?.customAnnouncer?.characterId;
+      if (typeof id === 'string' && !participantCharacterIds.has(id)) {
+        offSceneCharacterIds.add(id);
+      }
+    }
+    const offSceneCharacters: Array<{ id: string; name: string; title: string | null; avatarUrl: string | null }> = [];
+    for (const charId of offSceneCharacterIds) {
+      try {
+        // Use getCharacterDetail so avatarUrl resolves through avatarOverrides /
+        // defaultImageId — characters whose avatar is stored as a defaultImage
+        // (not a raw avatarUrl) still render correctly in announcement bubbles.
+        const detail = await getCharacterDetail(charId, repos, chatId);
+        if (detail) {
+          offSceneCharacters.push({
+            id: detail.id,
+            name: detail.name,
+            title: detail.title,
+            avatarUrl: detail.avatarUrl,
+          });
+        }
+      } catch {
+        // Character may have been deleted; skip and let the renderer fall back.
+      }
+    }
 
     let projectName: string | null = null;
     let project = null;
@@ -364,6 +459,10 @@ export async function handleGet(
       documentEditingMode: chatMetadata.documentEditingMode ?? false,
       documentMode: chatMetadata.documentMode || 'normal',
       dividerPosition: chatMetadata.dividerPosition ?? 45,
+      terminalMode: chatMetadata.terminalMode || 'normal',
+      activeTerminalSessionId: chatMetadata.activeTerminalSessionId ?? null,
+      rightPaneVerticalSplit: chatMetadata.rightPaneVerticalSplit ?? 50,
+      offSceneCharacters,
     };
 
     return NextResponse.json({ chat });

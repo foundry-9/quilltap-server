@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod';
+import { OutfitSelectionSchema } from '@/lib/schemas/wardrobe.types';
 
 export const updateChatSchema = z.object({
   title: z.string().optional(),
@@ -17,6 +18,12 @@ export const updateChatSchema = z.object({
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shared by all participants)
   alertCharactersOfLanternImages: z.boolean().nullish(),
   allowCrossCharacterVaultReads: z.boolean().optional(),
+  // Layout state for the salon split panes
+  documentMode: z.enum(['normal', 'split', 'focus']).optional(),
+  dividerPosition: z.number().min(20).max(80).optional(),
+  terminalMode: z.enum(['normal', 'split', 'focus']).optional(),
+  activeTerminalSessionId: z.uuid().nullish(),
+  rightPaneVerticalSplit: z.number().min(20).max(80).optional(),
 });
 
 export const updateParticipantSchema = z.object({
@@ -41,6 +48,11 @@ export const addParticipantSchema = z.object({
   hasHistoryAccess: z.boolean().optional(),
   joinScenario: z.string().nullish(),
   controlledBy: z.enum(['llm', 'user']).optional(),
+  /**
+   * Starting outfit selection for the added character. When omitted, the
+   * server applies the character's default wardrobe (`mode: 'default'`).
+   */
+  outfitSelection: OutfitSelectionSchema.optional(),
 });
 
 export const removeParticipantSchema = z.object({
@@ -123,4 +135,31 @@ export const queueMemoriesSchema = z.object({
     userContent: z.string(),
     assistantContent: z.string(),
   })).optional(),
+});
+
+const STAFF_SENDER_ENUM = z.enum([
+  'lantern',
+  'aurora',
+  'librarian',
+  'concierge',
+  'prospero',
+  'host',
+  'commonplaceBook',
+  'ariel',
+]);
+
+export const insertAnnouncementSchema = z.object({
+  contentMarkdown: z.string().min(1),
+  sender: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('staff'), staffId: STAFF_SENDER_ENUM }),
+    z.object({ kind: z.literal('character'), characterId: z.uuid() }),
+    z.object({ kind: z.literal('custom'), displayName: z.string().min(1).max(120) }),
+  ]),
+});
+
+export const insertAnnouncementPreviewSchema = z.object({
+  seedMarkdown: z.string().min(1),
+  characterId: z.uuid(),
+  connectionProfileId: z.uuid(),
+  systemPromptId: z.uuid().optional(),
 });

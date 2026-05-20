@@ -4,6 +4,7 @@ import { TaskFilters } from './TaskFilters'
 import { TaskItem } from './TaskItem'
 import { TaskDetails } from './TaskDetails'
 import { useTasksQueue } from './hooks/useTasksQueue'
+import { formatRelativeDate } from '@/lib/format-time'
 
 export function TasksQueueCard() {
   const {
@@ -35,33 +36,14 @@ export function TasksQueueCard() {
     return tokens.toString()
   }
 
-  const formatDate = (dateString: string): string => {
-    try {
-      const date = new Date(dateString)
-      const now = new Date()
-      const diffMs = now.getTime() - date.getTime()
-      const diffMins = Math.floor(diffMs / 60000)
-
-      if (diffMins < 1) return 'Just now'
-      if (diffMins < 60) return `${diffMins}m ago`
-      if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`
-      return date.toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    } catch {
-      return dateString
-    }
-  }
+  const formatDate = formatRelativeDate
 
   return (
     <div className="qt-card p-6">
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-foreground mb-1">Tasks Queue</h2>
+          <h2 className="qt-heading-2 text-foreground mb-1">Tasks Queue</h2>
           <p className="qt-text-small">
             Background job queue for memory extraction and other LLM tasks
           </p>
@@ -106,19 +88,19 @@ export function TasksQueueCard() {
       {data && (
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="qt-card p-3 text-center">
-            <div className="text-2xl font-bold text-foreground">
+            <div className="qt-heading-2 text-foreground">
               {data.stats.activeTotal}
             </div>
             <div className="qt-text-xs">Active Jobs</div>
           </div>
           <div className="qt-card p-3 text-center">
-            <div className="text-2xl font-bold text-foreground">
+            <div className="qt-heading-2 text-foreground">
               ~{formatTokens(data.totalEstimatedTokens)}
             </div>
             <div className="qt-text-xs">Est. Tokens</div>
           </div>
           <div className="qt-card p-3 text-center">
-            <div className="text-2xl font-bold qt-text-success">
+            <div className="qt-heading-2 qt-text-success">
               {data.stats.completed}
             </div>
             <div className="qt-text-xs">Completed</div>
@@ -165,7 +147,7 @@ export function TasksQueueCard() {
 
       {/* Jobs List */}
       <div>
-        <h3 className="text-lg font-semibold text-foreground mb-3">Queue Items</h3>
+        <h3 className="qt-heading-4 text-foreground mb-3">Queue Items</h3>
 
         {loading && !data ? (
           <div className="text-center py-6 qt-text-secondary">

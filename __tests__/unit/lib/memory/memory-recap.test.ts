@@ -203,7 +203,8 @@ describe('Memory Recap Service', () => {
         testSelection,
         testUserId,
         undefined, // no chatId passed
-        undefined  // no uncensored fallback
+        undefined, // no uncensored fallback
+        testCharacterId
       )
     })
 
@@ -243,7 +244,8 @@ describe('Memory Recap Service', () => {
         testSelection,
         testUserId,
         testChatId,
-        undefined
+        undefined,
+        testCharacterId
       )
     })
 
@@ -422,7 +424,8 @@ describe('Memory Recap Service', () => {
         testSelection,
         testUserId,
         testChatId,
-        uncensoredFallback
+        uncensoredFallback,
+        testCharacterId
       )
     })
 

@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { createPortal } from 'react-dom';
 import type { CharacterOptimizerModalProps, OptimizerFilterOptions, OptimizerOutputMode } from './types';
 import { useCharacterOptimizer } from './hooks/useCharacterOptimizer';
@@ -94,16 +95,7 @@ export function CharacterOptimizerModal({
   const [beforeDate, setBeforeDate] = useState('');
   const [saveToVault, setSaveToVault] = useState(false);
 
-  // Handle escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !optimizer.loading && !optimizer.applying) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [onClose, optimizer.loading, optimizer.applying]);
+  useEscapeKey(onClose, !optimizer.loading && !optimizer.applying);
 
   const handleClose = () => {
     if (!optimizer.loading && !optimizer.applying) {
@@ -257,7 +249,7 @@ export function CharacterOptimizerModal({
               {/* Filter section */}
               {profiles.length > 0 && (
                 <details className="qt-card">
-                  <summary className="px-4 py-3 cursor-pointer text-sm font-medium qt-label select-none">
+                  <summary className="px-4 py-3 cursor-pointer qt-label select-none">
                     Filter Memories
                   </summary>
                   <div className="px-4 pb-4 flex flex-col gap-4 border-t qt-border-default pt-3">
@@ -431,11 +423,11 @@ export function CharacterOptimizerModal({
                         aria-label={`Go to suggestion ${idx + 1}`}
                         className={`rounded-full transition-all ${
                           idx === optimizer.currentIndex
-                            ? 'w-6 h-2.5 bg-primary'
+                            ? 'w-6 h-2.5 qt-bg-primary'
                             : hasDecision
                             ? decision === 'rejected'
                               ? 'w-2.5 h-2.5 qt-bg-destructive/60'
-                              : 'w-2.5 h-2.5 bg-green-500/60'
+                              : 'w-2.5 h-2.5 qt-bg-success/60'
                             : 'w-2.5 h-2.5 qt-bg-muted-foreground/30 hover:qt-bg-muted-foreground/60'
                         }`}
                       />
@@ -479,7 +471,7 @@ export function CharacterOptimizerModal({
           {/* ===== SUGGESTIONS-FILE-WRITTEN PHASE ===== */}
           {optimizer.phase === 'suggestions-file-written' && (
             <div className="flex flex-col items-center gap-4 py-8 text-center">
-              <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center">
+              <div className="w-14 h-14 rounded-full qt-bg-success/10 flex items-center justify-center">
                 <svg className="w-8 h-8 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
@@ -505,7 +497,7 @@ export function CharacterOptimizerModal({
             <>
               {applySuccess ? (
                 <div className="flex flex-col items-center gap-4 py-8 text-center">
-                  <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full qt-bg-success/10 flex items-center justify-center">
                     <svg className="w-8 h-8 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>

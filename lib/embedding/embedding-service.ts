@@ -65,6 +65,37 @@ export class EmbeddingError extends Error {
 }
 
 /**
+ * Hard cap on the text length we'll send to an embedding provider. Local
+ * Ollama models like qwen3-embedding refuse anything past their context
+ * window with a 500, and even when they accept it, requests in the
+ * 100KB+ range can park the queue for tens of seconds — long enough to
+ * starve interactive memory recall on the chat path.
+ */
+export const EMBEDDING_MAX_CHARS = 128 * 1024
+
+/**
+ * Priority lane for embedding requests.
+ *
+ * - `interactive`: chat-path memory/scriptorium/help searches. Run immediately.
+ * - `background`: re-index, dedup, and other queue-driven work. Yields to any
+ *   pending interactive request so chat doesn't sit behind a backlog of
+ *   bulk embedding work.
+ *
+ * The bottleneck is the embedding provider (Ollama serializes per loaded
+ * model), not Node — so a worker thread wouldn't help. What helps is keeping
+ * non-interactive callers from piling into the queue while a chat is waiting.
+ */
+export type EmbeddingPriority = 'interactive' | 'background'
+
+let interactivePending = 0
+
+async function waitForInteractiveQuiet(): Promise<void> {
+  while (interactivePending > 0) {
+    await new Promise<void>(resolve => setTimeout(resolve, 50))
+  }
+}
+
+/**
  * Get the default embedding profile for a user
  */
 export async function getDefaultEmbeddingProfile(userId: string): Promise<EmbeddingProfile | null> {
@@ -137,10 +168,12 @@ async function generateApiEmbedding(
     { dimensions: profile.dimensions || undefined }
   )
 
+  const embedding = applyEmbeddingProfile(result.embedding, profile)
+
   return {
-    embedding: toUnitVector(result.embedding),
+    embedding,
     model: result.model,
-    dimensions: result.dimensions,
+    dimensions: embedding.length,
     provider: providerName,
   }
 }
@@ -190,11 +223,12 @@ async function generateBuiltinEmbedding(
     // Generate the embedding
     const result = embeddingProvider.generateEmbedding(text)
 
+    const embedding = applyEmbeddingProfile(result.embedding, profile)
 
     return {
-      embedding: toUnitVector(result.embedding),
+      embedding,
       model: result.model,
-      dimensions: result.dimensions,
+      dimensions: embedding.length,
       provider: 'BUILTIN',
     }
   } catch (error) {
@@ -238,44 +272,52 @@ export async function generateEmbedding(
 }
 
 /**
- * Generate an embedding for text using the user's default profile
+ * Generate an embedding for text using the user's default profile.
+ *
+ * Honors a priority lane (default `'interactive'`): background callers should
+ * pass `{ priority: 'background' }` so they yield to any chat-path embedding
+ * work in flight. See `EmbeddingPriority` for the why.
  */
 export async function generateEmbeddingForUser(
   text: string,
   userId: string,
-  profileId?: string
+  profileId?: string,
+  opts: { priority?: EmbeddingPriority } = {}
 ): Promise<EmbeddingResult> {
-  let profile: EmbeddingProfile | null = null
-  let profileSource = 'default'
+  const priority = opts.priority ?? 'interactive'
 
-  if (profileId) {
-    profile = await getEmbeddingProfile(profileId)
-    if (profile) {
-      profileSource = 'explicit'
+  if (priority === 'background') {
+    await waitForInteractiveQuiet()
+  } else {
+    interactivePending++
+  }
+
+  try {
+    let profile: EmbeddingProfile | null = null
+    let profileSource = 'default'
+
+    if (profileId) {
+      profile = await getEmbeddingProfile(profileId)
+      if (profile) {
+        profileSource = 'explicit'
+      }
+    }
+
+    if (!profile) {
+      profile = await getDefaultEmbeddingProfile(userId)
+      profileSource = profileId ? 'default (explicit not found)' : 'default'
+    }
+
+    if (!profile) {
+      throw new EmbeddingError('No embedding profile configured')
+    }
+
+    return await generateEmbedding(text, profile, userId)
+  } finally {
+    if (priority === 'interactive') {
+      interactivePending--
     }
   }
-
-  if (!profile) {
-    profile = await getDefaultEmbeddingProfile(userId)
-    profileSource = profileId ? 'default (explicit not found)' : 'default'
-  }
-
-  if (!profile) {
-    throw new EmbeddingError('No embedding profile configured')
-  }
-
-  logger.debug('[Embedding] Generating embedding for user', {
-    context: 'embedding-service',
-    profileId: profile.id,
-    profileName: profile.name,
-    provider: profile.provider,
-    modelName: profile.modelName,
-    dimensions: profile.dimensions,
-    profileSource,
-    textLength: text.length,
-  })
-
-  return generateEmbedding(text, profile, userId)
 }
 
 /**
@@ -335,10 +377,11 @@ export function extractSearchTerms(text: string): FallbackSearchResult {
 export async function prepareForSearch(
   text: string,
   userId: string,
-  profileId?: string
+  profileId?: string,
+  opts: { priority?: EmbeddingPriority } = {}
 ): Promise<SearchPreparationResult> {
   try {
-    const embedding = await generateEmbeddingForUser(text, userId, profileId)
+    const embedding = await generateEmbeddingForUser(text, userId, profileId, opts)
     return {
       usedEmbedding: true,
       embedding,
@@ -382,6 +425,74 @@ function toUnitVector(v: ArrayLike<number>): Float32Array {
 }
 
 /**
+ * Apply an embedding profile's storage policy to a raw provider vector:
+ * optional Matryoshka slice followed by optional L2 normalisation. Returns a
+ * fresh Float32Array — never mutates the input.
+ *
+ * - If `profile.truncateToDimensions` is set and the raw vector is longer,
+ *   the first N components are kept (Matryoshka property).
+ * - If `profile.normalizeL2` is true (default), the result is unit-length.
+ *
+ * Insert-time and query-time paths both call this helper so they cannot drift.
+ */
+export function applyEmbeddingProfile(
+  v: ArrayLike<number>,
+  profile: Pick<EmbeddingProfile, 'truncateToDimensions' | 'normalizeL2'>
+): Float32Array {
+  const target = profile.truncateToDimensions ?? null
+  const source = v instanceof Float32Array ? v : new Float32Array(Array.from(v))
+  const sliceLen = target !== null && target < source.length ? target : source.length
+
+  // Always produce a fresh Float32Array so callers can keep / mutate it freely.
+  const out = new Float32Array(sliceLen)
+  for (let i = 0; i < sliceLen; i++) out[i] = source[i]
+
+  // normalizeL2 defaults to true — the field is only ever explicitly false for
+  // niche cases where downstream code wants raw magnitudes.
+  if (profile.normalizeL2 !== false) {
+    return normalizeVector(out)
+  }
+  return out
+}
+
+/**
+ * Error thrown when two embeddings being compared have different dimensions.
+ * Almost always means the active embedding profile's truncate/dimensions
+ * setting has drifted from the on-disk corpus — re-apply the profile to
+ * migrate.
+ */
+export class EmbeddingDimensionMismatchError extends Error {
+  constructor(
+    public readonly queryLength: number,
+    public readonly storedLength: number,
+    public readonly context?: string,
+  ) {
+    super(
+      `Embedding dimension mismatch${context ? ` (${context})` : ''}: ` +
+      `query is ${queryLength}-d, stored is ${storedLength}-d. ` +
+      `The active embedding profile differs from the on-disk corpus. ` +
+      `Re-apply the embedding profile to migrate stored vectors.`
+    )
+    this.name = 'EmbeddingDimensionMismatchError'
+  }
+}
+
+/**
+ * Assert that two embeddings share the same dimensionality. Throws an
+ * EmbeddingDimensionMismatchError with diagnostic context on mismatch — fail
+ * fast at search entry rather than letting cosineSimilarity throw mid-iteration.
+ */
+export function assertEmbeddingDimensionsMatch(
+  query: ArrayLike<number>,
+  stored: ArrayLike<number>,
+  context?: string,
+): void {
+  if (query.length !== stored.length) {
+    throw new EmbeddingDimensionMismatchError(query.length, stored.length, context)
+  }
+}
+
+/**
  * Calculate cosine similarity between two embedding vectors.
  *
  * Assumes both inputs are unit-length (guaranteed by `generateEmbeddingForUser`
@@ -391,7 +502,7 @@ function toUnitVector(v: ArrayLike<number>): Float32Array {
  */
 export function cosineSimilarity(a: ArrayLike<number>, b: ArrayLike<number>): number {
   if (a.length !== b.length) {
-    throw new Error('Vectors must have the same length')
+    throw new EmbeddingDimensionMismatchError(a.length, b.length)
   }
 
   let dotProduct = 0

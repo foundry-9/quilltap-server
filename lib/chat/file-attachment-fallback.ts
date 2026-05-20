@@ -56,6 +56,23 @@ async function getImageDescriptionProfile(
 }
 
 /**
+ * Resolve the configured uncensored vision fallback profile, if any. Returns
+ * null when no `uncensoredImageDescriptionProfileId` is configured or the
+ * referenced profile no longer exists. Distinct from the primary getter: we
+ * never auto-pick a fallback — the user must explicitly opt in by picking one.
+ */
+async function getUncensoredImageDescriptionProfile(
+  repos: any,
+  userId: string
+): Promise<ConnectionProfile | null> {
+  const chatSettings = await repos.chatSettings.findByUserId(userId)
+  const id = chatSettings?.uncensoredImageDescriptionProfileId
+  if (!id) return null
+  const profile = await repos.connections.findById(id)
+  return profile ?? null
+}
+
+/**
  * Check if a file attachment needs fallback processing
  */
 export function needsFallbackProcessing(
@@ -90,6 +107,8 @@ export interface FallbackResult {
   imageDescription?: string
   processingMetadata?: {
     usedImageDescriptionLLM?: boolean
+    /** True when the uncensored fallback profile produced the description. */
+    usedUncensoredFallback?: boolean
     descriptionProfileId?: string
     descriptionProvider?: string
     descriptionModel?: string
@@ -154,28 +173,17 @@ export async function convertTextFileToInline(
 }
 
 /**
- * Generate image description using image description LLM
+ * Run one describe attempt against a specific vision profile. Pure helper:
+ * does not consult chat settings or pick a profile. Caller is responsible for
+ * deciding whether to retry against a fallback profile.
  */
-export async function generateImageDescription(
+async function describeImageWithProfile(
   file: FileAttachment,
+  imageDescProfile: ConnectionProfile,
   repos: any,
   userId: string
 ): Promise<FallbackResult> {
   try {
-    // Get image description profile
-    const imageDescProfile = await getImageDescriptionProfile(repos, userId)
-
-    if (!imageDescProfile) {
-      return {
-        type: 'unsupported',
-        error: 'No image description profile available. Configure one in Settings → Chat Settings → Image Description Profile',
-        processingMetadata: {
-          originalFilename: file.filename,
-          originalMimeType: file.mimeType,
-        },
-      }
-    }
-
     // Check if profile supports images
     if (!profileSupportsMimeType(imageDescProfile, file.mimeType)) {
       return {
@@ -243,12 +251,8 @@ export async function generateImageDescription(
       messageParams.topP = topP
     }
 
-    // Debug log: LLM request for image description
-
-    // Send message to cheap LLM asking for description
+    // Send message to vision-capable LLM asking for description
     const response = await provider.sendMessage(messageParams, apiKeyValue || '')
-
-    // Debug log: LLM response
 
     // Check for empty or invalid responses
     const trimmedContent = response.content.trim()
@@ -261,7 +265,6 @@ export async function generateImageDescription(
         mimeType: file.mimeType,
         responseMetadata: JSON.stringify(response, null, 2)
       })
-
 
       // Check if this is a reasoning model that hit the token limit
       if (response.finishReason === 'length' && isReasoningModel) {
@@ -292,7 +295,7 @@ export async function generateImageDescription(
       }
     }
 
-    // Check if the response looks like an error message
+    // Check if the response looks like an error message or a refusal
     const contentLower = trimmedContent.toLowerCase()
     if (
       contentLower.includes('error') ||
@@ -325,7 +328,8 @@ export async function generateImageDescription(
 
     logger.info('[Image Fallback] Successfully generated description', {
       filename: file.filename,
-      descriptionLength: trimmedContent.length
+      descriptionLength: trimmedContent.length,
+      profileId: imageDescProfile.id,
     })
 
     return {
@@ -348,8 +352,73 @@ export async function generateImageDescription(
       processingMetadata: {
         originalFilename: file.filename,
         originalMimeType: file.mimeType,
+        descriptionProfileId: imageDescProfile.id,
+        descriptionProvider: imageDescProfile.provider,
+        descriptionModel: imageDescProfile.modelName,
       },
     }
+  }
+}
+
+/**
+ * Generate image description using the configured vision profile, with an
+ * automatic fallback to `uncensoredImageDescriptionProfileId` when the primary
+ * refuses or returns an unusable response. The fallback only runs when the
+ * user has explicitly configured one — there's no auto-pick at the fallback
+ * layer.
+ */
+export async function generateImageDescription(
+  file: FileAttachment,
+  repos: any,
+  userId: string
+): Promise<FallbackResult> {
+  // Get image description profile
+  const imageDescProfile = await getImageDescriptionProfile(repos, userId)
+
+  if (!imageDescProfile) {
+    return {
+      type: 'unsupported',
+      error: 'No image description profile available. Configure one in Settings → Chat Settings → Image Description Profile',
+      processingMetadata: {
+        originalFilename: file.filename,
+        originalMimeType: file.mimeType,
+      },
+    }
+  }
+
+  const primaryResult = await describeImageWithProfile(file, imageDescProfile, repos, userId)
+  if (primaryResult.type === 'image_description') {
+    return primaryResult
+  }
+
+  // Primary failed/refused. If an uncensored fallback is configured and it's
+  // a *different* profile, give it a shot.
+  const fallbackProfile = await getUncensoredImageDescriptionProfile(repos, userId)
+  if (!fallbackProfile || fallbackProfile.id === imageDescProfile.id) {
+    return primaryResult
+  }
+
+  logger.info('[Image Fallback] Primary profile failed, retrying with uncensored fallback', {
+    primaryProfileId: imageDescProfile.id,
+    fallbackProfileId: fallbackProfile.id,
+    primaryError: primaryResult.error,
+  })
+
+  const fallbackResult = await describeImageWithProfile(file, fallbackProfile, repos, userId)
+  if (fallbackResult.type === 'image_description') {
+    return {
+      ...fallbackResult,
+      processingMetadata: fallbackResult.processingMetadata
+        ? { ...fallbackResult.processingMetadata, usedUncensoredFallback: true }
+        : undefined,
+    }
+  }
+
+  // Both failed — return the primary's error since that's what the user
+  // configured first, but annotate that the fallback was tried.
+  return {
+    ...primaryResult,
+    error: `${primaryResult.error ?? 'Primary failed'} (uncensored fallback also failed: ${fallbackResult.error ?? 'unknown'})`,
   }
 }
 

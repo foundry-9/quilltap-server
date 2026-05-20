@@ -95,9 +95,6 @@ export function verifySignature(
       Buffer.from(sigBytes, 'base64')
     );
   } catch (error) {
-    logger.debug('Signature verification failed', {
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }

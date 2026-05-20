@@ -93,7 +93,16 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       const total = result.data?.totalCount ?? 0
 
       if (append) {
-        setMemories(prev => [...prev, ...newMemories])
+        // Offset-based pagination is unstable while the corpus is being
+        // mutated (e.g. a regenerate-all sweep deleting and re-extracting).
+        // Skip any IDs already in the list so React keys stay unique.
+        setMemories(prev => {
+          const seen = new Set(prev.map(m => m.id))
+          const additions = newMemories.filter(m => !seen.has(m.id))
+          return additions.length === newMemories.length
+            ? [...prev, ...newMemories]
+            : [...prev, ...additions]
+        })
       } else {
         setMemories(newMemories)
       }

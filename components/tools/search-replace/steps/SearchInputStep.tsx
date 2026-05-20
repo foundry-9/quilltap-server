@@ -41,8 +41,8 @@ export function SearchInputStep({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="qt-text-primary text-lg font-medium mb-2">
-          Search & Replace
+        <h3 className="qt-text-section mb-2">
+          Search &amp; Replace
         </h3>
         <p className="qt-text-secondary text-sm">
           Enter the text you want to find and what to replace it with.

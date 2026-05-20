@@ -32,11 +32,13 @@ export function FieldSelectionStep({
   currentData,
   canGeneratePhysicalDescription,
 }: FieldSelectionStepProps) {
-  // All possible fields
+  // All possible fields, ordered by vantage point (outside → acquaintance → self)
   const allFields: GeneratableField[] = [
     'name',
     'title',
+    'identity',
     'description',
+    'manifesto',
     'personality',
     'scenarios',
     'exampleDialogues',
@@ -54,7 +56,7 @@ export function FieldSelectionStep({
     <div className="space-y-6">
       {/* Background Context */}
       <div>
-        <h3 className="text-lg font-semibold text-foreground mb-2">
+        <h3 className="qt-heading-4 text-foreground mb-2">
           Background Context
         </h3>
         <p className="text-sm qt-text-secondary mb-3">
@@ -74,7 +76,7 @@ export function FieldSelectionStep({
       <div>
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="text-lg font-semibold text-foreground">
+            <h3 className="qt-heading-4 text-foreground">
               Fields to Generate
             </h3>
             <p className="text-sm qt-text-secondary">

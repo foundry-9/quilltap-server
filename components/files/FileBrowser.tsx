@@ -652,7 +652,7 @@ export default function FileBrowser({
   return (
     <div className={`flex flex-col h-full ${className}`}>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{displayTitle}</h2>
+        <h2 className="qt-heading-4">{displayTitle}</h2>
         <div className="flex items-center gap-2">
           {showUpload && (
             (isMountMode || projectId) ? (

@@ -15,8 +15,18 @@ When Shared Vaults is **on** for a multi-character chat:
 - **Every present participant** — that is, any character with status *active* or *silent* — becomes a legal reading destination for the `doc_*` tool family.
 - Friday, chatting alongside Amy, may now reach into Amy's vault with `doc_read_file`, `doc_list_files`, `doc_grep`, `doc_read_frontmatter`, `doc_read_heading`, `doc_read_blob`, and `doc_list_blobs` exactly as though the vault were her own.
 - The access is **read-only.** Any attempt by Friday to rewrite, rename, delete, or otherwise molest Amy's papers is turned away at the door with a polite but firm *"Amy's vault is read-only in this chat."*
+- The **results** of those vault reads are posted publicly: every character at the table sees what was read, and the contents enter each character's LLM context on subsequent turns.
 
-When Shared Vaults is **off** — which is, by genteel default, how every chat starts — the previous arrangement holds. Each character may only consult her own vault plus anything linked into the active project.
+When Shared Vaults is **off** — which is, by genteel default, how every chat starts — the previous arrangement holds: each character may only consult her own vault plus anything linked into the active project. In addition, the **results** of those vault reads are whispered to the calling character only (with the operator copied in, so you still see what's happening). Peer characters' LLM contexts never receive the body of the lookup. A character reaching into her own vault for a private memo will not have that memo silently broadcast to whoever else is in the chat.
+
+## Always-Private Tools
+
+Two tools are treated as inherently per-character and **always whisper their results** regardless of the Shared Vaults setting:
+
+- **`search`** — the unified search across memories, past conversations, documents, and knowledge. Memories and conversation history are character-scoped by their very nature, so a `search` result could always reveal another character's private recollection; the whisper closes that channel unconditionally.
+- **`read_conversation`** — renders a transcript of a chat. The caller must already participate in the chat being read, but other characters in the *current* chat have no business overhearing that transcript on its way through.
+
+If a character wants to share what she found, she can quote it back in her own narration; what we prevent is the silent, byte-for-byte injection of one character's lookup into another character's prompt.
 
 ## Where to Find It
 

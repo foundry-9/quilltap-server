@@ -55,11 +55,13 @@ describe('pseudo-tool.service', () => {
       createNote: true,
       wardrobeList: true,
       wardrobeUpdateOutfit: true,
+      wardrobeChangeItem: true,
       wardrobeCreateItem: true,
     })
 
     expect(instructions).toContain('[[WARDROBE /]]')
-    expect(instructions).toContain('[[EQUIP slot="top"')
+    expect(instructions).toContain('[[CHANGE_ITEM mode="equip"')
+    expect(instructions).toContain('[[SET_OUTFIT mode="wear"')
     expect(instructions).toContain('[[CREATE_WARDROBE_ITEM title="Red Scarf"')
     expect(instructions).not.toContain('[[SEARCH_WEB]]')
   })
@@ -69,7 +71,9 @@ describe('pseudo-tool.service', () => {
       'First I will check my options.',
       '[[WARDROBE /]]',
       'Then I will change clothes.',
-      '[[EQUIP slot="top" title="Charcoal Sweater" /]]',
+      '[[CHANGE_ITEM mode="equip" title="Charcoal Sweater" /]]',
+      'And put on the formal outfit.',
+      '[[SET_OUTFIT mode="wear" title="Black Tie Ensemble" /]]',
       '[[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]',
     ].join('\n')
 
@@ -79,10 +83,17 @@ describe('pseudo-tool.service', () => {
         arguments: {},
       },
       {
-        name: 'update_outfit_item',
+        name: 'wardrobe_change_item',
         arguments: {
-          slot: 'top',
+          mode: 'equip',
           item_title: 'Charcoal Sweater',
+        },
+      },
+      {
+        name: 'wardrobe_set_outfit',
+        arguments: {
+          mode: 'wear',
+          item_title: 'Black Tie Ensemble',
         },
       },
       {

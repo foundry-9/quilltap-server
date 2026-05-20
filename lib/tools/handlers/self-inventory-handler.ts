@@ -6,7 +6,9 @@
  * rather than throwing the whole report away.
  */
 
+import packageJson from '@/package.json';
 import { logger } from '@/lib/logger';
+import { formatBytes } from '@/lib/utils/format-bytes';
 import { getRepositories } from '@/lib/repositories/factory';
 import { isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { buildSystemPrompt, buildOtherParticipantsInfo } from '@/lib/chat/context/system-prompt-builder';
@@ -52,13 +54,6 @@ function roundPercent(n: number): number {
 
 function formatNumber(n: number): string {
   return n.toLocaleString('en-US');
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 function formatDate(iso: string): string {
@@ -405,10 +400,6 @@ async function buildPromptSection(
         roleplayTemplate = { systemPrompt: (tpl as { systemPrompt: string }).systemPrompt };
       }
     } catch (err) {
-      logger.debug('self_inventory: roleplay template lookup failed', {
-        templateId: chat.roleplayTemplateId,
-        error: getErrorMessage(err),
-      });
     }
   }
 
@@ -424,30 +415,18 @@ async function buildPromptSection(
         };
       }
     } catch (err) {
-      logger.debug('self_inventory: project lookup failed', {
-        projectId: chat.projectId,
-        error: getErrorMessage(err),
-      });
     }
   }
 
-  const systemPrompt = buildSystemPrompt(
+  const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,
-    otherParticipants,
     roleplayTemplate,
-    undefined,
-    respondingParticipant.selectedSystemPromptId ?? null,
-    chat.timestampConfig ?? null,
-    false,
-    projectContext,
-    undefined,
-    undefined,
-    respondingParticipant.status,
-    chat.scenarioText ?? null,
-    undefined,
-    undefined
-  );
+    selectedSystemPromptId: respondingParticipant.selectedSystemPromptId ?? null,
+    timestampConfig: chat.timestampConfig ?? null,
+    isInitialMessage: false,
+    scenarioText: chat.scenarioText ?? null,
+  });
 
   const characterCount = systemPrompt.length;
   const approxTokens = Math.round(characterCount / 4);
@@ -480,11 +459,6 @@ async function buildLastTurnSection(
     try {
       contextWindow = getModelContextLimit(provider, modelName);
     } catch (err) {
-      logger.debug('self_inventory: context window lookup failed', {
-        provider,
-        modelName,
-        error: getErrorMessage(err),
-      });
     }
 
     const utilizationPercent =
@@ -610,6 +584,7 @@ export async function executeSelfInventoryTool(
   if (!context.characterId) {
     return {
       success: false,
+      quilltapVersion: packageJson.version,
       characterId: '',
       characterName: '',
       vault: { available: false, reason: 'error', message: 'Missing characterId.' },
@@ -666,6 +641,7 @@ export async function executeSelfInventoryTool(
   if (!character) {
     return {
       success: false,
+      quilltapVersion: packageJson.version,
       characterId: context.characterId,
       characterName: '',
       vault: { available: false, reason: 'error', message: 'Character not found.' },
@@ -716,13 +692,6 @@ export async function executeSelfInventoryTool(
       error: `Character ${context.characterId} not found`,
     };
   }
-
-  logger.debug('self_inventory: assembling report', {
-    context: 'self-inventory-handler',
-    userId: context.userId,
-    chatId: context.chatId,
-    characterId: context.characterId,
-  });
 
   const vault: SelfInventoryVaultSection = await buildVaultSection(character).catch(
     (err) => ({
@@ -796,6 +765,7 @@ export async function executeSelfInventoryTool(
 
   return {
     success: true,
+    quilltapVersion: packageJson.version,
     characterId: character.id,
     characterName: character.name,
     vault,
@@ -820,7 +790,7 @@ function formatVaultSection(section: SelfInventoryVaultSection): string {
 
   const lines = section.files.map((f) => {
     const date = formatDate(f.lastModified);
-    return `- ${f.relativePath}  [${f.fileType}, ${formatSize(f.fileSizeBytes)}, modified ${date}]`;
+    return `- ${f.relativePath}  [${f.fileType}, ${formatBytes(f.fileSizeBytes)}, modified ${date}]`;
   });
   const footer = `(To read a file: doc_read_file with scope='document_store', mount_point='${section.mountPointName}', path='<relativePath>')`;
   return `${header}\n${lines.join('\n')}\n${footer}`;
@@ -971,10 +941,12 @@ function formatLastTurnSection(section: SelfInventoryLastTurnSection): string {
 
 export function formatSelfInventoryResults(output: SelfInventoryToolOutput): string {
   if (!output.success) {
-    return `Self-Inventory Error: ${output.error ?? 'Unknown error'}`;
+    return `You are running on Quilltap v${output.quilltapVersion}.\n\nSelf-Inventory Error: ${output.error ?? 'Unknown error'}`;
   }
 
   const lines = [
+    `You are running on Quilltap v${output.quilltapVersion}.`,
+    ``,
     `# Self-Inventory Report`,
     `Character: ${output.characterName} (id: ${output.characterId})`,
     ``,

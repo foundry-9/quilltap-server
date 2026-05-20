@@ -399,6 +399,40 @@
   --qt-warning-box-bg: hsl(43 85% 55% / 0.1);
   --qt-warning-box-border: hsl(43 85% 55% / 0.35);
   --qt-warning-box-fg: hsl(43 80% 42%);
+
+  /* ==========================================================================
+     TERMINAL VARIABLES — Chrysler-lobby telegraph room
+     Midnight navy pane with warm gold readout, regardless of UI mode.
+     ANSI palette stays VS-Code-legible but borrows the navy/gold accent set.
+     ========================================================================== */
+  --qt-terminal-bg: hsl(222 50% 6%);
+  --qt-terminal-fg: hsl(43 35% 86%);
+  --qt-terminal-cursor: hsl(43 90% 60%);
+  --qt-terminal-selection: hsl(43 85% 55% / 0.28);
+  --qt-terminal-ansi-black: hsl(222 35% 14%);
+  --qt-terminal-ansi-red: hsl(0 70% 58%);
+  --qt-terminal-ansi-green: hsl(142 55% 50%);
+  --qt-terminal-ansi-yellow: hsl(43 85% 60%);
+  --qt-terminal-ansi-blue: hsl(210 75% 62%);
+  --qt-terminal-ansi-magenta: hsl(285 60% 65%);
+  --qt-terminal-ansi-cyan: hsl(190 70% 60%);
+  --qt-terminal-ansi-white: hsl(45 25% 88%);
+  --qt-terminal-ansi-bright-black: hsl(222 25% 38%);
+  --qt-terminal-ansi-bright-red: hsl(0 80% 70%);
+  --qt-terminal-ansi-bright-green: hsl(142 60% 62%);
+  --qt-terminal-ansi-bright-yellow: hsl(43 92% 70%);
+  --qt-terminal-ansi-bright-blue: hsl(210 80% 72%);
+  --qt-terminal-ansi-bright-magenta: hsl(285 70% 75%);
+  --qt-terminal-ansi-bright-cyan: hsl(190 80% 72%);
+  --qt-terminal-ansi-bright-white: hsl(45 30% 96%);
+
+  /* Chrome — brass-edged inlay around the terminal pane */
+  --qt-terminal-chrome-bg: hsl(222 45% 9%);
+  --qt-terminal-chrome-border: hsl(43 75% 32%);
+  --qt-terminal-chrome-fg: hsl(43 30% 84%);
+  --qt-terminal-chrome-muted-fg: hsl(43 25% 60%);
+  --qt-terminal-closed-badge-bg: hsl(222 35% 18%);
+  --qt-terminal-closed-badge-fg: hsl(43 70% 70%);
 }
 
 /* ============================================================================

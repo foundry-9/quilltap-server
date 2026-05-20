@@ -23,7 +23,7 @@ export function ImportOptionsStep({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-foreground mb-2">
+        <label className="block qt-label text-foreground mb-2">
           Conflict Strategy
         </label>
         <select

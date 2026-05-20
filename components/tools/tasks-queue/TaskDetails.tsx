@@ -48,7 +48,7 @@ export function TaskDetails({
         {/* Dialog Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <div>
-            <h3 className="text-lg font-semibold text-foreground">Job Details</h3>
+            <h3 className="qt-heading-4 text-foreground">Job Details</h3>
             <p className="qt-text-small">{job.type}</p>
           </div>
           <button

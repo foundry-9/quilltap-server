@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-04-08
+**Last Updated**: 2026-05-17
 **Tool Used**: knip
-**Codebase**: Quilltap v4.0.0-dev
+**Codebase**: Quilltap v4.4.0-dev.228
 
 ---
 
@@ -12,44 +12,104 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | Cleaned up 2026-03-24 |
+| Unused Files | Cleaned up 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + 4 dead modal/form components + 2 sidebar components) |
 | Migration Scripts | Deleted (migrations complete) |
-| Unused Dependencies | @quilltap/theme-storybook removed 2026-04-02; @aws-sdk/client-s3, svgo removed 2026-03-05; bcrypt, qrcode, ts-jest removed 2026-01-30 |
-| Unused Exported Types | ~33 flagged; most are intentional plugin/barrel re-exports |
+| Unused Dependencies | @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom removed 2026-05-17; @aws-sdk/client-s3, svgo removed 2026-03-05; bcrypt, qrcode, ts-jest removed 2026-01-30 |
+| Unused Exported Types | ~700 flagged; most are intentional plugin/barrel re-exports |
 | Unused Enum Members | 3 in ErrorCode (preserved for future use) |
-| Duplicate Exports | ~39 (named + default pattern, low priority) |
+| Duplicate Exports | ~42 (named + default pattern, low priority) |
 
 ---
 
-## Current Findings (2026-04-08)
+## 2026-05-17 — Barrel slim-down and dependency cleanup
 
-### Unused Exported Types (~33)
+### Unused Files Removed
+
+| File | Reason |
+|------|--------|
+| `components/terminal/index.ts` | Barrel never imported; `Terminal` and `TerminalEmbed` are imported directly |
+| `components/files/FolderManagement/MoveFileModal.tsx` | Dead modal component; not referenced anywhere |
+| `components/files/FolderManagement/RenameModal.tsx` | Dead modal component; not referenced anywhere |
+| `components/images/embedded-gallery/hooks/index.ts` | Hook barrel; `useGalleryData` imported directly by `EmbeddedPhotoGallery` |
+| `components/tools/restore/hooks/index.ts` | Hook barrel; `useRestoreData` imported directly by `RestoreDialog` |
+| `components/tools/search-replace/hooks/index.ts` | Hook barrel; `useSearchReplace` imported directly by `SearchReplaceModal` |
+| `components/settings/connection-profiles/hooks/index.ts` | Hook barrel; hooks imported directly by tab component |
+| `components/layout/left-sidebar/sidebar-item.tsx` | Dead component; `SidebarItem` + `ViewAllLink` only re-exported by index, never used |
+| `components/layout/left-sidebar/sidebar-section.tsx` | Dead component; `SidebarSection` only re-exported by index, never used |
+| `components/settings/connection-profiles/ProfileForm.tsx` | Dead component; only re-exported via barrel, no consumers |
+| `components/settings/embedding-profiles/ProfileForm.tsx` | Dead component; only re-exported via barrel, no consumers |
+
+### Barrel Re-exports Trimmed
+
+Reduced unused re-exports in 15 barrel files to only what consumers actually import:
+
+| Barrel | What Remains |
+|--------|--------------|
+| `components/files/FolderManagement/index.ts` | `CreateFolderModal` |
+| `components/images/embedded-gallery/index.ts` | `EmbeddedPhotoGallery` |
+| `components/tools/restore/index.ts` | `RestoreDialog` |
+| `components/clothing-records/index.ts` | `ClothingRecordList` |
+| `components/physical-descriptions/index.ts` | `PhysicalDescriptionList` |
+| `components/homepage/index.ts` | Section components + types (dropped `RecentChatItem`, `ProjectItem`, `CharacterCard`) |
+| `components/wardrobe/index.ts` | `OutfitSelector` + `OutfitSelection`/`PreviousOutfitSummary` types |
+| `components/files/FilePreview/index.ts` | `FilePreviewModal` |
+| `components/tools/search-replace/index.ts` | `SearchReplaceModal` |
+| `components/tools/tool-settings/index.ts` | `ToolSettingsContent`, `ProjectToolSettingsModal`, `AvailableTool` |
+| `components/characters/ai-wizard/index.ts` | `AIWizardModal` + `* from './types'` |
+| `components/tools/import-export/components/index.ts` | Dropped unused `SearchInput` re-export |
+| `components/settings/connection-profiles/index.tsx` | Dropped all named re-exports; only default export remains |
+| `components/settings/embedding-profiles/index.tsx` | Dropped all named re-exports; only default export remains |
+| `components/layout/left-sidebar/index.tsx` | Only `LeftSidebar`; convenience re-exports removed |
+
+### Dependencies Removed
+
+| Dependency | Reason |
+|------------|--------|
+| `@lexical/clipboard` | Transitive dep of `@lexical/plain-text`, `@lexical/rich-text`, `@lexical/table`; no direct import |
+| `@lexical/history` | Transitive dep of `@lexical/react`; no direct import |
+| `@quilltap/theme-storybook` | Not imported by app; lives as separate published Storybook addon in `packages/theme-storybook/` |
+| `jsdom` | Transitive dep of `jest-environment-jsdom`; no direct import |
+
+### knip.json Updates
+
+- Added `lib/background-jobs/child/child-entry.ts` to `ignore` (dynamically forked via `child_process.fork` by `processor-host.ts`; knip can't detect runtime fork)
+- Added `create-quilltap-theme` to `ignoreDependencies` (invoked via `npx create-quilltap-theme` from `packages/quilltap/lib/theme-commands.js`)
+- Added `esbuild` to `ignoreDependencies` (invoked via `npx esbuild` in `scripts/build-standalone-overlay.mjs`)
+
+---
+
+## 2026-05-06 — Wardrobe UX overhaul cleanup
+
+`components/wardrobe/wardrobe-item-card.tsx` and `components/wardrobe/wardrobe-item-list.tsx` were retired together with the Aurora-page Wardrobe-tab move. Both components were the inline wardrobe-management surface on the character edit and view pages; they have been superseded by the global wardrobe dialog (`useWardrobeDialog().open({ characterId })`), which is reachable from a Wardrobe tab on each Aurora page (and from anywhere via the sidebar). Their barrel exports were dropped from `components/wardrobe/index.ts` in the same change. Knip confirmed neither was referenced outside the barrel after the Aurora pages were rewired.
+
+---
+
+## Current Findings (2026-04-29)
+
+### Unused Exported Types
 
 #### Intentional: Plugin/Barrel Re-exports in `lib/tools/index.ts`
 
 These types are re-exported from the tools barrel file to form the public API surface for plugins and external consumers. They should be preserved.
 
-| Type | Source | Reason to Keep |
-|------|--------|----------------|
-| `BuildToolsOptions` | `lib/tools/index.ts:262` (from `plugin-tool-builder.ts`) | Plugin tool builder API |
-| `WardrobeListToolInput` | `lib/tools/index.ts:269` (from `wardrobe-list-tool.ts`) | Wardrobe tool plugin API |
-| `WardrobeListToolOutput` | `lib/tools/index.ts:270` (from `wardrobe-list-tool.ts`) | Wardrobe tool plugin API |
-| `WardrobeListItemResult` | `lib/tools/index.ts:271` (from `wardrobe-list-tool.ts`) | Wardrobe tool plugin API |
-| `WardrobeListToolContext` | `lib/tools/index.ts:278` (from wardrobe-list-handler) | Wardrobe tool plugin API |
-| `WardrobeUpdateOutfitToolInput` | `lib/tools/index.ts:284` (from wardrobe-update-outfit-tool) | Wardrobe tool plugin API |
-| `WardrobeUpdateOutfitToolOutput` | `lib/tools/index.ts:285` (from wardrobe-update-outfit-tool) | Wardrobe tool plugin API |
-| `WardrobeUpdateOutfitToolContext` | `lib/tools/index.ts:292` (from wardrobe-update-outfit-handler) | Wardrobe tool plugin API |
-| `WardrobeCreateItemToolInput` | `lib/tools/index.ts:298` (from wardrobe-create-item-tool) | Wardrobe tool plugin API |
-| `WardrobeCreateItemToolOutput` | `lib/tools/index.ts:299` (from wardrobe-create-item-tool) | Wardrobe tool plugin API |
-| `WardrobeCreateItemToolContext` | `lib/tools/index.ts:306` (from wardrobe-create-item-handler) | Wardrobe tool plugin API |
-| `ParsedTextBlock` | `lib/tools/index.ts:327` (from `text-block-parser.ts`) | Text block parser API |
-| `ShellSessionState` | `lib/tools/shell/index.ts` (from shell-session.types) | Shell tool plugin API |
-| `AsyncProcessRecord` | `lib/tools/shell/index.ts` (from shell-session.types) | Shell tool plugin API |
-| `ShellCommandRequest` | `lib/tools/shell/index.ts` (from shell-session.types) | Shell tool plugin API |
-| `ShellCommandResult` | `lib/tools/shell/index.ts` (from shell-session.types) | Shell tool plugin API |
-| `ShellAsyncCommandResult` | `lib/tools/shell/index.ts` (from shell-session.types) | Shell tool plugin API |
-| `ShellToolName` | `lib/tools/shell/index.ts` (from shell-tools) | Shell tool plugin API |
-| `ShellToolOutput` | `lib/tools/shell/shell-handler.ts` | Shell tool plugin API |
+The barrel has expanded significantly since the last report. All types re-exported via `lib/tools/index.ts` should be treated as intentional plugin API, including (but not limited to):
+
+- **Project info tool**: `ProjectInfoAction`, `ProjectInfoToolInput`, `ProjectInfoToolOutput`, `ProjectInfoResult`, `ProjectInstructionsSection`, `ProjectInfoToolContext`
+- **Request full context tool**: `RequestFullContextToolInput`, `RequestFullContextToolOutput`, `RequestFullContextToolContext`
+- **Help tools**: `HelpSearchToolInput`, `HelpSearchToolOutput`, `HelpSearchResult`, `HelpSearchToolContext`, `HelpSettingsCategory`, `HelpSettingsToolInput`, `HelpSettingsToolOutput`, `HelpSettingsToolContext`, `HelpNavigateToolInput`, `HelpNavigateToolOutput`, `HelpNavigateToolContext`
+- **RNG tool**: `RngType`, `RngToolInput`, `RngToolOutput`, `RngResult`, `RngToolContext`
+- **Whisper tool**: `WhisperToolInput`, `WhisperToolOutput`, `WhisperToolContext`
+- **State tool**: `StateOperation`, `StateContext`, `StateToolInput`, `StateToolOutput`, `StateToolContext`
+- **Self-inventory tool**: `SelfInventoryToolInput`, `SelfInventoryToolOutput`, `SelfInventoryVaultFile`, `SelfInventoryVaultSection`, `SelfInventoryMemorySection`, `SelfInventoryChatSection`, `SelfInventoryPromptSection`, `SelfInventoryLastTurnSource`, `SelfInventoryLastTurnSection`, `SelfInventoryToolContext`
+- **Shell tools**: `ShellToolName`, `ShellToolContext`, `ShellToolOutput`, `ShellCommandResult`, `ShellAsyncCommandResult`, `ShellSessionState`
+- **Wardrobe tools**: `WardrobeListToolInput`, `WardrobeListToolOutput`, `WardrobeListItemResult`, `WardrobeListToolContext`, `WardrobeUpdateOutfitToolInput`, `WardrobeUpdateOutfitToolOutput`, `WardrobeUpdateOutfitToolContext`, `WardrobeCreateItemToolInput`, `WardrobeCreateItemToolOutput`, `WardrobeCreateItemToolContext`
+- **Annotation tools**: `ReadConversationToolInput`, `ReadConversationToolOutput`, `UpsertAnnotationToolInput`, `UpsertAnnotationToolOutput`, `DeleteAnnotationToolInput`, `DeleteAnnotationToolOutput`
+- **Scriptorium search**: `SearchScriptoriumToolInput`, `SearchScriptoriumToolOutput`, `SearchScriptoriumResult`, `SearchScriptoriumToolContext`
+- **Plugin tool builder**: `BuildToolsOptions`
+- **Text block parser**: `ParsedTextBlock`
+- **Scriptorium doc editing tools**: `DocReadFileInput`, `DocReadFileOutput`, `DocWriteFileInput`, `DocWriteFileOutput`, `DocStrReplaceInput`, `DocStrReplaceOutput`, `DocInsertTextInput`, `DocInsertTextOutput`, `DocGrepInput`, `DocGrepOutput`, `DocGrepMatch`, `DocListFilesInput`, `DocListFilesOutput`, `DocFileInfo`, `DocReadFrontmatterInput`, `DocReadFrontmatterOutput`, `DocUpdateFrontmatterInput`, `DocUpdateFrontmatterOutput`, `DocReadHeadingInput`, `DocReadHeadingOutput`, `DocUpdateHeadingInput`, `DocUpdateHeadingOutput`, `DocMoveFileInput`, `DocMoveFileOutput`, `DocCopyFileInput`, `DocCopyFileOutput`, `DocDeleteFileInput`, `DocDeleteFileOutput`, `DocCreateFolderInput`, `DocCreateFolderOutput`, `DocDeleteFolderInput`, `DocDeleteFolderOutput`, `DocMoveFolderInput`, `DocMoveFolderOutput`, `DocWriteBlobInput`, `DocWriteBlobOutput`, `DocReadBlobInput`, `DocReadBlobOutput`, `DocListBlobsInput`, `DocListBlobsOutput`, `DocBlobSummary`, `DocDeleteBlobInput`, `DocDeleteBlobOutput`, `DocOpenDocumentInput`, `DocOpenDocumentOutput`, `DocCloseDocumentInput`, `DocCloseDocumentOutput`, `DocFocusInput`, `DocFocusOutput`, `DocEditToolContext`
+
+**Status**: Intentional. All are plugin/barrel re-exports forming the public tool API.
 
 #### Intentional: Source-Level Exports (used internally or for type safety)
 
@@ -59,14 +119,19 @@ These types are re-exported from the tools barrel file to form the public API su
 | `ToolContext` | `lib/tools/registry.ts:26` | Core tool registry interface, referenced by `ToolDefinition.handler` |
 | `DisplacementRepos` | `lib/wardrobe/outfit-displacement.ts:20` | Used as parameter type in two functions in same file; exported for testability |
 | `RequestFullContextToolInput` | `lib/tools/request-full-context-tool.ts:14` | Tool input type; follows tool type convention |
-
-#### Potentially Actionable
-
-| Type | Location | Notes |
-|------|----------|-------|
-| `BuildToolsOptions` | `lib/tools/plugin-tool-builder.ts:123` | Required by barrel re-export in `lib/tools/index.ts`. Not actionable. |
-| `ParsedTextBlock` | `lib/tools/text-block-parser.ts:24` | Required by barrel re-export in `lib/tools/index.ts`. Not actionable. |
-| `ShellCommandRequest` | `lib/tools/shell/shell-session.types.ts:48` | Imported by `shell-handler.ts` and re-exported from barrel. Not actionable. |
+| `MemorySearchToolInput` | `lib/tools/memory-search-tool.ts:13` | Used internally as type guard parameter; exported for testability |
+| `MemorySearchResult` | `lib/tools/memory-search-tool.ts:22` | Used internally in `MemorySearchToolOutput`; exported for testability |
+| `MemorySearchToolOutput` | `lib/tools/memory-search-tool.ts:36` | Tool output type; exported following tool type convention |
+| `ProjectFileInfo` | `lib/tools/project-info-tool.ts:41` | Used as return type within the file; exported for testability |
+| `SelfInventorySemanticMemoryItem` | `lib/tools/self-inventory-tool.ts:61` | Used in `SelfInventoryLoadedMemoriesSection` within the same file |
+| `SelfInventoryInterCharacterMemoryItem` | `lib/tools/self-inventory-tool.ts:68` | Used in `SelfInventoryLoadedMemoriesSection` within the same file |
+| `ProposedWardrobeItem` | `lib/wardrobe/image-analysis.ts:29` | Used as parameter/return type within the file; exported for testability |
+| `ImageAnalysisResult` | `lib/wardrobe/image-analysis.ts:39` | Return type of `analyzeImageForWardrobe()`; exported for testability |
+| `ImageAnalysisParams` | `lib/wardrobe/image-analysis.ts:48` | Parameter type; exported for testability |
+| `OutfitSlotValues` | `lib/wardrobe/outfit-description.ts:18` | Used via dynamic import qualifier in `lib/image-gen/appearance-resolution.ts:101`; knip cannot detect dynamic import usage |
+| `ShellToolOutput` (shell-handler.ts) | `lib/tools/shell/shell-handler.ts:58` | Duplicate definition alongside barrel re-export; intentional for handler-local type safety |
+| `ShellCommandRequest` (shell-session.types.ts) | `lib/tools/shell/shell-session.types.ts:48` | Imported by `shell-handler.ts`; re-exported from shell barrel |
+| `AsyncProcessRecord` | `lib/tools/shell/index.ts:12` | Part of shell session types barrel; available to plugins |
 
 ### Unused Enum Members (3)
 
@@ -91,6 +156,42 @@ Knip flags ~39 components/modules that have both named and default exports. This
 Knip suggests removing `packages/**` and `plugins/**` from `knip.json` ignore list. These directories contain independently published npm packages and dynamically loaded plugins respectively, and must remain ignored.
 
 **Status**: No action needed. These are correctly configured false-positive exclusions.
+
+---
+
+## Cleanup Completed (2026-04-29)
+
+### Local-Only Types Unexported
+
+| Location | Item | Reason |
+|----------|------|--------|
+| `lib/help-guide/categories.ts` | `HelpCategory` | Only used to type `HELP_CATEGORIES` within the same file; no external consumer references it |
+| `lib/file-storage/project-store-bridge.ts` | `ProjectStoreTarget` | Only used as the local return type of `getProjectDocumentStore()` |
+| `lib/file-storage/project-store-bridge.ts` | `WriteProjectFileInput` | Only used as the local parameter type of `writeProjectFileToMountStore()` |
+| `lib/file-storage/project-store-bridge.ts` | `WriteProjectFileResult` | Only used as the local return type of `writeProjectFileToMountStore()` |
+
+### Barrel Exports Removed
+
+| Location | Item | Reason |
+|----------|------|--------|
+| `components/wardrobe/index.ts` | `GiftWardrobeItemModal` | Re-export was unused; consumers import the component directly from `gift-wardrobe-item-modal.tsx` |
+| `components/wardrobe/index.ts` | `ImportFromImageModal` | Re-export was unused; consumers import the component directly from `import-from-image-modal.tsx` |
+
+---
+
+## Cleanup Completed (2026-04-27)
+
+### Functions Removed
+
+| Location | Item | Reason |
+|----------|------|--------|
+| `lib/services/chat-message/recovery.service.ts` | `attemptTokenLimitRecovery` (deprecated alias) | Never imported anywhere; only `attemptRequestLimitRecovery` is used |
+
+### Types Unexported (kept as internal)
+
+| Location | Item | Reason |
+|----------|------|--------|
+| `lib/tools/text-block-parser.ts` | `ToolCallRequest` | Only used locally within the file as the return type of `convertTextBlockToToolCallRequest`; no external consumer needed the type directly |
 
 ---
 

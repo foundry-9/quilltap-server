@@ -14,6 +14,7 @@ import Avatar from '@/components/ui/Avatar'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import type { Project } from '../types'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
+import { CloseIcon } from '@/components/ui/icons'
 
 interface CharactersCardProps {
   project: Project
@@ -27,14 +28,6 @@ function UsersIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-    </svg>
-  )
-}
-
-function CloseIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
     </svg>
   )
 }
@@ -78,7 +71,7 @@ export function CharactersCard({ project, onRemoveCharacter, onToggleAllowAnyCha
           {/* Allow Any Character Toggle */}
           <div className="flex items-center justify-between px-4 py-3 qt-bg-muted">
             <div>
-              <h4 className="text-sm font-medium text-foreground">Allow Any Character</h4>
+              <h4 className="qt-label text-foreground">Allow Any Character</h4>
               <p className="qt-text-xs qt-text-secondary">
                 {project.allowAnyCharacter
                   ? 'Any character can join project chats.'

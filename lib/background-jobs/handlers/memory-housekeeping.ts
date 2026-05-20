@@ -27,11 +27,6 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
     // even when auto-housekeeping is disabled at the user level. Only the
     // automatic triggers (watermark + scheduled) should bail here.
     if (payload.reason && payload.reason !== 'manual') {
-      logger.debug('[Housekeeping] Auto-housekeeping disabled for user — skipping automatic run', {
-        jobId: job.id,
-        userId: job.userId,
-        reason: payload.reason,
-      });
       return;
     }
   }

@@ -16,7 +16,8 @@ import { resolveDangerousContentSettings } from '@/lib/services/dangerous-conten
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { SceneStateTrackingPayload } from '../queue-service';
-import { describeOutfit } from '@/lib/wardrobe/outfit-description';
+import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description';
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 
 const logger = createServiceLogger('SceneStateTrackingHandler');
 
@@ -106,9 +107,6 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
         lastUpdateMessageCount = validated.data.updatedAtMessageCount;
       }
     } catch {
-      logger.debug('[SceneStateTracking] Failed to parse existing scene state, treating as first turn', {
-        jobId: job.id, chatId: payload.chatId,
-      });
     }
   }
 
@@ -123,7 +121,6 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     : allMessages.slice(-20); // First turn: use last 20 messages
 
   if (recentMessages.length === 0) {
-    logger.debug('[SceneStateTracking] No messages to process, skipping', { jobId: job.id, chatId: payload.chatId });
     return;
   }
 
@@ -178,24 +175,17 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
   const characterBaselines = await Promise.all(presentCharacters.map(async (char) => {
     let clothingDescription = '';
 
-    // Load equipped wardrobe items for clothing description
+    // Load equipped wardrobe items for clothing description. Slots are
+    // arrays-per-slot; composites are expanded to leaves before describing.
     try {
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       if (equippedSlots) {
-        const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
-        const items = equippedItemIds.length > 0 ? await repos.wardrobe.findByIds(equippedItemIds) : [];
-        const itemsMap = new Map(items.map(item => [item.id, item]));
-        const findTitle = (slot: string): string | null => {
-          const itemId = equippedSlots[slot as keyof typeof equippedSlots];
-          if (!itemId) return null;
-          const item = itemsMap.get(itemId);
-          return item ? (item.description ? `${item.title} (${item.description})` : item.title) : null;
-        };
+        const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots);
         clothingDescription = describeOutfit({
-          top: findTitle('top'),
-          bottom: findTitle('bottom'),
-          footwear: findTitle('footwear'),
-          accessories: findTitle('accessories'),
+          top: decorateOutfitItems(resolved.leafItemsBySlot.top),
+          bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom),
+          footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear),
+          accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories),
         });
       }
     } catch (error) {

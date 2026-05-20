@@ -87,8 +87,18 @@ interface MockRepos {
     update: jest.Mock;
     delete: jest.Mock;
   };
+  docMountFileLinks: {
+    findByMountPointAndPath: jest.Mock;
+    findByMountPointId: jest.Mock;
+    update: jest.Mock;
+    deleteWithGC: jest.Mock;
+    linkDocumentContent: jest.Mock;
+    linkBlobContent: jest.Mock;
+    linkFilesystemFile: jest.Mock;
+  };
   docMountChunks: {
     deleteByFileId: jest.Mock;
+    deleteByLinkId: jest.Mock;
   };
   docMountBlobs: {
     listByMountPoint: jest.Mock;
@@ -119,8 +129,30 @@ function createMockRepos(): MockRepos {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    docMountFileLinks: {
+      findByMountPointAndPath: jest.fn().mockResolvedValue(null),
+      findByMountPointId: jest.fn().mockResolvedValue([]),
+      update: jest.fn(),
+      deleteWithGC: jest.fn().mockResolvedValue({ fileId: null, fileGC: false }),
+      linkDocumentContent: jest.fn().mockImplementation(async (input) => ({
+        link: { id: 'link-mock', fileId: 'file-mock', ...input },
+        file: { id: 'file-mock' },
+        documentId: 'doc-mock',
+      })),
+      linkBlobContent: jest.fn().mockImplementation(async (input) => ({
+        link: { id: 'link-mock', fileId: 'file-mock', ...input },
+        file: { id: 'file-mock' },
+        blobId: 'blob-mock',
+      })),
+      linkFilesystemFile: jest.fn().mockImplementation(async (input) => ({
+        id: 'link-mock',
+        fileId: 'file-mock',
+        ...input,
+      })),
+    },
     docMountChunks: {
       deleteByFileId: jest.fn(),
+      deleteByLinkId: jest.fn(),
     },
     docMountBlobs: {
       listByMountPoint: jest.fn().mockResolvedValue([]),
@@ -258,23 +290,19 @@ describe('database-store folder operations', () => {
 
       repos.docMountFolders.findByMountPointAndPath.mockResolvedValue(mockFolder);
       repos.docMountFolders.findChildren.mockResolvedValue([]);
-      repos.docMountDocuments.findByMountPointId.mockResolvedValue([
+      // folderHasContents walks docMountFileLinks post-refactor; the test
+      // simulates one document at this folder.
+      repos.docMountFileLinks.findByMountPointId.mockResolvedValue([
         {
-          id: 'doc-001',
+          id: 'link-001',
+          fileId: 'file-001',
           folderId: 'folder-001',
           relativePath: 'data/note.md',
           mountPointId: MOUNT_ID,
-          content: 'test',
-          contentSha256: 'abc',
-          plainTextLength: 4,
-          lastModified: new Date().toISOString(),
           fileName: 'note.md',
           fileType: 'markdown',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
         },
       ]);
-      repos.docMountFiles.findByMountPointId.mockResolvedValue([]);
 
       const error = await deleteDatabaseFolder(MOUNT_ID, 'data').catch(e => e);
       expect(error).toBeInstanceOf(DatabaseStoreError);
@@ -375,19 +403,16 @@ describe('database-store folder operations', () => {
         updatedAt: new Date().toISOString(),
       };
 
-      const document = {
-        id: 'doc-001',
+      // After the content/link split, move walks the link table directly
+      // and rewrites each link's relativePath + folderId.
+      const link = {
+        id: 'link-001',
+        fileId: 'file-001',
         folderId: 'folder-src',
         relativePath: 'old/note.md',
         mountPointId: MOUNT_ID,
-        content: 'test',
-        contentSha256: 'abc',
-        plainTextLength: 4,
-        lastModified: new Date().toISOString(),
         fileName: 'note.md',
         fileType: 'markdown',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
       };
 
       repos.docMountFolders.findByMountPointAndPath.mockImplementation(
@@ -399,15 +424,13 @@ describe('database-store folder operations', () => {
       );
 
       repos.docMountFolders.findByMountPointId.mockResolvedValue([sourceFolder]);
-      repos.docMountDocuments.findByMountPointId.mockResolvedValue([document]);
-      repos.docMountFiles.findByMountPointId.mockResolvedValue([]);
-      repos.docMountBlobs.listByMountPoint.mockResolvedValue([]);
+      repos.docMountFileLinks.findByMountPointId.mockResolvedValue([link]);
 
       await moveDatabaseFolder(MOUNT_ID, 'old', 'new');
 
-      // Verify document was updated
-      expect(repos.docMountDocuments.update).toHaveBeenCalledWith(
-        'doc-001',
+      // Verify the link row was updated
+      expect(repos.docMountFileLinks.update).toHaveBeenCalledWith(
+        'link-001',
         expect.objectContaining({
           relativePath: 'new/note.md',
           folderId: null,
@@ -435,23 +458,16 @@ describe('database-store folder operations', () => {
         updatedAt: new Date().toISOString(),
       };
 
-      const blob = {
-        id: 'blob-001',
-        mountPointId: MOUNT_ID,
+      // Blob link in the source folder. Post-refactor blobs are content-
+      // addressable; the path moves with the link, not the blob row.
+      const blobLink = {
+        id: 'link-blob',
+        fileId: 'file-blob',
+        folderId: 'folder-src',
         relativePath: 'uploads/portrait.webp',
-        originalFileName: 'portrait.png',
-        originalMimeType: 'image/png',
-        storedMimeType: 'image/webp',
-        sizeBytes: 1024,
-        sha256: 'a'.repeat(64),
-        description: '',
-        descriptionUpdatedAt: null,
-        extractedText: null,
-        extractedTextSha256: null,
-        extractionStatus: 'none' as const,
-        extractionError: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        mountPointId: MOUNT_ID,
+        fileName: 'portrait.webp',
+        fileType: 'blob',
       };
 
       repos.docMountFolders.findByMountPointAndPath.mockImplementation(
@@ -463,15 +479,16 @@ describe('database-store folder operations', () => {
       );
 
       repos.docMountFolders.findByMountPointId.mockResolvedValue([sourceFolder]);
-      repos.docMountDocuments.findByMountPointId.mockResolvedValue([]);
-      repos.docMountFiles.findByMountPointId.mockResolvedValue([]);
-      repos.docMountBlobs.listByMountPoint.mockResolvedValue([blob]);
+      repos.docMountFileLinks.findByMountPointId.mockResolvedValue([blobLink]);
 
       await moveDatabaseFolder(MOUNT_ID, 'uploads', 'archive');
 
-      expect(repos.docMountBlobs.updatePath).toHaveBeenCalledWith(
-        'blob-001',
-        'archive/portrait.webp'
+      expect(repos.docMountFileLinks.update).toHaveBeenCalledWith(
+        'link-blob',
+        expect.objectContaining({
+          relativePath: 'archive/portrait.webp',
+          fileName: 'portrait.webp',
+        })
       );
     });
 
@@ -524,8 +541,7 @@ describe('database-store folder operations', () => {
 
   describe('writeDatabaseDocument', () => {
     it('auto-creates parent folders when writing', async () => {
-      repos.docMountDocuments.findByMountPointAndPath.mockResolvedValue(null);
-      repos.docMountFiles.findByMountPointAndPath.mockResolvedValue(null);
+      repos.docMountFileLinks.findByMountPointAndPath.mockResolvedValue(null);
 
       let folderCreateCount = 0;
       repos.docMountFolders.findByMountPointAndPath.mockResolvedValue(null);
@@ -539,16 +555,13 @@ describe('database-store folder operations', () => {
         };
       });
 
-      repos.docMountDocuments.create.mockResolvedValue(undefined);
-      repos.docMountFiles.create.mockResolvedValue(undefined);
-
       await writeDatabaseDocument(MOUNT_ID, 'a/b/note.md', 'hello');
 
       // Should have created 'a' and 'a/b' folders
       expect(repos.docMountFolders.create).toHaveBeenCalledTimes(2);
 
-      // Should have created the document
-      expect(repos.docMountDocuments.create).toHaveBeenCalledWith(
+      // Should have written the document via the new high-level helper
+      expect(repos.docMountFileLinks.linkDocumentContent).toHaveBeenCalledWith(
         expect.objectContaining({
           relativePath: 'a/b/note.md',
           folderId: 'folder-2',
@@ -557,14 +570,11 @@ describe('database-store folder operations', () => {
     });
 
     it('sets folderId to null for root-level documents', async () => {
-      repos.docMountDocuments.findByMountPointAndPath.mockResolvedValue(null);
-      repos.docMountFiles.findByMountPointAndPath.mockResolvedValue(null);
-      repos.docMountDocuments.create.mockResolvedValue(undefined);
-      repos.docMountFiles.create.mockResolvedValue(undefined);
+      repos.docMountFileLinks.findByMountPointAndPath.mockResolvedValue(null);
 
       await writeDatabaseDocument(MOUNT_ID, 'note.md', 'hello');
 
-      expect(repos.docMountDocuments.create).toHaveBeenCalledWith(
+      expect(repos.docMountFileLinks.linkDocumentContent).toHaveBeenCalledWith(
         expect.objectContaining({
           relativePath: 'note.md',
           folderId: null,
@@ -579,24 +589,19 @@ describe('database-store folder operations', () => {
 
   describe('backfillFolderRowsForMountPoint', () => {
     it('creates folder rows from existing documents', async () => {
-      const document = {
-        id: 'doc-001',
+      // After the content/link split, folder membership lives on links;
+      // backfill walks the link table once for docs and blobs alike.
+      const link = {
+        id: 'link-001',
+        fileId: 'file-001',
         folderId: null,
         relativePath: 'a/b/note.md',
         mountPointId: MOUNT_ID,
-        content: 'test',
-        contentSha256: 'abc',
-        plainTextLength: 4,
-        lastModified: new Date().toISOString(),
         fileName: 'note.md',
         fileType: 'markdown',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
       };
 
-      repos.docMountDocuments.findByMountPointId.mockResolvedValue([document]);
-      repos.docMountFiles.findByMountPointId.mockResolvedValue([]);
-      repos.docMountBlobs.listByMountPoint.mockResolvedValue([]);
+      repos.docMountFileLinks.findByMountPointId.mockResolvedValue([link]);
 
       let folderCreateCount = 0;
       repos.docMountFolders.findByMountPointAndPath.mockResolvedValue(null);
@@ -614,8 +619,8 @@ describe('database-store folder operations', () => {
 
       expect(result.foldersCreated).toBeGreaterThan(0);
       expect(result.filesUpdated).toBe(1);
-      expect(repos.docMountDocuments.update).toHaveBeenCalledWith(
-        'doc-001',
+      expect(repos.docMountFileLinks.update).toHaveBeenCalledWith(
+        'link-001',
         expect.objectContaining({
           folderId: expect.any(String),
         })
@@ -623,40 +628,28 @@ describe('database-store folder operations', () => {
     });
 
     it('creates multiple folder levels for nested documents', async () => {
-      const docs = [
+      const links = [
         {
-          id: 'doc-1',
+          id: 'link-1',
+          fileId: 'file-1',
           folderId: null,
           relativePath: 'x/y/z/file1.md',
           mountPointId: MOUNT_ID,
-          content: 'test',
-          contentSha256: 'abc',
-          plainTextLength: 4,
-          lastModified: new Date().toISOString(),
           fileName: 'file1.md',
           fileType: 'markdown',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
         },
         {
-          id: 'doc-2',
+          id: 'link-2',
+          fileId: 'file-2',
           folderId: null,
           relativePath: 'x/y/file2.md',
           mountPointId: MOUNT_ID,
-          content: 'test',
-          contentSha256: 'def',
-          plainTextLength: 4,
-          lastModified: new Date().toISOString(),
           fileName: 'file2.md',
           fileType: 'markdown',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
         },
       ];
 
-      repos.docMountDocuments.findByMountPointId.mockResolvedValue(docs);
-      repos.docMountFiles.findByMountPointId.mockResolvedValue([]);
-      repos.docMountBlobs.listByMountPoint.mockResolvedValue([]);
+      repos.docMountFileLinks.findByMountPointId.mockResolvedValue(links);
 
       let folderCounter = 0;
       repos.docMountFolders.findByMountPointAndPath.mockResolvedValue(null);
@@ -672,8 +665,6 @@ describe('database-store folder operations', () => {
 
       const result = await backfillFolderRowsForMountPoint(MOUNT_ID);
 
-      // Creates 'x' and 'x/y' (ensureFolderPath is called for both)
-      // 'x/y/z' is created for the first doc, then 'x/y' is shared for the second doc
       expect(result.foldersCreated).toBeGreaterThanOrEqual(2);
       expect(result.filesUpdated).toBe(2);
     });

@@ -84,7 +84,7 @@ export function ScopeSelectionStep({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="qt-text-primary text-lg font-medium mb-2">
+        <h3 className="qt-text-section mb-2">
           Select Scope
         </h3>
         <p className="qt-text-secondary text-sm">

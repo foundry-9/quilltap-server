@@ -489,25 +489,25 @@ export default function PluginsTab() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div>
               <p className="qt-text-label">Total Plugins</p>
-              <p className="text-2xl font-bold text-primary">{stats.total}</p>
+              <p className="qt-heading-2 text-primary">{stats.total}</p>
             </div>
             <div>
               <p className="qt-text-label">Enabled</p>
-              <p className="text-2xl font-bold qt-text-success">{stats.enabled}</p>
+              <p className="qt-heading-2 qt-text-success">{stats.enabled}</p>
             </div>
             <div>
               <p className="qt-text-label">Upgrades</p>
-              <p className={`text-2xl font-bold ${availableUpgrades.length > 0 ? 'qt-text-warning' : 'qt-text-secondary'}`}>
+              <p className={`qt-heading-2 ${availableUpgrades.length > 0 ? 'qt-text-warning' : 'qt-text-secondary'}`}>
                 {availableUpgrades.length}
               </p>
             </div>
             <div>
               <p className="qt-text-label">Disabled</p>
-              <p className="text-2xl font-bold qt-text-secondary">{stats.disabled}</p>
+              <p className="qt-heading-2 qt-text-secondary">{stats.disabled}</p>
             </div>
             <div>
               <p className="qt-text-label">Errors</p>
-              <p className={`text-2xl font-bold ${stats.errors > 0 ? 'qt-text-destructive' : 'qt-text-secondary'}`}>
+              <p className={`qt-heading-2 ${stats.errors > 0 ? 'qt-text-destructive' : 'qt-text-secondary'}`}>
                 {stats.errors}
               </p>
             </div>
@@ -520,7 +520,7 @@ export default function PluginsTab() {
         <div className="flex gap-4">
           <button
             onClick={() => setActiveTab('installed')}
-            className={`pb-2 px-1 text-sm font-medium transition-colors relative ${
+            className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'installed'
                 ? 'text-foreground'
                 : 'qt-text-secondary hover:text-foreground'
@@ -533,7 +533,7 @@ export default function PluginsTab() {
           </button>
           <button
             onClick={() => setActiveTab('upgrades')}
-            className={`pb-2 px-1 text-sm font-medium transition-colors relative ${
+            className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'upgrades'
                 ? 'text-foreground'
                 : 'qt-text-secondary hover:text-foreground'
@@ -546,7 +546,7 @@ export default function PluginsTab() {
           </button>
           <button
             onClick={() => setActiveTab('browse')}
-            className={`pb-2 px-1 text-sm font-medium transition-colors relative ${
+            className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'browse'
                 ? 'text-foreground'
                 : 'qt-text-secondary hover:text-foreground'
@@ -564,7 +564,7 @@ export default function PluginsTab() {
       {activeTab === 'installed' && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-foreground mb-2">
+            <h2 className="qt-heading-4 mb-2">
               Plugin Management
             </h2>
             <p className="qt-text-small">
@@ -663,7 +663,7 @@ export default function PluginsTab() {
         <div className="space-y-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-foreground mb-2">
+              <h2 className="qt-heading-4 mb-2">
                 Available Upgrades
               </h2>
               <p className="qt-text-small">
@@ -852,7 +852,7 @@ export default function PluginsTab() {
       {activeTab === 'browse' && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-foreground mb-2">
+            <h2 className="qt-heading-4 mb-2">
               Browse npm Plugins
             </h2>
             <p className="qt-text-small">

@@ -20,7 +20,7 @@ jest.mock('@/lib/templates/processor', () => ({
 }))
 
 jest.mock('@/lib/chat/context/system-prompt-builder', () => ({
-  buildIdentityReinforcement: (charName: string, userName: string) =>
+  buildIdentityReinforcement: (charName: string) =>
     `[Identity reinforcement for ${charName}]`,
 }))
 

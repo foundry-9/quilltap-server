@@ -60,7 +60,9 @@ export interface Character {
   id: string
   name: string
   title?: string | null
+  identity?: string | null
   description?: string | null
+  manifesto?: string | null
   personality?: string | null
   scenarios?: CharacterScenario[]
   firstMessage?: string | null

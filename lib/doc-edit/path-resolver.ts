@@ -147,7 +147,6 @@ export async function resolveDocEditPath(
   relativePath: string,
   context: PathResolutionContext
 ): Promise<ResolvedPath> {
-  logger.debug(`Resolving ${scope} path: ${relativePath}`);
 
   // Security check: reject traversal attempts
   if (hasTraversalSegments(relativePath)) {
@@ -196,6 +195,11 @@ function describeCharacters(context: PathResolutionContext): string {
  * character's own vault (if any). The character vault is always accessible
  * to the LLM acting as that character, even when the vault is not linked
  * to the active project.
+ *
+ * The instance-wide "Quilltap General" mount (when provisioned) is always
+ * included so every character can reach its `Scenarios/` library and any
+ * other curated content kept at the household level — regardless of which
+ * project the chat lives in, if any.
  */
 async function collectAccessibleMountPointIds(
   context: PathResolutionContext
@@ -221,6 +225,19 @@ async function collectAccessibleMountPointIds(
     if (character?.characterDocumentMountPointId) {
       ids.add(character.characterDocumentMountPointId);
     }
+  }
+
+  // Quilltap General is always accessible to every character. Lazy-imported
+  // to keep the path resolver free of an instance-settings dependency at load
+  // time.
+  try {
+    const { getGeneralMountPointId } = await import('@/lib/instance-settings');
+    const generalMountPointId = await getGeneralMountPointId();
+    if (generalMountPointId) ids.add(generalMountPointId);
+  } catch (error) {
+    logger.warn('Failed to look up Quilltap General mount; continuing without it', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   return Array.from(ids);
@@ -254,9 +271,6 @@ async function resolveDocumentStorePath(
   const accessibleIds = await collectAccessibleMountPointIds(context);
 
   if (accessibleIds.length === 0) {
-    logger.debug(
-      `No mount points accessible for project=${context.projectId ?? 'none'} characters=${describeCharacters(context)}`,
-    );
     throw new PathResolutionError(
       `No document stores accessible in this context`,
       'ACCESS_DENIED'
@@ -308,7 +322,6 @@ async function resolveDocumentStorePath(
   // helpers need comes from (mountPointId, relativePath); callers dispatch
   // on `mountType` to decide whether to read from disk or from the DB.
   if (mountPoint.mountType === 'database') {
-    logger.debug(`Resolved database-backed document_store path: ${relativePath}`);
     return {
       absolutePath: '',
       scope: 'document_store',
@@ -338,8 +351,6 @@ async function resolveDocumentStorePath(
     );
   }
 
-  logger.debug(`Resolved document_store path: ${relativePath} -> ${realPath}`);
-
   return {
     absolutePath: realPath,
     scope: 'document_store',
@@ -352,7 +363,15 @@ async function resolveDocumentStorePath(
 }
 
 /**
- * Resolve a path within a project's file storage
+ * Resolve a path within a project's file storage.
+ *
+ * Projects own a "project-official" document store (see
+ * `projects.officialMountPointId` and the `convert-project-files-to-document-stores`
+ * migration). When set, `scope: 'project'` is just an alias for that mount —
+ * which is what Prospero advertises to the LLM. We dispatch through the mount
+ * point so reads/writes land in the same place the Scriptorium UI sees, and
+ * fall back to the legacy on-disk `<filesDir>/<projectId>/` layout only when
+ * no official mount has been provisioned yet.
  */
 async function resolveProjectPath(
   relativePath: string,
@@ -363,6 +382,55 @@ async function resolveProjectPath(
     throw new PathResolutionError(
       'Project ID is required for project scope',
       'MISSING_CONTEXT'
+    );
+  }
+
+  const repos = getRepositories();
+  const project = await repos.projects.findById(context.projectId);
+  const officialMountPointId = project?.officialMountPointId ?? null;
+
+  if (officialMountPointId) {
+    const mountPoint = await repos.docMountPoints.findById(officialMountPointId);
+    if (mountPoint && mountPoint.enabled) {
+      if (mountPoint.mountType === 'database') {
+        return {
+          absolutePath: '',
+          scope: 'project',
+          mountPointId: mountPoint.id,
+          mountPointName: mountPoint.name,
+          mountType: 'database',
+          basePath: '',
+          relativePath,
+        };
+      }
+
+      const baseDir = mountPoint.basePath;
+      const joinedPath = path.join(baseDir, relativePath);
+      const [realBase, realPath] = await Promise.all([
+        safeRealpath(baseDir),
+        safeRealpath(joinedPath),
+      ]);
+      if (!verifyPathIsWithinBase(realPath, realBase)) {
+        logger.warn(
+          `Path resolution escaped official project mount: ${relativePath} -> ${realPath} (base: ${realBase})`
+        );
+        throw new PathResolutionError(
+          `Path escapes project boundary`,
+          'TRAVERSAL_ATTEMPT'
+        );
+      }
+      return {
+        absolutePath: realPath,
+        scope: 'project',
+        mountPointId: mountPoint.id,
+        mountPointName: mountPoint.name,
+        mountType: mountPoint.mountType,
+        basePath: realBase,
+        relativePath,
+      };
+    }
+    logger.warn(
+      `Project ${context.projectId} has officialMountPointId=${officialMountPointId} but mount point is missing or disabled — falling back to legacy filesystem path`
     );
   }
 
@@ -384,8 +452,6 @@ async function resolveProjectPath(
       'TRAVERSAL_ATTEMPT'
     );
   }
-
-  logger.debug(`Resolved project path: ${relativePath} -> ${realPath}`);
 
   return {
     absolutePath: realPath,
@@ -420,8 +486,6 @@ async function resolveGeneralPath(
       'TRAVERSAL_ATTEMPT'
     );
   }
-
-  logger.debug(`Resolved general path: ${relativePath} -> ${realPath}`);
 
   return {
     absolutePath: realPath,
@@ -484,8 +548,6 @@ export async function readFileWithMtime(
       fs.readFile(absolutePath, 'utf-8'),
       fs.stat(absolutePath),
     ]);
-
-    logger.debug(`Read file: ${absolutePath} (${stats.size} bytes)`);
 
     return {
       content,
@@ -562,8 +624,6 @@ export async function writeFileWithMtimeCheck(
     const stats = await fs.stat(absolutePath);
     const mtime = stats.mtime.getTime();
 
-    logger.debug(`Wrote file: ${absolutePath} (${content.length} bytes)`);
-
     return { mtime };
   } catch (error) {
     if (error instanceof Error) {
@@ -601,9 +661,6 @@ export async function getAccessibleMountPoints(
     });
 
     if (ids.length === 0) {
-      logger.debug(
-        `No mount points accessible for project=${projectId ?? 'none'} character=${characterId ?? 'none'}`,
-      );
       return [];
     }
 
@@ -619,10 +676,6 @@ export async function getAccessibleMountPoints(
         });
       }
     }
-
-    logger.debug(
-      `Found ${mountPoints.length} accessible mount points for project=${projectId ?? 'none'} character=${characterId ?? 'none'} peers=${extraCharacterIds?.length ?? 0}`,
-    );
 
     return mountPoints;
   } catch (error) {
@@ -675,7 +728,6 @@ export function isTextFile(filePath: string): boolean {
   const isAllowed = allowedExtensions.has(ext);
 
   if (!isAllowed) {
-    logger.debug(`File rejected as non-text: ${filePath} (extension: ${ext})`);
   }
 
   return isAllowed;

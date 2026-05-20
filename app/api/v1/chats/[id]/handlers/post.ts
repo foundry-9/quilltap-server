@@ -17,6 +17,7 @@ import {
   handleAddParticipantAction,
   handleUpdateParticipantAction,
   handleRemoveParticipantAction,
+  handleRebuildSystemPromptAction,
   handleTurnAction,
   handleSetAvatar,
   handleRemoveAvatar,
@@ -24,6 +25,7 @@ import {
   handleAddToolResult,
   handleUpdateToolSettings,
   handleQueueMemories,
+  handleExtractMemoriesDryRun,
   handleRng,
   handleRunTool,
   handleToggleAgentMode,
@@ -41,6 +43,8 @@ import {
   handleWriteDocument,
   handleRenameDocument,
   handleDeleteDocument,
+  handleInsertAnnouncement,
+  handleAnnouncementPreview,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -55,11 +59,13 @@ const CHAT_POST_ACTIONS = [
   'add-participant',
   'update-participant',
   'remove-participant',
+  'rebuild-system-prompt',
   'bulk-reattribute',
   'set-avatar',
   'remove-avatar',
   'add-tool-result',
   'queue-memories',
+  'extract-memories-dry-run',
   'update-tool-settings',
   'rng',
   'run-tool',
@@ -78,6 +84,8 @@ const CHAT_POST_ACTIONS = [
   'write-document',
   'rename-document',
   'delete-document',
+  'announcement',
+  'announcement-preview',
 ] as const;
 
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
@@ -114,11 +122,13 @@ export async function handlePost(
     'add-participant': () => handleAddParticipantAction(req, chatId, chat, ctx),
     'update-participant': () => handleUpdateParticipantAction(req, chatId, ctx),
     'remove-participant': () => handleRemoveParticipantAction(req, chatId, chat, ctx),
+    'rebuild-system-prompt': () => handleRebuildSystemPromptAction(req, chatId, ctx),
     'bulk-reattribute': () => handleBulkReattribute(req, chatId, chat, ctx),
     'set-avatar': () => handleSetAvatar(req, chatId, ctx),
     'remove-avatar': () => handleRemoveAvatar(req, chatId, ctx),
     'add-tool-result': () => handleAddToolResult(req, chatId, ctx),
     'queue-memories': () => handleQueueMemories(req, chatId, chat, ctx),
+    'extract-memories-dry-run': () => handleExtractMemoriesDryRun(req, chatId, chat, ctx),
     'update-tool-settings': () => handleUpdateToolSettings(req, chatId, ctx),
     rng: () => handleRng(req, chatId, ctx),
     'run-tool': () => handleRunTool(req, chatId, ctx),
@@ -137,6 +147,8 @@ export async function handlePost(
     'write-document': () => handleWriteDocument(req, chatId, ctx),
     'rename-document': () => handleRenameDocument(req, chatId, ctx),
     'delete-document': () => handleDeleteDocument(chatId, ctx),
+    announcement: () => handleInsertAnnouncement(req, chatId, ctx),
+    'announcement-preview': () => handleAnnouncementPreview(req, chatId, ctx),
   };
 
   return actionHandlers[action]();

@@ -50,7 +50,9 @@ export const SQLITE_TABLES = [
       "userId" TEXT NOT NULL,
       "name" TEXT NOT NULL,
       "title" TEXT,
+      "identity" TEXT,
       "description" TEXT,
+      "manifesto" TEXT,
       "personality" TEXT,
       "scenario" TEXT,
       "firstMessage" TEXT,
@@ -100,6 +102,11 @@ export const SQLITE_TABLES = [
       "messageCount" INTEGER DEFAULT 0,
       "lastMessageAt" TEXT,
       "lastRenameCheckInterchange" INTEGER DEFAULT 0,
+      "compactionGeneration" INTEGER DEFAULT 0,
+      "lastSummaryTurn" INTEGER DEFAULT 0,
+      "lastSummaryTokens" INTEGER DEFAULT 0,
+      "lastFullRebuildTurn" INTEGER DEFAULT 0,
+      "summaryAnchorMessageIds" TEXT DEFAULT '[]',
       "isPaused" INTEGER DEFAULT 0,
       "isManuallyRenamed" INTEGER DEFAULT 0,
       "impersonatingParticipantIds" TEXT DEFAULT '[]',
@@ -142,6 +149,28 @@ export const SQLITE_TABLES = [
     indexes: [
       `CREATE INDEX IF NOT EXISTS "idx_chat_documents_chatId" ON "chat_documents" ("chatId")`,
       `CREATE UNIQUE INDEX IF NOT EXISTS "idx_chat_documents_unique" ON "chat_documents" ("chatId", "filePath", "scope", "mountPoint")`,
+    ],
+  },
+  // Terminal sessions (in-chat terminal feature: session metadata and transcripts)
+  {
+    name: 'terminal_sessions',
+    sql: `CREATE TABLE IF NOT EXISTS "terminal_sessions" (
+      "id" TEXT PRIMARY KEY,
+      "chatId" TEXT NOT NULL,
+      "label" TEXT,
+      "shell" TEXT NOT NULL,
+      "cwd" TEXT NOT NULL,
+      "startedAt" TEXT NOT NULL,
+      "exitedAt" TEXT,
+      "exitCode" INTEGER,
+      "transcriptPath" TEXT,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL,
+      FOREIGN KEY ("chatId") REFERENCES "chats" ("id") ON DELETE CASCADE
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_terminal_sessions_chatId" ON "terminal_sessions" ("chatId")`,
+      `CREATE INDEX IF NOT EXISTS "idx_terminal_sessions_startedAt" ON "terminal_sessions" ("startedAt" DESC)`,
     ],
   },
   // Conversation annotations (Scriptorium: per-message annotations by characters)
@@ -230,6 +259,7 @@ export const SQLITE_TABLES = [
       "provider" TEXT,
       "modelName" TEXT,
       "estimatedCostUSD" REAL,
+      "summaryAnchor" TEXT DEFAULT NULL,
       "createdAt" TEXT NOT NULL
     )`,
     indexes: [

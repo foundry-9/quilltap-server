@@ -138,6 +138,191 @@
   }
 
   /**
+   * Collapsed bar for Staff-authored ("systemSender") messages.
+   * Single-line summary: sender name · kind · timestamp · chevron.
+   * Click to expand into the regular message body.
+   */
+  .qt-chat-system-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    padding: 0.25rem 0.625rem;
+    margin: 0.125rem 0;
+    background: var(--qt-chat-system-bar-bg);
+    color: var(--qt-chat-system-bar-fg);
+    border: 1px solid var(--qt-chat-system-bar-border);
+    border-radius: var(--radius-sm, 0.25rem);
+    font-size: 0.75rem;
+    line-height: 1.2;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 120ms ease;
+  }
+
+  .qt-chat-system-bar:hover,
+  .qt-chat-system-bar:focus-visible {
+    background: var(--qt-chat-system-bar-hover-bg);
+    outline: none;
+  }
+
+  .qt-chat-system-bar-sender {
+    color: var(--qt-chat-system-bar-sender-fg);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .qt-chat-system-bar-kind {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-style: italic;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .qt-chat-system-bar-time {
+    color: var(--qt-chat-system-bar-fg);
+    opacity: 0.75;
+    white-space: nowrap;
+  }
+
+  .qt-chat-system-bar-chevron {
+    flex-shrink: 0;
+    width: 0.875rem;
+    height: 0.875rem;
+    opacity: 0.7;
+  }
+
+  /**
+   * Variant rendered at the top of an *expanded* Staff-authored message,
+   * giving the user a prominent click target to re-collapse. Keeps the
+   * collapsed-bar look so the affordance is visually consistent.
+   */
+  .qt-chat-system-bar-expanded {
+    margin-bottom: 0.25rem;
+  }
+
+  /**
+   * The Courier — manual / clipboard transport placeholder bubble.
+   * Stands in for an assistant message that is awaiting a pasted reply
+   * from an external LLM. Wider than a normal message, with a stacked
+   * layout: instructions, copyable Markdown blob, attachment list,
+   * paste textarea, action row.
+   */
+  .qt-courier-bubble {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .qt-courier-bubble-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .qt-courier-bubble-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .qt-courier-bubble-mode-badge {
+    display: inline-block;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.0625rem 0.375rem;
+    border-radius: var(--radius-sm, 0.25rem);
+    border: 1px solid var(--qt-border-default, currentColor);
+    opacity: 0.75;
+  }
+
+  .qt-courier-bubble-hint {
+    font-size: 0.8125rem;
+    opacity: 0.75;
+  }
+
+  .qt-courier-bubble-prompt {
+    position: relative;
+    border: 1px solid var(--qt-border-default, currentColor);
+    border-radius: var(--radius-sm, 0.25rem);
+    background: var(--qt-chat-system-bar-bg, transparent);
+  }
+
+  .qt-courier-bubble-prompt-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    border-bottom: 1px solid var(--qt-border-default, currentColor);
+  }
+
+  .qt-courier-bubble-prompt-body {
+    margin: 0;
+    padding: 0.75rem 0.875rem;
+    max-height: 24rem;
+    overflow: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .qt-courier-bubble-attachments-label {
+    font-size: 0.8125rem;
+    opacity: 0.85;
+    margin-bottom: 0.375rem;
+  }
+
+  .qt-courier-bubble-attachments-list {
+    list-style: disc;
+    padding-left: 1.25rem;
+    margin: 0;
+    font-size: 0.8125rem;
+  }
+
+  .qt-courier-bubble-attachments-list li {
+    margin-bottom: 0.125rem;
+  }
+
+  .qt-courier-bubble-attachment-meta {
+    margin-left: 0.5rem;
+    opacity: 0.65;
+  }
+
+  .qt-courier-bubble-paste-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    margin-bottom: 0.375rem;
+  }
+
+  .qt-courier-bubble-textarea {
+    width: 100%;
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+
+  .qt-courier-bubble-error {
+    color: var(--qt-status-danger, #b91c1c);
+    font-size: 0.8125rem;
+  }
+
+  .qt-courier-bubble-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  /**
    * Message header - avatar, name, timestamp
    */
   .qt-chat-message-header {
@@ -300,6 +485,23 @@
 
   .qt-chat-message-content del {
     @apply line-through;
+  }
+
+  /**
+   * Links inside rendered chat messages must be visibly clickable. The default
+   * .qt-link decoration is `none`, which leaves markdown links indistinguishable
+   * from surrounding prose. Force a colored, underlined treatment in this scope.
+   */
+  .qt-chat-message-content a,
+  .qt-chat-message-content a.qt-link {
+    color: var(--qt-link-color, hsl(var(--primary)));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .qt-chat-message-content a:hover,
+  .qt-chat-message-content a.qt-link:hover {
+    color: var(--qt-link-hover-color, hsl(var(--primary)));
+    text-decoration: underline;
   }
 
   /**
@@ -1398,6 +1600,55 @@
   }
 
   /**
+   * Vertical (top/bottom) split inside the right pane — used when both
+   * Document Mode and Terminal Mode are active. Document on top, terminal
+   * on bottom, with a draggable horizontal divider between them.
+   */
+  .qt-doc-vertical-split-layout {
+    @apply flex flex-col h-full w-full;
+    @apply overflow-hidden;
+  }
+
+  .qt-doc-vertical-pane {
+    @apply flex flex-col w-full;
+    @apply overflow-hidden;
+    min-height: 200px;
+  }
+
+  .qt-doc-vertical-divider {
+    @apply flex-shrink-0 w-full;
+    @apply flex items-center justify-center;
+    height: 6px;
+    cursor: row-resize;
+    background: var(--qt-border);
+    transition: background 0.15s ease;
+    user-select: none;
+    touch-action: none;
+  }
+
+  .qt-doc-vertical-divider:hover,
+  .qt-doc-vertical-divider.qt-doc-vertical-divider-active {
+    background: var(--qt-primary);
+  }
+
+  .qt-doc-vertical-divider-grip {
+    @apply flex flex-row gap-1;
+  }
+
+  .qt-doc-vertical-divider-grip span {
+    display: block;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--qt-text-muted);
+  }
+
+  .qt-doc-vertical-divider:hover .qt-doc-vertical-divider-grip span,
+  .qt-doc-vertical-divider.qt-doc-vertical-divider-active .qt-doc-vertical-divider-grip span {
+    background: var(--qt-primary-fg, #fff);
+  }
+
+  /**
    * Focus mode — document pane fills the entire main area
    * Chat pane is hidden
    */
@@ -2033,20 +2284,23 @@
   }
 
   /**
-   * Regenerate avatar button — tiny camera icon anchored below the avatar.
-   * Semi-transparent until hovered so it doesn't fight with the portrait.
+   * Avatar tool buttons — two square icon buttons stacked beneath the
+   * participant avatar (regenerate / wardrobe). Width matches the md avatar
+   * (48px) and is split evenly between however many tools are visible.
    */
-  .qt-participant-avatar-regenerate {
-    @apply absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all;
-    background: var(--qt-surface-alt, var(--color-muted));
-    color: var(--qt-text-secondary, var(--color-muted-foreground));
-    border: 1.5px solid var(--color-background);
-    opacity: 0.6;
-    z-index: 3;
+  .qt-participant-avatar-tools {
+    @apply flex items-stretch gap-px;
+    width: 48px;
   }
 
-  .qt-participant-avatar-regenerate:hover {
-    opacity: 1;
+  .qt-participant-avatar-tool-button {
+    @apply flex-1 aspect-square flex items-center justify-center cursor-pointer transition-colors rounded;
+    background: var(--qt-surface-alt, var(--color-muted));
+    color: var(--qt-text-secondary, var(--color-muted-foreground));
+    border: 1px solid var(--color-border);
+  }
+
+  .qt-participant-avatar-tool-button:hover {
     background: var(--qt-accent-bg, var(--color-primary));
     color: var(--qt-accent-fg, var(--color-primary-foreground));
   }
@@ -2345,6 +2599,106 @@
   @media (prefers-reduced-motion: reduce) {
     .qt-chat-response-status { animation: none; }
     .qt-chat-response-status-icon .animate-pulse { animation: none; }
+  }
+
+  /* ==========================================================================
+     TERMINAL — IN-CHAT EMBED, POP-OUT PAGE, AND PANE SURFACES
+     A terminal carries its own identity (dark by default) regardless of the
+     surrounding theme's light/dark mode. Themes may re-tint these via the
+     --qt-terminal-* and --qt-terminal-chrome-* tokens in _variables.css.
+     ========================================================================== */
+
+  /**
+   * Bare terminal surface — the dark canvas that xterm renders on.
+   * Use anywhere the xterm Terminal component is mounted.
+   */
+  .qt-terminal-surface {
+    background-color: var(--qt-terminal-bg);
+  }
+
+  /**
+   * In-chat embed wrapper — outer card around the terminal embed.
+   * Mirrors a chat bubble's border/rounding but keeps the terminal body dark.
+   */
+  .qt-terminal-embed {
+    @apply rounded-lg overflow-hidden;
+    background-color: var(--qt-terminal-embed-bg);
+    border: 1px solid var(--qt-terminal-embed-border);
+  }
+
+  /**
+   * Header strip of the in-chat embed — collapse toggle, pop-out, kill.
+   * Sits on a neutral surface so the title is readable against the chat bg.
+   */
+  .qt-terminal-embed-header {
+    @apply flex items-center justify-between px-4 py-3;
+    background-color: var(--qt-terminal-embed-header-bg);
+    border-bottom: 1px solid var(--qt-terminal-embed-header-border);
+  }
+
+  /**
+   * Footer strip — used when Terminal Mode pane has taken over the body
+   * and the embed shows a "Go to pane →" affordance instead of the live PTY.
+   */
+  .qt-terminal-embed-footer {
+    @apply flex items-center justify-between gap-3 px-4 py-3 text-sm;
+    background-color: var(--qt-terminal-embed-header-bg);
+    border-top: 1px solid var(--qt-terminal-embed-header-border);
+  }
+
+  /**
+   * Pop-out page — full-screen terminal opened via /salon/[id]/terminal/[sessionId].
+   * Carries the terminal identity end-to-end, even on light themes.
+   */
+  .qt-terminal-popout-page {
+    background-color: var(--qt-terminal-bg);
+    color: var(--qt-terminal-chrome-fg);
+  }
+
+  /**
+   * Top bar of the pop-out page — back link, title, kill button.
+   */
+  .qt-terminal-popout-header {
+    @apply flex items-center justify-between px-4 py-3;
+    background-color: var(--qt-terminal-chrome-bg);
+    border-bottom: 1px solid var(--qt-terminal-chrome-border);
+    color: var(--qt-terminal-chrome-fg);
+  }
+
+  /**
+   * Anchor in the pop-out header (back-to-chat link).
+   */
+  .qt-terminal-popout-link {
+    color: var(--qt-terminal-chrome-fg);
+  }
+
+  .qt-terminal-popout-link:hover {
+    text-decoration: underline;
+  }
+
+  /**
+   * Title text in the pop-out header.
+   */
+  .qt-terminal-popout-title {
+    color: var(--qt-terminal-chrome-fg);
+    font-weight: 500;
+  }
+
+  /**
+   * Separator (slash) between breadcrumb fragments in the pop-out header.
+   */
+  .qt-terminal-popout-separator {
+    color: var(--qt-terminal-chrome-muted-fg);
+  }
+
+  /**
+   * Overlay badge shown when a session has exited and the terminal stays
+   * mounted (e.g. in the inline embed before the user dismisses it).
+   */
+  .qt-terminal-closed-badge {
+    @apply absolute top-2 right-2 px-2 py-1 text-xs rounded;
+    background-color: var(--qt-terminal-closed-badge-bg);
+    color: var(--qt-terminal-closed-badge-fg);
   }
 }
 

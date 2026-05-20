@@ -21,45 +21,33 @@ export interface EnqueueJobOptions {
   maxAttempts?: number;
   /** When the job should become eligible to run (default: now) */
   scheduledAt?: Date;
+  /**
+   * Skip the per-call dedup scan for enqueue helpers that own a precomputed
+   * in-flight set. Set this when bulk-enqueuing many jobs in a tight loop —
+   * e.g. the regenerate-chat handler enqueuing per-turn extractions, where
+   * a per-call scan turns N enqueues into 2N DB queries.
+   */
+  skipDedupCheck?: boolean;
 }
 
 /**
- * Payload for memory extraction job
+ * Payload for per-turn memory extraction job.
+ *
+ * The handler rebuilds the TurnTranscript from chat state at execution time
+ * (the chat is the source of truth — pre-serialising the transcript into
+ * the job would just stale faster than the job drains). Dedup is keyed on
+ * (chatId, turnOpenerMessageId): the first response of a turn enqueues the
+ * job; subsequent responses in the same turn no-op against the existing
+ * pending job.
  */
 export interface MemoryExtractionPayload {
   chatId: string;
-  characterId: string;
-  characterName: string;
-  /** Character pronouns (JSON-serialised structure or null). */
-  characterPronouns?: unknown;
-  userMessage: string;
-  assistantMessage: string;
-  sourceMessageId: string;
-  connectionProfileId: string;
-  /** User character name (for "X says:" labelling in extraction prompts) */
-  userCharacterName?: string;
-  /** User character ID - who the memory is about (the user-controlled character) */
-  userCharacterId?: string;
-  /** All character names in a multi-character chat (for clear identity context) */
-  allCharacterNames?: string[];
-  /** Map of character name -> pronouns for multi-character chats */
-  allCharacterPronouns?: Record<string, unknown>;
-}
-
-/**
- * Payload for inter-character memory extraction job
- */
-export interface InterCharacterMemoryPayload {
-  chatId: string;
-  observerCharacterId: string;
-  observerCharacterName: string;
-  observerCharacterPronouns?: unknown;
-  observerMessage: string;
-  subjectCharacterId: string;
-  subjectCharacterName: string;
-  subjectCharacterPronouns?: unknown;
-  subjectMessage: string;
-  sourceMessageId: string;
+  /**
+   * USER message ID that opened this turn. May be null for greeting-only or
+   * continue/nudge turns where there's no fresh user input — the handler
+   * skips the user-pass and runs only the self / inter-character passes.
+   */
+  turnOpenerMessageId: string | null;
   connectionProfileId: string;
 }
 
@@ -122,6 +110,27 @@ export interface EmbeddingRefitPayload {
 export interface EmbeddingReindexAllPayload {
   /** ID of the embedding profile */
   profileId: string;
+  /**
+   * Selection scope. Defaults to `'all'` for backwards compatibility.
+   *
+   * - `'all'` (default): wipe and re-embed every memory, conversation chunk,
+   *   and help doc. This is the path the manual "Re-embed Everything" button
+   *   takes after a model swap.
+   * - `'mismatched-dim'`: only re-embed rows whose stored embedding dim
+   *   differs from the profile's target dim
+   *   (`truncateToDimensions ?? dimensions`). Used to clean up orphans left
+   *   behind by a previous embedding model without paying for a full reindex.
+   *   Does not delete vector stores or cancel in-flight jobs.
+   */
+  scope?: 'all' | 'mismatched-dim';
+}
+
+/**
+ * Payload for embedding re-apply-profile job (Matryoshka slice + renormalize)
+ */
+export interface EmbeddingReapplyProfilePayload {
+  /** ID of the embedding profile whose truncateToDimensions + normalizeL2 will be applied */
+  profileId: string;
 }
 
 /**
@@ -150,6 +159,18 @@ export interface CharacterAvatarGenerationPayload {
   characterId: string;
   /** Image profile ID to use for generation */
   imageProfileId: string;
+  /**
+   * One-shot equipped-slots override: when set, the avatar prompt is built
+   * from these slots instead of the chat's stored `equippedOutfit`. Used
+   * when the user generates from a "fitting room" composition that does
+   * not match what the character is actually wearing in the chat.
+   */
+  equippedSlotsOverride?: {
+    top: string[];
+    bottom: string[];
+    footwear: string[];
+    accessories: string[];
+  } | null;
 }
 
 /**
@@ -202,6 +223,36 @@ export interface MemoryHousekeepingPayload {
   dryRun?: boolean;
   /** Why the job was enqueued (for debug logs). */
   reason?: 'watermark' | 'scheduled' | 'manual';
+}
+
+/**
+ * Payload for the per-chat memory regenerate job.
+ *
+ * One job per chat. The handler wipes the chat's existing memories
+ * (and their vector store entries), then enqueues one MEMORY_EXTRACTION
+ * job per user-message turn opener. For greeting-only chats with no user
+ * messages, it enqueues a single null-opener extraction.
+ */
+export interface MemoryRegenerateChatPayload {
+  chatId: string;
+  /** Connection profile to use for the extraction LLM passes — resolved at enqueue time. */
+  connectionProfileId: string;
+}
+
+/**
+ * Payload for the regenerate-all fan-out job.
+ *
+ * The HTTP handler returns immediately after enqueuing one of these. The
+ * background processor then enumerates the user's chats, walks the memory
+ * table for orphan chatIds, and enqueues one MEMORY_REGENERATE_CHAT per
+ * chat. Doing the heavy enumeration here keeps the API response sub-second
+ * even on instances with tens of thousands of memories.
+ */
+export interface MemoryRegenerateAllPayload {
+  /** Standard cheap-LLM profile to use for non-dangerous chats. */
+  standardProfileId: string;
+  /** Profile to use for chats marked `isDangerousChat`; same as standardProfileId when no dangerous-compatible cheap LLM is configured. */
+  dangerousProfileId: string;
 }
 
 /**
@@ -321,16 +372,6 @@ export async function enqueueConversationRender(
 }
 
 /**
- * Message pair for batch memory extraction
- */
-export interface MessagePair {
-  userMessageId: string;
-  assistantMessageId: string;
-  userContent: string;
-  assistantContent: string;
-}
-
-/**
  * Enqueue a single background job
  */
 export async function enqueueJob(
@@ -365,13 +406,46 @@ export async function enqueueJob(
 }
 
 /**
- * Enqueue a memory extraction job
+ * Enqueue a per-turn memory extraction job.
+ *
+ * Dedupe: if a PENDING or PROCESSING MEMORY_EXTRACTION job already exists
+ * for the same (chatId, turnOpenerMessageId) pair, this is a no-op that
+ * returns the existing job ID. The first character to finalize in a multi-
+ * character turn creates the job; later characters' finalize calls fall
+ * through to dedup. Greeting / continue turns (where turnOpenerMessageId
+ * is null) dedupe on (chatId, null) so a single extraction job covers the
+ * greeting tail rather than producing one per assistant message.
  */
 export async function enqueueMemoryExtraction(
   userId: string,
   payload: MemoryExtractionPayload,
   options?: EnqueueJobOptions
 ): Promise<string> {
+  if (options?.skipDedupCheck) {
+    return enqueueJob(userId, 'MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
+  }
+
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'MEMORY_EXTRACTION') return false;
+      const existingPayload = j.payload as unknown as MemoryExtractionPayload;
+      return existingPayload.chatId === payload.chatId
+        && existingPayload.turnOpenerMessageId === payload.turnOpenerMessageId;
+    });
+    if (existing) {
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[MemoryExtraction] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through and enqueue anyway.
+  }
+
   return enqueueJob(userId, 'MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
 }
 
@@ -399,11 +473,6 @@ export async function enqueueMemoryHousekeeping(
       return existingCharId === payload.characterId;
     });
     if (existing) {
-      logger.debug('[Housekeeping] Skipping enqueue — job already in-flight', {
-        jobId: existing.id,
-        userId,
-        characterId: payload.characterId ?? '(all)',
-      });
       return existing.id;
     }
   } catch (error) {
@@ -427,14 +496,85 @@ export async function enqueueMemoryHousekeeping(
 }
 
 /**
- * Enqueue an inter-character memory extraction job
+ * Enqueue a per-chat memory regeneration job.
+ *
+ * Dedupes: if a PENDING or PROCESSING MEMORY_REGENERATE_CHAT job already
+ * exists for the same (userId, chatId) pair, returns the existing job ID
+ * rather than queuing a duplicate wipe.
+ *
+ * Capped at maxAttempts: 1 — a retry would double-enqueue the per-turn
+ * extraction jobs spawned by the first attempt.
  */
-export async function enqueueInterCharacterMemory(
+export async function enqueueMemoryRegenerateChat(
   userId: string,
-  payload: InterCharacterMemoryPayload,
-  options?: EnqueueJobOptions
+  payload: MemoryRegenerateChatPayload,
+  options?: EnqueueJobOptions,
 ): Promise<string> {
-  return enqueueJob(userId, 'INTER_CHARACTER_MEMORY', payload as unknown as Record<string, unknown>, options);
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'MEMORY_REGENERATE_CHAT') return false;
+      const existingPayload = j.payload as unknown as MemoryRegenerateChatPayload;
+      return existingPayload.chatId === payload.chatId;
+    });
+    if (existing) {
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[MemoryRegenerateChat] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return enqueueJob(
+    userId,
+    'MEMORY_REGENERATE_CHAT',
+    payload as unknown as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
+}
+
+/**
+ * Enqueue the regenerate-all fan-out job.
+ *
+ * The HTTP handler returns immediately after this; the actual chat
+ * enumeration and per-chat enqueues happen inside the background job.
+ *
+ * Dedupes on userId (only one fan-out per user at a time). Capped at
+ * maxAttempts: 1 — a retry would re-enqueue every per-chat wipe.
+ */
+export async function enqueueMemoryRegenerateAll(
+  userId: string,
+  payload: MemoryRegenerateAllPayload,
+  options?: EnqueueJobOptions,
+): Promise<{ jobId: string; isNew: boolean }> {
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(
+      (j) => j.type === 'MEMORY_REGENERATE_ALL',
+    );
+    if (existing) {
+      return { jobId: existing.id, isNew: false };
+    }
+  } catch (error) {
+    logger.warn('[MemoryRegenerateAll] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const jobId = await enqueueJob(
+    userId,
+    'MEMORY_REGENERATE_ALL',
+    payload as unknown as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
+  return { jobId, isNew: true };
 }
 
 /**
@@ -551,6 +691,23 @@ export async function enqueueEmbeddingReindexAll(
 }
 
 /**
+ * Enqueue an embedding re-apply-profile job (Matryoshka slice + renormalize).
+ * Pure local rewrite — no provider call. Use after editing a profile's
+ * truncateToDimensions to migrate the existing corpus.
+ */
+export async function enqueueEmbeddingReapplyProfile(
+  userId: string,
+  payload: EmbeddingReapplyProfilePayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  return enqueueJob(userId, 'EMBEDDING_REAPPLY_PROFILE', payload as unknown as Record<string, unknown>, {
+    // Re-apply runs once and is purely local; default priority -1 like reindex.
+    priority: options?.priority ?? -1,
+    ...options,
+  });
+}
+
+/**
  * Result of enqueueing a story background job
  */
 export interface StoryBackgroundEnqueueResult {
@@ -592,36 +749,35 @@ export async function enqueueStoryBackgroundGeneration(
 }
 
 /**
- * Batch enqueue memory extraction jobs for an imported chat
- * Creates one job per message pair
+ * Batch enqueue per-turn memory extraction jobs.
+ *
+ * Used by the "queue memories for this entire chat" UI action and by the
+ * SillyTavern import path. Caller supplies one entry per turn (keyed by
+ * the USER message that opened it). The handler rebuilds the transcript
+ * from chat state at execution time, so this enqueue API doesn't need
+ * the per-turn message contents — only the turn-opener IDs.
  */
 export async function enqueueMemoryExtractionBatch(
   userId: string,
   chatId: string,
-  characterId: string,
-  characterName: string,
   connectionProfileId: string,
-  messagePairs: MessagePair[],
+  turnOpenerMessageIds: Array<string | null>,
   options?: EnqueueJobOptions
 ): Promise<string[]> {
-  if (messagePairs.length === 0) {
+  if (turnOpenerMessageIds.length === 0) {
     return [];
   }
 
   const repos = getRepositories();
   const now = new Date().toISOString();
 
-  const jobs = messagePairs.map((pair) => ({
+  const jobs = turnOpenerMessageIds.map((turnOpenerMessageId) => ({
     userId,
     type: 'MEMORY_EXTRACTION' as const,
     status: 'PENDING' as const,
     payload: {
       chatId,
-      characterId,
-      characterName,
-      userMessage: pair.userContent,
-      assistantMessage: pair.assistantContent,
-      sourceMessageId: pair.assistantMessageId,
+      turnOpenerMessageId,
       connectionProfileId,
     },
     priority: options?.priority ?? 0,
@@ -637,11 +793,9 @@ export async function enqueueMemoryExtractionBatch(
 
   logger.info('Memory extraction batch enqueued', {
     chatId,
-    characterId,
     jobCount: jobIds.length,
   });
 
-  // Auto-start the processor when jobs are enqueued
   if (jobIds.length > 0) {
     ensureProcessorRunning();
   }
@@ -745,42 +899,44 @@ export interface WardrobeOutfitAnnouncementPayload {
 }
 
 /**
- * Debounce window for outfit announcements. Each new wardrobe change for the
- * same (chatId, characterId) pair pushes the existing pending job's
- * scheduledAt forward by this much, so a flurry of slot edits collapses into
- * a single announcement once the dust settles.
- */
-const WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS = 60_000;
-
-/**
- * Enqueue a wardrobe outfit announcement job, debounced per (chatId, characterId).
+ * Enqueue a wardrobe outfit announcement job, fire-and-forget.
  *
- * If a pending job already exists for this pair, its scheduledAt is pushed
- * forward by WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS rather than enqueuing a duplicate.
- * The job, when it finally fires, reads the chat's current equipped outfit and
- * posts an Aurora system message visible to everyone in the chat.
+ * Originally this scheduled the announcement an entire minute out so a flurry
+ * of small slot edits could collapse into a single Aurora message. With the
+ * Wardrobe dialog's "Wear this" gesture committing whole compositions in one
+ * shot, the operator expects the announcement (and avatar regen) to land
+ * promptly. We still collapse against any *unclaimed* pending job for the
+ * same (chatId, characterId) pair so back-to-back changes don't fan out.
  */
 export async function enqueueWardrobeOutfitAnnouncement(
   userId: string,
   payload: WardrobeOutfitAnnouncementPayload,
 ): Promise<{ jobId: string; isNew: boolean }> {
   const repos = getRepositories();
-  const scheduledAt = new Date(Date.now() + WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS);
+  const scheduledAt = new Date();
 
+  // Only collapse against a still-PENDING job. findPendingForChat also returns
+  // PROCESSING jobs, but a job that has already been claimed and is running
+  // (or about to run) the announcement handler can't absorb fresh changes —
+  // its scheduledAt is ignored once claimed, and it has already snapshotted
+  // the equipped state. Letting that path return isNew=false strands any
+  // post-claim slot edits with no follow-up announcement. Treat PROCESSING
+  // as "missed the bus" and enqueue a fresh debounced job instead.
   const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
   const existing = pendingJobs.find(
     job => job.type === 'WARDROBE_OUTFIT_ANNOUNCEMENT'
+      && job.status === 'PENDING'
       && (job.payload as unknown as WardrobeOutfitAnnouncementPayload).characterId === payload.characterId
   );
 
   if (existing) {
-    await repos.backgroundJobs.update(existing.id, { scheduledAt: scheduledAt.toISOString() });
-    logger.info('[WardrobeAnnouncement] Rescheduled pending announcement', {
+    // A pending announcement is already on its way; let it fire as-is rather
+    // than spawning a duplicate.
+    logger.info('[WardrobeAnnouncement] Pending announcement reused', {
       context: 'background-jobs.queue',
       chatId: payload.chatId,
       characterId: payload.characterId,
       jobId: existing.id,
-      newScheduledAt: scheduledAt.toISOString(),
     });
     return { jobId: existing.id, isNew: false };
   }

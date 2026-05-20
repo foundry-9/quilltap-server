@@ -62,7 +62,7 @@ export function CapabilitiesReportDialog({
           {/* Header */}
           <div className="qt-dialog-header flex-shrink-0">
             <div className="flex items-center justify-between">
-              <h2 className="qt-dialog-title text-xl font-semibold">
+              <h2 className="qt-dialog-title">
                 {filename}
               </h2>
               <button
@@ -119,17 +119,17 @@ export function CapabilitiesReportDialog({
                   ),
                   // Custom heading styling
                   h1: ({ children }) => (
-                    <h1 className="text-2xl font-bold mt-6 mb-4 pb-2 border-b qt-border-default">
+                    <h1 className="qt-heading-2 mt-6 mb-4 pb-2 border-b qt-border-default">
                       {children}
                     </h1>
                   ),
                   h2: ({ children }) => (
-                    <h2 className="text-xl font-semibold mt-6 mb-3 pb-1 border-b qt-border-default">
+                    <h2 className="qt-heading-3 mt-6 mb-3 pb-1 border-b qt-border-default">
                       {children}
                     </h2>
                   ),
                   h3: ({ children }) => (
-                    <h3 className="text-lg font-semibold mt-4 mb-2">
+                    <h3 className="qt-heading-4 mt-4 mb-2">
                       {children}
                     </h3>
                   ),

@@ -14,7 +14,7 @@ import os from 'node:os';
 import yauzl from 'yauzl';
 import { logger } from '@/lib/logger';
 import { getThemesDir } from '@/lib/paths';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 import {
   type QtapThemeManifest,
   type ThemeBundleIndex,

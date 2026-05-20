@@ -29,8 +29,19 @@ export interface WardrobeListItemResult {
   types: string[];
   appropriateness: string | null;
   is_equipped: boolean;
-  /** Which slot it's equipped in, if any */
+  /**
+   * Which slot the item is currently equipped in (the first if multi-slot
+   * coverage). With arrays-per-slot this is the simplest single-value
+   * back-compat field; consumers that need the full set should consult
+   * `equippedOutfit` directly.
+   */
   equipped_slot: string | null;
+  /** True when this item is a composite (has `componentItemIds`). */
+  is_composite?: boolean;
+  /** Component item IDs (only populated for composites). */
+  component_item_ids?: string[];
+  /** Resolved component titles (best-effort; missing components are dropped). */
+  component_titles?: string[];
 }
 
 /**
@@ -69,11 +80,13 @@ export const wardrobeListToolDefinition = {
   function: {
     name: 'list_wardrobe',
     description:
-      'Retrieve wardrobe items and outfit presets for the current character. ' +
+      'Retrieve wardrobe items for the current character. ' +
       'Returns clothing and accessory items from the character\'s wardrobe, ' +
       'with optional filtering by item type and appropriateness context. ' +
-      'Each item includes its equipped status, showing what the character is currently wearing. ' +
-      'Also includes saved outfit presets that can be applied via the update_outfit_item tool. ' +
+      'Each item includes its equipped status (which slot[s] it occupies, if any) ' +
+      'and a composite flag indicating whether it bundles other items. ' +
+      'Use wardrobe_change_item to put on / take off / layer single garments, ' +
+      'and wardrobe_set_outfit to wear or remove a composite outfit. ' +
       'Archived items are excluded from results.',
     parameters: {
       type: 'object',

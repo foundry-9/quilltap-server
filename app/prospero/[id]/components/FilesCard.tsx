@@ -10,6 +10,7 @@
 
 import { useState } from 'react'
 import FileBrowser from '@/components/files/FileBrowser'
+import { formatBytes } from '@/lib/utils/format-bytes'
 import FileThumbnail from '@/components/files/FileThumbnail'
 import { FilePreviewModal } from '@/components/files/FilePreview'
 import { useProjectFileUpload } from '@/components/files/useProjectFileUpload'
@@ -50,11 +51,6 @@ function FolderIcon({ className }: { className?: string }) {
   )
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 /**
  * Convert ProjectFile to FileInfo for the preview modal.
@@ -148,7 +144,7 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
                       relativePath={file.relativePath}
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">
+                      <p className="qt-label text-foreground truncate">
                         {file.originalFilename}
                       </p>
                       <p className="qt-text-xs qt-text-secondary">

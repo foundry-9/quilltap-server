@@ -28,7 +28,7 @@ export function ImportExportCard() {
           </svg>
         </div>
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-foreground mb-1">Import / Export</h2>
+          <h2 className="qt-heading-2 text-foreground mb-1">Import / Export</h2>
           <p className="qt-text-small">
             Export individual entity types or import from Quilltap export files (.qtap)
           </p>

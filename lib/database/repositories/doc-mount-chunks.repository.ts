@@ -1,20 +1,16 @@
 /**
  * Document Mount Chunks Repository
  *
- * Backend-agnostic repository for DocMountChunk entities.
- * Overrides getCollection() to route all operations to the dedicated
- * mount index database (quilltap-mount-index.db), isolating document
- * mount tracking data from the main database.
+ * Backend-agnostic repository for DocMountChunk entities. Chunks are now
+ * keyed by linkId — one set of chunks per (mountPoint, relativePath) hard
+ * link, so two consumers hard-linking the same content can re-extract /
+ * re-embed independently.
  *
  * Includes BLOB column handling for vector embeddings — the `embedding`
- * column stores Float32 BLOBs that need special deserialization. Since
- * this repository uses a separate database, blob columns are passed
- * directly to the SQLiteCollection constructor rather than using
- * registerBlobColumns (which targets the main database).
+ * column stores Float32 BLOBs that need special deserialization.
  *
- * When the mount index DB is in degraded mode (corruption, permissions, etc.),
- * getCollection() throws and all safeQuery fallbacks kick in — returning
- * empty arrays, null, etc. The rest of the app continues normally.
+ * When the mount index DB is in degraded mode, getCollection() throws and
+ * all safeQuery fallbacks kick in.
  */
 
 import { logger } from '@/lib/logger';
@@ -26,11 +22,6 @@ import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqli
 import { generateDDL, extractSchemaMetadata } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 
-/**
- * Document Mount Chunks Repository
- * Implements CRUD operations and queries for document mount chunks
- * with BLOB embedding support. Uses the mount index database.
- */
 export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChunk> {
   private mountIndexCollectionInitialized = false;
 
@@ -38,11 +29,6 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
     super('doc_mount_chunks', DocMountChunkSchema);
   }
 
-  /**
-   * Override getCollection to return a collection from the dedicated mount index
-   * database instead of the main database. Also registers the `embedding` column
-   * as a BLOB column so that Float32 BLOBs are properly deserialized to number[].
-   */
   protected async getCollection(): Promise<DatabaseCollection<DocMountChunk>> {
     if (isMountIndexDegraded()) {
       throw new Error('Mount index database is in degraded mode');
@@ -53,13 +39,22 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
       throw new Error('Mount index database not initialized');
     }
 
-    // Ensure the table exists in the mount index DB on first access
     if (!this.mountIndexCollectionInitialized) {
       try {
         const ddlStatements = generateDDL(this.collectionName, this.schema);
         for (const sql of ddlStatements) {
           db.exec(sql);
         }
+
+        db.exec(
+          `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_linkId" ` +
+          `ON "${this.collectionName}" ("linkId")`
+        );
+        db.exec(
+          `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_mp" ` +
+          `ON "${this.collectionName}" ("mountPointId")`
+        );
+
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
         logger.error('Failed to ensure doc_mount_chunks table in mount index database', {
@@ -69,7 +64,6 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
       }
     }
 
-    // Detect JSON, array, and boolean columns from schema
     const metadata = extractSchemaMetadata(this.collectionName, this.schema);
     const jsonColumns = metadata.fields
       .filter(f => f.type === 'array' || f.type === 'object')
@@ -81,10 +75,9 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
       .filter(f => f.type === 'boolean')
       .map(f => f.name);
 
-    // Pass 'embedding' as a blob column directly to the SQLiteCollection constructor.
-    // This ensures Float32 BLOBs stored in the embedding column are properly
-    // deserialized to number[] without going through registerBlobColumns (which
-    // targets the main database's collection registry).
+    // Float32 BLOBs in the embedding column need explicit blob-column
+    // handling so they're deserialized to Float32Array instead of being
+    // run through JSON.parse.
     const blobColumns = ['embedding'];
 
     return new SQLiteCollection<DocMountChunk>(
@@ -95,14 +88,6 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   // ============================================================================
   // Abstract method implementations
   // ============================================================================
-
-  async findById(id: string): Promise<DocMountChunk | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<DocMountChunk[]> {
-    return this._findAll();
-  }
 
   async create(
     data: Omit<DocMountChunk, 'id' | 'createdAt' | 'updatedAt'>,
@@ -124,56 +109,29 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   // ============================================================================
 
   /**
-   * Find all chunks for a file
-   * @param fileId The file ID
-   * @returns Promise<DocMountChunk[]> Array of chunks for the file
+   * Find all chunks for a link, ordered by chunkIndex.
    */
-  async findByFileId(fileId: string): Promise<DocMountChunk[]> {
+  async findByLinkId(linkId: string): Promise<DocMountChunk[]> {
     return this.safeQuery(
       async () => {
-        logger.debug('Finding chunks by file ID', {
-          context: 'DocMountChunksRepository.findByFileId',
-          fileId,
-        });
         const results = await this.findByFilter(
-          { fileId } as TypedQueryFilter<DocMountChunk>,
+          { linkId } as TypedQueryFilter<DocMountChunk>,
           { sort: { chunkIndex: 1 } }
         );
-        logger.debug('Found chunks by file ID', {
-          context: 'DocMountChunksRepository.findByFileId',
-          fileId,
-          count: results.length,
-        });
         return results;
       },
-      'Error finding chunks by file ID',
-      { fileId },
+      'Error finding chunks by link ID',
+      { linkId },
       []
     );
   }
 
   /**
-   * Find all chunks for a mount point
-   * @param mountPointId The mount point ID
-   * @returns Promise<DocMountChunk[]> Array of chunks for the mount point
+   * Find all chunks for a mount point.
    */
   async findByMountPointId(mountPointId: string): Promise<DocMountChunk[]> {
     return this.safeQuery(
-      async () => {
-        logger.debug('Finding chunks by mount point ID', {
-          context: 'DocMountChunksRepository.findByMountPointId',
-          mountPointId,
-        });
-        const results = await this.findByFilter(
-          { mountPointId } as TypedQueryFilter<DocMountChunk>
-        );
-        logger.debug('Found chunks by mount point ID', {
-          context: 'DocMountChunksRepository.findByMountPointId',
-          mountPointId,
-          count: results.length,
-        });
-        return results;
-      },
+      async () => this.findByFilter({ mountPointId } as TypedQueryFilter<DocMountChunk>),
       'Error finding chunks by mount point ID',
       { mountPointId },
       []
@@ -182,9 +140,9 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
 
   /**
    * Count embedded chunks per mount point without hydrating the embeddings.
-   * Uses a single GROUP BY query, avoiding the multi-megabyte BLOB decode
-   * that `findAllWithEmbeddingsByMountPointIds` incurs when the caller only
-   * wants counts (e.g. the Scriptorium settings UI).
+   * Single GROUP BY query — avoids the multi-megabyte BLOB decode that
+   * findAllWithEmbeddingsByMountPointIds incurs when the caller only wants
+   * counts (e.g. the Scriptorium settings UI).
    */
   async countEmbeddedByMountPointIds(mountPointIds: string[]): Promise<Map<string, number>> {
     const result = new Map<string, number>();
@@ -217,10 +175,6 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
 
   /**
    * Find all chunks with non-null embeddings for a set of mount point IDs.
-   * Loads chunks per mount point and filters for non-null embeddings.
-   *
-   * @param mountPointIds Array of mount point IDs to query
-   * @returns Promise<DocMountChunk[]> Array of chunks with embeddings
    */
   async findAllWithEmbeddingsByMountPointIds(mountPointIds: string[]): Promise<DocMountChunk[]> {
     return this.safeQuery(
@@ -228,11 +182,6 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
         if (mountPointIds.length === 0) {
           return [];
         }
-
-        logger.debug('Finding chunks with embeddings for mount point IDs', {
-          context: 'DocMountChunksRepository.findAllWithEmbeddingsByMountPointIds',
-          mountPointIdCount: mountPointIds.length,
-        });
 
         const allChunks: DocMountChunk[] = [];
         for (const mountPointId of mountPointIds) {
@@ -242,16 +191,9 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
           allChunks.push(...chunks);
         }
 
-        // Filter for non-null embeddings
         const withEmbeddings = allChunks.filter(
           chunk => chunk.embedding != null && chunk.embedding.length > 0
         );
-
-        logger.debug('Found chunks with embeddings for mount point IDs', {
-          context: 'DocMountChunksRepository.findAllWithEmbeddingsByMountPointIds',
-          totalChunks: allChunks.length,
-          withEmbeddings: withEmbeddings.length,
-        });
 
         return withEmbeddings;
       },
@@ -262,64 +204,39 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   }
 
   /**
-   * Delete all chunks for a file
-   * @param fileId The file ID
-   * @returns Promise<number> Number of chunks deleted
+   * Delete all chunks for a link.
    */
-  async deleteByFileId(fileId: string): Promise<number> {
+  async deleteByLinkId(linkId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        logger.debug('Deleting chunks by file ID', {
-          context: 'DocMountChunksRepository.deleteByFileId',
-          fileId,
-        });
-        // Peek one chunk to learn the mount point so we can invalidate the
-        // in-memory cache after the delete (chunks for one file all share
-        // a mount point).
         const sample = await this.findByFilter(
-          { fileId } as TypedQueryFilter<DocMountChunk>,
+          { linkId } as TypedQueryFilter<DocMountChunk>,
           { limit: 1 }
         );
         const mountPointId = sample[0]?.mountPointId;
         const count = await this.deleteMany(
-          { fileId } as TypedQueryFilter<DocMountChunk>
+          { linkId } as TypedQueryFilter<DocMountChunk>
         );
         if (mountPointId) {
           invalidateMountPoint(mountPointId);
         }
-        logger.debug('Deleted chunks by file ID', {
-          context: 'DocMountChunksRepository.deleteByFileId',
-          fileId,
-          deletedCount: count,
-        });
         return count;
       },
-      'Error deleting chunks by file ID',
-      { fileId }
+      'Error deleting chunks by link ID',
+      { linkId }
     );
   }
 
   /**
-   * Delete all chunks for a mount point
-   * @param mountPointId The mount point ID
-   * @returns Promise<number> Number of chunks deleted
+   * Delete all chunks for a mount point.
    */
   async deleteByMountPointId(mountPointId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        logger.debug('Deleting chunks by mount point ID', {
-          context: 'DocMountChunksRepository.deleteByMountPointId',
-          mountPointId,
-        });
         const count = await this.deleteMany(
           { mountPointId } as TypedQueryFilter<DocMountChunk>
         );
         invalidateMountPoint(mountPointId);
-        logger.debug('Deleted chunks by mount point ID', {
-          context: 'DocMountChunksRepository.deleteByMountPointId',
-          mountPointId,
-          deletedCount: count,
-        });
         return count;
       },
       'Error deleting chunks by mount point ID',
@@ -328,9 +245,7 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   }
 
   /**
-   * Update the embedding vector for a chunk
-   * @param id The chunk ID
-   * @param embedding The new embedding vector (Float32 array)
+   * Update the embedding vector for a chunk.
    */
   async updateEmbedding(id: string, embedding: Float32Array): Promise<void> {
     await this.safeQuery(
@@ -343,45 +258,57 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
           throw new Error(`Doc mount chunk not found for embedding update: ${id}`);
         }
 
-        logger.debug('Updated embedding for doc mount chunk', {
-          context: 'DocMountChunksRepository.updateEmbedding',
-          id,
-          embeddingLength: embedding.length,
-        });
+        // Invalidate the in-memory mount-chunk cache: until embedding lands,
+        // findAllWithEmbeddingsByMountPointIds excludes this chunk, so the
+        // cache that powers searchDocumentChunks won't surface it on its own.
+        invalidateMountPoint(updated.mountPointId);
       },
       'Error updating doc mount chunk embedding',
       { id }
     );
   }
 
+  // ============================================================================
+  // Legacy-name aliases — callers that used to hold a "fileId" actually held a
+  // link id under the old 1:1 schema. After the content/link split they hold
+  // the link's UUID. These aliases let those callers keep their variable
+  // names while gradually migrating.
+  // ============================================================================
+
+  /** Alias for findByLinkId. The argument now is treated as a linkId. */
+  async findByFileId(linkId: string): Promise<DocMountChunk[]> {
+    return this.findByLinkId(linkId);
+  }
+
+  /** Alias for deleteByLinkId. The argument now is treated as a linkId. */
+  async deleteByFileId(linkId: string): Promise<number> {
+    return this.deleteByLinkId(linkId);
+  }
+
   /**
-   * Bulk insert multiple chunks.
-   * Iterates and calls _create for each chunk since the ORM does not
-   * support native bulk insert.
-   *
-   * @param chunks Array of chunk data (without id, createdAt, updatedAt)
-   * @returns Promise<DocMountChunk[]> Array of created chunks
+   * Bulk insert multiple chunks. The ORM does not support native bulk
+   * insert, so this iterates and calls _create for each chunk.
    */
   async bulkInsert(
     chunks: Array<Omit<DocMountChunk, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<DocMountChunk[]> {
     return this.safeQuery(
       async () => {
-        logger.debug('Bulk inserting doc mount chunks', {
-          context: 'DocMountChunksRepository.bulkInsert',
-          count: chunks.length,
-        });
-
         const created: DocMountChunk[] = [];
         for (const chunk of chunks) {
           const result = await this._create(chunk);
           created.push(result);
         }
 
-        logger.debug('Bulk insert complete for doc mount chunks', {
-          context: 'DocMountChunksRepository.bulkInsert',
-          insertedCount: created.length,
-        });
+        // Invalidate the mount-chunk cache for every mount touched. See
+        // updateEmbedding for the cache-staleness reasoning.
+        const touchedMounts = new Set<string>();
+        for (const chunk of chunks) {
+          if (chunk.mountPointId) touchedMounts.add(chunk.mountPointId);
+        }
+        for (const mountPointId of touchedMounts) {
+          invalidateMountPoint(mountPointId);
+        }
 
         return created;
       },

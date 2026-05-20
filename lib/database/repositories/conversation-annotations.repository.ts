@@ -31,14 +31,6 @@ export class ConversationAnnotationsRepository extends AbstractBaseRepository<Co
   // Abstract method implementations
   // ============================================================================
 
-  async findById(id: string): Promise<ConversationAnnotation | null> {
-    return this._findById(id);
-  }
-
-  async findAll(): Promise<ConversationAnnotation[]> {
-    return this._findAll();
-  }
-
   async create(
     data: Omit<ConversationAnnotation, 'id' | 'createdAt' | 'updatedAt'>,
     options?: import('./base.repository').CreateOptions
@@ -118,13 +110,6 @@ export class ConversationAnnotationsRepository extends AbstractBaseRepository<Co
         } as TypedQueryFilter<ConversationAnnotation>);
 
         if (existing) {
-          logger.debug('Updating existing conversation annotation', {
-            context: 'ConversationAnnotationsRepository.upsert',
-            id: existing.id,
-            chatId: input.chatId,
-            messageIndex: input.messageIndex,
-            characterName: input.characterName,
-          });
 
           const updated = await this._update(existing.id, {
             content: input.content,
@@ -136,13 +121,6 @@ export class ConversationAnnotationsRepository extends AbstractBaseRepository<Co
           }
           return updated;
         }
-
-        logger.debug('Creating new conversation annotation', {
-          context: 'ConversationAnnotationsRepository.upsert',
-          chatId: input.chatId,
-          messageIndex: input.messageIndex,
-          characterName: input.characterName,
-        });
 
         return this._create(input as Omit<ConversationAnnotation, 'id' | 'createdAt' | 'updatedAt'>);
       },
@@ -172,12 +150,6 @@ export class ConversationAnnotationsRepository extends AbstractBaseRepository<Co
         } as TypedQueryFilter<ConversationAnnotation>);
 
         if (!existing) {
-          logger.debug('Annotation not found for deletion', {
-            context: 'ConversationAnnotationsRepository.deleteAnnotation',
-            chatId,
-            messageIndex,
-            characterName,
-          });
           return false;
         }
 
@@ -197,11 +169,6 @@ export class ConversationAnnotationsRepository extends AbstractBaseRepository<Co
     await this.safeQuery(
       async () => {
         const count = await this.deleteMany({ chatId } as TypedQueryFilter<ConversationAnnotation>);
-        logger.debug('Deleted all annotations for chat', {
-          context: 'ConversationAnnotationsRepository.deleteAllForChat',
-          chatId,
-          deletedCount: count,
-        });
       },
       'Error deleting all annotations for chat',
       { chatId }

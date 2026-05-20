@@ -12,36 +12,14 @@ import { useParams, useRouter } from 'next/navigation'
 import { useDocumentStoreDetail } from './hooks/useDocumentStoreDetail'
 import { FileTable } from './components'
 import { EditDocumentStoreDialog } from '../components/EditDocumentStoreDialog'
+import { formatBytes } from '@/lib/utils/format-bytes'
+import { PencilIcon, RefreshIcon } from '@/components/ui/icons'
 import type { UpdateDocumentStoreData } from '../types'
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
-}
 
 function ChevronLeftIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-    </svg>
-  )
-}
-
-function RefreshIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-    </svg>
-  )
-}
-
-function PencilIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
     </svg>
   )
 }
@@ -159,11 +137,11 @@ export default function DocumentStoreDetailPage() {
       {/* Info cards */}
       <div className="grid grid-cols-2 gap-4 mb-8 sm:grid-cols-4">
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-          <div className="text-2xl font-bold text-foreground">{store.fileCount}</div>
+          <div className="qt-heading-2 text-foreground">{store.fileCount}</div>
           <div className="text-xs qt-text-secondary">Indexed Files</div>
         </div>
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-          <div className="text-2xl font-bold text-foreground">{formatBytes(store.totalSizeBytes)}</div>
+          <div className="qt-heading-2 text-foreground">{formatBytes(store.totalSizeBytes)}</div>
           <div className="text-xs qt-text-secondary">Total Size</div>
         </div>
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
@@ -173,14 +151,14 @@ export default function DocumentStoreDetailPage() {
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
           {store.chunkCount === 0 ? (
             <>
-              <div className="text-sm font-medium qt-text-secondary">No chunks</div>
+              <div className="qt-label qt-text-secondary">No chunks</div>
               <div className="text-xs qt-text-secondary">Embedding Status</div>
             </>
           ) : store.embeddedChunkCount === store.chunkCount ? (
             <>
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full qt-dot-success" />
-                <span className="text-sm font-medium qt-text-success">Complete</span>
+                <span className="qt-label qt-text-success">Complete</span>
               </div>
               <div className="text-xs qt-text-secondary">{store.embeddedChunkCount}/{store.chunkCount} chunks embedded</div>
             </>
@@ -188,7 +166,7 @@ export default function DocumentStoreDetailPage() {
             <>
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 animate-pulse rounded-full qt-dot-warning" />
-                <span className="text-sm font-medium qt-text-warning">{Math.round((store.embeddedChunkCount / store.chunkCount) * 100)}%</span>
+                <span className="qt-label qt-text-warning">{Math.round((store.embeddedChunkCount / store.chunkCount) * 100)}%</span>
               </div>
               <div className="text-xs qt-text-secondary">{store.embeddedChunkCount}/{store.chunkCount} chunks embedded</div>
             </>
@@ -208,7 +186,7 @@ export default function DocumentStoreDetailPage() {
       {store.mountType !== 'database' && (
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-            <h3 className="text-xs font-medium qt-text-secondary uppercase tracking-wider mb-2">Include Patterns</h3>
+            <h3 className="qt-text-secondary uppercase tracking-wider mb-2">Include Patterns</h3>
             <div className="flex flex-wrap gap-1.5">
               {store.includePatterns.map((p, i) => (
                 <span key={i} className="inline-flex rounded qt-bg-success/10 qt-text-success px-2 py-0.5 text-xs font-mono">
@@ -218,7 +196,7 @@ export default function DocumentStoreDetailPage() {
             </div>
           </div>
           <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-            <h3 className="text-xs font-medium qt-text-secondary uppercase tracking-wider mb-2">Exclude Patterns</h3>
+            <h3 className="qt-text-secondary uppercase tracking-wider mb-2">Exclude Patterns</h3>
             <div className="flex flex-wrap gap-1.5">
               {store.excludePatterns.map((p, i) => (
                 <span key={i} className="inline-flex rounded qt-bg-destructive/10 qt-text-destructive px-2 py-0.5 text-xs font-mono">
@@ -235,7 +213,7 @@ export default function DocumentStoreDetailPage() {
           an Upload button in this table; filesystem stores get populated by
           scans. */}
       <div className="border-t qt-border-default/60 pt-6">
-        <h2 className="text-xl font-semibold mb-4">Indexed Files</h2>
+        <h2 className="qt-heading-3 mb-4">Indexed Files</h2>
         <FileTable
           files={files}
           loading={filesLoading}

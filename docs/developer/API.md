@@ -1,6 +1,16 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v4.2+.
+API reference for Quilltap v4.3 and later.
+
+> **Freshness note (v4.3-dev):** The Scriptorium / Document Mode work, the Salon Staff (Librarian, Host, Concierge, Aurora, Lantern, Prospero) announcement system, and the Ariel terminal subsystem landed during 4.3-dev. The chat-actions list, the LLM-tools list, the terminals endpoints, and the message schema below reflect those changes; older subsections may still describe earlier shapes verbatim. When in doubt, the source of truth is `app/api/v1/`, `lib/schemas/`, and `lib/tools/`. Notable additions since v4.2:
+>
+> - **Mount Points** (`/api/v1/mount-points`) — Scriptorium document-store CRUD, files/folders/blobs operations, scan/convert/deconvert actions, and per-project linking
+> - **Terminals** (`/api/v1/terminals`) — Ariel PTY session spawn, list, signal, write, and ring-buffer access
+> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `memories`, `outfit`, `participants`, `photo-albums`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
+> - **New built-in LLM tools** — `doc_*` family (read/write/grep/list/move/copy/str_replace/focus/open/close/insert_text/update_heading/read_heading/read_frontmatter/update_frontmatter/create_folder/delete_folder/delete_file, plus blob variants), `self_inventory`, `state`, `whisper`, `read_conversation`, `submit_final_response`, `upsert_annotation`, `delete_annotation`, `create_wardrobe_item`, `update_outfit_item`. The unified search tool is now named `search` (was `search_memories`).
+> - **Retired tools** — `file_management` and the file-write-permission infrastructure are gone; many `project_info` actions were trimmed.
+> - **`systemSender` enum on messages** — `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`, `commonplaceBook`, `ariel`. See `lib/schemas/chat.types.ts`.
+> - **`systemTransparency` on characters** — per-character covenant toggle.
 
 ## Table of Contents
 
@@ -12,6 +22,7 @@ Complete API reference for Quilltap v4.2+.
 - [Endpoints](#endpoints)
   - [Providers (Endpoint)](#providers-endpoint)
   - [Health](#health)
+  - [Session](#session-endpoint)
   - [User Profile](#user-profile)
   - [Chat Settings](#chat-settings)
   - [API Keys](#api-keys)
@@ -30,28 +41,31 @@ Complete API reference for Quilltap v4.2+.
   - [Character Wardrobe](#character-wardrobe)
   - [Outfit Presets](#outfit-presets)
   - [Chats](#chats)
+  - [Chat Announcements](#chat-announcements)
+  - [Chat Photo Albums](#chat-photo-albums)
   - [Chat Files](#chat-files)
   - [Chat File Operations](#chat-file-operations)
   - [Messages](#messages)
   - [Memories](#memories)
   - [Tags](#tags)
   - [Files](#files)
-  - [Files & Images (Legacy)](#files--images)
   - [Folders](#folders)
-  - [Templates](#templates)
+  - [Prompt Templates](#prompt-templates)
+  - [Roleplay Templates](#roleplay-templates)
   - [Images](#images)
+  - [Mount Points (Scriptorium)](#mount-points-scriptorium)
+  - [Terminals (Ariel)](#terminals-ariel)
   - [System Backup & Restore](#system-backup--restore)
   - [System Data Directory](#system-data-directory)
   - [System Unlock](#system-unlock)
   - [System Migration Warnings](#system-migration-warnings)
-  - [Tools & Backup (Legacy)](#tools--backup)
   - [LLM Logs](#llm-logs)
-  - [Themes](#themes)
+  - [Theme Assets & Fonts](#theme-assets--fonts)
   - [Themes (v1)](#themes-v1)
   - [Search](#search)
   - [Search & Replace](#search--replace)
+  - [Background Jobs](#background-jobs)
   - [LLM Tools](#llm-tools)
-  - [Plugins](#plugins)
   - [Plugins (v1)](#plugins-v1)
   - [Projects](#projects)
   - [Help Docs](#help-docs)
@@ -60,10 +74,7 @@ Complete API reference for Quilltap v4.2+.
   - [System Plugin Initialization](#system-plugin-initialization)
   - [System Plugin Upgrades](#system-plugin-upgrades)
   - [System Pepper Vault (Deprecated)](#system-pepper-vault-deprecated)
-  - [Shell: Sudo Approval](#shell-sudo-approval)
-  - [Shell: Workspace Acknowledgement](#shell-workspace-acknowledgement)
   - [File Proxy](#file-proxy)
-  - [File Write Permissions](#file-write-permissions)
 
 ## API Versioning
 
@@ -1878,10 +1889,25 @@ Add a character to the chat.
 
 ```json
 {
+  "type": "CHARACTER",
   "characterId": "char-uuid",
-  "connectionProfileId": "profile-uuid"
+  "connectionProfileId": "profile-uuid",
+  "controlledBy": "llm",
+  "hasHistoryAccess": false,
+  "joinScenario": "Optional entrance description",
+  "outfitSelection": {
+    "characterId": "char-uuid",
+    "mode": "default"
+  }
 }
 ```
+
+**Notes**:
+
+- `controlledBy` accepts `"llm"` (default) or `"user"` (user-impersonated). `connectionProfileId` is required for LLM control and ignored for user control.
+- `hasHistoryAccess` (default `false`) controls whether the new participant sees messages from before they joined.
+- `joinScenario` is optional context describing how the character entered; surfaced as a Host announcement targeted at the new participant when `hasHistoryAccess` is false.
+- `outfitSelection` is optional. Modes: `default` (wardrobe defaults), `manual` (provide a `slots` object), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add defaults to `mode: "default"` so the new arrival is dressed; on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
 
 #### `POST /api/v1/chats/[id]?action=update-participant`
 
@@ -2287,6 +2313,99 @@ Queue a story background regeneration job.
   "jobId": "job-uuid"
 }
 ```
+
+---
+
+### Chat Announcements
+
+Ad-hoc announcement messages — system or character bubbles inserted into the chat via the Salon's "Insert Announcement" composer.
+
+#### `POST /api/v1/chats/[id]?action=announcement`
+
+Post an ad-hoc announcement bubble.
+
+**Request Body**:
+
+```json
+{
+  "contentMarkdown": "**Aurora:** The wardrobe has been updated.",
+  "sender": {
+    "kind": "character",
+    "characterId": "char-uuid"
+  }
+}
+```
+
+`sender.kind` is one of `"system"`, `"character"`, or a `systemSender` value (e.g. `"lantern"`, `"host"`). For `character` senders the referenced character must exist.
+
+**Response**: `201 Created` — `{ success: true, message: {...} }`.
+
+#### `POST /api/v1/chats/[id]?action=announcement-preview`
+
+Generate an in-character rewrite of a seed announcement for an off-scene character. Does not persist — the caller (the Insert Announcement dialog) displays the proposal for operator approval, edit, or regenerate, and only the approved text is posted via `?action=announcement`.
+
+**Request Body**:
+
+```json
+{
+  "characterId": "char-uuid",
+  "connectionProfileId": "profile-uuid",
+  "systemPromptId": "prompt-uuid",
+  "seedMarkdown": "Aurora announces the wardrobe refresh."
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "proposedMarkdown": "Aurora steps from behind the gilded screen..."
+}
+```
+
+---
+
+### Chat Photo Albums
+
+#### `GET /api/v1/chats/[id]?action=photo-albums`
+
+Returns the list of photo-album targets the Salon's Save-Image dialog can offer for a given chat: each chat participant with a character vault, the project's own mount point (`officialMountPointId`) if any, every document store linked to the project, and the instance-wide "Quilltap General" mount point. Exactly one option is flagged `isDefault: true` (preference order: active impersonated user character → first user-controlled participant with a vault → Quilltap General).
+
+**Response**: `200 OK`
+
+```json
+{
+  "albums": [
+    {
+      "mountPointId": "mp-uuid",
+      "name": "Alice",
+      "kind": "character",
+      "characterId": "char-uuid",
+      "participantId": "participant-uuid",
+      "isUserCharacter": true,
+      "isDefault": true
+    },
+    {
+      "mountPointId": "mp-uuid-2",
+      "name": "Project Notes",
+      "kind": "project"
+    },
+    {
+      "mountPointId": "mp-uuid-3",
+      "name": "World Bible",
+      "kind": "document-store"
+    },
+    {
+      "mountPointId": "mp-uuid-4",
+      "name": "Quilltap General",
+      "kind": "general"
+    }
+  ]
+}
+```
+
+`kind` is one of `"character"`, `"project"`, `"document-store"`, or `"general"`.
 
 ---
 
@@ -2936,46 +3055,7 @@ Trigger filesystem reconciliation — scans the file storage directory and synch
 
 ---
 
-### Files & Images (Legacy)
-
-#### `GET /api/v1/files/[id]`
-
-Download a file by ID.
-
-#### `GET /api/v1/images`
-
-List user's images.
-
-#### `POST /api/v1/images`
-
-Upload an image.
-
-**Request**: `multipart/form-data`
-
-#### `GET /api/v1/images/[id]`
-
-Get image metadata.
-
-#### `DELETE /api/v1/images/[id]`
-
-Delete an image.
-
-#### `POST /api/v1/images?action=generate`
-
-Generate an image using configured profile.
-
-**Request Body**:
-
-```json
-{
-  "profileId": "image-profile-uuid",
-  "prompt": "A serene mountain landscape",
-  "chatId": "chat-uuid",
-  "characterId": "char-uuid"
-}
-```
-
-#### Folders
+### Folders
 
 Manage folder entities for file organization. Folders are first-class entities stored in the database.
 
@@ -3090,9 +3170,7 @@ Delete an empty folder. Returns error if folder contains files or subfolders.
 
 ---
 
-### Templates
-
-#### Prompt Templates
+### Prompt Templates
 
 User-created system prompt templates.
 
@@ -3102,7 +3180,9 @@ User-created system prompt templates.
 - `PUT /api/v1/prompt-templates/[id]` - Update template
 - `DELETE /api/v1/prompt-templates/[id]` - Delete template
 
-#### Roleplay Templates
+---
+
+### Roleplay Templates
 
 Per-chat roleplay formatting templates.
 
@@ -3236,6 +3316,283 @@ Remove a tag from an image.
   "tagId": "char-uuid"
 }
 ```
+
+---
+
+### Mount Points (Scriptorium)
+
+Mount points are the storage units of the Scriptorium document-store system. Each mount point is one of three kinds:
+
+- **`filesystem`** — backed by a directory on the host filesystem (watcher tracks changes).
+- **`obsidian`** — filesystem variant tuned for an Obsidian vault (skips `.obsidian/`, `.trash/` by default).
+- **`database`** — bytes live entirely inside `quilltap-mount-index.db`; no `basePath` required.
+
+Mount points have a `storeType` of `documents` (general-purpose) or `character` (a character's private vault — see [Character Vault](../characters.md)).
+
+#### `GET /api/v1/mount-points`
+
+List all mount points, enriched with `embeddedChunkCount`.
+
+**Response**: `200 OK`
+
+```json
+{
+  "mountPoints": [
+    {
+      "id": "mp-uuid",
+      "name": "Project Notes",
+      "basePath": "/Users/me/notes",
+      "mountType": "filesystem",
+      "storeType": "documents",
+      "includePatterns": ["*.md", "*.txt", "*.pdf", "*.docx"],
+      "excludePatterns": [".git", "node_modules", ".obsidian", ".trash"],
+      "enabled": true,
+      "scanStatus": "idle",
+      "conversionStatus": "idle",
+      "fileCount": 42,
+      "chunkCount": 137,
+      "totalSizeBytes": 921384,
+      "embeddedChunkCount": 137,
+      "createdAt": "2026-01-15T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/mount-points`
+
+Create a mount point. The body is validated: `basePath` is required for `filesystem` and `obsidian` types but ignored for `database`.
+
+**Request Body**:
+
+```json
+{
+  "name": "Project Notes",
+  "basePath": "/Users/me/notes",
+  "mountType": "filesystem",
+  "storeType": "documents",
+  "includePatterns": ["*.md", "*.txt"],
+  "excludePatterns": [".git"],
+  "enabled": true
+}
+```
+
+**Response**: `201 Created` — `{ mountPoint: {...} }`, optionally with `warning` if the `basePath` is not currently accessible. Watchers attach asynchronously after creation. Character-scoped database mounts are scaffolded with a preset folder layout.
+
+#### `GET /api/v1/mount-points/[id]`
+
+Get a single mount point with computed `embeddedChunkCount`.
+
+#### `PATCH /api/v1/mount-points/[id]`
+
+Update fields on a mount point. Flipping `storeType` to `character` on a database-backed mount triggers preset scaffolding (missing folders only — existing files are untouched). The watcher is refreshed after the update.
+
+**Request Body** (all fields optional):
+
+```json
+{
+  "name": "Renamed",
+  "basePath": "/new/path",
+  "mountType": "filesystem",
+  "storeType": "documents",
+  "includePatterns": ["*.md"],
+  "excludePatterns": [".git"],
+  "enabled": true
+}
+```
+
+#### `DELETE /api/v1/mount-points/[id]`
+
+Detach the watcher and delete the mount point along with its chunks, files, database-backed documents/blobs, and project links.
+
+**Response**: `200 OK` — `{ success: true, message: "Mount point deleted successfully" }`
+
+#### `POST /api/v1/mount-points/[id]?action=scan`
+
+Run a full scan of the mount point and enqueue embedding jobs for any new or modified chunks.
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "scanResult": {
+    "filesScanned": 42,
+    "filesNew": 3,
+    "filesModified": 1,
+    "filesDeleted": 0,
+    "chunksCreated": 9,
+    "errors": []
+  },
+  "embeddingJobsEnqueued": 9
+}
+```
+
+#### `POST /api/v1/mount-points/[id]?action=convert`
+
+Convert a `filesystem` or `obsidian` mount to `database`-backed storage. Migrates all files into `doc_mount_documents` / `doc_mount_blobs`, detaches the watcher, and clears `basePath`. The conversion status is tracked on the mount point (`converting` → `idle` or `error`).
+
+**Response**: `200 OK` — `{ success: true, mountPoint: {...}, convertResult: { filesMigrated, documentsWritten, blobsWritten, filesSkipped, errors }, previousBasePath }`.
+
+#### `POST /api/v1/mount-points/[id]?action=deconvert`
+
+Convert a `database` mount back to `filesystem`-backed storage at a chosen `targetPath`. The target directory must exist and be empty.
+
+**Request Body**:
+
+```json
+{
+  "targetPath": "/Users/me/notes-extracted"
+}
+```
+
+**Response**: `200 OK` — `{ success: true, mountPoint: {...}, deconvertResult: { filesWritten, blobsWritten, bytesWritten, errors } }`.
+
+#### `GET /api/v1/mount-points/[id]/files`
+
+List indexed files plus the folder structure for a mount point.
+
+**Response**: `200 OK`
+
+```json
+{
+  "files": [...],
+  "folders": ["images", "notes", "notes/2026"]
+}
+```
+
+For filesystem/obsidian mounts the folder list is augmented with on-disk directories (so empty folders show up too). For database-backed mounts it comes from `doc_mount_folders`.
+
+#### `POST /api/v1/mount-points/[id]/folders`
+
+Create a folder inside a mount point. The path is normalised and validated to prevent traversal or invalid filesystem segments.
+
+**Request Body**:
+
+```json
+{
+  "path": "notes/2026"
+}
+```
+
+**Response**: `200 OK` — `{ success: true, path: "notes/2026" }`.
+
+#### `GET /api/v1/mount-points/[id]/blobs`
+
+List blob metadata (no bytes) for a mount point.
+
+**Query Parameters**:
+- `folder` (optional) — filter to a specific folder
+
+**Response**: `200 OK` — `{ blobs: [{ id, mountPointId, relativePath, storedMimeType, sizeBytes, sha256, description, ... }] }`
+
+#### `POST /api/v1/mount-points/[id]/blobs`
+
+Upload a blob via `multipart/form-data`. Image bitmaps are transcoded to WebP via `sharp`; WebP, SVG, and other MIME types are stored as-is. PDF and DOCX uploads have their text extracted into `doc_mount_blobs.extractedText` and are chunked for embedding so they become searchable.
+
+**Form fields**:
+- `file` (required) — the binary
+- `path` (required) — relative path inside the mount point
+- `description` (optional)
+
+**Response**: `201 Created` — `{ blob: {...} }`.
+
+#### `GET /api/v1/mount-points/[id]/blobs/[...path]`
+
+Stream blob bytes. The catch-all `[...path]` segment carries the blob's `relativePath` so Markdown references like `![alt](images/avatar.webp)` resolve directly against this URL. If no blob matches, the endpoint falls back to `doc_mount_documents` so text documents (Markdown, txt, JSON, JSONL) can also be served from the same path.
+
+Response headers include `Content-Type`, `Content-Length`, `Cache-Control: private, max-age=3600`, and `X-Blob-Sha256`.
+
+#### `PATCH /api/v1/mount-points/[id]/blobs/[...path]`
+
+Update the blob's `description`.
+
+**Request Body**:
+
+```json
+{
+  "description": "New description"
+}
+```
+
+#### `DELETE /api/v1/mount-points/[id]/blobs/[...path]`
+
+Delete the blob. If no blob is found at that path, the endpoint falls back to deleting the matching text document (and its chunks and `doc_mount_files` row).
+
+---
+
+### Terminals (Ariel)
+
+The Terminals API spawns and manages PTY sessions attached to a chat, used by the Ariel terminal subsystem. Each session is broadcast in the Salon via a synthetic `ariel` `systemSender` announcement when it opens or closes.
+
+#### `POST /api/v1/terminals`
+
+Spawn a new terminal session and post an open-announcement to the chat.
+
+**Request Body**:
+
+```json
+{
+  "chatId": "chat-uuid",
+  "label": "build server",
+  "shell": "/bin/zsh",
+  "cwd": "/Users/me/project",
+  "cols": 120,
+  "rows": 40
+}
+```
+
+Only `chatId` is required.
+
+**Response**: `201 Created` — `{ success: true, session: { id, chatId, label, shell, cwd, cols, rows, ... } }`.
+
+#### `GET /api/v1/terminals?chatId=<id>`
+
+List terminal sessions for a chat. Returns historical sessions from the database (live and exited).
+
+**Response**: `200 OK` — `{ success: true, sessions: [...] }`.
+
+#### `GET /api/v1/terminals/[id]`
+
+Get a session's metadata along with the in-memory ring buffer (recent output). If the session is no longer tracked in memory (server restart, natural exit), the endpoint falls back to the database row so callers can distinguish "exited" from "never existed" — `ringBuffer` is `null` in that case.
+
+**Response**: `200 OK` — `{ success: true, session: {...}, ringBuffer: string | null }`.
+
+#### `POST /api/v1/terminals/[id]?action=kill`
+
+Send `SIGTERM` to the session.
+
+**Response**: `200 OK` — `{ success: true, ok: true }`.
+
+#### `POST /api/v1/terminals/[id]?action=signal`
+
+Send a custom signal.
+
+**Request Body**:
+
+```json
+{
+  "signal": "SIGINT"
+}
+```
+
+Allowed signals: `SIGINT`, `SIGTERM`, `SIGHUP`.
+
+#### `POST /api/v1/terminals/[id]?action=write`
+
+Write input bytes to the session. This is the HTTP fallback for environments where the WebSocket channel is unavailable.
+
+**Request Body**:
+
+```json
+{
+  "data": "ls -la\n"
+}
+```
+
+#### `DELETE /api/v1/terminals/[id]`
+
+Kill the session (which triggers the close-announcement with the real exit code via the `onExit` handler) and delete the database row.
 
 ---
 
@@ -3517,67 +3874,6 @@ Marks migration warnings as acknowledged. Call after displaying notifications to
 
 ---
 
-### Tools & Backup (Legacy)
-
-#### `POST /api/v1/system/backup`
-
-Create a full backup.
-
-**Request Body**:
-
-```json
-{
-  "destination": "local" | "cloud",
-  "includeImages": true
-}
-```
-
-#### `GET /api/v1/system/backup`
-
-List backups.
-
-#### `GET /api/v1/system/backup/[id]?action=preview`
-
-Preview backup contents.
-
-#### `POST /api/v1/system/restore`
-
-Restore from backup.
-
-#### `GET /api/v1/system/backup/[id]?action=download`
-
-Download a backup file.
-
-#### `DELETE /api/v1/system/backup/[id]`
-
-Delete a backup.
-
-#### `POST /api/v1/system/tools?action=delete-data`
-
-Delete all user data.
-
-**Request Body**:
-
-```json
-{
-  "confirmed": true
-}
-```
-
-#### `POST /api/v1/system/tools?action=capabilities-report-generate`
-
-Generate a capabilities report.
-
-#### `GET /api/v1/system/tools?action=capabilities-report-list`
-
-List generated reports.
-
-#### `GET /api/v1/system/tools?action=capabilities-report-get`
-
-Get a specific report.
-
----
-
 ### LLM Logs
 
 #### `GET /api/v1/llm-logs`
@@ -3669,31 +3965,17 @@ Delete a log entry by ID.
 
 ---
 
-### Themes
+### Theme Assets & Fonts
 
-#### `GET /api/themes`
-
-List available themes.
-
-#### `GET /api/themes/[themeId]/tokens`
-
-Get theme CSS tokens.
+Static asset routes used by both plugin and bundle themes. These sit outside `/api/v1/` because they are unauthenticated asset endpoints.
 
 #### `GET /api/themes/assets/[...path]`
 
-Serve theme assets.
+Serve theme assets (CSS overrides, images, etc.).
 
 #### `GET /api/themes/fonts/[...path]`
 
 Serve theme fonts.
-
-#### `GET /api/theme-preference`
-
-Get user's theme preference.
-
-#### `PUT /api/theme-preference`
-
-Update theme preference.
 
 ---
 
@@ -4010,16 +4292,16 @@ List all available LLM tools that can be enabled/disabled per chat.
       "available": true
     },
     {
-      "id": "search_memories",
-      "name": "Search Memories",
-      "description": "Search through character memories and past conversations",
+      "id": "search",
+      "name": "Search",
+      "description": "Search across the Scriptorium — character memories, past conversations, and document stores",
       "source": "built-in",
       "category": "memory",
       "available": true
     },
     {
-      "id": "search_web",
-      "name": "Search Web",
+      "id": "web_search",
+      "name": "Web Search",
       "description": "Search the web for current information",
       "source": "built-in",
       "category": "search",
@@ -4029,23 +4311,31 @@ List all available LLM tools that can be enabled/disabled per chat.
     {
       "id": "project_info",
       "name": "Project Info",
-      "description": "Access project information and files",
+      "description": "Access project information and files (trimmed actions in v4.3)",
       "source": "built-in",
       "category": "project",
       "available": false,
       "unavailableReason": "Chat must be associated with a project"
     },
     {
-      "id": "file_management",
-      "name": "File Management",
-      "description": "Read, write, and manage files in the file system",
+      "id": "doc_read_file",
+      "name": "Doc: Read File",
+      "description": "Read a file from a document store (Scriptorium)",
       "source": "built-in",
-      "category": "files",
+      "category": "documents",
       "available": true
     },
     {
-      "id": "search_help",
-      "name": "Search Help",
+      "id": "self_inventory",
+      "name": "Self Inventory",
+      "description": "Introspect character: loaded memories, wardrobe, vault access, current outfit",
+      "source": "built-in",
+      "category": "self",
+      "available": true
+    },
+    {
+      "id": "help_search",
+      "name": "Help Search",
       "description": "Search Quilltap help documentation for features, settings, and usage guidance",
       "source": "built-in",
       "category": "help",
@@ -4056,170 +4346,32 @@ List all available LLM tools that can be enabled/disabled per chat.
 }
 ```
 
-**Built-in Tools:**
+**Built-in Tools (v4.3):**
 
-| Tool ID | Name | Description | Context Requirements |
-|---------|------|-------------|---------------------|
-| `generate_image` | Generate Image | AI image generation | Requires image profile on character |
-| `search_memories` | Search Memories | Search character memories | Always available |
-| `search_web` | Search Web | Web search for current info | Requires web search enabled in connection profile |
-| `project_info` | Project Info | Access project files | Chat must be in a project |
-| `file_management` | File Management | File system operations | Always available |
-| `search_help` | Search Help | Search Quilltap documentation | Always available |
+The full list lives in `lib/tools/*-tool.ts`. Highlights:
+
+| Tool ID | Description | Context Requirements |
+|---------|-------------|---------------------|
+| `generate_image` | AI image generation (Lantern) | Requires image profile on character |
+| `search` | Unified search over memories, conversations, and Scriptorium documents (renamed from `search_memories`; the old name still works as a parser alias) | Always available |
+| `web_search` | Web search via the configured search provider plugin | Requires web search enabled in connection profile |
+| `help_search` / `help_navigate` / `help_settings` | Search and navigate the in-app help system | Always available |
+| `project_info` | Project file access (trimmed action set in v4.3) | Chat must be in a project |
+| `doc_read_file` / `doc_write_file` / `doc_str_replace` / `doc_grep` / `doc_list_files` / `doc_open_document` / `doc_close_document` / `doc_focus` / `doc_create_folder` / `doc_delete_folder` / `doc_delete_file` / `doc_move_file` / `doc_move_folder` / `doc_copy_file` / `doc_insert_text` / `doc_read_heading` / `doc_update_heading` / `doc_read_frontmatter` / `doc_update_frontmatter` / `doc_read_blob` / `doc_write_blob` / `doc_list_blobs` / `doc_delete_blob` | Document-store (Scriptorium) read/write tools — replaces the old `file_management` tool | Document store available; some require Document Mode |
+| `self_inventory` | Character introspection (loaded memories, wardrobe, vault access) | Always available |
+| `state` | Persistent chat state (Pascal: inventory, stats, counters) | Always available |
+| `rng` | Dice / coin / random rolls (Pascal) | Always available |
+| `whisper` | Send a private message to a specific character | Multi-character chats |
+| `read_conversation` | Read prior conversation history with filters | Always available |
+| `upsert_annotation` / `delete_annotation` | Manage conversation annotations | Always available |
+| `create_wardrobe_item` / `update_outfit_item` | Aurora wardrobe edits | Character context |
+| `submit_final_response` | Agent-mode wrap-up | Agent mode only |
+| `request_full_context` | Request full context expansion | Context compression enabled |
 
 **Notes:**
 - When `chatId` is provided, the response includes `available` and `unavailableReason` fields
 - Plugin-provided tools are also included with `source: "plugin"`
 - The `request_full_context` tool is intentionally excluded (always available when context compression is enabled)
-
----
-
-### Plugins
-
-Plugin management endpoints for npm-based plugin installation.
-
-#### `GET /api/plugins`
-
-Get all registered plugins and system status.
-
-**Response:**
-```json
-{
-  "plugins": [
-    {
-      "name": "qtap-plugin-openai",
-      "title": "OpenAI Provider",
-      "version": "1.0.5",
-      "enabled": true,
-      "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER"],
-      "path": "/app/plugins/dist/qtap-plugin-openai",
-      "source": "included"
-    }
-  ],
-  "stats": {
-    "total": 15,
-    "enabled": 14,
-    "disabled": 1,
-    "errors": 0,
-    "initialized": true
-  },
-  "errors": []
-}
-```
-
-#### `PUT /api/plugins/[name]`
-
-Enable or disable a plugin.
-
-**Request Body:**
-```json
-{
-  "enabled": true
-}
-```
-
-#### `GET /api/plugins/search`
-
-Search npm registry for Quilltap plugins.
-
-**Query Parameters:**
-- `q` - Search query (appended to "qtap-plugin-" prefix)
-
-**Response:**
-```json
-{
-  "plugins": [
-    {
-      "name": "qtap-plugin-example",
-      "version": "1.0.0",
-      "description": "Example Quilltap plugin",
-      "author": "Author Name",
-      "keywords": ["quilltap", "plugin"],
-      "updated": "2024-01-15T10:30:00Z",
-      "score": 0.85
-    }
-  ]
-}
-```
-
-#### `POST /api/plugins/install`
-
-Install a plugin from npm.
-
-**Request Body:**
-```json
-{
-  "packageName": "qtap-plugin-example"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "plugin": {
-    "name": "qtap-plugin-example",
-    "title": "Example Plugin",
-    "version": "1.0.0",
-    "description": "An example plugin",
-    "capabilities": ["LLM_PROVIDER"]
-  },
-  "message": "Plugin installed successfully. Restart Quilltap to activate the plugin."
-}
-```
-
-#### `POST /api/plugins/uninstall`
-
-Uninstall an installed plugin.
-
-**Request Body:**
-```json
-{
-  "packageName": "qtap-plugin-example"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Plugin uninstalled successfully. Restart Quilltap to complete removal."
-}
-```
-
-**Notes:**
-- Bundled plugins cannot be uninstalled
-
-#### `GET /api/plugins/installed`
-
-Get all installed plugins with metadata.
-
-**Query Parameters:**
-- `scope` - Filter by scope: `"all"`, `"bundled"`, `"site"` (default: `"all"`)
-- `check` - Package name to check installation status
-
-**Response:**
-```json
-{
-  "plugins": [
-    {
-      "name": "qtap-plugin-openai",
-      "title": "OpenAI Provider",
-      "version": "1.0.5",
-      "description": "OpenAI LLM and image generation provider",
-      "source": "bundled",
-      "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER"],
-      "installedAt": null
-    }
-  ],
-  "counts": {
-    "total": 15,
-    "bundled": 12,
-    "site": 2,
-    "user": 1
-  }
-}
-```
 
 ---
 
@@ -4816,88 +4968,6 @@ Mark upgrade notifications as acknowledged. Call this after showing toast notifi
 
 ---
 
-### Shell: Sudo Approval
-
-Handles user approval or denial of pending sudo commands from the shell tool.
-
-#### `POST /api/v1/shell/sudo-approval?action=complete`
-
-Complete a pending sudo command by approving or denying it.
-
-**Request Body**:
-
-```json
-{
-  "chatId": "chat-uuid",
-  "decision": "approve",
-  "pendingSudoCommand": {
-    "command": "npm install",
-    "parameters": ["-g", "typescript"],
-    "timeout_ms": 60000
-  }
-}
-```
-
-**Validation**:
-- `chatId`: Required UUID
-- `decision`: Required, `"approve"` or `"deny"`
-- `pendingSudoCommand.command`: Required, min 1 character
-- `pendingSudoCommand.parameters`: Optional array of strings
-- `pendingSudoCommand.timeout_ms`: Optional integer, 1000-300000
-
-**Response (approved)**: `200 OK`
-
-```json
-{
-  "action": "approved",
-  "result": { ... },
-  "toolMessageId": "message-uuid"
-}
-```
-
-**Response (denied)**: `200 OK`
-
-```json
-{
-  "action": "denied",
-  "message": "Sudo command denied",
-  "toolMessageId": "message-uuid"
-}
-```
-
-**Note**: A POST without `?action=complete` returns `400 Bad Request`.
-
----
-
-### Shell: Workspace Acknowledgement
-
-Records user acknowledgement of workspace security implications for the shell tool.
-
-#### `POST /api/v1/shell/workspace-acknowledgement`
-
-Record workspace security acknowledgement for a chat.
-
-**Request Body**:
-
-```json
-{
-  "chatId": "chat-uuid"
-}
-```
-
-**Response**: `200 OK`
-
-```json
-{
-  "acknowledged": true,
-  "message": "Workspace acknowledgement recorded"
-}
-```
-
-Sets `workspaceWarningAcknowledged: true` in the chat state.
-
----
-
 ### File Proxy
 
 Serves files stored in the local filesystem through the API with authentication and ownership verification.
@@ -4915,130 +4985,6 @@ Download a file by storage key. The key is the path segments of the file's stora
 **Error Responses**:
 - `404 Not Found` - File not found in database or storage key not provided
 - `403 Forbidden` - File does not belong to the authenticated user
-
----
-
-### File Write Permissions
-
-Manages file write permissions that control whether LLM tools can create/modify files.
-
-#### `GET /api/v1/files/write-permissions`
-
-List all file write permissions for the current user, enriched with project and file names.
-
-**Response**: `200 OK`
-
-```json
-{
-  "permissions": [
-    {
-      "id": "perm-uuid",
-      "scope": "PROJECT",
-      "projectId": "project-uuid",
-      "projectName": "My Project",
-      "fileId": null,
-      "filename": null,
-      "grantedAt": "2026-01-15T12:00:00.000Z",
-      "grantedInChatId": "chat-uuid",
-      "createdAt": "2026-01-15T12:00:00.000Z"
-    }
-  ]
-}
-```
-
-#### `POST /api/v1/files/write-permissions`
-
-Grant a new file write permission (default POST, no action parameter).
-
-**Request Body**:
-
-```json
-{
-  "scope": "PROJECT",
-  "fileId": null,
-  "projectId": "project-uuid",
-  "grantedInChatId": "chat-uuid"
-}
-```
-
-**Scope Values**:
-- `SINGLE_FILE` - Permission for a single file (requires `fileId`)
-- `PROJECT` - Permission for all files in a project (requires `projectId`)
-- `GENERAL` - Permission for all user files
-
-**Response**: `201 Created`
-
-```json
-{
-  "permission": { ... }
-}
-```
-
-#### `POST /api/v1/files/write-permissions?action=revoke`
-
-Revoke a file write permission.
-
-**Request Body**:
-
-```json
-{
-  "permissionId": "perm-uuid"
-}
-```
-
-**Response**: `200 OK`
-
-```json
-{
-  "message": "Permission revoked"
-}
-```
-
-#### `POST /api/v1/files/write-permissions?action=complete`
-
-Complete a pending file write request (approve or deny). On approval, grants the appropriate permission and executes the file write.
-
-**Request Body**:
-
-```json
-{
-  "chatId": "chat-uuid",
-  "action": "approve",
-  "pendingWrite": {
-    "filename": "notes.txt",
-    "content": "File content here",
-    "mimeType": "text/plain",
-    "folderPath": "/",
-    "projectId": null
-  }
-}
-```
-
-**Response (approved)**: `200 OK`
-
-```json
-{
-  "action": "approved",
-  "file": {
-    "id": "file-uuid",
-    "filename": "notes.txt",
-    "folderPath": "/",
-    "projectId": null
-  },
-  "toolMessageId": "message-uuid",
-  "message": "File \"notes.txt\" created successfully"
-}
-```
-
-**Response (denied)**: `200 OK`
-
-```json
-{
-  "action": "denied",
-  "message": "File write request denied",
-  "toolMessageId": "message-uuid"
-}
-```
 
 ---
 
@@ -5110,7 +5056,7 @@ characters = data['characters']
 
 ## Versioning
 
-Current API version: **v4.0-dev**
+Current API version: **v4.3-dev**
 
 All core endpoints use the `/api/v1/` prefix. Legacy routes (without prefix) were removed in v2.8.
 

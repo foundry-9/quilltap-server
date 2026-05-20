@@ -31,20 +31,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
   // ============================================================================
 
   /**
-   * Find a connection profile by ID
-   */
-  async findById(id: string): Promise<ConnectionProfile | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all connection profiles
-   */
-  async findAll(): Promise<ConnectionProfile[]> {
-    return this._findAll();
-  }
-
-  /**
    * Find connection profiles with a specific tag
    */
   async findByTag(tagId: string): Promise<ConnectionProfile[]> {

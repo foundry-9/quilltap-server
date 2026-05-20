@@ -56,7 +56,18 @@ export function TimestampConfigCard({
   const handleModeChange = (mode: TimestampMode) => {
     if (disabled) return
     const updated = { ...currentConfig, mode }
+    // Seed a sensible default for the interval the first time EVERY_N_MINUTES is selected.
+    if (mode === 'EVERY_N_MINUTES' && !updated.intervalMinutes) {
+      updated.intervalMinutes = 15
+    }
     onChange(updated)
+  }
+
+  const handleIntervalMinutesChange = (raw: string) => {
+    if (disabled) return
+    const parsed = Number.parseInt(raw, 10)
+    const next = Number.isFinite(parsed) && parsed >= 1 ? parsed : 1
+    onChange({ ...currentConfig, intervalMinutes: next })
   }
 
   const handleFormatChange = (format: TimestampFormat) => {
@@ -134,6 +145,27 @@ export function TimestampConfigCard({
           ))}
         </div>
       </div>
+
+      {/* Interval (only when mode is EVERY_N_MINUTES) */}
+      {currentConfig.mode === 'EVERY_N_MINUTES' && (
+        <div>
+          <label className="block qt-text-label mb-2">
+            Interval (minutes)
+          </label>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={currentConfig.intervalMinutes ?? 15}
+            onChange={(e) => handleIntervalMinutesChange(e.target.value)}
+            disabled={disabled}
+            className="w-32 px-3 py-2 border qt-border-default rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          <p className="qt-text-secondary mt-1 text-xs">
+            The Host will announce the time at most once every {currentConfig.intervalMinutes ?? 15} minute{(currentConfig.intervalMinutes ?? 15) === 1 ? '' : 's'}. The first message in the conversation always gets an announcement.
+          </p>
+        </div>
+      )}
 
       {/* Format and Options (only when mode is not NONE) */}
       {currentConfig.mode !== 'NONE' && (
@@ -354,7 +386,9 @@ export function TimestampConfigCard({
             : `Timestamps will be injected ${
                 currentConfig.mode === 'START_ONLY'
                   ? 'at conversation start'
-                  : 'with every message'
+                  : currentConfig.mode === 'EVERY_N_MINUTES'
+                    ? `every ${currentConfig.intervalMinutes ?? 15} minute${(currentConfig.intervalMinutes ?? 15) === 1 ? '' : 's'}`
+                    : 'with every message'
               } in ${currentConfig.format} format${
                 currentConfig.useFictionalTime ? ' (fictional time)' : ''
               }`}

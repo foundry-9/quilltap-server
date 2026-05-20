@@ -360,13 +360,6 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       }
 
       if (entry.embedding.length !== queryEmbedding.length) {
-        logger.debug('Skipping vector entry with mismatched dimensions during search', {
-          context: 'CharacterVectorStore.search',
-          entryId: entry.id,
-          expectedDimensions: queryEmbedding.length,
-          actualDimensions: entry.embedding.length,
-          characterId: this.characterId,
-        })
         continue
       }
 
@@ -431,13 +424,6 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       }
 
       if (entry.embedding.length !== queryEmbedding.length) {
-        logger.debug('Skipping vector entry with mismatched dimensions during search', {
-          context: 'CharacterVectorStore.search',
-          entryId: entry.id,
-          expectedDimensions: queryEmbedding.length,
-          actualDimensions: entry.embedding.length,
-          characterId: this.characterId,
-        })
         continue
       }
 
@@ -548,6 +534,14 @@ export class VectorStoreManager {
    */
   unloadStore(characterId: string): boolean {
     return this.stores.delete(characterId)
+  }
+
+  /**
+   * Drop every cached store. Used after a corpus-wide rewrite (e.g. a
+   * Matryoshka re-apply) to ensure the next search loads fresh BLOBs.
+   */
+  unloadAll(): void {
+    this.stores.clear()
   }
 
   /**

@@ -1,31 +1,48 @@
 /**
- * Memory Processor
- * Sprint 3: Auto-Memory Formation
+ * Memory Processor — Per-Turn Extraction
  *
- * This module handles automatic memory extraction from chat messages.
- * It runs as a background task to avoid blocking chat responses.
+ * Runs once per chat turn (not once per assistant message). The orchestrator
+ * defers extraction until the turn closes, builds a TurnTranscript covering
+ * the user opener plus every character contribution, and feeds the whole
+ * transcript through two extraction passes:
+ *
+ *   1. SELF — one call per allowed character, with that character's identity
+ *      preloaded into the prompt as an ALREADY ESTABLISHED canon block so the
+ *      extractor can skip facts already on file.
+ *   2. OTHER — one call per (observer, subject) pair where subject ranges over
+ *      every other allowed character plus the user-controlled character (if
+ *      any). The subject canon block is loaded from the observer's vault at
+ *      `Others/<subject>.md`, falling back to the subject's identity property.
+ *
+ * The user is no longer special-cased — they are a participant with
+ * `controlledBy: 'user'` and a real character record, so they route through
+ * the OTHER pass like any other subject.
+ *
+ * Rate-limiting is per-character-per-turn (existing per-hour cap continues
+ * to apply). The chat flow never blocks on memory extraction.
  */
 
 import { getRepositories } from '@/lib/repositories/factory'
-import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, extractInterCharacterMemoryFromMessage, MemoryCandidate, UncensoredFallbackOptions } from './cheap-llm-tasks'
+import {
+  extractSelfMemoriesFromTurn,
+  extractOtherMemoriesFromTurn,
+  loadCanonForSelf,
+  loadCanonForObserverAboutSubject,
+  renderCanonBlock,
+  MemoryCandidate,
+  UncensoredFallbackOptions,
+} from './cheap-llm-tasks'
+import type { OtherSubjectInput } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { resolveMaxTokens } from '@/lib/llm/model-context-data'
-import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/schemas/types'
+import { ConnectionProfile, CheapLLMSettings, Character } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
 import type { DangerousContentSettings, MemoryExtractionLimits } from '@/lib/schemas/settings.types'
+import type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-message/turn-transcript'
 import { createMemoryWithGate } from './memory-service'
 import type { MemoryGateOutcome } from './memory-gate'
 import { logger } from '@/lib/logger'
-import { formatNameWithPronouns } from './format-utils'
 
-/**
- * Resolve the per-extraction rate-limit state for a character.
- *
- * Returns `{ mode, floor }` where:
- *  - `mode: 'allow'` — no limit engaged; candidates flow through unchanged
- *  - `mode: 'throttle'` — volume is in the soft band; filter candidates below `floor`
- *  - `mode: 'skip'` — volume is at or above the hard cap; skip this entire extraction
- */
 type RateLimitDecision =
   | { mode: 'allow' }
   | { mode: 'throttle'; floor: number; recentCount: number; cap: number }
@@ -58,7 +75,6 @@ async function resolveExtractionRateLimit(
       }
     }
   } catch (error) {
-    // Never block extraction on a rate-limit lookup failure
     logger.warn('[Memory] Rate-limit lookup failed; allowing extraction', {
       characterId,
       error: error instanceof Error ? error.message : String(error),
@@ -68,132 +84,77 @@ async function resolveExtractionRateLimit(
   return { mode: 'allow' }
 }
 
-/** Filter candidates by an importance floor. Returns a new array. */
 function applyImportanceFloor(candidates: MemoryCandidate[], floor: number): MemoryCandidate[] {
   return candidates.filter(c => (c.importance ?? 0.5) >= floor)
 }
 
 /**
- * Context for memory extraction
+ * Per-turn memory extraction context. The transcript carries everything the
+ * extraction passes need; the rest is environment (cheap LLM selection,
+ * danger settings, rate limits).
  */
-export interface MemoryExtractionContext {
-  /** Character ID to associate the memory with */
+export interface TurnMemoryExtractionContext {
+  transcript: TurnTranscript
+  /**
+   * Hydrated character records keyed by characterId, covering every CHARACTER
+   * participant in the chat (including the user-controlled one when present).
+   * Used by the canon loader to read `identity` and `characterDocumentMountPointId`
+   * without making fresh DB calls per extraction pass.
+   */
+  participantCharacters: Map<string, Character>
+  chatId: string
+  userId: string
+  connectionProfile: ConnectionProfile
+  cheapLLMSettings: CheapLLMSettings
+  availableProfiles?: ConnectionProfile[]
+  dangerSettings?: DangerousContentSettings
+  isDangerousChat?: boolean
+  memoryExtractionLimits?: MemoryExtractionLimits
+  /** Override the source-message timestamp on derived memories — used by batch re-extraction to backfill historical timing. */
+  sourceMessageTimestamp?: string
+  /** When true, run all extraction passes but skip persistence — candidates are returned on the result instead. */
+  dryRun?: boolean
+}
+
+/**
+ * Candidate memory captured during a dry-run extraction. Mirrors the input to
+ * `createMemoryWithGate` plus the metadata a caller needs to attribute it
+ * (which character, observing whom, from which pass, sourced from which message).
+ */
+export interface ExtractedCandidate {
+  pass: 'SELF' | 'OTHER'
   characterId: string
-  /** Character name for context */
   characterName: string
-  /** Character pronouns for context */
-  characterPronouns?: Pronouns | null
-  /** User character name if available */
-  userCharacterName?: string
-  /** User character ID - who the memory is about (the user-controlled character in the chat) */
-  userCharacterId?: string
-  /** All character names in a multi-character chat (for clear identity context) */
-  allCharacterNames?: string[]
-  /** Map of character name to pronouns for multi-character chats */
-  allCharacterPronouns?: Record<string, Pronouns | null>
-  /** Chat ID for source reference */
-  chatId: string
-  /** User message content */
-  userMessage: string
-  /** Assistant response content */
-  assistantMessage: string
-  /** Source message ID for tracking */
-  sourceMessageId: string
-  /** Source message createdAt timestamp (to preserve original timing on extracted memories) */
-  sourceMessageTimestamp?: string
-  /** User ID for API access */
-  userId: string
-  /** Connection profile for cheap LLM */
-  connectionProfile: ConnectionProfile
-  /** Cheap LLM settings */
-  cheapLLMSettings: CheapLLMSettings
-  /** Available connection profiles for user-defined strategy */
-  availableProfiles?: ConnectionProfile[]
-  /** Dangerous content settings for uncensored fallback */
-  dangerSettings?: DangerousContentSettings
-  /** Whether the chat is flagged as permanently dangerous */
-  isDangerousChat?: boolean
-  /** Per-hour extraction rate limits; when enabled, applies a graduated importance floor as volume approaches the cap */
-  memoryExtractionLimits?: MemoryExtractionLimits
+  aboutCharacterId: string
+  aboutCharacterName: string
+  sourceMessageId: string | null
+  content: string
+  summary: string
+  keywords: string[]
+  importance: number
 }
 
-/**
- * Context for inter-character memory extraction in multi-character chats
- */
-export interface InterCharacterMemoryContext {
-  /** The character who is forming the memory (observer) */
-  observerCharacterId: string
-  /** The observer character's name */
-  observerCharacterName: string
-  /** The observer character's pronouns */
-  observerCharacterPronouns?: Pronouns | null
-  /** What the observer said in this exchange */
-  observerMessage: string
-  /** The character being observed (subject of the memory) */
-  subjectCharacterId: string
-  /** The subject character's name */
-  subjectCharacterName: string
-  /** The subject character's pronouns */
-  subjectCharacterPronouns?: Pronouns | null
-  /** What the subject said in this exchange */
-  subjectMessage: string
-  /** Chat ID for source reference */
-  chatId: string
-  /** Source message ID for tracking */
-  sourceMessageId: string
-  /** Source message createdAt timestamp (to preserve original timing on extracted memories) */
-  sourceMessageTimestamp?: string
-  /** User ID for API access */
-  userId: string
-  /** Connection profile for cheap LLM */
-  connectionProfile: ConnectionProfile
-  /** Cheap LLM settings */
-  cheapLLMSettings: CheapLLMSettings
-  /** Available connection profiles for user-defined strategy */
-  availableProfiles?: ConnectionProfile[]
-  /** Dangerous content settings for uncensored fallback */
-  dangerSettings?: DangerousContentSettings
-  /** Whether the chat is flagged as permanently dangerous */
-  isDangerousChat?: boolean
-  /** Per-hour extraction rate limits; when enabled, applies a graduated importance floor as volume approaches the cap */
-  memoryExtractionLimits?: MemoryExtractionLimits
-}
-
-/**
- * Result of memory processing
- */
-export interface MemoryProcessingResult {
-  /** Whether extraction was successful */
+export interface TurnMemoryProcessingResult {
   success: boolean
-  /** Whether any memories were created */
-  memoryCreated: boolean
-  /** Whether any existing memories were reinforced */
-  memoryReinforced: boolean
-  /** IDs of all created memories */
-  memoryIds: string[]
-  /** IDs of all reinforced memories */
+  /** Total number of new memories written across all passes. */
+  memoriesCreatedCount: number
+  /** Total number of existing memories that were reinforced. */
+  memoriesReinforcedCount: number
+  /** All created memory IDs across all passes (for downstream logging). */
+  createdMemoryIds: string[]
+  /** All reinforced memory IDs. */
   reinforcedMemoryIds: string[]
-  /** @deprecated Use memoryIds[0] — kept for backward compatibility */
-  memoryId?: string
-  /** @deprecated Use reinforcedMemoryIds[0] — kept for backward compatibility */
-  reinforcedMemoryId?: string
-  /** IDs of related memories that were linked */
-  relatedMemoryIds?: string[]
-  /** Error message if failed */
+  /** Aggregate token usage across every cheap-LLM call this run made. */
+  usage: { promptTokens: number; completionTokens: number; totalTokens: number }
+  /** Source message ID to attach debug logs to (latest assistant message of the turn, or null when the turn produced none). */
+  sourceMessageId: string | null
+  /** Combined debug log lines, one per outcome, in extraction order. */
+  debugLogs: string[]
+  /** Populated only when the context was run with `dryRun: true`. */
+  extractedCandidates?: ExtractedCandidate[]
   error?: string
-  /** Token usage for cost tracking */
-  usage?: {
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-  }
-  /** Debug log messages for display in frontend */
-  debugLogs?: string[]
 }
 
-/**
- * Converts CheapLLMSettings to CheapLLMConfig for the provider selection
- */
 function toCheapLLMConfig(settings: CheapLLMSettings): CheapLLMConfig {
   return {
     strategy: settings.strategy,
@@ -202,610 +163,133 @@ function toCheapLLMConfig(settings: CheapLLMSettings): CheapLLMConfig {
   }
 }
 
-/**
- * Builds context string for memory extraction
- * Includes clear participant identification for multi-character chats
- */
-function buildExtractionContext(ctx: MemoryExtractionContext): string {
-  const parts: string[] = []
-
-  parts.push('PARTICIPANTS IN THIS CONVERSATION:')
-
-  // User identification
-  if (ctx.userCharacterName) {
-    parts.push(`- USER: ${ctx.userCharacterName} (the human participant)`)
-  } else {
-    parts.push('- USER: The human participant')
-  }
-
-  // Character(s) identification with pronouns
-  if (ctx.allCharacterNames && ctx.allCharacterNames.length > 1) {
-    // Multi-character chat - list all characters with pronouns
-    parts.push('- CHARACTERS (AI characters in this chat):')
-    for (const name of ctx.allCharacterNames) {
-      const pronouns = ctx.allCharacterPronouns?.[name]
-      const nameWithPronouns = formatNameWithPronouns(name, pronouns)
-      const marker = name === ctx.characterName ? ' (currently responding)' : ''
-      parts.push(`  * ${nameWithPronouns}${marker}`)
-    }
-  } else {
-    // Single character chat with pronouns
-    const nameWithPronouns = formatNameWithPronouns(ctx.characterName, ctx.characterPronouns)
-    parts.push(`- CHARACTER: ${nameWithPronouns} (an AI character)`)
-  }
-
-  return parts.join('\n')
+interface WriteOptions {
+  characterId: string
+  characterName: string
+  aboutCharacterId: string
+  aboutCharacterName: string
+  pass: 'SELF' | 'OTHER'
+  candidate: MemoryCandidate
+  passLabel: string
+  ctx: TurnMemoryExtractionContext
+  sourceMessageId: string | null
+  debugLogs: string[]
+  createdIds: string[]
+  reinforcedIds: string[]
+  collected: ExtractedCandidate[]
 }
 
-/**
- * Creates a memory from an extraction candidate using the Memory Gate.
- * Returns the full gate outcome (action, novel details, related IDs).
- */
-async function createMemoryFromCandidate(
-  ctx: MemoryExtractionContext,
-  candidate: MemoryCandidate
-): Promise<MemoryGateOutcome> {
-  return createMemoryWithGate(
+async function writeCandidate(opts: WriteOptions): Promise<void> {
+  if (opts.ctx.dryRun) {
+    opts.collected.push({
+      pass: opts.pass,
+      characterId: opts.characterId,
+      characterName: opts.characterName,
+      aboutCharacterId: opts.aboutCharacterId,
+      aboutCharacterName: opts.aboutCharacterName,
+      sourceMessageId: opts.sourceMessageId,
+      content: opts.candidate.content || '',
+      summary: opts.candidate.summary || '',
+      keywords: opts.candidate.keywords || [],
+      importance: opts.candidate.importance ?? 0.5,
+    })
+    opts.debugLogs.push(
+      `[Memory] DRY-RUN ${opts.passLabel} — would write: ${opts.candidate.summary}`
+    )
+    return
+  }
+
+  const outcome: MemoryGateOutcome = await createMemoryWithGate(
     {
-      characterId: ctx.characterId,
-      aboutCharacterId: ctx.userCharacterId || null,
-      chatId: ctx.chatId,
-      content: candidate.content || '',
-      summary: candidate.summary || '',
-      keywords: candidate.keywords || [],
-      importance: candidate.importance || 0.5,
+      characterId: opts.characterId,
+      aboutCharacterId: opts.aboutCharacterId,
+      chatId: opts.ctx.chatId,
+      content: opts.candidate.content || '',
+      summary: opts.candidate.summary || '',
+      keywords: opts.candidate.keywords || [],
+      importance: opts.candidate.importance || 0.5,
       source: 'AUTO',
-      sourceMessageId: ctx.sourceMessageId,
-      sourceMessageTimestamp: ctx.sourceMessageTimestamp,
+      sourceMessageId: opts.sourceMessageId ?? undefined,
+      sourceMessageTimestamp: opts.ctx.sourceMessageTimestamp,
       tags: [],
     },
-    {
-      userId: ctx.userId,
-    }
+    { userId: opts.ctx.userId }
   )
+
+  switch (outcome.action) {
+    case 'SKIP_NEAR_DUPLICATE': {
+      opts.debugLogs.push(
+        `[Memory] SKIPPED near-duplicate ${opts.passLabel}: absorbed into ${outcome.memory?.id ?? 'unknown'} ` +
+        `(similarity ${outcome.similarity?.toFixed(3) ?? 'n/a'}) — ${opts.candidate.summary}`
+      )
+      break
+    }
+    case 'SKIP_EMBEDDING_FAILED': {
+      opts.debugLogs.push(
+        `[Memory] SKIPPED ${opts.passLabel} — embedding generation failed: ${outcome.reason ?? 'unknown'}`
+      )
+      break
+    }
+    case 'REINFORCE': {
+      if (outcome.memory) opts.reinforcedIds.push(outcome.memory.id)
+      opts.debugLogs.push(
+        `[Memory] REINFORCED ${opts.passLabel}: ${outcome.memory?.id ?? 'unknown'} ` +
+        `(count ${outcome.memory?.reinforcementCount ?? 1}) — ${opts.candidate.summary}`
+      )
+      break
+    }
+    case 'INSERT_RELATED': {
+      if (outcome.memory) opts.createdIds.push(outcome.memory.id)
+      opts.debugLogs.push(
+        `[Memory] Created ${opts.passLabel} (linked to ${outcome.relatedMemoryIds?.length || 0} related) — ` +
+        `${opts.candidate.summary}`
+      )
+      break
+    }
+    case 'INSERT':
+    case 'SKIP_GATE':
+    default: {
+      if (outcome.memory) opts.createdIds.push(outcome.memory.id)
+      opts.debugLogs.push(
+        `[Memory] Created ${opts.passLabel} — ${opts.candidate.summary}`
+      )
+      break
+    }
+  }
 }
 
 /**
- * Creates an inter-character memory from an extraction candidate using the Memory Gate.
+ * Run all extraction passes for a single turn.
  */
-async function createInterCharacterMemoryFromCandidate(
-  ctx: InterCharacterMemoryContext,
-  candidate: MemoryCandidate
-): Promise<MemoryGateOutcome> {
-  return createMemoryWithGate(
-    {
-      characterId: ctx.observerCharacterId,
-      aboutCharacterId: ctx.subjectCharacterId,
-      chatId: ctx.chatId,
-      content: candidate.content || '',
-      summary: candidate.summary || '',
-      keywords: candidate.keywords || [],
-      importance: candidate.importance || 0.5,
-      source: 'AUTO',
-      sourceMessageId: ctx.sourceMessageId,
-      sourceMessageTimestamp: ctx.sourceMessageTimestamp,
-      tags: [],
-    },
-    {
-      userId: ctx.userId,
-    }
-  )
-}
-
-/**
- * Processes a message exchange for potential memory extraction
- *
- * This is the main entry point for automatic memory formation.
- * It should be called after each assistant response in a chat.
- *
- * The function is designed to be non-blocking and fail-safe:
- * - Errors are caught and logged but don't propagate
- * - The chat flow is never blocked by memory extraction
- */
-export async function processMessageForMemory(
-  ctx: MemoryExtractionContext
-): Promise<MemoryProcessingResult> {
+export async function processTurnForMemory(
+  ctx: TurnMemoryExtractionContext
+): Promise<TurnMemoryProcessingResult> {
   const debugLogs: string[] = []
+  const createdMemoryIds: string[] = []
+  const reinforcedMemoryIds: string[] = []
+  const collectedCandidates: ExtractedCandidate[] = []
+  const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+  const sourceMessageId = ctx.transcript.latestAssistantMessageId
 
   try {
-    // Rate limit check — bail early if the character is over cap
-    const rateLimit = await resolveExtractionRateLimit(ctx.characterId, ctx.memoryExtractionLimits)
-    if (rateLimit.mode === 'skip') {
-      debugLogs.push(
-        `[Memory] SKIPPED extraction for ${ctx.characterName} — rate limit reached ` +
-        `(${rateLimit.recentCount}/${rateLimit.cap} memories in last hour)`
-      )
+    if (ctx.transcript.characterSlices.length === 0) {
+      debugLogs.push('[Memory] Turn has no character contributions — nothing to extract')
       return {
         success: true,
-        memoryCreated: false,
-        memoryReinforced: false,
-        memoryIds: [],
-        reinforcedMemoryIds: [],
+        memoriesCreatedCount: 0,
+        memoriesReinforcedCount: 0,
+        createdMemoryIds,
+        reinforcedMemoryIds,
+        usage: totalUsage,
+        sourceMessageId,
         debugLogs,
+        ...(ctx.dryRun ? { extractedCandidates: collectedCandidates } : {}),
       }
     }
-    if (rateLimit.mode === 'throttle') {
-      debugLogs.push(
-        `[Memory] THROTTLING extraction for ${ctx.characterName} — ${rateLimit.recentCount}/${rateLimit.cap} ` +
-        `in last hour; importance floor raised to ${rateLimit.floor}`
-      )
-    }
 
-    // Get cheap LLM provider selection
-    const config = toCheapLLMConfig(ctx.cheapLLMSettings)
-    let selection: CheapLLMSelection = getCheapLLMProvider(
-      ctx.connectionProfile,
-      config,
-      ctx.availableProfiles || [],
-      false // ollamaAvailable - we'll check via available profiles
-    )
-
-    // For dangerous chats, prefer an uncensored provider to avoid content refusals
-    selection = resolveUncensoredCheapLLMSelection(
-      selection,
-      ctx.isDangerousChat ?? false,
-      ctx.dangerSettings,
-      ctx.availableProfiles ?? []
-    )
-
-    // Build context for extraction
-    const extractionContext = buildExtractionContext(ctx)
-
-    // Build uncensored fallback options if danger settings are provided
-    const uncensoredFallback: UncensoredFallbackOptions | undefined =
-      ctx.dangerSettings && ctx.availableProfiles
-        ? { dangerSettings: ctx.dangerSettings, availableProfiles: ctx.availableProfiles }
-        : undefined
-
-    // Resolve max tokens for the cheap LLM profile to determine memory limits
-    const cheapMaxTokens = resolveMaxTokens(ctx.connectionProfile)
-
-    // Extract memories for both user and character
-    const [userMemoryResult, characterMemoryResult] = await Promise.all([
-      extractMemoryFromMessage(
-        ctx.userMessage,
-        ctx.assistantMessage,
-        extractionContext,
-        ctx.characterName,
-        ctx.userCharacterName,
-        selection,
-        ctx.userId,
-        uncensoredFallback,
-        ctx.chatId,
-        ctx.characterPronouns,
-        cheapMaxTokens
-      ),
-      extractCharacterMemoryFromMessage(
-        ctx.userMessage,
-        ctx.assistantMessage,
-        extractionContext,
-        ctx.characterName,
-        ctx.userCharacterName,
-        selection,
-        ctx.userId,
-        uncensoredFallback,
-        ctx.chatId,
-        ctx.characterPronouns,
-        cheapMaxTokens
-      ),
-    ])
-
-    const memoryIds: string[] = []
-    const reinforcedMemoryIds: string[] = []
-    const allRelatedMemoryIds: string[] = []
-    const totalUsage = {
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0,
-    }
-
-    // Process user memories
-    if (userMemoryResult.success && userMemoryResult.usage) {
-      totalUsage.promptTokens += userMemoryResult.usage.promptTokens
-      totalUsage.completionTokens += userMemoryResult.usage.completionTokens
-      totalUsage.totalTokens += userMemoryResult.usage.totalTokens
-    }
-
-    if (userMemoryResult.success) {
-      const rawUserCandidates = userMemoryResult.result || []
-      const userCandidates = rateLimit.mode === 'throttle'
-        ? applyImportanceFloor(rawUserCandidates, rateLimit.floor)
-        : rawUserCandidates
-      if (rateLimit.mode === 'throttle' && userCandidates.length < rawUserCandidates.length) {
-        debugLogs.push(
-          `[Memory] Throttle dropped ${rawUserCandidates.length - userCandidates.length} USER ` +
-          `candidate(s) below importance ${rateLimit.floor}`
-        )
-      }
-
-      if (userCandidates.length > 0) {
-        for (const candidate of userCandidates) {
-          const outcome = await createMemoryFromCandidate(ctx, candidate)
-
-          switch (outcome.action) {
-            case 'SKIP_NEAR_DUPLICATE': {
-              debugLogs.push(
-                `[Memory] SKIPPED near-duplicate USER memory for ${ctx.characterName}:\n` +
-                `  Absorbed into existing memory: ${outcome.memory?.id ?? 'unknown'}\n` +
-                `  Similarity: ${outcome.similarity?.toFixed(3) ?? 'n/a'}\n` +
-                `  Summary: ${candidate.summary}`
-              )
-              break
-            }
-            case 'SKIP_EMBEDDING_FAILED': {
-              debugLogs.push(
-                `[Memory] SKIPPED USER memory for ${ctx.characterName} — embedding generation failed after retry:\n` +
-                `  Reason: ${outcome.reason ?? 'unknown'}\n` +
-                `  Summary: ${candidate.summary}`
-              )
-              break
-            }
-            case 'REINFORCE': {
-              if (outcome.memory) reinforcedMemoryIds.push(outcome.memory.id)
-              debugLogs.push(
-                `[Memory] REINFORCED USER memory for ${ctx.characterName}:\n` +
-                `  Memory ID: ${outcome.memory?.id ?? 'unknown'}\n` +
-                `  Count: ${outcome.memory?.reinforcementCount ?? 1}\n` +
-                `  Novel details: ${outcome.novelDetails?.join(', ') || 'none'}\n` +
-                `  Summary: ${candidate.summary}`
-              )
-              break
-            }
-            case 'INSERT_RELATED': {
-              if (outcome.memory) memoryIds.push(outcome.memory.id)
-              if (outcome.relatedMemoryIds) allRelatedMemoryIds.push(...outcome.relatedMemoryIds)
-              debugLogs.push(
-                `[Memory] Created USER memory (linked to ${outcome.relatedMemoryIds?.length || 0} related) for ${ctx.characterName}:\n` +
-                `  Content: ${candidate.content}\n` +
-                `  Summary: ${candidate.summary}\n` +
-                `  Importance: ${candidate.importance}\n` +
-                `  Keywords: ${candidate.keywords?.join(', ')}\n` +
-                `  Related: ${outcome.relatedMemoryIds?.join(', ')}`
-              )
-              break
-            }
-            case 'INSERT':
-            case 'SKIP_GATE':
-            default: {
-              if (outcome.memory) memoryIds.push(outcome.memory.id)
-              debugLogs.push(
-                `[Memory] Created USER memory for ${ctx.characterName}:\n` +
-                `  Content: ${candidate.content}\n` +
-                `  Summary: ${candidate.summary}\n` +
-                `  Importance: ${candidate.importance}\n` +
-                `  Keywords: ${candidate.keywords?.join(', ')}`
-              )
-              break
-            }
-          }
-        }
-      } else {
-        debugLogs.push(`[Memory] No significant USER memories for ${ctx.characterName}`)
-      }
-    } else if (!userMemoryResult.success) {
-      debugLogs.push(
-        `[Memory] USER memory extraction failed for ${ctx.characterName}:\n` +
-        `  Error: ${userMemoryResult.error}\n` +
-        `  User message: ${ctx.userMessage.substring(0, 200)}${ctx.userMessage.length > 200 ? '...' : ''}`
-      )
-    }
-
-    // Process character memories
-    if (characterMemoryResult.success && characterMemoryResult.usage) {
-      totalUsage.promptTokens += characterMemoryResult.usage.promptTokens
-      totalUsage.completionTokens += characterMemoryResult.usage.completionTokens
-      totalUsage.totalTokens += characterMemoryResult.usage.totalTokens
-    }
-
-    if (characterMemoryResult.success) {
-      const rawCharCandidates = characterMemoryResult.result || []
-      const charCandidates = rateLimit.mode === 'throttle'
-        ? applyImportanceFloor(rawCharCandidates, rateLimit.floor)
-        : rawCharCandidates
-      if (rateLimit.mode === 'throttle' && charCandidates.length < rawCharCandidates.length) {
-        debugLogs.push(
-          `[Memory] Throttle dropped ${rawCharCandidates.length - charCandidates.length} CHARACTER ` +
-          `candidate(s) below importance ${rateLimit.floor}`
-        )
-      }
-
-      if (charCandidates.length > 0) {
-        for (const candidate of charCandidates) {
-          const outcome = await createMemoryFromCandidate(ctx, candidate)
-
-          switch (outcome.action) {
-            case 'SKIP_NEAR_DUPLICATE': {
-              debugLogs.push(
-                `[Memory] SKIPPED near-duplicate CHARACTER memory for ${ctx.characterName}:\n` +
-                `  Absorbed into existing memory: ${outcome.memory?.id ?? 'unknown'}\n` +
-                `  Similarity: ${outcome.similarity?.toFixed(3) ?? 'n/a'}\n` +
-                `  Summary: ${candidate.summary}`
-              )
-              break
-            }
-            case 'SKIP_EMBEDDING_FAILED': {
-              debugLogs.push(
-                `[Memory] SKIPPED CHARACTER memory for ${ctx.characterName} — embedding generation failed after retry:\n` +
-                `  Reason: ${outcome.reason ?? 'unknown'}\n` +
-                `  Summary: ${candidate.summary}`
-              )
-              break
-            }
-            case 'REINFORCE': {
-              if (outcome.memory) reinforcedMemoryIds.push(outcome.memory.id)
-              debugLogs.push(
-                `[Memory] REINFORCED CHARACTER memory for ${ctx.characterName}:\n` +
-                `  Memory ID: ${outcome.memory?.id ?? 'unknown'}\n` +
-                `  Count: ${outcome.memory?.reinforcementCount ?? 1}\n` +
-                `  Novel details: ${outcome.novelDetails?.join(', ') || 'none'}\n` +
-                `  Summary: ${candidate.summary}`
-              )
-              break
-            }
-            case 'INSERT_RELATED': {
-              if (outcome.memory) memoryIds.push(outcome.memory.id)
-              if (outcome.relatedMemoryIds) allRelatedMemoryIds.push(...outcome.relatedMemoryIds)
-              debugLogs.push(
-                `[Memory] Created CHARACTER memory (linked to ${outcome.relatedMemoryIds?.length || 0} related) for ${ctx.characterName}:\n` +
-                `  Content: ${candidate.content}\n` +
-                `  Summary: ${candidate.summary}\n` +
-                `  Importance: ${candidate.importance}\n` +
-                `  Keywords: ${candidate.keywords?.join(', ')}\n` +
-                `  Related: ${outcome.relatedMemoryIds?.join(', ')}`
-              )
-              break
-            }
-            case 'INSERT':
-            case 'SKIP_GATE':
-            default: {
-              if (outcome.memory) memoryIds.push(outcome.memory.id)
-              debugLogs.push(
-                `[Memory] Created CHARACTER memory for ${ctx.characterName}:\n` +
-                `  Content: ${candidate.content}\n` +
-                `  Summary: ${candidate.summary}\n` +
-                `  Importance: ${candidate.importance}\n` +
-                `  Keywords: ${candidate.keywords?.join(', ')}`
-              )
-              break
-            }
-          }
-        }
-      } else {
-        debugLogs.push(`[Memory] No significant CHARACTER memories for ${ctx.characterName}`)
-      }
-    } else if (!characterMemoryResult.success) {
-      debugLogs.push(
-        `[Memory] CHARACTER memory extraction failed for ${ctx.characterName}:\n` +
-        `  Error: ${characterMemoryResult.error}\n` +
-        `  Character message: ${ctx.assistantMessage.substring(0, 200)}${ctx.assistantMessage.length > 200 ? '...' : ''}`
-      )
-    }
-
-    return {
-      success: true,
-      memoryCreated: memoryIds.length > 0,
-      memoryReinforced: reinforcedMemoryIds.length > 0,
-      memoryIds,
-      reinforcedMemoryIds,
-      memoryId: memoryIds[0],
-      reinforcedMemoryId: reinforcedMemoryIds[0],
-      relatedMemoryIds: allRelatedMemoryIds.length > 0 ? allRelatedMemoryIds : undefined,
-      usage: totalUsage,
-      debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
-    }
-  } catch (error) {
-    // Never let memory processing break the chat flow
-    const errorMsg = 'Memory processing error:' + (error instanceof Error ? error.message : 'Unknown error')
-    logger.error(errorMsg, { characterId: ctx.characterId, userId: ctx.userId }, error instanceof Error ? error : undefined)
-    return {
-      success: false,
-      memoryCreated: false,
-      memoryReinforced: false,
-      memoryIds: [],
-      reinforcedMemoryIds: [],
-      error: error instanceof Error ? error.message : 'Unknown error',
-      debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
-    }
-  }
-}
-
-/**
- * Processes memory extraction in the background (fire-and-forget)
- *
- * This is a convenience wrapper that logs the result but doesn't await it.
- * Use this when you want to trigger memory extraction without blocking.
- */
-export function processMessageForMemoryAsync(
-  ctx: MemoryExtractionContext,
-  onComplete?: (result: MemoryProcessingResult) => void
-): void {
-  processMessageForMemory(ctx)
-    .then(result => {
-      if (result.memoryCreated) {
-        logger.info(
-          '[Memory] Created memories for character',
-          { memoryIds: result.memoryIds, count: result.memoryIds.length, characterId: ctx.characterId, userId: ctx.userId }
-        )
-      } else if (result.memoryReinforced) {
-        logger.info(
-          '[Memory] Reinforced existing memories for character',
-          { reinforcedMemoryIds: result.reinforcedMemoryIds, count: result.reinforcedMemoryIds.length, characterId: ctx.characterId, userId: ctx.userId }
-        )
-      } else if (!result.success) {
-        logger.warn(`[Memory] Extraction failed: ${result.error}`, { characterId: ctx.characterId, userId: ctx.userId })
-      }
-      // Call the callback with the full result
-      onComplete?.(result)
-      // Silent success without memory creation is normal (not everything is significant)
-    })
-    .catch(error => {
-      logger.error('[Memory] Async processing error', { characterId: ctx.characterId, userId: ctx.userId }, error instanceof Error ? error : undefined)
-    })
-}
-
-/**
- * Batch process existing chat messages for memory extraction
- *
- * Useful for extracting memories from historical conversations
- * or when memory extraction was temporarily disabled.
- *
- * @param chatId - The chat to process
- * @param characterId - The character ID
- * @param userId - The user ID for API access
- * @param options - Processing options
- */
-export async function batchProcessChatForMemories(
-  chatId: string,
-  characterId: string,
-  userId: string,
-  options: {
-    /** Only process messages after this timestamp */
-    afterTimestamp?: string
-    /** Maximum number of message pairs to process */
-    maxPairs?: number
-    /** Connection profile ID to use */
-    connectionProfileId: string
-  }
-): Promise<{
-  processed: number
-  memoriesCreated: number
-  errors: number
-}> {
-  const repos = getRepositories()
-
-  // Get chat messages
-  const messages = await repos.chats.getMessages(chatId)
-
-  // Get character
-  const character = await repos.characters.findById(characterId)
-  if (!character) {
-    throw new Error(`Character ${characterId} not found`)
-  }
-
-  // Get connection profile
-  const connectionProfile = await repos.connections.findById(options.connectionProfileId)
-  if (!connectionProfile) {
-    throw new Error(`Connection profile ${options.connectionProfileId} not found`)
-  }
-
-  // Get chat settings for cheap LLM config
-  const chatSettings = await repos.chatSettings.findByUserId(userId)
-  if (!chatSettings) {
-    throw new Error(`Chat settings not found for user ${userId}`)
-  }
-
-  // Get all available profiles for user-defined strategy
-  const availableProfiles = await repos.connections.findByUserId(userId)
-
-  // Filter and pair messages - only include message events with USER or ASSISTANT role
-  const messageEvents = messages
-    .filter((m): m is typeof m & { type: 'message'; role: 'USER' | 'ASSISTANT' } =>
-      m.type === 'message' &&
-      (m.role === 'USER' || m.role === 'ASSISTANT') &&
-      (!options.afterTimestamp || m.createdAt > options.afterTimestamp)
-    )
-
-  // Pair user messages with their subsequent assistant responses
-  const pairs: Array<{
-    userMessage: { id: string; content: string; createdAt: string }
-    assistantMessage: { id: string; content: string; createdAt: string }
-  }> = []
-
-  for (let i = 0; i < messageEvents.length - 1; i++) {
-    const current = messageEvents[i]
-    const next = messageEvents[i + 1]
-
-    if (current.role === 'USER' && next.role === 'ASSISTANT') {
-      pairs.push({
-        userMessage: { id: current.id, content: current.content, createdAt: current.createdAt },
-        assistantMessage: { id: next.id, content: next.content, createdAt: next.createdAt },
-      })
-    }
-  }
-
-  // Limit pairs if specified
-  const pairsToProcess = options.maxPairs
-    ? pairs.slice(0, options.maxPairs)
-    : pairs
-
-  let processed = 0
-  let memoriesCreated = 0
-  let errors = 0
-
-  // Process each pair
-  for (const pair of pairsToProcess) {
-    const result = await processMessageForMemory({
-      characterId,
-      characterName: character.name,
-      chatId,
-      userMessage: pair.userMessage.content,
-      assistantMessage: pair.assistantMessage.content,
-      sourceMessageId: pair.assistantMessage.id,
-      sourceMessageTimestamp: pair.assistantMessage.createdAt,
-      userId,
-      connectionProfile,
-      cheapLLMSettings: chatSettings.cheapLLMSettings,
-      availableProfiles,
-    })
-
-    processed++
-
-    if (result.memoryCreated) {
-      memoriesCreated += result.memoryIds.length
-    }
-
-    if (!result.success) {
-      errors++
-    }
-
-    // Small delay between API calls to avoid rate limiting
-    if (processed < pairsToProcess.length) {
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-  }
-
-  return { processed, memoriesCreated, errors }
-}
-
-/**
- * Processes an inter-character message exchange for potential memory extraction
- *
- * This is called in multi-character chats when one character responds to another.
- * It extracts memories that the responding character forms about other characters.
- *
- * @param ctx - The inter-character memory extraction context
- * @returns The result of memory processing
- */
-export async function processInterCharacterMemory(
-  ctx: InterCharacterMemoryContext
-): Promise<MemoryProcessingResult> {
-  const debugLogs: string[] = []
-
-  try {
-    // Rate limit check — bail early if the observer is over cap
-    const rateLimit = await resolveExtractionRateLimit(ctx.observerCharacterId, ctx.memoryExtractionLimits)
-    if (rateLimit.mode === 'skip') {
-      debugLogs.push(
-        `[Memory] SKIPPED inter-character extraction for ${ctx.observerCharacterName} — rate limit reached ` +
-        `(${rateLimit.recentCount}/${rateLimit.cap} memories in last hour)`
-      )
-      return {
-        success: true,
-        memoryCreated: false,
-        memoryReinforced: false,
-        memoryIds: [],
-        reinforcedMemoryIds: [],
-        debugLogs,
-      }
-    }
-    if (rateLimit.mode === 'throttle') {
-      debugLogs.push(
-        `[Memory] THROTTLING inter-character extraction for ${ctx.observerCharacterName} — ` +
-        `${rateLimit.recentCount}/${rateLimit.cap} in last hour; importance floor raised to ${rateLimit.floor}`
-      )
-    }
-
-    // Get cheap LLM provider selection
+    // Resolve cheap LLM selection ONCE for the whole turn — every pass reuses
+    // the same provider so the cacheable prefix the rendered transcript
+    // produces actually hits.
     const config = toCheapLLMConfig(ctx.cheapLLMSettings)
     let selection: CheapLLMSelection = getCheapLLMProvider(
       ctx.connectionProfile,
@@ -813,8 +297,6 @@ export async function processInterCharacterMemory(
       ctx.availableProfiles || [],
       false
     )
-
-    // For dangerous chats, prefer an uncensored provider to avoid content refusals
     selection = resolveUncensoredCheapLLMSelection(
       selection,
       ctx.isDangerousChat ?? false,
@@ -822,209 +304,260 @@ export async function processInterCharacterMemory(
       ctx.availableProfiles ?? []
     )
 
-    // Build uncensored fallback options if danger settings are provided
     const uncensoredFallback: UncensoredFallbackOptions | undefined =
       ctx.dangerSettings && ctx.availableProfiles
         ? { dangerSettings: ctx.dangerSettings, availableProfiles: ctx.availableProfiles }
         : undefined
 
-    // Resolve max tokens for the cheap LLM profile to determine memory limits
     const cheapMaxTokens = resolveMaxTokens(ctx.connectionProfile)
 
-    // Extract memories that observer has about subject
-    const memoryResult = await extractInterCharacterMemoryFromMessage(
-      ctx.observerCharacterName,
-      ctx.observerMessage,
-      ctx.subjectCharacterName,
-      ctx.subjectMessage,
-      selection,
-      ctx.userId,
-      uncensoredFallback,
-      ctx.chatId,
-      ctx.observerCharacterPronouns,
-      ctx.subjectCharacterPronouns,
-      cheapMaxTokens
-    )
-
-    const memoryIds: string[] = []
-    const reinforcedMemoryIds: string[] = []
-    const allRelatedMemoryIds: string[] = []
-    const totalUsage = {
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0,
+    // Pre-resolve per-character rate limits so we know which characters to
+    // skip entirely, throttle, or allow before we start firing LLM calls.
+    const rateLimits = new Map<string, RateLimitDecision>()
+    for (const slice of ctx.transcript.characterSlices) {
+      rateLimits.set(slice.characterId, await resolveExtractionRateLimit(slice.characterId, ctx.memoryExtractionLimits))
     }
 
-    if (memoryResult.success && memoryResult.usage) {
-      totalUsage.promptTokens += memoryResult.usage.promptTokens
-      totalUsage.completionTokens += memoryResult.usage.completionTokens
-      totalUsage.totalTokens += memoryResult.usage.totalTokens
-    }
-
-    if (memoryResult.success) {
-      const rawCandidates = memoryResult.result || []
-      const candidates = rateLimit.mode === 'throttle'
-        ? applyImportanceFloor(rawCandidates, rateLimit.floor)
-        : rawCandidates
-      if (rateLimit.mode === 'throttle' && candidates.length < rawCandidates.length) {
+    const allowedSlices = ctx.transcript.characterSlices.filter(s => {
+      const rl = rateLimits.get(s.characterId)!
+      if (rl.mode === 'skip') {
         debugLogs.push(
-          `[Memory] Throttle dropped ${rawCandidates.length - candidates.length} INTER-CHARACTER ` +
-          `candidate(s) below importance ${rateLimit.floor}`
+          `[Memory] SKIPPED extraction for ${s.characterName} — rate limit reached ` +
+          `(${rl.recentCount}/${rl.cap} memories in last hour)`
+        )
+        return false
+      }
+      if (rl.mode === 'throttle') {
+        debugLogs.push(
+          `[Memory] THROTTLING ${s.characterName} — ${rl.recentCount}/${rl.cap}; floor ${rl.floor}`
         )
       }
+      return true
+    })
 
-      if (candidates.length > 0) {
+    // ---------------------------------------------------------------------
+    // Build the subject set for the OTHER pass: every allowed character plus
+    // the user-controlled character (if any). The user's character record is
+    // also used here just like an AI character's — we look up its identity
+    // and vault mount point exactly the same way.
+    // ---------------------------------------------------------------------
+    type Subject = { id: string; name: string; identity: string | null; isUser: boolean }
+    const subjects: Subject[] = []
+    for (const slice of allowedSlices) {
+      const character = ctx.participantCharacters.get(slice.characterId)
+      subjects.push({
+        id: slice.characterId,
+        name: slice.characterName,
+        identity: character?.identity ?? null,
+        isUser: false,
+      })
+    }
+    if (ctx.transcript.userCharacterId && ctx.transcript.userCharacterName) {
+      const userCharacter = ctx.participantCharacters.get(ctx.transcript.userCharacterId)
+      subjects.push({
+        id: ctx.transcript.userCharacterId,
+        name: ctx.transcript.userCharacterName,
+        identity: userCharacter?.identity ?? null,
+        isUser: true,
+      })
+    }
+
+    // ---------------------------------------------------------------------
+    // Pass 1: SELF memories (one call per allowed character; canon = own
+    // identity, no vault lookup).
+    // ---------------------------------------------------------------------
+    for (const slice of allowedSlices) {
+      const rl = rateLimits.get(slice.characterId)!
+      const observerCharacter = ctx.participantCharacters.get(slice.characterId)
+      const selfCanonBlock = renderCanonBlock(loadCanonForSelf({
+        id: slice.characterId,
+        name: slice.characterName,
+        identity: observerCharacter?.identity ?? null,
+      }))
+
+      const selfResult = await extractSelfMemoriesFromTurn(
+        ctx.transcript,
+        slice.characterId,
+        selfCanonBlock,
+        selection,
+        ctx.userId,
+        uncensoredFallback,
+        ctx.chatId,
+        cheapMaxTokens
+      )
+
+      if (selfResult.usage) {
+        totalUsage.promptTokens += selfResult.usage.promptTokens
+        totalUsage.completionTokens += selfResult.usage.completionTokens
+        totalUsage.totalTokens += selfResult.usage.totalTokens
+      }
+
+      if (selfResult.success) {
+        const rawCandidates = selfResult.result || []
+        const candidates = rl.mode === 'throttle'
+          ? applyImportanceFloor(rawCandidates, rl.floor)
+          : rawCandidates
+        if (rl.mode === 'throttle' && candidates.length < rawCandidates.length) {
+          debugLogs.push(
+            `[Memory] Throttle dropped ${rawCandidates.length - candidates.length} SELF candidate(s) ` +
+            `for ${slice.characterName} below importance ${rl.floor}`
+          )
+        }
+        debugLogs.push(`[Memory] SELF for ${slice.characterName}: ${candidates.length} candidate(s)`)
         for (const candidate of candidates) {
-          const outcome = await createInterCharacterMemoryFromCandidate(ctx, candidate)
-
-          switch (outcome.action) {
-            case 'SKIP_NEAR_DUPLICATE': {
-              debugLogs.push(
-                `[Memory] SKIPPED near-duplicate INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
-                `  Absorbed into existing memory: ${outcome.memory?.id ?? 'unknown'}\n` +
-                `  Similarity: ${outcome.similarity?.toFixed(3) ?? 'n/a'}\n` +
-                `  Summary: ${candidate.summary}`
-              )
-              break
-            }
-            case 'SKIP_EMBEDDING_FAILED': {
-              debugLogs.push(
-                `[Memory] SKIPPED INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName} — embedding generation failed after retry:\n` +
-                `  Reason: ${outcome.reason ?? 'unknown'}\n` +
-                `  Summary: ${candidate.summary}`
-              )
-              break
-            }
-            case 'REINFORCE': {
-              if (outcome.memory) reinforcedMemoryIds.push(outcome.memory.id)
-              debugLogs.push(
-                `[Memory] REINFORCED INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
-                `  Memory ID: ${outcome.memory?.id ?? 'unknown'}\n` +
-                `  Count: ${outcome.memory?.reinforcementCount ?? 1}\n` +
-                `  Novel details: ${outcome.novelDetails?.join(', ') || 'none'}\n` +
-                `  Summary: ${candidate.summary}`
-              )
-              break
-            }
-            case 'INSERT_RELATED': {
-              if (outcome.memory) memoryIds.push(outcome.memory.id)
-              if (outcome.relatedMemoryIds) allRelatedMemoryIds.push(...outcome.relatedMemoryIds)
-              debugLogs.push(
-                `[Memory] Created INTER-CHARACTER memory (linked to ${outcome.relatedMemoryIds?.length || 0} related): ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
-                `  Content: ${candidate.content}\n` +
-                `  Summary: ${candidate.summary}\n` +
-                `  Importance: ${candidate.importance}\n` +
-                `  Keywords: ${candidate.keywords?.join(', ')}\n` +
-                `  Related: ${outcome.relatedMemoryIds?.join(', ')}`
-              )
-              break
-            }
-            case 'INSERT':
-            case 'SKIP_GATE':
-            default: {
-              if (outcome.memory) memoryIds.push(outcome.memory.id)
-              debugLogs.push(
-                `[Memory] Created INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
-                `  Content: ${candidate.content}\n` +
-                `  Summary: ${candidate.summary}\n` +
-                `  Importance: ${candidate.importance}\n` +
-                `  Keywords: ${candidate.keywords?.join(', ')}`
-              )
-              break
-            }
-          }
+          await writeCandidate({
+            characterId: slice.characterId,
+            characterName: slice.characterName,
+            aboutCharacterId: slice.characterId,
+            aboutCharacterName: slice.characterName,
+            pass: 'SELF',
+            candidate,
+            passLabel: `SELF memory for ${slice.characterName}`,
+            ctx,
+            sourceMessageId: slice.contributingMessageIds[slice.contributingMessageIds.length - 1] ?? sourceMessageId,
+            debugLogs,
+            createdIds: createdMemoryIds,
+            reinforcedIds: reinforcedMemoryIds,
+            collected: collectedCandidates,
+          })
         }
       } else {
-        debugLogs.push(
-          `[Memory] No significant INTER-CHARACTER memories: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}`
-        )
+        debugLogs.push(`[Memory] SELF extraction failed for ${slice.characterName}: ${selfResult.error}`)
       }
-    } else {
-      debugLogs.push(
-        `[Memory] INTER-CHARACTER memory extraction failed: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
-        `  Error: ${memoryResult.error}`
+    }
+
+    // ---------------------------------------------------------------------
+    // Pass 2: OTHER memories (one multi-subject call per observer; the
+    // call covers every other allowed character and the user-controlled
+    // character). Observer rate-limit gates the whole call. Each subject's
+    // canon block comes from the observer's vault `Others/<subject>.md`
+    // first, then falls back to the subject's own identity property; the
+    // canon source is preserved per subject so debug logs can attribute it.
+    // ---------------------------------------------------------------------
+    for (const observer of allowedSlices) {
+      const rl = rateLimits.get(observer.characterId)!
+      const observerCharacter = ctx.participantCharacters.get(observer.characterId)
+      const observerVault = {
+        characterId: observer.characterId,
+        mountPointId: observerCharacter?.characterDocumentMountPointId ?? null,
+      }
+
+      const observerSubjects = subjects.filter(s => s.id !== observer.characterId)
+      if (observerSubjects.length === 0) continue
+
+      // Resolve every subject's canon block + pronouns up front so the
+      // single LLM call can be assembled in one shot. We hold the source
+      // tag separately so per-subject debug logs can still report
+      // canon=<source> the way the per-pair version did.
+      type ResolvedSubject = OtherSubjectInput & { canonSource: string; subjectName: string }
+      const resolvedSubjects: ResolvedSubject[] = []
+      for (const subject of observerSubjects) {
+        const canon = await loadCanonForObserverAboutSubject(observerVault, subject)
+        const subjectCanonBlock = renderCanonBlock(canon)
+        const pronouns: Pronouns | null = subject.isUser
+          ? (ctx.transcript.userCharacterPronouns ?? null)
+          : (ctx.transcript.characterSlices.find(s => s.characterId === subject.id)?.characterPronouns ?? null)
+        resolvedSubjects.push({
+          id: subject.id,
+          name: subject.name,
+          pronouns,
+          isUser: subject.isUser,
+          canonBlock: subjectCanonBlock,
+          canonSource: canon.source,
+          subjectName: subject.name,
+        })
+      }
+
+      const otherResult = await extractOtherMemoriesFromTurn(
+        ctx.transcript,
+        observer.characterId,
+        resolvedSubjects,
+        selection,
+        ctx.userId,
+        uncensoredFallback,
+        ctx.chatId,
+        cheapMaxTokens
       )
+
+      if (otherResult.usage) {
+        totalUsage.promptTokens += otherResult.usage.promptTokens
+        totalUsage.completionTokens += otherResult.usage.completionTokens
+        totalUsage.totalTokens += otherResult.usage.totalTokens
+      }
+
+      if (!otherResult.success) {
+        debugLogs.push(
+          `[Memory] OTHER extraction failed (${observer.characterName} → ${resolvedSubjects.length} subject(s)): ${otherResult.error}`
+        )
+        continue
+      }
+
+      const candidatesBySubject = otherResult.result ?? new Map<string, MemoryCandidate[]>()
+      for (const subject of resolvedSubjects) {
+        const rawCandidates = candidatesBySubject.get(subject.id) ?? []
+        const candidates = rl.mode === 'throttle'
+          ? applyImportanceFloor(rawCandidates, rl.floor)
+          : rawCandidates
+        if (rl.mode === 'throttle' && candidates.length < rawCandidates.length) {
+          debugLogs.push(
+            `[Memory] Throttle dropped ${rawCandidates.length - candidates.length} OTHER candidate(s) ` +
+            `for ${observer.characterName} about ${subject.subjectName} below importance ${rl.floor}`
+          )
+        }
+        debugLogs.push(
+          `[Memory] OTHER observer=${observer.characterName} subject=${subject.subjectName} ` +
+          `canon=${subject.canonSource}: ${candidates.length} candidate(s)`
+        )
+        for (const candidate of candidates) {
+          await writeCandidate({
+            characterId: observer.characterId,
+            characterName: observer.characterName,
+            aboutCharacterId: subject.id,
+            aboutCharacterName: subject.subjectName,
+            pass: 'OTHER',
+            candidate,
+            passLabel: `OTHER memory ${observer.characterName} about ${subject.subjectName}`,
+            ctx,
+            sourceMessageId: observer.contributingMessageIds[observer.contributingMessageIds.length - 1] ?? sourceMessageId,
+            debugLogs,
+            createdIds: createdMemoryIds,
+            reinforcedIds: reinforcedMemoryIds,
+            collected: collectedCandidates,
+          })
+        }
+      }
     }
 
     return {
       success: true,
-      memoryCreated: memoryIds.length > 0,
-      memoryReinforced: reinforcedMemoryIds.length > 0,
-      memoryIds,
+      memoriesCreatedCount: createdMemoryIds.length,
+      memoriesReinforcedCount: reinforcedMemoryIds.length,
+      createdMemoryIds,
       reinforcedMemoryIds,
-      memoryId: memoryIds[0],
-      reinforcedMemoryId: reinforcedMemoryIds[0],
-      relatedMemoryIds: allRelatedMemoryIds.length > 0 ? allRelatedMemoryIds : undefined,
       usage: totalUsage,
-      debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
+      sourceMessageId,
+      debugLogs,
+      ...(ctx.dryRun ? { extractedCandidates: collectedCandidates } : {}),
     }
   } catch (error) {
-    const errorMsg = 'Inter-character memory processing error:' + (error instanceof Error ? error.message : 'Unknown error')
-    logger.error(errorMsg, {
-      observerCharacterId: ctx.observerCharacterId,
-      subjectCharacterId: ctx.subjectCharacterId,
-      userId: ctx.userId,
-    }, error instanceof Error ? error : undefined)
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+    logger.error('[Memory] Turn processing error', { chatId: ctx.chatId, userId: ctx.userId }, error instanceof Error ? error : undefined)
     return {
       success: false,
-      memoryCreated: false,
-      memoryReinforced: false,
-      memoryIds: [],
-      reinforcedMemoryIds: [],
-      error: error instanceof Error ? error.message : 'Unknown error',
-      debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
+      memoriesCreatedCount: 0,
+      memoriesReinforcedCount: 0,
+      createdMemoryIds,
+      reinforcedMemoryIds,
+      usage: totalUsage,
+      sourceMessageId,
+      debugLogs,
+      ...(ctx.dryRun ? { extractedCandidates: collectedCandidates } : {}),
+      error: errorMsg,
     }
   }
 }
 
 /**
- * Processes inter-character memory extraction in the background (fire-and-forget)
- *
- * This is a convenience wrapper for multi-character chats.
- * It extracts memories between all character pairs in the exchange.
+ * Re-export the slice type so callers can avoid importing from turn-transcript directly.
  */
-export function processInterCharacterMemoryAsync(
-  ctx: InterCharacterMemoryContext,
-  onComplete?: (result: MemoryProcessingResult) => void
-): void {
-  processInterCharacterMemory(ctx)
-    .then(result => {
-      if (result.memoryCreated) {
-        logger.info(
-          '[Memory] Created inter-character memories',
-          {
-            memoryIds: result.memoryIds,
-            count: result.memoryIds.length,
-            observerCharacterId: ctx.observerCharacterId,
-            subjectCharacterId: ctx.subjectCharacterId,
-            userId: ctx.userId,
-          }
-        )
-      } else if (result.memoryReinforced) {
-        logger.info(
-          '[Memory] Reinforced inter-character memories',
-          {
-            reinforcedMemoryIds: result.reinforcedMemoryIds,
-            count: result.reinforcedMemoryIds.length,
-            observerCharacterId: ctx.observerCharacterId,
-            subjectCharacterId: ctx.subjectCharacterId,
-            userId: ctx.userId,
-          }
-        )
-      } else if (!result.success) {
-        logger.warn(`[Memory] Inter-character extraction failed: ${result.error}`, {
-          observerCharacterId: ctx.observerCharacterId,
-          subjectCharacterId: ctx.subjectCharacterId,
-          userId: ctx.userId,
-        })
-      }
-      onComplete?.(result)
-    })
-    .catch(error => {
-      logger.error('[Memory] Async inter-character processing error', {
-        observerCharacterId: ctx.observerCharacterId,
-        subjectCharacterId: ctx.subjectCharacterId,
-        userId: ctx.userId,
-      }, error instanceof Error ? error : undefined)
-    })
-}
+export type { TurnTranscript, TurnCharacterSlice }

@@ -112,7 +112,7 @@ export function MemoryDedupCard() {
       <div className="qt-card p-6">
         <div className="flex items-start gap-4 mb-6">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-foreground mb-1">
+            <h2 className="qt-heading-2 mb-1">
               Memory Deduplication
             </h2>
             <p className="qt-text-small">
@@ -186,7 +186,7 @@ export function MemoryDedupCard() {
                         />
                       </svg>
                     </div>
-                    <h2 className="text-lg font-semibold text-foreground">
+                    <h2 className="qt-heading-4">
                       {step === 'complete' ? 'Deduplication Complete' : 'Memory Deduplication'}
                     </h2>
                   </div>

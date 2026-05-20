@@ -31,7 +31,7 @@ import { createAuthenticatedParamsHandler, checkOwnership, enrichWithDefaultImag
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
-import { readImageBuffer } from '@/lib/images-v2';
+import { readCharacterAvatarBuffer, resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 import { z } from 'zod';
 import { PronounsSchema } from '@/lib/schemas/character.types';
 import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
@@ -56,6 +56,7 @@ const updateCharacterSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   title: z.string().optional(),
   description: z.string().optional(),
+  manifesto: z.string().nullable().optional(),
   personality: z.string().optional(),
   scenarios: z
     .array(
@@ -188,9 +189,10 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         if (format === 'png') {
           let avatarBuffer: Buffer | undefined;
           if (character.defaultImageId) {
-            try {
-              avatarBuffer = await readImageBuffer(character.defaultImageId);
-            } catch (error) {
+            const bytes = await readCharacterAvatarBuffer(character.defaultImageId, repos);
+            if (bytes) {
+              avatarBuffer = bytes;
+            } else {
               logger.warn('[Characters v1] Could not read avatar for PNG export, using placeholder', {
                 characterId: id,
                 imageId: character.defaultImageId,
@@ -585,16 +587,18 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       const body = await req.json();
       const { imageId } = avatarSchema.parse(body);
 
-      // Validate image if provided
+      // Validate image if provided. Post-Phase-3 imageId is a doc_mount_file_links
+      // id pointing into the character's vault `photos/`; the resolver falls back
+      // to a legacy `files.id` for pre-migration imports.
       if (imageId) {
-        const fileEntry = await repos.files.findById(imageId);
+        const resolved = await resolveCharacterAvatar(imageId, repos);
 
-        if (!fileEntry) {
+        if (!resolved) {
           return notFound('Image file');
         }
 
-        if (fileEntry.category !== 'IMAGE' && fileEntry.category !== 'AVATAR') {
-          return badRequest(`Invalid file type. Expected IMAGE or AVATAR, got ${fileEntry.category}`);
+        if (resolved.mimeType && !resolved.mimeType.startsWith('image/')) {
+          return badRequest(`Invalid file type. Expected an image, got ${resolved.mimeType}`);
         }
       }
 
@@ -749,54 +753,33 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         // active wardrobe wholesale — the same "vault is the list" semantics
         // used for systemPrompts / scenarios above.
         let wardrobeItemsWritten = 0;
-        let wardrobePresetsWritten = 0;
         const wardrobeSynced = vaultWardrobe !== null;
         if (vaultWardrobe) {
+          // Use the *Raw / FromVault repo methods throughout: the standard
+          // `delete` and `create` paths fire `syncCharacterVaultWardrobe` as a
+          // post-write side effect, which calls back into
+          // `ingestVaultOnlyWardrobeIntoDb` and re-promotes the vault file we
+          // just deleted (or are about to insert). On a multi-item rebuild the
+          // table never empties and the recreate phase hits
+          // `UNIQUE constraint failed: wardrobe_items.id`.
           const existingItems = await repos.wardrobe.findByCharacterIdRaw(
             rawCharacter.id,
             true,
           );
           for (const item of existingItems) {
-            await repos.wardrobe.delete(item.id);
-          }
-          const existingPresets = await repos.outfitPresets.findByCharacterIdRaw(
-            rawCharacter.id,
-          );
-          for (const preset of existingPresets) {
-            await repos.outfitPresets.delete(preset.id);
+            await repos.wardrobe.deleteRaw(item.id);
           }
 
+          // Outfit presets are gone as a separate table — composite items
+          // (with `componentItemIds`) replace them entirely and round-trip
+          // via the same `Wardrobe/` folder. Anything the vault still calls
+          // a "preset" gets ignored at the read layer.
           for (const item of vaultWardrobe.items) {
-            await repos.wardrobe.create(
-              {
-                characterId: rawCharacter.id,
-                title: item.title,
-                description: item.description ?? null,
-                types: item.types,
-                appropriateness: item.appropriateness ?? null,
-                isDefault: item.isDefault,
-                migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
-                archivedAt: item.archivedAt ?? null,
-              },
-              { id: item.id, createdAt: item.createdAt, updatedAt: item.updatedAt },
-            );
+            await repos.wardrobe.createFromVault({
+              ...item,
+              characterId: rawCharacter.id,
+            });
             wardrobeItemsWritten++;
-          }
-          for (const preset of vaultWardrobe.presets) {
-            await repos.outfitPresets.create(
-              {
-                characterId: rawCharacter.id,
-                name: preset.name,
-                description: preset.description ?? null,
-                slots: preset.slots,
-              },
-              {
-                id: preset.id,
-                createdAt: preset.createdAt,
-                updatedAt: preset.updatedAt,
-              },
-            );
-            wardrobePresetsWritten++;
           }
         }
 
@@ -818,6 +801,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           mountPointId: mountId,
           syncedProperties: snapshot.aliases !== undefined,
           syncedDescription: snapshot.description !== undefined,
+          syncedManifesto: snapshot.manifesto !== undefined,
           syncedPersonality: snapshot.personality !== undefined,
           syncedExampleDialogues: snapshot.exampleDialogues !== undefined,
           syncedPhysical: snapshot.physicalDescriptions !== undefined,
@@ -826,7 +810,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           syncedScenarioCount: snapshot.scenarios?.length ?? 0,
           syncedWardrobe: wardrobeSynced,
           wardrobeItemsWritten,
-          wardrobePresetsWritten,
         });
 
         return NextResponse.json({ character: updatedCharacter });
@@ -849,15 +832,16 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         }
 
         const mountId = rawCharacter.characterDocumentMountPointId;
-        const [wardrobeItems, outfitPresets] = await Promise.all([
-          repos.wardrobe.findByCharacterIdRaw(rawCharacter.id, true),
-          repos.outfitPresets.findByCharacterIdRaw(rawCharacter.id),
-        ]);
+        const wardrobeItems = await repos.wardrobe.findByCharacterIdRaw(
+          rawCharacter.id,
+          true,
+        );
 
+        // Outfit presets are gone — composite wardrobe items round-trip via
+        // the same `Wardrobe/` folder, so we project just the items list.
         const writeResult = await writeCharacterVaultManagedFields(mountId, {
           character: rawCharacter,
           wardrobeItems,
-          outfitPresets,
         });
 
         logger.info('[Characters v1] Synced character properties to vault', {
@@ -867,7 +851,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           systemPromptsWritten: writeResult.systemPromptsWritten,
           scenariosWritten: writeResult.scenariosWritten,
           wardrobeItemsWritten: writeResult.wardrobeItemsWritten,
-          outfitPresetsWritten: writeResult.outfitPresetsWritten,
           physicalSkippedNoPrimary: writeResult.physicalSkippedNoPrimary,
         });
 
@@ -900,11 +883,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
             queued++;
           } catch (err) {
             // Skip chats that already have a pending render job
-            logger.debug('[Characters v1] Skipped render enqueue (likely already pending)', {
-              characterId: id,
-              chatId: chat.id,
-              error: err instanceof Error ? err.message : String(err),
-            });
           }
         }
 

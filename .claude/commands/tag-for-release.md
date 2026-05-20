@@ -1,6 +1,6 @@
 # Tag for Production Release
 
-This command uses a linear git strategy. After creating the release commit on `release`, main stays perfectly linear (no merge-back). Use `git log <tag>..main` to see commits since a release. The squash onto release uses a tree-copy approach immune to stale merge bases.
+This command builds the release commit with a tree-copy strategy (immune to stale merge bases) and then merges the tagged release back into main so history stays connected. After a release is tagged, `git log <tag>..main` reflects everything done on main since that release.
 
 **Important:** Do not use sed commands with regexp group backreferences (like `\1`) in Bash tool calls — they get mangled. Instead, use the Edit tool to modify `package.json`, `README.md`, and other files directly. The instructions below describe *what* to change in each file, with examples.
 
@@ -90,6 +90,17 @@ git tag -s -m "NEWRELEASE" NEWRELEASE
 ```
 
 (Replace NEWRELEASE with the actual version string, e.g., `4.1.0`)
+
+### Step 5: Merge the release back into main
+
+```bash
+git checkout main
+git merge --no-ff release -m "merge: NEWRELEASE back into main"
+```
+
+(Replace NEWRELEASE with the actual version, e.g., `4.1.0`.)
+
+This brings the release commit and tag into main's history so `git log NEWRELEASE..main` reflects everything done on main since the release. Conflicts are rare in this direction — release was tree-copied from main — but if any appear, take release's version. The next step bumps version files anyway, so the merge's version-file state on main is transient.
 
 ### Step 6: Start the new dev branch on main
 
@@ -229,7 +240,24 @@ git tag -s -m "NEWRELEASE" NEWRELEASE
 
 If `git tag -s` fails due to signing issues, fall back to `git tag -a -m "NEWRELEASE" NEWRELEASE`.
 
-### Step 5: Restart bugfix from the new release
+### Step 5: Merge the release back into main
+
+```bash
+git checkout main
+git merge --no-ff release -m "merge: NEWRELEASE back into main"
+```
+
+(Replace NEWRELEASE with the actual version, e.g., `4.0.2`.)
+
+This brings the release commit and tag into main's history so `git log NEWRELEASE..main` works. Expect conflicts here — main has been moving forward on its dev branch while the bugfix was prepared. Resolve them as follows:
+
+- **package.json, package-lock.json, README.md**: keep main's version (the in-progress dev version, e.g. `4.1.0-dev.N`). Do not downgrade main to the bugfix release version.
+- **docs/CHANGELOG.md**: keep both sets of entries — main's new dev-cycle entries above the bugfix entries.
+- **Code conflicts**: resolve case-by-case. The bugfix change is usually the intended fix; if the dev branch already supersedes it, prefer the dev version.
+
+Commit the merge resolution before moving on.
+
+### Step 6: Restart bugfix from the new release
 
 The bugfix branch version should be one patch ahead of the release. For example, if the release was `4.0.2`, the bugfix branch starts at `4.0.3-bugfix.0`.
 
@@ -260,15 +288,13 @@ git commit --no-verify -m "bugfix: started NEWRELEASE bug branch"
 
 (Where the commit message uses the *release* version, not the bugfix version — e.g., "bugfix: started 4.0.2 bug branch")
 
-### Step 6: Push everything
+### Step 7: Push everything
 
 ```bash
+git push
+git checkout main
 git push
 git checkout release
 git push
 git push --tags
 ```
-
-### Pulling bugfix changes into main
-
-No merge needed — main stays linear. The bugfix code is already on `release` and will be picked up in the next main-to-release squash. If the bugfix is urgent and needed on `main` immediately, cherry-pick the specific commits from `bugfix` onto `main`.

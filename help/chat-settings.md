@@ -346,6 +346,7 @@ Controls whether Quilltap injects the current date and time into the system prom
 - **Disabled** — No timestamp is injected
 - **Conversation Start** — Include the time only in the initial system prompt
 - **Every Message** — Update the timestamp with each message sent
+- **Every X Minutes** — The Host announces the time only when at least the configured number of minutes (defaulting to fifteen, like a stationmaster glancing at his pocket watch each quarter-hour) have elapsed since the last announcement. The first message of a conversation always receives an announcement.
 
 **Timestamp Format:**
 

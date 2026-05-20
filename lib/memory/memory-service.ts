@@ -9,6 +9,11 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
 import { generateEmbeddingForUser, EmbeddingError, cosineSimilarity } from '@/lib/embedding/embedding-service'
+import {
+  applyLiteralBoost,
+  containsLiteralPhrase,
+  getLiteralPhrase,
+} from '@/lib/embedding/literal-boost'
 import { getCharacterVectorStore, getVectorStoreManager } from '@/lib/embedding/vector-store'
 import { logger } from '@/lib/logger'
 import {
@@ -16,10 +21,13 @@ import {
   reinforceMemory,
   linkRelatedMemories,
   calculateReinforcedImportance,
+  deleteMemoryWithUnlink,
+  deleteMemoriesWithUnlinkBatch,
 } from './memory-gate'
 import { calculateEffectiveWeight } from './memory-weighting'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
+import { resolveAboutCharacterId } from './about-character-resolution'
 export type { MemoryGateOutcome } from './memory-gate'
 
 /** Fraction of the per-character cap at which auto-housekeeping engages. */
@@ -60,12 +68,6 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
     // sweep anyway burns 10–15 minutes of main-thread time for no benefit
     // and blocks the next chat turn's context build. Back off for an hour.
     if (shouldSkipWatermarkSweep(characterId)) {
-      logger.debug('[Housekeeping] Skipping watermark sweep — previous sweep deleted zero within backoff window', {
-        userId,
-        characterId,
-        count,
-        cap,
-      })
       return
     }
 
@@ -74,18 +76,60 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
       characterId,
       reason: 'watermark',
     })
-    logger.debug('[Housekeeping] Watermark reached; enqueued housekeeping job', {
-      userId,
-      characterId,
-      count,
-      cap,
-    })
   } catch (error) {
     logger.warn('[Housekeeping] Failed watermark check after insert (non-fatal)', {
       userId,
       characterId,
       error: error instanceof Error ? error.message : String(error),
     })
+  }
+}
+
+/**
+ * If the caller supplied an aboutCharacterId that points to someone other
+ * than the holder, verify that character's name or aliases actually appears
+ * in the memory text. If not, collapse aboutCharacterId to the holder so the
+ * memory is recorded as self-referential. Manual creations and inter-character
+ * memories where the subject is named in the text pass through unchanged.
+ */
+async function applyNamePresenceCheck(data: CreateMemoryOptions): Promise<CreateMemoryOptions> {
+  const proposed = data.aboutCharacterId
+  if (!proposed || proposed === data.characterId) {
+    return data
+  }
+  // Only second-guess AUTO-extracted attributions; MANUAL memories carry the
+  // user's deliberate choice of about-target and should pass through unchanged.
+  if (data.source && data.source !== 'AUTO') {
+    return data
+  }
+  try {
+    const repos = getRepositories()
+    const [aboutChar, holderChar] = await Promise.all([
+      repos.characters.findById(proposed),
+      repos.characters.findById(data.characterId),
+    ])
+    const text = `${data.summary || ''}\n${data.content || ''}`
+    const resolution = resolveAboutCharacterId({
+      holderCharacterId: data.characterId,
+      holderCharacter: holderChar ? { name: holderChar.name, aliases: holderChar.aliases } : null,
+      proposedAboutCharacterId: proposed,
+      proposedAboutCharacter: aboutChar
+        ? { name: aboutChar.name, aliases: aboutChar.aliases, controlledBy: aboutChar.controlledBy }
+        : null,
+      text,
+    })
+    if (resolution.flipped) {
+      return { ...data, aboutCharacterId: data.characterId }
+    }
+    return data
+  } catch (error) {
+    // Never block a memory write on the safety-net lookup
+    logger.warn('[Memory] Name-presence check failed; using proposed aboutCharacterId unchanged', {
+      holderCharacterId: data.characterId,
+      proposedAboutCharacterId: proposed,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return data
   }
 }
 
@@ -177,6 +221,12 @@ export async function createMemoryWithGate(
   options: MemoryServiceOptions
 ): Promise<MemoryGateOutcome> {
   const repos = getRepositories()
+
+  // Name-presence safety net: if the caller proposes a non-self aboutCharacterId
+  // but that character's name (or aliases, or generic user aliases for user-
+  // controlled characters) doesn't appear in the memory text, the LLM almost
+  // certainly mis-attributed. Collapse to a self-reference on the holder.
+  data = await applyNamePresenceCheck(data)
 
   // If gate or embedding is skipped, use the direct creation flow
   if (options.skipGate || options.skipEmbedding) {
@@ -302,7 +352,8 @@ async function createMemoryDirect(
     const embeddingResult = await generateEmbeddingForUser(
       `${data.summary}\n\n${data.content}`,
       options.userId,
-      options.embeddingProfileId
+      options.embeddingProfileId,
+      { priority: 'background' }
     )
 
     const updatedMemory = await repos.memories.updateForCharacter(
@@ -457,8 +508,14 @@ export async function deleteMemoryWithVector(
 ): Promise<boolean> {
   const repos = getRepositories()
 
-  // Delete from repository
-  const deleted = await repos.memories.deleteForCharacter(characterId, memoryId)
+  // Confirm ownership before going through the chokepoint, which is
+  // characterId-agnostic.
+  const existing = await repos.memories.findById(memoryId)
+  if (!existing || existing.characterId !== characterId) {
+    return false
+  }
+
+  const deleted = await deleteMemoryWithUnlink(memoryId)
   if (!deleted) {
     return false
   }
@@ -488,6 +545,16 @@ export async function searchMemoriesSemantic(
     minScore?: number
     minImportance?: number
     source?: 'AUTO' | 'MANUAL'
+    /**
+     * When true and the trimmed query is ≥ LITERAL_BOOST_MIN_PHRASE_LENGTH,
+     * memories whose content or summary contains the query verbatim
+     * (case-insensitive) are unioned into the vector-store top-K candidate
+     * pool — their embeddings are explicitly scored against the query if
+     * they weren't already in the pool — and their cosine score is boosted
+     * halfway to 1.0 BEFORE the importance/recency blend. Used by the
+     * unified `search` tool; per-turn injectors leave this off.
+     */
+    applyLiteralPhraseBoost?: boolean
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -534,30 +601,86 @@ export async function searchMemoriesSemantic(
     )
     const tVector = performance.now()
 
-    if (vectorResults.length > 0) {
+    // Hybrid step: when literal-boost is enabled, find every memory that
+    // contains the trimmed query verbatim (case-insensitive) and explicitly
+    // union them into the candidate pool. searchByContent runs case-
+    // insensitive regex match against content+summary, so this captures all
+    // direct hits regardless of where they ranked in the vector top-K — a
+    // buried exact match cannot stay buried because the vector store's
+    // candidate cap excluded it.
+    const literalPhrase = options.applyLiteralPhraseBoost
+      ? getLiteralPhrase(query)
+      : null
+    const literalHitIds = new Set<string>()
+    let augmentedVectorResults = vectorResults
+
+    if (literalPhrase) {
+      const directHitMemories = await repos.memories.searchByContent(
+        characterId,
+        query.trim(),
+      )
+      for (const m of directHitMemories) {
+        literalHitIds.add(m.id)
+      }
+      const inVectorPool = new Set(vectorResults.map(vr => vr.id))
+      const missingDirectHits = directHitMemories.filter(
+        m => !inVectorPool.has(m.id),
+      )
+      if (missingDirectHits.length > 0) {
+        const extras: typeof vectorResults = []
+        for (const memory of missingDirectHits) {
+          if (
+            memory.embedding &&
+            memory.embedding.length === embeddingResult.embedding.length
+          ) {
+            const score = cosineSimilarity(embeddingResult.embedding, memory.embedding)
+            extras.push({
+              id: memory.id,
+              score,
+              metadata: { memoryId: memory.id, characterId },
+            })
+          }
+        }
+        if (extras.length > 0) {
+          augmentedVectorResults = [...vectorResults, ...extras]
+        }
+      }
+    }
+
+    if (augmentedVectorResults.length > 0) {
       // Hydrate only the matched memories. The previous version called
       // findByCharacterId here, which decrypted and Zod-validated the whole
       // corpus (20k+ rows on heavy characters) just to pluck ~60 hits out of
       // a Map. The Memory Gate read path already uses this shape — see
       // lib/memory/memory-gate.ts findByIds(matchedIds).
-      const matchedIds = vectorResults.map(vr => vr.id)
+      const matchedIds = augmentedVectorResults.map(vr => vr.id)
       const memories = await repos.memories.findByIds(matchedIds)
       const memoryMap = new Map(memories.map(m => [m.id, m]))
 
-      let results: SemanticSearchResult[] = vectorResults
-        .filter(vr => vr.score >= minScore)
+      let results: SemanticSearchResult[] = augmentedVectorResults
         .map(vr => {
           const memory = memoryMap.get(vr.id)
           if (!memory) return null
+          // Boost the cosine score (BEFORE the importance/recency blend) for
+          // any memory that scored a literal-phrase hit. We re-check the body
+          // here on top of literalHitIds so memories already in the vector
+          // pool also get the boost without an extra DB roundtrip.
+          const literalHit = literalPhrase
+            ? literalHitIds.has(memory.id) ||
+              containsLiteralPhrase(memory.content, literalPhrase) ||
+              containsLiteralPhrase(memory.summary, literalPhrase)
+            : false
+          const cosineScore = literalHit ? applyLiteralBoost(vr.score) : vr.score
           const { effectiveWeight } = calculateEffectiveWeight(memory)
           return {
             memory,
-            score: vr.score,
+            score: cosineScore,
             usedEmbedding: true,
             effectiveWeight,
           } as SemanticSearchResult
         })
         .filter((r): r is SemanticSearchResult => r !== null)
+        .filter(r => r.score >= minScore)
 
       // Apply additional filters
       if (options.minImportance !== undefined) {
@@ -576,16 +699,6 @@ export async function searchMemoriesSemantic(
       })
 
       const tDone = performance.now()
-      logger.debug('[Memory] Semantic search timings', {
-        characterId,
-        corpusSize: vectorStore.size,
-        vectorHits: vectorResults.length,
-        finalHits: Math.min(results.length, limit),
-        embedMs: Math.round(tEmbed - t0),
-        vectorSearchMs: Math.round(tVector - tEmbed),
-        hydrateAndRankMs: Math.round(tDone - tVector),
-        totalMs: Math.round(tDone - t0),
-      })
 
       const finalResults = results.slice(0, limit)
       bumpAccessTimes(characterId, finalResults.map(r => r.memory.id))
@@ -678,13 +791,6 @@ async function searchMemoriesText(
           }
         }
       }
-
-      logger.debug('[Memory] Text search broadened to per-word search', {
-        characterId,
-        query: query.substring(0, 100),
-        significantWords: queryWords,
-        totalCandidates: memories.length,
-      })
     }
   }
 
@@ -768,7 +874,8 @@ export async function findSimilarMemories(
     const embeddingResult = await generateEmbeddingForUser(
       `${summary}\n\n${content}`,
       options.userId,
-      options.embeddingProfileId
+      options.embeddingProfileId,
+      { priority: 'background' }
     )
 
     const vectorStore = await getCharacterVectorStore(characterId)
@@ -866,7 +973,8 @@ export async function generateMissingEmbeddings(
       const embeddingResult = await generateEmbeddingForUser(
         `${memory.summary}\n\n${memory.content}`,
         options.userId,
-        options.embeddingProfileId
+        options.embeddingProfileId,
+        { priority: 'background' }
       )
 
       // Update memory with embedding
@@ -997,8 +1105,10 @@ export async function deleteMemoriesBySourceMessageWithVectors(
     }
   }
 
-  // Delete the memories from the database
-  const deleted = await repos.memories.deleteBySourceMessageId(sourceMessageId)
+  // Delete the memories through the chokepoint so neighbours' relatedMemoryIds
+  // get scrubbed before the rows go away.
+  const allMemoryIds = memories.map(m => m.id)
+  const deleted = await deleteMemoriesWithUnlinkBatch(allMemoryIds)
 
   logger.info('[Memory] Cascade deleted memories for source message', {
     sourceMessageId,
@@ -1023,22 +1133,111 @@ export async function deleteMemoriesBySourceMessagesWithVectors(
     return { deleted: 0, vectorsRemoved: 0 }
   }
 
-  let totalDeleted = 0
-  let totalVectorsRemoved = 0
+  const repos = getRepositories()
 
-  // Process each message - could be optimized with bulk operations but
-  // vector stores are per-character so we need the grouping logic
+  // Gather every memory across the whole swipe group up front, so the chokepoint
+  // scan only sweeps the relatedMemoryIds column once for the entire batch.
+  const allMemories: Memory[] = []
   for (const sourceMessageId of sourceMessageIds) {
-    const result = await deleteMemoriesBySourceMessageWithVectors(sourceMessageId)
-    totalDeleted += result.deleted
-    totalVectorsRemoved += result.vectorsRemoved
+    const slice = await repos.memories.findBySourceMessageId(sourceMessageId)
+    allMemories.push(...slice)
   }
+  if (allMemories.length === 0) {
+    return { deleted: 0, vectorsRemoved: 0 }
+  }
+
+  const memoryIdsByCharacter = new Map<string, string[]>()
+  for (const memory of allMemories) {
+    const existing = memoryIdsByCharacter.get(memory.characterId) || []
+    existing.push(memory.id)
+    memoryIdsByCharacter.set(memory.characterId, existing)
+  }
+
+  let vectorsRemoved = 0
+  for (const [characterId, memoryIds] of memoryIdsByCharacter) {
+    try {
+      const vectorStore = await getCharacterVectorStore(characterId)
+      for (const memoryId of memoryIds) {
+        if (vectorStore.hasVector(memoryId)) {
+          await vectorStore.removeVector(memoryId)
+          vectorsRemoved++
+        }
+      }
+      await vectorStore.save()
+    } catch (error) {
+      logger.warn('[Memory] Failed to remove vectors for character during swipe-group cascade', {
+        characterId,
+        memoryCount: memoryIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const totalDeleted = await deleteMemoriesWithUnlinkBatch(allMemories.map(m => m.id))
 
   logger.info('[Memory] Bulk cascade deleted memories for swipe group', {
     messageCount: sourceMessageIds.length,
     totalDeleted,
-    totalVectorsRemoved,
+    totalVectorsRemoved: vectorsRemoved,
   })
 
-  return { deleted: totalDeleted, vectorsRemoved: totalVectorsRemoved }
+  return { deleted: totalDeleted, vectorsRemoved }
+}
+
+/**
+ * Delete every memory tied to the given chat (across all characters) and
+ * remove their entries from each character's vector store.
+ *
+ * Used by the DELETE /api/v1/memories?chatId= route and by the
+ * MEMORY_REGENERATE_CHAT job when wiping a chat's auto-extracted memories
+ * before re-running extraction from scratch.
+ */
+export async function deleteMemoriesByChatIdWithVectors(
+  chatId: string,
+): Promise<{ deleted: number; vectorsRemoved: number; characterCount: number }> {
+  const repos = getRepositories()
+
+  const memories = await repos.memories.findByChatId(chatId)
+  if (memories.length === 0) {
+    return { deleted: 0, vectorsRemoved: 0, characterCount: 0 }
+  }
+
+  const memoryIdsByCharacter = new Map<string, string[]>()
+  for (const memory of memories) {
+    const existing = memoryIdsByCharacter.get(memory.characterId) || []
+    existing.push(memory.id)
+    memoryIdsByCharacter.set(memory.characterId, existing)
+  }
+
+  let vectorsRemoved = 0
+  for (const [characterId, memoryIds] of memoryIdsByCharacter) {
+    try {
+      const vectorStore = await getCharacterVectorStore(characterId)
+      for (const memoryId of memoryIds) {
+        if (vectorStore.hasVector(memoryId)) {
+          await vectorStore.removeVector(memoryId)
+          vectorsRemoved++
+        }
+      }
+      await vectorStore.save()
+    } catch (error) {
+      logger.warn('[Memory] Failed to remove vectors for character during chat wipe', {
+        characterId,
+        memoryCount: memoryIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const allMemoryIds = memories.map(m => m.id)
+  const deleted = await deleteMemoriesWithUnlinkBatch(allMemoryIds)
+
+  logger.info('[Memory] Cascade deleted memories for chat', {
+    chatId,
+    deleted,
+    vectorsRemoved,
+    characterCount: memoryIdsByCharacter.size,
+  })
+
+  return { deleted, vectorsRemoved, characterCount: memoryIdsByCharacter.size }
 }

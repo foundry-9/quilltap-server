@@ -18,6 +18,8 @@ const createWardrobeItemSchema = z.object({
   types: z.array(WardrobeItemTypeEnum).min(1, 'At least one type is required'),
   appropriateness: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
+  /** Optional composite components — empty/omitted = leaf item. */
+  componentItemIds: z.array(z.string()).optional(),
 });
 
 // GET /api/v1/characters/[id]/wardrobe
@@ -29,8 +31,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       if (!checkOwnership(character, user.id)) {
         return notFound('Character');
       }
-
-      logger.debug('[Wardrobe v1] Fetching wardrobe items', { characterId: id });
 
       const wardrobeItems = await repos.wardrobe.findByCharacterId(id);
       return NextResponse.json({ wardrobeItems });
@@ -53,17 +53,12 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     const body = await req.json();
     const validatedData = createWardrobeItemSchema.parse(body);
 
-    logger.debug('[Wardrobe v1] Creating wardrobe item', {
-      characterId: id,
-      title: validatedData.title,
-      types: validatedData.types,
-    });
-
     const item = await repos.wardrobe.create({
       characterId: id,
       title: validatedData.title,
       description: validatedData.description ?? null,
       types: validatedData.types,
+      componentItemIds: validatedData.componentItemIds ?? [],
       appropriateness: validatedData.appropriateness ?? null,
       isDefault: validatedData.isDefault ?? false,
       migratedFromClothingRecordId: null,

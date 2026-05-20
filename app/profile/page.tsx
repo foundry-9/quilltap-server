@@ -54,7 +54,7 @@ export default function ProfilePage() {
       <div className="mb-8">
         <Link
           href="/"
-          className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
+          className="mb-4 inline-flex items-center qt-label text-primary transition hover:text-primary/80"
         >
           ← Back to Home
         </Link>

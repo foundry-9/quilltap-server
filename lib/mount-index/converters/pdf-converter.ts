@@ -20,10 +20,6 @@ export async function convertPdfBufferToText(buffer: Buffer): Promise<string> {
 
     try {
       const result = await parser.getText();
-      logger.debug('PDF conversion complete', {
-        pages: result.total,
-        textLength: result.text.length,
-      });
       return result.text;
     } finally {
       await parser.destroy().catch(() => {
@@ -42,7 +38,6 @@ export async function convertPdfBufferToText(buffer: Buffer): Promise<string> {
  * Extract plain text from a PDF file on disk.
  */
 export async function convertPdfToText(absolutePath: string): Promise<string> {
-  logger.debug('Converting PDF to text', { path: absolutePath });
   try {
     const buffer = await fs.readFile(absolutePath);
     return await convertPdfBufferToText(buffer);

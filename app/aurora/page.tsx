@@ -233,7 +233,7 @@ export default function CharactersPage() {
   return (
     <div className="character-page qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/aurora.webp)' } as React.CSSProperties}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
-        <h1 className="text-3xl font-semibold leading-tight">Characters</h1>
+        <h1 className="qt-page-title">Characters</h1>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setResetBuiltinsDialogOpen(true)}
@@ -301,7 +301,7 @@ export default function CharactersPage() {
                     </div>
                   )}
                   <div className="flex-grow">
-                    <h2 className="text-xl font-semibold text-foreground">{character.name}</h2>
+                    <h2 className="qt-heading-3 text-foreground">{character.name}</h2>
                     {character.title && (
                       <p className="qt-text-small">{character.title}</p>
                     )}
@@ -391,7 +391,7 @@ export default function CharactersPage() {
       {importDialogOpen && (
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
-            <h3 className="mb-4 text-lg font-semibold text-foreground">
+            <h3 className="mb-4 qt-dialog-title text-foreground">
               Import from SillyTavern
             </h3>
             <form onSubmit={handleImport}>
@@ -431,7 +431,7 @@ export default function CharactersPage() {
       {resetBuiltinsDialogOpen && (
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
-            <h3 className="mb-3 text-lg font-semibold text-foreground">
+            <h3 className="mb-3 qt-dialog-title text-foreground">
               Reset Built-in Characters
             </h3>
             <p className="mb-5 qt-text-small">
@@ -464,7 +464,7 @@ export default function CharactersPage() {
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground">
+              <h3 className="qt-dialog-title text-foreground">
                 Summon From Lore
               </h3>
               <button

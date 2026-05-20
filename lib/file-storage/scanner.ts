@@ -98,10 +98,22 @@ function shouldSkipFile(name: string): boolean {
 }
 
 /**
+ * Directories created by the v4.3 / v4.4 migration sweep as safety-net copies
+ * of files that were moved into document-store mounts. The reconciler must not
+ * walk them: their contents are not live storage, and their parent-directory
+ * names are not parseable as projectIds.
+ */
+function isMigrationArchiveDir(name: string): boolean {
+  return name.endsWith('_doc_store_archive') || name.endsWith('_archive');
+}
+
+/**
  * Scan a directory tree relative to a base path.
  *
  * Returns all files and directories found, excluding:
  * - `_thumbnails/` directory
+ * - Migration archive directories (`<projectId>_doc_store_archive/` at the top
+ *   level, and `*_archive/` siblings under `_general/`)
  * - Hidden files (starting with `.`)
  * - Legacy `.meta.json` sidecar files
  *
@@ -144,6 +156,9 @@ export async function scanDirectory(
       if (entry.isDirectory()) {
         // Skip special directories
         if (SKIP_DIRS.has(entry.name)) {
+          continue;
+        }
+        if (isMigrationArchiveDir(entry.name)) {
           continue;
         }
 

@@ -11,20 +11,6 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import type { ConnectionProfile } from './types'
 
-// Re-export for barrel exports
-export { ProfileForm } from './ProfileForm'
-export { ProfileList } from './ProfileList'
-export { ProfileCard } from './ProfileCard'
-export { useConnectionProfiles, useProfileForm } from './hooks'
-export type {
-  ApiKey,
-  Tag,
-  ProviderConfig,
-  ConnectionProfile,
-  ProfileFormData,
-} from './types'
-export { initialFormState } from './types'
-
 /**
  * Main connection profiles component
  * Orchestrates profile list, modal, and all operations

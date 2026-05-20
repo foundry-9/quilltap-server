@@ -10,7 +10,7 @@
 
 import { logger } from '@/lib/logger';
 import { providerRegistry, getConfigRequirements, getProvider } from './provider-registry';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage } from '@/lib/error-utils';
 
 // ============================================================================
 // TYPES

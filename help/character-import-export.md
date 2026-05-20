@@ -104,6 +104,7 @@ When you export, the file contains:
   "name": "Alice",
   "title": "The Wanderer",
   "description": "...",
+  "manifesto": "...",
   "personality": "...",
   "scenarios": [
     { "title": "The Brass Lantern Tavern", "content": "..." },
@@ -119,7 +120,7 @@ When you export, the file contains:
 }
 ```
 
-All character data in one JSON file.
+All character data in one JSON file. The Manifesto field round-trips with Quilltap exports and imports.
 
 ### Backing Up Your Characters
 
@@ -276,6 +277,7 @@ If importing from SillyTavern:
 
 **What may not transfer:**
 
+- Manifesto (SillyTavern has no equivalent — the field will be empty on round-trip)
 - Custom system prompts (may need re-creation)
 - External links (may break)
 - Special formatting (may lose structure)
@@ -371,6 +373,7 @@ If you know JSON structure:
   "name": "Character Name",
   "title": "Character Title",
   "description": "Full description text",
+  "manifesto": "Foundational tenets and load-bearing truths",
   "personality": "Personality traits",
   "scenarios": [
     { "title": "Scenario Title", "content": "Setting/scenario description" }
@@ -385,7 +388,7 @@ If you know JSON structure:
 }
 ```
 
-Note that `scenarios` is an array of objects with `title` and `content` fields. A character may have zero, one, or many scenarios. The SillyTavern format uses a single `"scenario"` string field, which Quilltap imports as a single entry in the scenarios list.
+Note that `scenarios` is an array of objects with `title` and `content` fields. A character may have zero, one, or many scenarios. The SillyTavern format uses a single `"scenario"` string field, which Quilltap imports as a single entry in the scenarios list. The `manifesto` field is optional and Quilltap-specific.
 
 ### Batch Import/Export with Scripts
 

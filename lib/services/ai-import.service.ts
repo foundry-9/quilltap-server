@@ -16,6 +16,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { validateQtapExport } from '@/lib/validation/qtap-schema-validator';
+import { FIELD_SEMANTICS_PREAMBLE } from '@/lib/services/character-field-semantics';
 import { logger } from '@/lib/logger';
 import packageJson from '@/package.json';
 import type { ConnectionProfile } from '@/lib/schemas/types';
@@ -75,7 +76,9 @@ export interface AIImportStepResults {
   character_basics?: {
     name: string;
     title?: string;
+    identity?: string;
     description?: string;
+    manifesto?: string;
     personality?: string;
     scenario?: string;
   };
@@ -150,15 +153,19 @@ Respond with JSON:
 }`;
 }
 
-const CHARACTER_BASICS_PROMPT = `Extract or generate the character's basic information from the source material.
+export const CHARACTER_BASICS_PROMPT = `${FIELD_SEMANTICS_PREAMBLE}
+
+Extract or generate the character's basic information from the source material. Use the vantage-point rule above to decide what belongs in IDENTITY vs DESCRIPTION vs PERSONALITY. Do NOT put the same content under two different fields, and do NOT put physical appearance into DESCRIPTION — physical appearance is generated separately and lives in physicalDescriptions.
 
 Respond with JSON:
 {
   "name": "Character's full name",
   "title": "A short epithet or title (2-5 words, like 'The Wandering Scholar')",
-  "description": "A comprehensive 2-3 paragraph description covering appearance, background, and current situation. Write in third person, present tense.",
-  "personality": "1-2 paragraphs describing core traits, interaction style, emotional tendencies, and quirks. Write as behavioral instructions.",
-  "scenario": "1-2 paragraphs setting the default scene for interactions. Present tense, describing environment and relationship context."
+  "identity": "1-2 paragraphs of public-knowledge / outside-view facts only — name, station, occupation, public reputation, signifying outward facts a stranger could plausibly know without having spoken to the character. Never internal motivation, never private mannerisms, never physical appearance.",
+  "description": "1-2 paragraphs of what someone who has interacted with the character would notice — behaviour, mannerisms, frequent verbal patterns, conversational tics. NOT physical appearance (that lives in physicalDescriptions). NOT the character's private inner monologue. NOT the public-facing reputation that already lives in identity. Write in third person, present tense.",
+  "manifesto": "The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Not a vantage-point field; nobody 'sees' the manifesto, it is the load-bearing truth the character is built on. Short, declarative, foundational. If a fact would be devastating to contradict, it belongs here.",
+  "personality": "1-2 paragraphs of the character's own self-knowledge — inner drivers of speech and behaviour, motivations, beliefs, emotional tendencies, things only the character knows about themselves unless they choose to share them. Never put outward behaviour someone else would observe here, and never put public-facing identity facts.",
+  "scenario": "1-2 paragraphs setting the default scene for interactions. Present tense, describing environment and relationship context. The scenario is the stage, not the actor — do not restate personality or appearance here."
 }
 
 If the source material clearly provides information for a field, extract and adapt it. If not, generate appropriate content that fits the character.`;
@@ -217,12 +224,14 @@ The "appropriateness" field is a comma-separated list of context tags describing
 
 const PRONOUNS_PROMPT = `Determine the character's pronouns from the source material.
 
-Respond with JSON:
+If the source material clearly indicates pronouns, respond with JSON:
 {
   "subject": "he/she/they/etc",
   "object": "him/her/them/etc",
   "possessive": "his/her/their/etc"
-}`;
+}
+
+If the source material does NOT indicate pronouns, respond with JSON null (literally: null). Do not invent placeholders like "unknown", "n/a", or empty strings — return null instead.`;
 
 const MEMORIES_PROMPT = `Generate memories that this character would have based on the source material. These are key facts, experiences, and knowledge the character should remember.
 
@@ -351,6 +360,30 @@ export function parseLLMJson<T>(text: string): T {
     const repaired = repairTruncatedJson(cleaned);
     return JSON.parse(repaired) as T;
   }
+}
+
+const PRONOUN_PLACEHOLDERS = new Set([
+  '', 'unknown', 'n/a', 'na', 'none', 'null', 'undefined', 'not specified', 'not given', 'tbd',
+]);
+
+// Validate a parsed pronouns response. Returns the trimmed object if all three
+// fields are usable strings; otherwise returns undefined so the assembler stores null.
+// PronounsSchema requires non-empty strings ≤20 chars on subject/object/possessive,
+// so anything else would explode at character-create time.
+function sanitizePronouns(raw: unknown): { subject: string; object: string; possessive: string } | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const obj = raw as Record<string, unknown>;
+  const fields = ['subject', 'object', 'possessive'] as const;
+  const cleaned: Record<string, string> = {};
+  for (const f of fields) {
+    const v = obj[f];
+    if (typeof v !== 'string') return undefined;
+    const trimmed = v.trim();
+    if (!trimmed || trimmed.length > 20) return undefined;
+    if (PRONOUN_PLACEHOLDERS.has(trimmed.toLowerCase())) return undefined;
+    cleaned[f] = trimmed;
+  }
+  return cleaned as { subject: string; object: string; possessive: string };
 }
 
 type LLMProvider = Awaited<ReturnType<typeof createLLMProvider>>;
@@ -495,7 +528,7 @@ function getSnippet(content: unknown, maxLength: number = 100): string {
 /**
  * Assemble a QuilltapExport from the generated step results
  */
-function assembleQtapExport(
+export function assembleQtapExport(
   stepResults: AIImportStepResults,
   includeMemories: boolean,
   includeChats: boolean,
@@ -516,7 +549,9 @@ function assembleQtapExport(
     userId,
     name: basics.name,
     title: basics.title || null,
+    identity: basics.identity || null,
     description: basics.description || null,
+    manifesto: basics.manifesto || null,
     personality: basics.personality || null,
     scenarios: basics.scenario ? [{
       id: crypto.randomUUID(),
@@ -951,12 +986,22 @@ export async function runAIImportStreaming(
           PRONOUNS_PROMPT,
           { temperature: 0.3, maxTokens: 100, ...llmOpts }
         );
-        stepResults.pronouns = parseLLMJson(raw);
-        onProgress({
-          type: 'step_complete',
-          step: 'pronouns',
-          snippet: `${stepResults.pronouns?.subject}/${stepResults.pronouns?.object}/${stepResults.pronouns?.possessive}`,
-        });
+        const parsed = parseLLMJson<unknown>(raw);
+        stepResults.pronouns = sanitizePronouns(parsed);
+        if (stepResults.pronouns) {
+          onProgress({
+            type: 'step_complete',
+            step: 'pronouns',
+            snippet: `${stepResults.pronouns.subject}/${stepResults.pronouns.object}/${stepResults.pronouns.possessive}`,
+          });
+        } else {
+          onProgress({
+            type: 'step_complete',
+            step: 'pronouns',
+            snippet: 'pronouns not derivable — left blank',
+          });
+          logger.info('[AIImport] Pronouns not derivable from source — leaving null');
+        }
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Pronouns failed';
         errors.pronouns = msg;

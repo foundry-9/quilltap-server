@@ -11,7 +11,7 @@
 
 import { Memory } from '@/lib/schemas/types'
 import { cosineSimilarity } from '@/lib/embedding/embedding-service'
-import { extractNovelDetails } from '@/lib/memory/memory-gate'
+import { extractNovelDetails, deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getUserRepositories } from '@/lib/repositories/factory'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
@@ -313,9 +313,10 @@ export async function deduplicateCharacterMemories(
       })
     }
 
-    // Bulk delete discarded memories
+    // Bulk delete discarded memories through the chokepoint so neighbours'
+    // relatedMemoryIds get scrubbed atomically.
     if (allRemoveIds.length > 0) {
-      const deletedCount = await repos.memories.bulkDelete(characterId, allRemoveIds)
+      const deletedCount = await deleteMemoriesWithUnlinkBatch(allRemoveIds)
       logger.info('[MemoryDedup] Bulk deleted memories', {
         context: 'memory-dedup.deduplicateCharacterMemories',
         characterId,

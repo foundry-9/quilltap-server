@@ -43,7 +43,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -54,6 +54,19 @@ jobs:
 
       - name: Build Next.js standalone
         run: SKIP_ENV_VALIDATION=true npx next build --webpack
+
+      # Compile our custom server.ts and out-of-band entry points into the
+      # standalone tree, then drop the bootstrap shim over Next's auto-generated
+      # server.js. Without this, published Docker images run Next's default
+      # standalone server (no WebSocket upgrade handler → no terminal in Docker)
+      # and the forked background-job child loads raw .ts and crashes on @/.
+      # Mirrors scripts/build-standalone-tarball.ts; the prebuild artifact
+      # uploaded below is what Dockerfile.ci copies into the published image.
+      - name: Compile custom server, terminal handler, and child entry
+        # Single source of truth for esbuild flags + child externals lives in
+        # scripts/build-standalone-overlay.mjs (also invoked by the local
+        # Dockerfile and scripts/build-standalone-tarball.ts).
+        run: node scripts/build-standalone-overlay.mjs .next/standalone
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
@@ -83,7 +96,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Download pre-built app
         uses: actions/download-artifact@v8
@@ -171,7 +184,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Export rootfs tarball
         run: npx --yes tsx scripts/build-rootfs.ts --image quilltap-rootfs:local --platform ${{ matrix.platform }}
@@ -366,7 +379,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Determine dist-tag
@@ -413,6 +426,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: create-release
     continue-on-error: true
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Notify Discord of release
         uses: tsickert/discord-webhook@v7.0.0

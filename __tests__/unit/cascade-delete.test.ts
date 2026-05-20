@@ -7,13 +7,16 @@
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
-import {
-  findExclusiveChatsForCharacter,
-  findExclusiveImagesForCharacter,
-  findExclusiveImagesForChats,
-  getCascadeDeletePreview,
-  executeCascadeDelete,
-} from '@/lib/cascade-delete'
+
+// cascade-delete now routes memory deletion through the memory-gate
+// chokepoint. Stub the batch helper to mirror the legacy bulkDelete contract
+// (returns the count of IDs deleted) so the test doesn't need a real DB.
+jest.mock('@/lib/memory/memory-gate', () => ({
+  __esModule: true,
+  deleteMemoriesWithUnlinkBatch: jest.fn(((ids: string[]) =>
+    Promise.resolve(ids.length))),
+}))
+
 import { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadata, FileEntry } from '@/lib/schemas/types'
 
@@ -22,6 +25,26 @@ import type { ChatMetadata, FileEntry } from '@/lib/schemas/types'
 jest.mock('@/lib/repositories/factory')
 
 const mockGetRepositories = jest.mocked(getRepositories)
+
+// The cascade-delete module needs to be loaded *after* the memory-gate mock
+// is registered so the relative-path import inside it picks up the mocked
+// chokepoint helper. Loading via isolateModules + require keeps it tidy.
+let findExclusiveChatsForCharacter: typeof import('@/lib/cascade-delete').findExclusiveChatsForCharacter
+let findExclusiveImagesForCharacter: typeof import('@/lib/cascade-delete').findExclusiveImagesForCharacter
+let findExclusiveImagesForChats: typeof import('@/lib/cascade-delete').findExclusiveImagesForChats
+let getCascadeDeletePreview: typeof import('@/lib/cascade-delete').getCascadeDeletePreview
+let executeCascadeDelete: typeof import('@/lib/cascade-delete').executeCascadeDelete
+
+beforeAll(() => {
+  jest.isolateModules(() => {
+    const mod = require('@/lib/cascade-delete') as typeof import('@/lib/cascade-delete')
+    findExclusiveChatsForCharacter = mod.findExclusiveChatsForCharacter
+    findExclusiveImagesForCharacter = mod.findExclusiveImagesForCharacter
+    findExclusiveImagesForChats = mod.findExclusiveImagesForChats
+    getCascadeDeletePreview = mod.getCascadeDeletePreview
+    executeCascadeDelete = mod.executeCascadeDelete
+  })
+})
 
 describe('Cascade Delete Utilities', () => {
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
@@ -337,10 +360,15 @@ describe('Cascade Delete Utilities', () => {
         findByIds: jest.fn().mockResolvedValue([]),
       }
 
+      const docMountFileLinksRepo = {
+        findByIdWithContent: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         personas: personasRepo as any,
         files: filesRepo as any,
+        docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
       const result = await findExclusiveImagesForCharacter('char-1')
@@ -414,12 +442,17 @@ describe('Cascade Delete Utilities', () => {
         findByIds: jest.fn().mockResolvedValue([]),
       }
 
+      const docMountFileLinksRepo = {
+        findByIdWithContent: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
         files: filesRepo as any,
+        docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
       const result = await getCascadeDeletePreview('char-1')
@@ -458,12 +491,17 @@ describe('Cascade Delete Utilities', () => {
         findByIds: jest.fn().mockResolvedValue([]),
       }
 
+      const docMountFileLinksRepo = {
+        findByIdWithContent: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
         files: filesRepo as any,
+        docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
       const result = await getCascadeDeletePreview('char-1')
@@ -528,12 +566,17 @@ describe('Cascade Delete Utilities', () => {
         delete: jest.fn().mockResolvedValue(true),
       }
 
+      const docMountFileLinksRepo = {
+        findByIdWithContent: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
         files: filesRepo as any,
+        docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
       // getVectorStoreManager is already mocked in jest.setup.ts
@@ -581,12 +624,17 @@ describe('Cascade Delete Utilities', () => {
         delete: jest.fn().mockResolvedValue(true),
       }
 
+      const docMountFileLinksRepo = {
+        findByIdWithContent: jest.fn().mockResolvedValue(null),
+      }
+
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
         chats: chatsRepo as any,
         personas: personasRepo as any,
         memories: memoriesRepo as any,
         files: filesRepo as any,
+        docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
       // getVectorStoreManager is already mocked in jest.setup.ts

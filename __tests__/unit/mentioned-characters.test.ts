@@ -1,14 +1,14 @@
 /**
  * Unit tests for the mentioned-characters module — scans a chat corpus for
  * references to characters that exist on the system but are not currently in
- * the chat, and formats them into a "Characters Mentioned" system-prompt
- * section.
+ * the chat. Hits drive the Host's off-scene-character introduction (posted
+ * once per character to chat history); the legacy "Characters Mentioned"
+ * system-prompt section was retired.
  */
 
 import { describe, it, expect } from '@jest/globals'
 import {
   findMentionedCharacterIds,
-  formatMentionedCharactersSection,
 } from '@/lib/chat/context/mentioned-characters'
 import type { Character } from '@/lib/schemas/types'
 
@@ -118,75 +118,8 @@ describe('findMentionedCharacterIds', () => {
   })
 })
 
-describe('formatMentionedCharactersSection', () => {
-  it('returns empty section for empty input', () => {
-    const result = formatMentionedCharactersSection([])
-    expect(result.section).toBe('')
-    expect(result.includedCount).toBe(0)
-  })
-
-  it('renders name, aliases, pronouns, and full description', () => {
-    const alice = makeCharacter({
-      id: 'a',
-      name: 'Alice Tremaine',
-      aliases: ['Allie', 'Tremaine'],
-      pronouns: { subject: 'she', object: 'her', possessive: 'hers' },
-      description: 'A solicitor with an unfortunate habit of arriving late.',
-    })
-    const result = formatMentionedCharactersSection([alice])
-    expect(result.section).toContain('## Characters Mentioned')
-    expect(result.section).toContain('### Alice Tremaine')
-    expect(result.section).toContain('Aliases: Allie, Tremaine')
-    expect(result.section).toContain('Pronouns: she/her/hers')
-    expect(result.section).toContain('A solicitor with an unfortunate habit of arriving late.')
-    expect(result.includedCount).toBe(1)
-  })
-
-  it('includes the full description even when very long', () => {
-    const longDesc = 'lorem ipsum '.repeat(200).trim() // ~2400 chars
-    const c = makeCharacter({ id: 'a', name: 'Alice', description: longDesc })
-    const result = formatMentionedCharactersSection([c])
-    expect(result.section).toContain(longDesc)
-    expect(result.section).not.toMatch(/…/)
-  })
-
-  it('omits pronouns/aliases/description fields when missing', () => {
-    const c = makeCharacter({ id: 'a', name: 'Bare' })
-    const result = formatMentionedCharactersSection([c])
-    expect(result.section).toContain('### Bare')
-    expect(result.section).not.toContain('Aliases:')
-    expect(result.section).not.toContain('Pronouns:')
-  })
-
-  it('renders multiple characters in alphabetical order', () => {
-    const characters = [
-      makeCharacter({ id: 'c', name: 'Carol' }),
-      makeCharacter({ id: 'a', name: 'Alice' }),
-      makeCharacter({ id: 'b', name: 'Bob' }),
-    ]
-    const result = formatMentionedCharactersSection(characters)
-    const aIdx = result.section.indexOf('### Alice')
-    const bIdx = result.section.indexOf('### Bob')
-    const cIdx = result.section.indexOf('### Carol')
-    expect(aIdx).toBeGreaterThan(-1)
-    expect(bIdx).toBeGreaterThan(aIdx)
-    expect(cIdx).toBeGreaterThan(bIdx)
-  })
-
-  it('includes every matched character without dropping any', () => {
-    const longDesc = 'A truly extraordinary creature. '.repeat(15).trim()
-    const characters = Array.from({ length: 80 }, (_, i) =>
-      makeCharacter({
-        id: `id-${i}`,
-        name: `Character ${String(i).padStart(2, '0')}`,
-        description: longDesc,
-      })
-    )
-    const result = formatMentionedCharactersSection(characters)
-    expect(result.includedCount).toBe(characters.length)
-    expect(result.section).not.toMatch(/more mentioned characters/)
-    for (let i = 0; i < characters.length; i++) {
-      expect(result.section).toContain(`### Character ${String(i).padStart(2, '0')}`)
-    }
-  })
-})
+// `formatMentionedCharactersSection` and its tests were retired when off-scene
+// character cards moved out of the system prompt and into Host-authored
+// chat-history introductions. See `buildOffSceneCharactersContent` and its
+// tests in `__tests__/unit/lib/services/host-notifications-phase-c.test.ts`
+// for the equivalent coverage.

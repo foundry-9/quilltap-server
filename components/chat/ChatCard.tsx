@@ -16,6 +16,8 @@ import { useRouter } from 'next/navigation'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import AvatarStack from '@/components/ui/AvatarStack'
+import { formatChatListDate } from '@/lib/format-time'
+import { CloseIcon } from '@/components/ui/icons'
 
 // ============================================================================
 // Types
@@ -131,14 +133,6 @@ function TrashIcon({ className }: { className?: string }) {
   )
 }
 
-function CloseIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  )
-}
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -151,35 +145,6 @@ function formatParticipantNames(participants: ChatCardParticipant[]): string {
   if (participants.length === 1) return participants[0].name
   if (participants.length === 2) return `${participants[0].name} + ${participants[1].name}`
   return participants.map(p => p.name).join(' + ')
-}
-
-/**
- * Format date with relative option
- */
-function formatDate(dateString: string, useRelative: boolean): string {
-  const date = new Date(dateString)
-
-  if (!useRelative) {
-    return date.toLocaleDateString()
-  }
-
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffDays === 0) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  } else if (diffDays === 1) {
-    return 'Yesterday'
-  } else if (diffDays < 7) {
-    return date.toLocaleDateString([], { weekday: 'long' })
-  } else {
-    return date.toLocaleDateString([], {
-      month: 'short',
-      day: 'numeric',
-      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
-    })
-  }
 }
 
 // ============================================================================
@@ -205,7 +170,7 @@ export function ChatCard({
   const { formatCharacterName } = useUserCharacterDisplayName()
 
   const participantNames = formatParticipantNames(chat.participants)
-  const dateStr = formatDate(chat.lastMessageAt || chat.updatedAt, useRelativeDates)
+  const dateStr = formatChatListDate(chat.lastMessageAt || chat.updatedAt, useRelativeDates)
   const displayTitle = chat.title || (characterName ? `Chat with ${characterName}` : 'Untitled Chat')
 
   const handleCardClick = (e: React.MouseEvent) => {

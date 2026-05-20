@@ -44,6 +44,28 @@ export const ConnectionProfileSchema = z.object({
   userId: UUIDSchema,
   name: z.string(),
   provider: ProviderEnum,
+  /**
+   * How requests for this profile are delivered.
+   * - 'api': the normal plugin-dispatched API path (default for all
+   *   pre-existing profiles).
+   * - 'courier': the manual / clipboard transport. Quilltap renders the
+   *   assembled request as Markdown for the human user to carry by hand to
+   *   an external LLM and paste the reply back in. No API key, base URL, or
+   *   tools are used; `provider` is informational only ("OpenAI",
+   *   "Anthropic in claude.ai", etc.).
+   */
+  transport: z.enum(['api', 'courier']).default('api'),
+  /**
+   * The Courier — delta mode. When true (default), after a character's first
+   * successful Courier turn in a given chat, subsequent placeholders render
+   * only the delta since the last paste. Desktop LLM clients (Claude desktop,
+   * ChatGPT web, etc.) hold the prior conversation themselves, so the full
+   * system prompt and earlier history needn't be re-established every turn.
+   * The Salon bubble still keeps a full-context fallback alongside the delta
+   * for when the user has switched clients or cleared their conversation.
+   * Ignored when `transport === 'api'`.
+   */
+  courierDeltaMode: z.boolean().default(true),
   apiKeyId: UUIDSchema.nullable().optional(),
   baseUrl: z.string().nullable().optional(),
   modelName: z.string(),
@@ -142,8 +164,22 @@ export const EmbeddingProfileSchema = z.object({
   apiKeyId: UUIDSchema.nullable().optional(),
   baseUrl: z.string().nullable().optional(),
   modelName: z.string(),
-  /** Embedding dimension size (provider-specific) */
+  /** Embedding dimension size requested from the provider (provider-specific) */
   dimensions: z.number().nullable().optional(),
+  /**
+   * If set, the raw vector returned by the provider is sliced to this length
+   * before normalization. Intended for Matryoshka-trained models (e.g. Qwen3-
+   * Embedding) whose first N components are themselves a valid embedding at
+   * dimension N. When null, the vector is stored at whatever length the
+   * provider returned.
+   */
+  truncateToDimensions: z.number().int().positive().nullable().optional(),
+  /**
+   * When true (default), every embedding is L2-normalised before storage so
+   * cosine similarity reduces to a dot product. False is reserved for niche
+   * cases where downstream code wants raw magnitudes.
+   */
+  normalizeL2: z.boolean().default(true),
   isDefault: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,

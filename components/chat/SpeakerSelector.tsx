@@ -98,7 +98,7 @@ export function SpeakerSelector({
               size="xs"
               styleOverride="RECTANGULAR"
             />
-            <span className="text-sm font-medium">Speaking as {activeCharacter.name}</span>
+            <span className="qt-label">Speaking as {activeCharacter.name}</span>
           </>
         ) : (
           <span className="text-sm">Select speaker...</span>

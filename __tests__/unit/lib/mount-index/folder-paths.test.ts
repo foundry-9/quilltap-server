@@ -55,6 +55,9 @@ interface MockRepos {
   docMountFiles: {
     findByMountPointId: jest.Mock;
   };
+  docMountFileLinks: {
+    findByMountPointId: jest.Mock;
+  };
 }
 
 function createMockRepos(): MockRepos {
@@ -69,6 +72,9 @@ function createMockRepos(): MockRepos {
       findByMountPointId: jest.fn().mockResolvedValue([]),
     },
     docMountFiles: {
+      findByMountPointId: jest.fn().mockResolvedValue([]),
+    },
+    docMountFileLinks: {
       findByMountPointId: jest.fn().mockResolvedValue([]),
     },
   };
@@ -343,23 +349,18 @@ describe('folder-paths utilities', () => {
 
     it('returns true when folder contains a document', async () => {
       repos.docMountFolders.findChildren.mockResolvedValue([]);
-      repos.docMountDocuments.findByMountPointId.mockResolvedValue([
+      repos.docMountFileLinks.findByMountPointId.mockResolvedValue([
         {
-          id: 'doc-001',
+          id: 'link-001',
+          fileId: 'file-001',
           folderId: 'folder-001',
           relativePath: 'parent/note.md',
           mountPointId: MOUNT_ID,
-          content: 'test',
-          contentSha256: 'abc123',
-          plainTextLength: 4,
-          lastModified: new Date().toISOString(),
           fileName: 'note.md',
           fileType: 'markdown',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          sha256: 'abc123',
         },
       ]);
-      repos.docMountFiles.findByMountPointId.mockResolvedValue([]);
 
       const result = await folderHasContents(MOUNT_ID, 'folder-001');
       expect(result).toBe(true);
@@ -367,24 +368,16 @@ describe('folder-paths utilities', () => {
 
     it('returns true when folder contains a file', async () => {
       repos.docMountFolders.findChildren.mockResolvedValue([]);
-      repos.docMountDocuments.findByMountPointId.mockResolvedValue([]);
-      repos.docMountFiles.findByMountPointId.mockResolvedValue([
+      repos.docMountFileLinks.findByMountPointId.mockResolvedValue([
         {
-          id: 'file-001',
+          id: 'link-001',
+          fileId: 'file-001',
           folderId: 'folder-001',
           relativePath: 'parent/file.txt',
           mountPointId: MOUNT_ID,
           fileName: 'file.txt',
           fileType: 'txt',
           sha256: 'def456',
-          fileSizeBytes: 100,
-          lastModified: new Date().toISOString(),
-          source: 'database',
-          conversionStatus: 'converted',
-          plainTextLength: 100,
-          chunkCount: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
         },
       ]);
 
@@ -394,23 +387,18 @@ describe('folder-paths utilities', () => {
 
     it('ignores documents and files in other folders', async () => {
       repos.docMountFolders.findChildren.mockResolvedValue([]);
-      repos.docMountDocuments.findByMountPointId.mockResolvedValue([
+      repos.docMountFileLinks.findByMountPointId.mockResolvedValue([
         {
-          id: 'doc-002',
+          id: 'link-002',
+          fileId: 'file-002',
           folderId: 'folder-other',
           relativePath: 'other/note.md',
           mountPointId: MOUNT_ID,
-          content: 'test',
-          contentSha256: 'abc123',
-          plainTextLength: 4,
-          lastModified: new Date().toISOString(),
           fileName: 'note.md',
           fileType: 'markdown',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          sha256: 'abc123',
         },
       ]);
-      repos.docMountFiles.findByMountPointId.mockResolvedValue([]);
 
       const result = await folderHasContents(MOUNT_ID, 'folder-001');
       expect(result).toBe(false);

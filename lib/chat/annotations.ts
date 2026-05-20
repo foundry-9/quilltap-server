@@ -8,6 +8,7 @@
  */
 
 import type { TemplateDelimiter, AnnotationButton, RenderingPattern, NarrationDelimiters } from '@/lib/schemas/template.types'
+import { escapeRegex } from '@/lib/utils/regex'
 
 // Re-export for convenience
 export type { TemplateDelimiter, AnnotationButton }
@@ -68,11 +69,6 @@ export function delimiterToPrefixSuffix(delimiter: TemplateDelimiter): { prefix:
 // ============================================================================
 // RENDERING PATTERN AUTO-GENERATION
 // ============================================================================
-
-/** Escape a string for use in a regex pattern */
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
 
 /**
  * Auto-generate rendering patterns from template delimiters and narration delimiters.
