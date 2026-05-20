@@ -103,8 +103,6 @@ export async function reindexLinks(
   const scope = normalisePathScope(options.path);
   const force = !!options.force;
 
-  logger.debug('Reindex starting', { mountPointId: mountPoint.id, scope, force });
-
   const allLinks = await repos.docMountFileLinks.findByMountPointId(mountPoint.id);
   const inScope = allLinks.filter(l => linkMatchesScope(l, scope));
 
@@ -121,11 +119,6 @@ export async function reindexLinks(
     }
     processed++;
     try {
-      logger.debug('Reindex extracting link', {
-        mountPointId: mountPoint.id,
-        relativePath: link.relativePath,
-        fileType: link.fileType,
-      });
       const buf = await readSourceBytes(mountPoint, link);
       // shouldProcess already excluded fileType === 'blob'; narrow for the
       // converter dispatch which is typed only over extractable file types.
