@@ -29,6 +29,10 @@ function resolveDataDir(overrideDir) {
 // explicit `--data-dir` or `--passphrase` still wins so callers can override.
 // Errors out if both `--instance` and `--data-dir` were supplied — these
 // configure the same thing two different ways and must not silently disagree.
+//
+// Returns `usedPlatformDefault: true` only when nothing was targeted at all —
+// no --instance, no --data-dir, no QUILLTAP_DATA_DIR. Callers can use this to
+// decide whether to prompt the user with a "did you forget --instance?" hint.
 function resolveDataDirAndPassphrase({ dataDir, instance, passphrase }) {
   if (dataDir && instance) {
     throw new Error('Specify either --instance or --data-dir, not both.');
@@ -40,13 +44,42 @@ function resolveDataDirAndPassphrase({ dataDir, instance, passphrase }) {
       dataDir: path.join(inst.path, 'data'),
       passphrase: passphrase || inst.passphrase || '',
       instanceName: inst.name,
+      usedPlatformDefault: false,
     };
   }
+  const usedPlatformDefault = !dataDir && !process.env.QUILLTAP_DATA_DIR;
   return {
     dataDir: resolveDataDir(dataDir),
     passphrase: passphrase || '',
     instanceName: null,
+    usedPlatformDefault,
   };
+}
+
+// Print a one-line stderr hint when the CLI silently fell back to the platform
+// default instance but the user has registered alternatives — Friday, Ignite,
+// etc. The hint fires at most once per process so repeated openDb() calls
+// inside a single subcommand stay quiet.
+let _instanceHintPrinted = false;
+function printDefaultInstanceHint(resolved) {
+  if (_instanceHintPrinted) return;
+  if (!resolved || !resolved.usedPlatformDefault) return;
+  if (process.env.QUILLTAP_QUIET_HINTS) return;
+  let registered;
+  try {
+    const { listInstances } = require('./instances');
+    registered = listInstances();
+  } catch {
+    return;
+  }
+  if (!registered || registered.length === 0) return;
+  _instanceHintPrinted = true;
+  const names = registered.map((r) => r.name).join(', ');
+  process.stderr.write(
+    `Hint: using the default instance (${resolved.dataDir}). ` +
+    `Registered: ${names}. Pass --instance <name> to target one. ` +
+    `(set QUILLTAP_QUIET_HINTS=1 to silence)\n`
+  );
 }
 
 function promptPassphrase(prompt) {
@@ -184,6 +217,7 @@ function openMountIndexDb(dataDir, pepper, opts = {}) {
 module.exports = {
   resolveDataDir,
   resolveDataDirAndPassphrase,
+  printDefaultInstanceHint,
   promptPassphrase,
   loadDbKey,
   openEncryptedDb,

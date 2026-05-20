@@ -4,6 +4,16 @@
 
 ### 4.5-dev
 
+#### CLI: friendlier guidance when targeting the wrong instance
+
+Two small UX fixes on the `quilltap docs` / `quilltap db` CLI surfaces:
+
+1. **Default-instance hint.** When neither `--instance` nor `--data-dir` is passed (and `QUILLTAP_DATA_DIR` is unset), the CLI now writes a one-line stderr hint listing the registered instances and the data directory it ended up using, so it is obvious when a command silently fell back to the platform default. Fires at most once per process; set `QUILLTAP_QUIET_HINTS=1` to silence. Wired up in `bin/quilltap.js` (db subcommand), `lib/docs-commands.js` (every `docs` verb via `openDb`), and `lib/memory-diff-command.js`.
+
+2. **Pre-flight mount-index schema check.** `docs` verbs now verify the `doc_mount_file_links` table exists before any `prepare()` runs, and exit with an explanatory error pointing at the offending database, the missing table, and what to do (boot the server against that data directory once to run migrations, or pass `--instance <name>`). Previously the read failed deep inside a prepared statement with `Error: no such table: doc_mount_file_links`. Implementation in `lib/docs-commands.js` (`assertDocsSchema`).
+
+`resolveDataDirAndPassphrase` in `lib/db-helpers.js` now returns a `usedPlatformDefault` flag so the hint can tell explicit targeting (`--instance`, `--data-dir`, env var) from a silent fallback. New exported helper `printDefaultInstanceHint(resolved)` consumes it.
+
 #### `quilltap db backup` — online encrypted snapshots
 
 New CLI verb that produces a consistent snapshot of all three encrypted databases (or one named target) without requiring the server to be stopped. Default destination is `<dataDir>/backups/<ISO-timestamp>/`; override with `--out <dir>`. `--json` is supported.

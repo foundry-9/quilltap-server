@@ -8,6 +8,7 @@ const { getCacheDir, isCacheValid, ensureStandalone } = require('../lib/download
 const {
   resolveDataDir,
   resolveDataDirAndPassphrase,
+  printDefaultInstanceHint,
   promptPassphrase,
   loadDbKey,
 } = require('../lib/db-helpers');
@@ -833,6 +834,7 @@ async function dbCommand(args) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
     }
+    printDefaultInstanceHint(resolved);
     const dataDir = resolved.dataDir;
     let pepper;
     try {
@@ -906,6 +908,7 @@ async function dbCommand(args) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   }
+  printDefaultInstanceHint(legacyResolved);
   const dataDir = legacyResolved.dataDir;
   passphrase = legacyResolved.passphrase;
 

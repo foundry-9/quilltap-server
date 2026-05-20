@@ -13,7 +13,11 @@
 
 const path = require('path');
 const fs = require('fs');
-const { resolveDataDirAndPassphrase, loadDbKey } = require('./db-helpers');
+const {
+  resolveDataDirAndPassphrase,
+  printDefaultInstanceHint,
+  loadDbKey,
+} = require('./db-helpers');
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -134,11 +138,13 @@ function tryParseJsonColumn(value, fallback) {
  * columns are parsed; the binary `embedding` column is dropped from output.
  */
 async function readExistingMemories(flags, chatId) {
-  const { dataDir, passphrase } = resolveDataDirAndPassphrase({
+  const resolved = resolveDataDirAndPassphrase({
     dataDir: flags.dataDir,
     instance: flags.instance,
     passphrase: flags.passphrase,
   });
+  printDefaultInstanceHint(resolved);
+  const { dataDir, passphrase } = resolved;
   const dbPath = path.join(dataDir, 'quilltap.db');
   if (!fs.existsSync(dbPath)) {
     console.error(`Database not found: ${dbPath}`);

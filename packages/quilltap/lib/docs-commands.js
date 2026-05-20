@@ -3,7 +3,12 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { resolveDataDirAndPassphrase, loadDbKey, openMountIndexDb } = require('./db-helpers');
+const {
+  resolveDataDirAndPassphrase,
+  printDefaultInstanceHint,
+  loadDbKey,
+  openMountIndexDb,
+} = require('./db-helpers');
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -201,14 +206,59 @@ function parseFlags(args) {
 }
 
 async function openDb(flags) {
-  const { dataDir, passphrase } = resolveDataDirAndPassphrase({
+  const resolved = resolveDataDirAndPassphrase({
     dataDir: flags.dataDir,
     instance: flags.instance,
     passphrase: flags.passphrase,
   });
+  printDefaultInstanceHint(resolved);
+  const { dataDir, passphrase } = resolved;
   const pepper = await loadDbKey(dataDir, passphrase);
   const db = openMountIndexDb(dataDir, pepper, { readonly: true });
+  assertDocsSchema(db, dataDir);
   return { db, dataDir };
+}
+
+// Every docs subcommand assumes the post-link-table mount-index schema
+// (doc_mount_file_links plus the columns it expects on neighbouring tables).
+// Older instances opened by an out-of-date CLI — or, more often, by a fresh
+// CLI pointed at an instance that hasn't been booted since the migration
+// landed — fail deep inside a prepared statement with `no such table:
+// doc_mount_file_links`. Catch the missing table up front and tell the
+// operator exactly what to do.
+function assertDocsSchema(db, dataDir) {
+  const row = db.prepare(
+    "SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='doc_mount_file_links'"
+  ).get();
+  if (row && row.ok === 1) return;
+
+  db.close();
+
+  let registered = [];
+  try {
+    const { listInstances } = require('./instances');
+    registered = listInstances();
+  } catch {
+    // Registry unreadable or absent — keep going with an empty list.
+  }
+
+  const lines = [
+    'Error: this instance has not been migrated to the post-link-table mount-index schema.',
+    `  Database: ${path.join(dataDir, 'quilltap-mount-index.db')}`,
+    '  Missing table: doc_mount_file_links',
+    '',
+    'Start Quilltap against this data directory once (npm run dev / npx quilltap)',
+    'to run the pending migrations, or target a different instance:',
+  ];
+  if (registered.length > 0) {
+    for (const inst of registered) {
+      lines.push(`  --instance ${inst.name}    (${inst.path})`);
+    }
+  } else {
+    lines.push('  (no instances registered — see `quilltap instances --help`)');
+  }
+  process.stderr.write(lines.join('\n') + '\n');
+  process.exit(1);
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
