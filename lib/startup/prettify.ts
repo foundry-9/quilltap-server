@@ -181,6 +181,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'reabsorb-leftover-project-files-v1': "Re-absorbing leftover project files",
   'relink-files-to-mount-blobs-v1': 'Re-linking files to their mount-blob shims',
   'add-doc-mount-file-links-v1': 'Reorganising the document index so a single file may inhabit several shelves at once',
+  'repair-doc-mount-file-link-folderids-v1': 'Restoring each filed document to its proper drawer',
   'add-uncensored-image-description-profile-field-v1': 'Making room for a more candid set of eyes when describing photographs',
   'migrate-character-photos-to-vault-v1': "Hanging each character's photographs in their own vault",
   'provision-lantern-backgrounds-mount-v1': "Provisioning the Lantern's backgrounds mount",
