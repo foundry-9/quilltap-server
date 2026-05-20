@@ -4,7 +4,14 @@
 
 ### 4.5-dev
 
-(empty — new development starts here)
+#### test: add regression coverage for attachment fallback filtering
+
+Added `__tests__/unit/lib/services/chat-message/context-builder.load-and-process-files.test.ts` to cover `loadAndProcessFiles` behavior introduced in post-4.4.0 fallback fixes.
+
+The new tests verify three cases:
+- no file IDs returns early without repository/file loading
+- fallback `type: 'unsupported'` without `error` keeps the raw attachment
+- fallback `type: 'unsupported'` with `error` drops raw bytes and preserves warning prefix text
 
 ### 4.4.0
 
