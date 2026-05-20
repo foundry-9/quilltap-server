@@ -1,0 +1,121 @@
+#!/bin/bash
+
+# Bash completion for quilltap
+# Source this file or place it in /etc/bash_completion.d/ or ~/.bash_completion.d/
+
+_quilltap_complete() {
+  local cur prev words cword
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+  words=("${COMP_WORDS[@]}")
+  cword=$COMP_CWORD
+
+  # Global options that can appear before subcommands
+  local global_opts="-d --data-dir -i --instance -p --port -o --open -v --version -h --help --update"
+
+  # Get the subcommand (first non-option word after quilltap)
+  local subcommand=""
+  local i=1
+  while [[ $i -lt $cword ]]; do
+    local word="${words[$i]}"
+    case "$word" in
+      -d|--data-dir|-i|--instance|-p|--port)
+        # These take a value, skip the next word
+        ((i += 2))
+        ;;
+      -o|--open|-v|--version|-h|--help|--update)
+        # Flags without values
+        ((i += 1))
+        ;;
+      -*)
+        # Unknown flag, skip
+        ((i += 1))
+        ;;
+      *)
+        # This is the subcommand
+        subcommand="$word"
+        break
+        ;;
+    esac
+  done
+
+  # If we're completing a global flag value
+  if [[ "$prev" == "-d" ]] || [[ "$prev" == "--data-dir" ]] || \
+     [[ "$prev" == "-p" ]] || [[ "$prev" == "--port" ]]; then
+    # No completion for paths or ports
+    return
+  fi
+
+  if [[ "$prev" == "-i" ]] || [[ "$prev" == "--instance" ]]; then
+    # Complete with instance names
+    local instances=$(command quilltap instances list --names-only 2>/dev/null)
+    COMPREPLY=($(compgen -W "$instances" -- "$cur"))
+    return
+  fi
+
+  # If no subcommand yet, complete with subcommands and global options
+  if [[ -z "$subcommand" ]]; then
+    if [[ "$cur" == -* ]]; then
+      COMPREPLY=($(compgen -W "$global_opts" -- "$cur"))
+    else
+      COMPREPLY=($(compgen -W "db docs themes instances memories memory-diff completion" -- "$cur"))
+    fi
+    return
+  fi
+
+  # Subcommand-specific completion
+  local subcommand_opts=""
+  case "$subcommand" in
+    db)
+      subcommand_opts="schema find chats messages logs message log memories optimize backup integrity"
+      if [[ "$cur" == -* ]]; then
+        subcommand_opts="$subcommand_opts --instance --data-dir --json --help"
+      fi
+      COMPREPLY=($(compgen -W "$subcommand_opts" -- "$cur"))
+      ;;
+    docs)
+      local docs_verbs="list show files ls dir read export scan write delete mkdir move copy status find grep reindex embed"
+      if [[ "$cur" == -* ]]; then
+        docs_verbs="$docs_verbs --mount --instance --data-dir --port --json --help --force --rendered --links"
+      fi
+      COMPREPLY=($(compgen -W "$docs_verbs" -- "$cur"))
+      ;;
+    themes)
+      subcommand_opts="list install uninstall validate export create search update registry"
+      if [[ "$cur" == -* ]]; then
+        subcommand_opts="$subcommand_opts --instance --data-dir --output --help"
+      fi
+      COMPREPLY=($(compgen -W "$subcommand_opts" -- "$cur"))
+      ;;
+    instances)
+      subcommand_opts="list ls show path where add create remove rm delete set-passphrase passphrase"
+      if [[ "$cur" == -* ]]; then
+        subcommand_opts="$subcommand_opts --help"
+      fi
+      COMPREPLY=($(compgen -W "$subcommand_opts" -- "$cur"))
+      ;;
+    memories)
+      local mem_verbs="ls find grep show tree status validate"
+      if [[ "$cur" == -* ]]; then
+        mem_verbs="$mem_verbs --character --about --source --chat --project --since --until --min-importance --min-reinforced --has-embedding --no-embedding --sort --instance --data-dir --json --help"
+      fi
+      COMPREPLY=($(compgen -W "$mem_verbs" -- "$cur"))
+      ;;
+    memory-diff)
+      if [[ "$cur" == -* ]]; then
+        subcommand_opts="--instance --data-dir --help"
+        COMPREPLY=($(compgen -W "$subcommand_opts" -- "$cur"))
+      fi
+      ;;
+    completion)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--help" -- "$cur"))
+      else
+        COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
+      fi
+      ;;
+  esac
+}
+
+complete -F _quilltap_complete quilltap

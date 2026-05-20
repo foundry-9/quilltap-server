@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
 import { fileStorageManager } from '@/lib/file-storage/manager'
 import { getVectorStoreManager } from '@/lib/embedding/vector-store'
+import { deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
 import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar'
 import { removeFromCharacterGallery } from '@/lib/photos/character-gallery-service'
 import type { ChatMetadata, FileEntry } from '@/lib/schemas/types'
@@ -353,12 +354,15 @@ export async function executeCascadeDelete(
     }
   }
 
-  // Always delete memories associated with the character
+  // Always delete memories associated with the character. Route through the
+  // chokepoint so cross-character relatedMemoryIds get scrubbed before the
+  // rows go away — otherwise every neighbour outside this character keeps
+  // a dangling reference to the deleted memory.
   if (preview.memoryCount > 0) {
     try {
       const memories = await repos.memories.findByCharacterId(characterId)
       const memoryIds = memories.map(m => m.id)
-      deletedMemories = await repos.memories.bulkDelete(characterId, memoryIds)
+      deletedMemories = await deleteMemoriesWithUnlinkBatch(memoryIds)
     } catch (err) {
       logger.error(`Failed to delete memories for character ${characterId}`, { context: { characterId } }, err instanceof Error ? err : undefined)
     }
