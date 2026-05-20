@@ -209,6 +209,25 @@ quilltap themes registry list           # List configured registries
 quilltap themes registry add <url>      # Add a registry source
 ```
 
+## Shell Completion
+
+Tab-completion for bash, zsh, and fish. Generate the completion script for your shell:
+
+```bash
+# Bash: add to ~/.bashrc
+quilltap completion bash >> ~/.bashrc
+
+# Zsh: save to a completion directory
+mkdir -p ~/.zsh/completions
+quilltap completion zsh > ~/.zsh/completions/_quilltap
+# Then add to ~/.zshrc: fpath=(~/.zsh/completions $fpath)
+
+# Fish: save to the completions directory
+quilltap completion fish > ~/.config/fish/completions/quilltap.fish
+```
+
+Then restart your shell. Completion works for subcommands, sub-verbs, and instance/mount names (when reachable).
+
 ## Requirements
 
 - Node.js 18 or later

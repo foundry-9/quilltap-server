@@ -106,6 +106,25 @@ quilltap memories grep --max 3 --context 1 "rigor"               # at most 3 hit
 
 Pass `-l` (or `--paths-only`) to get just the memory UUIDs — convenient for piping into `xargs quilltap memories show`.
 
+### Semantic Search with `grep --semantic`
+
+When the precise wording escapes you but the *idea* is clear, `memories grep` accepts a `--semantic` flag and proceeds quite differently:
+
+```bash
+quilltap memories grep --semantic --character Ariadne "Charlie's preferences for writing style"
+quilltap memories grep --semantic --character Ariadne --top 5 --threshold 0.65 "theological commitments"
+```
+
+In this mode the CLI hands the query to the running Quilltap server, which embeds the text and conducts a cosine-similarity walk against the per-memory `embedding` BLOB — the same machinery the chat-path recall already uses, exposed here for diagnostic browsing.
+
+- `--character <name|id>` is **required**. The semantic-search endpoint scopes to one holder at a time; `all` is not accepted in this mode.
+- `--top N` — top *N* matches (default 20).
+- `--threshold <0..1>` — minimum cosine similarity (default 0.5).
+- `--source AUTO|MANUAL` and `--min-importance` are passed through to the server-side filter.
+- `--json` — the structured object.
+
+The literal `grep` (no `--semantic`) is undisturbed. If the embedding provider has drifted from what the corpus was embedded with, the server returns a clear dimension-mismatch error and the CLI relays it verbatim.
+
 ## `show` — One Memory in Full
 
 ```text

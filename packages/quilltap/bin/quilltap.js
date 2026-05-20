@@ -1099,6 +1099,24 @@ if (process.argv[2] === 'db') {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });
+} else if (process.argv[2] === 'completion') {
+  const { completionCommand } = require('../lib/completion-commands');
+  completionCommand(process.argv.slice(3)).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+} else if (process.argv[2] === 'logs') {
+  const { logsCommand } = require('../lib/logs-commands');
+  logsCommand(process.argv.slice(3)).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+} else if (process.argv[2] === 'migrations') {
+  const { migrationsCommand } = require('../lib/migrations-commands');
+  migrationsCommand(process.argv.slice(3)).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
 } else {
   main();
 }

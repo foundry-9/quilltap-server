@@ -87,6 +87,11 @@ function parseFlags(args) {
     noRelated: false,
     // validate
     list: false,
+    // semantic search
+    semantic: false,
+    top: 0,
+    threshold: -1,
+    port: 3000,
   };
   const positional = [];
   let i = 0;
@@ -128,6 +133,27 @@ function parseFlags(args) {
       case '--no-related': flags.noRelated = true; break;
 
       case '--list': flags.list = true; break;
+
+      case '--semantic': flags.semantic = true; break;
+      case '--top': flags.top = parseInt(args[++i], 10) || 0; break;
+      case '--threshold': {
+        const v = parseFloat(args[++i]);
+        if (isNaN(v) || v < 0 || v > 1) {
+          console.error('Error: --threshold must be a number between 0 and 1');
+          process.exit(1);
+        }
+        flags.threshold = v;
+        break;
+      }
+      case '--port': {
+        const p = parseInt(args[++i], 10);
+        if (isNaN(p) || p < 1 || p > 65535) {
+          console.error('Error: --port must be between 1 and 65535');
+          process.exit(1);
+        }
+        flags.port = p;
+        break;
+      }
 
       default:
         if (a.startsWith('-')) {
@@ -548,10 +574,106 @@ async function cmdFind(flags, positional) {
 
 // ---------- grep ----------
 
+async function cmdSemanticGrep(flags, query) {
+  if (!flags.character || flags.character === 'all') {
+    console.error('Error: memories grep --semantic requires --character <name|id>.');
+    console.error('The server search endpoint scopes results to one holder at a time.');
+    process.exit(1);
+  }
+
+  // Resolve character locally so the server gets a stable UUID.
+  let characterId;
+  {
+    const { db } = await openDb(flags);
+    try {
+      const resolved = resolveCharacter(db, flags.character);
+      characterId = resolved.id;
+    } finally {
+      db.close();
+    }
+  }
+  // Sanity-check: the server validates `characterId` as a UUID. If the local
+  // resolution returned something else (shouldn't happen), bail early with a
+  // useful message rather than letting the server emit a generic "Validation
+  // error".
+  if (!/^[0-9a-fA-F-]{36}$/.test(characterId)) {
+    console.error(`Error: could not resolve --character to a UUID (got "${characterId}").`);
+    console.error('Pass --character <name|id|all> against the same instance the dev server is running.');
+    process.exit(1);
+  }
+
+  const top = flags.top > 0 ? flags.top : 20;
+  const threshold = flags.threshold >= 0 ? flags.threshold : 0.5;
+  const port = flags.port || 3000;
+  const url = `http://localhost:${port}/api/v1/memories?action=search`;
+
+  const body = { characterId, query, limit: top, minScore: threshold };
+  if (flags.source) body.source = flags.source;
+  if (flags.minImportance != null) body.minImportance = flags.minImportance;
+
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    console.error(`Could not reach Quilltap server at http://localhost:${port}: ${err.message}`);
+    console.error('Semantic search requires the running server (the embedding provider lives there).');
+    console.error('Start it with: npm run dev');
+    process.exit(1);
+  }
+
+  let payload = null;
+  try {
+    const text = await res.text();
+    payload = text ? JSON.parse(text) : null;
+  } catch { /* leave payload null */ }
+
+  if (!res.ok) {
+    if (payload && payload.error && /dimension/i.test(payload.error)) {
+      console.error(`Error: ${payload.error}`);
+      console.error('Re-apply the embedding profile, or switch the active profile back to one that matches the corpus.');
+      process.exit(1);
+    }
+    const msg = (payload && payload.error) || `HTTP ${res.status}`;
+    console.error(`Error: ${msg}`);
+    process.exit(1);
+  }
+
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+    return;
+  }
+
+  const memories = (payload && payload.memories) || [];
+  if (memories.length === 0) {
+    console.log('(no matches)');
+    return;
+  }
+
+  for (const m of memories) {
+    const score = (m.score ?? 0).toFixed(3);
+    const summary = (m.summary || '').replace(/\s+/g, ' ').trim();
+    const trimmed = summary.length > 100 ? summary.slice(0, 100) + '…' : summary;
+    console.log(`${score}  imp ${(m.reinforcedImportance ?? m.importance ?? 0).toFixed(2)}  ${trimmed}`);
+    const content = (m.content || '').replace(/\s+/g, ' ').trim();
+    const snippet = content.length > 240 ? content.slice(0, 240) + '…' : content;
+    if (snippet) console.log(`        ${snippet}`);
+  }
+  console.log('');
+  console.log(`${memories.length} match${memories.length === 1 ? '' : 'es'}` +
+    (payload.usedEmbedding === false ? '  (fallback keyword search — no usable embeddings)' : ''));
+}
+
 async function cmdGrep(flags, positional) {
   const pattern = positional[0];
   if (!pattern) {
     throw new Error('memories grep: missing <pattern>. Usage: quilltap memories grep [filters] <pattern>');
+  }
+  if (flags.semantic) {
+    return cmdSemanticGrep(flags, pattern);
   }
   const { db } = await openDb(flags);
   try {

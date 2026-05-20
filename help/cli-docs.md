@@ -84,6 +84,51 @@ The `emb` column reports whether the file's chunks carry embedding vectors:
 
 Add `--links` to expand, beneath each multi-linked file, the inventory of its siblings: each one printed as `mountName:relativePath`, with the mount name discreetly omitted when the sibling lives in the same mount as the current listing. In JSON mode, the `links` array is always reported in full — every sibling, with mount UUID, mount name, and relative path — regardless of whether `--links` is passed; the JSON also reports `textRepresentation` and `embedding` objects with the underlying `extractionStatus`, `chunkCount`, `embeddedChunkCount`, and `fullyEmbedded` fields rather than the compact single-character marks.
 
+#### Recursive Listing
+
+Pass `--recursive` (or `-R`) to list every file in the mount or beneath a folder, grouped by directory:
+
+```bash
+quilltap docs ls -R "Quilltap General"              # every file, grouped
+quilltap docs ls "Quilltap General" Knowledge -R    # Knowledge/* only
+```
+
+The output shows a folder header followed by the files within it, each in the same column format as a single-folder listing.
+
+#### Sorting and Reversing
+
+By default, `ls` sorts case-insensitively by filename. Pass `--sort` to reorder:
+
+```bash
+quilltap docs ls --sort time <mount>       # newest first
+quilltap docs ls --sort size <mount>       # largest first
+quilltap docs ls --sort links <mount>      # most-linked first
+quilltap docs ls --sort name -r <mount>    # alphabetical, oldest to newest
+```
+
+The `-r` or `--reverse` flag flips the order. Time, size, and link count sort descending by default (newest/largest/most-linked first); name sorts ascending (A to Z). Reverse inverts either.
+
+Sort flags work alongside `--recursive`, so you may sort a recursive listing by mtime:
+
+```bash
+quilltap docs ls -R --sort time <mount>    # all files, newest first
+```
+
+### A Tree View — `tree`
+
+For a visual hierarchy of folders and files, `quilltap docs tree` renders an ASCII box-drawing tree:
+
+```bash
+quilltap docs tree "Quilltap General"             # whole mount
+quilltap docs tree "Quilltap General" Knowledge   # Knowledge/ subtree
+quilltap docs tree "Quilltap General" --depth 3   # only 3 levels deep
+quilltap docs tree "Quilltap General" --json      # nested JSON structure
+```
+
+The tree shows folders first (alphabetically), then files (alphabetically) beneath each. By default it renders up to 1000 nodes; pass `--max-nodes <N>` to change the cap. When the cap is hit, a truncation message appears at the end. The `--depth` flag (default 20) limits nesting depth; even with unlimited nodes, trees deeper than about 50 tend to exceed most terminals' comfort. Both flags cap themselves at sensible maximums to prevent runaway output.
+
+When the depth limit is reached, that level's children are still enumerated but not descended further. When the node limit is reached, the tree halts and prints a truncation message for clarity.
+
 ### Raw vs. Rendered
 
 `docs read` outputs whatever bytes are stored — a Markdown file produces its Markdown source, a PDF produces its binary header and all that follows. `docs read --rendered` instead outputs the plaintext that was extracted for embedding: for a PDF or DOCX, that is the text the chunker actually saw; for a Markdown or plain-text file, raw and rendered are the same.
@@ -110,6 +155,24 @@ quilltap docs ls 0123abcd-... research/2026
 
 # … and again, expanding every multi-linked file to show its siblings
 quilltap docs ls 0123abcd-... research/2026 --links
+
+# Recursive listing of every file in the mount
+quilltap docs ls -R 0123abcd-...
+
+# Sort by modification time, newest first
+quilltap docs ls --sort time 0123abcd-...
+
+# Sort by file size, smallest first
+quilltap docs ls --sort size -r 0123abcd-...
+
+# ASCII tree view of a folder
+quilltap docs tree 0123abcd-... research/2026
+
+# Tree of the whole mount, limited to 3 levels deep
+quilltap docs tree 0123abcd-... --depth 3
+
+# Tree as JSON
+quilltap docs tree 0123abcd-... --json
 
 # Read a Markdown file
 quilltap docs read 0123abcd-... notes/today.md
@@ -173,6 +236,25 @@ When `--mount` is omitted (or set to `all`), results from every mount are printe
 
 `--limit` (default 100) caps `docs find` output; `--max` (default 5) caps how many matches `docs grep` prints per file. Pass `--json` to either for the full structured object — sizes, modification times, line numbers, snippets, the lot.
 
+### Semantic Search with `grep --semantic`
+
+When the words you remember are not quite the words on the page — when you recall a *concept* but cannot summon the exact phrase — `docs grep` accepts a `--semantic` flag and conducts an altogether different kind of search:
+
+```bash
+quilltap docs grep --semantic "five-point Calvinist soteriology"
+quilltap docs grep --semantic --mount notes --top 5 "regulative principle of worship"
+quilltap docs grep --semantic --threshold 0.7 "imputed righteousness"
+```
+
+In this mode, the CLI posts the query to the running Quilltap server, which embeds the text via the configured embedding profile, performs a cosine-similarity sweep against every chunk's pre-computed vector, and returns the most similar passages ranked by score. The server is required — without it, the CLI emits a stern but courteous refusal and exits.
+
+- `--top N` — return the top *N* matches (default 20).
+- `--threshold <0..1>` — minimum cosine similarity (default 0.5). Pass a higher value when you want to be strict; pass a lower one when the matter at hand is obscure.
+- `--mount <name|id>` — narrow the search to a single mount; otherwise every mount with chunks is in scope.
+- `--json` — the structured object, including embedding model and dimensions, for the benefit of pipes and scripts.
+
+Should the embedding provider have changed dimensions since the corpus was indexed (a 768-d model swapped for a 1024-d one, say), the CLI surfaces the precise dimension mismatch and points the way to `docs reindex` and `docs embed`. The literal `grep` (without `--semantic`) remains undisturbed.
+
 ## Reindexing and Embedding
 
 Two complementary verbs exist for taking matters into one's own hands when the background pipelines lag, fail, or merely produce results one wishes to reproduce afresh.
@@ -227,7 +309,12 @@ The `--data-dir` and `--passphrase` flags work identically to the standard `db` 
 | `--json` | Machine-readable output |
 | `--rendered` | For `read`: extracted plaintext instead of raw bytes |
 | `--folder <path>` | For `files`: narrow to a folder prefix |
+| `--recursive, -R` | For `ls`: list all files recursively, grouped by folder |
+| `--sort name\|time\|size\|links` | For `ls`: sort by name (default), modification time, size, or hard-link count |
+| `-r, --reverse` | For `ls` / `tree`: reverse the sort order |
 | `--links` | For `ls` / `dir`: expand siblings under each multi-linked file |
+| `--depth N` | For `tree`: maximum nesting depth (default 20) |
+| `--max-nodes N` | For `tree`: maximum nodes to render (default 1000) |
 | `--force` | For `read`: dump binary to TTY anyway; for `write`: overwrite; for `copy`: overwrite and force a byte copy |
 | `-h, --help` | Per-subcommand help text |
 

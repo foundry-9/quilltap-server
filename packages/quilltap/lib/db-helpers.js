@@ -30,9 +30,17 @@ function resolveDataDir(overrideDir) {
 // Errors out if both `--instance` and `--data-dir` were supplied — these
 // configure the same thing two different ways and must not silently disagree.
 //
-// Returns `usedPlatformDefault: true` only when nothing was targeted at all —
-// no --instance, no --data-dir, no QUILLTAP_DATA_DIR. Callers can use this to
-// decide whether to prompt the user with a "did you forget --instance?" hint.
+// Precedence order (highest to lowest):
+//   1. --data-dir (explicit override)
+//   2. --instance (explicit instance)
+//   3. registered default instance
+//   4. QUILLTAP_DATA_DIR env var
+//   5. OS platform default
+//
+// Returns `usedPlatformDefault: true` only when falling back to the true
+// platform default (no flags, no env var, no registered default).
+// Callers can use this to decide whether to prompt the user with a
+// "did you forget --instance?" hint.
 function resolveDataDirAndPassphrase({ dataDir, instance, passphrase }) {
   if (dataDir && instance) {
     throw new Error('Specify either --instance or --data-dir, not both.');
@@ -46,6 +54,23 @@ function resolveDataDirAndPassphrase({ dataDir, instance, passphrase }) {
       instanceName: inst.name,
       usedPlatformDefault: false,
     };
+  }
+  if (!dataDir && !process.env.QUILLTAP_DATA_DIR) {
+    const { getDefaultInstance, resolveInstance } = require('./instances');
+    const defaultName = getDefaultInstance();
+    if (defaultName) {
+      try {
+        const inst = resolveInstance(defaultName);
+        return {
+          dataDir: path.join(inst.path, 'data'),
+          passphrase: passphrase || inst.passphrase || '',
+          instanceName: inst.name,
+          usedPlatformDefault: false,
+        };
+      } catch {
+        // Fall through to env var / platform default if default resolution fails
+      }
+    }
   }
   const usedPlatformDefault = !dataDir && !process.env.QUILLTAP_DATA_DIR;
   return {

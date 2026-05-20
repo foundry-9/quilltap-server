@@ -14,6 +14,10 @@ const {
   upsertInstance,
   removeInstance,
   setInstancePassphrase,
+  setDefaultInstance,
+  clearDefaultInstance,
+  getDefaultInstance,
+  renameInstance,
   verifyPassphrase,
   expandPath,
 } = require('./instances');
@@ -32,6 +36,8 @@ Verbs:
   add <name> [<path>]           Register an instance (prompts for missing path / passphrase)
   remove <name>                 Forget an instance (alias: rm, delete)
   set-passphrase <name>         Change or clear the stored passphrase
+  default [<name>]              Set/show/clear default instance
+  rename <old> <new>            Rename an instance (preserves passphrase)
   -h, --help                    This help
 
 Storage: ~/Library/Application Support/Quilltap/instances.json on macOS,
@@ -46,11 +52,22 @@ will also accept --instance <name>:
   quilltap db --instance Ignite schema characters
   quilltap docs --instance Lebanon list
 
+Default Instance:
+  When no --instance or --data-dir is specified, the CLI uses the registered
+  default (if one is set), then QUILLTAP_DATA_DIR (if set), then the OS platform
+  default. Marked with * in list output.
+
+  quilltap instances default Friday          # set Friday as the default
+  quilltap instances default --clear         # clear the default
+  quilltap instances default                 # show the current default
+
 Examples:
   quilltap instances add Friday ~/iCloud/Quilltap/Friday
   quilltap instances add Ignite ~/iCloud/Quilltap/Ignite     # prompts for passphrase
   quilltap instances set-passphrase Ignite                    # prompts hidden
   quilltap instances remove Friday-External
+  quilltap instances rename Friday FridayDev
+  quilltap instances default Friday
   quilltap instances list
 `);
 }
@@ -75,22 +92,34 @@ async function promptHiddenWithConfirm(label) {
   return first;
 }
 
-function formatRow(name, instancePath, hasPassphrase) {
+function formatRow(name, instancePath, hasPassphrase, isDefault) {
   const tag = hasPassphrase ? '[passphrase set]' : '[no passphrase]';
-  return `  ${name.padEnd(20)}  ${tag.padEnd(18)}  ${instancePath}`;
+  const marker = isDefault ? '*' : ' ';
+  return `${marker} ${name.padEnd(20)}  ${tag.padEnd(18)}  ${instancePath}`;
 }
 
-function cmdList() {
+function cmdList(opts = {}) {
   const entries = listInstances();
+  if (opts.namesOnly) {
+    // Hidden flag for completion: print one name per line
+    for (const entry of entries) {
+      console.log(entry.name);
+    }
+    return;
+  }
+  if (opts.json) {
+    console.log(JSON.stringify(entries, null, 2));
+    return;
+  }
   console.log(`Instances file: ${getInstancesPath()}`);
   if (entries.length === 0) {
     console.log('No instances registered. Add one with `quilltap instances add <name>`.');
     return;
   }
   console.log('');
-  console.log(`  ${'NAME'.padEnd(20)}  ${'PASSPHRASE'.padEnd(18)}  PATH`);
+  console.log(`* ${'NAME'.padEnd(20)}  ${'PASSPHRASE'.padEnd(18)}  PATH`);
   for (const entry of entries) {
-    console.log(formatRow(entry.name, entry.path, entry.hasPassphrase));
+    console.log(formatRow(entry.name, entry.path, entry.hasPassphrase, entry.isDefault));
   }
 }
 
@@ -219,6 +248,38 @@ async function cmdSetPassphrase(args) {
   console.log(`Updated passphrase for "${inst.name}".`);
 }
 
+function cmdDefault(args, opts = {}) {
+  if (args.length === 0) {
+    const current = getDefaultInstance();
+    if (opts.json) {
+      console.log(JSON.stringify({ defaultInstance: current }));
+    } else if (current) {
+      console.log(current);
+    } else {
+      console.log('(none)');
+    }
+    return;
+  }
+  const [name] = args;
+  if (name === '--clear') {
+    clearDefaultInstance();
+    console.log('Cleared default instance.');
+    return;
+  }
+  const key = setDefaultInstance(name);
+  console.log(`Set default instance to "${key}".`);
+}
+
+function cmdRename(args) {
+  if (args.length < 2) {
+    console.error('Usage: quilltap instances rename <old> <new>');
+    process.exit(1);
+  }
+  const [oldName, newName] = args;
+  const { oldKey, newKey } = renameInstance(oldName, newName);
+  console.log(`Renamed instance "${oldKey}" → "${newKey}".`);
+}
+
 async function instancesCommand(args) {
   if (args.length === 0) {
     cmdList();
@@ -235,9 +296,12 @@ async function instancesCommand(args) {
         printHelp();
         return;
       case 'list':
-      case 'ls':
-        cmdList();
+      case 'ls': {
+        const namesOnly = rest.includes('--names-only');
+        const json = rest.includes('--json');
+        cmdList({ namesOnly, json });
         return;
+      }
       case 'show':
         cmdShow(rest[0]);
         return;
@@ -257,6 +321,12 @@ async function instancesCommand(args) {
       case 'set-passphrase':
       case 'passphrase':
         await cmdSetPassphrase(rest);
+        return;
+      case 'default':
+        cmdDefault(rest);
+        return;
+      case 'rename':
+        cmdRename(rest);
         return;
       default:
         console.error(`Unknown instances verb: ${verb}`);

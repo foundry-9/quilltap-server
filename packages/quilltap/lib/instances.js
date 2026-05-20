@@ -44,7 +44,7 @@ function expandPath(input) {
 }
 
 function emptyRegistry() {
-  return { version: SCHEMA_VERSION, instances: {} };
+  return { version: SCHEMA_VERSION, instances: {}, defaultInstance: null };
 }
 
 // Verify ownership + permissions for a passphrase-bearing file on POSIX.
@@ -91,6 +91,9 @@ function readInstances() {
     parsed.instances = {};
   }
   if (!parsed.version) parsed.version = SCHEMA_VERSION;
+  if (!('defaultInstance' in parsed)) {
+    parsed.defaultInstance = null;
+  }
   return parsed;
 }
 
@@ -101,7 +104,11 @@ function writeInstances(registry) {
     fs.mkdirSync(dir, { recursive: true });
   }
   const payload = JSON.stringify(
-    { version: SCHEMA_VERSION, instances: registry.instances || {} },
+    {
+      version: SCHEMA_VERSION,
+      instances: registry.instances || {},
+      defaultInstance: registry.defaultInstance || null,
+    },
     null,
     2
   ) + '\n';
@@ -152,11 +159,13 @@ function resolveInstance(name) {
 
 function listInstances() {
   const registry = readInstances();
+  const defaultName = registry.defaultInstance;
   return Object.entries(registry.instances || {}).map(([name, entry]) => ({
     name,
     path: entry.path,
     expandedPath: expandPath(entry.path),
     hasPassphrase: typeof entry.passphrase === 'string' && entry.passphrase.length > 0,
+    isDefault: name === defaultName,
   }));
 }
 
@@ -206,6 +215,59 @@ function setInstancePassphrase(name, passphrase) {
   }
   writeInstances(registry);
   return key;
+}
+
+function setDefaultInstance(name) {
+  const registry = readInstances();
+  const key = findInstanceKey(registry, name);
+  if (!key) {
+    const known = Object.keys(registry.instances || {});
+    const hint = known.length
+      ? ` Known instances: ${known.join(', ')}.`
+      : ' No instances are registered yet — use `quilltap instances add <name>`.';
+    throw new Error(`Unknown instance "${name}".${hint}`);
+  }
+  registry.defaultInstance = key;
+  writeInstances(registry);
+  return key;
+}
+
+function clearDefaultInstance() {
+  const registry = readInstances();
+  registry.defaultInstance = null;
+  writeInstances(registry);
+}
+
+function getDefaultInstance() {
+  const registry = readInstances();
+  return registry.defaultInstance || null;
+}
+
+function renameInstance(oldName, newName) {
+  if (!oldName || !oldName.trim()) {
+    throw new Error('Old instance name is required.');
+  }
+  if (!newName || !newName.trim()) {
+    throw new Error('New instance name is required.');
+  }
+  const registry = readInstances();
+  const oldKey = findInstanceKey(registry, oldName);
+  if (!oldKey) {
+    throw new Error(`Unknown instance "${oldName}".`);
+  }
+  const newTrimmed = newName.trim();
+  const existingKey = findInstanceKey(registry, newTrimmed);
+  if (existingKey) {
+    throw new Error(`Instance "${newTrimmed}" already exists.`);
+  }
+  const entry = registry.instances[oldKey];
+  delete registry.instances[oldKey];
+  registry.instances[newTrimmed] = entry;
+  if (registry.defaultInstance === oldKey) {
+    registry.defaultInstance = newTrimmed;
+  }
+  writeInstances(registry);
+  return { oldKey, newKey: newTrimmed };
 }
 
 // Verify a candidate passphrase against the .dbkey at <instancePath>/data.
@@ -265,5 +327,9 @@ module.exports = {
   upsertInstance,
   removeInstance,
   setInstancePassphrase,
+  setDefaultInstance,
+  clearDefaultInstance,
+  getDefaultInstance,
+  renameInstance,
   verifyPassphrase,
 };

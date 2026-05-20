@@ -59,7 +59,8 @@ Read subcommands:
   list                                   List all mount points
   show <mount>                           Details for one mount point
   files <mount> [--folder <path>]        List files in a mount
-  ls|dir <mount> [path] [--links]        ls-style listing of one folder (or file)
+  ls|dir <mount> [path] [options]        ls-style listing of one folder (or file)
+  tree <mount> [path] [options]          ASCII tree view of a folder hierarchy
   read <mount> <relativePath>            Print file contents to stdout
   read --rendered <mount> <relativePath> Print extracted plaintext to stdout
   export <mount> <outputDir>             Export an entire mount to a directory
@@ -93,8 +94,15 @@ Options:
   --json                    Machine-readable output
   --rendered                For 'read': output extracted plaintext
   --folder <path>           For 'files': narrow to a folder prefix
+  --recursive, -R           For 'ls': list all files recursively, grouped by folder
+  --sort name|time|size|links  For 'ls': sort by name (default), modification time,
+                            file size, or hard-link count
+  -r, --reverse             Reverse sort order
   --links                   For 'ls' / 'dir': under each file with more than
                             one hard link, list the other mount/path entries
+  --depth N                 For 'tree': maximum nesting depth (default: 20)
+  --max-nodes N             For 'tree': maximum nodes to render (default: 1000)
+  --long                    For 'tree': include text/emb columns (reserved for future)
   --force                   For 'read': dump binary to TTY anyway
                             For 'write': overwrite existing destination
                             For 'copy':  overwrite + force a real byte copy
@@ -155,6 +163,17 @@ function parseFlags(args) {
     ignoreCase: false,
     pathsOnly: false,
     wait: false,
+    // ls flags: recursive, sort, reverse
+    recursive: false,
+    sort: 'name',
+    reverse: false,
+    // tree flags: depth, max-nodes, long
+    depth: 20,
+    maxNodes: 1000,
+    long: false,
+    // semantic search
+    semantic: false,
+    threshold: -1,
   };
   const positional = [];
   let i = 0;
@@ -192,6 +211,23 @@ function parseFlags(args) {
       case '--ignore-case': flags.ignoreCase = true; break;
       case '-l': flags.pathsOnly = true; break;
       case '--wait': flags.wait = true; break;
+      case '-R': case '--recursive': flags.recursive = true; break;
+      case '--sort': flags.sort = args[++i] || 'name'; break;
+      case '-r': case '--reverse': flags.reverse = true; break;
+      case '--depth': flags.depth = parseInt(args[++i], 10) || 20; break;
+      case '--max-nodes': flags.maxNodes = parseInt(args[++i], 10) || 1000; break;
+      case '--long': flags.long = true; break;
+      case '--names-only': flags.namesOnly = true; break;
+      case '--semantic': flags.semantic = true; break;
+      case '--threshold': {
+        const v = parseFloat(args[++i]);
+        if (isNaN(v) || v < 0 || v > 1) {
+          console.error('Error: --threshold must be a number between 0 and 1');
+          process.exit(1);
+        }
+        flags.threshold = v;
+        break;
+      }
       case '-h': case '--help': flags.help = true; break;
       default:
         if (a.startsWith('-')) {
@@ -316,6 +352,13 @@ async function handleList(flags) {
       FROM doc_mount_points
       ORDER BY name COLLATE NOCASE
     `).all();
+    if (flags.namesOnly) {
+      // Hidden flag for completion: print one name per line
+      for (const row of rows) {
+        console.log(row.name);
+      }
+      return;
+    }
     if (flags.json) {
       process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
       return;
@@ -586,52 +629,114 @@ function fetchLinksForFiles(db, fileIds) {
   return byFile;
 }
 
+function sortLsFiles(files, sortType, reverse) {
+  const sorted = [...files];
+  switch (sortType) {
+    case 'name':
+      sorted.sort((a, b) => a.fileName.localeCompare(b.fileName, undefined, { sensitivity: 'base' }));
+      break;
+    case 'time':
+      sorted.sort((a, b) => {
+        const aTime = new Date(a.lastModified || 0).getTime();
+        const bTime = new Date(b.lastModified || 0).getTime();
+        return bTime - aTime;  // newest first by default
+      });
+      break;
+    case 'size':
+      sorted.sort((a, b) => (b.fileSizeBytes || 0) - (a.fileSizeBytes || 0));  // largest first
+      break;
+    case 'links':
+      sorted.sort((a, b) => (b.linkCount || 0) - (a.linkCount || 0));  // most linked first
+      break;
+    default:
+      sorted.sort((a, b) => a.fileName.localeCompare(b.fileName, undefined, { sensitivity: 'base' }));
+  }
+  if (reverse) sorted.reverse();
+  return sorted;
+}
+
 async function handleLs(flags, mountSpec, rawPath) {
   if (!mountSpec) {
-    console.error('Usage: quilltap docs ls <mount> [path] [--links]');
+    console.error('Usage: quilltap docs ls <mount> [path] [--recursive|-R] [--sort name|time|size|links] [-r] [--links]');
     process.exit(1);
   }
   const { db } = await openDb(flags);
   try {
     const mount = requireMount(db, mountSpec);
     const normalizedPath = normalizeLsPath(rawPath);
-    const target = resolveLsTarget(db, mount.id, normalizedPath);
 
     let folders = [];
     let files = [];
     let singleFile = false;
+    let allFilesByFolder = {};
 
-    if (target.kind === 'none') {
-      console.error(`No file or folder at "${normalizedPath || '/'}" in mount ${mount.name}`);
-      process.exit(1);
-    } else if (target.kind === 'root') {
-      ({ folders, files } = fetchLsRows(db, mount.id, ''));
-    } else if (target.kind === 'folder') {
-      ({ folders, files } = fetchLsRows(db, mount.id, target.path));
+    if (flags.recursive) {
+      // Recursive mode: fetch all files under the path prefix
+      const prefix = normalizedPath ? normalizedPath.replace(/\/+$/, '') + '/' : '';
+      const allFiles = normalizedPath
+        ? db.prepare(`
+            SELECT ${LS_FILE_COLUMNS}
+            FROM doc_mount_file_links l
+            JOIN doc_mount_files f ON f.id = l.fileId
+            WHERE l.mountPointId = ? AND l.relativePath LIKE ?
+            ORDER BY l.relativePath
+          `).all(mount.id, prefix + '%')
+        : db.prepare(`
+            SELECT ${LS_FILE_COLUMNS}
+            FROM doc_mount_file_links l
+            JOIN doc_mount_files f ON f.id = l.fileId
+            WHERE l.mountPointId = ?
+            ORDER BY l.relativePath
+          `).all(mount.id);
+
+      // Group by folder
+      for (const file of allFiles) {
+        const lastSlash = file.relativePath.lastIndexOf('/');
+        const folderPath = lastSlash === -1 ? '' : file.relativePath.substring(0, lastSlash);
+        if (!allFilesByFolder[folderPath]) allFilesByFolder[folderPath] = [];
+        allFilesByFolder[folderPath].push(file);
+      }
+      files = allFiles;
     } else {
-      // Single-file mode: just show this one entry. linkCount / embeddedChunkCount
-      // are already populated by LS_FILE_COLUMNS via resolveLsTarget.
-      files = [target.file];
-      singleFile = true;
+      // Non-recursive: single folder listing
+      const target = resolveLsTarget(db, mount.id, normalizedPath);
+
+      if (target.kind === 'none') {
+        console.error(`No file or folder at "${normalizedPath || '/'}" in mount ${mount.name}`);
+        process.exit(1);
+      } else if (target.kind === 'root') {
+        ({ folders, files } = fetchLsRows(db, mount.id, ''));
+      } else if (target.kind === 'folder') {
+        ({ folders, files } = fetchLsRows(db, mount.id, target.path));
+      } else {
+        files = [target.file];
+        singleFile = true;
+      }
     }
 
-    // Always fetch links for JSON; for text, only when --links was passed.
+    // Apply sort
+    files = sortLsFiles(files, flags.sort, flags.reverse);
+
+    // Fetch links for JSON or --links flag
     const wantLinks = flags.json || flags.links;
     const multiLinkFileIds = wantLinks
       ? files.filter((f) => f.linkCount > 1).map((f) => f.fileId)
       : [];
     const linksByFile = fetchLinksForFiles(db, multiLinkFileIds);
 
+    // JSON output
     if (flags.json) {
       const out = [];
-      for (const folder of folders) {
-        out.push({
-          type: 'folder',
-          name: folder.name,
-          path: folder.path,
-          createdAt: folder.createdAt,
-          updatedAt: folder.updatedAt,
-        });
+      if (!flags.recursive) {
+        for (const folder of folders) {
+          out.push({
+            type: 'folder',
+            name: folder.name,
+            path: folder.path,
+            createdAt: folder.createdAt,
+            updatedAt: folder.updatedAt,
+          });
+        }
       }
       for (const file of files) {
         const others = linksByFile.get(file.fileId);
@@ -670,12 +775,42 @@ async function handleLs(flags, mountSpec, rawPath) {
       return;
     }
 
+    // Recursive text output: grouped by folder
+    if (flags.recursive) {
+      const folderPaths = Object.keys(allFilesByFolder).sort();
+      let anyOutput = false;
+      for (const folderPath of folderPaths) {
+        const folderFiles = allFilesByFolder[folderPath].sort((a, b) =>
+          a.fileName.localeCompare(b.fileName, undefined, { sensitivity: 'base' })
+        );
+        if (folderFiles.length > 0) {
+          anyOutput = true;
+          const displayPath = folderPath || '/';
+          console.log(`${BOLD}${displayPath}${RESET}`);
+          for (const file of folderFiles) {
+            const cells = [
+              '-',
+              String(file.linkCount).padStart(5),
+              formatBytes(file.fileSizeBytes || 0).padStart(8),
+              formatLsDate(file.lastModified),
+              textColumnMarker(file.fileType, file.extractionStatus),
+              embedColumnMarker(file.chunkCount, file.embeddedChunkCount),
+              file.fileName,
+            ];
+            console.log('  ' + cells.join('  '));
+          }
+        }
+      }
+      if (!anyOutput) console.log('(no files)');
+      return;
+    }
+
+    // Non-recursive text output
     if (!singleFile && folders.length === 0 && files.length === 0) {
       console.log('(empty)');
       return;
     }
 
-    // Header line so the columns are self-describing.
     const headerRow = {
       type: 'T',
       links: 'links',
@@ -743,8 +878,6 @@ async function handleLs(flags, mountSpec, rawPath) {
           (l) => !(l.mountPointId === mount.id && l.relativePath === r.relativePath)
         );
         if (others.length > 0) {
-          // Indent past type+links+size+modified+text+emb columns
-          // (6 cells, 5 separators of 2 spaces each).
           const indentWidth = widths.type + widths.links + widths.size
             + widths.modified + widths.text + widths.emb + 6 * 2;
           const indent = ' '.repeat(indentWidth);
@@ -755,6 +888,172 @@ async function handleLs(flags, mountSpec, rawPath) {
           }
         }
       }
+    }
+  } finally {
+    db.close();
+  }
+}
+
+// ----------------------------------------------------------------------------
+// tree
+// ----------------------------------------------------------------------------
+
+function buildFolderTree(db, mountId, startPath, maxDepth) {
+  // Build a folder/file tree starting from startPath
+  const tree = { name: startPath || '', type: 'folder', children: [] };
+
+  function addChildren(node, parentPath, currentDepth) {
+    if (currentDepth >= maxDepth) return;
+
+    // Get immediate child folders
+    const folderQuery = parentPath === ''
+      ? `SELECT id, name, path FROM doc_mount_folders
+         WHERE mountPointId = ? AND path NOT LIKE '%/%'
+         ORDER BY name COLLATE NOCASE`
+      : `SELECT id, name, path FROM doc_mount_folders
+         WHERE mountPointId = ? AND path LIKE ? AND path NOT LIKE ?
+         ORDER BY name COLLATE NOCASE`;
+
+    const folders = parentPath === ''
+      ? db.prepare(folderQuery).all(mountId)
+      : db.prepare(folderQuery).all(mountId, parentPath + '/%', parentPath + '/%/%');
+
+    // Get immediate child files
+    const fileQuery = parentPath === ''
+      ? `SELECT fileName, relativePath, fileSizeBytes, chunkCount, extractedText
+         FROM doc_mount_file_links l
+         JOIN doc_mount_files f ON f.id = l.fileId
+         WHERE l.mountPointId = ? AND l.relativePath NOT LIKE '%/%'
+         ORDER BY fileName COLLATE NOCASE`
+      : `SELECT fileName, relativePath, fileSizeBytes, chunkCount, extractedText
+         FROM doc_mount_file_links l
+         JOIN doc_mount_files f ON f.id = l.fileId
+         WHERE l.mountPointId = ? AND l.relativePath LIKE ? AND l.relativePath NOT LIKE ?
+         ORDER BY fileName COLLATE NOCASE`;
+
+    const files = parentPath === ''
+      ? db.prepare(fileQuery).all(mountId)
+      : db.prepare(fileQuery).all(mountId, parentPath + '/%', parentPath + '/%/%');
+
+    // Add folders first (alphabetically)
+    for (const folder of folders) {
+      const childNode = { name: folder.name, type: 'folder', path: folder.path, children: [] };
+      addChildren(childNode, folder.path, currentDepth + 1);
+      node.children.push(childNode);
+    }
+
+    // Then add files (alphabetically)
+    for (const file of files) {
+      node.children.push({
+        name: file.fileName,
+        type: 'file',
+        relativePath: file.relativePath,
+        size: file.fileSizeBytes || 0,
+        chunkCount: file.chunkCount || 0,
+      });
+    }
+  }
+
+  addChildren(tree, startPath, 0);
+  return tree;
+}
+
+function renderTreeAscii(node, prefix, isLast, isRoot, maxNodes, nodeCount) {
+  if (nodeCount.count >= maxNodes.max) {
+    nodeCount.truncated = true;
+    return;
+  }
+
+  if (!isRoot) {
+    nodeCount.count++;
+    if (nodeCount.count > maxNodes.max) {
+      nodeCount.truncated = true;
+      return;
+    }
+    const connector = isLast ? '└─' : '├─';
+    const typeMarker = node.type === 'folder' ? 'd' : '-';
+    const displayName = node.type === 'folder' ? node.name + '/' : node.name;
+    console.log(`${prefix}${connector} ${typeMarker} ${displayName}`);
+    prefix = prefix + (isLast ? '   ' : '│  ');
+  }
+
+  const children = node.children || [];
+  for (let i = 0; i < children.length; i++) {
+    if (nodeCount.count >= maxNodes.max) {
+      nodeCount.truncated = true;
+      break;
+    }
+    const child = children[i];
+    const last = i === children.length - 1;
+    renderTreeAscii(child, prefix, last, false, maxNodes, nodeCount);
+  }
+}
+
+function treeToJson(node) {
+  return {
+    name: node.name,
+    type: node.type,
+    path: node.path || undefined,
+    relativePath: node.relativePath || undefined,
+    size: node.size !== undefined ? node.size : undefined,
+    chunkCount: node.chunkCount !== undefined ? node.chunkCount : undefined,
+    children: node.children && node.children.length > 0
+      ? node.children.map(treeToJson)
+      : undefined,
+  };
+}
+
+async function handleTree(flags, mountSpec, rawPath) {
+  if (!mountSpec) {
+    console.error('Usage: quilltap docs tree <mount> [path] [--depth N] [--max-nodes N] [--long] [--json]');
+    process.exit(1);
+  }
+  const { db } = await openDb(flags);
+  try {
+    const mount = requireMount(db, mountSpec);
+    const normalizedPath = normalizeLsPath(rawPath);
+
+    // Validate the path exists
+    const target = resolveLsTarget(db, mount.id, normalizedPath);
+    if (target.kind === 'none') {
+      console.error(`No file or folder at "${normalizedPath || '/'}" in mount ${mount.name}`);
+      process.exit(1);
+    }
+    if (target.kind === 'file') {
+      console.error(`"${normalizedPath}" is a file, not a folder`);
+      process.exit(1);
+    }
+
+    const startPath = target.kind === 'folder' ? target.path : '';
+    const maxDepth = Math.min(flags.depth || 20, 50);  // Cap at 50
+    const maxNodes = Math.max(flags.maxNodes || 1000, 1);
+
+    const tree = buildFolderTree(db, mount.id, startPath, maxDepth);
+
+    if (flags.json) {
+      const output = treeToJson(tree);
+      process.stdout.write(JSON.stringify(output, null, 2) + '\n');
+      return;
+    }
+
+    // ASCII render
+    const nodeCount = { count: 0, truncated: false };
+    const displayRoot = startPath || '/';
+    console.log(`${BOLD}${displayRoot}${RESET}`);
+    if (tree.children && tree.children.length > 0) {
+      for (let i = 0; i < tree.children.length; i++) {
+        if (nodeCount.count >= maxNodes) {
+          nodeCount.truncated = true;
+          break;
+        }
+        const child = tree.children[i];
+        const last = i === tree.children.length - 1;
+        renderTreeAscii(child, '', last, false, { max: maxNodes }, nodeCount);
+      }
+    }
+
+    if (nodeCount.truncated) {
+      console.log(`${DIM}… (truncated at ${maxNodes} nodes; use --max-nodes <N> for more)${RESET}`);
     }
   } finally {
     db.close();
@@ -1711,11 +2010,95 @@ function printColumnar(headers, rows) {
 // grep — substring search inside extracted text
 // ----------------------------------------------------------------------------
 
+async function handleSemanticGrep(flags, query) {
+  let mountPointIds;
+  if (flags.mount && flags.mount !== 'all') {
+    const { db } = await openDb(flags);
+    try {
+      const mount = requireMount(db, flags.mount);
+      mountPointIds = [mount.id];
+    } finally {
+      db.close();
+    }
+  }
+
+  const top = flags.top > 0 ? flags.top : 20;
+  const threshold = flags.threshold >= 0 ? flags.threshold : 0.5;
+  const port = flags.port || 3000;
+  const url = `http://localhost:${port}/api/v1/mount-points?action=semantic-search`;
+
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, mountPointIds, top, threshold }),
+    });
+  } catch (err) {
+    console.error(`Could not reach Quilltap server at http://localhost:${port}: ${err.message}`);
+    console.error('Semantic search requires the running server (the embedding provider lives there).');
+    console.error('Start it with: npm run dev');
+    process.exit(1);
+  }
+
+  let payload = null;
+  try {
+    const text = await res.text();
+    payload = text ? JSON.parse(text) : null;
+  } catch { /* leave payload null */ }
+
+  if (!res.ok) {
+    if (payload && payload.code === 'EMBEDDING_DIMENSION_MISMATCH') {
+      console.error(`Error: ${payload.error}`);
+      console.error(`  Query embedding: ${payload.queryDimensions}-d`);
+      console.error(`  Stored chunks:   ${payload.storedDimensions}-d`);
+      console.error('Re-apply the embedding profile via "quilltap docs reindex" + "quilltap docs embed",');
+      console.error('or switch the active embedding profile back to one that matches the corpus.');
+      process.exit(1);
+    }
+    if (payload && payload.code === 'EMBEDDING_FAILED') {
+      console.error(`Error: ${payload.error}`);
+      console.error('Configure an embedding provider in /settings (Embeddings tab) and try again.');
+      process.exit(1);
+    }
+    const msg = (payload && payload.error) || `HTTP ${res.status}`;
+    console.error(`Error: ${msg}`);
+    process.exit(1);
+  }
+
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+    return;
+  }
+
+  const results = (payload && payload.results) || [];
+  if (results.length === 0) {
+    console.log('(no matches)');
+    return;
+  }
+
+  for (const r of results) {
+    const score = r.score.toFixed(3);
+    const heading = r.headingContext ? `  [${r.headingContext}]` : '';
+    console.log(`${score}  ${r.mountPointName}:${r.relativePath}${heading}`);
+    const snippet = (r.content || '').replace(/\s+/g, ' ').trim();
+    const trimmed = snippet.length > 240 ? snippet.slice(0, 240) + '…' : snippet;
+    console.log(`        ${trimmed}`);
+  }
+  console.log('');
+  console.log(`${results.length} match${results.length === 1 ? '' : 'es'}` +
+    (payload.embeddingModel ? `  (model: ${payload.embeddingModel}, ${payload.embeddingDimensions}-d)` : ''));
+}
+
 async function handleGrep(flags, positional) {
   const pattern = positional[0];
   if (!pattern) {
     console.error('Usage: quilltap docs grep [--mount <name|id|all>] [--ignore-case] [-l] [--max N] [--context N] [--json] <pattern>');
+    console.error('       quilltap docs grep --semantic [--mount <name|id|all>] [--top N] [--threshold 0..1] [--json] <query>');
     process.exit(1);
+  }
+  if (flags.semantic) {
+    return handleSemanticGrep(flags, pattern);
   }
   const max = flags.max > 0 ? flags.max : 5;
   const contextLines = flags.context > 0 ? flags.context : 0;
@@ -2174,6 +2557,9 @@ async function docsCommand(args) {
       case 'ls':
       case 'dir':
         await handleLs(flags, positional[0], positional[1]);
+        break;
+      case 'tree':
+        await handleTree(flags, positional[0], positional[1]);
         break;
       case 'read':
         await handleRead(flags, positional[0], positional[1]);
