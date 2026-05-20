@@ -281,6 +281,8 @@ import { addOpaqueContentFieldMigration } from './add-opaque-content-field';
 import { repairDocMountFileLinkFolderIdsMigration } from './repair-doc-mount-file-link-folderids';
 // Add reinforcedImportance index on memories (CLI default sort)
 import { addMemoriesReinforcedImportanceIndexMigration } from './add-memories-reinforced-importance-index-v1';
+// Scrub dangling relatedMemoryIds left by historical deletion paths
+import { repairDanglingRelatedMemoryEdgesV1Migration } from './repair-dangling-related-memory-edges-v1';
 
 /**
  * All available migrations.
@@ -557,6 +559,8 @@ export const migrations: Migration[] = [
   repairDocMountFileLinkFolderIdsMigration,
   // Add reinforcedImportance index on memories (CLI default sort)
   addMemoriesReinforcedImportanceIndexMigration,
+  // Scrub dangling relatedMemoryIds left by historical deletion paths
+  repairDanglingRelatedMemoryEdgesV1Migration,
 ];
 
 export {
@@ -818,5 +822,7 @@ export {
   repairDocMountFileLinkFolderIdsMigration,
   // Add reinforcedImportance index on memories (CLI default sort)
   addMemoriesReinforcedImportanceIndexMigration,
+  // Scrub dangling relatedMemoryIds left by historical deletion paths
+  repairDanglingRelatedMemoryEdgesV1Migration,
 };
 

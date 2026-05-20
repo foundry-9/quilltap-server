@@ -4,6 +4,18 @@
 
 ### 4.5-dev
 
+#### Memory deletion chokepoint + dangling-edge repair
+
+Memory deletions now route through a single chokepoint helper that scrubs the deleted ID from every neighbor's `relatedMemoryIds` before the row is removed. Until this landed, `relatedMemoryIds` (a JSON array with no FK enforcement) accumulated dangling UUIDs every time a memory was deleted — Friday's smoke test caught 9,390 of them.
+
+- Two new helpers in `lib/memory/memory-gate.ts`: `deleteMemoryWithUnlink(id)` for single deletions and `deleteMemoriesWithUnlinkBatch(ids)` for cascades. The batch variant scans neighbors once for the whole doomed set, scrubs the doomed IDs from every neighbor's array, then deletes the batch grouped by character.
+- All nine leaking deletion paths rerouted through the chokepoints: the manual-delete API (`app/api/v1/memories/[id]/route.ts`), character cascade (`lib/cascade-delete.ts`), housekeeping retention (`lib/memory/housekeeping.ts`), dedup merge (`lib/tools/memory-dedup.ts`), and four memory-service surfaces (single delete with vector, source-message cascade, swipe-group cascade, chat cascade).
+- New migration `repair-dangling-related-memory-edges-v1` does a one-time, idempotent scan that removes any UUID from every `relatedMemoryIds` that no longer resolves to a row. Pretty-label entry: "Pruning phantom links from the memory graph".
+- New read-only CLI verb `quilltap memories validate [--character <name|id|all>] [--list] [--json]`. Exits `0` on a clean graph, `1` on any dangling edges remaining. The dangling-edge scan is now a shared helper at `packages/quilltap/lib/graph-integrity.js` consumed by both `memories status` and `memories validate`.
+- The global `@/lib/database/manager` mock added to `jest.setup.ts` lets unit tests that pull memory-gate into their import graph (housekeeping, cascade-delete, etc.) run without spinning up the real SQLite backend.
+
+After this lands and the migration runs on Friday, `quilltap memories status` should report `dangling edges: 0` and `quilltap memories validate` should exit 0 indefinitely.
+
 #### `quilltap memories` — new read-only CLI namespace
 
 New top-level subcommand with six read-only verbs (`ls`, `find`, `grep`, `show`, `tree`, `status`) for surveying the memories table. Mirrors the shape of `quilltap docs`: shared filter flags (`--character`, `--about` with `self`/`none` shortcuts, `--source`, `--chat` with `none` shortcut, `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`), shared sort vocabulary (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, `-r` to reverse), `--limit N`, `--json`. All verbs open `quilltap.db` read-only.

@@ -33,6 +33,7 @@ quilltap memories grep     [filters] [-i] [-l] [--max N] [--context N] <pattern>
 quilltap memories show     <id|prefix> [--depth N] [--no-related]        # Full record + neighbours
 quilltap memories tree     <id|prefix> [--depth N] [--max-nodes N]       # ASCII walk of the graph
 quilltap memories status   [--character <name|id>]                       # Per-holder rollup
+quilltap memories validate [--character <name|id>] [--list]              # Read-only health check
 ```
 
 All verbs accept `--json` for piping, `--limit N` (default 50), and the shared filter vocabulary described below.
@@ -147,7 +148,22 @@ quilltap memories status --json                   # structured
 
 Each holder block reports total counts, the AUTO/MANUAL split, the about-distribution (self-referential vs. inter-character vs. legacy-null), embedding presence, several graph statistics (nodes with links, isolated nodes, average and maximum degree), and a top-five list ranked by reinforced importance.
 
-The `dangling edges` count is worth its weight. Since `relatedMemoryIds` is a JSON array of UUIDs rather than a foreign key constraint, a deleted memory can leave stale pointers in its former neighbours. If the count is nonzero, the verb logs the offending source memory IDs to stderr so you can investigate further. (It does not repair them; that's deliberately left to a future verb.)
+The `dangling edges` count is worth its weight. Since `relatedMemoryIds` is a JSON array of UUIDs rather than a foreign key constraint, a deleted memory could once leave stale pointers in its former neighbours. The deletion chokepoint introduced in version 4.5 scrubs neighbours' arrays whenever a memory is removed, and the `repair-dangling-related-memory-edges` migration swept up the historical drift. The `dangling edges` value should now sit at zero forever; if it climbs, run `validate` (see below) for the offending IDs.
+
+## `validate` — Memory-Graph Health Check
+
+```bash
+quilltap memories validate                            # all holders
+quilltap memories validate --character Ariadne        # one holder
+quilltap memories validate --list                     # print offending IDs
+quilltap memories validate --json                     # structured output
+```
+
+`validate` is the read-only sibling of `status`, dedicated to one question: are there any dangling `relatedMemoryIds` entries left in the Commonplace Book? The verb scans the same way `status` does and exits with code `0` if the graph is clean, or code `1` if anything is amiss.
+
+A dangling edge is a UUID in `relatedMemoryIds` that no longer resolves to a row in the `memories` table — the spectral footprint of a memory that was deleted before the chokepoint was in place, or (much more rarely) of a deletion path that escaped the chokepoint. `--list` prints the source memories and their dangling targets in short-ID form, so you can pipe through `quilltap memories show` for closer inspection.
+
+The verb intentionally does not offer a `--fix` flag. Repair runs through the migration system so it is recorded, idempotent, and ordered with the rest of the schema evolution. If `validate` ever surfaces a non-zero count after the v4.5 chokepoint shipped, the right response is to identify the new leaking deletion path, plug it at the source, and write a new repair migration — not to bolt another knob onto the CLI.
 
 ## Common Flags
 

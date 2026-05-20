@@ -13,6 +13,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { calculateEffectiveWeight, calculateProtectionScore } from './memory-weighting'
+import { deleteMemoriesWithUnlinkBatch } from './memory-gate'
 
 import { logger } from '@/lib/logger'
 
@@ -389,7 +390,7 @@ export async function runHousekeeping(
   const deletedIds = Array.from(deleteSet)
 
   if (!opts.dryRun && deletedIds.length > 0) {
-    const deletedCount = await repos.memories.bulkDelete(characterId, deletedIds)
+    const deletedCount = await deleteMemoriesWithUnlinkBatch(deletedIds)
 
     try {
       const vectorStore = await getCharacterVectorStore(characterId)

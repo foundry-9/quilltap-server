@@ -10,6 +10,7 @@ const {
   resolveChat,
   resolveProject,
 } = require('./db-helpers');
+const { scanDanglingEdges } = require('./graph-integrity');
 
 // ---------- colour & marker helpers ----------
 
@@ -84,6 +85,8 @@ function parseFlags(args) {
     depth: -1,
     maxNodes: 0,
     noRelated: false,
+    // validate
+    list: false,
   };
   const positional = [];
   let i = 0;
@@ -123,6 +126,8 @@ function parseFlags(args) {
       case '--depth': flags.depth = parseInt(args[++i], 10); break;
       case '--max-nodes': flags.maxNodes = parseInt(args[++i], 10) || 0; break;
       case '--no-related': flags.noRelated = true; break;
+
+      case '--list': flags.list = true; break;
 
       default:
         if (a.startsWith('-')) {
@@ -984,35 +989,7 @@ function computeHolderStats(db, characterId) {
     WHERE characterId = ?
   `).get(characterId);
 
-  const graphRows = db.prepare(`
-    SELECT id, relatedMemoryIds FROM memories WHERE characterId = ?
-  `).all(characterId);
-
-  const allIds = new Set(graphRows.map(r => r.id));
-  // Also include other-character memories so cross-character links don't count
-  // as dangling — `relatedMemoryIds` may point at memories owned by other holders.
-  for (const row of db.prepare('SELECT id FROM memories').all()) {
-    allIds.add(row.id);
-  }
-
-  let withLinks = 0;
-  let isolated = 0;
-  let degreeSum = 0;
-  let maxDegree = 0;
-  let danglingEdges = 0;
-  for (const row of graphRows) {
-    let arr = [];
-    try { arr = JSON.parse(row.relatedMemoryIds || '[]'); } catch { arr = []; }
-    if (!Array.isArray(arr)) arr = [];
-    if (arr.length === 0) { isolated++; continue; }
-    withLinks++;
-    degreeSum += arr.length;
-    if (arr.length > maxDegree) maxDegree = arr.length;
-    for (const linkedId of arr) {
-      if (!allIds.has(linkedId)) danglingEdges++;
-    }
-  }
-  const avgDegree = withLinks > 0 ? degreeSum / withLinks : 0;
+  const graph = scanDanglingEdges(db, { characterId });
 
   const topMemories = db.prepare(`
     SELECT id, summary, reinforcedImportance
@@ -1038,11 +1015,11 @@ function computeHolderStats(db, characterId) {
       missing: counts.withoutEmbedding || 0,
     },
     graph: {
-      withLinks,
-      isolated,
-      avgDegree: Number(avgDegree.toFixed(2)),
-      maxDegree,
-      danglingEdges,
+      withLinks: graph.withLinks,
+      isolated: graph.isolated,
+      avgDegree: graph.avgDegree,
+      maxDegree: graph.maxDegree,
+      danglingEdges: graph.danglingEdges,
     },
     top: topMemories,
   };
@@ -1078,6 +1055,83 @@ function renderStatusBlock(holder, stats) {
   }
 }
 
+// ---------- validate ----------
+
+async function cmdValidate(flags) {
+  const { db } = await openDb(flags);
+  try {
+    let holderIds = null;
+    let holderRows;
+    if (flags.character && flags.character !== 'all') {
+      const c = resolveCharacter(db, flags.character);
+      holderRows = [{ id: c.id, name: c.name }];
+      holderIds = [c.id];
+    } else {
+      holderRows = db.prepare(`
+        SELECT c.id, c.name FROM characters c
+        WHERE EXISTS (SELECT 1 FROM memories m WHERE m.characterId = c.id)
+        ORDER BY c.name
+      `).all();
+    }
+
+    const includePairs = Boolean(flags.list);
+    let totalDangling = 0;
+    let totalEdges = 0;
+    let totalNodes = 0;
+    const perHolder = [];
+    for (const holder of holderRows) {
+      const stats = scanDanglingEdges(db, {
+        characterId: holder.id,
+        includePairs,
+      });
+      totalDangling += stats.danglingEdges;
+      totalEdges += stats.totalEdges;
+      totalNodes += stats.nodes;
+      perHolder.push({ holder, stats });
+    }
+
+    if (flags.json) {
+      renderJson({
+        scanned: holderIds ? 'single' : 'all',
+        characterIds: holderRows.map(h => h.id),
+        totals: {
+          nodes: totalNodes,
+          edges: totalEdges,
+          danglingEdges: totalDangling,
+        },
+        holders: perHolder.map(({ holder, stats }) => ({
+          holder: { id: holder.id, name: holder.name },
+          ...stats,
+        })),
+      });
+    } else {
+      const scope = holderIds ? `holder ${holderRows[0].name}` : `${holderRows.length} holders`;
+      const drift = totalEdges > 0 ? ((totalDangling / totalEdges) * 100).toFixed(2) : '0.00';
+      console.log(`Scanned ${scope}: ${totalNodes} memories, ${totalEdges} edges, ${totalDangling} dangling (${drift}%).`);
+      if (totalDangling === 0) {
+        console.log(colorize('Graph is clean.', GREEN));
+      } else if (flags.list) {
+        console.log('');
+        for (const { holder, stats } of perHolder) {
+          if (!stats.danglingPairs || stats.danglingPairs.length === 0) continue;
+          console.log(colorize(`${holder.name}  (${shortId(holder.id)})`, BOLD));
+          for (const pair of stats.danglingPairs) {
+            console.log(`  ${shortId(pair.sourceId)}  →  ${pair.targetIds.map(shortId).join(', ')}`);
+          }
+        }
+      } else {
+        console.log(colorize('Run with --list to see offending source memory IDs and dangling targets.', YELLOW));
+      }
+    }
+
+    if (totalDangling > 0) {
+      process.exitCode = 1;
+    }
+  } finally {
+    db.close();
+  }
+}
+
 // ---------- help ----------
 
 function printMemoriesHelp() {
@@ -1104,6 +1158,9 @@ Subcommands:
                                              related-memory graph.
   status   [--character <name|id>] [--json]  Per-holder rollup + dangling-
                                              edge check.
+  validate [--character <name|id>] [--list]  Read-only memory-graph health
+                                  [--json]   check. Exits 1 if any
+                                             dangling edges remain.
 
 Shared filter flags:
   --character <name|id|all>   Holder. Default: all.
@@ -1146,6 +1203,8 @@ Examples:
   quilltap memories show abc12345 --depth 2
   quilltap memories tree abc12345 --depth 3
   quilltap memories status --character Ariadne
+  quilltap memories validate
+  quilltap memories validate --list
 `);
 }
 
@@ -1173,6 +1232,7 @@ async function memoriesCommand(args) {
     case 'show': await cmdShow(flags, positional); break;
     case 'tree': await cmdTree(flags, positional); break;
     case 'status': await cmdStatus(flags); break;
+    case 'validate': await cmdValidate(flags); break;
     default:
       console.error(`Unknown memories subcommand: ${verb}`);
       console.error("Run 'quilltap memories --help' for a list.");

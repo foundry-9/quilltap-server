@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
 import { scheduleRefit, handleEntityDeletion } from '@/lib/embedding/embedding-job-scheduler';
+import { deleteMemoryWithUnlink } from '@/lib/memory/memory-gate';
 
 // Validation schema for updating a memory
 const updateMemorySchema = z.object({
@@ -128,7 +129,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Memory');
       }
 
-      await repos.memories.deleteForCharacter(existingMemory.characterId, memoryId);
+      await deleteMemoryWithUnlink(memoryId);
 
       // Clean up embedding status (non-blocking)
       handleEntityDeletion('MEMORY', memoryId).catch((err: Error) =>
