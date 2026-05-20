@@ -211,22 +211,78 @@ quilltap themes registry add <url>      # Add a registry source
 
 ## Shell Completion
 
-Tab-completion for bash, zsh, and fish. Generate the completion script for your shell:
+Tab-completion for bash, zsh, and fish. Pick the block that matches your shell.
+
+### Bash
+
+Append the generated script to `~/.bashrc`:
 
 ```bash
-# Bash: add to ~/.bashrc
 quilltap completion bash >> ~/.bashrc
+```
 
-# Zsh: save to a completion directory
+Or drop it into a system completion directory:
+
+```bash
+quilltap completion bash > /usr/local/etc/bash_completion.d/quilltap
+# Linux with admin rights: /etc/bash_completion.d/quilltap
+```
+
+Restart the shell, or `source ~/.bashrc`.
+
+### Zsh
+
+Two reasonable ways to wire this up; pick one.
+
+**Option A — one line in `.zshrc`** (simpler; adds noticeable shell-startup latency because `quilltap` runs every time you open a new shell):
+
+```zsh
+# In ~/.zshrc:
+source <(quilltap completion zsh)
+```
+
+**Option B — canonical `fpath` setup** (faster; what zsh expects):
+
+```zsh
+# In ~/.zshrc, before compinit runs:
+fpath=(~/.zsh/completions $fpath)
+autoload -Uz compinit
+compinit
+```
+
+Then once, from any shell:
+
+```zsh
 mkdir -p ~/.zsh/completions
 quilltap completion zsh > ~/.zsh/completions/_quilltap
-# Then add to ~/.zshrc: fpath=(~/.zsh/completions $fpath)
+```
 
-# Fish: save to the completions directory
+The leading underscore on `_quilltap` is the zsh convention — it tells `compinit` this is a completion definition file rather than a regular autoloaded function.
+
+**oh-my-zsh users:** the framework runs `compinit` for you, so either set the `fpath` line *before* the framework loads, or delete the cache (`rm -f ~/.zcompdump*`) after dropping the file in and start a new shell. The more idiomatic location under oh-my-zsh is:
+
+```zsh
+mkdir -p ~/.oh-my-zsh/custom/plugins/quilltap
+quilltap completion zsh > ~/.oh-my-zsh/custom/plugins/quilltap/_quilltap
+# then add `quilltap` to the plugins=(...) line in ~/.zshrc
+```
+
+### Fish
+
+```fish
 quilltap completion fish > ~/.config/fish/completions/quilltap.fish
 ```
 
-Then restart your shell. Completion works for subcommands, sub-verbs, and instance/mount names (when reachable).
+Fish picks new completion files up automatically — no shell restart needed.
+
+### What gets completed
+
+- **Subcommands**: `quilltap d<TAB>` → `db docs`
+- **Sub-verbs per namespace**: `quilltap db s<TAB>` → `schema show`
+- **Instance names**: `quilltap --instance Fr<TAB>` → registered instances
+- **Mount names**: `quilltap docs ls --mount Qu<TAB>` → mount points in the active instance
+
+Dynamic completions shell out to `quilltap`'s own subcommands. If the active instance is encrypted and no passphrase is reachable, the completion silently returns nothing rather than prompting in the middle of a tab.
 
 ## Requirements
 

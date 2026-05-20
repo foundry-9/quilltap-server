@@ -4,6 +4,10 @@
 
 ### 4.5-dev
 
+#### Fix: zsh completion "doubled argument definition" error
+
+`quilltap completion zsh` produced a script that crashed at first tab with a `doubled argument definition: 1: :(docs)` error from the zsh `_arguments` helper. The top-level subcommand spec used `"1: :(${subcommands[@]%:*})"` — inside double quotes, `[@]` still expands each array element as a separate word, so `_arguments` received `"1: :(db"`, `"docs"`, `"themes"`, ... as separate positional specs and rejected the duplicates. Replaced with the idiomatic `_arguments -C '1: :->subcommand'` + `_describe 'command' subcommands` pattern in `packages/quilltap/lib/completion/zsh.template`. Bash and fish templates were unaffected. Users who already saved `_quilltap` need to regenerate it: `quilltap completion zsh > ~/.zsh/completions/_quilltap` (and `rm -f ~/.zcompdump*` if the cache is stale). Per-shell installation blocks in `packages/quilltap/README.md` and `help/cli-completion.md` were expanded to cover both the one-line `source <(...)` form and the canonical `fpath` setup, plus an oh-my-zsh note.
+
 #### CLI Tier 2 — semantic search (item 7)
 
 Two new `--semantic` modes on the existing literal grep verbs, plus one new server endpoint:
