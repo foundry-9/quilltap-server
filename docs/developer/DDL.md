@@ -770,6 +770,7 @@ CREATE INDEX "idx_memories_characterId" ON "memories" ("characterId");
 CREATE INDEX "idx_memories_chatId" ON "memories" ("chatId");
 CREATE INDEX "idx_memories_createdAt" ON "memories" ("createdAt" DESC);
 CREATE INDEX "idx_memories_projectId" ON "memories" ("projectId");
+CREATE INDEX "idx_memories_reinforcedImportance" ON "memories" ("reinforcedImportance" DESC);
 ```
 
 `aboutCharacterId` semantics: the character the memory is *about*. Three buckets are valid:

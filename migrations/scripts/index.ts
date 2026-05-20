@@ -279,6 +279,8 @@ import { migrateCharacterPhotosToVaultMigration } from './migrate-character-phot
 import { addOpaqueContentFieldMigration } from './add-opaque-content-field';
 // Repair drifted folderId on doc_mount_file_links rows
 import { repairDocMountFileLinkFolderIdsMigration } from './repair-doc-mount-file-link-folderids';
+// Add reinforcedImportance index on memories (CLI default sort)
+import { addMemoriesReinforcedImportanceIndexMigration } from './add-memories-reinforced-importance-index-v1';
 
 /**
  * All available migrations.
@@ -553,6 +555,8 @@ export const migrations: Migration[] = [
   addOpaqueContentFieldMigration,
   // Repair drifted folderId on doc_mount_file_links rows
   repairDocMountFileLinkFolderIdsMigration,
+  // Add reinforcedImportance index on memories (CLI default sort)
+  addMemoriesReinforcedImportanceIndexMigration,
 ];
 
 export {
@@ -812,5 +816,7 @@ export {
   addOpaqueContentFieldMigration,
   // Repair drifted folderId on doc_mount_file_links rows
   repairDocMountFileLinkFolderIdsMigration,
+  // Add reinforcedImportance index on memories (CLI default sort)
+  addMemoriesReinforcedImportanceIndexMigration,
 };
 

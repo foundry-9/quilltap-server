@@ -91,6 +91,7 @@ Subcommands:
   db                            Query encrypted databases
   themes                        Manage theme bundles
   docs                          Inspect, read, and export document mounts
+  memories                      Search, browse, and graph memories
   instances                     Register / inspect named Quilltap instances
   memory-diff <chatId>          Dump existing memories and dry-run re-extraction for a chat
 
@@ -1077,6 +1078,15 @@ if (process.argv[2] === 'db') {
 } else if (process.argv[2] === 'docs') {
   const { docsCommand } = require('../lib/docs-commands');
   docsCommand(process.argv.slice(3));
+} else if (process.argv[2] === 'memories') {
+  const { memoriesCommand } = require('../lib/memories-commands');
+  memoriesCommand(process.argv.slice(3)).catch(err => {
+    if (!err.silent) {
+      console.error(`Error: ${err.message}`);
+    }
+    const code = err.exitCode != null ? err.exitCode : (err.ambiguous ? 2 : 1);
+    process.exit(code);
+  });
 } else if (process.argv[2] === 'instances') {
   const { instancesCommand } = require('../lib/instances-commands');
   instancesCommand(process.argv.slice(3)).catch(err => {

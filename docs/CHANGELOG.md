@@ -4,6 +4,19 @@
 
 ### 4.5-dev
 
+#### `quilltap memories` — new read-only CLI namespace
+
+New top-level subcommand with six read-only verbs (`ls`, `find`, `grep`, `show`, `tree`, `status`) for surveying the memories table. Mirrors the shape of `quilltap docs`: shared filter flags (`--character`, `--about` with `self`/`none` shortcuts, `--source`, `--chat` with `none` shortcut, `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`), shared sort vocabulary (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, `-r` to reverse), `--limit N`, `--json`. All verbs open `quilltap.db` read-only.
+
+- `ls` — column listing modelled on `docs ls`. Defaults to `reinforcedImportance DESC` (what the recall path uses), not `createdAt DESC` like the legacy `db memories` verb. Shows holder + `imp` + `rein` + `src` + `about` + `chat` + `links` + `emb` + `summary`; holder column conditional on `--character all`.
+- `find <pattern>` — substring match against `summary` (default), `content`, or `both` via `--in`. Relevance ranking when `--sort` is unset (summary-hit > content-only-hit, then reinforced + recency).
+- `grep <pattern>` — pattern search inside `content` with snippet formatting. Same `-i` / `-l` / `--max` / `--context` semantics as `docs grep`.
+- `show <id|prefix>` — long-form record with related-memory neighbors. `--depth N` (default 1, cap 4), `--no-related`, prefix-matching at ≥8 chars.
+- `tree <id|prefix>` — ASCII walk of the bidirectional related-memory graph. Cycle handling via visited-set (renders as `↺ <id>`), dangling edges render as `✗ <id>  (deleted or missing)`. `--depth N` (default 2, cap 4), `--max-nodes N` (default 100, cap 1000).
+- `status` — per-holder rollup: AUTO/MANUAL split, about-distribution (self / about-others / legacy-null), embedding presence, graph stats (with-links / isolated / avg degree / max degree / dangling edges). Top-5 by `reinforcedImportance`. Dangling-edge count surfaces stale UUIDs in `relatedMemoryIds` after deletions; logs offenders to stderr.
+
+The legacy `quilltap db memories --character <name>` verb is unchanged. Implementation in `packages/quilltap/lib/memories-commands.js`; dispatcher branch added to `bin/quilltap.js`. Character / chat / project resolvers moved from `lib/db-commands.js` into `lib/db-helpers.js` so both namespaces share them. New migration `add-memories-reinforced-importance-index-v1` adds `idx_memories_reinforcedImportance` so the new default sort uses an index instead of a full-table sort on instances with tens of thousands of memories.
+
 #### CLI: friendlier guidance when targeting the wrong instance
 
 Two small UX fixes on the `quilltap docs` / `quilltap db` CLI surfaces:

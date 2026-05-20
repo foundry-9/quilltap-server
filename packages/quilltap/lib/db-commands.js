@@ -2,7 +2,17 @@
 
 const fs = require('fs');
 const path = require('path');
-const { openMainDb, openLlmLogsDb, openMountIndexDb, openEncryptedDb } = require('./db-helpers');
+const {
+  openMainDb,
+  openLlmLogsDb,
+  openMountIndexDb,
+  openEncryptedDb,
+  UUID_RE,
+  ambiguous,
+  resolveCharacter,
+  resolveChat,
+  resolveProject,
+} = require('./db-helpers');
 const { getLockStatus } = require('./lock-helpers');
 
 // Tables grouped by domain for `db schema` (with-no-arg) overview, and for
@@ -116,67 +126,6 @@ function printRecord(label, row) {
       console.log(`  ${k}: ${v}`);
     }
   }
-}
-
-// ---------- name resolution ----------
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function resolveCharacter(db, query) {
-  if (UUID_RE.test(query)) {
-    const row = db.prepare('SELECT id, name, aliases FROM characters WHERE id = ?').get(query);
-    if (!row) throw new Error(`No character with id ${query}`);
-    return row;
-  }
-  const exact = db.prepare(
-    'SELECT id, name, aliases FROM characters WHERE LOWER(name) = LOWER(?)'
-  ).all(query);
-  if (exact.length === 1) return exact[0];
-  if (exact.length > 1) {
-    throw ambiguous('character', exact);
-  }
-  const fuzzy = db.prepare(
-    'SELECT id, name, aliases FROM characters WHERE LOWER(name) LIKE LOWER(?) OR LOWER(aliases) LIKE LOWER(?) ORDER BY name'
-  ).all(`%${query}%`, `%${query}%`);
-  if (fuzzy.length === 0) throw new Error(`No character matching '${query}'`);
-  if (fuzzy.length > 1) throw ambiguous('character', fuzzy);
-  return fuzzy[0];
-}
-
-function resolveChat(db, query) {
-  if (UUID_RE.test(query)) {
-    const row = db.prepare('SELECT id, title, chatType, projectId FROM chats WHERE id = ?').get(query);
-    if (!row) throw new Error(`No chat with id ${query}`);
-    return row;
-  }
-  const fuzzy = db.prepare(
-    "SELECT id, title, chatType, projectId, lastMessageAt FROM chats WHERE LOWER(title) LIKE LOWER(?) ORDER BY lastMessageAt DESC"
-  ).all(`%${query}%`);
-  if (fuzzy.length === 0) throw new Error(`No chat matching '${query}'`);
-  if (fuzzy.length > 1) throw ambiguous('chat', fuzzy);
-  return fuzzy[0];
-}
-
-function resolveProject(db, query) {
-  if (UUID_RE.test(query)) {
-    const row = db.prepare('SELECT id, name FROM projects WHERE id = ?').get(query);
-    if (!row) throw new Error(`No project with id ${query}`);
-    return row;
-  }
-  const fuzzy = db.prepare(
-    'SELECT id, name FROM projects WHERE LOWER(name) LIKE LOWER(?) ORDER BY name'
-  ).all(`%${query}%`);
-  if (fuzzy.length === 0) throw new Error(`No project matching '${query}'`);
-  if (fuzzy.length > 1) throw ambiguous('project', fuzzy);
-  return fuzzy[0];
-}
-
-function ambiguous(kind, rows) {
-  const list = rows.slice(0, 10).map(r => `  ${r.id}  ${r.name || r.title || ''}`).join('\n');
-  const more = rows.length > 10 ? `\n  … and ${rows.length - 10} more` : '';
-  const err = new Error(`Multiple ${kind}s match. Use a UUID or a more specific name:\n${list}${more}`);
-  err.ambiguous = true;
-  return err;
 }
 
 // ---------- verb: schema ----------

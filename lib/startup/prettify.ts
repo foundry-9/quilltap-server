@@ -195,6 +195,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'fix-memory-timestamps-from-source-v1': 'Mending memory timestamps from their source messages',
   'align-about-character-id-v1': 'Aligning memory authorship by name presence',
   'align-about-character-id-v2': 'Aligning memory authorship with the holder-dominance rule',
+  'add-memories-reinforced-importance-index-v1': 'Sharpening the memory ranking so the salient ones float to the top',
 
   // Logs
   'move-llm-logs-to-separate-db-v1': 'Relocating LLM logs to their own dossier',

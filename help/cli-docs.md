@@ -231,6 +231,10 @@ The `--data-dir` and `--passphrase` flags work identically to the standard `db` 
 | `--force` | For `read`: dump binary to TTY anyway; for `write`: overwrite; for `copy`: overwrite and force a byte copy |
 | `-h, --help` | Per-subcommand help text |
 
+## See Also
+
+- `quilltap memories --help` — the same shape, applied to a character's memories instead of documents ([CLI: The Command Line and the Commonplace Book](cli-memories.md)).
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

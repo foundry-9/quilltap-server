@@ -176,6 +176,22 @@ quilltap docs copy [--force] <srcMount> <srcPath> <dstMount> <dstPath>
 
 Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous names print candidates and exit non-zero. `--json` is supported by every verb; `reindex` and `embed` refuse to run without a reachable server.
 
+## Memories
+
+`quilltap memories` exposes the same Commonplace Book that each character carries — searchable, sortable, graphable, but never writable. All verbs open the main encrypted DB read-only.
+
+```bash
+quilltap memories ls                                                   # All holders, default sort: reinforcedImportance DESC
+quilltap memories ls --character Ariadne --sort created --limit 10     # One holder, newest first
+quilltap memories find "concrete examples"                             # Substring match on summary (--in content|both)
+quilltap memories grep -i --max 3 --context 1 "concrete examples"      # Pattern search inside content, with snippets
+quilltap memories show <id|prefix> [--depth N] [--no-related]          # Full record + related-memory neighbourhood
+quilltap memories tree <id|prefix> [--depth N] [--max-nodes N]         # ASCII walk of the bidirectional related-memory graph
+quilltap memories status [--character <name|id>]                       # Per-holder rollup + dangling-edge check
+```
+
+Shared filter flags apply to `ls`, `find`, `grep`, and `status` where they make sense: `--character`, `--about` (with `self` / `none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`. Sort flags (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, plus `-r` to reverse) apply to `ls`, `find`, and `grep`. Names accept fuzzy substrings; ambiguous names print candidates and exit 2. `--json` is supported by every verb. The legacy `quilltap db memories --character <name>` verb remains undisturbed.
+
 ## Theme Management
 
 The CLI includes theme management commands:
