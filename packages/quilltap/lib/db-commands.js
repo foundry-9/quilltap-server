@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { openMainDb, openLlmLogsDb, openMountIndexDb } = require('./db-helpers');
+const { openMainDb, openLlmLogsDb, openMountIndexDb, openEncryptedDb } = require('./db-helpers');
 const { getLockStatus } = require('./lock-helpers');
 
 // Tables grouped by domain for `db schema` (with-no-arg) overview, and for
@@ -839,6 +839,312 @@ function optimizeOneDb(key, dbPath, ctx) {
   return { target: target.label, skipped: false, sizeBefore, sizeAfter, steps };
 }
 
+// ---------- verb: backup ----------
+
+// Targets mirror OPTIMIZE_TARGETS but live separately so the verb can grow
+// its own per-target metadata (e.g. exclude logs) without disturbing optimize.
+const BACKUP_TARGETS = OPTIMIZE_TARGETS;
+const INTEGRITY_TARGETS = OPTIMIZE_TARGETS;
+
+function isoTimestampForDir() {
+  // 2026-05-20T14-32-07
+  return new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, '').slice(0, 19);
+}
+
+function resolveBackupTargets(positional) {
+  if (positional.length === 0 || (positional.length === 1 && positional[0] === 'all')) {
+    return Object.keys(BACKUP_TARGETS);
+  }
+  return positional.map(p => {
+    if (!BACKUP_TARGETS[p]) {
+      const allowed = Object.keys(BACKUP_TARGETS).join(' | ');
+      throw new Error(`Unknown backup target '${p}'. Allowed: ${allowed} | all`);
+    }
+    return p;
+  });
+}
+
+async function cmdBackup(args, ctx) {
+  const { flags, positional } = parseSubArgs(args);
+  const json = asBool(flags.json);
+  const out = typeof flags.out === 'string' ? flags.out : '';
+
+  const targets = resolveBackupTargets(positional);
+
+  // Backups are safe while the server is running — page-level online copy.
+  // Log the situation and proceed; do not refuse.
+  const lockStatus = getLockStatus(ctx.dataDir);
+  if (!json && (lockStatus.state === 'active' || lockStatus.state === 'suspect')) {
+    const pidPart = lockStatus.lock && lockStatus.lock.pid ? ` (PID ${lockStatus.lock.pid})` : '';
+    console.log(`Live instance detected${pidPart} — taking online snapshot.`);
+  }
+
+  // Resolve destination directory. Default: <dataDir>/backups/<ISO-timestamp>/
+  const destDir = out
+    ? (out.startsWith('~') ? path.join(require('os').homedir(), out.slice(1)) : out)
+    : path.join(ctx.dataDir, 'backups', isoTimestampForDir());
+  fs.mkdirSync(destDir, { recursive: true });
+
+  if (!json) {
+    console.log(`Destination: ${destDir}`);
+  }
+
+  const results = [];
+  for (const key of targets) {
+    const target = BACKUP_TARGETS[key];
+    const sourcePath = path.join(ctx.dataDir, target.filename);
+    if (!fs.existsSync(sourcePath)) {
+      if (!json) console.log(`Skipping ${target.label}: ${sourcePath} not found.`);
+      results.push({ target: target.label, source: sourcePath, skipped: true, ok: false, reason: 'not found' });
+      continue;
+    }
+    const result = await backupOneDb(key, sourcePath, destDir, ctx);
+    results.push(result);
+  }
+
+  const okCount = results.filter(r => r.ok).length;
+  const totalBytes = results.filter(r => r.ok && r.destSize != null).reduce((acc, r) => acc + r.destSize, 0);
+
+  if (json) {
+    printJson({ destDir, results, summary: { ok: okCount, total: results.length, totalBytes } });
+    return;
+  }
+
+  console.log('');
+  console.log(`Snapshot complete: ${okCount}/${results.length} target${results.length === 1 ? '' : 's'} (${formatBytes(totalBytes)} written).`);
+
+  if (okCount !== results.length) {
+    // Surface failure via non-zero exit so scripts can pick it up.
+    const err = new Error('one or more snapshots failed');
+    err.silent = true;
+    throw err;
+  }
+}
+
+async function backupOneDb(key, sourcePath, destDir, ctx) {
+  const target = BACKUP_TARGETS[key];
+  const opener = key === 'main' ? openMainDb : key === 'llm-logs' ? openLlmLogsDb : openMountIndexDb;
+  const destPath = path.join(destDir, target.filename);
+
+  console.log('');
+  console.log(`── ${target.label}  (${sourcePath}) ──`);
+  const sourceSize = fileSize(sourcePath);
+  console.log(`  source size: ${formatBytes(sourceSize)}`);
+
+  if (fs.existsSync(destPath)) {
+    console.log(`  refusing: destination ${destPath} already exists`);
+    return { target: target.label, source: sourcePath, sourceSize, dest: destPath, ok: false, error: 'destination exists' };
+  }
+
+  // Open source RW. We need write capability for `wal_checkpoint(TRUNCATE)`
+  // and `BEGIN EXCLUSIVE`. The lock is held only for the duration of the
+  // file copy itself.
+  let src;
+  try {
+    src = opener(ctx.dataDir, ctx.pepper, { readonly: false });
+  } catch (err) {
+    console.log(`  open failed: ${err.message}`);
+    return { target: target.label, source: sourcePath, sourceSize, dest: destPath, ok: false, error: err.message };
+  }
+
+  // The SQLCipher build in this driver does not expose `sqlcipher_export`
+  // and the SQLite online-backup API refuses cross-cipher copies. We
+  // instead take a brief exclusive lock, force a WAL checkpoint, and copy
+  // the encrypted .db file at the byte level — the pages are already
+  // encrypted in the source, so the destination inherits the key.
+  const t0 = Date.now();
+  let inTxn = false;
+  try {
+    src.exec('BEGIN EXCLUSIVE');
+    inTxn = true;
+    try { src.pragma('wal_checkpoint(TRUNCATE)'); } catch { /* best effort */ }
+    fs.copyFileSync(sourcePath, destPath);
+    src.exec('COMMIT');
+    inTxn = false;
+  } catch (err) {
+    if (inTxn) { try { src.exec('ROLLBACK'); } catch {} }
+    try { src.close(); } catch {}
+    try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch {}
+    console.log(`  backup failed: ${err.message}`);
+    return { target: target.label, source: sourcePath, sourceSize, dest: destPath, ok: false, error: err.message, durationMs: Date.now() - t0 };
+  } finally {
+    try { src.close(); } catch {}
+  }
+  const durationMs = Date.now() - t0;
+  const destSize = fileSize(destPath);
+  console.log(`  dest: ${destPath}`);
+  console.log(`  dest size:   ${formatBytes(destSize)}  (${formatDuration(durationMs)})`);
+
+  // Post-flight: open the snapshot with the same key and run quick_check.
+  let verifyDb;
+  try {
+    verifyDb = openEncryptedDb(destPath, ctx.pepper, { readonly: true, friendlyName: `snapshot of ${target.label}` });
+  } catch (err) {
+    console.log(`  verify failed: ${err.message}`);
+    return { target: target.label, source: sourcePath, sourceSize, dest: destPath, destSize, durationMs, ok: false, error: `verify open failed: ${err.message}` };
+  }
+  try {
+    const rows = verifyDb.pragma('quick_check');
+    const result = rows && rows[0] ? (rows[0].integrity_check || rows[0].quick_check || Object.values(rows[0])[0]) : 'unknown';
+    if (result !== 'ok') {
+      console.log(`  verify failed: quick_check returned ${result}`);
+      return { target: target.label, source: sourcePath, sourceSize, dest: destPath, destSize, durationMs, ok: false, error: `quick_check: ${result}` };
+    }
+    console.log(`  verify: ok`);
+  } catch (err) {
+    console.log(`  verify failed: ${err.message}`);
+    return { target: target.label, source: sourcePath, sourceSize, dest: destPath, destSize, durationMs, ok: false, error: err.message };
+  } finally {
+    try { verifyDb.close(); } catch {}
+  }
+
+  return { target: target.label, source: sourcePath, sourceSize, dest: destPath, destSize, durationMs, ok: true };
+}
+
+// ---------- verb: integrity ----------
+
+function cmdIntegrity(args, ctx) {
+  const { flags, positional } = parseSubArgs(args);
+  const json = asBool(flags.json);
+
+  let targets;
+  if (positional.length === 0 || (positional.length === 1 && positional[0] === 'all')) {
+    targets = Object.keys(INTEGRITY_TARGETS);
+  } else {
+    targets = positional.map(p => {
+      if (!INTEGRITY_TARGETS[p]) {
+        const allowed = Object.keys(INTEGRITY_TARGETS).join(' | ');
+        throw new Error(`Unknown integrity target '${p}'. Allowed: ${allowed} | all`);
+      }
+      return p;
+    });
+  }
+
+  // Read-only — safe alongside a running instance. Log it once if active.
+  const lockStatus = getLockStatus(ctx.dataDir);
+  if (!json && (lockStatus.state === 'active' || lockStatus.state === 'suspect')) {
+    const pidPart = lockStatus.lock && lockStatus.lock.pid ? ` (PID ${lockStatus.lock.pid})` : '';
+    console.log(`Live instance detected${pidPart} — running read-only checks.`);
+  }
+
+  const results = [];
+  for (const key of targets) {
+    const target = INTEGRITY_TARGETS[key];
+    const dbPath = path.join(ctx.dataDir, target.filename);
+    if (!fs.existsSync(dbPath)) {
+      if (!json) console.log(`Skipping ${target.label}: ${dbPath} not found.`);
+      results.push({ target: target.label, ok: false, openable: false, issues: [], reason: 'not found' });
+      continue;
+    }
+    const result = integrityOneDb(key, dbPath, ctx);
+    results.push(result);
+  }
+
+  const anyOpenFailed = results.some(r => r.openable === false && r.reason !== 'not found');
+  const anyIssues = results.some(r => r.openable !== false && !r.ok);
+
+  if (json) {
+    printJson({ results });
+  } else {
+    console.log('');
+    if (!anyIssues && !anyOpenFailed) {
+      console.log('All databases reported ok.');
+    } else if (anyOpenFailed) {
+      console.log('One or more databases could not be opened.');
+    } else {
+      console.log('One or more databases reported integrity issues — see above.');
+    }
+  }
+
+  if (anyOpenFailed) {
+    const err = new Error('database open failure');
+    err.silent = true;
+    err.exitCode = 2;
+    throw err;
+  }
+  if (anyIssues) {
+    const err = new Error('integrity issues detected');
+    err.silent = true;
+    err.exitCode = 1;
+    throw err;
+  }
+}
+
+function integrityOneDb(key, dbPath, ctx) {
+  const target = INTEGRITY_TARGETS[key];
+  const opener = key === 'main' ? openMainDb : key === 'llm-logs' ? openLlmLogsDb : openMountIndexDb;
+
+  console.log('');
+  console.log(`── ${target.label}  (${dbPath}) ──`);
+
+  let db;
+  try {
+    db = opener(ctx.dataDir, ctx.pepper, { readonly: true });
+  } catch (err) {
+    console.log(`  open failed: ${err.message}`);
+    return { target: target.label, ok: false, openable: false, issues: [], reason: err.message };
+  }
+
+  const issues = [];
+  let cipherCheck = null;
+  let integrityCheck = null;
+  const t0 = Date.now();
+  try {
+    try {
+      const rows = db.pragma('cipher_integrity_check');
+      if (rows && rows.length === 0) {
+        cipherCheck = 'ok';
+        console.log('  cipher_integrity_check: ok');
+      } else {
+        const lines = rows.map(r => (r.cipher_integrity_check || Object.values(r)[0] || '')).filter(Boolean);
+        if (lines.length === 1 && lines[0] === 'ok') {
+          cipherCheck = 'ok';
+          console.log('  cipher_integrity_check: ok');
+        } else {
+          cipherCheck = lines.join('; ');
+          for (const line of lines) {
+            console.log(`  cipher_integrity_check: ${line}`);
+            issues.push({ pragma: 'cipher_integrity_check', message: line });
+          }
+        }
+      }
+    } catch (err) {
+      // Plain SQLite has no cipher_integrity_check; treat as N/A and continue.
+      cipherCheck = `n/a (${err.message})`;
+      console.log(`  cipher_integrity_check: n/a (${err.message})`);
+    }
+
+    const integRows = db.pragma('integrity_check');
+    const lines = integRows.map(r => (r.integrity_check || Object.values(r)[0] || '')).filter(Boolean);
+    if (lines.length === 1 && lines[0] === 'ok') {
+      integrityCheck = 'ok';
+      console.log('  integrity_check:        ok');
+    } else {
+      integrityCheck = lines.join('; ');
+      for (const line of lines) {
+        console.log(`  integrity_check:        ${line}`);
+        issues.push({ pragma: 'integrity_check', message: line });
+      }
+    }
+  } finally {
+    try { db.close(); } catch {}
+  }
+  const durationMs = Date.now() - t0;
+  console.log(`  duration: ${formatDuration(durationMs)}`);
+
+  const ok = (cipherCheck === 'ok' || cipherCheck === null || (typeof cipherCheck === 'string' && cipherCheck.startsWith('n/a')))
+    && integrityCheck === 'ok';
+  return {
+    target: target.label,
+    ok,
+    openable: true,
+    cipherIntegrityCheck: cipherCheck,
+    integrityCheck,
+    issues,
+    durationMs,
+  };
+}
+
 // ---------- dispatch ----------
 
 const VERBS = {
@@ -851,17 +1157,19 @@ const VERBS = {
   log: cmdLog,
   memories: cmdMemories,
   optimize: cmdOptimize,
+  backup: cmdBackup,
+  integrity: cmdIntegrity,
 };
 
 function isVerb(arg) {
   return Object.prototype.hasOwnProperty.call(VERBS, arg);
 }
 
-function runVerb(args, ctx) {
+async function runVerb(args, ctx) {
   const [verb, ...rest] = args;
   const handler = VERBS[verb];
   if (!handler) throw new Error(`Unknown db subcommand: ${verb}`);
-  handler(rest, ctx);
+  return handler(rest, ctx);
 }
 
 function makeCtx(dataDir, pepper) {

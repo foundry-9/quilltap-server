@@ -15,7 +15,7 @@ The commands operate in one of two modes, chosen automatically depending on what
 - **Direct database access** — Listing mount points, inspecting one in detail, enumerating files, reading a file's contents, and exporting a whole mount to a directory all open the encrypted `quilltap-mount-index.db` file directly. The Quilltap server need not be running, and indeed any number of these commands may be issued against an instance whose server is taking the afternoon off.
 - **Through the running server** — Triggering a rescan, writing or deleting files, creating folders, moving and copying — these need the embedding pipeline, the watchers, and the rest of the apparatus, so the CLI makes a polite HTTP request to the server (defaulting to `http://localhost:3000`; pass `--port` for a non-default arrangement). If the server cannot be reached, write commands fall back to a best-effort filesystem-only mode for filesystem-backed mounts, and politely refuse the like for database-backed mounts (where the index machinery is indispensable).
 
-Semantic search remains, for the moment, only available through the chat interface and the API. A future arrival may add `quilltap docs search` once the embedding pipeline is plumbed into the CLI; until then, ask a character to consult their commonplace book in the usual way.
+Semantic search remains, for the moment, only available through the chat interface and the API. A future arrival may add `quilltap docs search` once the embedding pipeline is plumbed into the CLI; until then, ask a character to consult their commonplace book in the usual way. For more rough-and-ready searching by filename or by literal text, see *Searching* below.
 
 ## Wherever Mount Names Appear
 
@@ -33,6 +33,14 @@ quilltap docs read <mount> <relativePath>            # Raw bytes/text → stdout
 quilltap docs read --rendered <mount> <relativePath> # Extracted plaintext → stdout
 quilltap docs export <mount> <outputDir>             # Whole mount → a directory
 quilltap docs scan <mount>                           # Rescan via the running server
+quilltap docs find <pattern>                         # Substring search on file names (see Searching)
+quilltap docs grep <pattern>                         # Substring search inside extracted text
+quilltap docs status                                 # Per-mount extraction + embedding rollup
+
+# Server-required
+quilltap docs reindex <mount> [path] [--force]       # Re-extract text + re-chunk affected files
+quilltap docs embed <mount> [path] [--force] [--wait]
+                                                     # Enqueue embedding jobs for un-embedded chunks
 
 # Write
 quilltap docs write [--force] <mount> <path> [file]  # Stdin or file → mount
@@ -137,6 +145,64 @@ quilltap docs copy --force notes today.md archive 2026-05/today.copy.md
 # Idempotent delete
 quilltap docs delete notes today.md
 ```
+
+## Searching
+
+For occasions when you know roughly *what* you want and only fuzzily *where* it lives, `docs find` and `docs grep` are the appropriate tools. Both are read-only — they consult the encrypted `quilltap-mount-index.db` directly, without troubling the server in the slightest.
+
+`docs find` performs a case-insensitive substring match against the relative path of every file in scope:
+
+```bash
+quilltap docs find Manifesto                                    # every mount
+quilltap docs find --mount notes --ext md Knowledge             # only one mount, .md files
+quilltap docs find --type folder --mount notes "Wardrobe"       # folders only
+```
+
+`docs grep` performs the same substring match, but inside the *extracted text* of each file (for PDFs and DOCX, the plaintext stored on the link row; for Markdown and similar text-native files, the file's own bytes; for everything in between, the concatenation of chunks):
+
+```bash
+quilltap docs grep --mount notes "five-point Calvinist"         # literal, case-sensitive
+quilltap docs grep --mount notes --ignore-case "calvinist"      # case-insensitive
+quilltap docs grep --mount notes -l "TODO"                      # paths only, suitable for piping
+quilltap docs grep --mount notes --max 1 --context 1 "TODO"     # one match per file, with surrounding lines
+```
+
+A frank confession on performance: both verbs use `LIKE` and JavaScript string searches, with no FTS5 index lurking in the background. On a Scriptorium of modest size this is perfectly comfortable; against many gigabytes of extracted text, `grep` may take a moment longer than is dignified. Should that ever become a real complaint, a future arrival will add proper full-text indexing; until then, the simplicity has its own appeal.
+
+When `--mount` is omitted (or set to `all`), results from every mount are printed with a leading mount-name column. When you've narrowed to a single mount, the column is dropped for tidiness.
+
+`--limit` (default 100) caps `docs find` output; `--max` (default 5) caps how many matches `docs grep` prints per file. Pass `--json` to either for the full structured object — sizes, modification times, line numbers, snippets, the lot.
+
+## Reindexing and Embedding
+
+Two complementary verbs exist for taking matters into one's own hands when the background pipelines lag, fail, or merely produce results one wishes to reproduce afresh.
+
+`docs reindex <mount> [path] [--force]` re-extracts plaintext and re-chunks the files in scope. Without a `[path]`, the entire mount is in scope. With one, the scope narrows to that file (if `[path]` names a file) or to every file beneath it (if it names a folder). Without `--force`, only files whose extraction is `none`, `pending`, `failed`, or `skipped` are touched — chiefly the PDFs and DOCX that the conversion machinery has yet to digest, or that it tried and gave up on. With `--force`, every file in scope is re-extracted, even those already `converted`. The result is synchronous — when the verb returns, the work is done.
+
+`docs embed <mount> [path] [--force] [--wait]` enqueues embedding jobs for chunks that lack an embedding vector. Without `--force`, only chunks whose `embedding IS NULL` are queued; with `--force`, every chunk in scope is queued (though the queue itself politely deduplicates anything already pending). With `--wait`, the CLI follows each job to its conclusion and reports the score; without it, the verb prints the job identifiers and returns promptly.
+
+Both verbs require the Quilltap server to be running, because the background-job queue and the embedding pipeline both live inside the server's parent process. If the server is unavailable, the verbs refuse to do anything at all rather than risk a half-applied state.
+
+```bash
+quilltap docs reindex notes Knowledge                         # re-extract pending/failed in Knowledge/
+quilltap docs reindex notes --force                           # re-extract everything in the mount
+quilltap docs embed notes                                     # queue any un-embedded chunks
+quilltap docs embed notes Knowledge --wait                    # queue, then wait for completion
+quilltap docs embed notes --json                              # job ids in JSON
+```
+
+## Status — the Rollup View
+
+For a glance at where every mount stands with respect to extraction and embedding, without scanning each folder by hand:
+
+```bash
+quilltap docs status                                  # all mounts
+quilltap docs status --mount notes                    # only one mount
+quilltap docs status --top 10                         # widen the oldest-pending / failed lists
+quilltap docs status --json                           # structured output
+```
+
+Each mount block reports counts of text-native files, extracted files, files still pending extraction, files where extraction failed, plus chunk totals and embedding state. When any "pending" or "failed" rows exist, the oldest few are listed by relative path and timestamp — the same data that drives the `~` and `!` marks in `docs ls`, lifted up to instance-wide scale.
 
 ## SQL Against the Mount-Index Database
 

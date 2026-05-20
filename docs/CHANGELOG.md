@@ -4,6 +4,40 @@
 
 ### 4.5-dev
 
+#### `quilltap db backup` — online encrypted snapshots
+
+New CLI verb that produces a consistent snapshot of all three encrypted databases (or one named target) without requiring the server to be stopped. Default destination is `<dataDir>/backups/<ISO-timestamp>/`; override with `--out <dir>`. `--json` is supported.
+
+Implementation: SQLCipher's `sqlcipher_export` is not compiled into `better-sqlite3-multiple-ciphers`, and the SQLite online-backup API refuses cross-cipher copies, so the verb instead opens the source RW, runs `PRAGMA wal_checkpoint(TRUNCATE)`, takes a brief `BEGIN EXCLUSIVE` lock, copies the encrypted `.db` file byte-for-byte, and releases the lock. The destination inherits the source's encryption key transparently because the pages are already encrypted. Post-flight: each snapshot is re-opened with the same pepper and `PRAGMA quick_check` is asserted.
+
+Lock policy: unlike `optimize`, does not refuse on a live lock — logs "Live instance detected (PID X) — taking online snapshot" and proceeds. The exclusive lock held during the file copy is short (~150 ms for 300 MB on local SSD) and falls within SQLite's busy_timeout. Implementation in `packages/quilltap/lib/db-commands.js` (`cmdBackup`, registered in `VERBS`). Help text in `bin/quilltap.js` `printDbHelp()` and the "Database Protection" help page.
+
+#### `quilltap db integrity` — online cipher + structural health checks
+
+New CLI verb that runs `PRAGMA cipher_integrity_check` plus `PRAGMA integrity_check` against the encrypted databases. Read-only; safe alongside a running instance. Exit codes: 0 on clean, 1 on any reported issue, 2 on open failure. `--json` is supported. Implementation in `lib/db-commands.js` (`cmdIntegrity`).
+
+#### `quilltap docs find` / `docs grep` — substring search across mounts
+
+Two read-only CLI verbs that fill the gap left by `docs ls` (which assumes you already know the path). `find <pattern>` matches `pattern` as a case-insensitive substring against `doc_mount_file_links.relativePath`; `grep <pattern>` matches against the extracted text of each file, reusing the same content-resolution decision tree as `docs read --rendered`.
+
+- `find` flags: `--mount <name|id|all>`, `--type file|folder`, `--ext <ext>`, `--limit N` (default 100).
+- `grep` flags: `--mount <name|id|all>`, `--ignore-case`, `-l` (paths-only), `--max N` per file (default 5), `--context N` lines (default 0).
+
+Both default to all mounts when `--mount` is omitted (the mount-name column is included in output). Implementation: simple `LIKE` scans on the mount-index DB plus a JS substring search for `grep` — no FTS5 indexes added in v1. Documented as a known performance trade-off in `help/cli-docs.md` ("Searching" section). Implementation in `packages/quilltap/lib/docs-commands.js` (`handleFind`, `handleGrep`).
+
+#### `quilltap docs reindex` / `docs embed` — explicit pipeline triggers
+
+Two CLI verbs and two API actions that re-run extraction and embedding on demand. Both require the running server (the background-job queue and the embedding pipeline live in the parent Next.js process); the CLI refuses with a clear error if the server is unreachable rather than falling back to a partial state.
+
+- `docs reindex <mount> [path] [--force]` — synchronous. Resolves `path` to either one file or every link under a folder prefix, then re-extracts plaintext via `convertBufferToPlainText`, re-chunks via `chunkDocument`, replaces the existing chunk set, and updates the link's `extractionStatus` / `extractedText` / `extractedTextSha256` / `chunkCount`. Without `--force`, only PDFs/DOCX in `none|pending|failed|skipped` (and text-native files with no chunks yet) are touched; with `--force`, every link in scope.
+- `docs embed <mount> [path] [--force] [--wait]` — enqueues `EMBEDDING_GENERATE` jobs for chunks under the path scope. Without `--force`, only `embedding IS NULL` chunks; with `--force`, every chunk in scope (though the queue's existing dedup avoids double-enqueue). `--wait` polls `GET /api/v1/system/jobs/[id]` until each job reaches a terminal state.
+
+New helper `lib/mount-index/reindex.ts` exports `reindexLinks(mountPoint, opts)` and `enqueueEmbeddingJobsScoped(mountPoint, opts)`. Two new actions on `POST /api/v1/mount-points/[id]`: `reindex` and `embed`, registered in the existing `withActionDispatch` map. CLI handlers in `packages/quilltap/lib/docs-commands.js` (`handleReindex`, `handleEmbed`, `callMountAction`, `pollJob`).
+
+#### `quilltap docs status` — instance-wide extraction + embedding rollup
+
+New read-only CLI verb that aggregates `doc_mount_file_links` and `doc_mount_chunks` counts per mount and prints the result as a human-scannable block per mount. Reports text-native vs. extracted vs. extraction-pending vs. extraction-failed file counts, total vs. embedded chunk counts, and the oldest pending / failed extractions (sample list size controlled by `--top N`, default 5; `0` disables). `--mount` narrows to one mount; `--json` emits the full structured object. Implementation in `lib/docs-commands.js` (`handleStatus`).
+
 #### `doc_mount_file_links.folderId` drift — auto-derive on write + repair migration
 
 The three `link*` methods on `DocMountFileLinksRepository` (`linkBlobContent`, `linkDocumentContent`, `linkFilesystemFile`) now derive `folderId` from `relativePath` inside their existing transaction, creating any missing `doc_mount_folders` rows along the way. The caller-supplied `folderId` field is treated as informational and ignored; the repository logs a `warn` when the caller's value disagrees with the derived one so we can find the broken writer.

@@ -200,6 +200,11 @@ Rules for adding or updating these assets:
     - `npx quilltap db logs --chat <name|id>` / `--message <id>` / `--character <name|id>` / `--tail N`
     - `npx quilltap db memories --character <name|id> [--about <name|id>] [--source AUTO|MANUAL]`
   - Single records: `npx quilltap db message <id>` and `npx quilltap db log <id>` print full content/request/response.
+  - Maintenance + health:
+    - `npx quilltap db optimize [target]` — VACUUM + ANALYZE + PRAGMA optimize. Refuses while the server holds the lock.
+    - `npx quilltap db backup [target] [--out <dir>]` — online encrypted snapshot. Safe alongside a running instance; the destination inherits the source's key. Default destination is `<dataDir>/backups/<timestamp>/`.
+    - `npx quilltap db integrity [target]` — `cipher_integrity_check` + `integrity_check`. Read-only. Exit 0/1/2.
+  - Document-store CLI (`npx quilltap docs`): read-only verbs include `list`, `show`, `files`, `ls`/`dir`, `read`, `export`, `find` (substring on filename), `grep` (substring on extracted text), `status` (per-mount extraction + embedding rollup). Server-required verbs include `scan`, `reindex` (re-extract + re-chunk), `embed` (enqueue embedding jobs — `--wait` polls to completion), and the write verbs (`write`/`delete`/`mkdir`/`move`/`copy`). `reindex` and `embed` are explicit triggers for the two background pipelines; they refuse to run when the server is unreachable.
   - All subcommands accept `--json` for piping and `--limit N` (default 50). Names are case-insensitive; ambiguous matches print all candidates and exit non-zero.
   - Low-level (still supported):
     - List tables: `npx quilltap db --tables`

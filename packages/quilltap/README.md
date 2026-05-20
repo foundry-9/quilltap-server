@@ -117,6 +117,22 @@ quilltap db log <id> [--field request|response|both]
 quilltap db memories --character Friday [--about Amy] [--source AUTO]
 ```
 
+### Maintenance and Snapshots
+
+```bash
+quilltap db optimize                        # VACUUM + ANALYZE + PRAGMA optimize (all DBs)
+quilltap db optimize main                   # one DB; refuses while server is running
+
+quilltap db backup                          # online snapshot of all three DBs
+quilltap db backup main --out /tmp/snap     # one DB to a chosen directory
+quilltap db backup --json                   # parseable per-target sizes + durations
+
+quilltap db integrity                       # cipher_integrity_check + integrity_check
+quilltap db integrity llm-logs              # one DB; exit 0 ok, 1 issues, 2 open failure
+```
+
+`backup` and `integrity` are safe to run while the server is up; `optimize` refuses while a live lock is held. Backups default to `<dataDir>/backups/<timestamp>/` and inherit the source's encryption key transparently.
+
 Most subcommands accept `--json` (for piping) and `--limit N`. Names are case-insensitive; aliases are searched alongside character names. Ambiguous matches print all candidates and exit non-zero.
 
 ### Low-level options
@@ -131,6 +147,34 @@ quilltap db --mount-points --tables                 # Target the mount index DB
 ```
 
 In the REPL, `.cols <table>` and `.find <text>` mirror the subcommand helpers.
+
+## Document Stores (Scriptorium)
+
+`quilltap docs` exposes the document-store machinery from the command line. Read-only verbs open the mount-index DB directly and work without the server; write and pipeline verbs talk to the running server via `/api/v1/mount-points/[id]`.
+
+```bash
+# Read
+quilltap docs list                              # All mounts
+quilltap docs show <mount>                      # One mount, with counts
+quilltap docs ls <mount> [path] [--links]       # POSIX-flavoured listing (alias: dir)
+quilltap docs read [--rendered] <mount> <path>  # File contents → stdout
+quilltap docs export <mount> <outputDir>        # Mount → directory
+quilltap docs find <pattern>                    # Substring match on file names (--mount, --ext, --type, --limit)
+quilltap docs grep <pattern>                    # Substring match on extracted text (--mount, --ignore-case, -l, --max, --context)
+quilltap docs status                            # Per-mount extraction + embedding rollup (--mount, --top)
+
+# Server-required
+quilltap docs scan <mount>                                    # Trigger a rescan
+quilltap docs reindex <mount> [path] [--force]                # Re-extract + re-chunk
+quilltap docs embed <mount> [path] [--force] [--wait]         # Enqueue embedding jobs
+quilltap docs write [--force] <mount> <path> [file]           # Stdin or file → mount
+quilltap docs delete <mount> <path>                           # Idempotent delete
+quilltap docs mkdir <mount> <path>                            # Idempotent folder create
+quilltap docs move <srcMount> <srcPath> <dstMount> <dstPath>  # Move (hard-link when possible)
+quilltap docs copy [--force] <srcMount> <srcPath> <dstMount> <dstPath>
+```
+
+Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous names print candidates and exit non-zero. `--json` is supported by every verb; `reindex` and `embed` refuse to run without a reachable server.
 
 ## Theme Management
 

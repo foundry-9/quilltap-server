@@ -59,6 +59,16 @@ Read subcommands:
   read --rendered <mount> <relativePath> Print extracted plaintext to stdout
   export <mount> <outputDir>             Export an entire mount to a directory
   scan <mount>                           Trigger a rescan via the running server
+  find [--mount <name|id|all>] [--type file|folder] [--ext <ext>] [--limit N] <pattern>
+                                         Substring search on file (or folder) names
+  grep [--mount <name|id|all>] [--ignore-case] [-l] [--max N] [--context N] <pattern>
+                                         Substring search inside extracted text
+  status [--mount <name|id>] [--top N]   Per-mount extraction + embedding rollup
+
+Server-required subcommands (background-job queue lives in the running server):
+  reindex <mount> [path] [--force]       Re-extract text + re-chunk affected files
+  embed <mount> [path] [--force] [--wait]
+                                         Enqueue embedding jobs for un-embedded chunks
 
 Write subcommands (server required for database-backed mounts):
   write [--force] <mount> <path> [file]  Write a file from <file> or stdin
@@ -106,6 +116,14 @@ Examples:
   quilltap docs move drafts foo.md notes 2026/foo.md
   quilltap docs copy notes today.md archive 2026-05/today.md
   quilltap docs copy --force notes today.md archive copy.md
+  quilltap docs find Manifesto
+  quilltap docs find --mount notes --ext md Knowledge
+  quilltap docs grep --mount notes --ignore-case "five-point Calvinist"
+  quilltap docs grep --mount notes -l "TODO"
+  quilltap docs status
+  quilltap docs status --mount notes --top 10
+  quilltap docs reindex notes Knowledge --force
+  quilltap docs embed notes --wait
 `);
 }
 
@@ -121,6 +139,17 @@ function parseFlags(args) {
     force: false,
     links: false,
     help: false,
+    // find / grep / reindex / embed / status flags
+    mount: '',
+    type: '',
+    ext: '',
+    limit: 0,
+    max: 0,
+    context: 0,
+    top: -1,
+    ignoreCase: false,
+    pathsOnly: false,
+    wait: false,
   };
   const positional = [];
   let i = 0;
@@ -144,6 +173,20 @@ function parseFlags(args) {
       case '--folder': flags.folder = args[++i]; break;
       case '--force': flags.force = true; break;
       case '--links': flags.links = true; break;
+      case '--mount': flags.mount = args[++i]; break;
+      case '--type': flags.type = args[++i]; break;
+      case '--ext': flags.ext = args[++i]; break;
+      case '--limit': flags.limit = parseInt(args[++i], 10) || 0; break;
+      case '--max': flags.max = parseInt(args[++i], 10) || 0; break;
+      case '--context': flags.context = parseInt(args[++i], 10) || 0; break;
+      case '--top': {
+        const n = parseInt(args[++i], 10);
+        flags.top = isNaN(n) ? -1 : n;
+        break;
+      }
+      case '--ignore-case': flags.ignoreCase = true; break;
+      case '-l': flags.pathsOnly = true; break;
+      case '--wait': flags.wait = true; break;
       case '-h': case '--help': flags.help = true; break;
       default:
         if (a.startsWith('-')) {
@@ -1480,6 +1523,573 @@ async function handleFileOp(flags, positional, action) {
 // dispatch
 // ----------------------------------------------------------------------------
 
+// ----------------------------------------------------------------------------
+// find — substring search on relativePath
+// ----------------------------------------------------------------------------
+
+function escapeLike(s) {
+  // SQLite LIKE uses % and _ as wildcards; we treat the pattern as a substring
+  // literal so the user's % / _ don't have surprise semantics.
+  return s.replace(/[%_\\]/g, ch => '\\' + ch);
+}
+
+function resolveSearchMounts(db, mountSpec) {
+  if (!mountSpec || mountSpec === 'all') {
+    return db.prepare(
+      `SELECT * FROM doc_mount_points ORDER BY name COLLATE NOCASE`
+    ).all();
+  }
+  return [requireMount(db, mountSpec)];
+}
+
+async function handleFind(flags, positional) {
+  const pattern = positional[0];
+  if (!pattern) {
+    console.error('Usage: quilltap docs find [--mount <name|id|all>] [--type file|folder] [--ext <ext>] [--limit N] [--json] <pattern>');
+    process.exit(1);
+  }
+  const limit = flags.limit > 0 ? flags.limit : 100;
+  const type = flags.type || 'file';
+  if (type !== 'file' && type !== 'folder') {
+    console.error(`Error: --type must be file or folder, got "${flags.type}"`);
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  try {
+    const mounts = resolveSearchMounts(db, flags.mount);
+    const showMountColumn = !flags.mount || flags.mount === 'all';
+
+    const liked = `%${escapeLike(pattern)}%`;
+
+    const out = [];
+    if (type === 'file') {
+      // LIKE is case-insensitive on NOCASE collation; use COLLATE NOCASE on
+      // the comparison to make match independent of stored case.
+      const stmt = db.prepare(`
+        SELECT l.relativePath, l.lastModified, l.updatedAt,
+               f.fileSizeBytes, f.fileType
+        FROM doc_mount_file_links l
+        JOIN doc_mount_files f ON f.id = l.fileId
+        WHERE l.mountPointId = ?
+          AND l.relativePath LIKE ? ESCAPE '\\' COLLATE NOCASE
+        ORDER BY l.relativePath COLLATE NOCASE
+      `);
+      for (const mount of mounts) {
+        const rows = stmt.all(mount.id, liked);
+        for (const r of rows) {
+          if (flags.ext) {
+            const ext = flags.ext.startsWith('.') ? flags.ext.slice(1) : flags.ext;
+            if (!r.relativePath.toLowerCase().endsWith('.' + ext.toLowerCase())) continue;
+          }
+          out.push({
+            mount: { id: mount.id, name: mount.name },
+            kind: 'file',
+            relativePath: r.relativePath,
+            size: r.fileSizeBytes,
+            fileType: r.fileType,
+            lastModified: r.lastModified,
+            updatedAt: r.updatedAt,
+          });
+          if (out.length >= limit) break;
+        }
+        if (out.length >= limit) break;
+      }
+    } else {
+      // folder search (database-backed mounts only — doc_mount_folders is
+      // populated by the database scan path; filesystem mounts derive
+      // hierarchy from the OS at request time).
+      const stmt = db.prepare(`
+        SELECT path, name, updatedAt
+        FROM doc_mount_folders
+        WHERE mountPointId = ?
+          AND path LIKE ? ESCAPE '\\' COLLATE NOCASE
+        ORDER BY path COLLATE NOCASE
+      `);
+      for (const mount of mounts) {
+        const rows = stmt.all(mount.id, liked);
+        for (const r of rows) {
+          out.push({
+            mount: { id: mount.id, name: mount.name },
+            kind: 'folder',
+            relativePath: r.path,
+            name: r.name,
+            updatedAt: r.updatedAt,
+          });
+          if (out.length >= limit) break;
+        }
+        if (out.length >= limit) break;
+      }
+    }
+
+    if (flags.json) {
+      process.stdout.write(JSON.stringify({ pattern, type, results: out }, null, 2) + '\n');
+      return;
+    }
+    if (out.length === 0) {
+      console.log('(no matches)');
+      return;
+    }
+    // Plain text columns.
+    const headers = showMountColumn
+      ? ['mount', 'path', 'size', 'modified']
+      : ['path', 'size', 'modified'];
+    const rows = out.map(r => {
+      const size = r.size != null ? formatBytes(r.size) : '-';
+      const mod = r.lastModified || r.updatedAt || '';
+      return showMountColumn
+        ? [r.mount.name, r.relativePath, size, mod]
+        : [r.relativePath, size, mod];
+    });
+    printColumnar(headers, rows);
+    if (out.length >= limit) {
+      console.log(`${DIM}(limit ${limit} reached — use --limit to widen)${RESET}`);
+    }
+  } finally {
+    db.close();
+  }
+}
+
+function printColumnar(headers, rows) {
+  const widths = headers.map((h, i) => Math.max(h.length, ...rows.map(r => String(r[i] || '').length)));
+  const fmt = (cols) => cols.map((c, i) => String(c || '').padEnd(widths[i])).join('  ');
+  console.log(`${BOLD}${fmt(headers)}${RESET}`);
+  for (const r of rows) console.log(fmt(r));
+}
+
+// ----------------------------------------------------------------------------
+// grep — substring search inside extracted text
+// ----------------------------------------------------------------------------
+
+async function handleGrep(flags, positional) {
+  const pattern = positional[0];
+  if (!pattern) {
+    console.error('Usage: quilltap docs grep [--mount <name|id|all>] [--ignore-case] [-l] [--max N] [--context N] [--json] <pattern>');
+    process.exit(1);
+  }
+  const max = flags.max > 0 ? flags.max : 5;
+  const contextLines = flags.context > 0 ? flags.context : 0;
+
+  const { db } = await openDb(flags);
+  try {
+    const mounts = resolveSearchMounts(db, flags.mount);
+    const showMountColumn = !flags.mount || flags.mount === 'all';
+
+    const linksByMount = db.prepare(`
+      SELECT l.id AS linkId, l.fileId, l.relativePath, l.extractedText,
+             f.source, f.fileType
+      FROM doc_mount_file_links l
+      JOIN doc_mount_files f ON f.id = l.fileId
+      WHERE l.mountPointId = ?
+      ORDER BY l.relativePath COLLATE NOCASE
+    `);
+    const docStmt = db.prepare(`SELECT content FROM doc_mount_documents WHERE fileId = ?`);
+    const chunkStmt = db.prepare(`SELECT content FROM doc_mount_chunks WHERE linkId = ? ORDER BY chunkIndex`);
+
+    const needle = flags.ignoreCase ? pattern.toLowerCase() : pattern;
+
+    const results = [];
+    for (const mount of mounts) {
+      const links = linksByMount.all(mount.id);
+      for (const link of links) {
+        const text = resolveTextForLink(db, mount, link, docStmt, chunkStmt);
+        if (text == null || text.length === 0) continue;
+        const haystack = flags.ignoreCase ? text.toLowerCase() : text;
+        if (haystack.indexOf(needle) === -1) continue;
+
+        const matches = [];
+        if (!flags.pathsOnly) {
+          const lines = text.split(/\r?\n/);
+          for (let lineNum = 0; lineNum < lines.length && matches.length < max; lineNum++) {
+            const hay = flags.ignoreCase ? lines[lineNum].toLowerCase() : lines[lineNum];
+            if (hay.indexOf(needle) === -1) continue;
+            let snippet = lines[lineNum];
+            if (contextLines > 0) {
+              const start = Math.max(0, lineNum - contextLines);
+              const end = Math.min(lines.length, lineNum + contextLines + 1);
+              snippet = lines.slice(start, end).join('\n');
+            }
+            matches.push({ line: lineNum + 1, snippet });
+          }
+        }
+        results.push({
+          mount: { id: mount.id, name: mount.name },
+          relativePath: link.relativePath,
+          matches,
+        });
+      }
+    }
+
+    if (flags.json) {
+      process.stdout.write(JSON.stringify({ pattern, results }, null, 2) + '\n');
+      return;
+    }
+    if (results.length === 0) {
+      console.log('(no matches)');
+      return;
+    }
+
+    for (const r of results) {
+      const prefix = showMountColumn ? `${r.mount.name}:` : '';
+      if (flags.pathsOnly) {
+        console.log(`${prefix}${r.relativePath}`);
+        continue;
+      }
+      for (const m of r.matches) {
+        const oneLine = m.snippet.replace(/\n/g, ' ⏎ ');
+        console.log(`${prefix}${r.relativePath}:${m.line}: ${oneLine}`);
+      }
+    }
+  } finally {
+    db.close();
+  }
+}
+
+// Resolve text for a single link row using the same decision tree as
+// readRendered — so grep sees everything the user can `docs read --rendered`.
+function resolveTextForLink(db, mount, link, docStmt, chunkStmt) {
+  if (link.extractedText) return link.extractedText;
+  if (link.source === 'database' && TEXT_FILE_TYPES.has(link.fileType)) {
+    const doc = docStmt.get(link.fileId);
+    if (doc) return doc.content;
+  }
+  if (link.source === 'filesystem' && TEXT_FILE_TYPES.has(link.fileType)) {
+    const fullPath = path.join(mount.basePath, link.relativePath);
+    try {
+      if (fs.existsSync(fullPath)) {
+        return fs.readFileSync(fullPath, 'utf8');
+      }
+    } catch { /* unreadable file — skip */ }
+  }
+  const chunks = chunkStmt.all(link.linkId);
+  if (chunks.length > 0) return chunks.map(c => c.content).join('\n\n');
+  return null;
+}
+
+// ----------------------------------------------------------------------------
+// reindex / embed — server-required, talks to /api/v1/mount-points/[id]
+// ----------------------------------------------------------------------------
+
+async function callMountAction(port, mountId, action, body) {
+  const url = `http://localhost:${port}/api/v1/mount-points/${encodeURIComponent(mountId)}?action=${action}`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    });
+  } catch (err) {
+    return { reachable: false, error: err.message };
+  }
+  let text = '';
+  let parsed = null;
+  try {
+    text = await res.text();
+    parsed = text ? JSON.parse(text) : null;
+  } catch { /* leave parsed null */ }
+  if (!res.ok) {
+    const msg = parsed && parsed.error ? parsed.error : `HTTP ${res.status}`;
+    return { reachable: true, ok: false, status: res.status, error: msg };
+  }
+  return { reachable: true, ok: true, result: parsed && parsed.data ? parsed.data : parsed };
+}
+
+async function pollJob(port, jobId, opts = {}) {
+  const intervalMs = opts.intervalMs || 1500;
+  const timeoutMs = opts.timeoutMs || 0;
+  const start = Date.now();
+  while (true) {
+    let res;
+    try {
+      res = await fetch(`http://localhost:${port}/api/v1/system/jobs/${encodeURIComponent(jobId)}`);
+    } catch (err) {
+      return { ok: false, error: `Unreachable while polling: ${err.message}` };
+    }
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status} polling job` };
+    let body;
+    try { body = await res.json(); } catch { body = null; }
+    const job = body && (body.job || (body.data && body.data.job));
+    if (!job) return { ok: false, error: 'Malformed job response' };
+    if (job.status === 'COMPLETED' || job.status === 'FAILED' || job.status === 'CANCELLED') {
+      return { ok: true, terminal: true, job };
+    }
+    if (timeoutMs && Date.now() - start > timeoutMs) {
+      return { ok: false, error: 'Polling timed out' };
+    }
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+}
+
+async function handleReindex(flags, positional) {
+  const mountSpec = positional[0];
+  const pathArg = positional[1];
+  if (!mountSpec) {
+    console.error('Usage: quilltap docs reindex <mount> [path] [--force] [--json]');
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let mount;
+  try {
+    mount = requireMount(db, mountSpec);
+  } finally {
+    db.close();
+  }
+
+  const http = await callMountAction(flags.port, mount.id, 'reindex', {
+    path: pathArg,
+    force: !!flags.force,
+  });
+  if (!http.reachable) {
+    console.error(`Cannot reach Quilltap server at localhost:${flags.port}. The reindex action requires the running server (it owns the background job queue).`);
+    console.error(`  ${http.error || ''}`);
+    process.exit(1);
+  }
+  if (!http.ok) {
+    console.error(`Reindex failed: ${http.error}`);
+    process.exit(1);
+  }
+
+  const r = http.result;
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+    return;
+  }
+  console.log(`${BOLD}Reindex${RESET} ${mount.name}${pathArg ? `:${pathArg}` : ''}`);
+  console.log(`  processed:  ${r.processed}`);
+  console.log(`  succeeded:  ${r.succeeded}`);
+  console.log(`  failed:     ${r.failed}`);
+  console.log(`  skipped:    ${r.skipped}`);
+  if (r.errors && r.errors.length > 0) {
+    console.log(`  errors:`);
+    for (const e of r.errors.slice(0, 10)) {
+      console.log(`    ${e.relativePath}: ${e.error}`);
+    }
+    if (r.errors.length > 10) {
+      console.log(`    … ${r.errors.length - 10} more`);
+    }
+  }
+}
+
+async function handleEmbed(flags, positional) {
+  const mountSpec = positional[0];
+  const pathArg = positional[1];
+  if (!mountSpec) {
+    console.error('Usage: quilltap docs embed <mount> [path] [--force] [--wait] [--json]');
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let mount;
+  try {
+    mount = requireMount(db, mountSpec);
+  } finally {
+    db.close();
+  }
+
+  const http = await callMountAction(flags.port, mount.id, 'embed', {
+    path: pathArg,
+    force: !!flags.force,
+  });
+  if (!http.reachable) {
+    console.error(`Cannot reach Quilltap server at localhost:${flags.port}. The embed action requires the running server (it owns the background job queue).`);
+    console.error(`  ${http.error || ''}`);
+    process.exit(1);
+  }
+  if (!http.ok) {
+    console.error(`Embed failed: ${http.error}`);
+    process.exit(1);
+  }
+
+  const r = http.result;
+  if (!flags.wait) {
+    if (flags.json) {
+      process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+      return;
+    }
+    console.log(`${BOLD}Embed${RESET} ${mount.name}${pathArg ? `:${pathArg}` : ''}`);
+    console.log(`  queued:   ${r.queued}`);
+    console.log(`  skipped:  ${r.skipped}`);
+    if (r.jobs && r.jobs.length > 0 && r.jobs.length <= 5) {
+      console.log(`  jobs:`);
+      for (const j of r.jobs) console.log(`    ${j.id}  (${j.status})`);
+    } else if (r.jobs && r.jobs.length > 5) {
+      console.log(`  jobs:    ${r.jobs.length} queued (use --json for ids)`);
+    }
+    return;
+  }
+
+  // --wait: poll each job to terminal status.
+  const jobs = r.jobs || [];
+  if (jobs.length === 0) {
+    if (flags.json) {
+      process.stdout.write(JSON.stringify({ ...r, waited: true, completed: 0, failed: 0 }, null, 2) + '\n');
+    } else {
+      console.log('No jobs queued.');
+    }
+    return;
+  }
+  console.log(`Waiting on ${jobs.length} job${jobs.length === 1 ? '' : 's'}…`);
+  let done = 0;
+  let failed = 0;
+  for (const j of jobs) {
+    const poll = await pollJob(flags.port, j.id);
+    if (!poll.ok) {
+      console.error(`Job ${j.id}: ${poll.error}`);
+      failed++;
+      continue;
+    }
+    if (poll.job.status === 'COMPLETED') done++;
+    else failed++;
+  }
+  if (flags.json) {
+    process.stdout.write(JSON.stringify({ ...r, waited: true, completed: done, failed }, null, 2) + '\n');
+  } else {
+    console.log(`Embed done: ${done} completed, ${failed} failed.`);
+  }
+  if (failed > 0) process.exit(1);
+}
+
+// ----------------------------------------------------------------------------
+// status
+// ----------------------------------------------------------------------------
+
+async function handleStatus(flags) {
+  const { db } = await openDb(flags);
+  try {
+    // Resolve target mounts: --mount narrows; default is all.
+    let mounts;
+    if (flags.mount) {
+      mounts = [requireMount(db, flags.mount)];
+    } else {
+      mounts = db.prepare(
+        `SELECT * FROM doc_mount_points ORDER BY name COLLATE NOCASE`
+      ).all();
+    }
+
+    const topN = flags.top >= 0 ? flags.top : 5;
+
+    // Per-mount aggregates.
+    const extractionGroupByStatus = db.prepare(
+      `SELECT extractionStatus, COUNT(*) AS n FROM doc_mount_file_links WHERE mountPointId = ? GROUP BY extractionStatus`
+    );
+    const textNativeCount = db.prepare(
+      `SELECT COUNT(*) AS n
+       FROM doc_mount_file_links l
+       JOIN doc_mount_files f ON f.id = l.fileId
+       WHERE l.mountPointId = ? AND f.fileType IN ('markdown', 'txt', 'json', 'jsonl')`
+    );
+    const nonTextLinkCount = db.prepare(
+      `SELECT COUNT(*) AS n
+       FROM doc_mount_file_links l
+       JOIN doc_mount_files f ON f.id = l.fileId
+       WHERE l.mountPointId = ? AND f.fileType NOT IN ('markdown', 'txt', 'json', 'jsonl')`
+    );
+    const chunkAgg = db.prepare(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END) AS embedded
+       FROM doc_mount_chunks WHERE mountPointId = ?`
+    );
+    const oldestExtraction = db.prepare(
+      `SELECT l.relativePath, l.updatedAt, l.extractionStatus, l.extractionError
+       FROM doc_mount_file_links l
+       WHERE l.mountPointId = ? AND l.extractionStatus = ?
+       ORDER BY l.updatedAt ASC
+       LIMIT ?`
+    );
+
+    const report = [];
+    for (const mount of mounts) {
+      const statusRows = extractionGroupByStatus.all(mount.id);
+      const byStatus = {};
+      for (const r of statusRows) byStatus[r.extractionStatus] = r.n;
+      const textNative = (textNativeCount.get(mount.id) || { n: 0 }).n;
+      const nonText = (nonTextLinkCount.get(mount.id) || { n: 0 }).n;
+      // converted/pending/failed counts apply to non-text-native files only.
+      const extracted = byStatus['converted'] || 0;
+      const extractionPending = byStatus['pending'] || 0;
+      const extractionFailed = byStatus['failed'] || 0;
+      const extractionSkipped = byStatus['skipped'] || 0;
+      const extractionNone = byStatus['none'] || 0;
+
+      const chunkRow = chunkAgg.get(mount.id) || { total: 0, embedded: 0 };
+      const totalChunks = chunkRow.total || 0;
+      const embeddedChunks = chunkRow.embedded || 0;
+      const embeddingPending = Math.max(0, totalChunks - embeddedChunks);
+
+      const oldestPending = topN > 0 ? oldestExtraction.all(mount.id, 'pending', topN) : [];
+      const oldestFailed = topN > 0 ? oldestExtraction.all(mount.id, 'failed', topN) : [];
+
+      report.push({
+        mount: { id: mount.id, name: mount.name, mountType: mount.mountType, basePath: mount.basePath },
+        files: {
+          'text-native': textNative,
+          extracted,
+          'extraction-pending': extractionPending,
+          'extraction-failed': extractionFailed,
+          'extraction-skipped': extractionSkipped,
+          'extraction-none': extractionNone,
+          'non-text-total': nonText,
+        },
+        chunks: {
+          total: totalChunks,
+          embedded: embeddedChunks,
+          'embedding-pending': embeddingPending,
+        },
+        oldestPendingExtractions: oldestPending,
+        oldestFailedExtractions: oldestFailed,
+      });
+    }
+
+    if (flags.json) {
+      process.stdout.write(JSON.stringify({ mounts: report }, null, 2) + '\n');
+      return;
+    }
+
+    // Human text output.
+    for (let i = 0; i < report.length; i++) {
+      if (i > 0) console.log('');
+      const r = report[i];
+      console.log(`${BOLD}Mount: ${r.mount.name}${RESET}  ${DIM}(${r.mount.id})${RESET}`);
+      console.log('  Files');
+      console.log(`    text-native:         ${String(r.files['text-native']).padStart(7)}`);
+      console.log(`    extracted:           ${String(r.files.extracted).padStart(7)}`);
+      console.log(`    extraction-pending:  ${String(r.files['extraction-pending']).padStart(7)}`);
+      console.log(`    extraction-failed:   ${String(r.files['extraction-failed']).padStart(7)}`);
+      if (r.files['extraction-skipped']) {
+        console.log(`    extraction-skipped:  ${String(r.files['extraction-skipped']).padStart(7)}`);
+      }
+      console.log('  Chunks');
+      console.log(`    total:               ${String(r.chunks.total).padStart(7)}`);
+      console.log(`    embedded:            ${String(r.chunks.embedded).padStart(7)}`);
+      console.log(`    embedding-pending:   ${String(r.chunks['embedding-pending']).padStart(7)}`);
+      if (r.oldestPendingExtractions.length > 0) {
+        console.log('  Oldest pending extractions:');
+        for (const row of r.oldestPendingExtractions) {
+          console.log(`    ${row.relativePath}  ${DIM}queued ${row.updatedAt}${RESET}`);
+        }
+      }
+      if (r.oldestFailedExtractions.length > 0) {
+        console.log('  Oldest failed extractions:');
+        for (const row of r.oldestFailedExtractions) {
+          const reason = row.extractionError ? `  ("${truncateSnippet(row.extractionError, 60)}")` : '';
+          console.log(`    ${row.relativePath}  ${DIM}failed ${row.updatedAt}${RESET}${reason}`);
+        }
+      }
+    }
+  } finally {
+    db.close();
+  }
+}
+
+function truncateSnippet(s, n) {
+  if (s == null) return '';
+  const str = String(s).replace(/\s+/g, ' ');
+  if (str.length <= n) return str;
+  return str.slice(0, n) + '…';
+}
+
 async function docsCommand(args) {
   if (args.length === 0) {
     printDocsHelp();
@@ -1538,6 +2148,21 @@ async function docsCommand(args) {
         break;
       case 'copy':
         await handleFileOp(flags, positional, 'copy');
+        break;
+      case 'status':
+        await handleStatus(flags);
+        break;
+      case 'find':
+        await handleFind(flags, positional);
+        break;
+      case 'grep':
+        await handleGrep(flags, positional);
+        break;
+      case 'reindex':
+        await handleReindex(flags, positional);
+        break;
+      case 'embed':
+        await handleEmbed(flags, positional);
         break;
       default:
         console.error(`Unknown docs subcommand: ${verb}`);

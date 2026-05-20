@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { scanMountPoint } from '@/lib/mount-index/scanner';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import { reindexLinks, enqueueEmbeddingJobsScoped } from '@/lib/mount-index/reindex';
 import { detachMountPoint, refreshMountPoint } from '@/lib/mount-index/watcher';
 import {
   convertMountPointToDatabase,
@@ -591,6 +592,89 @@ async function handleDeleteFile(
   }
 }
 
+async function handleReindex(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const mountPoint = await repos.docMountPoints.findById(id);
+  if (!mountPoint) return notFound('Mount point');
+
+  let body: { path?: string; force?: boolean } = {};
+  try {
+    const text = await req.text();
+    if (text) body = JSON.parse(text);
+  } catch (err) {
+    return badRequest(`Invalid JSON body: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  logger.info('[Mount Points v1] Reindex requested', {
+    mountPointId: id,
+    name: mountPoint.name,
+    path: body.path,
+    force: !!body.force,
+  });
+
+  try {
+    const result = await reindexLinks(mountPoint, { path: body.path, force: body.force });
+    return successResponse({
+      mountPointId: id,
+      mountName: mountPoint.name,
+      ...result,
+    });
+  } catch (error) {
+    logger.error(
+      '[Mount Points v1] Reindex failed',
+      { mountPointId: id },
+      error instanceof Error ? error : undefined,
+    );
+    return serverError(`Reindex failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function handleEmbed(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const mountPoint = await repos.docMountPoints.findById(id);
+  if (!mountPoint) return notFound('Mount point');
+
+  let body: { path?: string; force?: boolean } = {};
+  try {
+    const text = await req.text();
+    if (text) body = JSON.parse(text);
+  } catch (err) {
+    return badRequest(`Invalid JSON body: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  logger.info('[Mount Points v1] Embed requested', {
+    mountPointId: id,
+    name: mountPoint.name,
+    path: body.path,
+    force: !!body.force,
+  });
+
+  try {
+    const result = await enqueueEmbeddingJobsScoped(mountPoint, {
+      path: body.path,
+      force: body.force,
+    });
+    return successResponse({
+      mountPointId: id,
+      mountName: mountPoint.name,
+      ...result,
+    });
+  } catch (error) {
+    logger.error(
+      '[Mount Points v1] Embed enqueue failed',
+      { mountPointId: id },
+      error instanceof Error ? error : undefined,
+    );
+    return serverError(`Embed failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   (req, ctx, { id }) => {
     const dispatch = withActionDispatch<{ id: string }>({
@@ -601,6 +685,8 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       'copy-file': handleCopyFile,
       'write-file': handleWriteFile,
       'delete-file': handleDeleteFile,
+      reindex: handleReindex,
+      embed: handleEmbed,
     });
     return dispatch(req, ctx, { id });
   }
