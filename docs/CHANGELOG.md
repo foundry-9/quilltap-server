@@ -4,6 +4,12 @@
 
 ### 4.6-dev
 
+#### Fix: CLI no longer breaks node-pty's spawn-helper executable bit on macOS
+
+`packages/quilltap/bin/quilltap.js` was unconditionally replacing the standalone tarball's bundled `node_modules/node-pty` with a symlink to the npm-installed copy under `/usr/local/lib/node_modules/quilltap/node_modules/node-pty`. On macOS, `sudo npm install -g quilltap` extracts that copy with the executable bit stripped off `prebuilds/<platform>/spawn-helper` (a known npm-as-root tar-extraction wart). The CLI tried to restore the bit with `chmodSync(helper, 0o755)`, but the file is owned by root and the CLI runs as a non-root user — the chmod returned `EPERM` and was swallowed by a silent `try {} catch {}`. Result: terminal spawns failed with `posix_spawnp failed` at runtime, with no actionable hint.
+
+`linkNativeModules()` now checks whether the standalone dir already has a real (non-symlink) `node-pty` directory with a `prebuilds/<platform>-<arch>/` subdirectory for the current platform. If yes — which is the case on macOS and Windows, where the tarball ships working prebuilds — the symlink step is skipped entirely and the tarball's correct copy survives. Linux (no node-pty prebuild) and pre-existing broken-symlink states still fall through to the symlink + chmod path. The chmod failure case now logs a clear warning with the exact `sudo chmod 755 …` command instead of failing silently.
+
 #### Fix: Lantern story-background prompts no longer dump full wardrobe prose
 
 The Lantern's image-prompt pipeline was leaking wardrobe items' human-prose `description` fields straight into image-generation prompts, producing multi-thousand-character prompts full of markdown bullets and style commentary ("Good for moving between Lodge, office, balcony…", "She's not hiding those hands"). Three independent leak paths fixed:

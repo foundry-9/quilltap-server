@@ -266,25 +266,67 @@ function linkNativeModules(standaloneDir) {
                         || resolveModuleDir('better-sqlite3');
   linkModule('better-sqlite3', betterSqlite3Dir);
 
-  // Link node-pty — the standalone tarball strips it (platform-specific),
-  // and pty-manager loads it via a dynamic require, so it needs to resolve
-  // from standaloneDir/node_modules.
-  const nodePtyDir = resolveModuleDir('node-pty');
-  linkModule('node-pty', nodePtyDir);
-  if (nodePtyDir) {
-    // Some npm cache extractions strip the executable bit on spawn-helper,
-    // causing pty.spawn() to fail with `posix_spawnp failed`. Restore it.
-    const prebuildsDir = path.join(nodePtyDir, 'prebuilds');
-    if (fs.existsSync(prebuildsDir)) {
-      try {
-        for (const entry of fs.readdirSync(prebuildsDir, { withFileTypes: true })) {
-          if (!entry.isDirectory()) continue;
-          const helper = path.join(prebuildsDir, entry.name, 'spawn-helper');
-          if (fs.existsSync(helper)) {
-            try { fs.chmodSync(helper, 0o755); } catch { /* best-effort */ }
+  // Link node-pty — but only when we have to. The standalone tarball ships
+  // node-pty intact with cross-platform prebuilds (darwin-arm64, darwin-x64,
+  // win32-arm64, win32-x64). On those platforms the tarball-shipped copy is
+  // already correct, and we MUST NOT replace it with a symlink to the
+  // npm-installed copy: `sudo npm install -g quilltap` on macOS can strip the
+  // executable bit off `spawn-helper`, and we can't chmod a root-owned file
+  // back as a non-root runtime user — pty.spawn() then fails with
+  // `posix_spawnp failed`. Only Linux (which has no node-pty prebuild) and
+  // rebuild-failure cases need the symlink.
+  const standaloneNodePtyPath = path.join(standaloneNodeModules, 'node-pty');
+  const standaloneHasUsablePty = (() => {
+    try {
+      const stat = fs.lstatSync(standaloneNodePtyPath);
+      if (stat.isSymbolicLink()) return false; // prior broken-symlink state — replace it
+      if (!stat.isDirectory()) return false;
+    } catch {
+      return false;
+    }
+    const platformPrebuildDir = path.join(
+      standaloneNodePtyPath,
+      'prebuilds',
+      `${process.platform}-${process.arch}`,
+    );
+    return fs.existsSync(platformPrebuildDir);
+  })();
+
+  if (!standaloneHasUsablePty) {
+    const nodePtyDir = resolveModuleDir('node-pty');
+    linkModule('node-pty', nodePtyDir);
+    if (nodePtyDir) {
+      // Some npm cache extractions (notably `sudo npm install -g`) strip the
+      // executable bit on spawn-helper. Restore it where we can. If chmod
+      // fails because we don't own the file (typical when the CLI was
+      // installed with sudo and is run as a non-root user), warn loudly —
+      // silent failure here produces the `posix_spawnp failed` runtime error
+      // with no actionable hint.
+      const prebuildsDir = path.join(nodePtyDir, 'prebuilds');
+      if (fs.existsSync(prebuildsDir)) {
+        try {
+          for (const entry of fs.readdirSync(prebuildsDir, { withFileTypes: true })) {
+            if (!entry.isDirectory()) continue;
+            const helper = path.join(prebuildsDir, entry.name, 'spawn-helper');
+            if (!fs.existsSync(helper)) continue;
+            try {
+              fs.chmodSync(helper, 0o755);
+            } catch (err) {
+              if (err && err.code === 'EPERM') {
+                console.error('');
+                console.error(`  Warning: Could not make node-pty spawn-helper executable:`);
+                console.error(`    ${helper}`);
+                console.error(`  The file is owned by another user (likely root from a sudo'd`);
+                console.error(`  global install). Terminal sessions will fail to spawn with`);
+                console.error(`  "posix_spawnp failed" until this is fixed. Run:`);
+                console.error(`    sudo chmod 755 "${helper}"`);
+                console.error('');
+              }
+              // Other errors are non-fatal — node-pty may still work if the bit was already set.
+            }
           }
-        }
-      } catch { /* best-effort */ }
+        } catch { /* best-effort */ }
+      }
     }
   }
 
