@@ -5427,7 +5427,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.37.0";
+var VERSION = "6.38.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -6759,31 +6759,34 @@ var WorkloadIdentityAuth = class {
   }
   async refreshToken() {
     const subjectToken = await this.config.provider.getToken();
+    const body = {
+      grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+      subject_token: subjectToken,
+      subject_token_type: SUBJECT_TOKEN_TYPES[this.config.provider.tokenType],
+      identity_provider_id: this.config.identityProviderId,
+      service_account_id: this.config.serviceAccountId
+    };
+    if (this.config.clientId) {
+      body["client_id"] = this.config.clientId;
+    }
     const response = await this.fetch(this.tokenExchangeUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
-        client_id: this.config.clientId,
-        subject_token: subjectToken,
-        subject_token_type: SUBJECT_TOKEN_TYPES[this.config.provider.tokenType],
-        identity_provider_id: this.config.identityProviderId,
-        service_account_id: this.config.serviceAccountId
-      })
+      body: JSON.stringify(body)
     });
     if (!response.ok) {
       const errorText = await response.text();
-      let body = void 0;
+      let body2 = void 0;
       try {
-        body = JSON.parse(errorText);
+        body2 = JSON.parse(errorText);
       } catch {
       }
       if (response.status === 400 || response.status === 401 || response.status === 403) {
-        throw new OAuthError(response.status, body, response.headers);
+        throw new OAuthError(response.status, body2, response.headers);
       }
-      throw APIError.generate(response.status, body, `Token exchange failed with status ${response.status}`, response.headers);
+      throw APIError.generate(response.status, body2, `Token exchange failed with status ${response.status}`, response.headers);
     }
     const tokenResponse = await response.json();
     const expiresIn = tokenResponse.expires_in || 3600;

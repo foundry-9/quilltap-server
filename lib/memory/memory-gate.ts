@@ -14,6 +14,7 @@ import { Memory } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { generateEmbeddingForUser, EmbeddingError } from '@/lib/embedding/embedding-service'
+import { rawQuery } from '@/lib/database/manager'
 import { logger } from '@/lib/logger'
 
 // =============================================================================
@@ -347,6 +348,167 @@ export async function linkRelatedMemories(
   }
 
   return linkedIds
+}
+
+// =============================================================================
+// Deletion chokepoint — unlink before delete
+// =============================================================================
+
+/**
+ * Warn-log threshold for single-memory deletions touching an unusually
+ * large neighbour set. Either indicates a hub node (interesting) or a bug.
+ */
+const SINGLE_DELETE_NEIGHBOUR_WARN = 20
+
+/**
+ * Warn-log threshold for batch deletions. Batch cascades from large
+ * characters or chats are expected; the warn fires when neighbour count
+ * outstrips even those.
+ */
+const BATCH_DELETE_NEIGHBOUR_WARN = 200
+
+interface NeighbourRow {
+  id: string
+  characterId: string
+  relatedMemoryIds: string | null
+}
+
+function parseRelatedIds(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Delete a single memory and scrub the deleted ID from every neighbour's
+ * `relatedMemoryIds`. The single chokepoint for memory deletion — parallel
+ * to `createMemoryWithGate` on the write side. Idempotent: if the row is
+ * already gone, returns false without touching neighbours.
+ *
+ * Callers that need to cascade many memories at once should use
+ * {@link deleteMemoriesWithUnlinkBatch} — it scans neighbours in a single
+ * pass instead of repeating the LIKE filter per ID.
+ */
+export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean> {
+  const startedAt = Date.now()
+  const repos = getRepositories()
+
+  const target = await repos.memories.findById(memoryId)
+  if (!target) {
+    return false
+  }
+
+  // LIKE pre-filter narrows the scan; the quoted UUID inside the pattern
+  // prevents partial-UUID collisions across the JSON column.
+  const likeParam = `%"${memoryId}"%`
+  const neighbours = await rawQuery<NeighbourRow[]>(
+    'SELECT id, characterId, relatedMemoryIds FROM memories WHERE relatedMemoryIds LIKE ? AND id != ?',
+    [likeParam, memoryId]
+  )
+
+  const charactersAffected = new Set<string>()
+  for (const neighbour of neighbours) {
+    const current = parseRelatedIds(neighbour.relatedMemoryIds)
+    if (!current.includes(memoryId)) continue
+    const filtered = current.filter(id => id !== memoryId)
+    await repos.memories.updateForCharacter(neighbour.characterId, neighbour.id, {
+      relatedMemoryIds: filtered,
+    })
+    charactersAffected.add(neighbour.characterId)
+  }
+
+  const deleted = await repos.memories.delete(memoryId)
+
+  const logFields = {
+    memoryId,
+    neighbourCount: neighbours.length,
+    charactersAffected: charactersAffected.size,
+    durationMs: Date.now() - startedAt,
+  }
+  if (neighbours.length >= SINGLE_DELETE_NEIGHBOUR_WARN) {
+    logger.warn('[MemoryGate] deleteMemoryWithUnlink touched an unusually large neighbour set', logFields)
+  }
+
+  return deleted
+}
+
+/**
+ * Batch version of {@link deleteMemoryWithUnlink}. Scans neighbours once
+ * against the full doomed set, scrubs every doomed ID from each neighbour's
+ * `relatedMemoryIds` in one update per neighbour, then deletes the batch.
+ *
+ * Use this for cascades: character deletion, chat-wipe, swipe-group cleanup,
+ * housekeeping retention sweeps. Calling the single-ID helper in a loop is
+ * correct but wastes a full table scan per ID.
+ *
+ * Returns the number of memory rows actually deleted (the LIKE-filtered
+ * neighbour count is logged, not returned).
+ */
+export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promise<number> {
+  if (memoryIds.length === 0) return 0
+
+  const startedAt = Date.now()
+  const repos = getRepositories()
+  const doomedSet = new Set(memoryIds)
+
+  // One-pass scan of every row with a non-empty links array. The OR-of-LIKEs
+  // approach grows ugly past ~50 IDs and the in-JS filter keeps the query
+  // shape stable regardless of batch size.
+  const candidates = await rawQuery<NeighbourRow[]>(
+    "SELECT id, characterId, relatedMemoryIds FROM memories WHERE relatedMemoryIds IS NOT NULL AND relatedMemoryIds != '[]'",
+    []
+  )
+
+  const charactersAffected = new Set<string>()
+  let neighboursTouched = 0
+  for (const candidate of candidates) {
+    if (doomedSet.has(candidate.id)) continue
+    const current = parseRelatedIds(candidate.relatedMemoryIds)
+    if (current.length === 0) continue
+    const filtered = current.filter(id => !doomedSet.has(id))
+    if (filtered.length === current.length) continue
+    await repos.memories.updateForCharacter(candidate.characterId, candidate.id, {
+      relatedMemoryIds: filtered,
+    })
+    charactersAffected.add(candidate.characterId)
+    neighboursTouched++
+  }
+
+  // Group by character so each deletion call carries its proper scope. The
+  // by-character split also means we never touch unrelated rows — the
+  // repository's bulkDelete is `characterId`-scoped.
+  const idsByCharacter = new Map<string, string[]>()
+  const toResolve = await rawQuery<Array<{ id: string; characterId: string }>>(
+    `SELECT id, characterId FROM memories WHERE id IN (${memoryIds.map(() => '?').join(',')})`,
+    memoryIds
+  )
+  for (const row of toResolve) {
+    const list = idsByCharacter.get(row.characterId) ?? []
+    list.push(row.id)
+    idsByCharacter.set(row.characterId, list)
+  }
+
+  let deleted = 0
+  for (const [characterId, ids] of idsByCharacter) {
+    deleted += await repos.memories.bulkDelete(characterId, ids)
+  }
+
+  const logFields = {
+    requested: memoryIds.length,
+    deleted,
+    neighboursTouched,
+    charactersAffected: charactersAffected.size,
+    durationMs: Date.now() - startedAt,
+  }
+  if (neighboursTouched >= BATCH_DELETE_NEIGHBOUR_WARN) {
+    logger.warn('[MemoryGate] deleteMemoriesWithUnlinkBatch touched an unusually large neighbour set', logFields)
+  }
+
+  return deleted
 }
 
 // =============================================================================

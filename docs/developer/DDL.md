@@ -68,22 +68,59 @@ Periodic `PRAGMA wal_checkpoint(PASSIVE)` runs every 5 minutes. `PRAGMA optimize
 
 **Always use the Quilltap CLI** — never raw `sqlite3`.
 
+### High-level subcommands (preferred)
+
+These auto-pick the right database, resolve characters/chats/projects by name, and skip the JOIN/PRAGMA hunting that bare SQL forces.
+
 ```bash
-# Main database
-npx quilltap db --tables                           # List tables
-npx quilltap db "SELECT COUNT(*) FROM characters;" # Run a query
-npx quilltap db --repl                             # Interactive REPL
+# Schema (instead of PRAGMA table_info)
+npx quilltap db schema                          # Tables grouped by domain
+npx quilltap db schema chat_messages            # Columns, FKs, indexes, DDL link
+npx quilltap db schema --grep memory            # Search tables/columns by substring
+
+# Resolve by name → UUID (fuzzy; checks character aliases too)
+npx quilltap db find character Friday
+npx quilltap db find chat "physical prompts"
+npx quilltap db find project "Quilltap"
+
+# Drill-down — pass a name OR a UUID; the CLI does the right thing
+npx quilltap db chats --character Friday                    # Containing a character
+npx quilltap db chats --project "Quilltap"                  # In a project
+npx quilltap db messages --chat <id|title> --last 50 --full
+npx quilltap db logs --chat <id|title>                      # LLM logs for a chat
+npx quilltap db logs --message <id>                         # LLM logs for one message
+npx quilltap db logs --character <id|name>                  # LLM logs for a character
+npx quilltap db logs --tail 20                              # Most recent LLM logs
+npx quilltap db memories --character Friday [--about Amy] [--source AUTO|MANUAL]
+
+# Single records, full body
+npx quilltap db message <id>                                # Full chat-message content
+npx quilltap db log <id> [--field request|response|both]    # Full LLM request/response
+
+# Add --json to any of the above for machine-readable output.
+```
+
+### Low-level (still supported)
+
+```bash
+npx quilltap db --tables                           # List tables in active DB
+npx quilltap db "SELECT COUNT(*) FROM characters;" # Run arbitrary SQL
+npx quilltap db --repl                             # Interactive REPL (.cols, .find shortcuts)
+npx quilltap db --count chat_messages              # Row count
 
 # LLM logs database
 npx quilltap db --llm-logs --tables
 npx quilltap db --llm-logs "SELECT * FROM llm_logs ORDER BY createdAt DESC LIMIT 5;"
 
+# Mount-index database
+npx quilltap db --mount-points --tables
+
 # With passphrase (if set)
 npx quilltap db --passphrase <pass> --tables
 QUILLTAP_DB_PASSPHRASE=secret npx quilltap db --tables
 
-# Custom data directory
-npx quilltap db --data-dir /path/to/data --tables
+# Custom data directory (pass instance root, not its data/ subdir)
+npx quilltap db --data-dir /path/to/instance --tables
 
 # Instance lock management
 npx quilltap db --lock-status
@@ -733,6 +770,7 @@ CREATE INDEX "idx_memories_characterId" ON "memories" ("characterId");
 CREATE INDEX "idx_memories_chatId" ON "memories" ("chatId");
 CREATE INDEX "idx_memories_createdAt" ON "memories" ("createdAt" DESC);
 CREATE INDEX "idx_memories_projectId" ON "memories" ("projectId");
+CREATE INDEX "idx_memories_reinforcedImportance" ON "memories" ("reinforcedImportance" DESC);
 ```
 
 `aboutCharacterId` semantics: the character the memory is *about*. Three buckets are valid:

@@ -75,6 +75,53 @@ npx quilltap db --llm-logs --tables
 npx quilltap db --data-dir /path/to/data --tables
 ```
 
+### Tidying Up the Premises
+
+From time to time — particularly after a great churn of message deletion, log pruning, or document-store reshuffling — the databases will accumulate unused pages and grow stale query-planner statistics. A spot of housekeeping reclaims the disk space and restores the planner's wits:
+
+```bash
+# VACUUM + ANALYZE + PRAGMA optimize on every database
+npx quilltap db optimize
+
+# Or operate on a single database
+npx quilltap db optimize main
+npx quilltap db optimize llm-logs
+npx quilltap db optimize mount-points
+```
+
+The command refuses to proceed while a Quilltap instance still has the database in its grasp — VACUUM rewrites the entire file, an operation which brooks no concurrent writers. Stop the running instance first (or, in the case of a stale lock left behind by a previous crash, consult `quilltap db --lock-status` and `--lock-clean`).
+
+### Taking a Snapshot Without Stopping the Server
+
+When you want a frozen copy of the encrypted databases — for an off-host backup, for forensic spelunking, or simply for the comfort of having a known-good moment recorded — `quilltap db backup` will oblige without asking you to close the application:
+
+```bash
+# Snapshot all three databases to a fresh timestamped directory under data/backups/
+npx quilltap db backup
+
+# Snapshot only one, to a directory of your choosing
+npx quilltap db backup main --out /tmp/qtap-snap
+npx quilltap db backup llm-logs --out ~/Desktop/llm-logs-snap
+```
+
+Unlike `optimize`, the snapshot operation is **safe alongside a running instance**. Behind the scenes it forces a Write-Ahead-Log checkpoint, takes a brief exclusive lock on the source database, copies the encrypted file byte-for-byte to the destination, and releases the lock — typically a matter of milliseconds for any database of reasonable size. The destination inherits the source's encryption key transparently (the pages are already encrypted), so the snapshot opens with the same `.dbkey` and passphrase as the original. After each copy, Quilltap re-opens the snapshot with the same key and runs `PRAGMA quick_check` to ensure it really is readable; any verification failure halts the operation with a clear complaint.
+
+The default destination is `<dataDir>/backups/<ISO-timestamp>/`, so successive runs never collide. Pass `--out <dir>` to send the snapshot elsewhere. `--json` emits per-target source/dest paths, byte sizes, and durations for scripts that want to know exactly what happened.
+
+### Online Health Checks
+
+Closely related, and equally safe alongside a running instance: `quilltap db integrity` runs SQLite's structural `integrity_check` pragma together with SQLCipher's `cipher_integrity_check` pragma, which together catch both ordinary corruption and any encryption-layer mischief.
+
+```bash
+# Check all three databases
+npx quilltap db integrity
+
+# Check just one
+npx quilltap db integrity mount-points
+```
+
+Read-only by construction: the command opens each database in read-only mode and may be run whenever you please, server or no server. Exit codes are deliberate — `0` for clean, `1` for any reported issue, `2` if a database could not be opened at all — so a nightly cron entry can usefully alert you on anything that isn't a clean pass. The startup integrity check (see *What Runs Automatically* below) is the same family of pragmas, performed automatically; this is the same check, on demand.
+
 ## Three-Database Architecture
 
 Quilltap stores your data across three separate database files:

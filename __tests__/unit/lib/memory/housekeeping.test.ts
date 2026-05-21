@@ -11,8 +11,19 @@ import { describe, expect, it, jest, beforeEach } from '@jest/globals'
 // mocked in jest.setup.ts (setupFilesAfterEnv runs AFTER test-level jest.mock).
 // We reach into those mocks via jest.requireMock below.
 
-import { runHousekeeping } from '@/lib/memory/housekeeping'
+// memory-gate's deleteMemoriesWithUnlinkBatch is the chokepoint that
+// runHousekeeping calls. Stub it to mirror the legacy bulkDelete contract
+// (returns the count of IDs deleted) so we don't need a real DB.
+jest.mock('@/lib/memory/memory-gate', () => ({
+  __esModule: true,
+  deleteMemoriesWithUnlinkBatch: jest.fn(),
+}))
+
 import type { Memory } from '@/lib/schemas/types'
+
+// Loaded inside `jest.isolateModules` in beforeEach so the mocks above are
+// guaranteed to apply to housekeeping's transitive imports.
+let runHousekeeping: typeof import('@/lib/memory/housekeeping').runHousekeeping
 
 
 function makeMemory(overrides: Partial<Memory> = {}): Memory {
@@ -92,6 +103,17 @@ describe('housekeeping', () => {
 
     mockMemoriesRepo.bulkDelete.mockImplementation(((_characterId: string, ids: string[]) =>
       Promise.resolve(ids.length)) as any)
+
+    const gateMock = jest.requireMock('@/lib/memory/memory-gate') as {
+      deleteMemoriesWithUnlinkBatch: jest.Mock
+    }
+    gateMock.deleteMemoriesWithUnlinkBatch.mockImplementation(((ids: string[]) =>
+      Promise.resolve(ids.length)) as any)
+
+    jest.isolateModules(() => {
+      const mod = require('@/lib/memory/housekeeping') as typeof import('@/lib/memory/housekeeping')
+      runHousekeeping = mod.runHousekeeping
+    })
   })
 
   it('defaults maxMemories to 2000', async () => {
