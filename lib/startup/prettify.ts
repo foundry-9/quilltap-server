@@ -181,6 +181,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'reabsorb-leftover-project-files-v1': "Re-absorbing leftover project files",
   'relink-files-to-mount-blobs-v1': 'Re-linking files to their mount-blob shims',
   'add-doc-mount-file-links-v1': 'Reorganising the document index so a single file may inhabit several shelves at once',
+  'repair-doc-mount-file-link-folderids-v1': 'Restoring each filed document to its proper drawer',
   'add-uncensored-image-description-profile-field-v1': 'Making room for a more candid set of eyes when describing photographs',
   'migrate-character-photos-to-vault-v1': "Hanging each character's photographs in their own vault",
   'provision-lantern-backgrounds-mount-v1': "Provisioning the Lantern's backgrounds mount",
@@ -194,6 +195,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'fix-memory-timestamps-from-source-v1': 'Mending memory timestamps from their source messages',
   'align-about-character-id-v1': 'Aligning memory authorship by name presence',
   'align-about-character-id-v2': 'Aligning memory authorship with the holder-dominance rule',
+  'add-memories-reinforced-importance-index-v1': 'Sharpening the memory ranking so the salient ones float to the top',
+  'repair-dangling-related-memory-edges-v1': 'Pruning phantom links from the memory graph',
 
   // Logs
   'move-llm-logs-to-separate-db-v1': 'Relocating LLM logs to their own dossier',

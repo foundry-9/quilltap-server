@@ -14,6 +14,6 @@
     - `npx tsc`
     - `npm run test:unit`
 
-8. If (and only if) either the Electron source or the Next.js source has changed in any way, run `scripts/update_version.sh` to update the version number of the application.
+8. If (and only if) either the Electron source or the Next.js source or the quilltap CLI package source has changed in any way, run `scripts/update_version.sh` to update the version number of the application.
 9. Please don't credit yourself in the commit message.
 10. After this, you can commit.

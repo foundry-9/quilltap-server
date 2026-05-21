@@ -262,6 +262,33 @@ jest.mock('@/lib/repositories/factory', () => ({
   clearUserRepositoryCache: jest.fn(),
 }))
 
+// Mock the low-level database manager so test files that import code paths
+// touching `rawQuery` (e.g. the memory-deletion chokepoint introduced in 4.5)
+// don't spin up the real SQLite backend and trip on jsdom's setInterval
+// returning a number instead of a Timeout. Tests that need a specific
+// rawQuery response can override this with `jest.requireMock(...).rawQuery.mockResolvedValueOnce(...)`.
+jest.mock('@/lib/database/manager', () => ({
+  __esModule: true,
+  rawQuery: jest.fn().mockResolvedValue([]),
+  registerBlobColumns: jest.fn().mockResolvedValue(undefined),
+  getDatabase: jest.fn(),
+  getDatabaseAsync: jest.fn(),
+  initializeDatabase: jest.fn(),
+  isDatabaseInitialized: jest.fn().mockReturnValue(false),
+  isDatabaseConnected: jest.fn().mockResolvedValue(false),
+  closeDatabase: jest.fn().mockResolvedValue(undefined),
+  getCollection: jest.fn(),
+  ensureCollection: jest.fn().mockResolvedValue(undefined),
+  listCollections: jest.fn().mockResolvedValue([]),
+  getBackendType: jest.fn().mockReturnValue(null),
+  getBackendCapabilities: jest.fn().mockReturnValue(null),
+  supportsCapability: jest.fn().mockReturnValue(false),
+  healthCheck: jest.fn(),
+  withTransaction: jest.fn(),
+  _resetForTesting: jest.fn(),
+  _setBackendForTesting: jest.fn(),
+}))
+
 // Mock file storage manager - used by cascade-delete and other modules
 jest.mock('@/lib/file-storage/manager', () => {
   return {

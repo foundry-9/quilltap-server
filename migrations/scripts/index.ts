@@ -277,6 +277,12 @@ import { addUncensoredImageDescriptionProfileFieldMigration } from './add-uncens
 import { migrateCharacterPhotosToVaultMigration } from './migrate-character-photos-to-vault';
 // Add opaqueContent column to chat_messages (per-chat opaque-anywhere Staff voicing)
 import { addOpaqueContentFieldMigration } from './add-opaque-content-field';
+// Repair drifted folderId on doc_mount_file_links rows
+import { repairDocMountFileLinkFolderIdsMigration } from './repair-doc-mount-file-link-folderids';
+// Add reinforcedImportance index on memories (CLI default sort)
+import { addMemoriesReinforcedImportanceIndexMigration } from './add-memories-reinforced-importance-index-v1';
+// Scrub dangling relatedMemoryIds left by historical deletion paths
+import { repairDanglingRelatedMemoryEdgesV1Migration } from './repair-dangling-related-memory-edges-v1';
 
 /**
  * All available migrations.
@@ -549,6 +555,12 @@ export const migrations: Migration[] = [
   migrateCharacterPhotosToVaultMigration,
   // Add opaqueContent column to chat_messages (per-chat opaque-anywhere Staff voicing)
   addOpaqueContentFieldMigration,
+  // Repair drifted folderId on doc_mount_file_links rows
+  repairDocMountFileLinkFolderIdsMigration,
+  // Add reinforcedImportance index on memories (CLI default sort)
+  addMemoriesReinforcedImportanceIndexMigration,
+  // Scrub dangling relatedMemoryIds left by historical deletion paths
+  repairDanglingRelatedMemoryEdgesV1Migration,
 ];
 
 export {
@@ -806,5 +818,11 @@ export {
   migrateCharacterPhotosToVaultMigration,
   // Add opaqueContent column to chat_messages (per-chat opaque-anywhere Staff voicing)
   addOpaqueContentFieldMigration,
+  // Repair drifted folderId on doc_mount_file_links rows
+  repairDocMountFileLinkFolderIdsMigration,
+  // Add reinforcedImportance index on memories (CLI default sort)
+  addMemoriesReinforcedImportanceIndexMigration,
+  // Scrub dangling relatedMemoryIds left by historical deletion paths
+  repairDanglingRelatedMemoryEdgesV1Migration,
 };
 

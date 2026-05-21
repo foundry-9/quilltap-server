@@ -17,6 +17,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import * as posixPath from 'path/posix';
 import { logger } from '@/lib/logger';
 import {
   DocMountFile,
@@ -30,6 +31,76 @@ import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 import { generateDDL, extractSchemaMetadata } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
+
+// Minimal subset of better-sqlite3's Database that the inline folder helper
+// uses. Avoids dragging the type into every link* method signature.
+type SyncDb = {
+  prepare(sql: string): {
+    get(...params: unknown[]): unknown;
+    run(...params: unknown[]): unknown;
+  };
+};
+
+/**
+ * Walk every segment of `folderPath` (relative, POSIX-style) and find-or-create
+ * a `doc_mount_folders` row for each, returning the leaf folder's id (or null
+ * when `folderPath` is empty / `.` / `/`).
+ *
+ * Runs inline against the raw mount-index DB handle so it can be invoked
+ * inside the `db.transaction(...)` blocks below without crossing an async
+ * boundary — folder creation participates in the same transaction as the
+ * link write, so a failed link insert rolls the folder rows back too.
+ *
+ * Mirrors the segment-by-segment idempotent walk in
+ * `lib/mount-index/folder-paths.ts#ensureFolderPath`, plus an
+ * `ON CONFLICT`-style fallback for races.
+ */
+function ensureLinkFolderId(
+  db: SyncDb,
+  mountPointId: string,
+  relativePath: string,
+  now: string,
+): string | null {
+  const dir = posixPath.dirname(relativePath || '');
+  if (!dir || dir === '.' || dir === '/') return null;
+
+  const normalized = dir.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/^\/+|\/+$/g, '');
+  if (!normalized) return null;
+
+  const segments = normalized.split('/').filter((s) => s.length > 0);
+  if (segments.length === 0) return null;
+
+  const findStmt = db.prepare(
+    'SELECT id FROM doc_mount_folders WHERE mountPointId = ? AND path = ?'
+  );
+  const insertStmt = db.prepare(
+    `INSERT INTO doc_mount_folders (id, mountPointId, parentId, name, path, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  );
+
+  let currentParentId: string | null = null;
+  let currentPath = '';
+
+  for (const segment of segments) {
+    currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+    let row = findStmt.get(mountPointId, currentPath) as { id: string } | undefined;
+    if (!row) {
+      const id = randomUUID();
+      try {
+        insertStmt.run(id, mountPointId, currentParentId, segment, currentPath, now, now);
+        currentParentId = id;
+        continue;
+      } catch (err) {
+        // Re-look up after conflict (UNIQUE(mountPointId, path)).
+        row = findStmt.get(mountPointId, currentPath) as { id: string } | undefined;
+        if (!row) throw err;
+      }
+    }
+    currentParentId = row.id;
+  }
+
+  return currentParentId;
+}
 
 export type FileType = DocMountFile['fileType'];
 export type FileSource = DocMountFile['source'];
@@ -474,6 +545,20 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         };
       }
 
+      // Derive folderId from relativePath as the single source of truth.
+      // Any caller-supplied input.folderId is informational and ignored —
+      // the relativePath wins, and missing folder rows are created here so
+      // doc_mount_folders stays in sync with what the link table claims.
+      const folderId = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      if (input.folderId !== undefined && input.folderId !== folderId) {
+        logger.warn('linkBlobContent: caller folderId disagrees with relativePath; using derived', {
+          mountPointId: input.mountPointId,
+          relativePath: input.relativePath,
+          callerFolderId: input.folderId,
+          derivedFolderId: folderId,
+        });
+      }
+
       // Upsert the blob bytes for this fileId. If the blob already exists
       // (because the content row was reused), we keep the existing bytes
       // — they're identical by sha. Only insert if missing.
@@ -516,7 +601,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
-          fileRow.id, input.fileName, input.folderId,
+          fileRow.id, input.fileName, folderId,
           input.originalFileName, input.originalMimeType,
           description, descriptionUpdatedAt,
           extractedText, extractedTextSha256, extractionStatus,
@@ -541,7 +626,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              0, ?, ?, ?
            )`
         ).run(
-          linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, input.folderId,
+          linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, folderId,
           input.originalFileName, input.originalMimeType,
           description, descriptionUpdatedAt,
           conversionStatus,
@@ -616,6 +701,17 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         ).run(documentId, fileRow.id, input.content, input.contentSha256, input.plainTextLength, now, now);
       }
 
+      // Derive folderId from relativePath (see linkBlobContent for rationale).
+      const folderId = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      if (input.folderId !== undefined && input.folderId !== folderId) {
+        logger.warn('linkDocumentContent: caller folderId disagrees with relativePath; using derived', {
+          mountPointId: input.mountPointId,
+          relativePath: input.relativePath,
+          callerFolderId: input.folderId,
+          derivedFolderId: folderId,
+        });
+      }
+
       const existingLink = db.prepare(
         `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ?`
       ).get(input.mountPointId, input.relativePath) as { id: string } | undefined;
@@ -631,7 +727,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
-          fileRow.id, input.fileName, input.folderId,
+          fileRow.id, input.fileName, folderId,
           input.plainTextLength,
           now, now, linkId
         );
@@ -648,7 +744,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              0, ?, ?, ?
            )`
         ).run(
-          linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, input.folderId,
+          linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, folderId,
           input.plainTextLength, now, now, now
         );
       }
@@ -704,6 +800,20 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         };
       }
 
+      // Derive folderId from relativePath (see linkBlobContent for rationale).
+      // The scanner calls this without passing folderId at all, so this
+      // derivation is the only place new filesystem-scan rows get a sensible
+      // folderId.
+      const folderId = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      if (input.folderId !== undefined && input.folderId !== null && input.folderId !== folderId) {
+        logger.warn('linkFilesystemFile: caller folderId disagrees with relativePath; using derived', {
+          mountPointId: input.mountPointId,
+          relativePath: input.relativePath,
+          callerFolderId: input.folderId,
+          derivedFolderId: folderId,
+        });
+      }
+
       const existingLink = db.prepare(
         `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ?`
       ).get(input.mountPointId, input.relativePath) as { id: string } | undefined;
@@ -723,7 +833,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
-          fileRow.id, input.fileName, input.folderId ?? null,
+          fileRow.id, input.fileName, folderId,
           conversionStatus, input.conversionError ?? null,
           plainTextLength, chunkCount,
           input.lastModified, now, linkId
@@ -741,7 +851,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              ?, ?, ?, ?
            )`
         ).run(
-          linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, input.folderId ?? null,
+          linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, folderId,
           conversionStatus, input.conversionError ?? null, plainTextLength,
           chunkCount, input.lastModified, now, now
         );

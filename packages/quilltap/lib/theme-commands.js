@@ -1076,6 +1076,7 @@ ${c.bold}Registry Operator Commands:${c.reset}
 
 ${c.bold}Options:${c.reset}
   --data-dir <path>            Override data directory
+  -i, --instance <name>        Use a registered instance (see 'quilltap instances')
   -h, --help                   Show this help
 
 ${c.bold}Examples:${c.reset}
@@ -1098,6 +1099,7 @@ ${c.bold}Examples:${c.reset}
 
 async function themesCommand(args) {
   let dataDirOverride = '';
+  let instanceName = '';
   let showHelp = false;
   let command = '';
   const positional = [];
@@ -1109,6 +1111,7 @@ async function themesCommand(args) {
   while (i < args.length) {
     switch (args[i]) {
       case '--data-dir': case '-d': dataDirOverride = args[++i]; break;
+      case '--instance': case '-i': instanceName = args[++i]; break;
       case '--output': case '-o': outputPath = args[++i]; break;
       case '--help': case '-h': showHelp = true; break;
       default:
@@ -1134,6 +1137,21 @@ async function themesCommand(args) {
   if (showHelp || !command) {
     printHelp();
     process.exit(0);
+  }
+
+  if (instanceName && dataDirOverride) {
+    console.error('Error: Specify either --instance or --data-dir, not both.');
+    process.exit(1);
+  }
+  if (instanceName) {
+    try {
+      const { resolveInstance } = require('./instances');
+      const inst = resolveInstance(instanceName);
+      dataDirOverride = inst.path;
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
   }
 
   switch (command) {
