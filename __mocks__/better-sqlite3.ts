@@ -135,4 +135,13 @@ class MockDatabase {
   };
 }
 
+// The real better-sqlite3 module uses CJS `module.exports = Database`, so
+// `require('better-sqlite3')` returns the constructor directly. Mirror that
+// shape so plain `require()` callers (e.g. the quilltap CLI's db-helpers.js
+// fallback that does `require('better-sqlite3')` after the
+// `better-sqlite3-multiple-ciphers` attempt fails) get a usable constructor
+// rather than `{ default: ... }`. TS `import Database from 'better-sqlite3'`
+// callers still keep working via esModuleInterop.
 export default MockDatabase;
+(module.exports as unknown) = MockDatabase;
+(module.exports as { default: typeof MockDatabase }).default = MockDatabase;
