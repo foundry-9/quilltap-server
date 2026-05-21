@@ -384,6 +384,13 @@ export class OpenAIProvider implements TextProvider {
       }
     }
 
+    if (params.stop) {
+      const stopArr = Array.isArray(params.stop) ? params.stop : [params.stop];
+      if (stopArr.length > 0) {
+        requestParams.stop = stopArr;
+      }
+    }
+
     return requestParams as Omit<OpenAI.Responses.ResponseCreateParamsNonStreaming, 'stream'>;
   }
 

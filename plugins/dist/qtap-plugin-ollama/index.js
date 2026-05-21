@@ -9375,7 +9375,8 @@ var OllamaProvider = class {
       options: {
         temperature: params.temperature ?? 0.7,
         num_predict: params.maxTokens ?? 4096,
-        top_p: params.topP ?? 1
+        top_p: params.topP ?? 1,
+        stop: params.stop
       }
     };
     if (params.tools && params.tools.length > 0) {

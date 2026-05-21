@@ -173,6 +173,7 @@ export class OllamaProvider implements TextProvider {
         temperature: params.temperature ?? 0.7,
         num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
+        stop: params.stop,
       },
     };
     // Add tools if provided

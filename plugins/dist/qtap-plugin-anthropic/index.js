@@ -15292,6 +15292,18 @@ var AnthropicProvider = class {
       }
       requestParams.tools = tools;
     }
+    if (params.stop) {
+      const stopArr = (Array.isArray(params.stop) ? params.stop : [params.stop]).filter(Boolean);
+      if (stopArr.length > 0) {
+        requestParams.stop_sequences = stopArr.slice(0, 4);
+        if (stopArr.length > 4) {
+          logger.warn("Anthropic accepts at most 4 stop sequences; truncating", {
+            context: "AnthropicProvider.sendMessage",
+            requested: stopArr.length
+          });
+        }
+      }
+    }
     const response = await client.messages.create(requestParams);
     const content = response.content[0];
     const rawUsage = response.usage;
@@ -15375,6 +15387,18 @@ var AnthropicProvider = class {
         };
       }
       requestParams.tools = tools;
+    }
+    if (params.stop) {
+      const stopArr = (Array.isArray(params.stop) ? params.stop : [params.stop]).filter(Boolean);
+      if (stopArr.length > 0) {
+        requestParams.stop_sequences = stopArr.slice(0, 4);
+        if (stopArr.length > 4) {
+          logger.warn("Anthropic accepts at most 4 stop sequences; truncating", {
+            context: "AnthropicProvider.streamMessage",
+            requested: stopArr.length
+          });
+        }
+      }
     }
     const stream = await client.messages.create(requestParams);
     let totalInputTokens = 0;

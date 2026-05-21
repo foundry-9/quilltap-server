@@ -1,6 +1,6 @@
 # Feature: Simple JSON Tool Calls (pseudo-tool replacement)
 
-**Status:** Proposal / Not Implemented
+**Status:** Implemented (v4.6-dev). The Zod refactor of tool definitions called for in Phase 1 is deferred to a follow-up commit; `describeToolSignature` walks the existing OpenAI-shape `parameters` JSON, so the feature works fully without it.
 **Owner:** Charlie
 **Scope:** Replace the `text-block` pseudo-tool format with a smaller, more robustly-parsed JSON-in-XML-tag format for models that lack native function calling. Native function-calling providers are unaffected.
 
@@ -21,7 +21,7 @@ This feature replaces the `text-block` strategy with a `simple-json` strategy de
 
 ### Emission format
 
-```
+```xml
 <tool_call>
 {"name": "search", "arguments": {"query": "user's favorite food"}}
 </tool_call>
@@ -62,7 +62,7 @@ This is enforced softly by prompt and hard by stop sequence. If the model emits 
 
 Tool results are returned to the model in a symmetric `<tool_result>` block, mirroring the `<tool_call>` format the model just emitted:
 
-```
+```xml
 <tool_result name="search">
 {"matches": [{"title": "Pizza preference", "excerpt": "Charlie mentioned he prefers...", "score": 0.87}]}
 </tool_result>
@@ -91,7 +91,7 @@ The `TextToolStrategy` interface in `text-tool-loop.service.ts` gains a `formatT
 
 Instead of 15 hand-written prompt blurbs, `buildSimpleJsonToolInstructions(enabledTools)` walks the tool registry and emits a uniform schema for each enabled tool:
 
-```
+```text
 Available tools:
 
 - search(query: string, limit?: number): Search the Scriptorium for information about past conversations, preferences, or facts.
@@ -127,7 +127,7 @@ The profile-level override (`pseudoToolMode` or equivalent setting) gains a new 
 ## Files to modify
 
 1. `lib/services/chat-message/pseudo-tool.service.ts` — add `buildSimpleJsonSystemInstructions(...)`, `parseSimpleJsonFromResponse(...)`, `stripSimpleJsonFromResponse(...)`, `logSimpleJsonToolUsage(...)`. Keep the existing `text-block` exports for the rollout period.
-2. `lib/services/chat-message/text-tool-loop.service.ts` — add `'simple-json'` to the strategy-name union. Extend `TextToolStrategy` with `formatToolResult(toolName: string, content: string): string`. Replace the inline `\`[Tool Result: ${toolMsg.toolName}]\\n${toolMsg.content}\`` template inside the continuation-message-building loop with a call to `strategy.formatToolResult(toolMsg.toolName, toolMsg.content)`. Provide the existing template as the `text-block` strategy's implementation so its behavior is unchanged.
+2. `lib/services/chat-message/text-tool-loop.service.ts` — add `'simple-json'` to the strategy-name union. Extend `TextToolStrategy` with `formatToolResult(toolName: string, content: string): string`. Replace the inline `[Tool Result: ${toolMsg.toolName}]\\n${toolMsg.content}` template inside the continuation-message-building loop with a call to `strategy.formatToolResult(toolMsg.toolName, toolMsg.content)`. Provide the existing template as the `text-block` strategy's implementation so its behavior is unchanged.
 3. `lib/services/chat-message/streaming.service.ts` — extend `StreamOptions` with `stop?: string[]`. Pass through to `provider.streamMessage(...)`.
 4. Each provider adapter under `lib/providers/` — accept the new `stop` option. For most providers this is a one-line passthrough; document the mapping in a comment (`stop` → `stop_sequences` for Anthropic, → `stopSequences` for Gemini, → `stop` for OpenAI-compatible and Ollama).
 5. `lib/services/chat-message/orchestrator.service.ts` — when the active strategy is `'simple-json'`, call `runTextToolPass` with a strategy object that returns `'simple-json'` as `name` and passes `stop: ['</tool_call>']` into the continuation's `streamMessage` call. The initial pre-loop stream also needs the stop sequence — that's a small change near where `streamMessage` is first invoked for the assistant turn.

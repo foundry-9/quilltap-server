@@ -610,7 +610,8 @@ CREATE TABLE "connection_profiles" (
   "maxTokens" INTEGER DEFAULT NULL,
   "supportsImageUpload" INTEGER DEFAULT 0,
   "transport" TEXT NOT NULL DEFAULT 'api',
-  "courierDeltaMode" INTEGER DEFAULT 1
+  "courierDeltaMode" INTEGER DEFAULT 1,
+  "pseudoToolMode" TEXT DEFAULT 'auto'
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);

@@ -311,14 +311,19 @@ export {
 export {
   checkModelSupportsTools,
   shouldUseTextBlockTools,
+  resolveToolMode,
   type ToolMode,
+  type ResolvedToolMode,
 } from './pseudo-tool-support';
 
 export {
   buildNativeToolInstructions,
 } from './native-tool-prompt';
 
-// Text-Block Tool Call Parser (rich text-based tool invocation for all tools)
+// Text-Block Tool Call Parser (legacy `[[TOOL ...]]content[[/TOOL]]` format —
+// kept selectable via `pseudoToolMode === 'text-block'` for compatibility while
+// users migrate to the simple-json surface. Slated for removal in a future
+// version; see lib/tools/legacy/.
 export {
   parseTextBlockCalls,
   convertTextBlockToToolCallRequest,
@@ -326,12 +331,32 @@ export {
   hasTextBlockMarkers,
   mapTextBlockToolName,
   type ParsedTextBlock,
-} from './text-block-parser';
+} from './legacy/text-block-parser';
 
 export {
   buildTextBlockInstructions,
   type TextBlockPromptOptions,
-} from './text-block-prompt';
+} from './legacy/text-block-prompt';
+
+// Simple-JSON Tool Call Parser/Prompt (`<tool_call>{...}</tool_call>` format —
+// the post-flip default for non-native models).
+export {
+  parseSimpleJsonCalls,
+  convertSimpleJsonToToolCallRequest,
+  stripSimpleJsonMarkers,
+  hasSimpleJsonMarkers,
+  mapSimpleJsonToolName,
+  escapeXmlAttribute,
+  SIMPLE_JSON_STOP_SEQUENCES,
+  type ParsedSimpleJsonCall,
+  type SimpleJsonParserTier,
+} from './simple-json-parser';
+
+export {
+  buildSimpleJsonToolInstructions,
+  describeToolSignature,
+  type SimpleJsonPromptOptions,
+} from './simple-json-prompt';
 
 // Document Editing Tools (Scriptorium Phase 3.3)
 export { docReadFileTool, validateDocReadFileInput, type DocReadFileInput, type DocReadFileOutput } from './doc-read-file-tool';

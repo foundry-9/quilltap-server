@@ -116,6 +116,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         allowWebSearch,
         useNativeWebSearch,
         allowToolUse,
+        pseudoToolMode,
         modelClass,
         maxContext,
         sortIndex,
@@ -258,6 +259,13 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           return badRequest('allowToolUse must be a boolean');
         }
         updateData.allowToolUse = allowToolUse;
+      }
+
+      if (pseudoToolMode !== undefined && !isCourier) {
+        if (pseudoToolMode !== 'auto' && pseudoToolMode !== 'native' && pseudoToolMode !== 'simple-json' && pseudoToolMode !== 'text-block') {
+          return badRequest('pseudoToolMode must be one of auto, native, simple-json, text-block');
+        }
+        updateData.pseudoToolMode = pseudoToolMode;
       }
 
       if (modelClass !== undefined) {

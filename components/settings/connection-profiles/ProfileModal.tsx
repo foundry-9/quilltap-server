@@ -690,6 +690,33 @@ export function ProfileModal({
                   Allow tool use (overrides chat and project tool settings when disabled)
                 </label>
               </div>
+              {form.formData.allowToolUse && (
+                <div className="flex flex-col gap-1 ml-6">
+                  <label htmlFor="pseudoToolMode" className="text-sm">
+                    Tool format
+                  </label>
+                  <select
+                    id="pseudoToolMode"
+                    value={form.formData.pseudoToolMode}
+                    onChange={(e) =>
+                      form.setField(
+                        'pseudoToolMode',
+                        e.target.value as 'auto' | 'native' | 'simple-json' | 'text-block',
+                      )
+                    }
+                    className="qt-select w-full max-w-md"
+                    title="How tool calls are framed on the wire. Auto picks the right format for the model; simple-json is the new pseudo-tool surface for models without native function calling; text-block is the legacy format kept for compatibility."
+                  >
+                    <option value="auto">Auto (recommended)</option>
+                    <option value="native">Native function calling</option>
+                    <option value="simple-json">Simple JSON (&lt;tool_call&gt;…)</option>
+                    <option value="text-block">Text-block ([[TOOL ...]]) — legacy</option>
+                  </select>
+                  <p className="qt-text-xs mt-1">
+                    Auto: native for capable models, otherwise simple JSON. Override only if your model needs a particular dialect.
+                  </p>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"

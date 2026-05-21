@@ -326,6 +326,7 @@ export class OpenAICompatibleProvider implements TextProvider {
         temperature: params.temperature ?? 0.7,
         max_tokens: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
+        stop: params.stop,
         stream: true,
         stream_options: { include_usage: true },
       });

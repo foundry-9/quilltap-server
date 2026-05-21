@@ -9528,6 +9528,12 @@ var OpenAIProvider = class {
         requestParams.prompt_cache_retention = "24h";
       }
     }
+    if (params.stop) {
+      const stopArr = Array.isArray(params.stop) ? params.stop : [params.stop];
+      if (stopArr.length > 0) {
+        requestParams.stop = stopArr;
+      }
+    }
     return requestParams;
   }
   /**

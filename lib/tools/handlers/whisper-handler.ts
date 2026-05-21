@@ -10,7 +10,7 @@ import {
   WhisperToolOutput,
   validateWhisperInput,
 } from '../whisper-tool';
-import { stripTextBlockMarkers } from '../text-block-parser';
+import { stripTextBlockMarkers } from '../legacy/text-block-parser';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { canReceiveWhisper } from '@/lib/schemas/chat.types';

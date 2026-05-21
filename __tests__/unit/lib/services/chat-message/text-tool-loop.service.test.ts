@@ -78,16 +78,21 @@ function makeStreaming(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 function makeStrategy(overrides: Partial<{
-  name: 'provider-text-markers' | 'text-block'
+  name: 'provider-text-markers' | 'text-block' | 'simple-json'
   hasMarkers: (r: string) => boolean
   parse: (r: string) => Array<{ name: string; arguments: Record<string, unknown> }>
   strip: (r: string) => string
+  formatToolResult: (toolName: string, content: string) => string
+  stopSequences?: string[]
 }> = {}) {
   return {
     name: 'provider-text-markers' as const,
     hasMarkers: jest.fn((_r: string) => true),
     parse: jest.fn((_r: string) => [{ name: 'doc_open_file', arguments: { path: 'a.md' } }]),
     strip: jest.fn((r: string) => r.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, '').trim()),
+    formatToolResult: jest.fn(
+      (toolName: string, content: string) => `[Tool Result: ${toolName}]\n${content}`,
+    ),
     ...overrides,
   }
 }
@@ -251,6 +256,7 @@ describe('text-tool-loop.service', () => {
         hasMarkers: jest.fn(() => true),
         parse: jest.fn(() => [{ name: 'image', arguments: {} }]),
         strip: stripSpy,
+        formatToolResult: (toolName: string, content: string) => `[Tool Result: ${toolName}]\n${content}`,
       },
       continuationTools: [],
       continuationUseNativeWebSearch: false,
@@ -265,5 +271,52 @@ describe('text-tool-loop.service', () => {
     // strip called twice (slate build + final combined).
     expect(stripSpy).toHaveBeenCalledTimes(2)
     expect(opts.streaming.fullResponse).toBe('foo  bar\n\ncontinuation-response')
+  })
+
+  describe('formatToolResult + stopSequences (simple-json strategy)', () => {
+    it('calls strategy.formatToolResult for each tool result in the continuation slate', async () => {
+      const formatSpy = jest.fn(
+        (toolName: string, content: string) =>
+          `<tool_result name="${toolName}">\n${content}\n</tool_result>`,
+      )
+      const strategy = makeStrategy({ name: 'simple-json', formatToolResult: formatSpy })
+      const opts = makeBaseOpts({ strategy })
+
+      await runTextToolPass(opts as any)
+
+      expect(formatSpy).toHaveBeenCalledTimes(1)
+      expect(formatSpy).toHaveBeenCalledWith('doc_open_file', 'opened a.md')
+
+      const sent = streamMessageCalls[0]!
+      const messages = sent.messages as Array<{ role: string; content: string }>
+      // The synthetic user-role result message uses the strategy's framing,
+      // not the legacy `[Tool Result: ...]` template.
+      expect(messages[2].role).toBe('user')
+      expect(messages[2].content).toBe('<tool_result name="doc_open_file">\nopened a.md\n</tool_result>')
+      expect(messages[2].content).not.toContain('[Tool Result:')
+    })
+
+    it('passes strategy.stopSequences into the continuation streamMessage call', async () => {
+      const strategy = makeStrategy({
+        name: 'simple-json',
+        stopSequences: ['</tool_call>'],
+      })
+      const opts = makeBaseOpts({ strategy })
+
+      await runTextToolPass(opts as any)
+
+      const sent = streamMessageCalls[0]!
+      expect(sent.stop).toEqual(['</tool_call>'])
+    })
+
+    it('passes undefined stop when the strategy does not declare stopSequences', async () => {
+      const strategy = makeStrategy() // legacy text-block / provider-text-markers
+      const opts = makeBaseOpts({ strategy })
+
+      await runTextToolPass(opts as any)
+
+      const sent = streamMessageCalls[0]!
+      expect(sent.stop).toBeUndefined()
+    })
   })
 })

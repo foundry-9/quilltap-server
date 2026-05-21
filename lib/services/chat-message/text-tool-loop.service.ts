@@ -51,7 +51,7 @@ export interface ParsedTextToolCall {
 
 export interface TextToolStrategy {
   /** Identifies the pass for logging and the unsupported-strategy fallthrough. */
-  name: 'provider-text-markers' | 'text-block'
+  name: 'provider-text-markers' | 'text-block' | 'simple-json'
   /** Returns true when the response contains markers this strategy can parse. */
   hasMarkers: (response: string) => boolean
   /** Parses tool calls out of the response. May return an empty array even
@@ -60,6 +60,14 @@ export interface TextToolStrategy {
   /** Removes the strategy's markers from the response. Called once on the
    * pre-continuation text *and* once on the final combined response. */
   strip: (response: string) => string
+  /** Formats a single tool result for inclusion in the continuation slate as
+   * a synthetic `user`-role message. Each strategy frames results in the
+   * style symmetric with the markers it just stripped. */
+  formatToolResult: (toolName: string, content: string) => string
+  /** Optional provider stop sequences to apply to the continuation re-stream.
+   * The orchestrator is responsible for applying them to the *initial* stream;
+   * the loop applies them here for the continuation. */
+  stopSequences?: string[]
 }
 
 export interface RunTextToolPassOptions {
@@ -164,7 +172,7 @@ export async function runTextToolPass(opts: RunTextToolPassOptions): Promise<voi
   for (const toolMsg of results.toolMessages) {
     continuationMessages.push({
       role: 'user',
-      content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`,
+      content: strategy.formatToolResult(toolMsg.toolName, toolMsg.content),
       thoughtSignature: undefined,
       name: undefined,
     })
@@ -189,6 +197,7 @@ export async function runTextToolPass(opts: RunTextToolPassOptions): Promise<voi
       userId,
       messageId: preGeneratedAssistantMessageId,
       chatId,
+      stop: strategy.stopSequences,
     })) {
       if (chunk.content) {
         continuationResponse += chunk.content

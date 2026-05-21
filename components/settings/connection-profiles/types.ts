@@ -51,6 +51,8 @@ export interface ConnectionProfile {
   allowWebSearch?: boolean
   useNativeWebSearch?: boolean
   allowToolUse?: boolean
+  /** Tool-call framing: native, simple-json, text-block, or auto. */
+  pseudoToolMode?: 'auto' | 'native' | 'simple-json' | 'text-block'
   supportsImageUpload?: boolean
   modelClass?: string | null
   maxContext?: number | null
@@ -92,6 +94,7 @@ export interface ProfileFormData {
   isCheap: boolean
   isDangerousCompatible: boolean
   allowToolUse: boolean
+  pseudoToolMode: 'auto' | 'native' | 'simple-json' | 'text-block'
   supportsImageUpload: boolean
   allowWebSearch: boolean
   useNativeWebSearch: boolean
@@ -126,6 +129,7 @@ export const initialFormState: ProfileFormData = {
   isCheap: false,
   isDangerousCompatible: false,
   allowToolUse: true,
+  pseudoToolMode: 'auto',
   supportsImageUpload: false,
   allowWebSearch: false,
   useNativeWebSearch: false,

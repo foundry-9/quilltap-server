@@ -130,6 +130,8 @@ export interface RunPrimaryStreamOptions {
   actualTools: unknown[]
   useNativeWebSearch: boolean
   previousResponseId?: string
+  /** Optional provider stop sequences (e.g. simple-json's `</tool_call>`). */
+  stop?: string[]
   preGeneratedAssistantMessageId: string
   attachedFiles: AttachedFile[]
   originalMessage?: string
@@ -158,7 +160,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
   const {
     chatId, userId, chat, character, characterParticipant, userParticipantId, isMultiCharacter,
     formattedMessages, modelParams, actualTools, useNativeWebSearch,
-    previousResponseId, preGeneratedAssistantMessageId,
+    previousResponseId, stop, preGeneratedAssistantMessageId,
     attachedFiles, originalMessage, connectionProfile,
     streaming, controller, encoder, preservePartialOnError,
     repos,
@@ -184,6 +186,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
       chatId,
       characterId: character.id,
       previousResponseId,
+      stop,
     })) {
       if (chunk.content) {
         if (!streaming.hasStartedStreaming) {

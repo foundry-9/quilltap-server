@@ -627,6 +627,11 @@
         "useNativeWebSearch": { "type": "boolean" },
         "isDangerousCompatible": { "type": "boolean" },
         "allowToolUse": { "type": "boolean" },
+        "pseudoToolMode": {
+          "type": "string",
+          "enum": ["auto", "native", "simple-json", "text-block"],
+          "description": "How tool calls are framed on the wire. auto picks by model capability; simple-json is the modern <tool_call> JSON-in-XML format; text-block is the legacy [[TOOL ...]] format."
+        },
         "sortIndex": { "type": "integer", "minimum": 0 },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
         "totalTokens": { "type": "integer", "minimum": 0 },

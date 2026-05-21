@@ -28775,7 +28775,8 @@ var OpenRouterProvider = class {
       input,
       temperature: params.temperature ?? 0.7,
       maxOutputTokens: params.maxTokens ?? 4096,
-      topP: params.topP ?? 1
+      topP: params.topP ?? 1,
+      stop: params.stop
     };
     if (params.webSearchEnabled) {
       requestParams.tools = requestParams.tools || [];
@@ -28906,7 +28907,8 @@ var OpenRouterProvider = class {
       stream: true,
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 4096,
-      top_p: params.topP ?? 1
+      top_p: params.topP ?? 1,
+      stop: params.stop
     };
     if (params.tools && params.tools.length > 0) {
       body.tools = params.tools.map((tool) => ({

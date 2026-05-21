@@ -52,6 +52,7 @@ function sanitizeConnectionProfile(profile: Record<string, unknown>): Record<str
     modelName: profile.modelName,
     baseUrl: profile.baseUrl || null,
     allowToolUse: profile.allowToolUse ?? true,
+    pseudoToolMode: profile.pseudoToolMode ?? 'auto',
     allowWebSearch: profile.allowWebSearch ?? false,
     useNativeWebSearch: profile.useNativeWebSearch ?? false,
     isDefault: profile.isDefault ?? false,

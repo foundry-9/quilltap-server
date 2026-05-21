@@ -53,11 +53,19 @@ import {
   buildNativeToolSystemInstructions,
   determineEnabledToolOptions,
   checkShouldUseTextBlockTools,
+  checkResolvedToolMode,
   buildTextBlockSystemInstructions,
+  buildSimpleJsonSystemInstructions,
   parseTextBlocksFromResponse,
   stripTextBlockMarkersFromResponse,
+  parseSimpleJsonFromResponse,
+  stripSimpleJsonFromResponse,
+  hasSimpleJsonInResponse,
   determineTextBlockToolOptions,
   logTextBlockToolUsage,
+  logSimpleJsonToolUsage,
+  formatSimpleJsonToolResult,
+  SIMPLE_JSON_STOP,
 } from './pseudo-tool.service'
 import {
   hasTextBlockMarkers,
@@ -712,14 +720,30 @@ async function processMessage(
     useNativeWebSearch = builtTools.useNativeWebSearch
   }
 
-  const useTextBlockTools = !isEffectiveCourier && checkShouldUseTextBlockTools(modelSupportsNativeTools)
+  const profilePseudoToolMode = (streamingState.effectiveProfile as { pseudoToolMode?: 'auto' | 'native' | 'simple-json' | 'text-block' }).pseudoToolMode
+  const resolvedToolMode = isEffectiveCourier
+    ? 'native' // Courier sends no tools anyway; the value is unused.
+    : checkResolvedToolMode(modelSupportsNativeTools, profilePseudoToolMode)
+  const useTextBlockTools = !isEffectiveCourier && resolvedToolMode !== 'native'
   const actualTools = useTextBlockTools ? [] : tools
 
-  // Build tool instructions (text-block or native tool rules)
+  // Build tool instructions (simple-json, text-block, or native tool rules)
   let toolInstructions: string | undefined
   if (isEffectiveCourier) {
     toolInstructions = undefined
-  } else if (useTextBlockTools) {
+  } else if (resolvedToolMode === 'simple-json') {
+    const enabledOptions = determineTextBlockToolOptions(
+      imageProfileId,
+      streamingState.effectiveProfile.allowWebSearch,
+      isMultiCharacter,
+      !!chat.projectId,
+      helpToolsEnabled,
+      canDressThemselves,
+      canCreateOutfits
+    )
+    toolInstructions = buildSimpleJsonSystemInstructions(enabledOptions)
+    logSimpleJsonToolUsage(streamingState.effectiveProfile.provider, streamingState.effectiveProfile.modelName, enabledOptions)
+  } else if (resolvedToolMode === 'text-block') {
     const textBlockOptions = determineTextBlockToolOptions(
       imageProfileId,
       streamingState.effectiveProfile.allowWebSearch,
@@ -734,6 +758,12 @@ async function processMessage(
   } else if (actualTools.length > 0) {
     toolInstructions = buildNativeToolSystemInstructions()
   }
+
+  // Provider stop sequences (currently only simple-json needs them). Applied
+  // to both the initial primary stream and the continuation re-stream so the
+  // model is hard-cut at the closing `</tool_call>` tag.
+  const initialStopSequences: string[] | undefined =
+    resolvedToolMode === 'simple-json' ? SIMPLE_JSON_STOP : undefined
 
   // Build message context
   const modelParams = streamingState.effectiveProfile.parameters as Record<string, unknown>
@@ -1044,6 +1074,7 @@ async function processMessage(
     actualTools,
     useNativeWebSearch,
     previousResponseId,
+    stop: initialStopSequences,
     preGeneratedAssistantMessageId,
     attachedFiles: fileProcessing.attachedFiles,
     originalMessage: options.content,
@@ -1102,6 +1133,7 @@ async function processMessage(
         hasMarkers: pluginHasMarkers,
         parse: pluginParse,
         strip: pluginStrip,
+        formatToolResult: (toolName, content) => `[Tool Result: ${toolName}]\n${content}`,
       },
       formattedMessages,
       modelParams,
@@ -1117,33 +1149,68 @@ async function processMessage(
     })
   }
 
-  // Phase 20: text-block tool calls (`[[TOOL_NAME ...]]content[[/TOOL_NAME]]`),
-  // runs for ALL providers. When useTextBlockTools is on, the continuation
-  // suppresses native tools and web search so the model can't re-emit the
-  // markers it just had stripped.
-  await runTextToolPass({
-    chatId,
-    userId,
-    character,
-    preGeneratedAssistantMessageId,
-    strategy: {
-      name: 'text-block',
-      hasMarkers: hasTextBlockMarkers,
-      parse: parseTextBlocksFromResponse,
-      strip: stripTextBlockMarkersFromResponse,
-    },
-    formattedMessages,
-    modelParams,
-    continuationTools: useTextBlockTools ? [] : actualTools,
-    continuationUseNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
-    toolContext,
-    streaming: streamingState,
-    toolMessages,
-    generatedImagePaths,
-    controller,
-    encoder,
-    preservePartialOnError,
-  })
+  // Phase 20: text-format tool calls (simple-json `<tool_call>{...}</tool_call>`
+  // or legacy text-block `[[TOOL ...]]content[[/TOOL]]`), runs for ALL providers.
+  // When useTextBlockTools is on, the continuation suppresses native tools and
+  // web search so the model can't re-emit the markers it just had stripped.
+  if (resolvedToolMode === 'simple-json') {
+    await runTextToolPass({
+      chatId,
+      userId,
+      character,
+      preGeneratedAssistantMessageId,
+      strategy: {
+        name: 'simple-json',
+        hasMarkers: hasSimpleJsonInResponse,
+        parse: (response) =>
+          parseSimpleJsonFromResponse(response, {
+            provider: streamingState.effectiveProfile.provider,
+            model: streamingState.effectiveProfile.modelName,
+          }),
+        strip: stripSimpleJsonFromResponse,
+        formatToolResult: formatSimpleJsonToolResult,
+        stopSequences: SIMPLE_JSON_STOP,
+      },
+      formattedMessages,
+      modelParams,
+      continuationTools: useTextBlockTools ? [] : actualTools,
+      continuationUseNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
+      toolContext,
+      streaming: streamingState,
+      toolMessages,
+      generatedImagePaths,
+      controller,
+      encoder,
+      preservePartialOnError,
+    })
+  } else {
+    // text-block (legacy) and the native/courier paths both fall through here
+    // — for native/courier the pass no-ops because no markers are emitted.
+    await runTextToolPass({
+      chatId,
+      userId,
+      character,
+      preGeneratedAssistantMessageId,
+      strategy: {
+        name: 'text-block',
+        hasMarkers: hasTextBlockMarkers,
+        parse: parseTextBlocksFromResponse,
+        strip: stripTextBlockMarkersFromResponse,
+        formatToolResult: (toolName, content) => `[Tool Result: ${toolName}]\n${content}`,
+      },
+      formattedMessages,
+      modelParams,
+      continuationTools: useTextBlockTools ? [] : actualTools,
+      continuationUseNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
+      toolContext,
+      streaming: streamingState,
+      toolMessages,
+      generatedImagePaths,
+      controller,
+      encoder,
+      preservePartialOnError,
+    })
+  }
 
   const contentWasFlaggedDangerous = !!(dangerFlags && dangerFlags.length > 0)
   const { uncensoredRetryAttempted, sameProviderRetryAttempted } = await attemptEmptyResponseRecovery({

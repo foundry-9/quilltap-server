@@ -21,7 +21,7 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
-jest.mock('@/lib/tools/text-block-parser', () => ({
+jest.mock('@/lib/tools/legacy/text-block-parser', () => ({
   stripTextBlockMarkers: jest.fn((text: string) => text),
 }))
 
@@ -34,7 +34,7 @@ import {
 } from '@/lib/tools/handlers/whisper-handler'
 
 const mockGetRepositories = getRepositories as jest.Mock
-const textBlockParser = require('@/lib/tools/text-block-parser')
+const textBlockParser = require('@/lib/tools/legacy/text-block-parser')
 const mockStripTextBlockMarkers = textBlockParser.stripTextBlockMarkers as jest.Mock
 const mockLogger = require('@/lib/logger').logger as { info: jest.Mock; error: jest.Mock; debug: jest.Mock; warn: jest.Mock }
 

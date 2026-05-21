@@ -283,6 +283,8 @@ import { repairDocMountFileLinkFolderIdsMigration } from './repair-doc-mount-fil
 import { addMemoriesReinforcedImportanceIndexMigration } from './add-memories-reinforced-importance-index-v1';
 // Scrub dangling relatedMemoryIds left by historical deletion paths
 import { repairDanglingRelatedMemoryEdgesV1Migration } from './repair-dangling-related-memory-edges-v1';
+// Add pseudoToolMode column to connection_profiles (selects native/simple-json/text-block pseudo-tool surface)
+import { addPseudoToolModeFieldMigration } from './add-pseudo-tool-mode-field';
 
 /**
  * All available migrations.
@@ -561,6 +563,8 @@ export const migrations: Migration[] = [
   addMemoriesReinforcedImportanceIndexMigration,
   // Scrub dangling relatedMemoryIds left by historical deletion paths
   repairDanglingRelatedMemoryEdgesV1Migration,
+  // Add pseudoToolMode column to connection_profiles
+  addPseudoToolModeFieldMigration,
 ];
 
 export {
@@ -824,5 +828,7 @@ export {
   addMemoriesReinforcedImportanceIndexMigration,
   // Scrub dangling relatedMemoryIds left by historical deletion paths
   repairDanglingRelatedMemoryEdgesV1Migration,
+  // Add pseudoToolMode column to connection_profiles
+  addPseudoToolModeFieldMigration,
 };
 

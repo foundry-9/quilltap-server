@@ -290,6 +290,7 @@ export class OpenRouterProvider implements TextProvider {
       temperature: params.temperature ?? 0.7,
       maxOutputTokens: params.maxTokens ?? 4096,
       topP: params.topP ?? 1,
+      stop: params.stop,
     };
 
     // Add web search tool if enabled
@@ -466,6 +467,7 @@ export class OpenRouterProvider implements TextProvider {
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 4096,
       top_p: params.topP ?? 1,
+      stop: params.stop,
     };
 
     // Convert tools to OpenAI format and attach if present

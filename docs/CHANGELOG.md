@@ -4,6 +4,28 @@
 
 ### 4.6-dev
 
+#### Feature: Simple JSON pseudo-tool surface for models without native function calling
+
+Replaced the legacy `[[TOOL ...]]content[[/TOOL]]` text-block pseudo-tool format with a smaller, more robustly-parsed `<tool_call>{...}</tool_call>` JSON-in-XML surface. The new format is designed around three principles: a familiar syntax (JSON inside an XML tag), exactly one tool call per turn, and a hard provider stop sequence (`</tool_call>`) so the model can't emit a valid call and then keep narrating fake results.
+
+New modules: `lib/tools/simple-json-parser.ts` (three-tier lenient parser — strict `JSON.parse`, `jsonrepair`, then a balanced-brace walker that recovers when the closing tag is dropped entirely; alias tags `<toolcall>`, `<tool>`, `<call>`, `<function_call>` are accepted) and `lib/tools/simple-json-prompt.ts` (uniform `(name: type)` signatures derived from each tool's existing OpenAI-shape `parameters` JSON Schema, replacing 15 hand-written prompt blurbs).
+
+Strategy wiring: `TextToolStrategy` in `lib/services/chat-message/text-tool-loop.service.ts` gains `formatToolResult(toolName, content)` and an optional `stopSequences?: string[]`. The inline `[Tool Result: ...]` template that the loop hard-coded is now strategy-scoped — simple-json frames results as `<tool_result name="...">...</tool_result>`, while the legacy text-block and provider-text-markers strategies keep the existing template. Orchestrator picks the strategy from a new `resolveToolMode()` helper in `lib/tools/pseudo-tool-support.ts` and injects `stop: ['</tool_call>']` into both the initial primary stream and the continuation re-stream when simple-json is active.
+
+Provider stop-sequence plumbing: `StreamOptions.stop?: string[]` flows through to each provider adapter. OpenAI's Responses API, Anthropic (`stop_sequences`, capped at 4), Ollama's streamMessage path, OpenRouter's chat-completions + SDK paths, and the shared `OpenAICompatibleProvider.streamMessage` all honour it now. Google and Grok already did. Each touched plugin bumps its patch version; `packages/plugin-utils` goes 2.2.8 → 2.2.9 and must be republished before the next plugin release.
+
+Profile schema: new `pseudoToolMode` column on `connection_profiles` (enum: `auto` | `native` | `simple-json` | `text-block`, default `auto`). Migration `add-pseudo-tool-mode-field-v1` ALTER-adds the column and backfills existing rows to `'auto'`. The "Tool format" selector now lives in the connection-profile editor (`components/settings/connection-profiles/ProfileModal.tsx`, conditional on `allowToolUse`). Default `auto` resolves to native on capable models and simple-json on everything else (the spec's Phase 5 flip); the legacy text-block surface remains selectable for compatibility while users migrate.
+
+Forcing `pseudoToolMode = 'native'` on a model that genuinely can't do native function calling now falls back to simple-json (graceful degradation) rather than shipping a broken native request. The pseudo-tool.service test that asserted the old behavior was updated accordingly.
+
+Legacy modules moved: `lib/tools/text-block-parser.ts` and `text-block-prompt.ts` (plus their tests) now live in `lib/tools/legacy/`. Public re-exports through `lib/tools/index.ts` keep behavior identical for all consumers; only direct relative-path importers (`whisper-handler.ts` and one mock) were updated.
+
+Help: `help/connection-profiles.md` gained a "Tool Format" section in the project's steampunk-Wodehouse voice, explaining each setting and why simple-json is the modern default. The help message-pack index needs rebuilding before release.
+
+Tests: 55 unit tests covering the parser (three tiers, alias tags, jsonrepair recovery, balanced-brace fallback, failure modes) and the prompt builder (signature rendering for primitive/enum/array/oneOf/zero-param shapes, instruction structure); 3 new integration tests in `text-tool-loop.service.test.ts` covering the strategy's `formatToolResult` indirection and `stopSequences` passthrough. All 805 existing service/repo tests still green.
+
+The Zod refactor of tool definitions called for by the implementation plan is deferred to a follow-up commit so this diff stays reviewable. `describeToolSignature` walks the existing OpenAI-shape `parameters` JSON, so the simple-json feature works fully without the refactor.
+
 #### Fix: CI test suites couldn't resolve the SQLCipher driver
 
 Four test suites (`__tests__/unit/packages/quilltap/{memories-commands,db-backup,graph-integrity}.test.js` and `__tests__/unit/lib/database/migration/repair-dangling-related-memory-edges-v1.test.ts`) failed in GitHub Actions with `Cannot find module 'better-sqlite3-multiple-ciphers'`. Their `loadDriver()` helpers tried `packages/quilltap/node_modules/better-sqlite3-multiple-ciphers` first and fell back to the bare `better-sqlite3-multiple-ciphers` require. Locally the first path resolves because `packages/quilltap/` carries its own `node_modules/`, but in CI only the root `npm ci` runs, and the root `package.json` declares the dep as `"better-sqlite3": "npm:better-sqlite3-multiple-ciphers@..."` — npm installs that under the alias name, so neither candidate resolves. Added a third fallback that requires `better-sqlite3` (the alias the runtime already uses) and documented the resolution rule in CLAUDE.md so future tests pick the right import path from the start.

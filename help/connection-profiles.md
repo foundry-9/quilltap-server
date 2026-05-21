@@ -282,6 +282,21 @@ Profiles with tool use disabled display a **No Tools** badge on their profile ca
 
 To re-enable tools, simply check the box again. Per-chat and per-project tool settings will resume their normal effect immediately.
 
+## Tool Format
+
+When tool use is allowed, the **Tool format** selector beneath the checkbox decides *how* a tool call travels between Quilltap and your model. Different models, you see, have been raised in different households and each has its own customs for the dinner table.
+
+There are four settings:
+
+- **Auto** (recommended) — Quilltap glances at the model's pedigree and selects accordingly: native function-calling for the well-bred services (OpenAI, recent Anthropic and Gemini), and the Simple JSON dialect for the more rustic establishments.
+- **Native function calling** — force the provider's own structured tool protocol. Excellent when supported; rather a disaster when not, in which case Quilltap politely falls back to Simple JSON anyway.
+- **Simple JSON** — emit tool calls inside a `<tool_call>{…}</tool_call>` block, paired with a provider-level stop sequence that hard-cuts the model after the closing tag. This is the modern pseudo-tool surface and the post-flip default for non-native models.
+- **Text-block (legacy)** — the older `[[TOOL ...]]content[[/TOOL]]` dialect. Kept for compatibility while the household migrates; you should rarely need to choose it on purpose.
+
+The Simple JSON surface was designed for smaller and local models that lack native function calling but still need to use Quilltap's tools (search, image generation, the wardrobe, and so on). Pairing the familiar JSON shape with a hard stop sequence prevents the most embarrassing failure mode of pseudo-tooling — the model emitting a perfectly valid tool call and then continuing on to invent the result it imagines the tool would have produced.
+
+When in doubt, leave the setting on **Auto**. The keeper of the keys can always rearrange the silverware later.
+
 ## Supports Image Attachments
 
 The **Supports image attachments (vision input)** checkbox tells Quilltap that this particular profile's model can read images — photographs, screenshots, diagrams, character portraits, and so forth. Some models see; most do not; a single provider will happily serve both sorts on the same API, so the distinction must be made at the profile level rather than by guessing from the provider's name on the door.
