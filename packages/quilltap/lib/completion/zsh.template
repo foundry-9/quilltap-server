@@ -16,6 +16,7 @@ _quilltap() {
     '(-v --version)'{-v,--version}'[Show version number]'
     '(-h --help)'{-h,--help}'[Show help message]'
     '--update[Force re-download of application files]'
+    '--passphrase[Database passphrase]:passphrase:'
   )
 
   subcommands=(
@@ -25,6 +26,8 @@ _quilltap() {
     'instances:Register or inspect named Quilltap instances'
     'memories:Search, browse, and graph memories'
     'memory-diff:Dump existing memories and dry-run re-extraction'
+    'logs:Tail or print an instance log file'
+    'migrations:Inspect migration status'
     'completion:Generate shell completion scripts'
   )
 
@@ -67,6 +70,12 @@ _quilltap_subcommand() {
     memory-diff)
       _quilltap_memory_diff
       ;;
+    logs)
+      _quilltap_logs
+      ;;
+    migrations)
+      _quilltap_migrations
+      ;;
     completion)
       _quilltap_completion
       ;;
@@ -74,7 +83,7 @@ _quilltap_subcommand() {
 }
 
 _quilltap_db() {
-  local -a subverbs
+  local -a subverbs db_opts
   subverbs=(
     'schema:Show database schema'
     'find:Find entities by name'
@@ -89,11 +98,46 @@ _quilltap_db() {
     'integrity:Check database integrity'
   )
 
-  _values 'db subcommand' $subverbs
+  db_opts=(
+    '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
+    '--passphrase[Database passphrase]:passphrase:'
+    '--json[JSON output]'
+    '--limit[Result limit]:limit:'
+    '--grep[Substring search]:text:'
+    '--character[Character name or id]:character:'
+    '--project[Project name or id]:project:'
+    '--about[Subject character]:character:'
+    '--source[Memory source]:source:(AUTO MANUAL)'
+    '--chat[Chat name or id]:chat:'
+    '--message[Message id]:id:'
+    '--rendered[Render rich content]'
+    '--field[Log field]:field:(request response both)'
+    '--tail[Tail N rows]:n:'
+    '--last[Last N items]:n:'
+    '--full[Full output]'
+    '--from[Participant filter]:participant:'
+    '--type[Filter by type]:type:'
+    '--out[Output directory]:path:_files -/'
+    '--tables[List tables (low-level)]'
+    '--count[Count rows in table]:table:'
+    '--repl[Open SQL REPL]'
+    '--llm-logs[Target llm-logs database]'
+    '--mount-points[Target mount-index database]'
+    '--lock-status[Show instance lock status]'
+    '--lock-clean[Clean stale lock]'
+    '--lock-override[Override active lock]'
+    '(-h --help)'{-h,--help}'[Show help]'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'db subcommand' subverbs
+  fi
+  _arguments $db_opts
 }
 
 _quilltap_docs() {
-  local -a subverbs
+  local -a subverbs docs_opts
   subverbs=(
     'list:List all mount points'
     'show:Details for one mount point'
@@ -115,11 +159,45 @@ _quilltap_docs() {
     'copy:Copy file'
   )
 
-  _values 'docs subcommand' $subverbs
+  docs_opts=(
+    '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
+    '--passphrase[Database passphrase]:passphrase:'
+    '(-p --port)'{-p,--port}'[Server port]:port:'
+    '--json[JSON output]'
+    '--mount[Mount name or id]:mount:'
+    '--folder[Folder filter]:folder:'
+    '--force[Force operation]'
+    '--rendered[Render rich content]'
+    '--links[Include link details]'
+    '--type[Filter by type]:type:(file folder)'
+    '--ext[Extension filter]:ext:'
+    '--limit[Result limit]:n:'
+    '--max[Maximum results]:n:'
+    '--context[Context lines]:n:'
+    '--top[Top N results]:n:'
+    '--threshold[Similarity threshold]:value:'
+    '--ignore-case[Case-insensitive search]'
+    '-l[Paths only]'
+    '--wait[Wait for completion]'
+    '(-R --recursive)'{-R,--recursive}'[Recursive listing]'
+    '--sort[Sort field]:field:(name path size modified created)'
+    '(-r --reverse)'{-r,--reverse}'[Reverse sort order]'
+    '--depth[Maximum traversal depth]:n:'
+    '--max-nodes[Maximum nodes in graph]:n:'
+    '--long[Long-form output]'
+    '--semantic[Use semantic search]'
+    '(-h --help)'{-h,--help}'[Show help]'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'docs subcommand' subverbs
+  fi
+  _arguments $docs_opts
 }
 
 _quilltap_themes() {
-  local -a subverbs
+  local -a subverbs registry_verbs themes_opts registry_opts
   subverbs=(
     'list:List available themes'
     'install:Install a theme'
@@ -132,17 +210,50 @@ _quilltap_themes() {
     'registry:Manage registries'
   )
 
-  _values 'themes subcommand' $subverbs
+  themes_opts=(
+    '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
+    '(-o --output)'{-o,--output}'[Output path]:path:_files'
+    '(-h --help)'{-h,--help}'[Show help]'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'themes subcommand' subverbs
+    return
+  fi
+
+  if [[ "$words[2]" == "registry" ]]; then
+    registry_verbs=(
+      'list:List registries'
+      'add:Add a registry'
+      'remove:Remove a registry'
+      'refresh:Refresh registries'
+      'keygen:Generate Ed25519 key'
+      'sign:Sign a registry or bundle'
+    )
+    registry_opts=(
+      '(-k --key)'{-k,--key}'[Signing key path]:path:_files'
+      '(-n --name)'{-n,--name}'[Registry name]:name:'
+      '(-o --output)'{-o,--output}'[Output path]:path:_files'
+    )
+    if (( CURRENT == 3 )); then
+      _describe 'registry subcommand' registry_verbs
+    fi
+    _arguments $registry_opts
+    return
+  fi
+
+  _arguments $themes_opts
 }
 
 _quilltap_instances() {
-  local -a subverbs
+  local -a subverbs inst_opts
   subverbs=(
     'list:List registered instances'
-    'ls:List instances'
+    'ls:List registered instances'
     'show:Show instance details'
-    'path:Show instance path'
-    'where:Show instance path'
+    'path:Show instances.json path'
+    'where:Show instances.json path'
     'add:Register a new instance'
     'create:Register a new instance'
     'remove:Unregister an instance'
@@ -150,9 +261,32 @@ _quilltap_instances() {
     'delete:Unregister an instance'
     'set-passphrase:Set instance passphrase'
     'passphrase:Set instance passphrase'
+    'default:Set/show/clear the default instance'
+    'rename:Rename an instance (preserves passphrase)'
   )
 
-  _values 'instances subcommand' $subverbs
+  inst_opts=(
+    '--names-only[Print one name per line (for completion)]'
+    '--json[JSON output]'
+    '--clear[Clear value (for default)]'
+    '(-h --help)'{-h,--help}'[Show help]'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'instances subcommand' subverbs
+    return
+  fi
+
+  case "$words[2]" in
+    show|remove|rm|delete|set-passphrase|passphrase|default|rename)
+      if (( CURRENT == 3 )); then
+        _values 'instance' ${(f)"$(command quilltap instances list --names-only 2>/dev/null)"}
+        return
+      fi
+      ;;
+  esac
+
+  _arguments $inst_opts
 }
 
 _quilltap_memories() {
@@ -168,24 +302,44 @@ _quilltap_memories() {
   )
 
   mem_opts=(
-    '--character[Character name or id]'
-    '--about[Subject of memory]'
-    '--source[AUTO or MANUAL]'
-    '--chat[Chat id or title]'
-    '--project[Project name or id]'
-    '--since[Since timestamp]'
-    '--until[Until timestamp]'
-    '--min-importance[Minimum importance]'
-    '--min-reinforced[Minimum reinforcement]'
-    '--has-embedding[Has embedding]'
-    '--no-embedding[No embedding]'
-    '--sort[Sort field]'
-    '--limit[Result limit]'
+    '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
+    '--passphrase[Database passphrase]:passphrase:'
+    '(-p --port)'{-p,--port}'[Server port]:port:'
     '--json[JSON output]'
-    '--help[Show help]'
+    '--character[Character name or id]:character:'
+    '--about[Subject of memory]:character:'
+    '--source[Memory source]:source:(AUTO MANUAL)'
+    '--chat[Chat id or title]:chat:'
+    '--project[Project name or id]:project:'
+    '--since[Since timestamp]:date:'
+    '--until[Until timestamp]:date:'
+    '--min-importance[Minimum importance]:value:'
+    '--min-reinforced[Minimum reinforcement]:value:'
+    '--has-embedding[Only memories with embeddings]'
+    '--no-embedding[Only memories without embeddings]'
+    '--sort[Sort field]:field:(reinforced importance created accessed reinforcement-count links)'
+    '(-r --reverse)'{-r,--reverse}'[Reverse sort]'
+    '--limit[Result limit]:n:'
+    '--full-titles[Show full titles]'
+    '--in[Restrict find-in field]:field:'
+    '--no-related[Hide related neighbors]'
+    '--list[List-only output]'
+    '(-i --ignore-case)'{-i,--ignore-case}'[Case-insensitive]'
+    '(-l --paths-only)'{-l,--paths-only}'[Paths only]'
+    '--max[Maximum results]:n:'
+    '--context[Context lines]:n:'
+    '--depth[Walk depth]:n:'
+    '--max-nodes[Maximum nodes]:n:'
+    '--semantic[Semantic search]'
+    '--top[Top N results]:n:'
+    '--threshold[Similarity threshold]:value:'
+    '(-h --help)'{-h,--help}'[Show help]'
   )
 
-  _values 'memories subcommand' $subverbs
+  if (( CURRENT == 2 )); then
+    _describe 'memories subcommand' subverbs
+  fi
   _arguments $mem_opts
 }
 
@@ -193,7 +347,46 @@ _quilltap_memory_diff() {
   _arguments \
     '(-h --help)'{-h,--help}'[Show help]' \
     '(-i --instance)'{-i,--instance}'[Use instance]:instance:_quilltap_instance_names' \
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories' \
+    '--passphrase[Database passphrase]:passphrase:' \
+    '(-p --port)'{-p,--port}'[Server port]:port:' \
+    '--concurrency[Concurrency limit]:n:' \
+    '--out[Output file]:path:_files'
+}
+
+_quilltap_logs() {
+  _arguments \
+    '(-h --help)'{-h,--help}'[Show help]' \
+    '(-i --instance)'{-i,--instance}'[Use instance]:instance:_quilltap_instance_names' \
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories' \
+    '--passphrase[Database passphrase]:passphrase:' \
+    '--stream[Which log stream]:stream:(combined error stdout stderr startup)' \
+    '--tail[Last N lines (0=full)]:n:' \
+    '(-f --follow)'{-f,--follow}'[Stream new lines]' \
+    '--grep[Regex filter]:pattern:'
+}
+
+_quilltap_migrations() {
+  local -a subverbs mig_opts
+  subverbs=(
+    'status:Migration status'
+    'pending:List pending migrations'
+    'run:Run pending migrations (use --dry-run)'
+  )
+
+  mig_opts=(
+    '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
     '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
+    '--passphrase[Database passphrase]:passphrase:'
+    '--dry-run[Dry run]'
+    '--json[JSON output]'
+    '(-h --help)'{-h,--help}'[Show help]'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'migrations subcommand' subverbs
+  fi
+  _arguments $mig_opts
 }
 
 _quilltap_completion() {

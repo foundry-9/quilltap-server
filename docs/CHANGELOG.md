@@ -2,6 +2,12 @@
 
 ## Recent Changes
 
+### 4.5.1
+
+#### Fix: shell completion coverage gaps
+
+The bash/zsh/fish completion templates were missing the `logs` and `migrations` top-level subcommands, the `instances default` and `instances rename` verbs, and the global `--passphrase` flag. The bash template's per-subcommand flag lists were also stale relative to the actual parsers in `db-commands.js`, `docs-commands.js`, and `memories-commands.js`. Rewrote all three templates (`packages/quilltap/lib/completion/{bash,zsh,fish}.template`) to enumerate the full surface — every verb, every documented flag, value-list completion for `--source` (AUTO/MANUAL), `--stream` (combined/error/stdout/stderr/startup), `--field` (request/response/both), `--sort`, `--type`. Bash now also two-level dispatches on sub-verbs (e.g. `themes registry` exposes `add/remove/refresh/keygen/sign`), and instances-targeting verbs (`show`, `remove`, `rename`, `default`, `set-passphrase`) tab-complete registered instance names. Bash smoke-tested with nine scenarios covering all new verbs and flag-value completions; zsh syntax-checked with `zsh -n`. Users who already saved a completion script need to regenerate it.
+
 ### 4.5.0
 
 #### docs: add release notes for 4.5.0
