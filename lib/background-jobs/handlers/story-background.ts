@@ -35,6 +35,7 @@ import { convertToWebP } from '@/lib/files/webp-conversion';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import type { Character } from '@/lib/schemas/types';
 
 /**
  * Detect post-hoc content-moderation rejections from image providers.
@@ -54,6 +55,70 @@ function isImageModerationError(error: unknown): boolean {
     message.includes('rejected by content') ||
     message.includes('moderation_blocked')
   );
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function deriveGenderPrefix(char: Character): string {
+  if (!char.pronouns) return '';
+  const subj = char.pronouns.subject.toLowerCase();
+  if (subj === 'he') return 'A man. ';
+  if (subj === 'she') return 'A woman. ';
+  return '';
+}
+
+function buildBasicEnumeration(char: Character): string {
+  const primary = char.physicalDescriptions?.[0];
+  const desc =
+    primary?.mediumPrompt ||
+    primary?.shortPrompt ||
+    primary?.longPrompt ||
+    primary?.fullDescription ||
+    char.name;
+  return `${deriveGenderPrefix(char)}${desc}`.trim();
+}
+
+/**
+ * Scan a story-background image prompt for any user-workspace character names
+ * that are mentioned but lack a matching `Name: ...` enumeration entry, and
+ * append canonical enumerations for them. Image providers otherwise hallucinate
+ * appearances for characters named in the scene description but not enumerated
+ * — typically off-scene-state characters who never made the participant list.
+ *
+ * The pre-built `resolvedDescriptionsByCharacterId` map covers participants
+ * whose enumeration was resolved earlier (including equipped wardrobe); other
+ * characters fall back to a basic enumeration drawn from their default
+ * physical description.
+ */
+function appendMissingCharacterEnumerations(
+  prompt: string,
+  userCharacters: Character[],
+  resolvedDescriptionsByCharacterId: Map<string, string>,
+): { prompt: string; added: Array<{ name: string; usedResolved: boolean }> } {
+  const added: Array<{ name: string; usedResolved: boolean }> = [];
+  // Process longest names first so "Lady Catherine" wins over "Catherine"
+  const ordered = [...userCharacters].sort((a, b) => b.name.length - a.name.length);
+
+  let result = prompt;
+  for (const char of ordered) {
+    if (!char.name || char.name.length < 2) continue;
+    const escaped = escapeRegex(char.name);
+    const nameRe = new RegExp(`\\b${escaped}\\b`, 'i');
+    if (!nameRe.test(result)) continue;
+    // Already enumerated as "Name:" somewhere in the prompt — leave it alone.
+    const enumRe = new RegExp(`(?:^|[.!?]\\s+)${escaped}\\s*:\\s`, 'i');
+    if (enumRe.test(result)) continue;
+
+    const resolved = resolvedDescriptionsByCharacterId.get(char.id);
+    const desc = resolved ?? buildBasicEnumeration(char);
+    if (!desc) continue;
+    const trailing = /[.!?]\s*$/.test(result) ? ' ' : '. ';
+    result = `${result.trimEnd()}${trailing}${char.name}: ${desc.replace(/\s*\.?\s*$/, '')}.`;
+    added.push({ name: char.name, usedResolved: !!resolved });
+  }
+  return { prompt: result, added };
 }
 
 /**
@@ -490,6 +555,51 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       });
       return;
     }
+  }
+
+  // 9b. Ensure every workspace character mentioned in the prompt is enumerated.
+  // The cheap LLM is given the participant list, but the scene context (chat
+  // title, derived scene, or SceneState character actions) can name additional
+  // characters who aren't current participants. Without a matching
+  // `Name: appearance` entry the image provider invents an appearance for them.
+  try {
+    const userCharacters = await repos.characters.findByUserId(job.userId);
+    const resolvedDescriptionsByCharacterId = new Map<string, string>();
+    for (let i = 0; i < validCharacters.length; i++) {
+      const id = validCharacters[i]!.id;
+      const desc = characterDescriptions[i]?.description;
+      if (desc) resolvedDescriptionsByCharacterId.set(id, desc);
+    }
+    const enrichResult = appendMissingCharacterEnumerations(
+      finalPrompt!,
+      userCharacters,
+      resolvedDescriptionsByCharacterId,
+    );
+    if (enrichResult.added.length > 0) {
+      logger.info('[StoryBackground] Appended missing character enumerations to prompt', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        chatId: payload.chatId,
+        added: enrichResult.added,
+        promptLengthBefore: finalPrompt!.length,
+        promptLengthAfter: enrichResult.prompt.length,
+      });
+      finalPrompt = enrichResult.prompt;
+    } else {
+      logger.debug('[StoryBackground] No missing character enumerations to append', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        chatId: payload.chatId,
+        promptLength: finalPrompt!.length,
+      });
+    }
+  } catch (err) {
+    logger.warn('[StoryBackground] Failed to scan prompt for missing character enumerations', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      chatId: payload.chatId,
+      error: getErrorMessage(err),
+    });
   }
 
 

@@ -2,92 +2,267 @@
 
 # Fish completion for quilltap
 
-# Top-level verbs
-complete -c quilltap -n '__fish_use_subcommand' -f -a 'db' -d 'Query encrypted databases'
-complete -c quilltap -n '__fish_use_subcommand' -f -a 'docs' -d 'Inspect and read document mounts'
-complete -c quilltap -n '__fish_use_subcommand' -f -a 'themes' -d 'Manage theme bundles'
-complete -c quilltap -n '__fish_use_subcommand' -f -a 'instances' -d 'Register or inspect instances'
-complete -c quilltap -n '__fish_use_subcommand' -f -a 'memories' -d 'Search and browse memories'
-complete -c quilltap -n '__fish_use_subcommand' -f -a 'memory-diff' -d 'Memory extraction dry-run'
-complete -c quilltap -n '__fish_use_subcommand' -f -a 'completion' -d 'Generate shell completion'
+# ---------- helper functions ----------
+
+function __quilltap_instance_names
+  command quilltap instances list --names-only 2>/dev/null
+end
+
+function __quilltap_no_subcommand
+  set -l cmd (commandline -opc)
+  if test (count $cmd) -lt 2
+    return 0
+  end
+  for i in (seq 2 (count $cmd))
+    switch $cmd[$i]
+      case db docs themes instances memories memory-diff logs migrations completion
+        return 1
+    end
+  end
+  return 0
+end
+
+function __quilltap_using_subcommand
+  set -l target $argv[1]
+  set -l cmd (commandline -opc)
+  for i in (seq 2 (count $cmd))
+    switch $cmd[$i]
+      case db docs themes instances memories memory-diff logs migrations completion
+        test "$cmd[$i]" = "$target"
+        return $status
+    end
+  end
+  return 1
+end
+
+function __quilltap_using_subverb
+  # usage: __quilltap_using_subverb <subcommand> <subverb>
+  __quilltap_using_subcommand $argv[1]; or return 1
+  set -l cmd (commandline -opc)
+  for token in $cmd
+    if test "$token" = "$argv[2]"
+      return 0
+    end
+  end
+  return 1
+end
+
+# ---------- top-level verbs ----------
+
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'db' -d 'Query encrypted databases'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'docs' -d 'Inspect and read document mounts'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'themes' -d 'Manage theme bundles'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'instances' -d 'Register or inspect instances'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memories' -d 'Search and browse memories'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memory-diff' -d 'Memory extraction dry-run'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'logs' -d 'Tail or print log files'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'migrations' -d 'Inspect migration status'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'completion' -d 'Generate shell completion'
 
 # Global options
-complete -c quilltap -n '__fish_use_subcommand' -f -l 'port' -s 'p' -d 'Port to listen on' -x
-complete -c quilltap -n '__fish_use_subcommand' -f -l 'data-dir' -s 'd' -d 'Data directory' -x
-complete -c quilltap -n '__fish_use_subcommand' -f -l 'instance' -s 'i' -d 'Use registered instance' -x
-complete -c quilltap -n '__fish_use_subcommand' -f -l 'open' -s 'o' -d 'Open browser after start'
-complete -c quilltap -n '__fish_use_subcommand' -f -l 'version' -s 'v' -d 'Show version'
-complete -c quilltap -n '__fish_use_subcommand' -f -l 'update' -d 'Force re-download'
-complete -c quilltap -n '__fish_use_subcommand' -f -l 'help' -s 'h' -d 'Show help'
+complete -c quilltap -n '__quilltap_no_subcommand' -l 'port' -s 'p' -d 'Port to listen on' -x
+complete -c quilltap -n '__quilltap_no_subcommand' -l 'data-dir' -s 'd' -d 'Data directory' -r -F
+complete -c quilltap -n '__quilltap_no_subcommand' -l 'instance' -s 'i' -d 'Use registered instance' -x -a '(__quilltap_instance_names)'
+complete -c quilltap -n '__quilltap_no_subcommand' -l 'open' -s 'o' -d 'Open browser after start'
+complete -c quilltap -n '__quilltap_no_subcommand' -l 'version' -s 'v' -d 'Show version'
+complete -c quilltap -n '__quilltap_no_subcommand' -l 'update' -d 'Force re-download'
+complete -c quilltap -n '__quilltap_no_subcommand' -l 'help' -s 'h' -d 'Show help'
+complete -c quilltap -n '__quilltap_no_subcommand' -l 'passphrase' -d 'Database passphrase' -x
 
-# db subcommands
-complete -c quilltap -n '__fish_seen_subcommand_from db' -f -a 'schema' -d 'Show database schema'
-complete -c quilltap -n '__fish_seen_subcommand_from db' -f -a 'find' -d 'Find entities by name'
-complete -c quilltap -n '__fish_seen_subcommand_from db' -f -a 'chats' -d 'Find chats'
-complete -c quilltap -n '__fish_seen_subcommand_from db' -f -a 'messages' -d 'Find messages'
-complete -c quilltap -n '__fish_seen_subcommand_from db' -f -a 'logs' -d 'Get LLM logs'
-complete -c quilltap -n '__fish_seen_subcommand_from db' -f -a 'message' -d 'Get single message'
-complete -c quilltap -n '__fish_seen_subcommand_from db' -f -a 'log' -d 'Get single log entry'
-complete -c quilltap -n '__fish_seen_subcommand_from db' -f -a 'memories' -d 'List memories'
-complete -c quilltap -n '__fish_seen_subcommand_from db' -f -a 'optimize' -d 'Optimize database'
-complete -c quilltap -n '__fish_seen_subcommand_from db' -f -a 'backup' -d 'Backup database'
-complete -c quilltap -n '__fish_seen_subcommand_from db' -f -a 'integrity' -d 'Check integrity'
+# Shared --instance completion when any subcommand is present
+complete -c quilltap -n 'not __quilltap_no_subcommand' -l 'instance' -s 'i' -d 'Use registered instance' -x -a '(__quilltap_instance_names)'
+complete -c quilltap -n 'not __quilltap_no_subcommand' -l 'data-dir' -s 'd' -d 'Data directory' -r -F
+complete -c quilltap -n 'not __quilltap_no_subcommand' -l 'passphrase' -d 'Database passphrase' -x
+complete -c quilltap -n 'not __quilltap_no_subcommand' -l 'help' -s 'h' -d 'Show help'
+complete -c quilltap -n 'not __quilltap_no_subcommand' -l 'json' -d 'JSON output'
 
-# docs subcommands
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'list' -d 'List mount points'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'show' -d 'Show mount details'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'files' -d 'List files in mount'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'ls' -d 'ls-style listing'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'dir' -d 'Directory listing'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'read' -d 'Print file contents'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'export' -d 'Export mount'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'scan' -d 'Trigger rescan'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'find' -d 'Substring search'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'grep' -d 'Pattern search in text'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'status' -d 'Per-mount status'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'reindex' -d 'Re-extract and chunk'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'embed' -d 'Enqueue embeddings'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'write' -d 'Write a file'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'delete' -d 'Delete a file'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'mkdir' -d 'Create folder'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'move' -d 'Move file'
-complete -c quilltap -n '__fish_seen_subcommand_from docs' -f -a 'copy' -d 'Copy file'
+# ---------- db verbs ----------
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'schema' -d 'Show database schema'
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'find' -d 'Find entities by name'
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'chats' -d 'Find chats'
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'messages' -d 'Find messages'
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'logs' -d 'Get LLM logs'
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'message' -d 'Get single message'
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'log' -d 'Get single log entry'
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'memories' -d 'List memories'
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'optimize' -d 'Optimize database'
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'backup' -d 'Backup database'
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'integrity' -d 'Check integrity'
 
-# themes subcommands
-complete -c quilltap -n '__fish_seen_subcommand_from themes' -f -a 'list' -d 'List themes'
-complete -c quilltap -n '__fish_seen_subcommand_from themes' -f -a 'install' -d 'Install theme'
-complete -c quilltap -n '__fish_seen_subcommand_from themes' -f -a 'uninstall' -d 'Uninstall theme'
-complete -c quilltap -n '__fish_seen_subcommand_from themes' -f -a 'validate' -d 'Validate bundle'
-complete -c quilltap -n '__fish_seen_subcommand_from themes' -f -a 'export' -d 'Export theme'
-complete -c quilltap -n '__fish_seen_subcommand_from themes' -f -a 'create' -d 'Create theme'
-complete -c quilltap -n '__fish_seen_subcommand_from themes' -f -a 'search' -d 'Search registries'
-complete -c quilltap -n '__fish_seen_subcommand_from themes' -f -a 'update' -d 'Update themes'
-complete -c quilltap -n '__fish_seen_subcommand_from themes' -f -a 'registry' -d 'Manage registries'
+# db flags
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'limit' -d 'Result limit' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'grep' -d 'Substring search' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'character' -d 'Character name or id' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'project' -d 'Project name or id' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'about' -d 'Subject character' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'source' -d 'Memory source' -x -a 'AUTO MANUAL'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'chat' -d 'Chat name or id' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'message' -d 'Message id' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'rendered' -d 'Render rich content'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'field' -d 'Log field' -x -a 'request response both'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'tail' -d 'Tail N rows' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'last' -d 'Last N items' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'full' -d 'Full output'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'from' -d 'Participant filter' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'type' -d 'Filter by type' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'out' -d 'Output directory' -r -F
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'tables' -d 'List tables (low-level)'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'count' -d 'Count rows in table' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'repl' -d 'Open SQL REPL'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'llm-logs' -d 'Target llm-logs database'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'mount-points' -d 'Target mount-index database'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'lock-status' -d 'Show instance lock status'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'lock-clean' -d 'Clean stale lock'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'lock-override' -d 'Override active lock'
 
-# instances subcommands
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'list' -d 'List instances'
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'ls' -d 'List instances'
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'show' -d 'Show instance'
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'path' -d 'Show path'
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'where' -d 'Show path'
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'add' -d 'Register instance'
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'create' -d 'Register instance'
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'remove' -d 'Unregister'
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'rm' -d 'Unregister'
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'delete' -d 'Unregister'
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'set-passphrase' -d 'Set passphrase'
-complete -c quilltap -n '__fish_seen_subcommand_from instances' -f -a 'passphrase' -d 'Set passphrase'
+# ---------- docs verbs ----------
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'list' -d 'List mount points'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'show' -d 'Show mount details'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'files' -d 'List files in mount'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'ls' -d 'ls-style listing'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'dir' -d 'Directory listing'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'read' -d 'Print file contents'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'export' -d 'Export mount'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'scan' -d 'Trigger rescan'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'find' -d 'Substring search'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'grep' -d 'Pattern search in text'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'status' -d 'Per-mount status'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'reindex' -d 'Re-extract and chunk'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'embed' -d 'Enqueue embeddings'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'write' -d 'Write a file'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'delete' -d 'Delete a file'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'mkdir' -d 'Create folder'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'move' -d 'Move file'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'copy' -d 'Copy file'
 
-# memories subcommands
-complete -c quilltap -n '__fish_seen_subcommand_from memories' -f -a 'ls' -d 'List memories'
-complete -c quilltap -n '__fish_seen_subcommand_from memories' -f -a 'find' -d 'Substring search'
-complete -c quilltap -n '__fish_seen_subcommand_from memories' -f -a 'grep' -d 'Pattern search'
-complete -c quilltap -n '__fish_seen_subcommand_from memories' -f -a 'show' -d 'Show memory'
-complete -c quilltap -n '__fish_seen_subcommand_from memories' -f -a 'tree' -d 'Graph walk'
-complete -c quilltap -n '__fish_seen_subcommand_from memories' -f -a 'status' -d 'Memory status'
-complete -c quilltap -n '__fish_seen_subcommand_from memories' -f -a 'validate' -d 'Health check'
+# docs flags
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'mount' -d 'Mount name or id' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'port' -s 'p' -d 'Server port' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'folder' -d 'Folder filter' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'force' -d 'Force operation'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'rendered' -d 'Render rich content'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'links' -d 'Include link details'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'type' -d 'Filter by type' -x -a 'file folder'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'ext' -d 'Extension filter' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'limit' -d 'Result limit' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'max' -d 'Maximum results' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'context' -d 'Context lines' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'top' -d 'Top N results' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'threshold' -d 'Similarity threshold' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'ignore-case' -d 'Case-insensitive'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -s 'l' -d 'Paths only'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'wait' -d 'Wait for completion'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'recursive' -s 'R' -d 'Recursive listing'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'sort' -d 'Sort field' -x -a 'name path size modified created'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'reverse' -s 'r' -d 'Reverse sort order'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'depth' -d 'Maximum traversal depth' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'max-nodes' -d 'Maximum graph nodes' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'long' -d 'Long-form output'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'semantic' -d 'Semantic search'
 
-# completion subcommands
-complete -c quilltap -n '__fish_seen_subcommand_from completion' -f -a 'bash' -d 'Bash completion'
-complete -c quilltap -n '__fish_seen_subcommand_from completion' -f -a 'zsh' -d 'Zsh completion'
-complete -c quilltap -n '__fish_seen_subcommand_from completion' -f -a 'fish' -d 'Fish completion'
+# ---------- themes verbs ----------
+complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'list' -d 'List themes'
+complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'install' -d 'Install theme'
+complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'uninstall' -d 'Uninstall theme'
+complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'validate' -d 'Validate bundle'
+complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'export' -d 'Export theme'
+complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'create' -d 'Create theme'
+complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'search' -d 'Search registries'
+complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'update' -d 'Update themes'
+complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'registry' -d 'Manage registries'
+complete -c quilltap -n '__quilltap_using_subcommand themes' -l 'output' -s 'o' -d 'Output path' -r -F
+
+# themes registry sub-subverbs
+complete -c quilltap -n '__quilltap_using_subverb themes registry' -f -a 'list' -d 'List registries'
+complete -c quilltap -n '__quilltap_using_subverb themes registry' -f -a 'add' -d 'Add a registry'
+complete -c quilltap -n '__quilltap_using_subverb themes registry' -f -a 'remove' -d 'Remove a registry'
+complete -c quilltap -n '__quilltap_using_subverb themes registry' -f -a 'refresh' -d 'Refresh registries'
+complete -c quilltap -n '__quilltap_using_subverb themes registry' -f -a 'keygen' -d 'Generate Ed25519 key'
+complete -c quilltap -n '__quilltap_using_subverb themes registry' -f -a 'sign' -d 'Sign a registry or bundle'
+complete -c quilltap -n '__quilltap_using_subverb themes registry' -l 'key' -s 'k' -d 'Signing key path' -r -F
+complete -c quilltap -n '__quilltap_using_subverb themes registry' -l 'name' -s 'n' -d 'Registry name' -x
+
+# ---------- instances verbs ----------
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'list' -d 'List instances'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'ls' -d 'List instances'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'show' -d 'Show instance'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'path' -d 'Show instances.json path'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'where' -d 'Show instances.json path'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'add' -d 'Register instance'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'create' -d 'Register instance'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'remove' -d 'Unregister instance'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'rm' -d 'Unregister instance'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'delete' -d 'Unregister instance'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'set-passphrase' -d 'Set passphrase'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'passphrase' -d 'Set passphrase'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'default' -d 'Set/show/clear default instance'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'rename' -d 'Rename instance'
+
+# Instance names as positional for verbs that target one
+for verb in show remove rm delete set-passphrase passphrase default rename
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -f -a '(__quilltap_instance_names)'
+end
+
+complete -c quilltap -n '__quilltap_using_subcommand instances' -l 'names-only' -d 'Print one name per line'
+complete -c quilltap -n '__quilltap_using_subverb instances default' -l 'clear' -d 'Clear default instance'
+
+# ---------- memories verbs ----------
+complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'ls' -d 'List memories'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'find' -d 'Substring search'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'grep' -d 'Pattern search'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'show' -d 'Show memory'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'tree' -d 'Graph walk'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'status' -d 'Memory status'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'validate' -d 'Health check'
+
+# memories flags
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'character' -d 'Character name or id' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'about' -d 'Subject of memory' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'source' -d 'Memory source' -x -a 'AUTO MANUAL'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'chat' -d 'Chat id or title' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'project' -d 'Project name or id' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'since' -d 'Since timestamp' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'until' -d 'Until timestamp' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'min-importance' -d 'Minimum importance' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'min-reinforced' -d 'Minimum reinforcement' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'has-embedding' -d 'Only memories with embeddings'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'no-embedding' -d 'Only memories without embeddings'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'sort' -d 'Sort field' -x -a 'reinforced importance created accessed reinforcement-count links'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'reverse' -s 'r' -d 'Reverse sort'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'limit' -d 'Result limit' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'full-titles' -d 'Show full titles'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'in' -d 'Restrict find-in field' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'no-related' -d 'Hide related neighbors'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'list' -d 'List-only output'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'ignore-case' -s 'i' -d 'Case-insensitive'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'paths-only' -s 'l' -d 'Paths only'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'max' -d 'Maximum results' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'context' -d 'Context lines' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'depth' -d 'Walk depth' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'max-nodes' -d 'Maximum graph nodes' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'semantic' -d 'Semantic search'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'top' -d 'Top N results' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'threshold' -d 'Similarity threshold' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'port' -s 'p' -d 'Server port' -x
+
+# ---------- memory-diff flags ----------
+complete -c quilltap -n '__quilltap_using_subcommand memory-diff' -l 'port' -s 'p' -d 'Server port' -x
+complete -c quilltap -n '__quilltap_using_subcommand memory-diff' -l 'concurrency' -d 'Concurrency limit' -x
+complete -c quilltap -n '__quilltap_using_subcommand memory-diff' -l 'out' -d 'Output file' -r -F
+
+# ---------- logs flags ----------
+complete -c quilltap -n '__quilltap_using_subcommand logs' -l 'stream' -d 'Log stream' -x -a 'combined error stdout stderr startup'
+complete -c quilltap -n '__quilltap_using_subcommand logs' -l 'tail' -d 'Last N lines (0=full)' -x
+complete -c quilltap -n '__quilltap_using_subcommand logs' -l 'follow' -s 'f' -d 'Stream new lines'
+complete -c quilltap -n '__quilltap_using_subcommand logs' -l 'grep' -d 'Regex filter' -x
+
+# ---------- migrations verbs ----------
+complete -c quilltap -n '__quilltap_using_subcommand migrations' -f -a 'status' -d 'Migration status'
+complete -c quilltap -n '__quilltap_using_subcommand migrations' -f -a 'pending' -d 'List pending migrations'
+complete -c quilltap -n '__quilltap_using_subcommand migrations' -f -a 'run' -d 'Run pending migrations'
+complete -c quilltap -n '__quilltap_using_subcommand migrations' -l 'dry-run' -d 'Dry run (required for run)'
+
+# ---------- completion sub-args ----------
+complete -c quilltap -n '__quilltap_using_subcommand completion' -f -a 'bash' -d 'Bash completion'
+complete -c quilltap -n '__quilltap_using_subcommand completion' -f -a 'zsh' -d 'Zsh completion'
+complete -c quilltap -n '__quilltap_using_subcommand completion' -f -a 'fish' -d 'Fish completion'
