@@ -12,15 +12,19 @@ _quilltap_complete() {
   cword=$COMP_CWORD
 
   # Global options that can appear before subcommands
-  local global_opts="-d --data-dir -i --instance -p --port -o --open -v --version -h --help --update"
+  local global_opts="-d --data-dir -i --instance -p --port -o --open -v --version -h --help --update --passphrase"
+
+  # Top-level subcommands
+  local top_cmds="db docs themes instances memories memory-diff logs migrations completion"
 
   # Get the subcommand (first non-option word after quilltap)
   local subcommand=""
+  local subverb=""
   local i=1
   while [[ $i -lt $cword ]]; do
     local word="${words[$i]}"
     case "$word" in
-      -d|--data-dir|-i|--instance|-p|--port)
+      -d|--data-dir|-i|--instance|-p|--port|--passphrase)
         # These take a value, skip the next word
         ((i += 2))
         ;;
@@ -33,22 +37,26 @@ _quilltap_complete() {
         ((i += 1))
         ;;
       *)
-        # This is the subcommand
-        subcommand="$word"
-        break
+        if [[ -z "$subcommand" ]]; then
+          subcommand="$word"
+        elif [[ -z "$subverb" ]]; then
+          subverb="$word"
+        fi
+        ((i += 1))
         ;;
     esac
   done
 
   # If we're completing a global flag value
-  if [[ "$prev" == "-d" ]] || [[ "$prev" == "--data-dir" ]] || \
-     [[ "$prev" == "-p" ]] || [[ "$prev" == "--port" ]]; then
-    # No completion for paths or ports
+  if [[ "$prev" == "-d" ]] || [[ "$prev" == "--data-dir" ]]; then
+    # Complete with directories
+    COMPREPLY=($(compgen -d -- "$cur"))
     return
   fi
-
+  if [[ "$prev" == "-p" ]] || [[ "$prev" == "--port" ]] || [[ "$prev" == "--passphrase" ]]; then
+    return
+  fi
   if [[ "$prev" == "-i" ]] || [[ "$prev" == "--instance" ]]; then
-    # Complete with instance names
     local instances=$(command quilltap instances list --names-only 2>/dev/null)
     COMPREPLY=($(compgen -W "$instances" -- "$cur"))
     return
@@ -59,53 +67,164 @@ _quilltap_complete() {
     if [[ "$cur" == -* ]]; then
       COMPREPLY=($(compgen -W "$global_opts" -- "$cur"))
     else
-      COMPREPLY=($(compgen -W "db docs themes instances memories memory-diff completion" -- "$cur"))
+      COMPREPLY=($(compgen -W "$top_cmds" -- "$cur"))
     fi
     return
   fi
 
+  # Shared flag-value completions for any subcommand
+  case "$prev" in
+    --mount)
+      local mounts=$(command quilltap docs list --names-only 2>/dev/null)
+      COMPREPLY=($(compgen -W "$mounts" -- "$cur"))
+      return
+      ;;
+    --character|--about)
+      # No live source; suggest common literals
+      COMPREPLY=($(compgen -W "all self none" -- "$cur"))
+      return
+      ;;
+    --source)
+      COMPREPLY=($(compgen -W "AUTO MANUAL" -- "$cur"))
+      return
+      ;;
+    --sort)
+      COMPREPLY=($(compgen -W "name path size modified created reinforced importance accessed reinforcement-count links" -- "$cur"))
+      return
+      ;;
+    --field)
+      COMPREPLY=($(compgen -W "request response both" -- "$cur"))
+      return
+      ;;
+    --type)
+      COMPREPLY=($(compgen -W "file folder" -- "$cur"))
+      return
+      ;;
+    --stream)
+      COMPREPLY=($(compgen -W "combined error stdout stderr startup" -- "$cur"))
+      return
+      ;;
+  esac
+
   # Subcommand-specific completion
-  local subcommand_opts=""
   case "$subcommand" in
     db)
-      subcommand_opts="schema find chats messages logs message log memories optimize backup integrity"
-      if [[ "$cur" == -* ]]; then
-        subcommand_opts="$subcommand_opts --instance --data-dir --json --help"
+      local db_verbs="schema find chats messages logs message log memories optimize backup integrity"
+      local db_flags="--instance --data-dir --passphrase --json --limit --grep \
+        --character --project --about --source --chat --message --rendered --field \
+        --tail --last --full --from --type --out --help \
+        --tables --count --repl --llm-logs --mount-points \
+        --lock-status --lock-clean --lock-override"
+      if [[ -z "$subverb" ]]; then
+        if [[ "$cur" == -* ]]; then
+          COMPREPLY=($(compgen -W "$db_flags" -- "$cur"))
+        else
+          COMPREPLY=($(compgen -W "$db_verbs" -- "$cur"))
+        fi
+      else
+        COMPREPLY=($(compgen -W "$db_flags" -- "$cur"))
       fi
-      COMPREPLY=($(compgen -W "$subcommand_opts" -- "$cur"))
       ;;
     docs)
       local docs_verbs="list show files ls dir read export scan write delete mkdir move copy status find grep reindex embed"
-      if [[ "$cur" == -* ]]; then
-        docs_verbs="$docs_verbs --mount --instance --data-dir --port --json --help --force --rendered --links"
+      local docs_flags="--mount --instance --data-dir --passphrase --port --json --help \
+        --force --rendered --links --folder --type --ext --limit --max --context --top --threshold \
+        --ignore-case -l --wait -R --recursive --sort -r --reverse --depth --max-nodes --long --semantic"
+      if [[ -z "$subverb" ]]; then
+        if [[ "$cur" == -* ]]; then
+          COMPREPLY=($(compgen -W "$docs_flags" -- "$cur"))
+        else
+          COMPREPLY=($(compgen -W "$docs_verbs" -- "$cur"))
+        fi
+      else
+        COMPREPLY=($(compgen -W "$docs_flags" -- "$cur"))
       fi
-      COMPREPLY=($(compgen -W "$docs_verbs" -- "$cur"))
       ;;
     themes)
-      subcommand_opts="list install uninstall validate export create search update registry"
-      if [[ "$cur" == -* ]]; then
-        subcommand_opts="$subcommand_opts --instance --data-dir --output --help"
+      local themes_verbs="list install uninstall validate export create search update registry"
+      local themes_flags="--instance --data-dir --output -o --help"
+      if [[ -z "$subverb" ]]; then
+        if [[ "$cur" == -* ]]; then
+          COMPREPLY=($(compgen -W "$themes_flags" -- "$cur"))
+        else
+          COMPREPLY=($(compgen -W "$themes_verbs" -- "$cur"))
+        fi
+      elif [[ "$subverb" == "registry" ]]; then
+        local registry_verbs="list add remove refresh keygen sign"
+        local registry_flags="--key -k --name -n --output -o --help"
+        if [[ "$cur" == -* ]]; then
+          COMPREPLY=($(compgen -W "$registry_flags" -- "$cur"))
+        else
+          COMPREPLY=($(compgen -W "$registry_verbs" -- "$cur"))
+        fi
+      else
+        COMPREPLY=($(compgen -W "$themes_flags" -- "$cur"))
       fi
-      COMPREPLY=($(compgen -W "$subcommand_opts" -- "$cur"))
       ;;
     instances)
-      subcommand_opts="list ls show path where add create remove rm delete set-passphrase passphrase"
-      if [[ "$cur" == -* ]]; then
-        subcommand_opts="$subcommand_opts --help"
+      local inst_verbs="list ls show path where add create remove rm delete set-passphrase passphrase default rename"
+      local inst_flags="--names-only --json --clear --help"
+      if [[ -z "$subverb" ]]; then
+        if [[ "$cur" == -* ]]; then
+          COMPREPLY=($(compgen -W "$inst_flags" -- "$cur"))
+        else
+          COMPREPLY=($(compgen -W "$inst_verbs" -- "$cur"))
+        fi
+      else
+        # Most instances verbs take a name as positional; offer registered names
+        case "$subverb" in
+          show|remove|rm|delete|set-passphrase|passphrase|default|rename)
+            local instances=$(command quilltap instances list --names-only 2>/dev/null)
+            if [[ "$cur" == -* ]]; then
+              COMPREPLY=($(compgen -W "$inst_flags" -- "$cur"))
+            else
+              COMPREPLY=($(compgen -W "$instances" -- "$cur"))
+            fi
+            ;;
+          *)
+            COMPREPLY=($(compgen -W "$inst_flags" -- "$cur"))
+            ;;
+        esac
       fi
-      COMPREPLY=($(compgen -W "$subcommand_opts" -- "$cur"))
       ;;
     memories)
       local mem_verbs="ls find grep show tree status validate"
-      if [[ "$cur" == -* ]]; then
-        mem_verbs="$mem_verbs --character --about --source --chat --project --since --until --min-importance --min-reinforced --has-embedding --no-embedding --sort --instance --data-dir --json --help"
+      local mem_flags="--character --about --source --chat --project --since --until \
+        --min-importance --min-reinforced --has-embedding --no-embedding \
+        --sort -r --reverse --limit --full-titles --in --no-related --list \
+        --ignore-case -i --paths-only -l --max --context --depth --max-nodes \
+        --semantic --top --threshold \
+        --instance --data-dir --passphrase --port --json --help"
+      if [[ -z "$subverb" ]]; then
+        if [[ "$cur" == -* ]]; then
+          COMPREPLY=($(compgen -W "$mem_flags" -- "$cur"))
+        else
+          COMPREPLY=($(compgen -W "$mem_verbs" -- "$cur"))
+        fi
+      else
+        COMPREPLY=($(compgen -W "$mem_flags" -- "$cur"))
       fi
-      COMPREPLY=($(compgen -W "$mem_verbs" -- "$cur"))
       ;;
     memory-diff)
-      if [[ "$cur" == -* ]]; then
-        subcommand_opts="--instance --data-dir --help"
-        COMPREPLY=($(compgen -W "$subcommand_opts" -- "$cur"))
+      local md_flags="--instance --data-dir --passphrase --port --concurrency --out --help"
+      COMPREPLY=($(compgen -W "$md_flags" -- "$cur"))
+      ;;
+    logs)
+      local logs_flags="--stream --tail -f --follow --grep \
+        --instance --data-dir --passphrase --help"
+      COMPREPLY=($(compgen -W "$logs_flags" -- "$cur"))
+      ;;
+    migrations)
+      local mig_verbs="status pending run"
+      local mig_flags="--dry-run --json --instance --data-dir --passphrase --help"
+      if [[ -z "$subverb" ]]; then
+        if [[ "$cur" == -* ]]; then
+          COMPREPLY=($(compgen -W "$mig_flags" -- "$cur"))
+        else
+          COMPREPLY=($(compgen -W "$mig_verbs" -- "$cur"))
+        fi
+      else
+        COMPREPLY=($(compgen -W "$mig_flags" -- "$cur"))
       fi
       ;;
     completion)
