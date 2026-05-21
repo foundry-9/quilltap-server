@@ -561,11 +561,19 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // title, derived scene, or SceneState character actions) can name additional
   // characters who aren't current participants. Without a matching
   // `Name: appearance` entry the image provider invents an appearance for them.
+  //
+  // Participants are excluded: the crafter already received their full
+  // descriptions and wove them into the scene (e.g. "On the left, Friday, a
+  // woman with…"). Re-appending canonical `Friday: A woman. …` portraits on
+  // top of that produces a divided/triptych image as the provider tries to
+  // render both the integrated scene AND the portrait sidecards.
   try {
+    const participantIdSet = new Set(payload.characterIds);
     const userCharacters = await repos.characters.findByUserId(job.userId);
+    const nonParticipantCharacters = userCharacters.filter(c => !participantIdSet.has(c.id));
     const enrichResult = appendMissingCharacterEnumerations(
       finalPrompt!,
-      userCharacters,
+      nonParticipantCharacters,
     );
     if (enrichResult.added.length > 0) {
       logger.info('[StoryBackground] Appended missing character enumerations to prompt', {

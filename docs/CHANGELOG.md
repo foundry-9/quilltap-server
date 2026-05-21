@@ -4,6 +4,12 @@
 
 ### 4.6-dev
 
+#### Fix: Lantern story-background prompts no longer re-append portraits for participants
+
+`appendMissingCharacterEnumerations` in `lib/background-jobs/handlers/story-background.ts` was scanning the full user-workspace character list and appending canonical `Name: A woman. <description>` entries for every participant whose name appeared in the crafted prompt without a `Name:` enumeration. Since the crafter LLM normally weaves participants into the scene inline ("On the left, Friday, a woman with strawberry-blonde…") rather than as `Friday: …` enumerations, the safety net was firing on every participant, dumping portrait-style side cards after the integrated scene. Image providers rendered the result as a divided triptych of head-shot tiles instead of a unified scene.
+
+The fallback's original purpose (`c8df7d58`) was non-participant characters who get name-dropped via scene context or SceneState actions but were never handed to the crafter. The call site now filters `userCharacters` down to non-participants using `payload.characterIds` before invoking the helper — participants already had their descriptions woven in by the crafter, so they don't need a fallback portrait append. Non-participants still get the safety-net enumeration so the image provider doesn't invent appearances for them.
+
 #### Fix: CLI no longer breaks node-pty's spawn-helper executable bit on macOS
 
 `packages/quilltap/bin/quilltap.js` was unconditionally replacing the standalone tarball's bundled `node_modules/node-pty` with a symlink to the npm-installed copy under `/usr/local/lib/node_modules/quilltap/node_modules/node-pty`. On macOS, `sudo npm install -g quilltap` extracts that copy with the executable bit stripped off `prebuilds/<platform>/spawn-helper` (a known npm-as-root tar-extraction wart). The CLI tried to restore the bit with `chmodSync(helper, 0o755)`, but the file is owned by root and the CLI runs as a non-root user — the chmod returned `EPERM` and was swallowed by a silent `try {} catch {}`. Result: terminal spawns failed with `posix_spawnp failed` at runtime, with no actionable hint.
