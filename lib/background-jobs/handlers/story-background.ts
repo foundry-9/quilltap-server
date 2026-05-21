@@ -87,17 +87,17 @@ function buildBasicEnumeration(char: Character): string {
  * appearances for characters named in the scene description but not enumerated
  * — typically off-scene-state characters who never made the participant list.
  *
- * The pre-built `resolvedDescriptionsByCharacterId` map covers participants
- * whose enumeration was resolved earlier (including equipped wardrobe); other
- * characters fall back to a basic enumeration drawn from their default
- * physical description.
+ * Always uses the compact `buildBasicEnumeration` form (gender prefix +
+ * mediumPrompt/shortPrompt). The richer participant-resolved description
+ * carries the equipped wardrobe with full prose, which dwarfs the image
+ * prompt and confuses providers; a back-fill on a name the crafter dropped
+ * doesn't earn the wardrobe injection.
  */
 function appendMissingCharacterEnumerations(
   prompt: string,
   userCharacters: Character[],
-  resolvedDescriptionsByCharacterId: Map<string, string>,
-): { prompt: string; added: Array<{ name: string; usedResolved: boolean }> } {
-  const added: Array<{ name: string; usedResolved: boolean }> = [];
+): { prompt: string; added: Array<{ name: string }> } {
+  const added: Array<{ name: string }> = [];
   // Process longest names first so "Lady Catherine" wins over "Catherine"
   const ordered = [...userCharacters].sort((a, b) => b.name.length - a.name.length);
 
@@ -111,12 +111,11 @@ function appendMissingCharacterEnumerations(
     const enumRe = new RegExp(`(?:^|[.!?]\\s+)${escaped}\\s*:\\s`, 'i');
     if (enumRe.test(result)) continue;
 
-    const resolved = resolvedDescriptionsByCharacterId.get(char.id);
-    const desc = resolved ?? buildBasicEnumeration(char);
+    const desc = buildBasicEnumeration(char);
     if (!desc) continue;
     const trailing = /[.!?]\s*$/.test(result) ? ' ' : '. ';
     result = `${result.trimEnd()}${trailing}${char.name}: ${desc.replace(/\s*\.?\s*$/, '')}.`;
-    added.push({ name: char.name, usedResolved: !!resolved });
+    added.push({ name: char.name });
   }
   return { prompt: result, added };
 }
@@ -564,16 +563,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // `Name: appearance` entry the image provider invents an appearance for them.
   try {
     const userCharacters = await repos.characters.findByUserId(job.userId);
-    const resolvedDescriptionsByCharacterId = new Map<string, string>();
-    for (let i = 0; i < validCharacters.length; i++) {
-      const id = validCharacters[i]!.id;
-      const desc = characterDescriptions[i]?.description;
-      if (desc) resolvedDescriptionsByCharacterId.set(id, desc);
-    }
     const enrichResult = appendMissingCharacterEnumerations(
       finalPrompt!,
       userCharacters,
-      resolvedDescriptionsByCharacterId,
     );
     if (enrichResult.added.length > 0) {
       logger.info('[StoryBackground] Appended missing character enumerations to prompt', {

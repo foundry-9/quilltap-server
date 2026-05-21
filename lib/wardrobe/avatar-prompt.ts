@@ -69,10 +69,10 @@ export async function buildCharacterAvatarPrompt(
     const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, equippedSlots);
 
     outfitText = describeOutfit({
-      top: decorateOutfitItems(resolved.leafItemsBySlot.top),
-      bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom),
-      footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear),
-      accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories),
+      top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
+      bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
+      footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
+      accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true }),
     }, { omit: ['bottom', 'footwear'] }).trimEnd();
 
     leafCounts.top = resolved.leafItemsBySlot.top.length;

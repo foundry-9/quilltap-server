@@ -99,14 +99,15 @@ function canSkipResolution(
  *
  * Multiple entries with the same `slot` represent layering and produce
  * multiple values in that slot's array, in the order they appear.
+ *
+ * Titles only — image-gen prompts must not carry the prose `description`
+ * field, which is written for human eyes and otherwise bloats the prompt.
  */
 function wardrobeItemsToSlotValues(
   items: Array<{ slot: string; title: string; description?: string | null }>
 ): import('@/lib/wardrobe/outfit-description').OutfitSlotValues {
   const valuesFor = (slot: string): string[] =>
-    items
-      .filter(i => i.slot === slot)
-      .map(i => i.description ? `${i.title} (${i.description})` : i.title)
+    items.filter(i => i.slot === slot).map(i => i.title)
   return {
     top: valuesFor('top'),
     bottom: valuesFor('bottom'),

@@ -4,6 +4,18 @@
 
 ### 4.6-dev
 
+#### Fix: Lantern story-background prompts no longer dump full wardrobe prose
+
+The Lantern's image-prompt pipeline was leaking wardrobe items' human-prose `description` fields straight into image-generation prompts, producing multi-thousand-character prompts full of markdown bullets and style commentary ("Good for moving between Lodge, office, balcony…", "She's not hiding those hands"). Three independent leak paths fixed:
+
+1. `lib/wardrobe/outfit-description.ts:decorateOutfitItems` gained a `titleOnly` option. Image-gen-adjacent callers (`lib/wardrobe/avatar-prompt.ts`, `lib/background-jobs/handlers/scene-state-tracking.ts`) now pass `titleOnly: true`. The two inline `valuesFor` builders in `lib/image-gen/appearance-resolution.ts` and `lib/memory/cheap-llm-tasks/image-scene-tasks.ts:resolveAppearance` were collapsed to titles-only the same way. Chat-context formatting (which is rendered to a model that can use the prose) is untouched.
+
+2. `APPEARANCE_RESOLUTION_PROMPT` was sharpened: `clothingDescription` is now capped at 200 chars of plain prose with explicit no-markdown / no-parenthetical-asides / no-commentary rules, and the equipped-wardrobe section is no longer labeled "Current Outfit … takes precedence", which a cheap LLM was reading as the "narrative → use verbatim" branch and echoing the entire input back.
+
+3. `appendMissingCharacterEnumerations` in `lib/background-jobs/handlers/story-background.ts` (introduced by the c8df7d58 missing-enumeration fix) was injecting the *resolved* participant description — which carried the bloated wardrobe text — back into the prompt for any character whose name appeared without a `Name:` enumeration. It now always uses the compact `buildBasicEnumeration` form (gender prefix + mediumPrompt/shortPrompt); the `resolvedDescriptionsByCharacterId` parameter was dropped.
+
+Two test expectations in `__tests__/unit/image-gen/appearance-resolution.test.ts` updated to assert the new title-only fallback output.
+
 #### Docs: tool plugin development guide reflects the Zod-source-of-truth convention
 
 `docs/developer/TOOL_PLUGIN_DEVELOPMENT.md` rewrote the calculator example to declare a Zod input schema, derive the OpenAI-shape `parameters` JSON via a small `zodToOpenAISchema` helper (Zod 4's native `z.toJSONSchema()` with `target: 'draft-7'`, plus a strip of `$schema`/`$id`/`definitions`/`$defs`), and have `validateCalculatorInput` delegate to `safeParse`. Added a section on `.refine()` for trim-non-empty / allowlists / cross-field constraints that JSON Schema cannot express alone. Best-practice and troubleshooting bullets updated to point at the Zod schema when input validation fails. Provider plugin docs unchanged — provider plugins consume tool definitions rather than define them.
