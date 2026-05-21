@@ -2,6 +2,10 @@
 
 ## Recent Changes
 
+### 4.6-dev
+
+(empty — new development starts here)
+
 ### 4.5.0
 
 #### docs: add release notes for 4.5.0
