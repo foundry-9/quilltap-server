@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 4.5-dev
+### 4.5.0
 
 #### docs: add release notes for 4.5.0
 
