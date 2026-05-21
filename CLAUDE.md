@@ -13,7 +13,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 - **Language**: TypeScript
 - **Package Manager**: npm
 - **Testing**: Jest (with native coverage) and Playwright
-- **Data Storage**: SQLite with SQLCipher encryption at rest. Uses `better-sqlite3-multiple-ciphers` driver (aliased as `better-sqlite3`). Data models are defined as TypeScript interfaces with Zod schemas.
+- **Data Storage**: SQLite with SQLCipher encryption at rest. Uses `better-sqlite3-multiple-ciphers` driver (aliased as `better-sqlite3` in root `package.json` — npm installs it under the alias name, so `node_modules/better-sqlite3-multiple-ciphers/` does **not** exist at the repo root, only `node_modules/better-sqlite3/`). Runtime and **tests** should `require('better-sqlite3')`, not the native package name. The native name only resolves where a sub-package (e.g. `packages/quilltap/`) declares it as a direct dep and has its own `node_modules/` — that's true on developer machines but not in CI, where only the root `npm ci` runs. If a test needs to handle both, fall back through `better-sqlite3-multiple-ciphers` → `better-sqlite3`. Data models are defined as TypeScript interfaces with Zod schemas.
 - **File Storage**: local filesystem only
 - **AI and LLM Services**: OpenAI, Anthropic, Grok (xAI), Google, Ollama, OpenRouter, and any OpenAI-compatible endpoint
 - **Design Documentation**: Storybook

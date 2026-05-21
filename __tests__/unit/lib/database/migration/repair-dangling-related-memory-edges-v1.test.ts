@@ -23,7 +23,13 @@ function loadDriver() {
       'better-sqlite3-multiple-ciphers'
     ));
   } catch {
-    return require('better-sqlite3-multiple-ciphers');
+    try {
+      return require('better-sqlite3-multiple-ciphers');
+    } catch {
+      // Root package.json aliases better-sqlite3-multiple-ciphers as better-sqlite3,
+      // so in CI (where only the root install runs) the driver is reachable via the alias.
+      return require('better-sqlite3');
+    }
   }
 }
 const Database = loadDriver();
