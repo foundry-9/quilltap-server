@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Docs: tool plugin development guide reflects the Zod-source-of-truth convention
+
+`docs/developer/TOOL_PLUGIN_DEVELOPMENT.md` rewrote the calculator example to declare a Zod input schema, derive the OpenAI-shape `parameters` JSON via a small `zodToOpenAISchema` helper (Zod 4's native `z.toJSONSchema()` with `target: 'draft-7'`, plus a strip of `$schema`/`$id`/`definitions`/`$defs`), and have `validateCalculatorInput` delegate to `safeParse`. Added a section on `.refine()` for trim-non-empty / allowlists / cross-field constraints that JSON Schema cannot express alone. Best-practice and troubleshooting bullets updated to point at the Zod schema when input validation fails. Provider plugin docs unchanged — provider plugins consume tool definitions rather than define them.
+
 #### Refactor: Zod schemas as the single source of truth for all 49 tool definitions
 
 Every tool definition in `lib/tools/*-tool.ts` now declares a Zod input schema (`xxxToolInputSchema`) as the canonical contract. The OpenAI-shape `parameters` JSON Schema served to native function-calling providers is derived from that schema via a new helper `lib/tools/zod-to-openai-schema.ts` (built on Zod 4's native `z.toJSONSchema()`), and every `validateXxxInput` function is now a one-line delegate to `schema.safeParse(input).success`. Closes the long-standing gap where the JSON Schema and the runtime validator could quietly drift apart.
