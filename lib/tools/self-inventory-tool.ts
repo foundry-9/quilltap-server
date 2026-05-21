@@ -8,7 +8,15 @@
  * right now, and token usage from the most recent LLM call.
  */
 
-export type SelfInventoryToolInput = Record<string, never>;
+import { z } from 'zod'
+import { zodToOpenAISchema } from './zod-to-openai-schema'
+
+/**
+ * Zod schema for the self inventory tool's input.
+ */
+export const selfInventoryToolInputSchema = z.object({})
+
+export type SelfInventoryToolInput = z.infer<typeof selfInventoryToolInputSchema>;
 
 export interface SelfInventoryVaultFile {
   mountPointName: string;
@@ -151,19 +159,12 @@ export const selfInventoryToolDefinition = {
       'prompt assembled for every turn, and provider/model/token usage from the most recent LLM call. ' +
       'Takes no arguments. Use this when you need to know what source material you have access to, how ' +
       'you are currently configured, or how close the last turn was to the context window limit.',
-    parameters: {
-      type: 'object',
-      properties: {},
-      required: [],
-    },
+    parameters: zodToOpenAISchema(selfInventoryToolInputSchema),
   },
 };
 
 export function validateSelfInventoryInput(
   input: unknown
 ): input is SelfInventoryToolInput {
-  if (input === undefined || input === null) {
-    return true;
-  }
-  return typeof input === 'object';
+  return selfInventoryToolInputSchema.safeParse(input).success;
 }

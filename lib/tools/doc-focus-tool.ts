@@ -4,85 +4,61 @@
  * Scriptorium Phase 3.5.
  */
 
-export const docFocusTool = {
-  type: 'function',
-  function: {
-    name: 'doc_focus',
-    description:
-      "Direct the user's attention to a specific location in the currently open document. Scrolls the viewport to the target, optionally highlights a text passage with a brief animation, and places an eye icon in the document gutter.",
-    parameters: {
-      type: 'object',
-      properties: {
-        anchor: {
-          type: 'string',
-          description:
-            'Heading text (without # markers) to scroll to. Narrows the search for highlight matching.',
-        },
-        highlight: {
-          type: 'string',
-          description:
-            'A short text string to find and briefly highlight in the document.',
-        },
-        line: {
-          type: 'number',
-          description:
-            'Line number to scroll to. Used as fallback when string matching is not viable.',
-        },
-        clear_focus: {
-          type: 'boolean',
-          description:
-            'If true, removes the attention marker from the gutter. No other parameters needed.',
-        },
-      },
-      required: [],
-    },
-  },
-};
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/**
+ * Zod schema for the doc_focus tool's input.
+ */
+export const docFocusToolInputSchema = z
+  .object({
+    anchor: z
+      .string()
+      .describe('Heading text (without # markers) to scroll to. Narrows the search for highlight matching.')
+      .optional(),
+    highlight: z
+      .string()
+      .describe('A short text string to find and briefly highlight in the document.')
+      .optional(),
+    line: z
+      .number()
+      .describe('Line number to scroll to. Used as fallback when string matching is not viable.')
+      .optional(),
+    clear_focus: z
+      .boolean()
+      .describe('If true, removes the attention marker from the gutter. No other parameters needed.')
+      .optional(),
+  })
+  .refine(
+    (obj) =>
+      obj.anchor !== undefined ||
+      obj.highlight !== undefined ||
+      obj.line !== undefined ||
+      obj.clear_focus === true,
+    'At least one parameter must be provided'
+  );
+
+/**
+ * Input parameters for the doc_focus tool
+ */
+export type DocFocusInput = z.infer<typeof docFocusToolInputSchema>;
 
 /**
  * Validates input for doc_focus tool.
  */
 export function validateDocFocusInput(input: unknown): input is DocFocusInput {
-  if (typeof input !== 'object' || input === null) {
-    return false;
-  }
-
-  const obj = input as Record<string, unknown>;
-
-  // anchor must be string if provided
-  if (obj.anchor !== undefined && typeof obj.anchor !== 'string') {
-    return false;
-  }
-
-  // highlight must be string if provided
-  if (obj.highlight !== undefined && typeof obj.highlight !== 'string') {
-    return false;
-  }
-
-  // line must be number if provided
-  if (obj.line !== undefined && typeof obj.line !== 'number') {
-    return false;
-  }
-
-  // clear_focus must be boolean if provided
-  if (obj.clear_focus !== undefined && typeof obj.clear_focus !== 'boolean') {
-    return false;
-  }
-
-  // At least one parameter must be provided
-  if (obj.anchor === undefined && obj.highlight === undefined && obj.line === undefined && obj.clear_focus !== true) {
-    return false;
-  }
-
-  return true;
+  return docFocusToolInputSchema.safeParse(input).success;
 }
 
-export interface DocFocusInput {
-  anchor?: string;
-  highlight?: string;
-  line?: number;
-  clear_focus?: boolean;
-}
+export const docFocusToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'doc_focus',
+    description:
+      "Direct the user's attention to a specific location in the currently open document. Scrolls the viewport to the target, optionally highlights a text passage with a brief animation, and places an eye icon in the document gutter.",
+    parameters: zodToOpenAISchema(docFocusToolInputSchema),
+  },
+};
 
 export interface DocFocusOutput {
   success: boolean;

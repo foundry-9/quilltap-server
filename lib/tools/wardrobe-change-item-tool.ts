@@ -17,26 +17,47 @@
  * `wardrobe_set_outfit` with mode `wear` or `remove` instead.
  */
 
+import { z } from 'zod'
+import { zodToOpenAISchema } from './zod-to-openai-schema'
+
+/**
+ * Zod schema for the wardrobe change item tool's input.
+ */
+export const wardrobeChangeItemToolInputSchema = z.object({
+  mode: z
+    .enum(['equip', 'add_to_slot', 'remove_from_slot', 'clear_slot'])
+    .describe(
+      '"equip" (replace slots covered by the item), ' +
+      '"add_to_slot" (layer in a slot), ' +
+      '"remove_from_slot" (take off one item), ' +
+      '"clear_slot" (empty the slot entirely).'
+    ),
+  slot: z
+    .enum(['top', 'bottom', 'footwear', 'accessories'])
+    .describe(
+      'Required for "add_to_slot", "remove_from_slot", and "clear_slot". ' +
+      'Optional for "equip" — slots are inferred from the item.'
+    )
+    .optional(),
+  item_id: z
+    .string()
+    .describe(
+      'The ID of the wardrobe item. Required for "equip" and "add_to_slot". ' +
+      'Optional for "remove_from_slot" (omit to clear the slot). ' +
+      'Ignored by "clear_slot". The item must be a leaf (no components); ' +
+      'composites are rejected — use wardrobe_set_outfit for those.'
+    )
+    .optional(),
+  item_title: z
+    .string()
+    .describe('Fallback lookup by title if item_id is not known.')
+    .optional(),
+})
+
 /**
  * Input parameters for wardrobe_change_item
  */
-export interface WardrobeChangeItemToolInput {
-  /** Which mutation to perform. */
-  mode: 'equip' | 'add_to_slot' | 'remove_from_slot' | 'clear_slot';
-  /**
-   * Required for `add_to_slot`, `remove_from_slot`, and `clear_slot`.
-   * Optional for `equip` (slots are inferred from the item's `types`).
-   */
-  slot?: 'top' | 'bottom' | 'footwear' | 'accessories';
-  /**
-   * Wardrobe item to act on. Required for `equip` and `add_to_slot`.
-   * Optional for `remove_from_slot` (omit to clear the slot entirely).
-   * Ignored by `clear_slot`.
-   */
-  item_id?: string;
-  /** Title fallback if `item_id` is unknown. */
-  item_title?: string;
-}
+export type WardrobeChangeItemToolInput = z.infer<typeof wardrobeChangeItemToolInputSchema>
 
 /**
  * Output from wardrobe_change_item
@@ -60,9 +81,6 @@ export interface WardrobeChangeItemToolOutput {
   error?: string;
 }
 
-const VALID_SLOTS = ['top', 'bottom', 'footwear', 'accessories'] as const;
-const VALID_MODES = ['equip', 'add_to_slot', 'remove_from_slot', 'clear_slot'] as const;
-
 /**
  * Tool definition compatible with OpenAI's tool_calls format
  */
@@ -79,40 +97,7 @@ export const wardrobeChangeItemToolDefinition = {
       'to empty a slot entirely. ' +
       'For composite outfits (wardrobe items that bundle several pieces), use ' +
       'wardrobe_set_outfit instead.',
-    parameters: {
-      type: 'object',
-      properties: {
-        mode: {
-          type: 'string',
-          enum: ['equip', 'add_to_slot', 'remove_from_slot', 'clear_slot'],
-          description:
-            '"equip" (replace slots covered by the item), ' +
-            '"add_to_slot" (layer in a slot), ' +
-            '"remove_from_slot" (take off one item), ' +
-            '"clear_slot" (empty the slot entirely).',
-        },
-        slot: {
-          type: 'string',
-          enum: ['top', 'bottom', 'footwear', 'accessories'],
-          description:
-            'Required for "add_to_slot", "remove_from_slot", and "clear_slot". ' +
-            'Optional for "equip" — slots are inferred from the item.',
-        },
-        item_id: {
-          type: 'string',
-          description:
-            'The ID of the wardrobe item. Required for "equip" and "add_to_slot". ' +
-            'Optional for "remove_from_slot" (omit to clear the slot). ' +
-            'Ignored by "clear_slot". The item must be a leaf (no components); ' +
-            'composites are rejected — use wardrobe_set_outfit for those.',
-        },
-        item_title: {
-          type: 'string',
-          description: 'Fallback lookup by title if item_id is not known.',
-        },
-      },
-      required: ['mode'],
-    },
+    parameters: zodToOpenAISchema(wardrobeChangeItemToolInputSchema),
   },
 };
 
@@ -122,33 +107,5 @@ export const wardrobeChangeItemToolDefinition = {
 export function validateWardrobeChangeItemInput(
   input: unknown
 ): input is WardrobeChangeItemToolInput {
-  if (typeof input !== 'object' || input === null) return false;
-
-  const obj = input as Record<string, unknown>;
-
-  if (typeof obj.mode !== 'string' || !VALID_MODES.includes(obj.mode as typeof VALID_MODES[number])) {
-    return false;
-  }
-
-  if (obj.slot !== undefined) {
-    if (typeof obj.slot !== 'string') return false;
-    if (!VALID_SLOTS.includes(obj.slot as typeof VALID_SLOTS[number])) return false;
-  }
-
-  if (
-    (obj.mode === 'add_to_slot' || obj.mode === 'remove_from_slot' || obj.mode === 'clear_slot') &&
-    obj.slot === undefined
-  ) {
-    return false;
-  }
-
-  if (obj.item_id !== undefined && typeof obj.item_id !== 'string') return false;
-  if (obj.item_title !== undefined && typeof obj.item_title !== 'string') return false;
-
-  // equip and add_to_slot need an item.
-  if ((obj.mode === 'equip' || obj.mode === 'add_to_slot') && !obj.item_id && !obj.item_title) {
-    return false;
-  }
-
-  return true;
+  return wardrobeChangeItemToolInputSchema.safeParse(input).success;
 }

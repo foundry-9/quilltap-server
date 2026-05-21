@@ -4,43 +4,51 @@
  * Returns file content with metadata including modification time for the read-then-replace workflow.
  */
 
-export const docReadFileTool = {
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/**
+ * Zod schema for the doc-read-file tool's input.
+ */
+export const docReadFileToolInputSchema = z.object({
+  scope: z
+    .enum(['document_store', 'project', 'general'])
+    .default('document_store')
+    .describe('The file source scope. "document_store" reads from mounted document stores, "project" reads from project files, "general" reads from general files.')
+    .optional(),
+  mount_point: z
+    .string()
+    .describe('Mount point name. Required when scope is "document_store".')
+    .optional(),
+  path: z
+    .string()
+    .describe('Relative path to the file within the selected scope.'),
+  offset: z
+    .number()
+    .int()
+    .min(1)
+    .describe('Start line number (1-based) for pagination. Default is 1.')
+    .optional(),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .describe('Maximum number of lines to return. Default returns all lines.')
+    .optional(),
+});
+
+/**
+ * Input parameters for the doc-read-file tool
+ */
+export type DocReadFileInput = z.infer<typeof docReadFileToolInputSchema>;
+
+export const docReadFileToolDefinition = {
   type: 'function',
   function: {
     name: 'doc_read_file',
     description:
       'Read the contents of a file from a document store, project files, or general files. Returns the file content with modification time for the read-then-replace workflow. Use offset and limit for large files.',
-    parameters: {
-      type: 'object',
-      properties: {
-        scope: {
-          type: 'string',
-          enum: ['document_store', 'project', 'general'],
-          default: 'document_store',
-          description:
-            'The file source scope. "document_store" reads from mounted document stores, "project" reads from project files, "general" reads from general files.',
-        },
-        mount_point: {
-          type: 'string',
-          description: 'Mount point name. Required when scope is "document_store".',
-        },
-        path: {
-          type: 'string',
-          description: 'Relative path to the file within the selected scope.',
-        },
-        offset: {
-          type: 'integer',
-          minimum: 1,
-          description: 'Start line number (1-based) for pagination. Default is 1.',
-        },
-        limit: {
-          type: 'integer',
-          minimum: 1,
-          description: 'Maximum number of lines to return. Default returns all lines.',
-        },
-      },
-      required: ['path'],
-    },
+    parameters: zodToOpenAISchema(docReadFileToolInputSchema),
   },
 };
 
@@ -48,53 +56,9 @@ export const docReadFileTool = {
  * Validates input for doc_read_file tool.
  */
 export function validateDocReadFileInput(input: unknown): input is DocReadFileInput {
-  if (typeof input !== 'object' || input === null) {
-    return false;
-  }
-
-  const obj = input as Record<string, unknown>;
-
-  // path is required
-  if (typeof obj.path !== 'string') {
-    return false;
-  }
-
-  // scope must be valid enum if provided
-  if (obj.scope !== undefined) {
-    if (typeof obj.scope !== 'string' || !['document_store', 'project', 'general'].includes(obj.scope)) {
-      return false;
-    }
-  }
-
-  // mount_point must be string if provided
-  if (obj.mount_point !== undefined && typeof obj.mount_point !== 'string') {
-    return false;
-  }
-
-  // offset must be positive integer if provided
-  if (obj.offset !== undefined) {
-    if (typeof obj.offset !== 'number' || !Number.isInteger(obj.offset) || obj.offset < 1) {
-      return false;
-    }
-  }
-
-  // limit must be positive integer if provided
-  if (obj.limit !== undefined) {
-    if (typeof obj.limit !== 'number' || !Number.isInteger(obj.limit) || obj.limit < 1) {
-      return false;
-    }
-  }
-
-  return true;
+  return docReadFileToolInputSchema.safeParse(input).success;
 }
 
-export interface DocReadFileInput {
-  scope?: 'document_store' | 'project' | 'general';
-  mount_point?: string;
-  path: string;
-  offset?: number;
-  limit?: number;
-}
 
 export interface DocReadFileOutput {
   content: string | unknown;  // raw string for text/*; parsed value for JSON/JSONL (string on parse failure)

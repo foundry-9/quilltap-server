@@ -359,42 +359,42 @@ export {
 } from './simple-json-prompt';
 
 // Document Editing Tools (Scriptorium Phase 3.3)
-export { docReadFileTool, validateDocReadFileInput, type DocReadFileInput, type DocReadFileOutput } from './doc-read-file-tool';
-export { docWriteFileTool, validateDocWriteFileInput, type DocWriteFileInput, type DocWriteFileOutput } from './doc-write-file-tool';
-export { docStrReplaceTool, validateDocStrReplaceInput, type DocStrReplaceInput, type DocStrReplaceOutput } from './doc-str-replace-tool';
-export { docInsertTextTool, validateDocInsertTextInput, type DocInsertTextInput, type DocInsertTextOutput } from './doc-insert-text-tool';
-export { docGrepTool, validateDocGrepInput, type DocGrepInput, type DocGrepOutput, type DocGrepMatch } from './doc-grep-tool';
-export { docListFilesTool, validateDocListFilesInput, type DocListFilesInput, type DocListFilesOutput, type DocFileInfo } from './doc-list-files-tool';
-export { docReadFrontmatterTool, validateDocReadFrontmatterInput, type DocReadFrontmatterInput, type DocReadFrontmatterOutput } from './doc-read-frontmatter-tool';
-export { docUpdateFrontmatterTool, validateDocUpdateFrontmatterInput, type DocUpdateFrontmatterInput, type DocUpdateFrontmatterOutput } from './doc-update-frontmatter-tool';
-export { docReadHeadingTool, validateDocReadHeadingInput, type DocReadHeadingInput, type DocReadHeadingOutput } from './doc-read-heading-tool';
-export { docUpdateHeadingTool, validateDocUpdateHeadingInput, type DocUpdateHeadingInput, type DocUpdateHeadingOutput } from './doc-update-heading-tool';
+export { docReadFileToolDefinition as docReadFileTool, validateDocReadFileInput, type DocReadFileInput, type DocReadFileOutput } from './doc-read-file-tool';
+export { docWriteFileToolDefinition as docWriteFileTool, validateDocWriteFileInput, type DocWriteFileInput, type DocWriteFileOutput } from './doc-write-file-tool';
+export { docStrReplaceToolDefinition as docStrReplaceTool, validateDocStrReplaceInput, type DocStrReplaceInput, type DocStrReplaceOutput } from './doc-str-replace-tool';
+export { docInsertTextToolDefinition as docInsertTextTool, validateDocInsertTextInput, type DocInsertTextInput, type DocInsertTextOutput } from './doc-insert-text-tool';
+export { docGrepToolDefinition as docGrepTool, validateDocGrepInput, type DocGrepInput, type DocGrepOutput, type DocGrepMatch } from './doc-grep-tool';
+export { docListFilesToolDefinition as docListFilesTool, validateDocListFilesInput, type DocListFilesInput, type DocListFilesOutput, type DocFileInfo } from './doc-list-files-tool';
+export { docReadFrontmatterToolDefinition as docReadFrontmatterTool, validateDocReadFrontmatterInput, type DocReadFrontmatterInput, type DocReadFrontmatterOutput } from './doc-read-frontmatter-tool';
+export { docUpdateFrontmatterToolDefinition as docUpdateFrontmatterTool, validateDocUpdateFrontmatterInput, type DocUpdateFrontmatterInput, type DocUpdateFrontmatterOutput } from './doc-update-frontmatter-tool';
+export { docReadHeadingToolDefinition as docReadHeadingTool, validateDocReadHeadingInput, type DocReadHeadingInput, type DocReadHeadingOutput } from './doc-read-heading-tool';
+export { docUpdateHeadingToolDefinition as docUpdateHeadingTool, validateDocUpdateHeadingInput, type DocUpdateHeadingInput, type DocUpdateHeadingOutput } from './doc-update-heading-tool';
 
 // Document File Management Tools (Scriptorium Phase 3.4)
-export { docMoveFileTool, validateDocMoveFileInput, type DocMoveFileInput, type DocMoveFileOutput } from './doc-move-file-tool';
-export { docCopyFileTool, validateDocCopyFileInput, type DocCopyFileInput, type DocCopyFileOutput } from './doc-copy-file-tool';
-export { docDeleteFileTool, validateDocDeleteFileInput, type DocDeleteFileInput, type DocDeleteFileOutput } from './doc-delete-file-tool';
-export { docCreateFolderTool, validateDocCreateFolderInput, type DocCreateFolderInput, type DocCreateFolderOutput } from './doc-create-folder-tool';
-export { docDeleteFolderTool, validateDocDeleteFolderInput, type DocDeleteFolderInput, type DocDeleteFolderOutput } from './doc-delete-folder-tool';
+export { docMoveFileToolDefinition as docMoveFileTool, validateDocMoveFileInput, type DocMoveFileInput, type DocMoveFileOutput } from './doc-move-file-tool';
+export { docCopyFileToolDefinition as docCopyFileTool, validateDocCopyFileInput, type DocCopyFileInput, type DocCopyFileOutput } from './doc-copy-file-tool';
+export { docDeleteFileToolDefinition as docDeleteFileTool, validateDocDeleteFileInput, type DocDeleteFileInput, type DocDeleteFileOutput } from './doc-delete-file-tool';
+export { docCreateFolderToolDefinition as docCreateFolderTool, validateDocCreateFolderInput, type DocCreateFolderInput, type DocCreateFolderOutput } from './doc-create-folder-tool';
+export { docDeleteFolderToolDefinition as docDeleteFolderTool, validateDocDeleteFolderInput, type DocDeleteFolderInput, type DocDeleteFolderOutput } from './doc-delete-folder-tool';
 
 // Document Folder Management Tool (Scriptorium Phase 4.0 Deliverable 3 - Phase B)
-export { docMoveFolderTool, validateDocMoveFolderInput, type DocMoveFolderInput, type DocMoveFolderOutput } from './doc-move-folder-tool';
+export { docMoveFolderToolDefinition as docMoveFolderTool, validateDocMoveFolderInput, type DocMoveFolderInput, type DocMoveFolderOutput } from './doc-move-folder-tool';
 
 // Document Blob Tools (database-backed stores + universal blob layer)
-export { docWriteBlobTool, validateDocWriteBlobInput, type DocWriteBlobInput, type DocWriteBlobOutput } from './doc-write-blob-tool';
-export { docReadBlobTool, validateDocReadBlobInput, type DocReadBlobInput, type DocReadBlobOutput } from './doc-read-blob-tool';
-export { docListBlobsTool, validateDocListBlobsInput, type DocListBlobsInput, type DocListBlobsOutput, type DocBlobSummary } from './doc-list-blobs-tool';
-export { docDeleteBlobTool, validateDocDeleteBlobInput, type DocDeleteBlobInput, type DocDeleteBlobOutput } from './doc-delete-blob-tool';
+export { docWriteBlobToolDefinition as docWriteBlobTool, validateDocWriteBlobInput, type DocWriteBlobInput, type DocWriteBlobOutput } from './doc-write-blob-tool';
+export { docReadBlobToolDefinition as docReadBlobTool, validateDocReadBlobInput, type DocReadBlobInput, type DocReadBlobOutput } from './doc-read-blob-tool';
+export { docListBlobsToolDefinition as docListBlobsTool, validateDocListBlobsInput, type DocListBlobsInput, type DocListBlobsOutput, type DocBlobSummary } from './doc-list-blobs-tool';
+export { docDeleteBlobToolDefinition as docDeleteBlobTool, validateDocDeleteBlobInput, type DocDeleteBlobInput, type DocDeleteBlobOutput } from './doc-delete-blob-tool';
 
 // Photo Album Tools (character vault photos/ folder)
-export { keepImageTool, validateKeepImageInput, type KeepImageInput, type KeepImageOutput } from './keep-image-tool';
-export { listImagesTool, validateListImagesInput, type ListImagesInput, type ListImagesOutput, type ListedImage } from './list-images-tool';
-export { attachImageTool, validateAttachImageInput, type AttachImageInput, type AttachedImageDescriptor } from './attach-image-tool';
+export { keepImageToolDefinition as keepImageTool, keepImageToolDefinition, validateKeepImageInput, type KeepImageInput, type KeepImageOutput } from './keep-image-tool';
+export { listImagesToolDefinition as listImagesTool, listImagesToolDefinition, validateListImagesInput, type ListImagesInput, type ListImagesOutput, type ListedImage } from './list-images-tool';
+export { attachImageToolDefinition as attachImageTool, attachImageToolDefinition, validateAttachImageInput, type AttachImageInput, type AttachedImageDescriptor } from './attach-image-tool';
 
 // Document UI Tools (Scriptorium Phase 3.5)
-export { docOpenDocumentTool, validateDocOpenDocumentInput, type DocOpenDocumentInput, type DocOpenDocumentOutput } from './doc-open-document-tool';
-export { docCloseDocumentTool, validateDocCloseDocumentInput, type DocCloseDocumentInput, type DocCloseDocumentOutput } from './doc-close-document-tool';
-export { docFocusTool, validateDocFocusInput, type DocFocusInput, type DocFocusOutput } from './doc-focus-tool';
+export { docOpenDocumentToolDefinition as docOpenDocumentTool, validateDocOpenDocumentInput, type DocOpenDocumentInput, type DocOpenDocumentOutput } from './doc-open-document-tool';
+export { docCloseDocumentToolDefinition as docCloseDocumentTool, validateDocCloseDocumentInput, type DocCloseDocumentInput, type DocCloseDocumentOutput } from './doc-close-document-tool';
+export { docFocusToolDefinition as docFocusTool, validateDocFocusInput, type DocFocusInput, type DocFocusOutput } from './doc-focus-tool';
 
 export {
   executeDocEditTool,

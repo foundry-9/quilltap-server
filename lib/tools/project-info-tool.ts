@@ -11,6 +11,9 @@
  * @module tools/project-info-tool
  */
 
+import { z } from 'zod'
+import { zodToOpenAISchema } from './zod-to-openai-schema'
+
 /**
  * Valid actions for the project info tool
  */
@@ -19,12 +22,20 @@ export type ProjectInfoAction =
   | 'get_instructions'
 
 /**
+ * Zod schema for the project info tool's input.
+ */
+export const projectInfoToolInputSchema = z.object({
+  action: z
+    .enum(['get_info', 'get_instructions'])
+    .describe(
+      'The action to perform. "get_info" returns project overview, character roster, and the linked Scriptorium document store (if any). "get_instructions" returns full project instructions.'
+    ),
+})
+
+/**
  * Input parameters for the project info tool
  */
-export interface ProjectInfoToolInput {
-  /** Action to perform */
-  action: ProjectInfoAction
-}
+export type ProjectInfoToolInput = z.infer<typeof projectInfoToolInputSchema>
 
 /**
  * Project character info
@@ -103,21 +114,9 @@ export const projectInfoToolDefinition = {
     name: 'project_info',
     description:
       'Access information about the current project context. Use this to get project overview or read project instructions. For file listing, reading, and search, use the Scriptorium document tools (doc_list_files, doc_read_file, doc_grep).',
-    parameters: {
-      type: 'object',
-      properties: {
-        action: {
-          type: 'string',
-          enum: ['get_info', 'get_instructions'],
-          description:
-            'The action to perform. "get_info" returns project overview, character roster, and the linked Scriptorium document store (if any). "get_instructions" returns full project instructions.',
-        },
-      },
-      required: ['action'],
-    },
+    parameters: zodToOpenAISchema(projectInfoToolInputSchema),
   },
 }
-
 
 /**
  * Helper to validate tool input parameters
@@ -125,16 +124,5 @@ export const projectInfoToolDefinition = {
 export function validateProjectInfoInput(
   input: unknown
 ): input is ProjectInfoToolInput {
-  if (typeof input !== 'object' || input === null) {
-    return false
-  }
-
-  const obj = input as Record<string, unknown>
-
-  const validActions = ['get_info', 'get_instructions']
-  if (typeof obj.action !== 'string' || !validActions.includes(obj.action)) {
-    return false
-  }
-
-  return true
+  return projectInfoToolInputSchema.safeParse(input).success
 }

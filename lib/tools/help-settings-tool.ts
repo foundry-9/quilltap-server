@@ -6,6 +6,9 @@
  * to understand and assist with the user's current configuration.
  */
 
+import { z } from 'zod'
+import { zodToOpenAISchema } from './zod-to-openai-schema'
+
 /**
  * Valid settings categories
  */
@@ -20,11 +23,20 @@ export type HelpSettingsCategory =
   | 'system'
 
 /**
+ * Zod schema for the help settings tool's input.
+ */
+export const helpSettingsToolInputSchema = z.object({
+  category: z
+    .enum(['overview', 'chat', 'connections', 'embeddings', 'images', 'appearance', 'templates', 'system'])
+    .describe(
+      'Which settings category to read. "overview" returns a high-level summary of all categories. "chat" returns token display, context compression, memory cascade, timestamps, agent mode, and content settings. "connections" returns configured LLM providers and models (API keys are never shown). "embeddings" returns embedding/memory search profiles. "images" returns image generation profiles and story background settings. "appearance" returns theme and avatar settings. "templates" returns roleplay templates. "system" returns plugin list and logging settings.'
+    ),
+})
+
+/**
  * Input parameters for the help settings tool
  */
-export interface HelpSettingsToolInput {
-  category: HelpSettingsCategory
-}
+export type HelpSettingsToolInput = z.infer<typeof helpSettingsToolInputSchema>
 
 /**
  * Output from the help settings tool
@@ -45,24 +57,9 @@ export const helpSettingsToolDefinition = {
     name: 'help_settings',
     description:
       'Read Quilltap instance settings to understand the current configuration. Use this to help users understand their setup, troubleshoot configuration issues, or suggest settings changes. Select a category to read specific settings.',
-    parameters: {
-      type: 'object',
-      properties: {
-        category: {
-          type: 'string',
-          enum: ['overview', 'chat', 'connections', 'embeddings', 'images', 'appearance', 'templates', 'system'],
-          description:
-            'Which settings category to read. "overview" returns a high-level summary of all categories. "chat" returns token display, context compression, memory cascade, timestamps, agent mode, and content settings. "connections" returns configured LLM providers and models (API keys are never shown). "embeddings" returns embedding/memory search profiles. "images" returns image generation profiles and story background settings. "appearance" returns theme and avatar settings. "templates" returns roleplay templates. "system" returns plugin list and logging settings.',
-        },
-      },
-      required: ['category'],
-    },
+    parameters: zodToOpenAISchema(helpSettingsToolInputSchema),
   },
 }
-
-const VALID_CATEGORIES: Set<string> = new Set([
-  'overview', 'chat', 'connections', 'embeddings', 'images', 'appearance', 'templates', 'system',
-])
 
 /**
  * Helper to validate tool input parameters
@@ -70,15 +67,5 @@ const VALID_CATEGORIES: Set<string> = new Set([
 export function validateHelpSettingsInput(
   input: unknown
 ): input is HelpSettingsToolInput {
-  if (typeof input !== 'object' || input === null) {
-    return false
-  }
-
-  const obj = input as Record<string, unknown>
-
-  if (typeof obj.category !== 'string' || !VALID_CATEGORIES.has(obj.category)) {
-    return false
-  }
-
-  return true
+  return helpSettingsToolInputSchema.safeParse(input).success
 }

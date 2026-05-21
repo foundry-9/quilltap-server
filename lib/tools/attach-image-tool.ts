@@ -4,33 +4,37 @@
  * everyone in the chat alongside the character's prose.
  */
 
-export const attachImageTool = {
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/**
+ * Zod schema for the attach-image tool's input. The single source of truth for both
+ * runtime validation and the derived OpenAI-format `parameters` JSON Schema.
+ */
+export const attachImageToolInputSchema = z.object({
+  uuid: z
+    .string()
+    .min(1)
+    .describe('UUID of the kept image (the album link uuid returned by keep_image / list_images, or an image-v2 file uuid).'),
+});
+
+/**
+ * Input parameters for the attach-image tool
+ */
+export type AttachImageInput = z.infer<typeof attachImageToolInputSchema>;
+
+export const attachImageToolDefinition = {
   type: 'function',
   function: {
     name: 'attach_image',
     description:
       "Re-attach an image you've previously kept (via keep_image) to your current message. Pass the uuid returned by keep_image or list_images. The image must live in your own photo album — to attach someone else's saved image, keep_image it first. The image renders inline in chat for any image-capable participant; non-image-capable models will see the stored prompt and caption in the tool result.",
-    parameters: {
-      type: 'object',
-      properties: {
-        uuid: {
-          type: 'string',
-          description: 'UUID of the kept image (the album link uuid returned by keep_image / list_images, or an image-v2 file uuid).',
-        },
-      },
-      required: ['uuid'],
-    },
+    parameters: zodToOpenAISchema(attachImageToolInputSchema),
   },
 };
 
 export function validateAttachImageInput(input: unknown): input is AttachImageInput {
-  if (typeof input !== 'object' || input === null) return false;
-  const o = input as Record<string, unknown>;
-  return typeof o.uuid === 'string' && o.uuid.length > 0;
-}
-
-export interface AttachImageInput {
-  uuid: string;
+  return attachImageToolInputSchema.safeParse(input).success;
 }
 
 /**

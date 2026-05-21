@@ -2,39 +2,38 @@
  * @fileoverview Tool definition for deleting a binary blob asset from a document store.
  */
 
-export const docDeleteBlobTool = {
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/**
+ * Zod schema for the doc_delete_blob tool's input.
+ */
+export const docDeleteBlobToolInputSchema = z.object({
+  mount_point: z.string().describe('Mount point name or ID holding the blob.'),
+  path: z.string().describe('Relative path to the blob within the mount point.'),
+});
+
+/**
+ * Input parameters for the doc_delete_blob tool
+ */
+export type DocDeleteBlobInput = z.infer<typeof docDeleteBlobToolInputSchema>;
+
+/**
+ * Validates input for doc_delete_blob tool.
+ */
+export function validateDocDeleteBlobInput(input: unknown): input is DocDeleteBlobInput {
+  return docDeleteBlobToolInputSchema.safeParse(input).success;
+}
+
+export const docDeleteBlobToolDefinition = {
   type: 'function',
   function: {
     name: 'doc_delete_blob',
     description:
       'Delete a binary asset from a document store. Markdown references to the deleted blob will 404 until re-uploaded.',
-    parameters: {
-      type: 'object',
-      properties: {
-        mount_point: {
-          type: 'string',
-          description: 'Mount point name or ID holding the blob.',
-        },
-        path: {
-          type: 'string',
-          description: 'Relative path to the blob within the mount point.',
-        },
-      },
-      required: ['mount_point', 'path'],
-    },
+    parameters: zodToOpenAISchema(docDeleteBlobToolInputSchema),
   },
 };
-
-export function validateDocDeleteBlobInput(input: unknown): input is DocDeleteBlobInput {
-  if (typeof input !== 'object' || input === null) return false;
-  const o = input as Record<string, unknown>;
-  return typeof o.mount_point === 'string' && typeof o.path === 'string';
-}
-
-export interface DocDeleteBlobInput {
-  mount_point: string;
-  path: string;
-}
 
 export interface DocDeleteBlobOutput {
   success: boolean;

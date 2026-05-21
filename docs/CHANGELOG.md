@@ -4,6 +4,18 @@
 
 ### 4.6-dev
 
+#### Refactor: Zod schemas as the single source of truth for all 49 tool definitions
+
+Every tool definition in `lib/tools/*-tool.ts` now declares a Zod input schema (`xxxToolInputSchema`) as the canonical contract. The OpenAI-shape `parameters` JSON Schema served to native function-calling providers is derived from that schema via a new helper `lib/tools/zod-to-openai-schema.ts` (built on Zod 4's native `z.toJSONSchema()`), and every `validateXxxInput` function is now a one-line delegate to `schema.safeParse(input).success`. Closes the long-standing gap where the JSON Schema and the runtime validator could quietly drift apart.
+
+The conversion exposed and fixed several real drift cases that had been masked: `web_search`'s validator silently coerced string `maxResults` via `Number()` and ignored its own documented `maxLength: 500` on `query` — Zod enforces both correctly now. `whisper` rejected empty strings; the JSON Schema didn't say so; the Zod schema does now (`.min(1)`). `help_navigate`'s allowlist of permitted route prefixes lived only in the validator, never in the JSON Schema sent to the LLM — it's now a Zod `.refine()` so both surfaces see the same rule. `wardrobe_create_item`'s cross-field "either types or components must be supplied" check moved into a Zod object-level `.refine()`.
+
+Two web-search tests that previously documented the discrepancy ("should accept maxResults as string number — converts via Number()" and "should accept query exceeding max length — no length validation in runtime") were rewritten to assert the new strict behavior. The whole point of this refactor is that the JSON Schema and the validator are now the same thing.
+
+Snapshot test added at `lib/tools/__tests__/tool-definitions-snapshot.test.ts` captures the derived `parameters` JSON for all 49 tools so future Zod-side edits surface as snapshot diffs in review. Removed the now-unused `zod-to-json-schema` package — Zod 4 has native JSON Schema emission and `zod-to-json-schema@3.25` does not support Zod 4 schemas anyway.
+
+Naming convention also standardized: every tool file exports `xxxToolDefinition` as the canonical name. The previously-mixed naming (some files used `xxxTool`, others `xxxToolDefinition`) has been reconciled — `lib/tools/index.ts` still re-exports both for back-compat where consumers expected the short name.
+
 #### Feature: Simple JSON pseudo-tool surface for models without native function calling
 
 Replaced the legacy `[[TOOL ...]]content[[/TOOL]]` text-block pseudo-tool format with a smaller, more robustly-parsed `<tool_call>{...}</tool_call>` JSON-in-XML surface. The new format is designed around three principles: a familiar syntax (JSON inside an XML tag), exactly one tool call per turn, and a hard provider stop sequence (`</tool_call>`) so the model can't emit a valid call and then keep narrating fake results.

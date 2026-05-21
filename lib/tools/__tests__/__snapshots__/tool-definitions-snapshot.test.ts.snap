@@ -1,0 +1,1600 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`tool definitions: derived OpenAI parameters attachImage: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "uuid": {
+      "description": "UUID of the kept image (the album link uuid returned by keep_image / list_images, or an image-v2 file uuid).",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "uuid",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters deleteAnnotation: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "message_index": {
+      "description": "The 0-based message number to remove your annotation from.",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer",
+    },
+  },
+  "required": [
+    "message_index",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docCloseDocument: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "reason": {
+      "description": "Optional reason for closing the document. Shown to the user as a system note.",
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docCopyFile: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "dest_mount_point": {
+      "description": "Name (or ID) of the document store to copy the file into. Must be different from source_mount_point.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "dest_path": {
+      "description": "Destination path within the destination document store. If this path already exists as a directory, the file is dropped into it with the source filename. Otherwise it is treated as the full path with filename. Use "" or "." to copy to the root of the destination store.",
+      "type": "string",
+    },
+    "source_mount_point": {
+      "description": "Name (or ID) of the document store to copy the file from.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "source_path": {
+      "description": "Relative path to the source file within the source document store.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "source_mount_point",
+    "source_path",
+    "dest_mount_point",
+    "dest_path",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docCreateFolder: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "path": {
+      "description": "Relative path for the folder to create within the selected scope.",
+      "type": "string",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file scope. "document_store" for mounted document stores, "project" for project files, "general" for general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docDeleteBlob: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "mount_point": {
+      "description": "Mount point name or ID holding the blob.",
+      "type": "string",
+    },
+    "path": {
+      "description": "Relative path to the blob within the mount point.",
+      "type": "string",
+    },
+  },
+  "required": [
+    "mount_point",
+    "path",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docDeleteFile: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "path": {
+      "description": "Relative path to the file to delete within the selected scope.",
+      "type": "string",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file scope. "document_store" for mounted document stores, "project" for project files, "general" for general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docDeleteFolder: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "path": {
+      "description": "Relative path to the empty folder to delete within the selected scope.",
+      "type": "string",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file scope. "document_store" for mounted document stores, "project" for project files, "general" for general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docFocus: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "anchor": {
+      "description": "Heading text (without # markers) to scroll to. Narrows the search for highlight matching.",
+      "type": "string",
+    },
+    "clear_focus": {
+      "description": "If true, removes the attention marker from the gutter. No other parameters needed.",
+      "type": "boolean",
+    },
+    "highlight": {
+      "description": "A short text string to find and briefly highlight in the document.",
+      "type": "string",
+    },
+    "line": {
+      "description": "Line number to scroll to. Used as fallback when string matching is not viable.",
+      "type": "number",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docGrep: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "case_sensitive": {
+      "default": false,
+      "description": "Case-sensitive matching. Default is case-insensitive.",
+      "type": "boolean",
+    },
+    "context_lines": {
+      "default": 0,
+      "description": "Number of lines of context to include before and after each match.",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer",
+    },
+    "is_regex": {
+      "default": false,
+      "description": "Treat query as a regular expression rather than literal text.",
+      "type": "boolean",
+    },
+    "max_results": {
+      "default": 100,
+      "description": "Maximum number of matching lines to return.",
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "mount_point": {
+      "description": "Optional: restrict search to a specific mount point. Without this, searches all mounted points.",
+      "type": "string",
+    },
+    "normalize_diacritics": {
+      "default": true,
+      "description": "Normalize Unicode diacritics for matching (e.g., "Nimue" matches "Nimuë"). Default is true.",
+      "type": "boolean",
+    },
+    "path": {
+      "description": "Optional: restrict search to a specific file or folder path. If a folder, searches recursively.",
+      "type": "string",
+    },
+    "query": {
+      "description": "Search string or regex pattern to find.",
+      "type": "string",
+    },
+  },
+  "required": [
+    "query",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docInsertText: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "content": {
+      "description": "Text to insert at the specified position.",
+      "type": "string",
+    },
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "normalize_diacritics": {
+      "default": true,
+      "description": "Normalize Unicode diacritics when matching anchor text (e.g., "Nimue" matches "Nimuë"). Default is true.",
+      "type": "boolean",
+    },
+    "path": {
+      "description": "Relative path to the file within the selected scope.",
+      "type": "string",
+    },
+    "position": {
+      "additionalProperties": false,
+      "description": "Insertion position. Must specify exactly one of: before (string), after (string), or at ("start"|"end").",
+      "properties": {
+        "after": {
+          "description": "Insert text after this anchor text (must be unique in file).",
+          "type": "string",
+        },
+        "at": {
+          "description": "Insert at the start or end of the file.",
+          "enum": [
+            "start",
+            "end",
+          ],
+          "type": "string",
+        },
+        "before": {
+          "description": "Insert text before this anchor text (must be unique in file).",
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file source scope. "document_store" operates on mounted document stores, "project" on project files, "general" on general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+    "position",
+    "content",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docListBlobs: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "folder": {
+      "description": "Optional folder prefix to filter results (e.g. "images").",
+      "type": "string",
+    },
+    "mount_point": {
+      "description": "Mount point name or ID to enumerate blobs for.",
+      "type": "string",
+    },
+  },
+  "required": [
+    "mount_point",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docListFiles: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "folder": {
+      "description": "Optional: list files within a specific subfolder path. Allows exploring directory structure.",
+      "type": "string",
+    },
+    "mount_point": {
+      "description": "Optional: restrict listing to a specific mount point. Without this, lists all mount points.",
+      "type": "string",
+    },
+    "pattern": {
+      "description": "Optional: glob pattern to filter results (e.g., "*.md", "*.{ts,tsx}", "src/**/*.js").",
+      "type": "string",
+    },
+    "recursive": {
+      "default": true,
+      "description": "Include files in subfolders. Default is true.",
+      "type": "boolean",
+    },
+    "scope": {
+      "description": "Optional: restrict to files in a specific scope. "document_store" for mounted stores, "project" for project files, "general" for general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docMoveFile: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "new_path": {
+      "description": "Destination relative path for the file. Parent directories are created automatically.",
+      "type": "string",
+    },
+    "path": {
+      "description": "Current relative path to the file within the selected scope.",
+      "type": "string",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file scope. "document_store" for mounted document stores, "project" for project files, "general" for general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+    "new_path",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docMoveFolder: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "new_path": {
+      "description": "Destination relative path for the folder. Parent directories are created automatically for database-backed stores.",
+      "type": "string",
+    },
+    "path": {
+      "description": "Current relative path to the folder within the selected scope.",
+      "type": "string",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The folder scope. Only "document_store" is supported for folder operations.",
+      "enum": [
+        "document_store",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+    "new_path",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docOpenDocument: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "mode": {
+      "default": "split",
+      "description": "Layout mode. "split" shows chat and document side by side, "focus" maximizes the document editor.",
+      "enum": [
+        "split",
+        "focus",
+      ],
+      "type": "string",
+    },
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "path": {
+      "description": "Relative path to the file to open. Omit to create a new blank document.",
+      "type": "string",
+    },
+    "scope": {
+      "default": "project",
+      "description": "The file source scope. Only used when path is provided.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+    "title": {
+      "description": "Display title for new blank documents. Ignored if path is provided.",
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docReadBlob: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "include_bytes": {
+      "default": false,
+      "description": "When true, returns the blob bytes as base64 alongside its metadata. Default false keeps responses compact.",
+      "type": "boolean",
+    },
+    "mount_point": {
+      "description": "Mount point name or ID holding the blob.",
+      "type": "string",
+    },
+    "path": {
+      "description": "Relative path to the blob within the mount point (e.g. images/avatar.webp).",
+      "type": "string",
+    },
+  },
+  "required": [
+    "mount_point",
+    "path",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docReadFile: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "description": "Maximum number of lines to return. Default returns all lines.",
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "offset": {
+      "description": "Start line number (1-based) for pagination. Default is 1.",
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "path": {
+      "description": "Relative path to the file within the selected scope.",
+      "type": "string",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file source scope. "document_store" reads from mounted document stores, "project" reads from project files, "general" reads from general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docReadFrontmatter: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "keys": {
+      "description": "Specific frontmatter keys to retrieve. If omitted, returns all keys.",
+      "items": {
+        "type": "string",
+      },
+      "type": "array",
+    },
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "path": {
+      "description": "Relative path to the markdown file within the selected scope.",
+      "type": "string",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file source scope. "document_store" reads from mounted document stores, "project" reads from project files, "general" reads from general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docReadHeading: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "heading": {
+      "description": "Heading text without # markers. For example, "Character Backstory" for the heading "## Character Backstory".",
+      "type": "string",
+    },
+    "level": {
+      "description": "Heading level (1-6) if the heading text is ambiguous. Use this to disambiguate when the same heading text appears at different levels.",
+      "maximum": 6,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "path": {
+      "description": "Relative path to the markdown file within the selected scope.",
+      "type": "string",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file source scope. "document_store" reads from mounted document stores, "project" reads from project files, "general" reads from general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+    "heading",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docStrReplace: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "case_sensitive": {
+      "default": true,
+      "description": "Whether the find text matching is case-sensitive. Default is true.",
+      "type": "boolean",
+    },
+    "find": {
+      "description": "Exact text to find in the file. Must be unique — appears exactly once. Include sufficient context to guarantee uniqueness.",
+      "type": "string",
+    },
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "normalize_diacritics": {
+      "default": true,
+      "description": "Normalize Unicode diacritics for matching (e.g., "Nimue" matches "Nimuë"). Default is true.",
+      "type": "boolean",
+    },
+    "path": {
+      "description": "Relative path to the file within the selected scope.",
+      "type": "string",
+    },
+    "replace": {
+      "description": "Text to replace the find text with. Can be empty string for deletion.",
+      "type": "string",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file source scope. "document_store" operates on mounted document stores, "project" on project files, "general" on general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+    "find",
+    "replace",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docUpdateFrontmatter: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "path": {
+      "description": "Relative path to the markdown file within the selected scope.",
+      "type": "string",
+    },
+    "replace_all": {
+      "default": false,
+      "description": "If true, replace the entire frontmatter block with updates. If false (default), merge updates with existing frontmatter.",
+      "type": "boolean",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file source scope. "document_store" operates on mounted document stores, "project" on project files, "general" on general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+    "updates": {
+      "additionalProperties": {},
+      "description": "Key-value pairs to set or update. Use null as a value to delete a key. Can contain nested objects and arrays.",
+      "propertyNames": {
+        "type": "string",
+      },
+      "type": "object",
+    },
+  },
+  "required": [
+    "path",
+    "updates",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docUpdateHeading: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "content": {
+      "description": "New content to place under the heading. Can be empty to clear the section.",
+      "type": "string",
+    },
+    "heading": {
+      "description": "Heading text without # markers. For example, "Character Backstory" for the heading "## Character Backstory".",
+      "type": "string",
+    },
+    "level": {
+      "description": "Heading level (1-6) if the heading text is ambiguous. Use this to disambiguate when the same heading text appears at different levels.",
+      "maximum": 6,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "path": {
+      "description": "Relative path to the markdown file within the selected scope.",
+      "type": "string",
+    },
+    "preserve_subheadings": {
+      "default": true,
+      "description": "If true (default), only replace content before the first subheading. If false, replace the entire section including subheadings.",
+      "type": "boolean",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file source scope. "document_store" operates on mounted document stores, "project" on project files, "general" on general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+    "heading",
+    "content",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docWriteBlob: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "data_base64": {
+      "description": "Base64-encoded bytes of the asset to upload.",
+      "type": "string",
+    },
+    "description": {
+      "description": "Optional human-authored description / transcript of the asset. Consumed by the embedding pipeline so the blob becomes searchable.",
+      "type": "string",
+    },
+    "mime_type": {
+      "description": "MIME type of the uploaded bytes (e.g. image/png, image/jpeg).",
+      "type": "string",
+    },
+    "mount_point": {
+      "description": "Mount point name or ID that should receive the blob.",
+      "type": "string",
+    },
+    "original_filename": {
+      "description": "Original filename as the user provided it. Preserved as metadata.",
+      "type": "string",
+    },
+    "path": {
+      "description": "Desired relative path within the mount point, e.g. "images/avatar.png". If the upload is transcoded to WebP the extension is rewritten to .webp.",
+      "type": "string",
+    },
+  },
+  "required": [
+    "mount_point",
+    "path",
+    "data_base64",
+    "original_filename",
+    "mime_type",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters docWriteFile: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "content": {
+      "description": "The complete new contents for the file. For JSON/JSONL files, can be a string (validated) or a native object/array (serialized).",
+    },
+    "expected_mtime": {
+      "description": "Expected modification time from a previous read. If the file has been modified since this time, the write is rejected to prevent overwriting concurrent changes.",
+      "type": "number",
+    },
+    "mime_type": {
+      "description": "Optional MIME type hint; extension detection takes precedence if absent.",
+      "type": "string",
+    },
+    "mount_point": {
+      "description": "Mount point name. Required when scope is "document_store".",
+      "type": "string",
+    },
+    "path": {
+      "description": "Relative path to the file within the selected scope.",
+      "type": "string",
+    },
+    "scope": {
+      "default": "document_store",
+      "description": "The file destination scope. "document_store" writes to mounted document stores, "project" writes to project files, "general" writes to general files.",
+      "enum": [
+        "document_store",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "path",
+    "content",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters helpNavigate: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "url": {
+      "description": "The internal Quilltap URL to navigate to. Must start with /. Examples: "/settings?tab=chat&section=dangerous-content", "/settings?tab=appearance", "/aurora", "/salon"",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "url",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters helpSearch: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "default": 3,
+      "description": "Maximum number of help documents to retrieve. Default is 3.",
+      "maximum": 10,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "query": {
+      "description": "What to search for in the help documentation. Be specific about the feature, setting, or topic. Examples: "how to configure embedding profiles", "image generation settings", "memory search", "project files"",
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "query",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters helpSettings: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "category": {
+      "description": "Which settings category to read. "overview" returns a high-level summary of all categories. "chat" returns token display, context compression, memory cascade, timestamps, agent mode, and content settings. "connections" returns configured LLM providers and models (API keys are never shown). "embeddings" returns embedding/memory search profiles. "images" returns image generation profiles and story background settings. "appearance" returns theme and avatar settings. "templates" returns roleplay templates. "system" returns plugin list and logging settings.",
+      "enum": [
+        "overview",
+        "chat",
+        "connections",
+        "embeddings",
+        "images",
+        "appearance",
+        "templates",
+        "system",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "category",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters imageGeneration: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "aspectRatio": {
+      "description": "Aspect ratio for image generation. Only used for providers that support aspect ratios (e.g., Google Imagen). Examples: 1:1 (square), 16:9 (landscape), 9:16 (portrait).",
+      "enum": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "9:16",
+        "16:9",
+      ],
+      "type": "string",
+    },
+    "count": {
+      "default": 1,
+      "description": "Number of images to generate. Default is 1.",
+      "maximum": 10,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "negativePrompt": {
+      "description": "Optional description of what to avoid in the image. Example: "blurry, low quality, watermark"",
+      "maxLength": 1000,
+      "type": "string",
+    },
+    "prompt": {
+      "description": "A detailed description of the image to generate. Be specific about style, composition, colors, mood, lighting, and any other visual elements.
+
+**CRITICAL: Always use {{placeholders}} for people - the system expands these with physical descriptions:**
+- {{me}}, {{I}}, or {{char}} = yourself (the character/assistant)
+- {{user}} = the person you are talking to (the user character)
+- {{CharacterName}} = any character by name
+
+**When depicting BOTH yourself AND the user together, you MUST use BOTH placeholders.** Do NOT describe appearances directly - use placeholders so the system can insert the correct descriptions.
+
+Good: "{{me}} and {{user}} sitting together in a cozy café, warm lighting"
+Good: "{{char}} handing a gift to {{user}} in a garden setting"
+Bad: "A woman with brown hair sitting with a man" (missing placeholders!)",
+      "maxLength": 4000,
+      "minLength": 1,
+      "type": "string",
+    },
+    "quality": {
+      "default": "standard",
+      "description": "Image quality. "standard" for regular quality (faster, lower cost). "hd" produces finer details and greater consistency (slower, higher cost).",
+      "enum": [
+        "standard",
+        "hd",
+      ],
+      "type": "string",
+    },
+    "size": {
+      "default": "1024x1024",
+      "description": "Image dimensions. Use 1024x1024 for square, 1792x1024 for landscape, 1024x1792 for portrait.",
+      "enum": [
+        "1024x1024",
+        "1792x1024",
+        "1024x1792",
+      ],
+      "type": "string",
+    },
+    "style": {
+      "default": "vivid",
+      "description": "Image style. "vivid" for dramatic, hyper-real, detailed images with vibrant colors. "natural" for more realistic, understated, less exaggerated images.",
+      "enum": [
+        "vivid",
+        "natural",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "prompt",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters keepImage: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "caption": {
+      "description": "Optional short caption describing what you wanted to remember about this image.",
+      "type": "string",
+    },
+    "tags": {
+      "description": "Optional freeform retrieval labels. Indexed alongside the prompt for semantic search.",
+      "items": {
+        "type": "string",
+      },
+      "type": "array",
+    },
+    "uuid": {
+      "description": "UUID of the image to keep. Use the id returned by generate_image, list_images, or the catalogue handle from a Librarian "Image attached" announcement.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "uuid",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters listImages: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "description": "Maximum results to return. Defaults to 20.",
+      "type": "number",
+    },
+    "offset": {
+      "description": "Pagination offset. Defaults to 0.",
+      "type": "number",
+    },
+    "query": {
+      "description": "Optional semantic search query. Searches the saved prompt, scene, caption, and tags.",
+      "type": "string",
+    },
+    "saved_by": {
+      "description": "Optional filter: character name or id of the character who saved the image. Defaults to all visible albums.",
+      "type": "string",
+    },
+    "tags": {
+      "description": "Optional tag filter. An image matches if any of its tags appears in the list.",
+      "items": {
+        "type": "string",
+      },
+      "type": "array",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters memorySearch: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "default": 5,
+      "description": "Maximum number of memories to retrieve. Default is 5.",
+      "maximum": 20,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "minImportance": {
+      "default": 0,
+      "description": "Minimum importance score (0-1) for returned memories. Higher values return only the most important memories. Default is 0.",
+      "maximum": 1,
+      "minimum": 0,
+      "type": "number",
+    },
+    "query": {
+      "description": "What to search for in your memories. Be specific about the topic, person, event, or detail you want to recall. Examples: "user's favorite food", "their birthday", "what happened last time we talked about work", "their pet's name"",
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "query",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters projectInfo: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "description": "The action to perform. "get_info" returns project overview, character roster, and the linked Scriptorium document store (if any). "get_instructions" returns full project instructions.",
+      "enum": [
+        "get_info",
+        "get_instructions",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "action",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters readConversation: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "conversationId": {
+      "description": "Optional ID of a specific conversation to read. If omitted, reads the current conversation. Use search to find conversation IDs.",
+      "type": "string",
+    },
+    "exclude_annotations": {
+      "default": false,
+      "description": "If true, returns clean conversation without any annotations. If false (default), includes all character annotations.",
+      "type": "boolean",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters requestFullContext: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {},
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters rng: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "rolls": {
+      "default": 1,
+      "description": "Number of times to roll/flip (default: 1). For dice, this is like rolling multiple dice (e.g., 3 rolls of d6 = 3d6).",
+      "maximum": 100,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "type": {
+      "anyOf": [
+        {
+          "description": "Number of sides on the die (e.g., 6 for d6, 20 for d20)",
+          "maximum": 1000,
+          "minimum": 2,
+          "type": "integer",
+        },
+        {
+          "description": "Special random type: flip_coin for heads/tails, spin_the_bottle to select a random participant",
+          "enum": [
+            "flip_coin",
+            "spin_the_bottle",
+          ],
+          "type": "string",
+        },
+      ],
+      "description": "Type of random generation. Use a number for dice (e.g., 6 for d6, 20 for d20), "flip_coin" for heads/tails, or "spin_the_bottle" to randomly select a chat participant.",
+    },
+  },
+  "required": [
+    "type",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters searchScriptorium: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "default": 10,
+      "description": "Maximum number of results to return across all sources. Default is 10.",
+      "maximum": 20,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "minImportance": {
+      "default": 0,
+      "description": "Minimum importance score (0-1) for memory results. Only affects memory search, not conversations. Default is 0.",
+      "maximum": 1,
+      "minimum": 0,
+      "type": "number",
+    },
+    "query": {
+      "description": "What to search for across memories, conversations, documents, and your own knowledge base. Be specific about the topic, event, or detail you want to find.",
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+    },
+    "scope": {
+      "default": "all",
+      "description": "Which document stores the \`documents\` and \`knowledge\` sources reach into. "all" (the default) searches every store you can see — your own character vault, every document store linked to this chat's project, and the instance-wide Quilltap General store. "project" narrows to just the document stores linked to this chat's project (returns nothing if no project is attached). "character" narrows to just your own character vault. \`scope\` has no effect on \`memories\` or \`conversations\`.",
+      "enum": [
+        "all",
+        "project",
+        "character",
+      ],
+      "type": "string",
+    },
+    "sources": {
+      "description": "Which layers to search. Defaults to all sources if not specified. "memories" recalls your personal commonplace-book memories; "conversations" searches rendered transcripts of past chats; "documents" searches every file in every document store within the current \`scope\`; "knowledge" searches only files under a \`Knowledge/\` folder inside those same stores. Each knowledge result is tagged with its tier (character, project, or global) so you can tell whose voice it speaks in.",
+      "items": {
+        "enum": [
+          "memories",
+          "conversations",
+          "documents",
+          "knowledge",
+        ],
+        "type": "string",
+      },
+      "type": "array",
+    },
+  },
+  "required": [
+    "query",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters selfInventory: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {},
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters state: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "context": {
+      "description": "Where to operate: "chat" for chat-specific state, "project" for project state. For fetch without context, returns merged state (chat values override project values).",
+      "enum": [
+        "chat",
+        "project",
+      ],
+      "type": "string",
+    },
+    "operation": {
+      "description": "Operation to perform: "fetch" reads state, "set" updates a value, "delete" removes a value.",
+      "enum": [
+        "fetch",
+        "set",
+        "delete",
+      ],
+      "type": "string",
+    },
+    "path": {
+      "description": "Path to the state value using dot notation and array indexing. Examples: "player.health", "inventory[0].name", "gameState.turn". Omit or use empty string to access root state object.",
+      "type": "string",
+    },
+    "value": {
+      "description": "Value to set at the path (required for "set" operation). Can be any JSON value.",
+    },
+  },
+  "required": [
+    "operation",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters submitFinalResponse: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "confidence": {
+      "description": "Optional confidence level (0-1) in your response. Use 0.9+ when highly confident, 0.5-0.9 for moderate confidence, below 0.5 when uncertain.",
+      "maximum": 1,
+      "minimum": 0,
+      "type": "number",
+    },
+    "response": {
+      "description": "The final response to deliver to the user. This should be your complete, well-formatted answer incorporating all information gathered from tool use.",
+      "type": "string",
+    },
+    "summary": {
+      "description": "Optional brief summary of what you accomplished (e.g., "Searched 3 files and found the bug in config.ts").",
+      "type": "string",
+    },
+  },
+  "required": [
+    "response",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters terminalList: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {},
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters terminalRead: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "end": {
+      "description": "Optional 0-indexed inclusive end line. Negative values mean (last line number) - abs(value). Defaults to the last line number when start is provided alone.",
+      "maximum": 9007199254740991,
+      "minimum": -9007199254740991,
+      "type": "integer",
+    },
+    "lines": {
+      "default": 200,
+      "description": "Maximum number of lines to return from the tail of the scrollback when start/end are not provided. Default 200. Ignored when start or end is set.",
+      "maximum": 2000,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "raw": {
+      "default": false,
+      "description": "When true, the response also includes a rawScrollback field with ANSI escape codes preserved. The default scrollback field is always cleaned.",
+      "type": "boolean",
+    },
+    "sessionId": {
+      "description": "Terminal session id (UUID). Get this from terminal_list.",
+      "type": "string",
+    },
+    "start": {
+      "description": "Optional 0-indexed inclusive start line. Negative values mean (last line number) - abs(value). Defaults to 0 when end is provided alone.",
+      "maximum": 9007199254740991,
+      "minimum": -9007199254740991,
+      "type": "integer",
+    },
+  },
+  "required": [
+    "sessionId",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters upsertAnnotation: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "content": {
+      "description": "Your annotation text. This is your personal commentary on the message.",
+      "maxLength": 2000,
+      "minLength": 1,
+      "type": "string",
+    },
+    "message_index": {
+      "description": "The 0-based message number to annotate (as shown in the rendered conversation, e.g., Message 0, Message 1).",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer",
+    },
+  },
+  "required": [
+    "message_index",
+    "content",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeChangeItem: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "item_id": {
+      "description": "The ID of the wardrobe item. Required for "equip" and "add_to_slot". Optional for "remove_from_slot" (omit to clear the slot). Ignored by "clear_slot". The item must be a leaf (no components); composites are rejected — use wardrobe_set_outfit for those.",
+      "type": "string",
+    },
+    "item_title": {
+      "description": "Fallback lookup by title if item_id is not known.",
+      "type": "string",
+    },
+    "mode": {
+      "description": ""equip" (replace slots covered by the item), "add_to_slot" (layer in a slot), "remove_from_slot" (take off one item), "clear_slot" (empty the slot entirely).",
+      "enum": [
+        "equip",
+        "add_to_slot",
+        "remove_from_slot",
+        "clear_slot",
+      ],
+      "type": "string",
+    },
+    "slot": {
+      "description": "Required for "add_to_slot", "remove_from_slot", and "clear_slot". Optional for "equip" — slots are inferred from the item.",
+      "enum": [
+        "top",
+        "bottom",
+        "footwear",
+        "accessories",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "mode",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeCreateItem: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "appropriateness": {
+      "description": "Context tags describing when this item is appropriate, such as "casual", "formal", "athletic", etc.",
+      "type": "string",
+    },
+    "component_item_ids": {
+      "description": "IDs of existing wardrobe items that this new item bundles. Supplying this makes the new item a composite. The slots it covers are computed from the union of the components' slots.",
+      "items": {
+        "type": "string",
+      },
+      "type": "array",
+    },
+    "component_titles": {
+      "description": "Titles of existing wardrobe items that this new item bundles, used as a fallback when component_item_ids are not known. Resolved against the calling character's wardrobe (case-insensitive).",
+      "items": {
+        "type": "string",
+      },
+      "type": "array",
+    },
+    "description": {
+      "description": "A detailed description of the wardrobe item.",
+      "type": "string",
+    },
+    "equip_now": {
+      "default": false,
+      "description": "If true, equip the item immediately after creation. Defaults to false. For composites this places the composite (as a single id) into every slot it covers.",
+      "type": "boolean",
+    },
+    "recipient": {
+      "description": "Name of a character in this chat to give the item to. If omitted, the item is added to your own wardrobe.",
+      "type": "string",
+    },
+    "title": {
+      "description": "The name of the wardrobe item.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "types": {
+      "description": "Coverage tags indicating what body area(s) this item covers. Required for leaf items (no components). Optional and ignored for composite items — the slot coverage is computed from the components.",
+      "items": {
+        "enum": [
+          "top",
+          "bottom",
+          "footwear",
+          "accessories",
+        ],
+        "type": "string",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "required": [
+    "title",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeList: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "appropriateness_filter": {
+      "description": "Filter items by appropriateness context, such as "casual", "formal", "athletic", etc. Only items matching the specified context will be returned.",
+      "type": "string",
+    },
+    "include_equipped": {
+      "description": "Whether to include currently equipped items in the results. Defaults to true.",
+      "type": "boolean",
+    },
+    "include_presets": {
+      "description": "Whether to include saved outfit presets in the response. Defaults to true.",
+      "type": "boolean",
+    },
+    "type_filter": {
+      "description": "Filter items by slot type. Possible values include "top", "bottom", "footwear", "accessories". Only items matching at least one of the specified types will be returned.",
+      "items": {
+        "type": "string",
+      },
+      "type": "array",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeUpdateOutfit: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "item_id": {
+      "description": "The ID of the composite wardrobe item. The item must have components (componentItemIds non-empty); leaf items are rejected — use wardrobe_change_item for those.",
+      "type": "string",
+    },
+    "item_title": {
+      "description": "Fallback lookup by title if item_id is not known.",
+      "type": "string",
+    },
+    "mode": {
+      "description": ""wear" — put the composite outfit on, replacing what was in those slots. "remove" — take the composite outfit off; layered items stay.",
+      "enum": [
+        "wear",
+        "remove",
+      ],
+      "type": "string",
+    },
+  },
+  "required": [
+    "mode",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters webSearch: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "maxResults": {
+      "default": 5,
+      "description": "Maximum number of search results to retrieve. Default is 5.",
+      "maximum": 10,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "query": {
+      "description": "The search query to execute. Be specific and use keywords that will help find relevant information. Examples: "latest news about AI", "current weather in Tokyo", "recent developments in quantum computing"",
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "query",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters whisper: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "message": {
+      "description": "The private message content to send.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "target": {
+      "description": "The name or alias of the character you want to whisper to.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "target",
+    "message",
+  ],
+  "type": "object",
+}
+`;

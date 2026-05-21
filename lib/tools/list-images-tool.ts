@@ -4,61 +4,53 @@
  * Vaults is on, the visible albums of other characters in the chat).
  */
 
-export const listImagesTool = {
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/**
+ * Zod schema for the list-images tool's input. The single source of truth for both
+ * runtime validation and the derived OpenAI-format `parameters` JSON Schema.
+ */
+export const listImagesToolInputSchema = z.object({
+  query: z
+    .string()
+    .describe('Optional semantic search query. Searches the saved prompt, scene, caption, and tags.')
+    .optional(),
+  tags: z
+    .array(z.string())
+    .describe('Optional tag filter. An image matches if any of its tags appears in the list.')
+    .optional(),
+  saved_by: z
+    .string()
+    .describe('Optional filter: character name or id of the character who saved the image. Defaults to all visible albums.')
+    .optional(),
+  limit: z
+    .number()
+    .describe('Maximum results to return. Defaults to 20.')
+    .optional(),
+  offset: z
+    .number()
+    .describe('Pagination offset. Defaults to 0.')
+    .optional(),
+});
+
+/**
+ * Input parameters for the list-images tool
+ */
+export type ListImagesInput = z.infer<typeof listImagesToolInputSchema>;
+
+export const listImagesToolDefinition = {
   type: 'function',
   function: {
     name: 'list_images',
     description:
       "List images previously saved to your photo album (and other characters' albums if cross-character vault reads are enabled for this chat). When `query` is set, results are ranked by semantic similarity over the saved image's prompt, scene snapshot, caption, and tags. The returned metadata includes the prompt excerpt so even a non-image-capable model can reason about each entry without rendering it. Use the returned uuid with `attach_image` to show one of these images again in the chat.",
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Optional semantic search query. Searches the saved prompt, scene, caption, and tags.',
-        },
-        tags: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional tag filter. An image matches if any of its tags appears in the list.',
-        },
-        saved_by: {
-          type: 'string',
-          description: 'Optional filter: character name or id of the character who saved the image. Defaults to all visible albums.',
-        },
-        limit: {
-          type: 'number',
-          description: 'Maximum results to return. Defaults to 20.',
-        },
-        offset: {
-          type: 'number',
-          description: 'Pagination offset. Defaults to 0.',
-        },
-      },
-      required: [],
-    },
+    parameters: zodToOpenAISchema(listImagesToolInputSchema),
   },
 };
 
 export function validateListImagesInput(input: unknown): input is ListImagesInput {
-  if (typeof input !== 'object' || input === null) return false;
-  const o = input as Record<string, unknown>;
-  if (o.query !== undefined && typeof o.query !== 'string') return false;
-  if (o.saved_by !== undefined && typeof o.saved_by !== 'string') return false;
-  if (o.limit !== undefined && typeof o.limit !== 'number') return false;
-  if (o.offset !== undefined && typeof o.offset !== 'number') return false;
-  if (o.tags !== undefined) {
-    if (!Array.isArray(o.tags) || !o.tags.every(t => typeof t === 'string')) return false;
-  }
-  return true;
-}
-
-export interface ListImagesInput {
-  query?: string;
-  tags?: string[];
-  saved_by?: string;
-  limit?: number;
-  offset?: number;
+  return listImagesToolInputSchema.safeParse(input).success;
 }
 
 export interface ListedImage {

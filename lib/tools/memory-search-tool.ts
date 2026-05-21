@@ -7,14 +7,43 @@
  * memory lookup when it needs more information about past interactions.
  */
 
+import { z } from 'zod'
+import { zodToOpenAISchema } from './zod-to-openai-schema'
+
+/**
+ * Zod schema for the memory search tool's input.
+ */
+export const memorySearchToolInputSchema = z.object({
+  query: z
+    .string()
+    .min(1)
+    .max(500)
+    .describe(
+      'What to search for in your memories. Be specific about the topic, person, event, or detail you want to recall. Examples: "user\'s favorite food", "their birthday", "what happened last time we talked about work", "their pet\'s name"'
+    ),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .default(5)
+    .describe('Maximum number of memories to retrieve. Default is 5.')
+    .optional(),
+  minImportance: z
+    .number()
+    .min(0)
+    .max(1)
+    .default(0)
+    .describe(
+      'Minimum importance score (0-1) for returned memories. Higher values return only the most important memories. Default is 0.'
+    )
+    .optional(),
+})
+
 /**
  * Input parameters for the memory search tool
  */
-export interface MemorySearchToolInput {
-  query: string
-  limit?: number
-  minImportance?: number
-}
+export type MemorySearchToolInput = z.infer<typeof memorySearchToolInputSchema>
 
 /**
  * Result of a memory search
@@ -50,37 +79,9 @@ export const memorySearchToolDefinition = {
     name: 'search',
     description:
       'Search the Scriptorium (memories, past conversations, and story backgrounds) for specific information about the user, past conversations, or facts you should remember. Use this when you need to recall details about past interactions, user preferences, important events, or anything you have previously learned about the user. This helps you provide more personalized and contextually aware responses.',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description:
-            'What to search for in your memories. Be specific about the topic, person, event, or detail you want to recall. Examples: "user\'s favorite food", "their birthday", "what happened last time we talked about work", "their pet\'s name"',
-          minLength: 1,
-          maxLength: 500,
-        },
-        limit: {
-          type: 'integer',
-          minimum: 1,
-          maximum: 20,
-          description: 'Maximum number of memories to retrieve. Default is 5.',
-          default: 5,
-        },
-        minImportance: {
-          type: 'number',
-          minimum: 0,
-          maximum: 1,
-          description:
-            'Minimum importance score (0-1) for returned memories. Higher values return only the most important memories. Default is 0.',
-          default: 0,
-        },
-      },
-      required: ['query'],
-    },
+    parameters: zodToOpenAISchema(memorySearchToolInputSchema),
   },
 }
-
 
 /**
  * Helper to validate tool input parameters
@@ -88,32 +89,5 @@ export const memorySearchToolDefinition = {
 export function validateMemorySearchInput(
   input: unknown
 ): input is MemorySearchToolInput {
-  if (typeof input !== 'object' || input === null) {
-    return false
-  }
-
-  const obj = input as Record<string, unknown>
-
-  // query is required
-  if (typeof obj.query !== 'string' || obj.query.trim().length === 0) {
-    return false
-  }
-
-  // Optional limit
-  if (obj.limit !== undefined) {
-    const limit = Number(obj.limit)
-    if (!Number.isInteger(limit) || limit < 1 || limit > 20) {
-      return false
-    }
-  }
-
-  // Optional minImportance
-  if (obj.minImportance !== undefined) {
-    const importance = Number(obj.minImportance)
-    if (isNaN(importance) || importance < 0 || importance > 1) {
-      return false
-    }
-  }
-
-  return true
+  return memorySearchToolInputSchema.safeParse(input).success
 }

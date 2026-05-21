@@ -4,6 +4,9 @@
  * Supports OpenAI and Anthropic format conversions
  */
 
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
 /**
  * Configuration for the image generation tool
  * Controls which features and constraints are available
@@ -19,18 +22,56 @@ export interface ImageGenerationToolConfig {
 }
 
 /**
+ * Zod schema for the image-generation tool's input. The single source of truth for both
+ * runtime validation and the derived OpenAI-format `parameters` JSON Schema.
+ */
+export const imageGenerationToolInputSchema = z.object({
+  prompt: z
+    .string()
+    .min(1)
+    .max(4000)
+    .describe(
+      'A detailed description of the image to generate. Be specific about style, composition, colors, mood, lighting, and any other visual elements.\n\n**CRITICAL: Always use {{placeholders}} for people - the system expands these with physical descriptions:**\n- {{me}}, {{I}}, or {{char}} = yourself (the character/assistant)\n- {{user}} = the person you are talking to (the user character)\n- {{CharacterName}} = any character by name\n\n**When depicting BOTH yourself AND the user together, you MUST use BOTH placeholders.** Do NOT describe appearances directly - use placeholders so the system can insert the correct descriptions.\n\nGood: "{{me}} and {{user}} sitting together in a cozy café, warm lighting"\nGood: "{{char}} handing a gift to {{user}} in a garden setting"\nBad: "A woman with brown hair sitting with a man" (missing placeholders!)'
+    ),
+  negativePrompt: z
+    .string()
+    .max(1000)
+    .describe('Optional description of what to avoid in the image. Example: "blurry, low quality, watermark"')
+    .optional(),
+  size: z
+    .enum(['1024x1024', '1792x1024', '1024x1792'])
+    .default('1024x1024')
+    .describe('Image dimensions. Use 1024x1024 for square, 1792x1024 for landscape, 1024x1792 for portrait.')
+    .optional(),
+  style: z
+    .enum(['vivid', 'natural'])
+    .default('vivid')
+    .describe('Image style. "vivid" for dramatic, hyper-real, detailed images with vibrant colors. "natural" for more realistic, understated, less exaggerated images.')
+    .optional(),
+  quality: z
+    .enum(['standard', 'hd'])
+    .default('standard')
+    .describe('Image quality. "standard" for regular quality (faster, lower cost). "hd" produces finer details and greater consistency (slower, higher cost).')
+    .optional(),
+  aspectRatio: z
+    .enum(['1:1', '3:4', '4:3', '9:16', '16:9'])
+    .describe('Aspect ratio for image generation. Only used for providers that support aspect ratios (e.g., Google Imagen). Examples: 1:1 (square), 16:9 (landscape), 9:16 (portrait).')
+    .optional(),
+  count: z
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .default(1)
+    .describe('Number of images to generate. Default is 1.')
+    .optional(),
+});
+
+/**
  * Input parameters for the image generation tool
  * These are the parameters the LLM can provide when calling the tool
  */
-export interface ImageGenerationToolInput {
-  prompt: string;
-  negativePrompt?: string;
-  size?: string; // e.g., "1024x1024"
-  aspectRatio?: string; // e.g., "16:9" (for Google Imagen)
-  style?: 'vivid' | 'natural';
-  quality?: 'standard' | 'hd';
-  count?: number; // Number of images (1-10)
-}
+export type ImageGenerationToolInput = z.infer<typeof imageGenerationToolInputSchema>;
 
 /**
  * Result information for a single generated image
@@ -70,62 +111,9 @@ export const imageGenerationToolDefinition = {
     name: 'generate_image',
     description:
       'Generate an image based on a text description. Use this when the user requests an image, illustration, artwork, visual content, or any visual material. Provide detailed descriptions of style, composition, colors, and mood for best results.',
-    parameters: {
-      type: 'object',
-      properties: {
-        prompt: {
-          type: 'string',
-          description:
-            'A detailed description of the image to generate. Be specific about style, composition, colors, mood, lighting, and any other visual elements.\n\n**CRITICAL: Always use {{placeholders}} for people - the system expands these with physical descriptions:**\n- {{me}}, {{I}}, or {{char}} = yourself (the character/assistant)\n- {{user}} = the person you are talking to (the user character)\n- {{CharacterName}} = any character by name\n\n**When depicting BOTH yourself AND the user together, you MUST use BOTH placeholders.** Do NOT describe appearances directly - use placeholders so the system can insert the correct descriptions.\n\nGood: "{{me}} and {{user}} sitting together in a cozy café, warm lighting"\nGood: "{{char}} handing a gift to {{user}} in a garden setting"\nBad: "A woman with brown hair sitting with a man" (missing placeholders!)',
-          minLength: 1,
-          maxLength: 4000,
-        },
-        negativePrompt: {
-          type: 'string',
-          description:
-            'Optional description of what to avoid in the image. Example: "blurry, low quality, watermark"',
-          maxLength: 1000,
-        },
-        size: {
-          type: 'string',
-          enum: ['1024x1024', '1792x1024', '1024x1792'],
-          description:
-            'Image dimensions. Use 1024x1024 for square, 1792x1024 for landscape, 1024x1792 for portrait.',
-          default: '1024x1024',
-        },
-        style: {
-          type: 'string',
-          enum: ['vivid', 'natural'],
-          description:
-            'Image style. "vivid" for dramatic, hyper-real, detailed images with vibrant colors. "natural" for more realistic, understated, less exaggerated images.',
-          default: 'vivid',
-        },
-        quality: {
-          type: 'string',
-          enum: ['standard', 'hd'],
-          description:
-            'Image quality. "standard" for regular quality (faster, lower cost). "hd" produces finer details and greater consistency (slower, higher cost).',
-          default: 'standard',
-        },
-        aspectRatio: {
-          type: 'string',
-          enum: ['1:1', '3:4', '4:3', '9:16', '16:9'],
-          description:
-            'Aspect ratio for image generation. Only used for providers that support aspect ratios (e.g., Google Imagen). Examples: 1:1 (square), 16:9 (landscape), 9:16 (portrait).',
-        },
-        count: {
-          type: 'integer',
-          minimum: 1,
-          maximum: 10,
-          description: 'Number of images to generate. Default is 1.',
-          default: 1,
-        },
-      },
-      required: ['prompt'],
-    },
+    parameters: zodToOpenAISchema(imageGenerationToolInputSchema),
   },
 };
-
 
 /**
  * Helper to validate tool input parameters
@@ -133,51 +121,7 @@ export const imageGenerationToolDefinition = {
 export function validateImageGenerationInput(
   input: unknown
 ): input is ImageGenerationToolInput {
-  if (typeof input !== 'object' || input === null) {
-    return false;
-  }
-
-  const obj = input as Record<string, unknown>;
-
-  // prompt is required
-  if (typeof obj.prompt !== 'string' || obj.prompt.trim().length === 0) {
-    return false;
-  }
-
-  // Optional string fields
-  if (obj.negativePrompt !== undefined && typeof obj.negativePrompt !== 'string') {
-    return false;
-  }
-
-  // Optional enum fields
-  if (obj.size !== undefined && !['1024x1024', '1792x1024', '1024x1792'].includes(String(obj.size))) {
-    return false;
-  }
-
-  if (obj.style !== undefined && !['vivid', 'natural'].includes(String(obj.style))) {
-    return false;
-  }
-
-  if (obj.quality !== undefined && !['standard', 'hd'].includes(String(obj.quality))) {
-    return false;
-  }
-
-  if (
-    obj.aspectRatio !== undefined &&
-    !['1:1', '3:4', '4:3', '9:16', '16:9'].includes(String(obj.aspectRatio))
-  ) {
-    return false;
-  }
-
-  // Optional number fields
-  if (obj.count !== undefined) {
-    const count = Number(obj.count);
-    if (!Number.isInteger(count) || count < 1 || count > 10) {
-      return false;
-    }
-  }
-
-  return true;
+  return imageGenerationToolInputSchema.safeParse(input).success;
 }
 
 /**

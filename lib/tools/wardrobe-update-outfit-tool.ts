@@ -15,17 +15,39 @@
  * with its `equip` / `add_to_slot` / `remove_from_slot` / `clear_slot` modes.
  */
 
+import { z } from 'zod'
+import { zodToOpenAISchema } from './zod-to-openai-schema'
+
+/**
+ * Zod schema for the wardrobe update outfit tool's input.
+ */
+export const wardrobeUpdateOutfitToolInputSchema = z.object({
+  mode: z
+    .enum(['wear', 'remove'])
+    .describe(
+      '"wear" — put the composite outfit on, replacing what was in those slots. ' +
+      '"remove" — take the composite outfit off; layered items stay.'
+    ),
+  item_id: z
+    .string()
+    .describe(
+      'The ID of the composite wardrobe item. The item must have components ' +
+      '(componentItemIds non-empty); leaf items are rejected — use ' +
+      'wardrobe_change_item for those.'
+    )
+    .optional(),
+  item_title: z
+    .string()
+    .describe(
+      'Fallback lookup by title if item_id is not known.'
+    )
+    .optional(),
+})
+
 /**
  * Input parameters for wardrobe_set_outfit
  */
-export interface WardrobeUpdateOutfitToolInput {
-  /** Which mutation to perform on the composite. */
-  mode: 'wear' | 'remove';
-  /** ID of the composite wardrobe item. Preferred over title. */
-  item_id?: string;
-  /** Title fallback if `item_id` is unknown. */
-  item_title?: string;
-}
+export type WardrobeUpdateOutfitToolInput = z.infer<typeof wardrobeUpdateOutfitToolInputSchema>
 
 /**
  * Output from wardrobe_set_outfit
@@ -49,8 +71,6 @@ export interface WardrobeUpdateOutfitToolOutput {
   error?: string;
 }
 
-const VALID_MODES = ['wear', 'remove'] as const;
-
 /**
  * Tool definition compatible with OpenAI's tool_calls format
  */
@@ -65,31 +85,7 @@ export const wardrobeUpdateOutfitToolDefinition = {
       'slots the bundle covers). Use mode=remove to take the bundle off (clears the ' +
       'bundle\'s id from those slots, leaving any layered items alone). ' +
       'For individual garments, use wardrobe_change_item instead.',
-    parameters: {
-      type: 'object',
-      properties: {
-        mode: {
-          type: 'string',
-          enum: ['wear', 'remove'],
-          description:
-            '"wear" — put the composite outfit on, replacing what was in those slots. ' +
-            '"remove" — take the composite outfit off; layered items stay.',
-        },
-        item_id: {
-          type: 'string',
-          description:
-            'The ID of the composite wardrobe item. The item must have components ' +
-            '(componentItemIds non-empty); leaf items are rejected — use ' +
-            'wardrobe_change_item for those.',
-        },
-        item_title: {
-          type: 'string',
-          description:
-            'Fallback lookup by title if item_id is not known.',
-        },
-      },
-      required: ['mode'],
-    },
+    parameters: zodToOpenAISchema(wardrobeUpdateOutfitToolInputSchema),
   },
 };
 
@@ -99,19 +95,5 @@ export const wardrobeUpdateOutfitToolDefinition = {
 export function validateWardrobeUpdateOutfitInput(
   input: unknown
 ): input is WardrobeUpdateOutfitToolInput {
-  if (typeof input !== 'object' || input === null) return false;
-
-  const obj = input as Record<string, unknown>;
-
-  if (typeof obj.mode !== 'string' || !VALID_MODES.includes(obj.mode as typeof VALID_MODES[number])) {
-    return false;
-  }
-
-  if (obj.item_id !== undefined && typeof obj.item_id !== 'string') return false;
-  if (obj.item_title !== undefined && typeof obj.item_title !== 'string') return false;
-
-  // Either id or title must be supplied — we can't act on nothing.
-  if (!obj.item_id && !obj.item_title) return false;
-
-  return true;
+  return wardrobeUpdateOutfitToolInputSchema.safeParse(input).success;
 }
