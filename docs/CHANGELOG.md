@@ -8,6 +8,8 @@
 
 Four test suites (`__tests__/unit/packages/quilltap/{memories-commands,db-backup,graph-integrity}.test.js` and `__tests__/unit/lib/database/migration/repair-dangling-related-memory-edges-v1.test.ts`) failed in GitHub Actions with `Cannot find module 'better-sqlite3-multiple-ciphers'`. Their `loadDriver()` helpers tried `packages/quilltap/node_modules/better-sqlite3-multiple-ciphers` first and fell back to the bare `better-sqlite3-multiple-ciphers` require. Locally the first path resolves because `packages/quilltap/` carries its own `node_modules/`, but in CI only the root `npm ci` runs, and the root `package.json` declares the dep as `"better-sqlite3": "npm:better-sqlite3-multiple-ciphers@..."` — npm installs that under the alias name, so neither candidate resolves. Added a third fallback that requires `better-sqlite3` (the alias the runtime already uses) and documented the resolution rule in CLAUDE.md so future tests pick the right import path from the start.
 
+The third fallback then failed differently — `TypeError: Database is not a constructor` — because `jest.config.ts`'s `moduleNameMapper` redirects `^better-sqlite3$` to a manual mock at `__mocks__/better-sqlite3.ts` whose `MockDatabase` is exported via `export default`. `require('better-sqlite3')` therefore returned `{ default: MockDatabase }`, not a constructor. Reworked the third fallback in all four `loadDriver()` helpers to require by absolute filesystem path (`<root>/node_modules/better-sqlite3`); moduleNameMapper only matches bare specifiers, so the absolute path bypasses the mock and loads the real native binding for these tests, which is what they need.
+
 ### 4.5.1
 
 #### Fix: story-background prompt missed enumerating non-participant characters

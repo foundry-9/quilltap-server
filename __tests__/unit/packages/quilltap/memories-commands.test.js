@@ -26,9 +26,12 @@ function loadDriver() {
     try {
       return require('better-sqlite3-multiple-ciphers');
     } catch {
-      // Root package.json aliases better-sqlite3-multiple-ciphers as better-sqlite3,
-      // so in CI (where only the root install runs) the driver is reachable via the alias.
-      return require('better-sqlite3');
+      // Root package.json aliases better-sqlite3-multiple-ciphers as better-sqlite3, so
+      // in CI (where only the root install runs) the driver lives at
+      // <root>/node_modules/better-sqlite3. Require by absolute path so the jest
+      // moduleNameMapper that mocks 'better-sqlite3' for the rest of the suite does
+      // not intercept this load — we want the real native binding here.
+      return require(path.join(QUILLTAP_PKG, '..', '..', 'node_modules', 'better-sqlite3'));
     }
   }
 }
