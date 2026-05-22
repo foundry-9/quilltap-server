@@ -4,6 +4,12 @@
 
 ### 4.6-dev
 
+#### Feature: Z.AI (GLM) provider plugin bundled with Quilltap
+
+`plugins/dist/qtap-plugin-z-ai/` now ships in-tree (previously a separately-published `@quilltap/qtap-plugin-z-ai` package). Source moved verbatim; `package.json`, `manifest.json`, and `esbuild.config.mjs` were rewritten to match the other bundled provider plugins (unscoped name, `Foundry-9 LLC` author, plain `dependencies` instead of peer-deps, `index.js` at plugin root). Version bumped 1.1.3 → 1.1.4 to mark the move. No app-side registration changes — the build-plugins script discovers it automatically via `manifest.json` with `typescript: true`.
+
+Provides GLM-4.6, GLM-4.5 family, GLM-4.6V / GLM-4.5V vision, tool/function calling, Z.AI's native `web_search` tool, and CogView-4 / GLM-Image image generation. Endpoint: `https://api.z.ai/api/paas/v4`.
+
 #### Fix: Lantern story-background prompts no longer re-append portraits for participants
 
 `appendMissingCharacterEnumerations` in `lib/background-jobs/handlers/story-background.ts` was scanning the full user-workspace character list and appending canonical `Name: A woman. <description>` entries for every participant whose name appeared in the crafted prompt without a `Name:` enumeration. Since the crafter LLM normally weaves participants into the scene inline ("On the left, Friday, a woman with strawberry-blonde…") rather than as `Friday: …` enumerations, the safety net was firing on every participant, dumping portrait-style side cards after the integrated scene. Image providers rendered the result as a divided triptych of head-shot tiles instead of a unified scene.

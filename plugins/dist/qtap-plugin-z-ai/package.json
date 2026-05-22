@@ -1,0 +1,21 @@
+{
+  "name": "qtap-plugin-z-ai",
+  "version": "1.1.4",
+  "description": "Z.AI GLM provider plugin for Quilltap",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "author": "Foundry-9 LLC",
+  "license": "MIT",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "clean": "rm -f index.js"
+  },
+  "dependencies": {
+    "@quilltap/plugin-types": "^2.3.2",
+    "@quilltap/plugin-utils": "^2.2.8",
+    "openai": "^6.38.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}
