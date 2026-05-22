@@ -13,6 +13,11 @@ const mockProcessToolCalls = jest.fn()
 
 let nextStreamMessageBehaviour: 'happy' | 'throw' = 'happy'
 let nextStreamMessageChunks: ChunkLike[] = []
+// Optional FIFO queue: when set, each streamMessage call pops the next chunk
+// array instead of reusing `nextStreamMessageChunks`. Once empty, falls back to
+// `nextStreamMessageChunks` so the same setup works for single- and multi-pass
+// tests.
+let streamMessageChunkQueue: ChunkLike[][] | null = null
 let nextStreamMessageThrowAfter: number | null = null
 const streamMessageCalls: Array<Record<string, unknown>> = []
 
@@ -21,8 +26,11 @@ async function* mockStreamMessageImpl(opts: Record<string, unknown>): AsyncGener
   if (nextStreamMessageBehaviour === 'throw' && nextStreamMessageThrowAfter === 0) {
     throw new Error('stream-broke-before-any-chunk')
   }
+  const chunks = streamMessageChunkQueue && streamMessageChunkQueue.length > 0
+    ? streamMessageChunkQueue.shift()!
+    : nextStreamMessageChunks
   let i = 0
-  for (const chunk of nextStreamMessageChunks) {
+  for (const chunk of chunks) {
     yield chunk
     i += 1
     if (nextStreamMessageBehaviour === 'throw' && nextStreamMessageThrowAfter === i) {
@@ -87,7 +95,11 @@ function makeStrategy(overrides: Partial<{
 }> = {}) {
   return {
     name: 'provider-text-markers' as const,
-    hasMarkers: jest.fn((_r: string) => true),
+    // Realistic marker detection: only the initial response carries the
+    // `<tool_use>` pattern. Continuations like `continuation-response` don't,
+    // so the loop naturally terminates after one iteration unless a test
+    // overrides this.
+    hasMarkers: jest.fn((r: string) => /<tool_use>/.test(r)),
     parse: jest.fn((_r: string) => [{ name: 'doc_open_file', arguments: { path: 'a.md' } }]),
     strip: jest.fn((r: string) => r.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, '').trim()),
     formatToolResult: jest.fn(
@@ -125,6 +137,7 @@ describe('text-tool-loop.service', () => {
     streamMessageCalls.length = 0
     nextStreamMessageBehaviour = 'happy'
     nextStreamMessageThrowAfter = null
+    streamMessageChunkQueue = null
     nextStreamMessageChunks = [
       { content: 'continuation-' },
       { content: 'response' },
@@ -176,8 +189,7 @@ describe('text-tool-loop.service', () => {
     expect(opts.toolMessages[0]).toMatchObject({ toolName: 'doc_open_file' })
     expect(opts.generatedImagePaths).toHaveLength(1)
 
-    // strip called on the original response (continuation slate build) and on
-    // the final combined result.
+    // strip is called once per raw response at assembly time: initial + 1 continuation.
     expect((opts.strategy.strip as jest.Mock).mock.calls).toHaveLength(2)
     expect((opts.strategy.strip as jest.Mock).mock.calls[0][0]).toBe(initialFull)
 
@@ -186,9 +198,10 @@ describe('text-tool-loop.service', () => {
     const sent = streamMessageCalls[0]!
     const messages = sent.messages as Array<{ role: string; content: string }>
     expect(messages[0]).toEqual({ role: 'user', content: 'Hi' })
-    // Stripped assistant turn is included.
+    // Un-stripped assistant turn is included so the model can see its own
+    // tool_call paired with the result that follows.
     expect(messages[1].role).toBe('assistant')
-    expect(messages[1].content).toBe('plain narration')
+    expect(messages[1].content).toBe(initialFull)
     // One synthetic user message per tool result.
     expect(messages[2]).toMatchObject({ role: 'user' })
     expect(messages[2].content).toContain('[Tool Result: doc_open_file]')
@@ -205,34 +218,24 @@ describe('text-tool-loop.service', () => {
     expect(opts.streaming.rawResponse).toEqual({ id: 'r1' })
     expect(opts.streaming.thoughtSignature).toBe('sig-2')
 
-    // fullResponse rewritten to stripped + separator + continuation, then re-stripped.
+    // fullResponse: each rawResponse stripped, then joined with a blank line.
     expect(opts.streaming.fullResponse).toBe('plain narration\n\ncontinuation-response')
 
     expect(opts.preservePartialOnError).not.toHaveBeenCalled()
   })
 
-  it('omits the assistant turn from the continuation when the stripped response is whitespace', async () => {
-    const strategy = makeStrategy({ strip: jest.fn(() => '   \n  ') })
-    const opts = makeBaseOpts({ strategy })
-
-    await runTextToolPass(opts as any)
-
-    const sent = streamMessageCalls[0]!
-    const messages = sent.messages as Array<{ role: string }>
-    // Only the original formattedMessages + tool-result user message.
-    expect(messages.map(m => m.role)).toEqual(['user', 'user'])
-  })
-
-  it('skips the "\\n\\n" separator in the combined response when continuation is empty', async () => {
+  it('drops continuation entries that strip to empty when assembling the final response', async () => {
     nextStreamMessageChunks = [
       { done: true, usage: null, cacheUsage: null, rawResponse: null },
     ]
     const opts = makeBaseOpts()
     await runTextToolPass(opts as any)
+    // Continuation was empty → only the initial stripped chunk survives, no
+    // dangling separator.
     expect(opts.streaming.fullResponse).toBe('plain narration')
   })
 
-  it('on continuation error: rewrites fullResponse, strips again, calls preservePartialOnError, and re-throws', async () => {
+  it('on continuation error: rewrites fullResponse, calls preservePartialOnError, and re-throws', async () => {
     nextStreamMessageBehaviour = 'throw'
     nextStreamMessageThrowAfter = 1 // throw after first chunk lands
     const opts = makeBaseOpts()
@@ -243,7 +246,6 @@ describe('text-tool-loop.service', () => {
     // The combined-and-stripped response carries the partial continuation
     // that streamed before the error.
     expect(opts.streaming.fullResponse).toBe('plain narration\n\ncontinuation-')
-    // strip is called once on the slate build and once on the error rewrite.
     expect((opts.strategy.strip as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 
@@ -253,7 +255,7 @@ describe('text-tool-loop.service', () => {
       streaming: makeStreaming({ fullResponse: 'foo [[TOOL]]x[[/TOOL]] bar' }),
       strategy: {
         name: 'text-block',
-        hasMarkers: jest.fn(() => true),
+        hasMarkers: jest.fn((r: string) => /\[\[TOOL\]\]/.test(r)),
         parse: jest.fn(() => [{ name: 'image', arguments: {} }]),
         strip: stripSpy,
         formatToolResult: (toolName: string, content: string) => `[Tool Result: ${toolName}]\n${content}`,
@@ -268,9 +270,113 @@ describe('text-tool-loop.service', () => {
     expect(sent.tools).toEqual([])
     expect(sent.useNativeWebSearch).toBe(false)
 
-    // strip called twice (slate build + final combined).
+    // strip called once per raw response at final assembly (initial + 1 continuation).
     expect(stripSpy).toHaveBeenCalledTimes(2)
     expect(opts.streaming.fullResponse).toBe('foo  bar\n\ncontinuation-response')
+  })
+
+  describe('multi-iteration looping', () => {
+    it('iterates while continuations keep emitting markers, accumulating tool messages', async () => {
+      // Initial response has markers; first two continuations also carry
+      // markers; the third is plain prose, ending the loop.
+      streamMessageChunkQueue = [
+        [{ content: 'still <tool_use>2</tool_use>' }, { done: true, usage: null, rawResponse: { id: 'r1' } }],
+        [{ content: 'more <tool_use>3</tool_use>' }, { done: true, usage: null, rawResponse: { id: 'r2' } }],
+        [{ content: 'final answer' }, { done: true, usage: null, rawResponse: { id: 'r3' } }],
+      ]
+
+      // Each parse returns a DIFFERENT args object so dedupe never trips.
+      let parseIdx = 0
+      const opts = makeBaseOpts({
+        strategy: makeStrategy({
+          parse: jest.fn(() => {
+            parseIdx += 1
+            return [{ name: 'doc_open_file', arguments: { iter: parseIdx } }]
+          }),
+        }),
+      })
+
+      await runTextToolPass(opts as any)
+
+      // Three batches executed (initial + 2 marker-bearing continuations).
+      expect(mockProcessToolCalls).toHaveBeenCalledTimes(3)
+      expect(opts.toolMessages).toHaveLength(3)
+      // Three streamMessage calls (one per continuation).
+      expect(streamMessageCalls).toHaveLength(3)
+      // Final assembled response: each raw response stripped, joined with "\n\n".
+      expect(opts.streaming.fullResponse).toBe('plain narration\n\nstill\n\nmore\n\nfinal answer')
+
+      // Each iteration's continuation slate grows: the un-stripped assistant
+      // turns from prior iterations stay attached so the model sees the chain.
+      const finalCallMessages = streamMessageCalls[2]!.messages as Array<{ role: string; content: string }>
+      const roles = finalCallMessages.map(m => m.role)
+      // user (original) + assistant1 + tool_result1 + assistant2 + tool_result2 + assistant3 + tool_result3.
+      expect(roles).toEqual(['user', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user'])
+      // The first assistant turn carries the un-stripped initial response.
+      expect(finalCallMessages[1].content).toBe('plain narration <tool_use>foo</tool_use>')
+    })
+
+    it('nudges and stops when the same call signature appears 3 times', async () => {
+      // Every continuation re-emits markers; final stream after dedupe trip
+      // returns the answer prose.
+      streamMessageChunkQueue = [
+        [{ content: 'again <tool_use>same</tool_use>' }, { done: true, usage: null, rawResponse: { id: 'a' } }],
+        [{ content: 'again <tool_use>same</tool_use>' }, { done: true, usage: null, rawResponse: { id: 'b' } }],
+        [{ content: 'okay, here is the answer based on what I have' }, { done: true, usage: null, rawResponse: { id: 'nudge' } }],
+      ]
+
+      const opts = makeBaseOpts({
+        strategy: makeStrategy({
+          // Always claim markers so we keep re-entering.
+          hasMarkers: jest.fn(() => true),
+          parse: jest.fn(() => [{ name: 'search', arguments: { q: 'x' } }]),
+        }),
+      })
+
+      await runTextToolPass(opts as any)
+
+      // Two actual tool executions; the 3rd identical call is refused.
+      expect(mockProcessToolCalls).toHaveBeenCalledTimes(2)
+      // Three streamMessage calls: 2 normal continuations + the nudge stream.
+      expect(streamMessageCalls).toHaveLength(3)
+
+      // Nudge stream's last user message contains the dedupe phrasing.
+      const lastSent = streamMessageCalls[streamMessageCalls.length - 1]!
+      const messages = lastSent.messages as Array<{ role: string; content: string }>
+      const lastUser = messages[messages.length - 1]!
+      expect(lastUser.role).toBe('user')
+      expect(lastUser.content).toContain('already called the same tool with the same arguments')
+      expect(lastUser.content).toContain('do NOT call any more tools')
+
+      // The nudge response landed in the final body.
+      expect(opts.streaming.fullResponse).toContain('okay, here is the answer based on what I have')
+    })
+
+    it('stops at the iteration cap when dedupe never trips', async () => {
+      // Marker-bearing chunks for every continuation; unique args so dedupe
+      // doesn't kick in.
+      const marker: ChunkLike[] = [
+        { content: 'and <tool_use>more</tool_use>' },
+        { done: true, usage: null, rawResponse: { id: 'r' } },
+      ]
+      streamMessageChunkQueue = [marker, marker, marker, marker, marker, marker]
+
+      let argsCounter = 0
+      const opts = makeBaseOpts({
+        strategy: makeStrategy({
+          parse: jest.fn(() => {
+            argsCounter += 1
+            return [{ name: 'search', arguments: { unique: argsCounter } }]
+          }),
+        }),
+      })
+
+      await runTextToolPass(opts as any)
+
+      // Cap is 5 → exactly five tool batches executed.
+      expect(mockProcessToolCalls).toHaveBeenCalledTimes(5)
+      expect(streamMessageCalls).toHaveLength(5)
+    })
   })
 
   describe('formatToolResult + stopSequences (simple-json strategy)', () => {

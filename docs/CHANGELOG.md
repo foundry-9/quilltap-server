@@ -4,6 +4,17 @@
 
 ### 4.6-dev
 
+#### Fix: Characters using non-native (`simple-json`) tool calls now respond to results and can chain calls
+
+When a model without native function-calling (e.g. `moonshotai/kimi-k2-thinking` via OpenRouter) emitted a `<tool_call>{...}</tool_call>` block, the system ran the tool but the character produced no follow-up: the continuation request to the model came back with empty content. Two design problems in `lib/services/chat-message/text-tool-loop.service.ts` combined to cause this:
+
+1. The `<tool_call>` block was stripped from the prior assistant turn before the continuation was re-sent, so the model could not see that *it* had asked for the tool. The model only saw its own preamble prose followed by a synthetic user message carrying a `<tool_result>` — a broken causal chain. Thinking models would burn 300+ reasoning tokens and emit nothing.
+2. The pass ran exactly once. Native function-calling loops up to 5 turns (`native-tool-loop.service.ts:104`); this pass did not, so even if the character had responded, it could not chain a second tool call.
+
+`runTextToolPass` is now a `while`-loop capped at `MAX_TEXT_TOOL_ITERATIONS = 5` (mirrors the native loop). Each iteration's continuation slate carries the un-stripped assistant turn, restoring the causal chain. Duplicate-call detection mirrors the help-chat orchestrator (`help-chat/orchestrator.service.ts:335`): JSON-stringified `{name, arguments}` signatures are tracked per pass, and the third identical call is refused with a synthetic user nudge ("you've already called this with the same arguments — respond now, in character") plus one final response stream. Final `streaming.fullResponse` is each iteration's raw response stripped of markers and joined.
+
+Test fixture for `text-tool-loop.service.test.ts` gained a FIFO chunk queue so multi-call passes can yield different content per call; three new tests cover multi-iteration accumulation, dedupe nudge, and the iteration cap. All existing tests updated for the un-stripped-assistant-turn expectation.
+
 #### Fix: Anthropic Sonnet 4.6 no longer 400s when a chat tail is all Staff whispers
 
 Sibling fix to the WebP-mimetype one: any chat where a character's response fails and synthetic whispers (Lantern, Host, Prospero, Librarian, Commonplace Book) accumulate at the tail produced `400 invalid_request_error: This model does not support assistant message prefill. The conversation must end with a user message.` on the next turn. The whispers are stored as `role: ASSISTANT` because that's how the Salon UI groups them, but for the LLM they are external annotations to the character — not the character's own speech.
