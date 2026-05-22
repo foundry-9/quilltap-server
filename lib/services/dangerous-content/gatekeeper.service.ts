@@ -38,6 +38,10 @@ export interface DangerClassificationResult {
   categories: Array<{ category: string; score: number; label: string }>
   /** Token usage for cost tracking */
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number }
+  /** Which classifier produced this result */
+  source?: 'moderation' | 'llm'
+  /** Provider that performed the classification (e.g., 'OPENAI', 'OLLAMA') */
+  providerName?: string
 }
 
 /**
@@ -128,7 +132,7 @@ const MODERATION_CATEGORY_MAP: Record<string, string> = {
 /**
  * Human-readable labels for Concierge categories
  */
-const CATEGORY_LABELS: Record<string, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
   'nsfw': 'Sexual/NSFW content',
   'violence': 'Violence or graphic content',
   'hate_speech': 'Hate speech or harassment',
@@ -252,6 +256,8 @@ async function classifyWithModerationProvider(
 
   // Map to our classification result format
   const result = mapModerationResult(moderationResult, settings.threshold)
+  result.source = 'moderation'
+  result.providerName = provider.metadata.providerName
 
   // Log the moderation call for Inspector visibility (fire and forget)
   logLLMCall({
@@ -391,6 +397,8 @@ export async function classifyContent(
     // Parse the response
     const result = parseClassificationResponse(response.content, settings.threshold)
     result.usage = response.usage
+    result.source = 'llm'
+    result.providerName = cheapLLMSelection.provider
 
     // Cache the result
     cacheResult(contentHash, result)

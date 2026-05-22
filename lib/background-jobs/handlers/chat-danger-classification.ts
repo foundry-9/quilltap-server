@@ -177,7 +177,16 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
   // reach this point when the chat newly transitions to dangerous, so the
   // Concierge announces exactly once per chat.
   if (result.isDangerous) {
-    await postConciergeDangerAnnouncement({ chatId: payload.chatId });
+    await postConciergeDangerAnnouncement({
+      chatId: payload.chatId,
+      details: {
+        score: result.score,
+        threshold: dangerSettings.threshold,
+        categories: result.categories,
+        source: result.source,
+        providerName: result.providerName,
+      },
+    });
   }
 
   logger.info('[ChatDangerClassification] Chat classified', {

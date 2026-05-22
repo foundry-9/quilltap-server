@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Change: Concierge danger announcement names the contributing categories, scores, and threshold
+
+When a chat is first classified as dangerous, the Concierge's in-chat announcement now states exactly what triggered the verdict: the contributing categories (using the canonical labels, e.g. `Sexual/NSFW content`, `Violence or graphic content`), each category's severity score, the overall score, the active threshold, and which assayer rendered the decision (moderation provider or cheap-LLM fallback, identified by provider name). Categories at or above the threshold are listed; if none cross individually (e.g. a moderation `flagged=true` aggregate case), the top scores by rank are shown instead, capped at three. The narrative version weaves these details into the Concierge's voice; the opaque/LLM-context body states them plainly without naming "the Concierge."
+
+To support this, `DangerClassificationResult` gained optional `source: 'moderation' | 'llm'` and `providerName` fields, stamped inside `classifyContent` on both paths. `CATEGORY_LABELS` is now exported from `gatekeeper.service.ts` and used by the writer to keep labels consistent (the cheap-LLM path's free-text `label` is no longer relied on for display). `chat-danger-classification` handler now passes the full classification result plus the active threshold through to the writer.
+
+Files: `lib/services/concierge-notifications/writer.ts`, `lib/services/dangerous-content/gatekeeper.service.ts`, `lib/background-jobs/handlers/chat-danger-classification.ts`, `help/dangerous-content.md`, and new specifics-rendering tests in `__tests__/unit/lib/services/staff-opaque-voicing.test.ts`.
+
 #### Change: Prospero's connection-profile-change announcement is terser
 
 The synthetic message Prospero posts when a character is reassigned to a different connection profile now reads `Amy's current response model is now ChatGPT 5.5 Low Verb; previous model was Kimi-K2 Thinking.` instead of the older `Prospero notes that Amy has been reassigned to ChatGPT 5.5 Low Verb (previously Kimi-K2 Thinking).` Both the visible message and the opaque LLM-context body use the same wording (the opaque body previously diverged). Null fallback (no profile assigned) now reads `unassigned` rather than `no connection profile`. `lib/services/prospero-notifications/writer.ts` + matching test in `staff-opaque-voicing.test.ts`.

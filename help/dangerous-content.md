@@ -149,6 +149,8 @@ Once a chat is classified as dangerous, it stays marked as dangerous permanently
 
 When a chat is first marked as dangerous, the Concierge — one of "the Staff" — steps quietly to the table and posts a brief message of his own. Worded with deliberate discretion, it lets every character at the table (those who can see the Staff) know that the conversation, and any errands attending it, will henceforth be entrusted to a desk better suited to the matter. The announcement carries the Concierge's avatar and is part of the normal chat history; nothing further is required of the user.
 
+The announcement now names *what drew his eye* — the contributing categories with their severity scores, the overall score, the threshold in force, and which assayer (moderation provider or cheap-LLM fallback, by provider name) rendered the verdict. This makes it transparent why the reroute happened and lets you tune the threshold or correct misclassifications with confidence.
+
 ### Optimizations for Permanently Dangerous Chats
 
 When a chat has been permanently classified as dangerous, Quilltap applies several optimizations to save tokens and avoid futile content refusals:
