@@ -4,6 +4,22 @@
 
 ### 4.6-dev
 
+#### Change: Salon Tools palette and Chat Settings modal consolidated into a new Chat Sidebar
+
+The right-side Participants Sidebar on the Salon chat page is now the **Chat Sidebar** (`components/chat/ChatSidebar.tsx`), built as a single-open accordion with five sections: Participants, Chat, Visibility, Organize, Edit Content. Every control that used to live in the composer's Tools palette popover, and every setting from the Chat Settings modal, now lives inline inside the appropriate accordion section. The two inline toggles that floated above the message list in multi-character chats (Shared Vaults, All Whispers) moved into the Visibility section.
+
+- **Chat section** holds Agent Mode toggle, Roleplay Template dropdown, Project picker, Image Provider dropdown, Announce Generated Images dropdown, Auto-generate Avatars toggle, Tools modal launcher, Run Tool modal launcher, and Regenerate Background.
+- **Organize** holds Rename, State editor, Continue Elsewhere, Export, and Gallery (conditional on `chatPhotoCount > 0`).
+- **Edit Content** holds Replace, Bulk Replace, Re-extract Memories, and Delete Memories.
+- **Participants** absorbs the existing turn list, talkativeness sliders, pause/resume, queue indicator, and Add Character button. Default-open on first render.
+- **Visibility** is gated on `isMultiChar` to match the previous behavior of the inline toggles.
+
+The narrow mini-avatar collapsed mode of the sidebar is preserved unchanged. Accordion open/closed state is session-only — no localStorage, no server persistence — and the section is always reset to Participants on reload.
+
+The Tools hamburger button on the composer is gone, along with `ToolPalette.tsx`, `ChatSettingsModal.tsx`, and the original `ParticipantSidebar.tsx`. `CollapsibleCard` gained optional `isOpen` / `onOpenChange` props so the parent can drive single-open behavior; uncontrolled callers are unaffected. `useModalState.ts` lost `toolPaletteOpen` and `chatSettingsModalOpen`. Files touched: `app/salon/[id]/page.tsx`, `app/salon/[id]/components/ChatComposer.tsx`, `app/salon/[id]/components/ChatModals.tsx`, `app/salon/[id]/hooks/useModalState.ts`, `components/ui/CollapsibleCard.tsx`, plus the new `components/chat/ChatSidebar.tsx`.
+
+The previous `ParticipantSidebar.test.tsx` (1310 lines, tightly coupled to the old flat layout) and `tool-palette.test.tsx` are removed; the help files that describe the Tools palette and Chat Settings modal (`chat-settings.md`, `chat-participants.md`, `chat-multi-character.md`, `run-tool.md`, `agent-mode.md`, `help-chat.md`) still describe the old UI and need a follow-up pass.
+
 #### Fix: Save Image now works for mount-file attachments whose images-v2 sister was reaped
 
 `saveImageToAlbum` in `lib/photos/save-image-to-album.ts` rejected with `IMAGE_NOT_FOUND` when the Salon Save-Image button (or the LLM `keep_image` tool) was used on a Librarian-attached mount file whose underlying `files` (images-v2) row no longer existed. The lookup chain — `getImageById` → `docMountFileLinks.findByIdWithContent` → `files.findBySha256` — bailed out if all three missed, even though the actual bytes were still readable from `doc_mount_blobs`. This typically hit older Lantern-generated story backgrounds that survived in a project document store after their original FileEntry was reaped by file-storage reconciliation.

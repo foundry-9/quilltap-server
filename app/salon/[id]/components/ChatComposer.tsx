@@ -1,7 +1,6 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
-import ToolPalette from '@/components/chat/ToolPalette'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
@@ -37,8 +36,6 @@ interface ChatComposerProps {
     toolName?: string
     characterName?: string
   } | null
-  toolPaletteOpen: boolean
-  setToolPaletteOpen: (open: boolean) => void
   showSource: boolean
   setShowSource: (show: boolean) => void
   uploadingFile: boolean
@@ -47,10 +44,6 @@ interface ChatComposerProps {
   renderingPatterns?: RenderingPattern[]
   /** Optional dialogue detection for paragraph-level styling in preview */
   dialogueDetection?: DialogueDetection | null
-  chatPhotoCount: number
-  chatMemoryCount: number
-  hasImageProfile: boolean
-  isSingleCharacterChat: boolean
   roleplayTemplateId?: string | null
   /** Whether document editing mode is enabled */
   documentEditingMode: boolean
@@ -60,37 +53,15 @@ interface ChatComposerProps {
   onOpenDocumentClick?: () => void
   /** Whether Document Mode is currently active (split/focus) */
   isDocumentModeActive?: boolean
-  /** Whether agent mode is enabled for this chat */
-  agentModeEnabled?: boolean | null
-  /** Callback to toggle agent mode */
-  onAgentModeToggle?: () => void
 
   // Callbacks
   onSubmit: (e: React.FormEvent) => void
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
   onAttachFileClick?: () => void
   onImagePaste: (file: File) => Promise<void>
-  onGalleryClick: () => void
-  onGenerateImageClick: () => void
   onLibraryFileClick: () => void
   onStandaloneGenerateImageClick: () => void
   onInsertAnnouncementClick: () => void
-  onAddCharacterClick: () => void
-  onSettingsClick: () => void
-  onRenameClick?: () => void
-  onProjectClick?: () => void
-  projectName?: string | null
-  onContinueChatClick?: () => void
-  onDeleteChatMemoriesClick: () => void
-  onReextractMemoriesClick: () => void
-  onSearchReplaceClick?: () => void
-  onBulkCharacterReplaceClick?: () => void
-  onToolSettingsClick?: () => void
-  onRunToolClick?: () => void
-  onStateClick?: () => void
-  onRegenerateBackgroundClick?: () => void
-  onRoleplayTemplateChange?: () => void
-  storyBackgroundsEnabled?: boolean
   onStopStreaming: () => void
   /** Hide the stop button (when sidebar has its own stop button) */
   hideStopButton?: boolean
@@ -118,51 +89,25 @@ export function ChatComposer({
   streaming,
   waitingForResponse,
   responseStatus,
-  toolPaletteOpen,
-  setToolPaletteOpen,
   showSource,
   setShowSource,
   uploadingFile,
   toolExecutionStatus,
-  renderingPatterns,
-  dialogueDetection,
-  chatPhotoCount,
-  chatMemoryCount,
-  hasImageProfile,
-  isSingleCharacterChat,
+  renderingPatterns: _renderingPatterns,
+  dialogueDetection: _dialogueDetection,
   roleplayTemplateId,
   documentEditingMode,
   onToggleDocumentEditingMode,
   onOpenDocumentClick,
   isDocumentModeActive,
   inputRef: externalInputRef,
-  agentModeEnabled = false,
-  onAgentModeToggle,
   onSubmit,
   onFileSelect,
   onAttachFileClick,
   onImagePaste,
-  onGalleryClick,
-  onGenerateImageClick,
   onLibraryFileClick,
   onStandaloneGenerateImageClick,
   onInsertAnnouncementClick,
-  onAddCharacterClick,
-  onSettingsClick,
-  onRenameClick,
-  onProjectClick,
-  projectName,
-  onContinueChatClick,
-  onDeleteChatMemoriesClick,
-  onReextractMemoriesClick,
-  onSearchReplaceClick,
-  onBulkCharacterReplaceClick,
-  onToolSettingsClick,
-  onRunToolClick,
-  onStateClick,
-  onRegenerateBackgroundClick,
-  onRoleplayTemplateChange,
-  storyBackgroundsEnabled = false,
   onStopStreaming,
   hideStopButton = false,
   onPendingToolResult,
@@ -171,7 +116,6 @@ export function ChatComposer({
   isTerminalModeActive,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
   const editorRef = useRef<ComposerEditorHandle>(null)
   // Track the Lexical editor instance in state so it's available during render
@@ -352,38 +296,6 @@ export function ChatComposer({
           </div>
         )}
 
-        {/* Tool palette popover - shows above the composer when open */}
-        <ToolPalette
-          isOpen={toolPaletteOpen}
-          onClose={() => setToolPaletteOpen(false)}
-          toggleButtonRef={toolPaletteToggleRef}
-          onGalleryClick={onGalleryClick}
-          onSettingsClick={onSettingsClick}
-          onRenameClick={onRenameClick}
-          onProjectClick={onProjectClick}
-          projectName={projectName}
-          onContinueChatClick={onContinueChatClick}
-          onAddCharacterClick={onAddCharacterClick}
-          onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
-          onReextractMemoriesClick={onReextractMemoriesClick}
-          onSearchReplaceClick={onSearchReplaceClick}
-          onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
-          onToolSettingsClick={onToolSettingsClick}
-          onRunToolClick={onRunToolClick}
-          onStateClick={onStateClick}
-          onRegenerateBackgroundClick={onRegenerateBackgroundClick}
-          chatPhotoCount={chatPhotoCount}
-          showAddCharacter={isSingleCharacterChat}
-          chatId={id}
-          chatMemoryCount={chatMemoryCount}
-          storyBackgroundsEnabled={storyBackgroundsEnabled}
-          disabled={sending || !hasActiveCharacters}
-          agentModeEnabled={agentModeEnabled}
-          onAgentModeToggle={onAgentModeToggle}
-          roleplayTemplateId={roleplayTemplateId}
-          onRoleplayTemplateChange={onRoleplayTemplateChange}
-        />
-
         {/* Formatting toolbar - shown above the form when document editing mode is enabled */}
         {documentEditingMode && lexicalEditor && (
           <FormattingToolbar
@@ -430,24 +342,8 @@ export function ChatComposer({
             />
             </div>
 
-            {/* Main toolbar buttons - hamburger and composition mode */}
+            {/* Main toolbar buttons - composition mode, document, terminal */}
             <div className="qt-chat-toolbar">
-              {/* Tool palette toggle button */}
-              <button
-                ref={toolPaletteToggleRef}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setToolPaletteOpen(!toolPaletteOpen)
-                }}
-                className="qt-chat-toolbar-button"
-                title="Tools"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-
               {/* Composition mode toggle button */}
               <button
                 type="button"

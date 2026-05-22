@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
+import ChatSidebar from '@/components/chat/ChatSidebar'
 import SpeakerSelector from '@/components/chat/SpeakerSelector'
 import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
@@ -1146,52 +1146,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onRightPaneVerticalSplitChange={terminalModeHook.setRightPaneVerticalSplit}
           chatContent={
             <>
-              {/* Chat toggles - shown in multi-character chats */}
-              {participantsWithImpersonation.isMultiChar && (
-                <div className="flex items-center justify-end gap-4 px-4 py-1">
-                  <div className="flex items-center gap-2">
-                    <span className="qt-text-secondary text-xs">Shared Vaults</span>
-                    <button
-                      onClick={chatControls.handleToggleCrossCharacterVaultReads}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        chatControls.allowCrossCharacterVaultReads ? 'bg-primary' : 'qt-bg-muted'
-                      }`}
-                      role="switch"
-                      aria-checked={chatControls.allowCrossCharacterVaultReads}
-                      title={
-                        chatControls.allowCrossCharacterVaultReads
-                          ? 'Characters may read each other’s vaults (read-only) and the results are public to the chat. Click to lock.'
-                          : 'Each character’s vault is private; results from doc_* reads are whispered to the caller. Click to let them peek at each other’s dossiers.'
-                      }
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                          chatControls.allowCrossCharacterVaultReads ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="qt-text-secondary text-xs">All Whispers</span>
-                    <button
-                      onClick={() => setShowAllWhispers(!showAllWhispers)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
-                      }`}
-                      role="switch"
-                      aria-checked={showAllWhispers}
-                      title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                          showAllWhispers ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              )}
-
         <VirtualizedMessageList
           messages={visibleMessages}
           virtualizer={virtualizer}
@@ -1272,28 +1226,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           streaming={sseStreaming.streaming}
           waitingForResponse={sseStreaming.waitingForResponse}
           responseStatus={sseStreaming.responseStatus}
-          toolPaletteOpen={modals.toolPaletteOpen}
-          setToolPaletteOpen={modals.setToolPaletteOpen}
           showSource={modals.showPreview}
           setShowSource={modals.setShowPreview}
           uploadingFile={uploadingFile}
           toolExecutionStatus={sseStreaming.toolExecutionStatus}
           renderingPatterns={roleplayRenderingPatterns}
           dialogueDetection={roleplayDialogueDetection}
-          chatPhotoCount={chatPhotoCount}
-          chatMemoryCount={chatMemoryCount}
-          hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
-          isSingleCharacterChat={participantsWithImpersonation.isSingleCharacterChat}
           roleplayTemplateId={chat?.roleplayTemplateId}
           documentEditingMode={chatControls.documentEditingMode}
           onToggleDocumentEditingMode={chatControls.handleToggleDocumentEditingMode}
           onOpenDocumentClick={() => setShowDocumentPicker(true)}
           isDocumentModeActive={documentModeHook.documentMode !== 'normal'}
-          agentModeEnabled={chatControls.agentModeEnabled}
-          onAgentModeToggle={chatControls.handleToggleAgentMode}
-          storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}
-          onRegenerateBackgroundClick={chatControls.handleRegenerateBackground}
-          onRoleplayTemplateChange={fetchChat}
           onSubmit={(e) => sseStreaming.sendMessage(
             e,
             input,
@@ -1316,24 +1259,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               showErrorToast(err instanceof Error ? err.message : 'Failed to upload pasted image')
             }
           }}
-          onGalleryClick={modals.openGallery}
-          onGenerateImageClick={modals.openGenerateImage}
           onLibraryFileClick={modals.openLibraryFilePicker}
           onStandaloneGenerateImageClick={modals.openStandaloneGenerateImage}
           onInsertAnnouncementClick={modals.openInsertAnnouncement}
-          onAddCharacterClick={modals.openAddCharacter}
-          onSettingsClick={modals.openChatSettings}
-          onRenameClick={modals.openRename}
-          onProjectClick={modals.openChatProject}
-          projectName={chat?.projectName}
-          onContinueChatClick={modals.openContinueChat}
-          onDeleteChatMemoriesClick={memoryActions.handleDeleteChatMemories}
-          onReextractMemoriesClick={memoryActions.handleReextractMemories}
-          onSearchReplaceClick={modals.openSearchReplace}
-          onBulkCharacterReplaceClick={modals.openBulkReplace}
-          onToolSettingsClick={modals.openToolSettings}
-          onRunToolClick={modals.openRunTool}
-          onStateClick={modals.openStateEditor}
           onStopStreaming={sseStreaming.stopStreaming}
           hideStopButton={modals.showParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
@@ -1450,8 +1378,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           setModalImage={modals.setModalImage}
           galleryOpen={modals.galleryOpen}
           closeGallery={modals.closeGallery}
-          chatSettingsModalOpen={modals.chatSettingsModalOpen}
-          closeChatSettings={modals.closeChatSettings}
           chatProjectModalOpen={modals.chatProjectModalOpen}
           closeChatProject={modals.closeChatProject}
           renameModalOpen={modals.renameModalOpen}
@@ -1534,7 +1460,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       />
 
       {modals.showParticipantSidebar && (
-        <ParticipantSidebar
+        <ChatSidebar
           participants={participantsWithImpersonation.participantData}
           turnState={turnState}
           turnSelectionResult={turnSelectionResult}
@@ -1565,6 +1491,38 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           chatId={id}
           onRegenerateAvatar={handleRegenerateAvatar}
           isDangerousChat={chat?.isDangerousChat === true}
+          // Chat section
+          agentModeEnabled={chatControls.agentModeEnabled}
+          onAgentModeToggle={chatControls.handleToggleAgentMode}
+          roleplayTemplateId={chat?.roleplayTemplateId}
+          onChatUpdated={fetchChat}
+          projectName={chat?.projectName}
+          onProjectClick={modals.openChatProject}
+          imageProfileId={chat?.imageProfileId}
+          alertCharactersOfLanternImages={chat?.alertCharactersOfLanternImages}
+          avatarGenerationEnabled={chat?.avatarGenerationEnabled}
+          onToolSettingsClick={modals.openToolSettings}
+          onRunToolClick={modals.openRunTool}
+          storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}
+          onRegenerateBackgroundClick={chatControls.handleRegenerateBackground}
+          // Visibility section
+          isMultiChar={participantsWithImpersonation.isMultiChar}
+          showAllWhispers={showAllWhispers}
+          onToggleAllWhispers={() => setShowAllWhispers(!showAllWhispers)}
+          allowCrossCharacterVaultReads={chatControls.allowCrossCharacterVaultReads}
+          onToggleCrossCharacterVaultReads={chatControls.handleToggleCrossCharacterVaultReads}
+          // Organize section
+          onRenameClick={modals.openRename}
+          onStateClick={modals.openStateEditor}
+          onContinueChatClick={modals.openContinueChat}
+          chatPhotoCount={chatPhotoCount}
+          onGalleryClick={modals.openGallery}
+          // Edit Content section
+          onSearchReplaceClick={modals.openSearchReplace}
+          onBulkCharacterReplaceClick={modals.openBulkReplace}
+          onReextractMemoriesClick={memoryActions.handleReextractMemories}
+          onDeleteChatMemoriesClick={memoryActions.handleDeleteChatMemories}
+          chatMemoryCount={chatMemoryCount}
         />
       )}
 
