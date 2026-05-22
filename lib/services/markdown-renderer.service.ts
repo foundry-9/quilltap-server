@@ -197,15 +197,40 @@ export function applyRoleplayPatterns(html: string, compiledPatterns: CompiledPa
       return part;
     }
 
-    // Apply patterns only to text content outside code blocks
-    let result = part;
-    for (const pattern of compiledPatterns) {
-      const regex = new RegExp(pattern.regex.source, pattern.regex.flags.includes('g') ? pattern.regex.flags : pattern.regex.flags + 'g');
-      result = result.replace(regex, (match) => {
-        return `<span class="${pattern.className}">${match}</span>`;
-      });
+    // Apply patterns to text content outside code blocks. Walk the text once,
+    // finding the earliest match among all patterns and advancing past the
+    // wrapped span — mirrors the client-side processRoleplayText in
+    // MessageContent.tsx. A naive per-pattern replace would let later patterns
+    // (e.g. dialogue's "...") match the quoted class attribute inside spans
+    // inserted by earlier patterns, producing malformed nested HTML.
+    let remaining = part;
+    let output = '';
+    while (remaining.length > 0) {
+      let earliestMatch: { index: number; length: number; className: string; text: string } | null = null;
+      for (const pattern of compiledPatterns) {
+        const regex = new RegExp(pattern.regex.source, pattern.regex.flags.replace('g', ''));
+        const match = remaining.match(regex);
+        if (match && match.index !== undefined) {
+          if (!earliestMatch || match.index < earliestMatch.index) {
+            earliestMatch = {
+              index: match.index,
+              length: match[0].length,
+              className: pattern.className,
+              text: match[0],
+            };
+          }
+        }
+      }
+      if (earliestMatch) {
+        output += remaining.substring(0, earliestMatch.index);
+        output += `<span class="${earliestMatch.className}">${earliestMatch.text}</span>`;
+        remaining = remaining.substring(earliestMatch.index + earliestMatch.length);
+      } else {
+        output += remaining;
+        break;
+      }
     }
-    return result;
+    return output;
   });
 
   return processedParts.join('');

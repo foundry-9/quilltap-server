@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Fix: OOC text in pre-rendered messages no longer leaks `"qt-chat-ooc">` as visible text
+
+A user-visible bug of long standing: a message like `((some comment))` in a chat using the Standard rendering patterns would render with the literal text `"qt-chat-ooc">((some comment))` and lose its OOC styling. `applyRoleplayPatterns` in `lib/services/markdown-renderer.service.ts` (the server-side path that writes `chat_messages.renderedHtml`) ran each pattern's `string.replace` sequentially, so the dialogue pattern (`"..."` ) matched the just-inserted `"qt-chat-ooc"` attribute value inside the OOC span and wrapped it, producing `<p><span class=<span class="qt-chat-dialogue">"qt-chat-ooc"</span>>((..))</span></p>`. The browser then parsed the outer span as `<span class=` followed by stray text. The client-side `MessageContent.tsx` already used the correct single-pass earliest-match algorithm (`processRoleplayText`); the server path now mirrors it. Already-stored bad `renderedHtml` values will only correct themselves when the message is re-rendered (e.g. edited, regenerated, or imported again).
+
 #### Fix: Characters using non-native (`simple-json`) tool calls now respond to results and can chain calls
 
 When a model without native function-calling (e.g. `moonshotai/kimi-k2-thinking` via OpenRouter) emitted a `<tool_call>{...}</tool_call>` block, the system ran the tool but the character produced no follow-up: the continuation request to the model came back with empty content. Two design problems in `lib/services/chat-message/text-tool-loop.service.ts` combined to cause this:
