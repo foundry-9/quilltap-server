@@ -163,6 +163,24 @@ When a chat has been permanently classified as dangerous, Quilltap applies sever
 
 If a chat was incorrectly classified as dangerous, you can reset its classification. This can be done via the API (`POST /api/v1/chats/[id]?action=reclassify-danger`), which clears the classification and re-queues it for evaluation.
 
+## The Per-Chat Concierge Switch
+
+Every chat keeps a small brass switch in the sidebar — found under the **Chat** section of the Chat Sidebar — bearing three positions: **Safe**, **Flagged**, and **Off-duty**. It is the only place a chat's relationship with the Concierge may be set, adjusted, or — should the operator so insist — dispensed with entirely.
+
+### Safe
+
+The default footing. The global Concierge settings apply: the gatekeeper makes his quiet rounds before each dispatch, and if the conversation drifts into the sort of territory that draws his eye, he will throw the switch himself and announce, with all due discretion, that the chat is now Flagged. This is the position you want for ordinary use.
+
+### Flagged
+
+The chat is to be treated as dangerous. Subsequent text traffic is routed to the uncensored desk; background errands — memory extraction, title revisions, story backgrounds — likewise. The position arrives in one of two ways: the Concierge has flipped it himself after classification, or the operator has thrown the switch by hand. To throw it back to Safe, simply select Safe; the Concierge will stand down for the moment, and resume his customary watch on the next user message.
+
+### Off-duty
+
+Reserved for the operator who would prefer the Concierge take the afternoon off. In this position **no moderation occurs**. The gatekeeper does not classify, the prompts go to whichever censored provider the chat is configured to use, and image generators receive whatever the conversation produces, unaltered. Provider refusals — and the occasional sternly worded reply — are part of the bargain. The chat never auto-flips out of Off-duty; only the operator's hand returns it to Safe or Flagged.
+
+Each transition between positions is announced in the chat history by the Concierge himself, in his customary voice, so the conversation's moderation provenance remains transparent on later re-readings.
+
 ## Quick-Hide Integration
 
 Chats classified as dangerous can be hidden from the sidebar using the quick-hide system.

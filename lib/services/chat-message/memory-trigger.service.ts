@@ -136,16 +136,18 @@ export async function triggerChatDangerClassification(
   }
 ): Promise<void> {
   try {
-    // Resolve danger settings — bail if mode is OFF
-    const chatSettings = await repos.chatSettings.findByUserId(options.userId)
-    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings)
-    if (dangerSettings.mode === 'OFF') {
+    // Get the chat first so an Off-duty override short-circuits before we
+    // do any setting lookups.
+    const chat = await repos.chats.findById(options.chatId)
+    if (!chat) {
       return
     }
 
-    // Get the chat
-    const chat = await repos.chats.findById(options.chatId)
-    if (!chat) {
+    // Resolve danger settings — bail if mode is OFF (also collapses to OFF
+    // when the chat itself is Off-duty)
+    const chatSettings = await repos.chatSettings.findByUserId(options.userId)
+    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat)
+    if (dangerSettings.mode === 'OFF') {
       return
     }
 

@@ -445,6 +445,33 @@
           "minimum": 20,
           "maximum": 80,
           "description": "Vertical divider position (%) for the right pane when both Document and Terminal Modes are active"
+        },
+        "isDangerousChat": {
+          "type": ["boolean", "null"],
+          "description": "Whether the Concierge has classified this chat as dangerous. NULL = not yet classified."
+        },
+        "dangerScore": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Overall danger score for this chat (0-1), null = not yet classified."
+        },
+        "dangerCategories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Categories of dangerous content detected at chat level."
+        },
+        "dangerClassifiedAt": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp of the last chat-level classification."
+        },
+        "dangerClassifiedAtMessageCount": {
+          "type": ["integer", "null"],
+          "description": "messageCount at classification time, used to detect changes for re-check."
+        },
+        "conciergeOverride": {
+          "enum": ["OFF", null],
+          "description": "Per-chat Concierge mode override. NULL = follow the global Concierge setting; 'OFF' = the Concierge is off-duty for this chat and no moderation effects apply."
         }
       }
     },

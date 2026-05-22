@@ -193,6 +193,8 @@ export interface Chat {
   isDangerousChat?: boolean | null
   /** Categories of dangerous content detected (e.g. 'nsfw', 'violence') */
   dangerCategories?: string[]
+  /** Per-chat Concierge tri-state override: NULL = follow global, 'OFF' = off-duty */
+  conciergeOverride?: 'OFF' | null
   /** Off-scene character cards referenced by ad-hoc announcement bubbles (customAnnouncer.kind === 'character'). Populated server-side from message rows. */
   offSceneCharacters?: Array<{
     id: string

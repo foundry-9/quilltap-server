@@ -4,6 +4,21 @@
 
 ### 4.6-dev
 
+#### Change: Per-chat Concierge tri-state (Safe / Flagged / Off-duty)
+
+Each chat now carries an explicit Concierge mode the operator can set from the sidebar. A new `chats.conciergeOverride` column (TEXT, NULL or `'OFF'`, default NULL) is added by `migrations/scripts/add-chat-concierge-override.ts`. The control lives in the Chat Sidebar's Chat section: Safe (default — global moderation applies, classifier may auto-flip to Flagged), Flagged (treat the chat as dangerous; uncensored routing for text, image gen, cheap-LLM, etc.), and Off-duty (`conciergeOverride='OFF'` — disables every Concierge effect for this chat; never auto-flips out).
+
+Implementation:
+
+- `lib/services/dangerous-content/chat-override.ts` exports `isConciergeOffDuty()` and `isChatActiveDangerous()`. The latter replaces direct `chat.isDangerousChat === true` reads everywhere routing or sanitization decisions are made: `danger-orchestrator.service.ts`, `image-generation-handler.ts`, `appearance-resolution`-aware paths, `cheap-llm.ts`, `chat/context-summary.ts`, `memory-trigger.service.ts`, `orchestrator.service.ts`, `message-finalizer.service.ts`, and the background handlers (`memory-extraction`, `memory-regenerate-all`, `scene-state-tracking`, `story-background`, `title-update`).
+- `resolveDangerousContentSettings()` accepts an optional `chat` argument and returns `OFF_DUTY_DANGEROUS_CONTENT_SETTINGS` (mode `OFF`, every scan disabled) when the chat is off-duty, so callers that already gated on `dangerSettings.mode !== 'OFF'` pick up the override automatically.
+- `scheduled-danger-scan.ts` skips off-duty chats during enumeration. `chat-danger-classification` handler bails at the top with a debug log if the chat is off-duty when its job runs.
+- `lib/services/dangerous-content/manual-flip.ts` is the single chokepoint for manual transitions: it writes the appropriate combination of `conciergeOverride` and `isDangerousChat` (and clears classifier metadata when returning to Safe so the scheduler can re-evaluate), then posts a synthetic Concierge announcement via the new `postConciergeManualAnnouncement` (four variants: manual-flagged, manual-safe, manual-off-duty, manual-on-duty).
+- `PUT /api/v1/chats/[id]` accepts a new `conciergeState: 'safe' | 'flagged' | 'off'` field that the helper maps onto storage.
+- `ChatSidebar.tsx` adds a tri-state `<select>` at the top of the Chat section, mirroring the existing "Announce Generated Images" pattern. The salon-page toolbar pill now shows an "Off-duty" badge when applicable instead of the "Flagged" badge.
+- Export schema (`public/schemas/qtap-export.schema.json`) declares `conciergeOverride` alongside the existing danger fields (which were previously undeclared) so the value round-trips through `.qtap` export/import.
+- DDL.md and `lib/startup/prettify.ts` updated to mention the new column and migration.
+
 #### Change: Salon Tools palette and Chat Settings modal consolidated into a new Chat Sidebar
 
 The right-side Participants Sidebar on the Salon chat page is now the **Chat Sidebar** (`components/chat/ChatSidebar.tsx`), built as a single-open accordion with five sections: Participants, Chat, Visibility, Organize, Edit Content. Every control that used to live in the composer's Tools palette popover, and every setting from the Chat Settings modal, now lives inline inside the appropriate accordion section. The two inline toggles that floated above the message list in multi-character chats (Shared Vaults, All Whispers) moved into the Visibility section.

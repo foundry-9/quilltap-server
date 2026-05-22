@@ -16,6 +16,7 @@ import {
   type TurnTranscript,
 } from '@/lib/services/chat-message/turn-transcript';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import type { Character, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types';
@@ -109,7 +110,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   }
 
   const availableProfiles = await repos.connections.findByUserId(job.userId);
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
   const memoryExtractionLimits = await getMemoryExtractionLimits();
 
   // Anchor derived memories to the historical chat timestamp rather than
@@ -143,7 +144,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
     cheapLLMSettings: chatSettings.cheapLLMSettings,
     availableProfiles,
     dangerSettings,
-    isDangerousChat: chat.isDangerousChat === true,
+    isDangerousChat: isChatActiveDangerous(chat),
     memoryExtractionLimits,
     sourceMessageTimestamp,
   });

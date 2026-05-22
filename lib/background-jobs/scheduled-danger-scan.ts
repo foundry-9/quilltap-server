@@ -126,7 +126,10 @@ export async function runScheduledDangerScan(): Promise<{ usersProcessed: number
       // 1. Never classified (isDangerousChat is null/undefined)
       // 2. Classified as safe but message count has changed since classification
       //    (dangerous chats are sticky and never re-checked)
+      // Off-duty chats (conciergeOverride === 'OFF') are always skipped — the
+      // operator has explicitly waved the Concierge off.
       const unclassified = chats.filter((chat) => {
+        if (chat.conciergeOverride === 'OFF') return false;
         if (chat.isDangerousChat == null) return true;
         if (chat.isDangerousChat === false &&
             chat.dangerClassifiedAtMessageCount != null &&

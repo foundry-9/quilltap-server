@@ -13,6 +13,7 @@ import { getCheapLLMProvider, CheapLLMConfig, type CheapLLMSelection, resolveUnc
 import { updateSceneState, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
 import { createSystemEvent } from '@/lib/services/system-events.service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { SceneStateTrackingPayload } from '../queue-service';
@@ -64,11 +65,12 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     fallbackToLocal: chatSettings?.cheapLLMSettings?.fallbackToLocal ?? true,
   };
 
-  const isDangerousChat = chat.isDangerousChat === true;
+  const isDangerousChat = isChatActiveDangerous(chat);
   let cheapLLMSelection = getCheapLLMProvider(connectionProfile, cheapLLMConfig, availableProfiles, false);
 
-  // For dangerous chats, use uncensored provider to avoid content refusals
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+  // For dangerous chats, use uncensored provider to avoid content refusals.
+  // Pass the chat so an Off-duty override collapses dangerSettings to mode='OFF'.
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
   if (isDangerousChat) {
     cheapLLMSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection,

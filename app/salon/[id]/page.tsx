@@ -867,7 +867,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               />
             </button>
           )}
-          {chat.isDangerousChat && (
+          {chat.conciergeOverride === 'OFF' ? (
+            <span
+              className="qt-danger-badge flex-shrink-0"
+              title="The Concierge is off-duty for this chat. No moderation, no rerouting — set from the sidebar's Chat section."
+            >
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+              </svg>
+              Off-duty
+            </span>
+          ) : chat.isDangerousChat ? (
             <span
               className="qt-danger-badge flex-shrink-0"
               title={`The Concierge has flagged this chat${chat.dangerCategories?.length ? `: ${chat.dangerCategories.join(', ')}` : ''}`}
@@ -877,7 +887,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               </svg>
               Flagged
             </span>
-          )}
+          ) : null}
           <span className="qt-text-primary truncate" title={chat.title}>
             {chat.title}
           </span>
@@ -888,7 +898,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
     return () => setLeftContent(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- llmCharacterKey is a stable string proxy for the llmCharacters array
-  }, [chat?.projectId, chat?.projectName, chat?.title, chat?.isDangerousChat, chat?.dangerCategories, llmCharacterKey, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
+  }, [chat?.projectId, chat?.projectName, chat?.title, chat?.isDangerousChat, chat?.dangerCategories, chat?.conciergeOverride, llmCharacterKey, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
 
   // Set cost summary and inspector button in toolbar right section
   useEffect(() => {
@@ -1501,6 +1511,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           imageProfileId={chat?.imageProfileId}
           alertCharactersOfLanternImages={chat?.alertCharactersOfLanternImages}
           avatarGenerationEnabled={chat?.avatarGenerationEnabled}
+          conciergeOverride={chat?.conciergeOverride}
           onToolSettingsClick={modals.openToolSettings}
           onRunToolClick={modals.openRunTool}
           storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}

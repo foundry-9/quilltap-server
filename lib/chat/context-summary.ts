@@ -13,6 +13,7 @@ import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent } from '@/lib/schemas/types'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
@@ -325,9 +326,9 @@ export async function generateContextSummary(
       return { success: false, error: 'No cheap LLM provider available', wasGenerated: false }
     }
 
-    if (chat.isDangerousChat === true) {
+    if (isChatActiveDangerous(chat)) {
       const chatSettingsForDanger = await repos.chatSettings.findByUserId(userId)
-      const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettingsForDanger)
+      const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettingsForDanger, chat)
       cheapLLM = resolveUncensoredCheapLLMSelection(
         cheapLLM,
         true,

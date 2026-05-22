@@ -562,6 +562,14 @@ export const ChatMetadataSchema = z.object({
   dangerClassifiedAt: TimestampSchema.nullable().optional(),
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
+  /**
+   * Per-chat Concierge mode override. NULL means follow the global Concierge
+   * setting and let `isDangerousChat` decide Safe vs Flagged. 'OFF' disables
+   * every Concierge effect for this chat: no classification, no scanning, no
+   * uncensored-provider reroute, no synthetic Concierge messages. Operators
+   * who flip this on accept the risk of provider refusals.
+   */
+  conciergeOverride: z.enum(['OFF']).nullable().optional(),
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
@@ -759,6 +767,14 @@ export const ChatMetadataBaseSchema = z.object({
   dangerClassifiedAt: TimestampSchema.nullable().optional(),
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
+  /**
+   * Per-chat Concierge mode override. NULL means follow the global Concierge
+   * setting and let `isDangerousChat` decide Safe vs Flagged. 'OFF' disables
+   * every Concierge effect for this chat: no classification, no scanning, no
+   * uncensored-provider reroute, no synthetic Concierge messages. Operators
+   * who flip this on accept the risk of provider refusals.
+   */
+  conciergeOverride: z.enum(['OFF']).nullable().optional(),
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),

@@ -49,6 +49,7 @@ import {
   safeClose,
 } from './streaming.service'
 import { dispatchCourierTransport } from './courier-transport.service'
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 import {
   buildNativeToolSystemInstructions,
   determineEnabledToolOptions,
@@ -828,8 +829,9 @@ async function processMessage(
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
       // Proactive memory recall results
       preSearchedMemories,
-      // Memory recap: uncensored fallback for dangerous chats
-      uncensoredFallbackOptions: (chat.isDangerousChat && dangerSettings && cheapLLMSelection)
+      // Memory recap: uncensored fallback for dangerous chats. Off-duty
+      // chats opt out, so the fallback is not engaged for them.
+      uncensoredFallbackOptions: (isChatActiveDangerous(chat) && dangerSettings && cheapLLMSelection)
         ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
         : undefined,
       // Status callback for budget-driven compression phases

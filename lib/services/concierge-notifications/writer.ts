@@ -125,6 +125,101 @@ export function buildDangerOpaqueContent(details?: ConciergeDangerDetails): stri
   return `${opener} ${specifics} ${closer}`;
 }
 
+/**
+ * Manual-transition announcements. These mirror the auto-classification
+ * variant above but speak to operator-driven flips of the per-chat
+ * Concierge state. They never include classifier details (because there was
+ * no classification) and never honor an opaque audience — the operator is
+ * announcing their own choice, in their own voice, through the Concierge.
+ */
+export type ConciergeManualKind =
+  | 'manual-flagged'      // Safe -> Flagged (the operator flipped the switch themselves)
+  | 'manual-safe'         // Flagged -> Safe (the operator says all clear)
+  | 'manual-off-duty'     // anything -> Off-duty (operator waves the Concierge off)
+  | 'manual-on-duty';     // Off-duty -> back on (operator calls the Concierge back)
+
+function buildManualContent(kind: ConciergeManualKind): string {
+  switch (kind) {
+    case 'manual-flagged':
+      return "By the operator's own hand, the Concierge has thrown the switch: the conversation is to be entrusted henceforth to a desk better appointed to subjects of its particular character. Pray continue at your leisure.";
+    case 'manual-safe':
+      return "By the operator's own hand, the Concierge stands down for the moment. Routine arrangements are restored; he shall, of course, return to his post should the matter again take a turn.";
+    case 'manual-off-duty':
+      return "By the operator's own direction, the Concierge takes the afternoon off. No moderation, no rerouting, no quiet interventions; the present conversation proceeds entirely on the operator's own recognizance.";
+    case 'manual-on-duty':
+      return "The Concierge returns to his post. Customary watch is resumed; the present arrangements are once again subject to his discreet attentions.";
+  }
+}
+
+function buildManualOpaqueContent(kind: ConciergeManualKind): string {
+  switch (kind) {
+    case 'manual-flagged':
+      return 'Operator advisory: this conversation has been manually marked for handling by an uncensored provider. Subsequent traffic may be routed accordingly.';
+    case 'manual-safe':
+      return 'Operator advisory: the prior dangerous-content mark has been manually cleared. Standard routing is restored.';
+    case 'manual-off-duty':
+      return 'Operator advisory: moderation is disabled for this conversation. No classification, scanning, or provider rerouting will run on the operator’s behalf.';
+    case 'manual-on-duty':
+      return 'Operator advisory: standard moderation is restored for this conversation.';
+  }
+}
+
+export interface ConciergeManualAnnouncement {
+  chatId: string;
+  kind: ConciergeManualKind;
+}
+
+export async function postConciergeManualAnnouncement(
+  params: ConciergeManualAnnouncement,
+): Promise<MessageEvent | null> {
+  const { chatId, kind } = params;
+  try {
+    const repos = getRepositories();
+
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      return null;
+    }
+
+    const messageId = randomUUID();
+    const now = new Date().toISOString();
+    const content = buildManualContent(kind);
+    const opaqueContent = buildManualOpaqueContent(kind);
+
+    const message: MessageEvent = {
+      type: 'message',
+      id: messageId,
+      role: 'ASSISTANT',
+      content,
+      opaqueContent,
+      attachments: [],
+      createdAt: now,
+      participantId: null,
+      systemSender: 'concierge',
+      systemKind: 'danger',
+    };
+
+    await repos.chats.addMessage(chatId, message);
+
+    logger.info('[ConciergeNotification] Manual transition announced', {
+      context: 'concierge-notifications',
+      chatId,
+      messageId,
+      kind,
+    });
+
+    return message;
+  } catch (error) {
+    logger.error('[ConciergeNotification] Failed to post manual announcement', {
+      context: 'concierge-notifications',
+      chatId,
+      kind,
+      error: getErrorMessage(error),
+    }, error as Error);
+    return null;
+  }
+}
+
 export async function postConciergeDangerAnnouncement(
   params: ConciergeDangerAnnouncement,
 ): Promise<MessageEvent | null> {

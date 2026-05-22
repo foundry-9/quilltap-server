@@ -112,9 +112,9 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  // 6. Concierge check — classify the prompt for dangerous content
+  // 6. Concierge check — classify the prompt for dangerous content (Off-duty chats skip everything)
   const chatSettings = await repos.chatSettings.findByUserId(job.userId) ?? undefined;
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
+  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
   const dangerSettings = dangerousContentResolved.settings;
 
   let effectiveImageProfile = imageProfile;

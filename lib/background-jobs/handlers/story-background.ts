@@ -31,6 +31,7 @@ import {
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
@@ -231,9 +232,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   }
 
   // Resolve the Concierge settings early (needed for uncensored routing and appearance sanitization)
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
+  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
   const dangerSettings = dangerousContentResolved.settings;
-  const isDangerousChat = chat.isDangerousChat === true;
+  const isDangerousChat = isChatActiveDangerous(chat);
   const hasUncensoredImageProvider = Boolean(dangerSettings.uncensoredImageProfileId);
 
   // For dangerous chats, use uncensored provider for all cheap LLM tasks

@@ -38,6 +38,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import {
   classifyContent as classifyDangerousContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service';
@@ -720,7 +721,7 @@ async function resolveAppearances(
   if (context.chatId) {
     try {
       const chat = await repos.chats.findById(context.chatId);
-      isDangerousChat = chat?.isDangerousChat === true;
+      isDangerousChat = isChatActiveDangerous(chat);
 
       const chatEvents = await repos.chats.getMessages(context.chatId);
       recentChatMessages = chatEvents
@@ -965,13 +966,14 @@ async function expandPromptWithContext(
  */
 async function loadSettingsAndBuildCheapLLM(
   userId: string,
-  chatSettings: ChatSettings | undefined
+  chatSettings: ChatSettings | undefined,
+  chat?: { conciergeOverride?: 'OFF' | null } | null
 ): Promise<{
   dangerSettings: DangerousContentSettings;
   cheapLLMSelection: CheapLLMSelection | null;
 }> {
-  // 4b. Resolve dangerous content settings
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
+  // 4b. Resolve dangerous content settings (chat may be Off-duty)
+  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
   const dangerSettings = dangerousContentResolved.settings;
 
   // 4c. Build cheap LLM selection for dangerous content classification
@@ -1035,10 +1037,25 @@ export async function executeImageGenerationTool(
       });
     }
 
+    // Fetch chat once so the Concierge off-duty override is honored everywhere downstream.
+    let chatForOverride: { conciergeOverride?: 'OFF' | null } | null = null;
+    if (context.chatId) {
+      try {
+        const fetched = await repos.chats.findById(context.chatId);
+        if (fetched) chatForOverride = fetched;
+      } catch (err) {
+        logger.warn('[Image Generation] Could not load chat for Concierge override check', {
+          chatId: context.chatId,
+          errorMessage: getErrorMessage(err),
+        });
+      }
+    }
+
     // 4b-4c. Resolve dangerous content settings and build cheap LLM selection
     const { dangerSettings, cheapLLMSelection } = await loadSettingsAndBuildCheapLLM(
       context.userId,
-      chatSettings
+      chatSettings,
+      chatForOverride
     );
 
     // 5-5b. Classify content, resolve style options, and reroute if needed

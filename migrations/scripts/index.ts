@@ -287,6 +287,8 @@ import { repairDanglingRelatedMemoryEdgesV1Migration } from './repair-dangling-r
 import { addPseudoToolModeFieldMigration } from './add-pseudo-tool-mode-field';
 // Reconcile files.mimeType/size with the mount blob (bridges transcode bitmaps to WebP; the FileEntry must reflect what is on disk)
 import { repairFilesMimeAndSizeFromMountBlobMigration } from './repair-files-mime-and-size-from-mount-blob';
+// Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
+import { addChatConciergeOverrideMigration } from './add-chat-concierge-override';
 
 /**
  * All available migrations.
@@ -569,6 +571,8 @@ export const migrations: Migration[] = [
   addPseudoToolModeFieldMigration,
   // Reconcile files.mimeType/size with the mount blob (post-transcode metadata was dropped on the floor)
   repairFilesMimeAndSizeFromMountBlobMigration,
+  // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
+  addChatConciergeOverrideMigration,
 ];
 
 export {
@@ -836,5 +840,7 @@ export {
   addPseudoToolModeFieldMigration,
   // Reconcile files.mimeType/size with the mount blob
   repairFilesMimeAndSizeFromMountBlobMigration,
+  // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
+  addChatConciergeOverrideMigration,
 };
 

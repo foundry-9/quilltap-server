@@ -102,6 +102,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-chat-scenario-text-field-v1': 'Recording scenario text on each chat',
   'add-chat-type-field-v1': 'Adding chat type field',
   'add-chat-danger-classification-fields-v1': "Adding the Concierge's classification fields",
+  'add-chat-concierge-override-v1': "Adding the Concierge's per-chat off-duty switch",
   'add-chat-cross-character-vault-reads-field-v1': 'Adding cross-character vault permission to chats',
   'add-whisper-target-field-v1': 'Adding whisper targets to chat messages',
   'add-turn-queue-field-v1': 'Adding the turn queue to chats',

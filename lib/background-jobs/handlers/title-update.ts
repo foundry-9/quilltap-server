@@ -13,6 +13,7 @@ import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection
 import { logger } from '@/lib/logger';
 import { resolveImageProfileForChat } from '@/lib/image-gen/profile-resolution';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import type { TitleUpdatePayload } from '../queue-service';
 import { enqueueStoryBackgroundGeneration } from '../queue-service';
 
@@ -59,9 +60,10 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
     availableProfiles
   );
 
-  // For dangerous chats, use uncensored provider to avoid content refusals
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
-  if (chat.isDangerousChat === true) {
+  // For dangerous chats, use uncensored provider to avoid content refusals.
+  // Off-duty chats are explicitly opted out of uncensored routing.
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
+  if (isChatActiveDangerous(chat)) {
     cheapLLMSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection,
       true,

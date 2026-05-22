@@ -97,6 +97,8 @@ export interface ChatSidebarProps {
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
   avatarGenerationEnabled?: boolean | null
+  /** Per-chat Concierge override ('OFF' = off-duty, null = follow global). */
+  conciergeOverride?: 'OFF' | null
   onToolSettingsClick?: () => void
   onRunToolClick?: () => void
   storyBackgroundsEnabled?: boolean
@@ -273,6 +275,8 @@ export function ChatSidebar(props: ChatSidebarProps) {
             imageProfileId={props.imageProfileId}
             alertCharactersOfLanternImages={props.alertCharactersOfLanternImages}
             avatarGenerationEnabled={props.avatarGenerationEnabled}
+            isDangerousChat={props.isDangerousChat}
+            conciergeOverride={props.conciergeOverride}
             onToolSettingsClick={props.onToolSettingsClick}
             onRunToolClick={props.onRunToolClick}
             storyBackgroundsEnabled={props.storyBackgroundsEnabled}
@@ -636,11 +640,24 @@ interface ChatSectionProps {
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
   avatarGenerationEnabled?: boolean | null
+  isDangerousChat?: boolean
+  conciergeOverride?: 'OFF' | null
   onToolSettingsClick?: () => void
   onRunToolClick?: () => void
   storyBackgroundsEnabled?: boolean
   onRegenerateBackgroundClick?: () => void
   sectionOpen: boolean
+}
+
+type ConciergeUIState = 'safe' | 'flagged' | 'off'
+
+function deriveConciergeState(
+  isDangerousChat: boolean | undefined,
+  conciergeOverride: 'OFF' | null | undefined,
+): ConciergeUIState {
+  if (conciergeOverride === 'OFF') return 'off'
+  if (isDangerousChat) return 'flagged'
+  return 'safe'
 }
 
 function ChatSection({
@@ -654,6 +671,8 @@ function ChatSection({
   imageProfileId,
   alertCharactersOfLanternImages,
   avatarGenerationEnabled,
+  isDangerousChat,
+  conciergeOverride,
   onToolSettingsClick,
   onRunToolClick,
   storyBackgroundsEnabled,
@@ -665,6 +684,7 @@ function ChatSection({
   const [imageProfileSaving, setImageProfileSaving] = useState(false)
   const [alertImagesSaving, setAlertImagesSaving] = useState(false)
   const [avatarGenSaving, setAvatarGenSaving] = useState(false)
+  const [conciergeSaving, setConciergeSaving] = useState(false)
 
   // Sync from props when chat record changes upstream
   useEffect(() => {
@@ -769,6 +789,34 @@ function ChatSection({
     }
   }
 
+  const handleConciergeStateChange = async (next: ConciergeUIState) => {
+    try {
+      setConciergeSaving(true)
+      const res = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conciergeState: next }),
+      })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
+      }
+      showSuccessToast(
+        next === 'safe'
+          ? 'The Concierge is on watch'
+          : next === 'flagged'
+            ? 'Marked as flagged'
+            : 'The Concierge is off-duty'
+      )
+      onChatUpdated?.()
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      showErrorToast(msg || 'Failed to change the Concierge state')
+    } finally {
+      setConciergeSaving(false)
+    }
+  }
+
   const handleAvatarGenToggle = async () => {
     try {
       setAvatarGenSaving(true)
@@ -794,8 +842,32 @@ function ChatSection({
     ? 'inherit'
     : alertCharactersOfLanternImages ? 'enabled' : 'disabled'
 
+  const conciergeState = deriveConciergeState(isDangerousChat, conciergeOverride)
+  const conciergeHelperText =
+    conciergeState === 'off'
+      ? "Off-duty gives the Concierge the afternoon off. Censored providers may refuse the conversation, and image prompts go out unaltered — the risk is yours."
+      : conciergeState === 'flagged'
+        ? 'Flagged routes this chat through the Concierge\'s uncensored providers.'
+        : 'Safe lets the Concierge keep watch; he\'ll flip the switch if the conversation calls for it.'
+
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-chat flex flex-col gap-3">
+      {/* The Concierge — per-chat tri-state */}
+      <label className="qt-label">
+        <span className="block mb-1">The Concierge</span>
+        <select
+          value={conciergeState}
+          onChange={(e) => handleConciergeStateChange(e.target.value as ConciergeUIState)}
+          disabled={conciergeSaving}
+          className="qt-select text-sm"
+        >
+          <option value="safe">Safe</option>
+          <option value="flagged">Flagged</option>
+          <option value="off">Off-duty</option>
+        </select>
+        <span className="block mt-1 qt-text-secondary text-xs">{conciergeHelperText}</span>
+      </label>
+
       {/* Agent Mode */}
       {onAgentModeToggle && (
         <button

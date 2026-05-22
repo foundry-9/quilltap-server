@@ -16,6 +16,7 @@ import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -236,7 +237,7 @@ export async function finalizeMessageResponse({
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings.cheapLLMSettings,
       dangerSettings,
-      isDangerousChat: chat.isDangerousChat === true,
+      isDangerousChat: isChatActiveDangerous(chat),
     }
 
     // Per-turn memory extraction: fire only when the turn closes (control
@@ -283,7 +284,7 @@ export async function finalizeMessageResponse({
       memoryChatSettings: {
         cheapLLMSettings: chatSettings.cheapLLMSettings,
         dangerSettings,
-        isDangerousChat: chat.isDangerousChat === true,
+        isDangerousChat: isChatActiveDangerous(chat),
       },
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),
     } : undefined,
