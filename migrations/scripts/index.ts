@@ -285,6 +285,8 @@ import { addMemoriesReinforcedImportanceIndexMigration } from './add-memories-re
 import { repairDanglingRelatedMemoryEdgesV1Migration } from './repair-dangling-related-memory-edges-v1';
 // Add pseudoToolMode column to connection_profiles (selects native/simple-json/text-block pseudo-tool surface)
 import { addPseudoToolModeFieldMigration } from './add-pseudo-tool-mode-field';
+// Reconcile files.mimeType/size with the mount blob (bridges transcode bitmaps to WebP; the FileEntry must reflect what is on disk)
+import { repairFilesMimeAndSizeFromMountBlobMigration } from './repair-files-mime-and-size-from-mount-blob';
 
 /**
  * All available migrations.
@@ -565,6 +567,8 @@ export const migrations: Migration[] = [
   repairDanglingRelatedMemoryEdgesV1Migration,
   // Add pseudoToolMode column to connection_profiles
   addPseudoToolModeFieldMigration,
+  // Reconcile files.mimeType/size with the mount blob (post-transcode metadata was dropped on the floor)
+  repairFilesMimeAndSizeFromMountBlobMigration,
 ];
 
 export {
@@ -830,5 +834,7 @@ export {
   repairDanglingRelatedMemoryEdgesV1Migration,
   // Add pseudoToolMode column to connection_profiles
   addPseudoToolModeFieldMigration,
+  // Reconcile files.mimeType/size with the mount blob
+  repairFilesMimeAndSizeFromMountBlobMigration,
 };
 

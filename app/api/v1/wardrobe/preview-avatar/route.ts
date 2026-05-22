@@ -157,13 +157,15 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     const storageKey = written.storageKey;
     const fileFolderPath: string | null = null;
 
+    // The vault bridge transcodes bitmap uploads to WebP; the FileEntry
+    // must record the post-transcode mime/size, not the input.
     await repos.files.create(
       {
         userId: user.id,
         sha256,
         originalFilename,
-        mimeType,
-        size: buffer.length,
+        mimeType: written.storedMimeType,
+        size: written.sizeBytes,
         width: 1024,
         height: 1792,
         // Linked to the character so it surfaces in the character's gallery,

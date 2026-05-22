@@ -320,6 +320,11 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     let fileProjectId: string | null;
     let fileFolderPath: string | null;
     let usedVault = false;
+    // The storage bridges transcode bitmap uploads to WebP; the FileEntry
+    // must record the post-transcode mime/size or vision providers reject
+    // the bytes ("media_type X but image is Y").
+    let storedMimeType: string;
+    let storedSize: number;
 
     if (!folderProjectId) {
       const vault = await getCharacterVaultStore(payload.characterId);
@@ -337,6 +342,8 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         description: `${character.name} — wardrobe portrait`,
       });
       storageKey = written.storageKey;
+      storedMimeType = written.storedMimeType;
+      storedSize = written.sizeBytes;
       fileProjectId = null;
       fileFolderPath = null;
       usedVault = true;
@@ -349,6 +356,8 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         folderPath: '/character-avatars/',
       });
       storageKey = uploadResult.storageKey;
+      storedMimeType = uploadResult.storedMimeType;
+      storedSize = uploadResult.sizeBytes;
       fileProjectId = folderProjectId;
       fileFolderPath = '/character-avatars/';
     }
@@ -373,8 +382,8 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       userId: job.userId,
       sha256,
       originalFilename,
-      mimeType,
-      size: buffer.length,
+      mimeType: storedMimeType,
+      size: storedSize,
       width: 1024,
       height: 1792,
       linkedTo: [payload.chatId, payload.characterId],

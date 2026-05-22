@@ -4,6 +4,28 @@
 
 ### 4.6-dev
 
+#### Fix: Anthropic Sonnet 4.6 no longer 400s when a chat tail is all Staff whispers
+
+Sibling fix to the WebP-mimetype one: any chat where a character's response fails and synthetic whispers (Lantern, Host, Prospero, Librarian, Commonplace Book) accumulate at the tail produced `400 invalid_request_error: This model does not support assistant message prefill. The conversation must end with a user message.` on the next turn. The whispers are stored as `role: ASSISTANT` because that's how the Salon UI groups them, but for the LLM they are external annotations to the character — not the character's own speech.
+
+Two places were leaking assistant-role whispers into the LLM tail:
+
+1. **Historical whispers in chat history.** `buildMessageContext` in `lib/services/chat-message/context-builder.service.ts` now re-roles `systemSender` messages to `USER` when building the LLM-bound message list. The opaque-anywhere body swap (persona body → `opaqueContent` in opaque mode) rides on the same map; both modes get the role flip. Exception: whispers carrying attachments (Lantern image generations, Librarian-attach announcements) keep `role: ASSISTANT` so `collectLanternImageFileIdsForCharacter`, which discriminates Lantern-published images structurally as "assistant + attachments," still picks them up. The whispers that needed flipping (host, prospero, librarian-no-attach, commonplace) have no attachments, so this carve-out is naturally safe.
+
+2. **In-line whispers injected at the very end of context-build.** `lib/chat/context-manager.ts` was pushing two whisper kinds straight into the final `contextMessages` array *after* the selected-messages loop ran, with `role: 'assistant'` hard-coded: the off-scene character introduction (a Host announcement when a workspace character is name-dropped for the first time) and the auto-prepend timestamp whisper. In non-continue mode this got buried by the trailing user message at line 1576; in continue/nudge mode there's no user message and these whisper pushes formed the tail. Both pushes are now `role: 'user'` for the same reason as (1) — they're Host voices, not character speech.
+
+Conceptually correct and provider-agnostic: every provider sees the Staff as external input rather than as the character's voice. The Lantern walker (`filteredExistingMessages` consumer) and the `hasPriorResponse` participantId check are unaffected; both key off signals untouched by the flip. All existing context-builder, librarian, host-notification, summary-fold, turn-transcript, and courier-transport tests pass without modification.
+
+#### Fix: Chat attachments no longer 400 with "media_type X but bytes are Y"
+
+The Scriptorium storage bridges (`writeProjectFileToMountStore`, `writeUserUploadToMountStore`, `writeLanternBackgroundToMountStore`, `writeCharacterAvatarToVault`) transcode bitmap uploads to WebP via `transcodeToWebP` before persisting. Each bridge returns the post-transcode `storedMimeType`, `sizeBytes`, and `sha256`, but every caller (`FileStorageManager.uploadFile`, `uploadFileToProject` in `chat-files-v2.ts`, the character-avatar and story-background job handlers, `image-generation-handler`, `images-v2`, `app/api/v1/images`, `app/api/v1/wardrobe/preview-avatar`, `app/api/v1/files/shared.ts`, and `restore-service`) discarded those return values and stamped the new `files` row with the *input* `mimeType` and `buffer.length` instead. The resulting `FileEntry` lied about what was on disk: stored bytes were WebP, the row said `image/jpeg` (or whatever the user uploaded).
+
+The visible symptom was Anthropic rejecting any attachment whose underlying blob was transcoded: `messages.N.content.M.image.source.base64: The image was specified using the image/jpeg media type, but the image appears to be a image/webp image`. HTTP `Content-Type` headers on `/api/v1/files/[id]?action=download` and `/api/v1/files/proxy/[...key]` were similarly wrong (browsers sniff and recover, so this was silent).
+
+`UploadResult` in `lib/file-storage/manager.ts` now exposes `storedMimeType`, `sizeBytes`, and `sha256` alongside `storageKey`. All eight callers were updated to use the post-bridge values when building the `FileEntry`. `sha256` on the FileEntry is still the input-bytes hash — upload-time deduplication (`findBySha256`) runs before the transcode, so swapping it would silently break dedup of same-source re-uploads. The mismatch between `files.sha256` (input bytes) and `doc_mount_blobs.sha256` (stored bytes) is by design.
+
+Repair migration `repair-files-mime-and-size-from-mount-blob-v1` walks every `files` row whose `storageKey` starts with `mount-blob:`, joins to `doc_mount_blobs` on the blob id encoded in the key, and rewrites `mimeType` / `size` when they disagree with the blob's `storedMimeType` / `sizeBytes`. `sha256` is left alone. Idempotent; orphaned mount-blob keys (no matching blob) are logged and skipped rather than aborting. Depends on `relink-files-to-mount-blobs-v1`.
+
 #### Feature: Z.AI (GLM) provider plugin bundled with Quilltap
 
 `plugins/dist/qtap-plugin-z-ai/` now ships in-tree (previously a separately-published `@quilltap/qtap-plugin-z-ai` package). Source moved verbatim; `package.json`, `manifest.json`, and `esbuild.config.mjs` were rewritten to match the other bundled provider plugins (unscoped name, `Foundry-9 LLC` author, plain `dependencies` instead of peer-deps, `index.js` at plugin root). Version bumped 1.1.3 → 1.1.4 to mark the move. No app-side registration changes — the build-plugins script discovers it automatically via `manifest.json` with `typescript: true`.

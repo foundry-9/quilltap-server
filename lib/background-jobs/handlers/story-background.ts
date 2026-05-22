@@ -837,6 +837,10 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     let storageKey: string;
     let fileFolderPath: string | null;
     let usedLantern = false;
+    // The bridges transcode bitmap uploads to WebP; the FileEntry must
+    // record the post-transcode mime/size, not the input.
+    let storedMimeType: string;
+    let storedSize: number;
 
     if (folderProjectId) {
       const uploadResult = await fileStorageManager.uploadFile({
@@ -847,6 +851,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         folderPath: '/story-backgrounds/',
       });
       storageKey = uploadResult.storageKey;
+      storedMimeType = uploadResult.storedMimeType;
+      storedSize = uploadResult.sizeBytes;
       fileFolderPath = '/story-backgrounds/';
     } else {
       const lantern = await getLanternBackgroundsStore();
@@ -863,6 +869,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         description: `Story background for: ${payload.sceneContext || chat.title}`,
       });
       storageKey = written.storageKey;
+      storedMimeType = written.storedMimeType;
+      storedSize = written.sizeBytes;
       fileFolderPath = null;
       usedLantern = true;
     }
@@ -893,8 +901,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       userId: job.userId,
       sha256,
       originalFilename,
-      mimeType,
-      size: buffer.length,
+      mimeType: storedMimeType,
+      size: storedSize,
       width: 1792,
       height: 1024,
       linkedTo,

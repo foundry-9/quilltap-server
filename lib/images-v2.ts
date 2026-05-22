@@ -150,7 +150,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   // images-v2 covers paste/drag-drop image uploads and URL imports — neither
   // ever carries a projectId, so route directly into the Quilltap Uploads
   // mount under images/ rather than the catch-all _general/.
-  const { storageKey } = await writeUserUploadToMountStore({
+  const written = await writeUserUploadToMountStore({
     filename: originalFilename,
     content: buffer,
     contentType: mimeType,
@@ -159,14 +159,16 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   // Inherit tags from linked entities and merge with any explicitly provided tags
   const inheritedTags = await getInheritedTags(linkedTo, userId);
   const finalTags = mergeTags(tags, inheritedTags);
-  // Create metadata in repository
+  // Create metadata in repository. The bridge may transcode bitmap uploads
+  // to WebP; record the stored mime/size, not the input — vision providers
+  // reject "media_type X but bytes are Y" mismatches.
   // IMPORTANT: Pass the fileId to ensure metadata matches storage path
   const fileEntry = await repos.files.create({
     userId,
     sha256,
     originalFilename,
-    mimeType,
-    size: buffer.length,
+    mimeType: written.storedMimeType,
+    size: written.sizeBytes,
     width: width || null,
     height: height || null,
     linkedTo,
@@ -177,7 +179,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
     generationRevisedPrompt: generationRevisedPrompt || null,
     description: description || null,
     tags: finalTags,
-    storageKey,
+    storageKey: written.storageKey,
   }, { id: fileId });
   return fileEntry;
 }

@@ -1450,6 +1450,8 @@ export async function restore(
           // project-store-bridge). Project-less files land in the Quilltap
           // Uploads mount under restored/, not the catch-all _general/.
           let restoredStorageKey: string;
+          let restoredMimeType: string;
+          let restoredSize: number;
           if (file.projectId) {
             const uploadResult = await fileStorageManager.uploadFile({
               filename: file.originalFilename,
@@ -1459,6 +1461,8 @@ export async function restore(
               folderPath: file.folderPath || '/',
             });
             restoredStorageKey = uploadResult.storageKey;
+            restoredMimeType = uploadResult.storedMimeType;
+            restoredSize = uploadResult.sizeBytes;
           } else {
             const written = await writeUserUploadToMountStore({
               filename: file.originalFilename,
@@ -1467,9 +1471,15 @@ export async function restore(
               subfolder: 'restored',
             });
             restoredStorageKey = written.storageKey;
+            restoredMimeType = written.storedMimeType;
+            restoredSize = written.sizeBytes;
           }
 
-          // Create file metadata with storage key
+          // Create file metadata with storage key. The bridges may transcode
+          // bytes (bitmaps → WebP), so we record the post-bridge mime/size
+          // rather than what the backup row claimed — a backup made before
+          // this fix may carry the pre-transcode lie, and re-writing it would
+          // re-introduce the "media_type X but bytes are Y" error.
           // Strip auto-generated and legacy fields from backup data
           const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
           // Remove legacy fields that may exist in older backups
@@ -1479,6 +1489,8 @@ export async function restore(
           await repos.files.create(
             {
               ...fileData,
+              mimeType: restoredMimeType,
+              size: restoredSize,
               storageKey: restoredStorageKey,
             },
             { id: file.id }

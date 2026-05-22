@@ -148,18 +148,19 @@ async function saveGeneratedImage(
       contentType: finalMimeType,
       subfolder: 'tool',
     });
-    const uploadResult: { storageKey: string } = { storageKey: written.storageKey };
     // Inherit tags from linked entities (e.g., the chat)
     const inheritedTags = await getInheritedTags(linkedTo, userId);
 
-    // Create metadata in repository
+    // Create metadata in repository. The bridge may have transcoded the
+    // bytes (bitmaps → WebP), so the FileEntry's mime/size must reflect
+    // what's on disk, not the input contentType/buffer length.
     // IMPORTANT: Pass the fileId to ensure metadata matches storage path
     const fileEntry = await repos.files.create({
       userId,
       sha256,
       originalFilename,
-      mimeType: finalMimeType,
-      size: buffer.length,
+      mimeType: written.storedMimeType,
+      size: written.sizeBytes,
       width: null,
       height: null,
       linkedTo,
@@ -170,7 +171,7 @@ async function saveGeneratedImage(
       generationRevisedPrompt: metadata.revisedPrompt || null,
       description: null,
       tags: inheritedTags,
-      storageKey: uploadResult.storageKey,
+      storageKey: written.storageKey,
     }, { id: fileId });
 
     // Always use API route for S3-backed files

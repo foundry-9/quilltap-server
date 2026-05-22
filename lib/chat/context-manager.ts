@@ -1442,8 +1442,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // surfaced to THIS turn's LLM context here so the responding character
   // sees the intro without a one-turn lag.
   if (pendingOffSceneAnnouncement) {
+    // Push as 'user' rather than 'assistant': this is a Host voice (external
+    // annotation to the responding character), and Anthropic Sonnet 4.6+
+    // rejects requests whose final message is role=assistant ("does not
+    // support assistant message prefill"). In continue/nudge mode there's
+    // no trailing user message to bury this behind, so role mismatch here
+    // becomes the prefill 400. Matches the systemSender role-flip in
+    // buildMessageContext for the same reason.
     contextMessages.push({
-      role: 'assistant',
+      role: 'user',
       content: pendingOffSceneAnnouncement.content,
     })
   }
@@ -1463,8 +1470,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       chatId: chat.id,
       formatted: timestamp.formatted,
     })
+    // Push as 'user' rather than 'assistant': Host timestamps are external
+    // annotations, not the character's own speech. Anthropic Sonnet 4.6+
+    // rejects role=assistant tails (no prefill), and in continue/nudge mode
+    // there is no trailing user message to follow this one. Matches the
+    // systemSender role-flip in buildMessageContext.
     contextMessages.push({
-      role: 'assistant',
+      role: 'user',
       content: buildTimestampContent(timestamp.formatted),
     })
   }

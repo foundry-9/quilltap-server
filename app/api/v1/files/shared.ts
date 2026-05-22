@@ -133,7 +133,11 @@ export async function saveFileEntry(options: SaveFileEntryOptions): Promise<{
   // project-store-bridge). Project-less uploads land in the Quilltap Uploads
   // mount under uploads/, not the catch-all _general/. The user's chosen
   // folderPath is preserved on the files row for the Files-tab tree UI.
+  // The bridges transcode bitmap uploads to WebP; we propagate the stored
+  // mime/size so the FileEntry reflects what's on disk, not what came in.
   let storageKey: string;
+  let storedMimeType: string;
+  let storedSize: number;
   if (options.projectId) {
     const uploaded = await fileStorageManager.uploadFile({
       filename: sanitizedFilename,
@@ -143,6 +147,8 @@ export async function saveFileEntry(options: SaveFileEntryOptions): Promise<{
       folderPath: options.folderPath,
     });
     storageKey = uploaded.storageKey;
+    storedMimeType = uploaded.storedMimeType;
+    storedSize = uploaded.sizeBytes;
   } else {
     const subfolder = options.category === 'IMAGE' ? 'images' : 'uploads';
     const written = await writeUserUploadToMountStore({
@@ -152,6 +158,8 @@ export async function saveFileEntry(options: SaveFileEntryOptions): Promise<{
       subfolder,
     });
     storageKey = written.storageKey;
+    storedMimeType = written.storedMimeType;
+    storedSize = written.sizeBytes;
   }
 
   const fileId = overwrite ? overwrite.fileId : randomUUID();
@@ -159,16 +167,16 @@ export async function saveFileEntry(options: SaveFileEntryOptions): Promise<{
   if (overwrite) {
     const fileEntry = await options.ctx.repos.files.update(fileId, {
       sha256,
-      mimeType: options.mimeType,
-      size: options.contentBuffer.length,
+      mimeType: storedMimeType,
+      size: storedSize,
       storageKey,
     });
 
     logger.info(options.overwriteLogMessage, {
       fileId,
       filename: sanitizedFilename,
-      mimeType: options.mimeType,
-      size: options.contentBuffer.length,
+      mimeType: storedMimeType,
+      size: storedSize,
       userId: options.ctx.user.id,
     });
 
@@ -181,8 +189,8 @@ export async function saveFileEntry(options: SaveFileEntryOptions): Promise<{
   const fileEntry = await options.ctx.repos.files.create({
     userId: options.ctx.user.id,
     originalFilename: sanitizedFilename,
-    mimeType: options.mimeType,
-    size: options.contentBuffer.length,
+    mimeType: storedMimeType,
+    size: storedSize,
     sha256,
     source: 'UPLOADED',
     category: options.category,
@@ -196,8 +204,8 @@ export async function saveFileEntry(options: SaveFileEntryOptions): Promise<{
   logger.info(options.createLogMessage, {
     fileId,
     filename: sanitizedFilename,
-    mimeType: options.mimeType,
-    size: options.contentBuffer.length,
+    mimeType: storedMimeType,
+    size: storedSize,
     userId: options.ctx.user.id,
   });
 

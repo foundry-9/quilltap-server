@@ -340,13 +340,15 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       // Inherit tags from linked entities
       const inheritedTags = await getInheritedTags(linkedTo, user.id);
 
-      // Create database record
+      // Create database record. The Lantern bridge transcodes bitmaps to
+      // WebP; record the stored mime/size so vision providers don't reject
+      // "media_type X but bytes are Y" mismatches.
       const file = await repos.files.create({
         sha256,
         userId: user.id,
         originalFilename: filename,
-        mimeType: imageMimeType,
-        size: imageBuffer.length,
+        mimeType: written.storedMimeType,
+        size: written.sizeBytes,
         source,
         category,
         linkedTo,
