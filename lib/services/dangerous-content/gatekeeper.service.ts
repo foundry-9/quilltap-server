@@ -242,12 +242,27 @@ async function classifyWithModerationProvider(
   // Check if a moderation provider is registered
   const provider = moderationProviderRegistry.getDefaultProvider()
   if (!provider) {
+    logger.warn(
+      '[Gatekeeper] No moderation provider registered; falling back to LLM classification',
+      {
+        chatId,
+        registryInitialized: moderationProviderRegistry.isInitialized(),
+        providerCount: moderationProviderRegistry.getAllProviders().length,
+      }
+    )
     return null
   }
 
   // Auto-detect an API key from connection profiles
   const apiKey = await autoDetectModerationApiKey(provider.metadata.providerName, userId)
   if (!apiKey) {
+    logger.warn(
+      '[Gatekeeper] No API key for moderation provider; falling back to LLM classification',
+      {
+        chatId,
+        providerName: provider.metadata.providerName,
+      }
+    )
     return null
   }
 

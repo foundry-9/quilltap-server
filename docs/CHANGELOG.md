@@ -4,6 +4,17 @@
 
 ### 4.6-dev
 
+#### Fix: Chat-level danger classification no longer misclassifies persona prompts and Staff announcements
+
+Two bugs let chat-level reclassification flag entire chats as dangerous based on content that wasn't user/character speech.
+
+1. `lib/background-jobs/handlers/chat-danger-classification.ts` ran in the forked job-runner child. When `classifyContent`'s moderation-provider path returned `null` (no provider registered, or no auto-detected API key), it silently fell through to the cheap-LLM classifier (gpt-5-nano). On Friday-style instances this happened intermittently — the child's plugin init runs asynchronously at startup, so jobs dispatched before init completed never saw the OpenAI moderation provider.
+2. The same handler's no-summary fallback concatenated every chat message as `ROLE: content` and shipped the first 4 KB to the classifier. With no filtering, a chat's `SYSTEM`-role persona prompt was the leading content; Staff announcements (Concierge, Lantern, Host, Librarian, Aurora, Prospero, Pascal, Ariel, Commonplace Book) and tool messages were also included. A persona prompt mentioning polyamory was enough to score a chat as NSFW even when the conversation itself was benign.
+
+`classifyWithModerationProvider` in `lib/services/dangerous-content/gatekeeper.service.ts` now emits a `warn` log on each null-return branch, distinguishing "no moderation provider registered" (with `registryInitialized` + `providerCount` for diagnostics) from "no API key auto-detected" (with the provider name). Future regressions surface in `combined.log` instead of being absorbed silently.
+
+`chat-danger-classification`'s no-summary fallback now filters out `SYSTEM` role, `TOOL` role, and any message with `systemSender != null` before concatenation. Only participant speech (user + character `USER` / `ASSISTANT` turns) reaches the classifier. Test mocks for both gatekeeper test suites were extended to cover the new `isInitialized` / `getAllProviders` calls.
+
 #### Change: Concierge danger announcement names the contributing categories, scores, and threshold
 
 When a chat is first classified as dangerous, the Concierge's in-chat announcement now states exactly what triggered the verdict: the contributing categories (using the canonical labels, e.g. `Sexual/NSFW content`, `Violence or graphic content`), each category's severity score, the overall score, the active threshold, and which assayer rendered the decision (moderation provider or cheap-LLM fallback, identified by provider name). Categories at or above the threshold are listed; if none cross individually (e.g. a moderation `flagged=true` aggregate case), the top scores by rank are shown instead, capped at three. The narrative version weaves these details into the Concierge's voice; the opaque/LLM-context body states them plainly without naming "the Concierge."

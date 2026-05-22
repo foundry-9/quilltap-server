@@ -61,10 +61,19 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     classificationInput = chat.contextSummary;
     inputSource = 'summary';
   } else {
-    // No context summary — fall back to concatenated raw messages
+    // No context summary — fall back to concatenated raw messages.
+    // Exclude:
+    //   - SYSTEM role: persona prompts skew classification toward their themes
+    //   - TOOL role: tool outputs aren't conversational content
+    //   - systemSender != null: Staff-authored announcements (Concierge,
+    //     Lantern, Host, etc.) describe events, not user/character speech
     const allMessages = await repos.chats.getMessages(payload.chatId);
     const messageEvents = allMessages.filter(
-      (m): m is MessageEvent => m.type === 'message'
+      (m): m is MessageEvent =>
+        m.type === 'message' &&
+        m.role !== 'SYSTEM' &&
+        m.role !== 'TOOL' &&
+        (m.systemSender == null)
     );
 
     if (messageEvents.length === 0) {
