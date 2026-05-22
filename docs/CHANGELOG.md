@@ -4,6 +4,12 @@
 
 ### 4.6-dev
 
+#### Fix: Save Image now works for mount-file attachments whose images-v2 sister was reaped
+
+`saveImageToAlbum` in `lib/photos/save-image-to-album.ts` rejected with `IMAGE_NOT_FOUND` when the Salon Save-Image button (or the LLM `keep_image` tool) was used on a Librarian-attached mount file whose underlying `files` (images-v2) row no longer existed. The lookup chain — `getImageById` → `docMountFileLinks.findByIdWithContent` → `files.findBySha256` — bailed out if all three missed, even though the actual bytes were still readable from `doc_mount_blobs`. This typically hit older Lantern-generated story backgrounds that survived in a project document store after their original FileEntry was reaped by file-storage reconciliation.
+
+The third lookup now has a fallback: it reads the bytes via `docMountBlobs.readDataByFileId(sourceLink.fileId)` and ingests them into images-v2 to synthesize a fresh `FileEntry`. The new `ingestImageBuffer` helper in `lib/images-v2.ts` wraps the internal `createFile` path (auto-WebP-convert, SHA256 dedup, dimension capture) so the synthesized entry is indistinguishable from a normal upload. The synthesized FileEntry loses the original generation metadata (prompt/model/revisedPrompt) — that vanished with the reaped row — but the photo itself survives and the save proceeds. MIME type comes from the link's `originalMimeType` with a filename-extension fallback (`inferImageMimeFromFilename`).
+
 #### Fix: Chat-level danger classification no longer misclassifies persona prompts and Staff announcements
 
 Two bugs let chat-level reclassification flag entire chats as dangerous based on content that wasn't user/character speech.

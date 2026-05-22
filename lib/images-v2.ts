@@ -346,6 +346,35 @@ export async function importImageFromUrl(url: string, userId: string, linkedTo: 
 }
 
 /**
+ * Ingest an in-memory image buffer as a FileEntry. Used by recovery paths that
+ * have raw bytes from a non-images-v2 source (e.g. a mount-file blob whose
+ * original images-v2 sister was reaped) and need a synthesized FileEntry to
+ * carry on with downstream flows.
+ */
+export async function ingestImageBuffer(params: {
+  buffer: Buffer;
+  originalFilename: string;
+  mimeType: string;
+  userId: string;
+  linkedTo?: string[];
+  source?: FileSource;
+  description?: string;
+}): Promise<FileEntry> {
+  const dimensions = await getImageDimensions(params.buffer, params.mimeType);
+  return createFile({
+    buffer: params.buffer,
+    originalFilename: params.originalFilename,
+    mimeType: params.mimeType,
+    source: params.source ?? 'IMPORTED',
+    category: 'IMAGE',
+    userId: params.userId,
+    linkedTo: params.linkedTo ?? [],
+    description: params.description,
+    ...dimensions,
+  });
+}
+
+/**
  * Delete an image file from the server
  */
 export async function deleteImageById(fileId: string): Promise<void> {
