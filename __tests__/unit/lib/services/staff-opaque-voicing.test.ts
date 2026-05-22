@@ -251,11 +251,20 @@ describe('Aurora opaque builders', () => {
 
 describe('Prospero opaque builders', () => {
   it('connection-profile change', () => {
-    expect(buildConnectionProfileChangeContent('Beatrice', 'old', 'new')).toContain('Prospero notes')
+    const visible = buildConnectionProfileChangeContent('Beatrice', 'old', 'new')
+    expect(visible).toContain("Beatrice's current response model is now new")
+    expect(visible).toContain('previous model was old')
     const opaque = buildConnectionProfileChangeOpaqueContent('Beatrice', 'old', 'new')
-    expect(opaque).toContain("Beatrice's assigned model has changed to new")
-    expect(opaque).toContain('previously old')
+    expect(opaque).toContain("Beatrice's current response model is now new")
+    expect(opaque).toContain('previous model was old')
     expectNoPersonaNames(opaque)
+  })
+
+  it('connection-profile change — null fallback reads as "unassigned"', () => {
+    expect(buildConnectionProfileChangeContent('Beatrice', null, 'new'))
+      .toBe("Beatrice's current response model is now new; previous model was unassigned.")
+    expect(buildConnectionProfileChangeContent('Beatrice', 'old', null))
+      .toBe("Beatrice's current response model is now unassigned; previous model was old.")
   })
 
   it('project context', () => {

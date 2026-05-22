@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Change: Prospero's connection-profile-change announcement is terser
+
+The synthetic message Prospero posts when a character is reassigned to a different connection profile now reads `Amy's current response model is now ChatGPT 5.5 Low Verb; previous model was Kimi-K2 Thinking.` instead of the older `Prospero notes that Amy has been reassigned to ChatGPT 5.5 Low Verb (previously Kimi-K2 Thinking).` Both the visible message and the opaque LLM-context body use the same wording (the opaque body previously diverged). Null fallback (no profile assigned) now reads `unassigned` rather than `no connection profile`. `lib/services/prospero-notifications/writer.ts` + matching test in `staff-opaque-voicing.test.ts`.
+
 #### Fix: OOC text in pre-rendered messages no longer leaks `"qt-chat-ooc">` as visible text
 
 A user-visible bug of long standing: a message like `((some comment))` in a chat using the Standard rendering patterns would render with the literal text `"qt-chat-ooc">((some comment))` and lose its OOC styling. `applyRoleplayPatterns` in `lib/services/markdown-renderer.service.ts` (the server-side path that writes `chat_messages.renderedHtml`) ran each pattern's `string.replace` sequentially, so the dialogue pattern (`"..."` ) matched the just-inserted `"qt-chat-ooc"` attribute value inside the OOC span and wrapped it, producing `<p><span class=<span class="qt-chat-dialogue">"qt-chat-ooc"</span>>((..))</span></p>`. The browser then parsed the outer span as `<span class=` followed by stray text. The client-side `MessageContent.tsx` already used the correct single-pass earliest-match algorithm (`processRoleplayText`); the server path now mirrors it. Already-stored bad `renderedHtml` values will only correct themselves when the message is re-rendered (e.g. edited, regenerated, or imported again).
