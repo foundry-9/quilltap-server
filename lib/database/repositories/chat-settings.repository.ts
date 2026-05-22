@@ -209,6 +209,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             },
             autoDetectRng: true,
             compositionModeDefault: false,
+            composerSpellcheck: true,
             agentModeSettings: {
               maxTurns: 10,
               defaultEnabled: false,

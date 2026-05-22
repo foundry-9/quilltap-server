@@ -38,7 +38,8 @@ async function updateChatSettings(
   contextCompressionSettings?: unknown,
   dangerousContentSettings?: unknown,
   autoLockSettings?: unknown,
-  compositionModeDefault?: boolean
+  compositionModeDefault?: boolean,
+  composerSpellcheck?: boolean
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -169,6 +170,12 @@ async function updateChatSettings(
     }
     updateData.compositionModeDefault = compositionModeDefault
   }
+  if (typeof composerSpellcheck !== 'undefined') {
+    if (typeof composerSpellcheck !== 'boolean') {
+      throw new Error('Invalid composerSpellcheck value (must be boolean)')
+    }
+    updateData.composerSpellcheck = composerSpellcheck
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -231,6 +238,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       dangerousContentSettings,
       autoLockSettings,
       compositionModeDefault,
+      composerSpellcheck,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -254,7 +262,8 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       contextCompressionSettings,
       dangerousContentSettings,
       autoLockSettings,
-      compositionModeDefault
+      compositionModeDefault,
+      composerSpellcheck
     )
 
     return successResponse(chatSettings)

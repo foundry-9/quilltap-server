@@ -4,6 +4,20 @@
 
 ### 4.6-dev
 
+#### Change: Composer spellcheck toggle (Salon composer + Document Mode rich editor)
+
+A new `composerSpellcheck` boolean (default on) governs browser spellcheck on the two Lexical rich-text surfaces — the Salon `ChatComposer` (`components/chat/lexical/LexicalComposerWrapper.tsx`) and the Document Mode rich editor (`app/salon/[id]/components/DocumentPane.tsx`'s `DocumentEditorPlugins`). Source-mode editors (the Markdown source view and plain-text source view in `DocumentPane`, plus `components/markdown-editor/MarkdownLexicalEditor.tsx`) keep their explicit `spellCheck={false}` — Markdown syntax against a monospace font becomes squiggle noise.
+
+Wired through the standard chat-settings path: Zod field on `ChatSettingsSchema` (`lib/schemas/settings.types.ts`), TypeScript interface on `ChatSettings` (`components/settings/chat-settings/types.ts`), pass-through in `PUT /api/v1/settings/chat`, new `handleComposerSpellcheckChange` handler in `useChatSettings`, new `ComposerSpellcheckSettings` card under a "Composer" `CollapsibleCard` (`sectionId="composer-spellcheck"`) on the Chat tab. The two ContentEditable surfaces read the value via `useSWR('/api/v1/settings/chat')` (matching the pattern in `AutoLockSettingsCard.tsx`); SWR deduplication keeps it one request per render tree. While settings are loading, the surfaces default to `spellCheck={true}` rather than `false`.
+
+Schema additions: `migrations/scripts/add-composer-spellcheck-field.ts` adds a `composerSpellcheck INTEGER DEFAULT 1` column to `chat_settings`, registered in `migrations/scripts/index.ts` with a pretty-label in `lib/startup/prettify.ts`.
+
+Electron-only dictionary feed: `lib/spellcheck/useDictionaryFeed.ts` is a renderer-side hook that watches `/api/v1/characters` and pushes tokenized character names into the shell's custom spellchecker dictionary via `window.quilltap.setDictionaryWords` (feature-detected — silent no-op in the browser). Tokenization splits on `[\s\p{P}]+`, drops <2-char and pure-digit tokens, dedupes, and caps at 5000 with a warn. The hook is mounted once via a renderless (returns-null) `DictionaryFeedMount` inside the authenticated branch of `components/layout/app-layout.tsx` so the SWR call doesn't fire on auth/setup/unlock screens.
+
+Type declarations: `types/quilltap-bridge.d.ts` gains three optional methods on `QuilltapElectronBridge` — `setDictionaryWords`, `setSpellCheckerLanguages`, `getSpellCheckerStatus` — so consumers can feature-detect without `(window as any)` casts. The matching shell-side handlers will land in `quilltap-shell`; this server-side change ships safely without them because every consumer feature-detects.
+
+DDL.md updated. Unit tests for `tokenizeNames` at `lib/spellcheck/__tests__/tokenizeNames.test.ts`. Help docs at `help/chat-settings.md` describe the new toggle and the desktop right-click menu.
+
 #### Fix: Deleting a mount point no longer leaks folder rows
 
 `DELETE /api/v1/mount-points/[id]` in `app/api/v1/mount-points/[id]/route.ts` cleared chunks, file links, documents, blobs, project links, and the mount-point row itself, but never called `docMountFolders.deleteByMountPointId(id)`. `doc_mount_folders` has no FK to any of those tables, so the folder hierarchy was orphaned on every mount-point deletion. Added the call between the blobs delete and the project-links delete. Pre-existing orphan folder rows must be cleaned up by hand (e.g. via `quilltap db --mount-points` against the mount-index DB).

@@ -4,6 +4,7 @@ import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import { useChatSettingsContext } from '@/components/settings/chat-settings/ChatSettingsProvider'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { CompositionModeDefaultSettings } from '@/components/settings/chat-settings/CompositionModeDefaultSettings'
+import { ComposerSpellcheckSettings } from '@/components/settings/chat-settings/ComposerSpellcheckSettings'
 import { TokenDisplaySettingsComponent } from '@/components/settings/chat-settings/TokenDisplaySettings'
 import { ContextCompressionSettingsComponent } from '@/components/settings/chat-settings/ContextCompressionSettings'
 import { MemoryCascadeSettings } from '@/components/settings/chat-settings/MemoryCascadeSettings'
@@ -25,6 +26,7 @@ export function ChatTabContent() {
     loadingProfiles,
     handleTokenDisplayChange,
     handleCompositionModeDefaultChange,
+    handleComposerSpellcheckChange,
     handleContextCompressionUpdate,
     handleMemoryCascadeUpdate,
     handleImageDescriptionProfileChange,
@@ -58,6 +60,14 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onChange={handleCompositionModeDefaultChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Composer" description="Composer behavior and input aids" sectionId="composer-spellcheck" forceOpen={activeSection === 'composer-spellcheck'}>
+          <ComposerSpellcheckSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleComposerSpellcheckChange}
           />
         </CollapsibleCard>
 

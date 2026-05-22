@@ -78,6 +78,8 @@ export interface ChatSettings {
   autoDetectRng?: boolean
   /** Whether new chats start in composition mode by default */
   compositionModeDefault?: boolean
+  /** Whether browser spellcheck is enabled in the composer and rich-text Document Mode editor */
+  composerSpellcheck?: boolean
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings?: AgentModeSettings
   /** Story backgrounds settings for AI-generated chat backgrounds */

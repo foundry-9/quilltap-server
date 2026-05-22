@@ -12,6 +12,7 @@
  */
 
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react'
+import useSWR from 'swr'
 import DocumentGutter, { type LinePosition } from './DocumentGutter'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
@@ -116,6 +117,8 @@ function DocumentEditorPlugins({
   onFocusProcessed?: () => void
 }) {
   const [editor] = useLexicalComposerContext()
+  const { data: chatSettings } = useSWR<{ composerSpellcheck?: boolean }>('/api/v1/settings/chat')
+  const spellCheck = chatSettings?.composerSpellcheck ?? true
 
   // Sync editable state
   useEffect(() => {
@@ -130,6 +133,7 @@ function DocumentEditorPlugins({
             className="qt-doc-editor-area qt-lexical-contenteditable"
             aria-label="Document editor"
             style={{ lineHeight: '1.6', minHeight: '100%' }}
+            spellCheck={spellCheck}
           />
         }
         ErrorBoundary={LexicalErrorBoundary}

@@ -123,6 +123,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-terminal-mode-fields-v1': 'Adding terminal mode fields to chats',
   'add-document-mode-fields-v1': 'Adding document mode fields to chats',
   'add-composition-mode-default-field-v1': 'Adding composition-mode default to chat settings',
+  'add-composer-spellcheck-field-v1': 'Teaching the composer to flag misspellings',
   'add-auto-housekeeping-settings-field-v1': 'Adding auto-housekeeping settings to chats',
   'add-auto-lock-settings-field-v1': 'Adding auto-lock settings to chats',
   'add-auto-detect-rng-field-v1': 'Adding auto-detect-RNG flag to chats',

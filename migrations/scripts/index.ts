@@ -289,6 +289,8 @@ import { addPseudoToolModeFieldMigration } from './add-pseudo-tool-mode-field';
 import { repairFilesMimeAndSizeFromMountBlobMigration } from './repair-files-mime-and-size-from-mount-blob';
 // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
 import { addChatConciergeOverrideMigration } from './add-chat-concierge-override';
+// Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
+import { addComposerSpellcheckFieldMigration } from './add-composer-spellcheck-field';
 
 /**
  * All available migrations.
@@ -573,6 +575,8 @@ export const migrations: Migration[] = [
   repairFilesMimeAndSizeFromMountBlobMigration,
   // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
   addChatConciergeOverrideMigration,
+  // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
+  addComposerSpellcheckFieldMigration,
 ];
 
 export {
@@ -842,5 +846,7 @@ export {
   repairFilesMimeAndSizeFromMountBlobMigration,
   // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
   addChatConciergeOverrideMigration,
+  // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
+  addComposerSpellcheckFieldMigration,
 };
 

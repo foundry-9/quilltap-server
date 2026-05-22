@@ -39,6 +39,35 @@ Decides whether each new chat is delivered to your blotter pre-poised for prose.
 - You favor multi-paragraph messages and would rather not bump Shift each time
 - You're using Quilltap chiefly for long-form roleplay or co-writing rather than rapid-fire chat
 
+### Composer
+
+A small but civilising amenity: red-pencil underlines beneath any word the dictionary fails to recognise, kept switched on by default for the saving of one's dignity. The toggle governs both the Salon composer (where one's daily correspondence is conducted) and the Document Mode rich editor (where longer compositions are mustered into shape). It does **not** disturb the raw-Markdown or plain-text source views, which are left blissfully unsquiggled so that one's punctuation and tagging are not mistaken for misspellings.
+
+In the Quilltap desktop application — that more dignified vessel than the bare browser — a right-click upon any flagged word produces a small menu of suggestions in the manner of an attentive sub-editor, together with the option to add the offending coinage to your personal dictionary. The browser, alas, offers no such courtesy.
+
+When running inside the desktop application, Quilltap also discreetly feeds the names of all characters in your Aurora into the spellchecker's custom dictionary, so that the invented appellations of your cast (Aristarchus, Theophilus, Penwallow, &c.) do not appear unjustly accused. New characters are added on the next reload; deletions remove them in turn.
+
+**Setting Options:**
+
+- **Spellcheck in the composer** — A single toggle. On: red squiggles appear beneath misspelled words in the rich-text composer and the Document Mode editor. Off: silence prevails.
+
+**How to configure:**
+
+1. Open the **Composer** card on the Chat tab in Settings
+2. Tick or untick the box
+3. The change applies at once to all open composers; no reload required
+
+**When useful:**
+
+- You suffer the occasional typographical lapse and would rather be told than not
+- You are drafting fiction in Document Mode and want a steady second pair of eyes
+- (Desktop only) You have a cast of invented names and would rather not see them all flagged as misspellings
+
+**When to turn it off:**
+
+- The squiggles distract you in flow
+- You are writing in a language Chromium does not recognise (you may also configure additional languages in the desktop app's developer console — a refinement we will dress up in a proper picker in a later issue)
+
 ### Avatar Settings
 
 Controls how your user avatar appears in chats.

@@ -17,6 +17,7 @@ import {
   useRef,
   useMemo,
 } from 'react'
+import useSWR from 'swr'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
@@ -85,6 +86,8 @@ const ComposerPlugins = forwardRef<
   const [editor] = useLexicalComposerContext()
   const controlRef = useRef<ExternalControlHandle>(null)
   const { getMarkdown, setMarkdown } = useMarkdownBridge()
+  const { data: chatSettings } = useSWR<{ composerSpellcheck?: boolean }>('/api/v1/settings/chat')
+  const spellCheck = chatSettings?.composerSpellcheck ?? true
 
   // Expose the ComposerEditorHandle to parent
   useImperativeHandle(
@@ -112,6 +115,7 @@ const ComposerPlugins = forwardRef<
               <div className="qt-lexical-placeholder">{placeholder}</div>
             }
             style={{ lineHeight: '1.5' }}
+            spellCheck={spellCheck}
           />
         }
         ErrorBoundary={LexicalErrorBoundary}

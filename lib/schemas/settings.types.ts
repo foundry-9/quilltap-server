@@ -360,6 +360,8 @@ export const ChatSettingsSchema = z.object({
   autoDetectRng: z.boolean().default(true),
   /** Whether new chats start in composition mode (Enter = newline, Ctrl/Cmd+Enter = submit) by default */
   compositionModeDefault: z.boolean().default(false),
+  /** Whether browser spellcheck is enabled in the Salon composer and Document Mode rich editor (default: true) */
+  composerSpellcheck: z.boolean().default(true),
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings: AgentModeSettingsSchema.default({
     maxTurns: 10,
