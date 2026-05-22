@@ -50,7 +50,7 @@ Each level can override the previous if explicitly set.
 
 ### Per-Chat Toggle
 
-Use the **Agent** button in the tool palette to toggle agent mode for the current chat.
+To toggle agent mode for the current chat, open the **Chat Sidebar** on the right edge of The Salon, expand the **Chat** drawer, and press the **Agent On / Agent Off** badge at its top. The badge announces its present state at a glance, in the manner of a railway signal — green when raised, dark when at rest.
 
 ### Character Defaults
 

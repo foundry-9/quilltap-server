@@ -30,12 +30,12 @@ By default, Quilltap automatically detects RNG patterns in both your messages an
 
 For your messages, results appear as tool messages before your message. For character responses, results appear as tool messages after the response. Either way, everyone in the chat sees the outcome.
 
-**Note:** This feature can be disabled in [Chat Settings](/settings?tab=chat&section=automation) under "Automation" if you prefer to use the manual tool palette or want to discuss dice without executing rolls.
+**Note:** This feature can be disabled in [Chat Settings](/settings?tab=chat&section=automation) under "Automation" if you prefer to roll only when you press the button yourself, or to discuss dice without executing rolls.
 
-### From the Tool Palette
+### From the Composer's Dice Button
 
-1. Open the **Tool Palette** in a chat (the toolbar button)
-2. Click the **RNG** dropdown
+1. In the composer's gutter (the slim column of icons to the left of the text field), find the **dice** icon
+2. Click it to open the **RNG dropdown**
 3. Choose a quick option or create a custom roll:
    - **Roll d6** - Roll a six-sided die
    - **Roll d20** - Roll a twenty-sided die

@@ -21,8 +21,8 @@ State is a JSON object that stores key-value pairs. Unlike regular messages whic
 ### In Chats
 
 1. Open any chat conversation
-2. Click the hamburger menu (three lines) in the composer toolbar
-3. Click the **State** button (database icon)
+2. On the right, open the **Chat Sidebar** and expand the **Organize** drawer
+3. Press **State…**
 4. The State Editor modal opens showing the current state
 
 ### In Projects

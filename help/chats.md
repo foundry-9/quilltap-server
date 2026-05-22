@@ -93,7 +93,7 @@ Where you compose messages:
 - **Text Field** — Type your message here
 - **Send Button** — Click to send (or press Enter)
 - **Attachment Button** — Add files or images to your message
-- **Tool Palette** — Access quick actions and settings
+- **Composition / Document / Terminal toggles** — Switch input modes
 
 ### Header
 
@@ -101,18 +101,18 @@ Shows chat information and controls:
 
 - **Chat Title** — Auto-generated or custom name
 - **Character Info** — Who you're chatting with
-- **Settings Button** — Configure this chat
 - **Action Menu** — Additional chat operations
 
-### Participants Sidebar
+### Chat Sidebar
 
-For multi-character chats, shows all participants:
+On the right, the **Chat Sidebar** is the single cabinet from which every per-chat dial and action is reached — a five-drawer affair holding **Participants**, **Chat**, **Visibility**, **Organize**, and **Edit Content**:
 
 - **Character Avatars** — Visual indicator of who's in the chat
 - **Turn Information** — Whose turn it is to speak
 - **Controls** — Manage character participation
+- **Per-chat settings and actions** — Agent Mode, Roleplay Template, Project, Image Provider, announcements, rename, export, replace, memory tools, and the rest
 
-See [Participants Sidebar](chat-participants.md) for details.
+See [Chat Sidebar](chat-participants.md) for the full tour.
 
 ## Basic Chat Actions
 
@@ -164,18 +164,19 @@ See [Message Actions](chat-message-actions.md) for complete details on editing, 
 
 Each chat can have its own configuration:
 
-- **Roleplay Template** — Formatting and style settings (in chat settings modal)
-- **Image Generation** — Which image provider to use (in chat settings modal)
-- **Connection Profiles** — Which LLM to use per participant (on each participant card in the sidebar)
-- **System Prompt Overrides** — Custom context per participant (on each participant card in the sidebar)
-- **Tools** — Which AI tools are available
-- **Project** — Which project this chat belongs to
+- **Roleplay Template** — Formatting and style settings (Chat drawer of the Chat Sidebar)
+- **Image Generation** — Which image provider to use (Chat drawer of the Chat Sidebar)
+- **Connection Profiles** — Which LLM to use per participant (on each participant card in the Participants drawer)
+- **System Prompt Overrides** — Custom context per participant (on each participant card in the Participants drawer)
+- **Tools** — Which AI tools are available (Chat drawer → Tools…)
+- **Project** — Which project this chat belongs to (Chat drawer)
 
 ### Accessing Chat Settings
 
 1. Open the chat
-2. Click the **Settings** button (gear icon) in the header or action menu to open the chat settings modal (roleplay template and image generation)
-3. In multi-character chats, use the **participant sidebar** to change connection profiles and per-participant settings directly on each card
+2. Open the **Chat Sidebar** on the right and expand the **Chat** drawer for roleplay template, project, image provider, Lantern announcements, auto-avatar, Tools, Run Tool, Agent Mode, and Regenerate Background
+3. Open the **Visibility** drawer (multi-character chats only) for All Whispers and Shared Vaults
+4. Open the **Participants** drawer for connection profiles and per-participant settings directly on each card
 
 ## Managing Chats
 
@@ -217,7 +218,7 @@ Save chats for backup or sharing:
 
 Now and again the matter under discussion drifts so far afield that the original setting will simply not bear it. The project no longer fits, the scenario has worn thin, and rather than narrate one's way out of it — like a guest pretending the parlour was always the conservatory — one wishes simply to *change venue*.
 
-To do so, open the **Tool Palette** in the input area and choose **Continue Elsewhere**. The familiar new-chat dialog appears, pre-filled with the present project (or none, as the case may be) and the cast of characters now in the room. From there:
+To do so, open the **Chat Sidebar** on the right, expand the **Organize** drawer, and press **Continue Elsewhere**. The familiar new-chat dialog appears, pre-filled with the present project (or none, as the case may be) and the cast of characters now in the room. From there:
 
 1. Adjust the project, characters, scenario, or image profile as you see fit.
 2. Click **Continue**.
@@ -367,7 +368,7 @@ Characters with help tools enabled can navigate directly to this page:
 - [Multi-Character Chats](chat-multi-character.md) — Conversations with multiple AI characters
 - [Turn Manager](chat-turn-manager.md) — How speaking turns work in group chats
 - [Message Actions](chat-message-actions.md) — Edit, regenerate, and manage messages
-- [Participants Sidebar](chat-participants.md) — Managing chat participants
+- [Chat Sidebar](chat-participants.md) — Managing chat participants and per-chat settings
 - [Chat Settings](chat-settings.md) — Global chat configuration
 - [Using Tools](tools-usage.md) — AI tools available during chat
 - [Characters](characters.md) — Create and manage chat participants

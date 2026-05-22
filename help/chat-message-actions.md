@@ -463,5 +463,5 @@ Characters with help tools enabled can navigate directly to this page:
 - [Chats Overview](chats.md) — Basic chat functionality
 - [Multi-Character Chats](chat-multi-character.md) — Group conversations
 - [Turn Manager](chat-turn-manager.md) — Turn-based chat flow
-- [Participants Sidebar](chat-participants.md) — Managing participants
+- [Chat Sidebar](chat-participants.md) — Managing participants and per-chat settings
 - [Chat Settings](chat-settings.md) — Memory and other settings

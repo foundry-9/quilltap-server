@@ -18,7 +18,11 @@ The narrow mini-avatar collapsed mode of the sidebar is preserved unchanged. Acc
 
 The Tools hamburger button on the composer is gone, along with `ToolPalette.tsx`, `ChatSettingsModal.tsx`, and the original `ParticipantSidebar.tsx`. `CollapsibleCard` gained optional `isOpen` / `onOpenChange` props so the parent can drive single-open behavior; uncontrolled callers are unaffected. `useModalState.ts` lost `toolPaletteOpen` and `chatSettingsModalOpen`. Files touched: `app/salon/[id]/page.tsx`, `app/salon/[id]/components/ChatComposer.tsx`, `app/salon/[id]/components/ChatModals.tsx`, `app/salon/[id]/hooks/useModalState.ts`, `components/ui/CollapsibleCard.tsx`, plus the new `components/chat/ChatSidebar.tsx`.
 
-The previous `ParticipantSidebar.test.tsx` (1310 lines, tightly coupled to the old flat layout) and `tool-palette.test.tsx` are removed; the help files that describe the Tools palette and Chat Settings modal (`chat-settings.md`, `chat-participants.md`, `chat-multi-character.md`, `run-tool.md`, `agent-mode.md`, `help-chat.md`) still describe the old UI and need a follow-up pass.
+The previous `ParticipantSidebar.test.tsx` (1310 lines, tightly coupled to the old flat layout) and `tool-palette.test.tsx` are removed.
+
+#### Change: Help files updated for the new Chat Sidebar
+
+Reworked `chat-participants.md` as the **Chat Sidebar** reference (covering all five drawers), added a per-chat / global note to `chat-settings.md`, and corrected access paths in `chat-multi-character.md`, `run-tool.md`, `agent-mode.md`, `help-chat.md`, `chats.md`, `chat-state.md`, `templates-in-chats.md`, `rng-tool.md`, `lantern.md`, `chat-turn-manager.md`, `chat-message-actions.md`, `salon-host-introductions.md`, and `the-courier.md` to point at the right Chat Sidebar drawer (or, for the RNG dropdown, at the composer's gutter dice icon).
 
 #### Fix: Save Image now works for mount-file attachments whose images-v2 sister was reaped
 

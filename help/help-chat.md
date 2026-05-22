@@ -94,7 +94,7 @@ The help chat supports a focused subset of the full Salon chat experience:
 - **Rename the chat** --- Or let the LLM retitle it automatically
 - **Export** --- Save the conversation as a SillyTavern-compatible chat
 
-Features like whispers, the Concierge, story backgrounds, the participants sidebar, and user-initiated tool use are not present. The help chat is a streamlined affair --- all substance, no ceremony.
+Features like whispers, the Concierge, story backgrounds, the Chat Sidebar, and user-initiated tool use are not present. The help chat is a streamlined affair --- all substance, no ceremony.
 
 ### Navigation Links
 

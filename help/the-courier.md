@@ -27,7 +27,7 @@ It is, in short, for those occasions when you would rather not give Quilltap you
 6. Tick **Set as default profile** if you want every new chat to lean on The Courier by default, or **Mark as cheap LLM** if you intend to use it for housekeeping tasks like memory extraction (be warned: every cheap LLM call will also pause for you to paste).
 7. Save.
 
-Once saved, you can attach this profile to any character (per-character default in the character editor) or to any chat participant (in the Participants sidebar of a Salon).
+Once saved, you can attach this profile to any character (per-character default in the character editor) or to any chat participant (in the Participants drawer of the Chat Sidebar of a Salon).
 
 ## Taking a Courier-bound turn
 

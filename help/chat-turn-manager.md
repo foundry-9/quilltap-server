@@ -101,7 +101,7 @@ The selection formula considers all eligible characters' weights. A character wi
 
 **How to use:**
 
-1. Find the character in the Participants Sidebar
+1. Find the character in the Participants drawer of the Chat Sidebar
 2. Click the **Nudge** button
 3. They respond immediately, regardless of the normal queue
 
@@ -306,7 +306,7 @@ You'll see a notification with options:
 
 ### Adjusting Talkativeness
 
-1. Expand Participants Sidebar
+1. Expand the Chat Sidebar (and, if needed, open the Participants drawer)
 2. Find character's card
 3. Use the slider to adjust:
    - Drag left for quieter (speaks less)
@@ -437,5 +437,5 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Chats Overview](chats.md) — Basic chat functionality
 - [Multi-Character Chats](chat-multi-character.md) — Setting up group conversations
-- [Participants Sidebar](chat-participants.md) — Managing participants
+- [Chat Sidebar](chat-participants.md) — Managing participants and per-chat settings
 - [Message Actions](chat-message-actions.md) — Editing and managing messages

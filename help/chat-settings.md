@@ -14,6 +14,10 @@ Chat Settings control global behavior for all your chats in Quilltap, including 
 2. Click the **Chat Settings** tab
 3. You'll see multiple setting cards for different aspects of chat behavior
 
+## Global vs. Per-Chat
+
+The Chat Settings page is where you set *defaults* — the standing instructions that apply to every chat unless one of them politely asks to do otherwise. The per-chat overrides (Image Provider, Announce Generated Images, Auto-generate Avatars, Roleplay Template, Project, Agent Mode, and the like) used to live in a Chat Settings modal, but now hold court in the **Chat** drawer of the right-hand **Chat Sidebar** inside any open conversation. See [Chat Sidebar](chat-participants.md) for the full tour of that cabinet.
+
 ## Understanding Chat Settings Sections
 
 ### Composition Mode
@@ -284,15 +288,15 @@ Controls whether Quilltap generates unique AI portraits for each character in a 
 
 **Setting Options:**
 
-- **Enable Avatar Generation** — Toggle per-conversation avatar generation on or off. Available both when creating a new chat and as a toggle during active conversations.
-- **Regenerate Avatar** — In the participant sidebar, click the refresh button on any character's portrait to queue a new avatar. Useful after outfit changes or when the muse simply failed to capture the right likeness the first time.
+- **Enable Avatar Generation** — Toggle per-conversation avatar generation on or off. Available both when creating a new chat and (as **Auto-generate Character Avatars**) in the Chat Sidebar's **Chat** drawer during active conversations.
+- **Regenerate Avatar** — In the Chat Sidebar's **Participants** drawer, click the refresh button on any character's portrait to queue a new avatar. Useful after outfit changes or when the muse simply failed to capture the right likeness the first time.
 
 **How it works:**
 
 1. When enabled on chat creation, avatars are generated for all LLM-controlled characters as soon as the chat begins
 2. When toggled on during an active chat, generation is queued for all LLM characters
 3. Avatars update automatically when outfit changes occur (if enabled)
-4. Generated avatars appear in the participant sidebar and are specific to that conversation
+4. Generated avatars appear in the Chat Sidebar's **Participants** drawer and are specific to that conversation
 
 **Prerequisites:**
 
@@ -327,7 +331,7 @@ Controls automatic behavior during chat interactions.
 **When to disable:**
 
 - When discussing dice or probability without wanting actual rolls
-- When you prefer to use the manual RNG tool in the tool palette
+- When you prefer to use the manual RNG tool via **Run Tool…** in the Chat Sidebar's Chat drawer
 - When writing content that mentions dice notation without wanting it executed
 
 **Example patterns detected:**

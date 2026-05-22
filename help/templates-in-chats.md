@@ -26,24 +26,24 @@ When a template is active in a chat, it:
 - **Independent** — Changing one chat's template doesn't affect others
 - **Can be changed anytime** — Switch templates at any point in a conversation
 
-## Accessing Chat Settings
-
-### Opening Chat Settings
+## Accessing the Template Selector
 
 While in a chat:
 
-1. Look for the **settings icon** (gear icon) at the top right
-2. Click it to open **Chat Settings**
-3. The settings modal appears
-4. Scroll to the **Roleplay Template** section
+1. Open the **Chat Sidebar** on the right
+2. Expand the **Chat** drawer
+3. Locate the **Roleplay Template** dropdown
 
-### What Settings Include
+### What the Chat Drawer Contains
 
-The Chat Settings modal contains:
+Alongside Roleplay Template, the Chat drawer holds every other per-chat dial:
 
-- **Roleplay Template** — Template selection dropdown
-- **Participants** — List of characters in the chat
-- **Other settings** — Avatar display, chat history, etc.
+- **Agent Mode** toggle
+- **Project** picker
+- **Image Provider** dropdown
+- **Announce Generated Images** dropdown
+- **Auto-generate Character Avatars** toggle
+- **Tools…**, **Run Tool…**, and **Regenerate Background** buttons
 
 ## Selecting a Template
 
@@ -310,11 +310,11 @@ Some templates include:
 
 **Solutions:**
 
-- Check that Chat Settings modal is fully loaded
+- Check that the Chat Sidebar is fully loaded
 - Refresh the page
 - Verify you're logged in
 - Check your internet connection
-- Try closing and reopening Chat Settings
+- Try collapsing and re-expanding the Chat drawer
 
 ### Template Reverts
 
