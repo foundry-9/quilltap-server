@@ -804,6 +804,8 @@ Low-level options (legacy; still supported):
   --tables              List all tables in the active database
   --count <table>       Show row count for a table
   --repl                Interactive SQL prompt (extras: .cols, .find)
+  --json                Emit machine-readable JSON instead of a table
+                        (works with --tables, --count, and raw SQL)
   --llm-logs            Target the LLM logs database
   --mount-points        Target the document mount-index database
   --data-dir <path>     Override data directory (pass instance root)
@@ -911,6 +913,7 @@ async function dbCommand(args) {
   let lockStatus = false;
   let lockClean = false;
   let lockOverride = false;
+  let asJson = false;
 
   let i = 0;
   while (i < cleaned.length) {
@@ -920,6 +923,7 @@ async function dbCommand(args) {
       case '--tables': showTables = true; break;
       case '--count': countTable = cleaned[++i]; break;
       case '--repl': repl = true; break;
+      case '--json': asJson = true; break;
       case '--help': case '-h': showHelp = true; break;
       case '--lock-status': lockStatus = true; break;
       case '--lock-clean': lockClean = true; break;
@@ -1013,22 +1017,27 @@ async function dbCommand(args) {
   try {
     if (showTables) {
       const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
-      for (const t of tables) console.log(t.name);
+      if (asJson) console.log(JSON.stringify(tables.map(t => t.name), null, 2));
+      else for (const t of tables) console.log(t.name);
     } else if (countTable) {
       const row = db.prepare(`SELECT count(*) as count FROM "${countTable}"`).get();
-      console.log(row.count);
+      if (asJson) console.log(JSON.stringify({ table: countTable, count: row.count }, null, 2));
+      else console.log(row.count);
     } else if (sql) {
       const stmt = db.prepare(sql);
       if (stmt.reader) {
         const rows = stmt.all();
-        if (rows.length === 0) {
+        if (asJson) {
+          console.log(JSON.stringify(rows, null, 2));
+        } else if (rows.length === 0) {
           console.log('(no results)');
         } else {
           console.table(rows);
         }
       } else {
         const info = stmt.run();
-        console.log(`Changes: ${info.changes}`);
+        if (asJson) console.log(JSON.stringify({ changes: info.changes, lastInsertRowid: Number(info.lastInsertRowid) }, null, 2));
+        else console.log(`Changes: ${info.changes}`);
       }
     } else if (repl) {
       const readline = require('readline');

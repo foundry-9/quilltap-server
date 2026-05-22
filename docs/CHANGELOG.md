@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Fix: Deleting a mount point no longer leaks folder rows
+
+`DELETE /api/v1/mount-points/[id]` in `app/api/v1/mount-points/[id]/route.ts` cleared chunks, file links, documents, blobs, project links, and the mount-point row itself, but never called `docMountFolders.deleteByMountPointId(id)`. `doc_mount_folders` has no FK to any of those tables, so the folder hierarchy was orphaned on every mount-point deletion. Added the call between the blobs delete and the project-links delete. Pre-existing orphan folder rows must be cleaned up by hand (e.g. via `quilltap db --mount-points` against the mount-index DB).
+
+#### Fix: `quilltap db` raw-SQL path now accepts `--json`
+
+The verb subcommands (`db chats`, `db schema`, etc.) already supported `--json` via `lib/db-commands.js`, but the legacy `db <SQL>` / `db --tables` / `db --count` path rejected it with `Unknown option: --json`. Added `--json` to the legacy flag parser in `packages/quilltap/bin/quilltap.js`. With `--tables` it emits a JSON array of table names; with `--count` an object `{ table, count }`; with raw SQL a JSON array of rows for SELECTs and `{ changes, lastInsertRowid }` for writes. Help text updated.
+
 #### Change: Per-chat Concierge tri-state (Safe / Flagged / Off-duty)
 
 Each chat now carries an explicit Concierge mode the operator can set from the sidebar. A new `chats.conciergeOverride` column (TEXT, NULL or `'OFF'`, default NULL) is added by `migrations/scripts/add-chat-concierge-override.ts`. The control lives in the Chat Sidebar's Chat section: Safe (default — global moderation applies, classifier may auto-flip to Flagged), Flagged (treat the chat as dangerous; uncensored routing for text, image gen, cheap-LLM, etc.), and Off-duty (`conciergeOverride='OFF'` — disables every Concierge effect for this chat; never auto-flips out).
