@@ -67,7 +67,6 @@ async function executeGetInfo(
       characterRoster.push({
         id: char.id,
         name: char.name,
-        avatarUrl: char.avatarUrl,
       })
     }
   }

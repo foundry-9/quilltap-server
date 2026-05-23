@@ -70,7 +70,6 @@ const createCharacterSchema = z.object({
     .optional(),
   firstMessage: z.string().optional(),
   exampleDialogues: z.string().optional(),
-  avatarUrl: z.url().optional().or(z.literal('')),
   defaultConnectionProfileId: z.uuid().optional(),
   controlledBy: z.enum(['llm', 'user']).optional(),
   npc: z.boolean().optional(),
@@ -86,33 +85,20 @@ const createCharacterSchema = z.object({
       })
     )
     .optional(),
-  physicalDescriptions: z
-    .array(
-      z.object({
-        id: z.uuid(),
-        name: z.string().min(1),
-        usageContext: z.string().max(200).nullable().optional(),
-        shortPrompt: z.string().max(350).nullable().optional(),
-        mediumPrompt: z.string().max(500).nullable().optional(),
-        longPrompt: z.string().max(750).nullable().optional(),
-        completePrompt: z.string().max(1000).nullable().optional(),
-        fullDescription: z.string().nullable().optional(),
-        createdAt: z.string(),
-        updatedAt: z.string(),
-      })
-    )
-    .optional(),
-  clothingRecords: z
-    .array(
-      z.object({
-        id: z.uuid(),
-        name: z.string().min(1),
-        usageContext: z.string().max(200).nullable().optional(),
-        description: z.string().nullable().optional(),
-        createdAt: z.string(),
-        updatedAt: z.string(),
-      })
-    )
+  physicalDescription: z
+    .object({
+      id: z.uuid(),
+      name: z.string().min(1),
+      usageContext: z.string().max(200).nullable().optional(),
+      shortPrompt: z.string().max(350).nullable().optional(),
+      mediumPrompt: z.string().max(500).nullable().optional(),
+      longPrompt: z.string().max(750).nullable().optional(),
+      completePrompt: z.string().max(1000).nullable().optional(),
+      fullDescription: z.string().nullable().optional(),
+      createdAt: z.string(),
+      updatedAt: z.string(),
+    })
+    .nullable()
     .optional(),
   characterDocumentMountPointId: z.uuid()
     .optional()
@@ -373,7 +359,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           name: character.name,
           title: character.title,
           description: character.description,
-          avatarUrl: character.avatarUrl,
           defaultImageId: character.defaultImageId,
           defaultImage,
           isFavorite: character.isFavorite,
@@ -446,7 +431,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     scenarios: normalizedScenarios,
     firstMessage: validatedData.firstMessage || null,
     exampleDialogues: validatedData.exampleDialogues || null,
-    avatarUrl: validatedData.avatarUrl || null,
     defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
     controlledBy: validatedData.controlledBy || 'llm',
     isFavorite: false,
@@ -455,8 +439,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     partnerLinks: [] as { partnerId: string; isDefault: boolean }[],
     avatarOverrides: [] as { chatId: string; imageId: string }[],
     defaultImageId: null,
-    physicalDescriptions: validatedData.physicalDescriptions || [],
-    clothingRecords: validatedData.clothingRecords || [],
+    physicalDescription: validatedData.physicalDescription ?? null,
     systemPrompts: validatedData.systemPrompts || [],
   });
 
@@ -493,15 +476,13 @@ async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext
     scenarios: [],
     firstMessage: null,
     exampleDialogues: null,
-    avatarUrl: null,
     defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
     isFavorite: false,
     tags: [] as string[],
     partnerLinks: [] as { partnerId: string; isDefault: boolean }[],
     avatarOverrides: [] as { chatId: string; imageId: string }[],
     defaultImageId: null,
-    physicalDescriptions: [],
-    clothingRecords: [],
+    physicalDescription: null,
   });
 
   logger.info('[Characters v1] Quick create completed', {
@@ -566,14 +547,12 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
     const character = await repos.characters.create({
       userId: user.id,
       ...importedData,
-      avatarUrl: null,
       isFavorite: false,
       tags: [] as string[],
       partnerLinks: [] as { partnerId: string; isDefault: boolean }[],
       avatarOverrides: [] as { chatId: string; imageId: string }[],
       defaultImageId: null,
-      physicalDescriptions: [],
-      clothingRecords: [],
+      physicalDescription: null,
     });
 
     let defaultImageId: string | null = null;
@@ -624,7 +603,6 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
           id: character.id,
           name: character.name,
           description: character.description,
-          avatarUrl: character.avatarUrl,
           defaultImageId,
           createdAt: character.createdAt,
           updatedAt: character.updatedAt,

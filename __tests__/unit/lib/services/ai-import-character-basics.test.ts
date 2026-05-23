@@ -26,11 +26,11 @@ describe('CHARACTER_BASICS_PROMPT', () => {
     expect(CHARACTER_BASICS_PROMPT).toContain('TITLE')
   })
 
-  it('description guidance forbids physical appearance and points at physicalDescriptions', () => {
+  it('description guidance forbids physical appearance and points at physicalDescription', () => {
     // The old prompt said "covering appearance, background, and current situation".
     expect(CHARACTER_BASICS_PROMPT).not.toMatch(/covering appearance/i)
     expect(CHARACTER_BASICS_PROMPT).toMatch(/NOT physical appearance/i)
-    expect(CHARACTER_BASICS_PROMPT).toContain('physicalDescriptions')
+    expect(CHARACTER_BASICS_PROMPT).toContain('physicalDescription')
   })
 
   it('personality guidance forbids putting outward behaviour or identity facts in personality', () => {

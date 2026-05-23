@@ -71,7 +71,7 @@ function deriveGenderPrefix(char: Character): string {
 }
 
 function buildBasicEnumeration(char: Character): string {
-  const primary = char.physicalDescriptions?.[0];
+  const primary = char.physicalDescription;
   const desc =
     primary?.mediumPrompt ||
     primary?.shortPrompt ||
@@ -285,7 +285,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     appearanceInputs.push({
       characterId: char!.id,
       characterName: char!.name,
-      physicalDescriptions: char!.physicalDescriptions || [],
+      physicalDescription: char!.physicalDescription ?? null,
       equippedWardrobeItems,
     });
   }
@@ -474,7 +474,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     }
 
     // Fallback: simple first-description logic
-    const primary = char!.physicalDescriptions?.[0];
+    const primary = char!.physicalDescription;
     const descParts = [genderPrefix + (primary?.mediumPrompt || primary?.shortPrompt || char!.name)];
     return {
       name: char!.name,

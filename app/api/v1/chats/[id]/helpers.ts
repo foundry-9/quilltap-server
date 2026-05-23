@@ -43,7 +43,6 @@ export async function getEnrichedCharacter(characterId: string, repos: Repos) {
     id: charData.id,
     name: charData.name,
     title: charData.title,
-    avatarUrl: charData.avatarUrl,
     talkativeness: charData.talkativeness ?? 0.5,
     defaultImageId: charData.defaultImageId,
     defaultImage,

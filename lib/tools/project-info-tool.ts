@@ -43,7 +43,6 @@ export type ProjectInfoToolInput = z.infer<typeof projectInfoToolInputSchema>
 export interface ProjectCharacterInfo {
   id: string
   name: string
-  avatarUrl?: string | null
 }
 
 /**

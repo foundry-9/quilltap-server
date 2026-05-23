@@ -251,10 +251,7 @@ export async function getCharacterSummary(
     }
   }
 
-  let avatarUrl: string | null = character.avatarUrl || null
-  if (!avatarUrl && defaultImage) {
-    avatarUrl = defaultImage.filepath
-  }
+  const avatarUrl: string | null = defaultImage ? defaultImage.filepath : null
 
   return {
     id: character.id,
@@ -316,11 +313,8 @@ export async function getCharacterDetail(
     }
   }
 
-  // Build avatar URL: use explicit avatarUrl if non-empty, else fall back to defaultImage
-  let avatarUrl: string | null = character.avatarUrl || null
-  if (!avatarUrl && defaultImage) {
-    avatarUrl = defaultImage.filepath
-  }
+  // Build avatar URL from defaultImage; the avatarUrl column has been retired.
+  const avatarUrl: string | null = defaultImage ? defaultImage.filepath : null
 
   return {
     id: character.id,

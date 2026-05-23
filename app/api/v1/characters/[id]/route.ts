@@ -33,7 +33,7 @@ import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-del
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
 import { readCharacterAvatarBuffer, resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 import { z } from 'zod';
-import { PronounsSchema } from '@/lib/schemas/character.types';
+import { PronounsSchema, PhysicalDescriptionSchema } from '@/lib/schemas/character.types';
 import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
 import type { Character } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
@@ -71,9 +71,6 @@ const updateCharacterSchema = z.object({
     .optional(),
   firstMessage: z.string().optional(),
   exampleDialogues: z.string().optional(),
-  avatarUrl: z.url()
-    .optional()
-    .or(z.literal('')),
   defaultConnectionProfileId: z.uuid()
     .optional()
     .or(
@@ -98,8 +95,22 @@ const updateCharacterSchema = z.object({
     .optional()
     .or(z.literal('').transform(() => null))
     .nullable(),
-  readPropertiesFromDocumentStore: z.boolean().nullable().optional(),
   systemTransparency: z.boolean().nullable().optional(),
+  physicalDescription: z
+    .object({
+      id: z.string().uuid().optional(),
+      name: z.string().min(1),
+      usageContext: z.string().max(200).nullable().optional(),
+      shortPrompt: z.string().max(350).nullable().optional(),
+      mediumPrompt: z.string().max(500).nullable().optional(),
+      longPrompt: z.string().max(750).nullable().optional(),
+      completePrompt: z.string().max(1000).nullable().optional(),
+      fullDescription: z.string().nullable().optional(),
+      createdAt: z.string().optional(),
+      updatedAt: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 const avatarSchema = z.object({
@@ -135,8 +146,6 @@ const generateExternalPromptSchema = z.object({
   connectionProfileId: z.string().uuid(),
   systemPromptId: z.string().uuid(),
   scenarioId: z.string().uuid().optional(),
-  descriptionId: z.string().uuid().optional(),
-  clothingRecordId: z.string().uuid().optional(),
   maxTokens: z.number().int().min(1000).max(20000),
 });
 
@@ -426,7 +435,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
   const validatedData = updateCharacterSchema.parse(body);
 
   // Normalize scenarios: fill in missing id/createdAt/updatedAt
-  const { scenarios: rawScenarios, ...restValidatedData } = validatedData;
+  const { scenarios: rawScenarios, physicalDescription: rawPhysical, ...restValidatedData } = validatedData;
   const updatePayload: Partial<Character> = { ...restValidatedData };
   if (rawScenarios) {
     const now = new Date().toISOString();
@@ -437,6 +446,25 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
       createdAt: s.createdAt ?? now,
       updatedAt: s.updatedAt ?? now,
     }));
+  }
+  if (rawPhysical !== undefined) {
+    if (rawPhysical === null) {
+      updatePayload.physicalDescription = null;
+    } else {
+      const now = new Date().toISOString();
+      updatePayload.physicalDescription = PhysicalDescriptionSchema.parse({
+        id: rawPhysical.id ?? crypto.randomUUID(),
+        name: rawPhysical.name,
+        usageContext: rawPhysical.usageContext ?? null,
+        shortPrompt: rawPhysical.shortPrompt ?? null,
+        mediumPrompt: rawPhysical.mediumPrompt ?? null,
+        longPrompt: rawPhysical.longPrompt ?? null,
+        completePrompt: rawPhysical.completePrompt ?? null,
+        fullDescription: rawPhysical.fullDescription ?? null,
+        createdAt: rawPhysical.createdAt ?? now,
+        updatedAt: now,
+      });
+    }
   }
 
   const character = await repos.characters.update(id, updatePayload);
@@ -739,13 +767,12 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         }
 
         const mountId = rawCharacter.characterDocumentMountPointId;
-        const existingPhysical = rawCharacter.physicalDescriptions ?? [];
+        const existingPhysical = rawCharacter.physicalDescription ?? null;
         const [snapshot, vaultWardrobe] = await Promise.all([
           readCharacterVaultManagedFields(mountId, rawCharacter.id, existingPhysical),
           readCharacterVaultWardrobe(mountId, rawCharacter.id),
         ]);
-        const physicalSkippedNoPrimary = snapshot.physicalSkippedNoPrimary === true;
-        const { physicalSkippedNoPrimary: _omit, ...patch } = snapshot;
+        const patch = snapshot;
 
         // Wardrobe syncs against separate tables (wardrobe_items,
         // outfit_presets), not character-row columns, so it doesn't feed
@@ -804,8 +831,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           syncedManifesto: snapshot.manifesto !== undefined,
           syncedPersonality: snapshot.personality !== undefined,
           syncedExampleDialogues: snapshot.exampleDialogues !== undefined,
-          syncedPhysical: snapshot.physicalDescriptions !== undefined,
-          physicalSkippedNoPrimary,
+          syncedPhysical: snapshot.physicalDescription !== undefined,
           syncedSystemPromptCount: snapshot.systemPrompts?.length ?? 0,
           syncedScenarioCount: snapshot.scenarios?.length ?? 0,
           syncedWardrobe: wardrobeSynced,

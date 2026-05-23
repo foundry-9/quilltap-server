@@ -105,17 +105,13 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
     parts.push(`\n## Character Pronouns\nThis character's pronouns are: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Always use these pronouns when referring to this character.`)
   }
 
-  if (character.physicalDescriptions && character.physicalDescriptions.length > 0) {
-    const descriptionLines = character.physicalDescriptions.map(desc => {
-      const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : ''
-      const descText = desc.shortPrompt || desc.mediumPrompt || desc.longPrompt
-        || desc.completePrompt || desc.fullDescription || ''
-      if (!descText) return null
-      return `- "${desc.name}"${contextNote}: ${descText}`
-    }).filter(Boolean)
-
-    if (descriptionLines.length > 0) {
-      parts.push(`\n## Physical Appearance\n${descriptionLines.join('\n')}`)
+  if (character.physicalDescription) {
+    const desc = character.physicalDescription
+    const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : ''
+    const descText = desc.shortPrompt || desc.mediumPrompt || desc.longPrompt
+      || desc.completePrompt || desc.fullDescription || ''
+    if (descText) {
+      parts.push(`\n## Physical Appearance\n- "${desc.name}"${contextNote}: ${descText}`)
     }
   }
 

@@ -46,14 +46,13 @@ const mockCharacter = {
   firstMessage: '',
   exampleDialogues: null,
   systemPrompts: [],
-  avatarUrl: null,
   defaultImageId: null,
   partnerLinks: [],
   tags: [],
   isFavorite: false,
   createdAt: now,
   updatedAt: now,
-  physicalDescriptions: [mockDescription],
+  physicalDescription: mockDescription,
 }
 
 // User-controlled character (formerly persona) - after migration, personas become characters with controlledBy: 'user'
@@ -66,7 +65,7 @@ const mockUserCharacter = {
   tags: [],
   createdAt: now,
   updatedAt: now,
-  physicalDescriptions: [mockDescription],
+  physicalDescription: mockDescription,
 }
 
 const mockChat = {

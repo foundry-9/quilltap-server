@@ -296,7 +296,14 @@
         },
         "firstMessage": { "type": "string" },
         "exampleDialogues": { "type": "string" },
-        "avatarUrl": { "type": ["string", "null"] },
+        "physicalDescription": {
+          "oneOf": [{ "type": "object" }, { "type": "null" }],
+          "description": "Singular physical description with full text plus token-sized prompt variants (short/medium/long/complete). Pre-4.6 exports carried a `physicalDescriptions` array instead; importers fold legacy index 0 into this field."
+        },
+        "avatarUrl": {
+          "type": ["string", "null"],
+          "description": "DEPRECATED in 4.6: avatar URLs now flow through defaultImageId and the per-vault images/avatar.webp. Retained on the schema so older `.qtap` files still validate; importers ignore it."
+        },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
         "_linkedPersonaNames": {
@@ -316,10 +323,6 @@
         "canCreateOutfits": {
           "type": ["boolean", "null"],
           "description": "Whether this character can create new wardrobe items mid-conversation (null = enabled by default)"
-        },
-        "readPropertiesFromDocumentStore": {
-          "type": ["boolean", "null"],
-          "description": "When true, pronouns/aliases/title/firstMessage/talkativeness are read live from the linked vault's properties.json instead of this row"
         },
         "systemTransparency": {
           "type": ["boolean", "null"],

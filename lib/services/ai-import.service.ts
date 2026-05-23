@@ -155,14 +155,14 @@ Respond with JSON:
 
 export const CHARACTER_BASICS_PROMPT = `${FIELD_SEMANTICS_PREAMBLE}
 
-Extract or generate the character's basic information from the source material. Use the vantage-point rule above to decide what belongs in IDENTITY vs DESCRIPTION vs PERSONALITY. Do NOT put the same content under two different fields, and do NOT put physical appearance into DESCRIPTION — physical appearance is generated separately and lives in physicalDescriptions.
+Extract or generate the character's basic information from the source material. Use the vantage-point rule above to decide what belongs in IDENTITY vs DESCRIPTION vs PERSONALITY. Do NOT put the same content under two different fields, and do NOT put physical appearance into DESCRIPTION — physical appearance is generated separately and lives in physicalDescription.
 
 Respond with JSON:
 {
   "name": "Character's full name",
   "title": "A short epithet or title (2-5 words, like 'The Wandering Scholar')",
   "identity": "1-2 paragraphs of public-knowledge / outside-view facts only — name, station, occupation, public reputation, signifying outward facts a stranger could plausibly know without having spoken to the character. Never internal motivation, never private mannerisms, never physical appearance.",
-  "description": "1-2 paragraphs of what someone who has interacted with the character would notice — behaviour, mannerisms, frequent verbal patterns, conversational tics. NOT physical appearance (that lives in physicalDescriptions). NOT the character's private inner monologue. NOT the public-facing reputation that already lives in identity. Write in third person, present tense.",
+  "description": "1-2 paragraphs of what someone who has interacted with the character would notice — behaviour, mannerisms, frequent verbal patterns, conversational tics. NOT physical appearance (that lives in physicalDescription). NOT the character's private inner monologue. NOT the public-facing reputation that already lives in identity. Write in third person, present tense.",
   "manifesto": "The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Not a vantage-point field; nobody 'sees' the manifesto, it is the load-bearing truth the character is built on. Short, declarative, foundational. If a fact would be devastating to contradict, it belongs here.",
   "personality": "1-2 paragraphs of the character's own self-knowledge — inner drivers of speech and behaviour, motivations, beliefs, emotional tendencies, things only the character knows about themselves unless they choose to share them. Never put outward behaviour someone else would observe here, and never put public-facing identity facts.",
   "scenario": "1-2 paragraphs setting the default scene for interactions. Present tense, describing environment and relationship context. The scenario is the stage, not the actor — do not restate personality or appearance here."
@@ -587,22 +587,19 @@ export function assembleQtapExport(
     pronouns: stepResults.pronouns || null,
     tags: [],
     avatarOverrides: [],
-    physicalDescriptions: stepResults.physical_descriptions
-      ? [
-          {
-            id: crypto.randomUUID(),
-            name: 'AI Generated',
-            shortPrompt: (stepResults.physical_descriptions.shortPrompt || '').substring(0, 350),
-            mediumPrompt: (stepResults.physical_descriptions.mediumPrompt || '').substring(0, 500),
-            longPrompt: (stepResults.physical_descriptions.longPrompt || '').substring(0, 750),
-            completePrompt: (stepResults.physical_descriptions.completePrompt || '').substring(0, 1000),
-            fullDescription: stepResults.physical_descriptions.fullDescription,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ]
-      : [],
-    clothingRecords: [],
+    physicalDescription: stepResults.physical_descriptions
+      ? {
+          id: crypto.randomUUID(),
+          name: 'AI Generated',
+          shortPrompt: (stepResults.physical_descriptions.shortPrompt || '').substring(0, 350),
+          mediumPrompt: (stepResults.physical_descriptions.mediumPrompt || '').substring(0, 500),
+          longPrompt: (stepResults.physical_descriptions.longPrompt || '').substring(0, 750),
+          completePrompt: (stepResults.physical_descriptions.completePrompt || '').substring(0, 1000),
+          fullDescription: stepResults.physical_descriptions.fullDescription,
+          createdAt: now,
+          updatedAt: now,
+        }
+      : null,
     wardrobeItems: stepResults.wardrobe_items
       ? stepResults.wardrobe_items.map((item) => ({
           id: crypto.randomUUID(),

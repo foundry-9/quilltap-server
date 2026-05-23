@@ -43,12 +43,11 @@ export async function buildCharacterAvatarPrompt(
 
   const leafCounts = { top: 0, bottom: 0, footwear: 0, accessories: 0 };
 
-  // Physical descriptions — use the first available variant, falling back
-  // through the canonical fields the avatar handler has always favored.
+  // Physical description — fall back through the canonical fields the avatar
+  // handler has always favored.
   let physicalText = '';
-  const physicalDescriptions = character.physicalDescriptions || [];
-  if (physicalDescriptions.length > 0) {
-    const desc = physicalDescriptions[0];
+  const desc = character.physicalDescription;
+  if (desc) {
     physicalText = (
       desc.mediumPrompt ||
       desc.shortPrompt ||

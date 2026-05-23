@@ -182,26 +182,16 @@ export function buildCharacterContext(character: Character): string {
     }
   }
 
-  if (character.physicalDescriptions && character.physicalDescriptions.length > 0) {
-    parts.push('=== Physical Descriptions ===');
-    for (const pd of character.physicalDescriptions) {
-      parts.push(`[Physical Description: "${pd.name}" (ID: ${pd.id})]`);
-      parts.push(`Short: ${pd.shortPrompt || '(empty)'}`);
-      parts.push(`Medium: ${pd.mediumPrompt || '(empty)'}`);
-      parts.push(`Long: ${pd.longPrompt || '(empty)'}`);
-      parts.push(`Complete: ${pd.completePrompt || '(empty)'}`);
-      parts.push(`Full: ${pd.fullDescription || '(empty)'}`);
-      parts.push('');
-    }
-  }
-
-  if (character.clothingRecords && character.clothingRecords.length > 0) {
-    parts.push('=== Clothing Records ===');
-    for (const cr of character.clothingRecords) {
-      parts.push(`[Clothing Record: "${cr.name}" (ID: ${cr.id})]`);
-      parts.push(cr.description || '(empty)');
-      parts.push('');
-    }
+  if (character.physicalDescription) {
+    const pd = character.physicalDescription;
+    parts.push('=== Physical Description ===');
+    parts.push(`[Physical Description: "${pd.name}" (ID: ${pd.id})]`);
+    parts.push(`Short: ${pd.shortPrompt || '(empty)'}`);
+    parts.push(`Medium: ${pd.mediumPrompt || '(empty)'}`);
+    parts.push(`Long: ${pd.longPrompt || '(empty)'}`);
+    parts.push(`Complete: ${pd.completePrompt || '(empty)'}`);
+    parts.push(`Full: ${pd.fullDescription || '(empty)'}`);
+    parts.push('');
   }
 
   return parts.join('\n');

@@ -62,7 +62,7 @@ export interface ResolvedCharacterAppearance {
 export interface AppearanceResolutionInput {
   characterId: string
   characterName: string
-  physicalDescriptions: PhysicalDescription[]
+  physicalDescription: PhysicalDescription | null
   /** Equipped wardrobe items (from the wardrobe system) */
   equippedWardrobeItems?: Array<{
     slot: string
@@ -88,7 +88,7 @@ function canSkipResolution(
   if (recentMessages.length > 0) return false
 
   return characters.every(
-    c => c.physicalDescriptions.length <= 1 && (!c.equippedWardrobeItems || c.equippedWardrobeItems.length <= 1)
+    c => (!c.equippedWardrobeItems || c.equippedWardrobeItems.length <= 1)
   )
 }
 
@@ -123,7 +123,7 @@ function buildDefaultAppearances(
   characters: AppearanceResolutionInput[]
 ): ResolvedCharacterAppearance[] {
   return characters.map(char => {
-    const primary = char.physicalDescriptions[0]
+    const primary = char.physicalDescription
 
     const physDesc =
       primary?.completePrompt ||
@@ -161,16 +161,9 @@ function mapResolutionResults(
   return characters.map(char => {
     const resolved = items.find(i => i.characterId === char.characterId)
 
-    // Find the selected physical description
-    let selectedDesc: PhysicalDescription | undefined
-    if (resolved?.selectedDescriptionId) {
-      selectedDesc = char.physicalDescriptions.find(
-        d => d.id === resolved.selectedDescriptionId
-      )
-    }
-    if (!selectedDesc) {
-      selectedDesc = char.physicalDescriptions[0]
-    }
+    // Only one physical description per character now; the resolver's
+    // selectedDescriptionId is informational only.
+    const selectedDesc: PhysicalDescription | null = char.physicalDescription
 
     const physDesc = selectedDesc
       ? (selectedDesc.completePrompt ||
@@ -225,7 +218,7 @@ export async function resolveCharacterAppearances(
   if (sceneState?.characters && sceneState.characters.length > 0) {
     const sceneAppearances: ResolvedCharacterAppearance[] = characters.map(char => {
       const sceneChar = sceneState.characters.find(sc => sc.characterId === char.characterId)
-      const primary = char.physicalDescriptions[0]
+      const primary = char.physicalDescription
       const physDesc = sceneChar?.appearance
         || primary?.completePrompt || primary?.longPrompt || primary?.mediumPrompt || primary?.shortPrompt
         || char.characterName
@@ -264,13 +257,15 @@ export async function resolveCharacterAppearances(
   const llmInput: CharacterAppearanceInput[] = characters.map(char => ({
     characterId: char.characterId,
     characterName: char.characterName,
-    physicalDescriptions: char.physicalDescriptions.map(d => ({
-      id: d.id,
-      name: d.name,
-      usageContext: d.usageContext,
-      shortPrompt: d.shortPrompt,
-      mediumPrompt: d.mediumPrompt,
-    })),
+    physicalDescriptions: char.physicalDescription
+      ? [{
+          id: char.physicalDescription.id,
+          name: char.physicalDescription.name,
+          usageContext: char.physicalDescription.usageContext,
+          shortPrompt: char.physicalDescription.shortPrompt,
+          mediumPrompt: char.physicalDescription.mediumPrompt,
+        }]
+      : [],
     ...(char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
       ? { equippedWardrobeItems: char.equippedWardrobeItems }
       : {}),

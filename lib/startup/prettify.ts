@@ -78,6 +78,9 @@ const PRETTY_LABELS: Record<string, string> = {
   'decrypt-api-key-values-v1': 'Decrypting stray API key values',
   'drop-api-key-encryption-columns-v1': 'Retiring old API-key columns',
 
+  // 4.6 character vault cutover
+  'cutover-characters-to-vault-v1': "Settling every character into their vault for keeps",
+
   // Per-character fields
   'add-default-image-profile-field-v1': 'Adding default image profile to characters',
   'add-character-aliases-field-v1': 'Adding aliases to characters',

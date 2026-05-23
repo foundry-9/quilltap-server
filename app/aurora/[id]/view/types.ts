@@ -68,7 +68,7 @@ export interface Character {
   firstMessage?: string | null
   exampleDialogues?: string | null
   systemPrompts?: CharacterSystemPrompt[]
-  physicalDescriptions?: CharacterPhysicalDescription[]
+  physicalDescription?: CharacterPhysicalDescription | null
   avatarUrl?: string
   defaultImageId?: string
   defaultConnectionProfileId?: string
@@ -84,7 +84,6 @@ export interface Character {
   defaultSystemPromptId?: string | null
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
-  readPropertiesFromDocumentStore?: boolean | null
   characterDocumentMountPointId?: string | null
   defaultImage?: {
     id: string

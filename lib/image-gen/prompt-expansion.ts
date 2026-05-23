@@ -103,7 +103,7 @@ export async function resolvePlaceholders(
           if (characterId) {
             const character = await repos.characters.findById(characterId);
             if (character) {
-              descriptions = character.physicalDescriptions || [];
+              descriptions = character.physicalDescription ? [character.physicalDescription] : [];
               entityId = character.id;
               entityType = 'character';
               resolvedName = character.name;
@@ -117,7 +117,7 @@ export async function resolvePlaceholders(
         if (characterParticipant?.characterId) {
           const character = await repos.characters.findById(characterParticipant.characterId);
           if (character) {
-            descriptions = character.physicalDescriptions || [];
+            descriptions = character.physicalDescription ? [character.physicalDescription] : [];
             entityId = character.id;
             entityType = 'character';
             resolvedName = character.name;
@@ -178,7 +178,7 @@ export async function resolvePlaceholders(
           if (characterId) {
             const character = await repos.characters.findById(characterId);
             if (character) {
-              descriptions = character.physicalDescriptions || [];
+              descriptions = character.physicalDescription ? [character.physicalDescription] : [];
               entityId = character.id;
               entityType = 'character';
               resolvedName = character.name;
@@ -212,7 +212,7 @@ export async function resolvePlaceholders(
         name: character.name,
         type: 'character',
         entityId: character.id,
-        descriptions: character.physicalDescriptions || [],
+        descriptions: character.physicalDescription ? [character.physicalDescription] : [],
         pronouns: character.pronouns ?? null,
       });
       continue;

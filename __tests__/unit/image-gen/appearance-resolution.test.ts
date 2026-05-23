@@ -78,24 +78,24 @@ const dangerOnSettings: DangerousContentSettings = {
 // Helper to add required timestamp fields
 const ts = '2025-01-01T00:00:00.000Z'
 
-// Sample character input data
+// Sample character input data — physicalDescription is now singular (the
+// schema collapsed the array in the 4.6 vault cutover; the vault only ever
+// stored index 0).
 const sampleCharacter1: AppearanceResolutionInput = {
   characterId: 'char-1',
   characterName: 'Alice',
-  physicalDescriptions: [
-    {
-      id: 'desc-1',
-      name: 'Default',
-      usageContext: 'General appearance',
-      shortPrompt: 'A woman with red hair',
-      mediumPrompt: 'A young woman with flowing red hair and green eyes',
-      longPrompt: 'A young woman with long flowing red hair, vibrant green eyes, and fair skin',
-      completePrompt: 'A young woman with long flowing red hair, vibrant green eyes, fair skin, wearing casual clothes',
-      fullDescription: null,
-      createdAt: ts,
-      updatedAt: ts,
-    },
-  ],
+  physicalDescription: {
+    id: 'desc-1',
+    name: 'Default',
+    usageContext: 'General appearance',
+    shortPrompt: 'A woman with red hair',
+    mediumPrompt: 'A young woman with flowing red hair and green eyes',
+    longPrompt: 'A young woman with long flowing red hair, vibrant green eyes, and fair skin',
+    completePrompt: 'A young woman with long flowing red hair, vibrant green eyes, fair skin, wearing casual clothes',
+    fullDescription: null,
+    createdAt: ts,
+    updatedAt: ts,
+  },
   equippedWardrobeItems: [
     { slot: 'top', title: 'Casual Outfit', description: 'Blue jeans and a white t-shirt' },
   ],
@@ -104,32 +104,18 @@ const sampleCharacter1: AppearanceResolutionInput = {
 const sampleCharacter2: AppearanceResolutionInput = {
   characterId: 'char-2',
   characterName: 'Bob',
-  physicalDescriptions: [
-    {
-      id: 'desc-2a',
-      name: 'Work appearance',
-      usageContext: 'Office settings',
-      shortPrompt: 'A man in a suit',
-      mediumPrompt: 'A middle-aged man with gray hair in a formal suit',
-      longPrompt: 'A middle-aged man with short gray hair, wearing glasses and a formal navy suit',
-      completePrompt: 'A middle-aged professional man with short gray hair, rectangular glasses, wearing a formal navy suit with a red tie',
-      fullDescription: null,
-      createdAt: ts,
-      updatedAt: ts,
-    },
-    {
-      id: 'desc-2b',
-      name: 'Casual appearance',
-      usageContext: 'Weekend activities',
-      shortPrompt: 'A man in casual clothes',
-      mediumPrompt: 'A middle-aged man with gray hair in casual weekend wear',
-      longPrompt: 'A middle-aged man with short gray hair, wearing jeans and a plaid shirt',
-      completePrompt: 'A middle-aged man with short gray hair, rectangular glasses, wearing comfortable jeans and a plaid flannel shirt',
-      fullDescription: null,
-      createdAt: ts,
-      updatedAt: ts,
-    },
-  ],
+  physicalDescription: {
+    id: 'desc-2a',
+    name: 'Work appearance',
+    usageContext: 'Office settings',
+    shortPrompt: 'A man in a suit',
+    mediumPrompt: 'A middle-aged man with gray hair in a formal suit',
+    longPrompt: 'A middle-aged man with short gray hair, wearing glasses and a formal navy suit',
+    completePrompt: 'A middle-aged professional man with short gray hair, rectangular glasses, wearing a formal navy suit with a red tie',
+    fullDescription: null,
+    createdAt: ts,
+    updatedAt: ts,
+  },
   equippedWardrobeItems: [
     { slot: 'top', title: 'Navy Suit Jacket', description: 'Navy suit jacket with red tie' },
     { slot: 'bottom', title: 'Navy Suit Trousers', description: 'Matching navy trousers' },
@@ -180,7 +166,11 @@ describe('Appearance Resolution Module', () => {
         })
       })
 
-      it('should NOT skip when character has multiple descriptions', async () => {
+      it('should NOT skip when character has multiple equipped wardrobe items', async () => {
+        // Multi-description characters are no longer possible (the schema
+        // collapsed physicalDescriptions[] → physicalDescription). Skip now
+        // hinges purely on equipped-item count + chat context: > 1 equipped
+        // item still triggers the LLM call.
         const characters: AppearanceResolutionInput[] = [sampleCharacter2]
         const noMessages: ChatMessage[] = []
 
@@ -189,7 +179,7 @@ describe('Appearance Resolution Module', () => {
           result: [
             {
               characterId: 'char-2',
-              selectedDescriptionId: 'desc-2b',
+              selectedDescriptionId: null,
               clothingDescription: 'Comfortable weekend clothes',
               clothingSource: 'stored',
             },
@@ -205,7 +195,8 @@ describe('Appearance Resolution Module', () => {
           testChatId
         )
 
-        // Should call mockResolveAppearance because multiple descriptions/clothing exist
+        // sampleCharacter2 has 3 equipped items (> 1), so the skip optimization
+        // does not fire and the LLM call goes through.
         expect(mockResolveAppearance).toHaveBeenCalled()
       })
 
@@ -238,14 +229,20 @@ describe('Appearance Resolution Module', () => {
       })
     })
 
-    describe('LLM resolution with multiple descriptions', () => {
+    describe('LLM resolution', () => {
+      // Note: post-cutover each character has at most one physicalDescription,
+      // so the LLM's `selectedDescriptionId` is informational only — the mapper
+      // always uses the character's singular description. Tests that previously
+      // asserted selection between desc-2a vs desc-2b were dropped; the
+      // remaining tests cover clothing-source mapping and the singular-desc
+      // mapping behavior.
       it('should call mockResolveAppearance and map results correctly', async () => {
         const characters: AppearanceResolutionInput[] = [sampleCharacter2]
 
         const llmResult: AppearanceResolutionItem[] = [
           {
             characterId: 'char-2',
-            selectedDescriptionId: 'desc-2b', // Weekend appearance
+            selectedDescriptionId: null,
             clothingDescription: 'Comfortable jeans and plaid shirt',
             clothingSource: 'stored',
           },
@@ -284,9 +281,10 @@ describe('Appearance Resolution Module', () => {
         expect(result.appearances[0]).toEqual({
           characterId: 'char-2',
           characterName: 'Bob',
-          // Should use the selected description (desc-2b)
-          physicalDescription: 'A middle-aged man with short gray hair, rectangular glasses, wearing comfortable jeans and a plaid flannel shirt',
-          physicalDescriptionName: 'Casual appearance',
+          // Singular physicalDescription — always the character's own.
+          physicalDescription:
+            'A middle-aged professional man with short gray hair, rectangular glasses, wearing a formal navy suit with a red tie',
+          physicalDescriptionName: 'Work appearance',
           clothingDescription: 'Comfortable jeans and plaid shirt',
           clothingSource: 'stored',
           wasSanitized: false,
@@ -322,69 +320,6 @@ describe('Appearance Resolution Module', () => {
         expect(result.llmResolved).toBe(true)
         expect(result.appearances[0].clothingSource).toBe('narrative')
         expect(result.appearances[0].clothingDescription).toBe('A flowing summer dress mentioned in conversation')
-      })
-
-      it('should fall back to first description when selectedDescriptionId is null', async () => {
-        const characters: AppearanceResolutionInput[] = [sampleCharacter2]
-
-        const llmResult: AppearanceResolutionItem[] = [
-          {
-            characterId: 'char-2',
-            selectedDescriptionId: null, // Use default
-            clothingDescription: 'Business suit',
-            clothingSource: 'stored',
-          },
-        ]
-
-        mockResolveAppearance.mockResolvedValue({
-          success: true,
-          result: llmResult,
-        })
-
-        const result = await resolveCharacterAppearances(
-          characters,
-          sampleMessages,
-          'Bob at work',
-          testSelection,
-          testUserId,
-          testChatId
-        )
-
-        // Should use first description (desc-2a)
-        expect(result.appearances[0].physicalDescription).toBe(
-          'A middle-aged professional man with short gray hair, rectangular glasses, wearing a formal navy suit with a red tie'
-        )
-        expect(result.appearances[0].physicalDescriptionName).toBe('Work appearance')
-      })
-
-      it('should handle invalid selectedDescriptionId by falling back to first', async () => {
-        const characters: AppearanceResolutionInput[] = [sampleCharacter2]
-
-        const llmResult: AppearanceResolutionItem[] = [
-          {
-            characterId: 'char-2',
-            selectedDescriptionId: 'invalid-id', // Does not exist
-            clothingDescription: 'Some clothes',
-            clothingSource: 'default',
-          },
-        ]
-
-        mockResolveAppearance.mockResolvedValue({
-          success: true,
-          result: llmResult,
-        })
-
-        const result = await resolveCharacterAppearances(
-          characters,
-          sampleMessages,
-          'Bob somewhere',
-          testSelection,
-          testUserId,
-          testChatId
-        )
-
-        // Should fall back to first description
-        expect(result.appearances[0].physicalDescriptionName).toBe('Work appearance')
       })
     })
 
@@ -486,7 +421,7 @@ describe('Appearance Resolution Module', () => {
         const noDescChar: AppearanceResolutionInput = {
           characterId: 'char-3',
           characterName: 'Charlie',
-          physicalDescriptions: [],
+          physicalDescription: null,
           equippedWardrobeItems: [],
         }
 
@@ -524,20 +459,18 @@ describe('Appearance Resolution Module', () => {
         const charWithPartialTiers: AppearanceResolutionInput = {
           characterId: 'char-4',
           characterName: 'Diana',
-          physicalDescriptions: [
-            {
-              id: 'desc-4',
-              name: 'Default',
-              usageContext: null,
-              shortPrompt: 'A person',
-              mediumPrompt: null,
-              longPrompt: null,
-              completePrompt: null,
-              fullDescription: null,
-              createdAt: ts,
-              updatedAt: ts,
-            },
-          ],
+          physicalDescription: {
+            id: 'desc-4',
+            name: 'Default',
+            usageContext: null,
+            shortPrompt: 'A person',
+            mediumPrompt: null,
+            longPrompt: null,
+            completePrompt: null,
+            fullDescription: null,
+            createdAt: ts,
+            updatedAt: ts,
+          },
           equippedWardrobeItems: [],
         }
 

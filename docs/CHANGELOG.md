@@ -4,6 +4,50 @@
 
 ### 4.6-dev
 
+#### Change: Aurora UI follow-up to the character vault cutover
+
+Tore out the dead multi-`physicalDescription` and `readPropertiesFromDocumentStore` UI left over from the Phase 3 cutover, and migrated callers off the deleted `/api/v1/characters/[id]/descriptions/*` and `/clothing/*` routes.
+
+- `app/aurora/[id]/view/types.ts` and `edit/types.ts`: `physicalDescriptions: CharacterPhysicalDescription[]` → `physicalDescription: CharacterPhysicalDescription | null`; dropped `readPropertiesFromDocumentStore` from both.
+- `app/aurora/[id]/view/hooks/useCharacterView.ts`: template-count loop and the template-replace flow collapsed from `physicalDescriptions.map(...)` to a single-record check; writes the singular `physicalDescription` field on PUT.
+- `app/aurora/[id]/view/components/DescriptionsTab.tsx`: rewritten as a self-contained single-record editor. No longer mounts `PhysicalDescriptionList` or `ClothingRecordList`; PUTs `{ physicalDescription: {...} }` to `/api/v1/characters/[id]` directly. Same field set as the old editor (name, usageContext, four prompt sizes, fullDescription).
+- `app/aurora/[id]/view/components/ExternalPromptDialog.tsx`: dropped the clothing branch entirely and the physical-description picker. `generateExternalPromptSchema` on the server side already accepts neither; the dropdowns were dead.
+- `app/aurora/[id]/view/page.tsx`: dropped the `overlayActive` prop and the `readPropertiesFromDocumentStore` half of `CharacterOptimizerModal`'s `vaultAvailable` — vault availability is now just `!!character?.characterDocumentMountPointId`.
+- `app/aurora/[id]/edit/page.tsx`: dropped `physicalDescriptionsRefreshKey` and the two `handleSyncProperties*AndRefreshLists` wrappers; descriptions tab now uses the new `DescriptionsTab`; wizard's physical-description save migrated from POST `/descriptions` to PUT `/characters/[id]` with `{ physicalDescription: ... }`.
+- `app/aurora/[id]/edit/hooks/useCharacterEdit.ts`: dropped `readPropertiesFromDocumentStore` from form state and removed `handleReadFromDocStoreToggle`, `handleSyncPropertiesFromVault`, `handleSyncPropertiesToVault`.
+- `app/aurora/[id]/edit/components/CharacterBasicInfo.tsx`: removed the Scriptorium-overlay toggle card, the Copy-vault/Copy-database buttons, the `hasLinkedVault` prop, and the `overlayOn` conditional copy in the Scenarios section.
+- `app/aurora/new/page.tsx`: wizard's physical-description save migrated from POST `/descriptions` to PUT `/characters/[id]` with `{ physicalDescription: ... }`.
+
+Server-side: extended `updateCharacterSchema` in `app/api/v1/characters/[id]/route.ts` to accept the singular `physicalDescription` (nullable) and normalize missing id/createdAt/updatedAt via `PhysicalDescriptionSchema.parse`. Without this the UI's PUT was being silently stripped by Zod.
+
+Stale comments scrubbed: `lib/database/repositories/wardrobe.repository.ts`, `lib/database/repositories/characters.repository.ts`, `lib/export/ndjson-writer.ts`, `lib/startup/refresh-vault-wardrobe.ts` no longer mention `readPropertiesFromDocumentStore`.
+
+Out of scope for this pass (still calls the deleted routes and will 404 at runtime): `components/physical-descriptions/*`, `components/clothing-records/*`, `components/chat/CreateNPCDialog.tsx`, and the suggestion-category keys `physicalDescriptions` / `clothingRecords` in `components/characters/optimizer/*`.
+
+Verification: `grep -rn "physicalDescriptions\b\|readPropertiesFromDocumentStore\|clothingRecords" app/aurora` is clean. `npx tsc --noEmit` is clean.
+
+#### Change: Character vault cutover — Phase 3 (Feature 0)
+
+Completed the multi-phase move of character content fields into the per-character document vault. After the `cutover-characters-to-vault-v1` migration runs, the `characters` table holds only identity, the vault pointer (`characterDocumentMountPointId`), default-reference fields, behavior flags, `systemTransparency`, and `sillyTavernData`. Every content field is now read from and written to the vault unconditionally.
+
+Dropped columns from the `characters` table: `identity`, `description`, `manifesto`, `personality`, `exampleDialogues`, `firstMessage`, `scenarios`, `systemPrompts`, `physicalDescriptions`, `title`, `talkativeness`, `aliases`, `pronouns`, `clothingRecords`, `avatarUrl`, `readPropertiesFromDocumentStore`. `systemTransparency` is NOT dropped — it remains as application-state access control on the DB row.
+
+`physicalDescriptions` (array) reshaped to `physicalDescription` (singular `PhysicalDescription | null`). The vault file shape is unchanged — `physical-description.md` for the fullDescription, `physical-prompts.json` for the short/medium/long/complete prompts. The migration logs a per-character warning when a pre-cutover record had more than one entry; only index 0 is preserved.
+
+The overlay (`lib/database/repositories/character-properties-overlay.ts`) no longer branches on `readPropertiesFromDocumentStore`; vault routing is unconditional whenever `characterDocumentMountPointId` is set. The overlay also stops mirroring `systemTransparency` into `properties.json`; the migration's per-character pass scrubs the residual key from any existing file.
+
+Backup safeguard: before per-character work, the migration calls the existing `createPhysicalBackup` / `createMountIndexPhysicalBackup` / `createLLMLogsPhysicalBackup` functions in `lib/database/backends/sqlite/physical-backup.ts` — the same `VACUUM INTO`-based snapshot path the server already runs at every startup. Those functions skip if a backup younger than 24h is on disk, so the typical "already started this morning" path is a no-op. After each call, the migration verifies a recent backup actually exists on disk (the create-functions return null both on "skipped" and on "silent failure"); if the main DB has no recent backup, the migration aborts before destructive work. The refusal gate: if any character's vault can't be verified complete after the per-character pass, the schema mutations are skipped and the operator can re-run after fixing the underlying issue.
+
+Pre-flight inspection: new `npx quilltap db characters status` CLI verb reports per-character vault readiness — vault present, `readPropertiesFromDocumentStore` flag value, files present (`N/8`), Prompts/Scenarios/Wardrobe counts, and any divergence between DB columns and vault files. Supports `--json`, `--id <name|uuid>`, `--diverged`, `--blocked`, `--limit N`. Schema-probes the `characters` table so it works both pre- and post-cutover.
+
+API surface: deleted `/api/v1/characters/[id]/clothing/*` (clothing has been wardrobe-managed since 4.5) and `/api/v1/characters/[id]/descriptions/*` (no longer an array). Character creates/updates with `clothingRecords`, `avatarUrl`, or `readPropertiesFromDocumentStore` payloads are silently dropped by the Zod schema.
+
+`.qtap` export schema (`public/schemas/qtap-export.schema.json`) drops `readPropertiesFromDocumentStore`; `avatarUrl` and the legacy `physicalDescriptions` array are kept on the schema as deprecated-but-tolerated for backwards compatibility with older `.qtap` files. New `physicalDescription` singular field documented. `lib/backup/restore-service.ts` folds legacy `physicalDescriptions[0]` into the singular form on import and silently drops `clothingRecords`.
+
+Files: new migration at `migrations/scripts/cutover-characters-to-vault.ts` (registered, PRETTY_LABELS entry added). `populateVaultWithCharacterData` exported from `lib/mount-index/character-vault.ts`. DDL.md updated with the post-cutover schema plus a vault-managed-fields cross-reference.
+
+Known follow-ups (tracked in session chips): Aurora UI multi-physicalDescription tear-down (the edit/view tabs still iterate on the array form; they compile but render dead controls). The AI-import / character-wizard services have been cleaned up (`lib/services/ai-import.service.ts` and `lib/services/character-wizard.service.ts` now emit the singular `physicalDescription` and no longer write `clothingRecords`).
+
 #### Change: Composer text replacement (Layer 1.5 of the spellcheck/autocorrect plan)
 
 Salon composer and Document Mode rich editor now apply user-defined word-boundary text replacements as you type (e.g. `teh ` → `the `, `Aris ` → `Aristarchus the Wise `). Cross-platform substitute for OS autocorrect, which Chromium does not run on contentEditable. Literal-string matching only; no snippets, no regex.

@@ -76,37 +76,33 @@ describe('buildCharacterContext', () => {
     expect(result).not.toContain('=== System Prompts ===')
   })
 
-  it('includes physical descriptions when present', () => {
+  it('includes physical description when present', () => {
+    // physicalDescriptions[] collapsed to physicalDescription (singular) in
+    // the 4.6 vault cutover. Section header is now "Physical Description"
+    // — production code renders it from character.physicalDescription.
     const character = createMockCharacter({
-      physicalDescriptions: [
-        {
-          id: '1',
-          name: 'Appearance',
-          shortPrompt: 'Tall',
-          mediumPrompt: 'Tall and dark-haired',
-          longPrompt: 'A tall figure with dark hair',
-          completePrompt: 'Complete description',
-          fullDescription: 'Full description here'
-        }
-      ]
+      physicalDescription: {
+        id: '1',
+        name: 'Appearance',
+        usageContext: null,
+        shortPrompt: 'Tall',
+        mediumPrompt: 'Tall and dark-haired',
+        longPrompt: 'A tall figure with dark hair',
+        completePrompt: 'Complete description',
+        fullDescription: 'Full description here',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      }
     })
     const result = buildCharacterContext(character)
-    expect(result).toContain('=== Physical Descriptions ===')
+    expect(result).toContain('=== Physical Description ===')
     expect(result).toContain('Appearance')
     expect(result).toContain('Tall')
   })
 
-  it('includes clothing records when present', () => {
-    const character = createMockCharacter({
-      clothingRecords: [
-        { id: '1', name: 'Formal Wear', description: 'A tailored suit' }
-      ]
-    })
-    const result = buildCharacterContext(character)
-    expect(result).toContain('=== Clothing Records ===')
-    expect(result).toContain('Formal Wear')
-    expect(result).toContain('A tailored suit')
-  })
+  // The standalone "clothing records when present" test was removed when the
+  // Character.clothingRecords field was deleted (wardrobe items now live in
+  // their own repository, not on the Character row).
 
   it('includes identity when set', () => {
     const character = createMockCharacter({ identity: 'A renowned alchemist of the northern court.' })

@@ -134,8 +134,7 @@ async function* streamCharacters(
     bump(counts, 'characters');
 
     // Wardrobe items — one record each. Use the raw variant so exports always
-    // reflect the canonical DB rows, regardless of the character's
-    // readPropertiesFromDocumentStore overlay.
+    // reflect the canonical DB rows rather than the vault overlay.
     try {
       const wardrobeItems = await globalRepos.wardrobe.findByCharacterIdRaw(id);
       for (const item of wardrobeItems) {

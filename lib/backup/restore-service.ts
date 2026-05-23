@@ -48,7 +48,6 @@ import type {
   Folder,
   ChatParticipantBase,
   PhysicalDescription,
-  ClothingRecord,
   PromptTemplate,
   RoleplayTemplate,
   ProviderModel,
@@ -1052,19 +1051,26 @@ function remapBackupData(
         imageId: remapper.remap(override.imageId),
       }));
     }
-    // Handle physicalDescriptions
-    if (remapped.physicalDescriptions) {
-      remapped.physicalDescriptions = remapped.physicalDescriptions.map((desc: PhysicalDescription) => ({
-        ...desc,
-        id: remapper.remap(desc.id),
-      }));
+    // Handle physicalDescription: backups may carry either the legacy plural
+    // array (`physicalDescriptions`) or the new singular field
+    // (`physicalDescription`). Collapse to the first record either way.
+    const legacyRecord = legacy as Record<string, unknown>;
+    if (Array.isArray(legacyRecord.physicalDescriptions)) {
+      const first = legacyRecord.physicalDescriptions[0] as PhysicalDescription | undefined;
+      remapped.physicalDescription = first
+        ? { ...first, id: remapper.remap(first.id) }
+        : null;
+      delete legacyRecord.physicalDescriptions;
+    } else if (remapped.physicalDescription) {
+      remapped.physicalDescription = {
+        ...remapped.physicalDescription,
+        id: remapper.remap(remapped.physicalDescription.id),
+      };
     }
-    // Handle clothingRecords
-    if (remapped.clothingRecords) {
-      remapped.clothingRecords = remapped.clothingRecords.map((record: ClothingRecord) => ({
-        ...record,
-        id: remapper.remap(record.id),
-      }));
+    // Legacy `clothingRecords` — the table is gone; drop silently so old
+    // backups still restore.
+    if (legacyRecord.clothingRecords) {
+      delete legacyRecord.clothingRecords;
     }
     return remapped as Character;
   });

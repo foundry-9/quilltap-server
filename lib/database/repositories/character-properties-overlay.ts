@@ -1,19 +1,18 @@
 /**
- * Character Properties Overlay
+ * Character Vault-Managed Fields
  *
- * Applies the per-character `readPropertiesFromDocumentStore` switch: when a
- * character has the flag on and a linked vault, selected fields are read from
- * the vault's files instead of the DB row.
- *
- * Nine vault targets participate, each independently:
+ * Every character with a linked vault has selected content fields served
+ * out of vault files rather than DB columns (those columns no longer exist
+ * post-4.6 cutover). Nine vault targets participate, each independently:
  *
  *   - properties.json          — pronouns, aliases, title, firstMessage, talkativeness
  *   - identity.md              — character.identity
  *   - description.md           — character.description
+ *   - manifesto.md             — character.manifesto
  *   - personality.md           — character.personality
  *   - example-dialogues.md     — character.exampleDialogues
- *   - physical-description.md  — physicalDescriptions[0].fullDescription
- *   - physical-prompts.json    — physicalDescriptions[0].{short,medium,long,complete}Prompt
+ *   - physical-description.md  — physicalDescription.fullDescription
+ *   - physical-prompts.json    — physicalDescription.{short,medium,long,complete}Prompt
  *   - Wardrobe/*.md            — wardrobe items (one file per item, frontmatter
  *                                 carries id/title/types/appropriateness/
  *                                 componentItems/etc.; body is the freeform
@@ -22,39 +21,39 @@
  *                                 components via the `componentItems:` slug
  *                                 array (slug-first, UUID fallback). The
  *                                 retired `Outfits/` folder is tolerated on
- *                                 read but no longer parsed; a separate
- *                                 migration step cleans it up.
+ *                                 read but no longer parsed.
  *   - Prompts/*.md             — character.systemPrompts (one file per variant,
  *                                 YAML frontmatter carries {name, isDefault})
  *   - Scenarios/*.md           — character.scenarios (one file per scenario,
  *                                 first `# heading` is the title)
  *
- * Each file's overlay is all-or-nothing for the fields it owns. If the file is
- * missing, malformed, or fails schema validation, that file's fields fall back
- * to the DB (other files are unaffected). Empty markdown files map `''` → null
- * so nullable fields retain their "unset" semantics.
+ * `systemTransparency` is intentionally NOT a managed field — it is access-
+ * control application state and lives only as a DB column.
  *
- * Prompts/ and Scenarios/ overlays enumerate top-level `.md` files only; nested
- * paths are ignored. When the character is configured to read properties from
- * the vault, the vault folder is authoritative: parseable files become the
- * array, and an empty (or all-unparseable) folder yields an empty array. The
- * DB columns are not consulted while the toggle is on — otherwise stale rows
- * persist as ghosts after the user clears the vault folder.
+ * Each file's read is all-or-nothing for the fields it owns. If the file is
+ * missing, malformed, or fails schema validation, that file's fields fall
+ * back to whatever the parent code path expects (typically null/empty).
+ * Empty markdown files map `''` → null so nullable fields retain their
+ * "unset" semantics.
  *
- * IDs for synthesized systemPrompts/scenarios entries are derived deterministically
- * from (mountPointId, relativePath) via SHA-256 so the chat's stored
- * `selectedSystemPromptId` / `defaultScenarioId` survives across overlay reads
- * as long as the filename doesn't change.
+ * Prompts/ and Scenarios/ enumerate top-level `.md` files only; nested
+ * paths are ignored. The vault folder is authoritative — parseable files
+ * become the array, and an empty/all-unparseable folder yields an empty
+ * array.
  *
- * The physical-description.md and physical-prompts.json overlays only apply when
- * the character already has at least one physicalDescription in the DB; they
- * target index 0 (the default). Characters with an empty `physicalDescriptions`
- * array are not extended synthetically.
+ * IDs for synthesized systemPrompts/scenarios entries are derived
+ * deterministically from (mountPointId, relativePath) via SHA-256 so chat
+ * references to `selectedSystemPromptId` / `defaultScenarioId` survive
+ * across reads as long as the filename doesn't change.
  *
- * The overlay is applied at the CharactersRepository layer so every read path
- * (findById/findAll/findByUserId/findByIds/findByFilter/etc.) sees overlaid
- * values transparently. Exports and the vault populator bypass via the
- * repository's `Raw` helpers.
+ * The physical-description.md and physical-prompts.json files populate the
+ * singular `physicalDescription`; a synthetic record is created when vault
+ * files exist but the character had no prior physical record.
+ *
+ * Vault routing is applied at the CharactersRepository layer so every read
+ * path (findById/findAll/findByUserId/findByIds/findByFilter/etc.) sees
+ * vault values transparently. Exports and the vault populator bypass via
+ * the repository's `Raw` helpers.
  */
 
 import crypto from 'node:crypto';
@@ -105,9 +104,6 @@ export const CharacterVaultPropertiesSchema = z.object({
   title: z.string().nullable(),
   firstMessage: z.string().nullable(),
   talkativeness: z.number().min(0.1).max(1.0),
-  // Optional so vaults written by older Quilltap versions still parse cleanly;
-  // missing in the file → leave the DB row's value untouched on read.
-  systemTransparency: z.boolean().nullable().optional(),
 });
 
 export type CharacterVaultProperties = z.infer<typeof CharacterVaultPropertiesSchema>;
@@ -211,10 +207,11 @@ export const CHARACTER_VAULT_DESCRIPTORS: readonly CharacterVaultDescriptor[] = 
   { kind: 'scenarios-dir', vaultFolder: CHARACTER_SCENARIOS_FOLDER },
 ];
 
-// Top-level Character keys whose writes are routed to the vault when overlay is
-// on. physicalDescriptions is included because the overlay owns
-// physicalDescriptions[0] — the write overlay only patches index 0 and leaves
-// the rest of the array untouched on the DB row.
+// Top-level Character keys whose writes are routed to the vault. Every
+// character with a linked vault has its managed-field writes diverted here;
+// the corresponding DB columns were dropped in the 4.6 cutover.
+// systemTransparency is intentionally absent — it stays as application-state
+// access control on the DB row.
 export const MANAGED_FIELDS: ReadonlySet<keyof Character> = new Set<keyof Character>([
   'identity',
   'description',
@@ -226,18 +223,18 @@ export const MANAGED_FIELDS: ReadonlySet<keyof Character> = new Set<keyof Charac
   'title',
   'firstMessage',
   'talkativeness',
-  'systemTransparency',
-  'physicalDescriptions',
+  'physicalDescription',
   'systemPrompts',
   'scenarios',
 ]);
 
 /**
- * Returns true if this character is a candidate for the overlay. A candidate
- * has the switch on AND a linked vault.
+ * Returns true if this character has a linked vault and is therefore subject
+ * to vault-managed-field routing. Post-cutover this is the only condition;
+ * the per-character opt-in flag is gone.
  */
-function isOverlayCandidate(character: Character): boolean {
-  return !!character.readPropertiesFromDocumentStore && !!character.characterDocumentMountPointId;
+function hasLinkedVault(character: Character): boolean {
+  return !!character.characterDocumentMountPointId;
 }
 
 function parseVaultProperties(
@@ -736,7 +733,7 @@ export async function applyDocumentStoreOverlay(
     return characters;
   }
 
-  const candidates = characters.filter(isOverlayCandidate);
+  const candidates = characters.filter(hasLinkedVault);
   if (candidates.length === 0) {
     return characters;
   }
@@ -814,13 +811,14 @@ export async function applyDocumentStoreOverlay(
   const physPromptsByMount = contentByMountByPath.get(CHARACTER_PHYSICAL_PROMPTS_JSON_PATH)!;
 
   return characters.map((character) => {
-    if (!isOverlayCandidate(character)) {
+    if (!hasLinkedVault(character)) {
       return character;
     }
     const mountId = character.characterDocumentMountPointId as string;
     let out: Character = character;
 
-    // properties.json: pronouns, aliases, title, firstMessage, talkativeness, systemTransparency
+    // properties.json: pronouns, aliases, title, firstMessage, talkativeness
+    // (systemTransparency is access-control state — DB column only, not vault-mirrored)
     const propsRaw = propsByMount.get(mountId);
     if (propsRaw !== undefined) {
       const parsed = parseVaultProperties(propsRaw, character.id);
@@ -832,11 +830,6 @@ export async function applyDocumentStoreOverlay(
           title: parsed.title,
           firstMessage: parsed.firstMessage,
           talkativeness: parsed.talkativeness,
-          // systemTransparency is optional in the vault schema. When absent,
-          // preserve the DB value rather than nulling it out.
-          ...(parsed.systemTransparency !== undefined
-            ? { systemTransparency: parsed.systemTransparency }
-            : {}),
         };
       }
     }
@@ -871,36 +864,45 @@ export async function applyDocumentStoreOverlay(
       out = { ...out, exampleDialogues: markdownToNullable(dialoguesRaw) };
     }
 
-    // physical-description.md + physical-prompts.json target physicalDescriptions[0]
+    // physical-description.md + physical-prompts.json populate the singular
+    // physicalDescription. Vault is authoritative post-cutover: any vault
+    // file present replaces the (now nonexistent) DB column.
     const physDescRaw = physDescByMount.get(mountId);
     const physPromptsRaw = physPromptsByMount.get(mountId);
     const hasPhysicalOverlayInput = physDescRaw !== undefined || physPromptsRaw !== undefined;
 
     if (hasPhysicalOverlayInput) {
-      if (!out.physicalDescriptions || out.physicalDescriptions.length === 0) {
-      } else {
-        const first = out.physicalDescriptions[0];
-        const patched: PhysicalDescription = { ...first };
+      const base = out.physicalDescription ?? null;
+      const patched: PhysicalDescription = base
+        ? { ...base }
+        : {
+            id: stableUuidFromString(`physical:${mountId}`),
+            name: 'default',
+            usageContext: null,
+            shortPrompt: null,
+            mediumPrompt: null,
+            longPrompt: null,
+            completePrompt: null,
+            fullDescription: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
 
-        if (physDescRaw !== undefined) {
-          patched.fullDescription = markdownToNullable(physDescRaw);
-        }
-
-        if (physPromptsRaw !== undefined) {
-          const parsedPrompts = parseVaultPhysicalPrompts(physPromptsRaw, character.id);
-          if (parsedPrompts) {
-            patched.shortPrompt = parsedPrompts.short;
-            patched.mediumPrompt = parsedPrompts.medium;
-            patched.longPrompt = parsedPrompts.long;
-            patched.completePrompt = parsedPrompts.complete;
-          }
-        }
-
-        out = {
-          ...out,
-          physicalDescriptions: [patched, ...out.physicalDescriptions.slice(1)],
-        };
+      if (physDescRaw !== undefined) {
+        patched.fullDescription = markdownToNullable(physDescRaw);
       }
+
+      if (physPromptsRaw !== undefined) {
+        const parsedPrompts = parseVaultPhysicalPrompts(physPromptsRaw, character.id);
+        if (parsedPrompts) {
+          patched.shortPrompt = parsedPrompts.short;
+          patched.mediumPrompt = parsedPrompts.medium;
+          patched.longPrompt = parsedPrompts.long;
+          patched.completePrompt = parsedPrompts.complete;
+        }
+      }
+
+      out = { ...out, physicalDescription: patched };
     }
 
     // Prompts/*.md → systemPrompts. Vault-authoritative: an empty or
@@ -1210,11 +1212,11 @@ export interface WardrobeOverlayOptions {
 }
 
 /**
- * Overlay a wardrobe-items list read. If the character has
- * `readPropertiesFromDocumentStore` on and a linked vault, the vault's
- * `Wardrobe/*.md` files (or the legacy wardrobe.json on a not-yet-migrated
- * vault) are the source of truth; the caller's DB loader is skipped.
- * Otherwise the DB loader runs and its result is returned.
+ * Overlay a wardrobe-items list read. When the character has a linked
+ * vault, the vault's `Wardrobe/*.md` files (or the legacy wardrobe.json on
+ * a not-yet-migrated vault) are the source of truth; the caller's DB
+ * loader is skipped. Otherwise the DB loader runs and its result is
+ * returned.
  *
  * Items parsed from the vault have their `characterId` coerced to the lookup
  * ID — a wardrobe file scoped to one character's vault always belongs to that
@@ -1228,7 +1230,7 @@ export async function getOverlaidWardrobeItems(
 ): Promise<WardrobeItem[]> {
   const repos = getRepositories();
   const character = await repos.characters.findByIdRaw(characterId);
-  if (!character || !isOverlayCandidate(character)) {
+  if (!character || !hasLinkedVault(character)) {
     return loadDbItems();
   }
 
@@ -1306,7 +1308,7 @@ async function performVaultWardrobeSync(
 ): Promise<void> {
   const repos = getRepositories();
   const character = await repos.characters.findByIdRaw(characterId);
-  if (!character || !isOverlayCandidate(character)) return;
+  if (!character || !hasLinkedVault(character)) return;
 
   const mountPointId = character.characterDocumentMountPointId as string;
 
@@ -1466,20 +1468,17 @@ export async function readVaultTextFile(
  * null), so callers can spread this object into a patch without clobbering
  * unrelated DB-only fields.
  *
- * `physicalDescriptions` is included as the full array (with index 0 patched
- * from physical-description.md / physical-prompts.json) only when the
- * character already has at least one physicalDescription — vault overlay
- * never synthesizes one.
+ * `physicalDescription` is set when any physical-* vault file is present —
+ * the singular record is built from the existing one (if any) plus the
+ * vault's full text / prompt variants, or synthesized from scratch when the
+ * character had no prior physical record.
  */
-export interface VaultManagedFieldsSnapshot extends Partial<Character> {
-  /** True if vault has any physical-* file but the character has no physicalDescriptions to patch. */
-  physicalSkippedNoPrimary?: boolean;
-}
+export interface VaultManagedFieldsSnapshot extends Partial<Character> {}
 
 export async function readCharacterVaultManagedFields(
   mountPointId: string,
   characterId: string,
-  existingPhysicalDescriptions: readonly PhysicalDescription[] = [],
+  existingPhysicalDescription: PhysicalDescription | null = null,
 ): Promise<VaultManagedFieldsSnapshot> {
   const snapshot: VaultManagedFieldsSnapshot = {};
 
@@ -1493,9 +1492,6 @@ export async function readCharacterVaultManagedFields(
           snapshot.title = props.title;
           snapshot.firstMessage = props.firstMessage;
           snapshot.talkativeness = props.talkativeness;
-          if (props.systemTransparency !== undefined) {
-            snapshot.systemTransparency = props.systemTransparency;
-          }
         }
         break;
       }
@@ -1510,7 +1506,7 @@ export async function readCharacterVaultManagedFields(
       case 'physical-md':
       case 'physical-json': {
         // Handled together below to keep both files patched onto the same
-        // physicalDescriptions[0] copy. We process physical-md first; the
+        // physicalDescription copy. We process physical-md first; the
         // physical-json branch is a no-op the second time around.
         if (descriptor.kind === 'physical-md') {
           const physDescMd = await readVaultTextFile(
@@ -1523,12 +1519,21 @@ export async function readCharacterVaultManagedFields(
             characterId,
           );
           if (physDescMd === null && physPromptsJson === null) break;
-          if (existingPhysicalDescriptions.length === 0) {
-            snapshot.physicalSkippedNoPrimary = true;
-            break;
-          }
-          const first = existingPhysicalDescriptions[0];
-          const patched: PhysicalDescription = { ...first };
+          const nowIso = new Date().toISOString();
+          const patched: PhysicalDescription = existingPhysicalDescription
+            ? { ...existingPhysicalDescription }
+            : {
+                id: stableUuidFromString(`physical:${mountPointId}`),
+                name: 'default',
+                usageContext: null,
+                shortPrompt: null,
+                mediumPrompt: null,
+                longPrompt: null,
+                completePrompt: null,
+                fullDescription: null,
+                createdAt: nowIso,
+                updatedAt: nowIso,
+              };
           if (physDescMd !== null) {
             patched.fullDescription = physDescMd === '' ? null : physDescMd;
           }
@@ -1538,8 +1543,8 @@ export async function readCharacterVaultManagedFields(
             patched.longPrompt = physPromptsJson.long;
             patched.completePrompt = physPromptsJson.complete;
           }
-          patched.updatedAt = new Date().toISOString();
-          snapshot.physicalDescriptions = [patched, ...existingPhysicalDescriptions.slice(1)];
+          patched.updatedAt = nowIso;
+          snapshot.physicalDescription = patched;
         }
         break;
       }
@@ -1588,7 +1593,7 @@ export interface VaultManagedFieldsWriteResult {
   systemPromptsWritten: number;
   scenariosWritten: number;
   wardrobeItemsWritten: number;
-  /** True when the character has no physicalDescriptions[0] and the physical-* files were skipped. */
+  /** True when the character has no physicalDescription and the physical-* files were skipped. */
   physicalSkippedNoPrimary: boolean;
 }
 
@@ -1614,7 +1619,6 @@ export async function writeCharacterVaultManagedFields(
         title: character.title ?? null,
         firstMessage: character.firstMessage ?? null,
         talkativeness: character.talkativeness ?? 0.5,
-        systemTransparency: character.systemTransparency ?? null,
       },
       null,
       2,
@@ -1641,7 +1645,7 @@ export async function writeCharacterVaultManagedFields(
   );
   result.singleFileWriteCount++;
 
-  const primaryPhysical = character.physicalDescriptions?.[0];
+  const primaryPhysical = character.physicalDescription ?? null;
   if (primaryPhysical) {
     await writeDatabaseDocument(
       mountPointId,
@@ -1725,7 +1729,7 @@ export async function applyDocumentStoreWriteOverlay(
     // Caller will hit the same not-found in _update; let it surface there.
     return patch;
   }
-  if (!isOverlayCandidate(character)) {
+  if (!hasLinkedVault(character)) {
     return patch;
   }
 
@@ -1744,7 +1748,7 @@ export async function applyDocumentStoreWriteOverlay(
         break;
       }
       case 'properties-json': {
-        const propsKeys = ['pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness', 'systemTransparency'] as const;
+        const propsKeys = ['pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness'] as const;
         const touched = propsKeys.filter((k) => k in patch);
         if (touched.length === 0) break;
         // Read-modify-write so a partial patch doesn't blow away unspecified
@@ -1755,7 +1759,6 @@ export async function applyDocumentStoreWriteOverlay(
           title: character.title ?? null,
           firstMessage: character.firstMessage ?? null,
           talkativeness: character.talkativeness ?? 0.5,
-          systemTransparency: character.systemTransparency ?? null,
         };
         const next: CharacterVaultProperties = {
           pronouns: 'pronouns' in patch ? (patch.pronouns ?? null) : current.pronouns,
@@ -1765,8 +1768,6 @@ export async function applyDocumentStoreWriteOverlay(
             'firstMessage' in patch ? (patch.firstMessage ?? null) : current.firstMessage,
           talkativeness:
             'talkativeness' in patch ? (patch.talkativeness ?? 0.5) : current.talkativeness,
-          systemTransparency:
-            'systemTransparency' in patch ? (patch.systemTransparency ?? null) : (current.systemTransparency ?? null),
         };
         await writeDatabaseDocument(
           mountPointId,
@@ -1780,40 +1781,27 @@ export async function applyDocumentStoreWriteOverlay(
       case 'physical-md':
       case 'physical-json': {
         // Only routed once, on the physical-md descriptor pass; physical-json
-        // is handled in the same write because both target physicalDescriptions[0].
+        // is handled in the same write because both target physicalDescription.
         if (descriptor.kind !== 'physical-md') break;
-        if (!('physicalDescriptions' in patch)) break;
-        const incoming = patch.physicalDescriptions ?? [];
-        if (incoming.length === 0) {
-          // The DB array still owns membership; deleting an entry should go to
-          // DB, not the vault. Drop the vault overlay only when the new array
-          // is non-empty so we don't accidentally clear the file when the
-          // caller is just emptying the DB row.
+        if (!('physicalDescription' in patch)) break;
+        const incoming = patch.physicalDescription ?? null;
+        if (!incoming) {
+          // Clearing physicalDescription is a DB-side concern; leave vault file alone.
           break;
         }
-        const primary = incoming[0];
         await writeDatabaseDocument(
           mountPointId,
           CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
-          primary.fullDescription ?? '',
+          incoming.fullDescription ?? '',
         );
         await writeDatabaseDocument(
           mountPointId,
           CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
-          renderPhysicalPromptsJson(primary),
+          renderPhysicalPromptsJson(incoming),
         );
-        // Strip primary's overlaid fields from the DB-bound patch so the DB
-        // row's index 0 stays frozen at the pre-overlay value. Non-overlaid
-        // fields on the primary, plus the rest of the array, still go to DB.
-        const dbPrimary: PhysicalDescription = {
-          ...primary,
-          fullDescription: character.physicalDescriptions?.[0]?.fullDescription ?? null,
-          shortPrompt: character.physicalDescriptions?.[0]?.shortPrompt ?? null,
-          mediumPrompt: character.physicalDescriptions?.[0]?.mediumPrompt ?? null,
-          longPrompt: character.physicalDescriptions?.[0]?.longPrompt ?? null,
-          completePrompt: character.physicalDescriptions?.[0]?.completePrompt ?? null,
-        };
-        dbPatch.physicalDescriptions = [dbPrimary, ...incoming.slice(1)];
+        // Vault owns the physicalDescription post-cutover; nothing flows back to
+        // the (now nonexistent) DB column.
+        delete dbPatch.physicalDescription;
         routedFieldCount++;
         break;
       }

@@ -201,7 +201,7 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     return {
       characterId: char!.id,
       characterName: char!.name,
-      physicalDescription: char!.physicalDescriptions?.[0]?.mediumPrompt || char!.physicalDescriptions?.[0]?.shortPrompt || '',
+      physicalDescription: char!.physicalDescription?.mediumPrompt || char!.physicalDescription?.shortPrompt || '',
       clothingDescription,
       scenario: chat.scenarioText || char!.scenarios?.[0]?.content || undefined,
     };

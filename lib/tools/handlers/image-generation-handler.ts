@@ -822,7 +822,7 @@ async function resolveAppearances(
           appearanceInputs.push({
             characterId: p.entityId!,
             characterName: p.name,
-            physicalDescriptions: p.descriptions || [],
+            physicalDescription: (p.descriptions && p.descriptions[0]) || null,
             equippedWardrobeItems,
           });
         }

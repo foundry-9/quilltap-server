@@ -135,11 +135,6 @@ export async function buildAddContent(
   lines.push(`The Host welcomes ${character.name} to the Salon.`);
   lines.push('');
 
-  if (character.avatarUrl && character.avatarUrl.trim().length > 0) {
-    lines.push(`![${character.name}](${character.avatarUrl})`);
-    lines.push('');
-  }
-
   const identity = await readVaultIdentity(character);
   if (identity) {
     lines.push('**Identity:**');
@@ -168,11 +163,6 @@ export async function buildAddOpaqueContent(
   const lines: string[] = [];
   lines.push(`${character.name} has joined the scene.`);
   lines.push('');
-
-  if (character.avatarUrl && character.avatarUrl.trim().length > 0) {
-    lines.push(`![${character.name}](${character.avatarUrl})`);
-    lines.push('');
-  }
 
   const identity = await readVaultIdentity(character);
   if (identity) {

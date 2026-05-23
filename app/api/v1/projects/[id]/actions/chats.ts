@@ -67,7 +67,6 @@ export async function handleListChats(
               return {
                 id: p.id,
                 name: char.name,
-                avatarUrl: char.avatarUrl,
                 defaultImage,
                 tags: char.tags || [],
               };

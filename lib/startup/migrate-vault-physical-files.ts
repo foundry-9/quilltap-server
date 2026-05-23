@@ -101,7 +101,7 @@ export async function migrateVaultPhysicalFiles(): Promise<VaultPhysicalMigratio
         continue;
       }
 
-      const primary = (character.physicalDescriptions ?? [])[0];
+      const primary = character.physicalDescription ?? null;
 
       await writeDatabaseDocument(
         mountPointId,

@@ -782,6 +782,11 @@ Subcommands (high-level shortcuts; auto-pick the right database):
   log <id>                    Full request/response of a single LLM log
   memories --character <id>   Memories held by a character
                               (flags: --about <id|name> --source AUTO|MANUAL)
+  characters status           Per-character vault readiness report:
+                              flag value, vault present, single-file count,
+                              Prompts/ and Scenarios/ folder counts, and any
+                              divergence between DB columns and vault content.
+                              (flags: --id <id|name> --diverged --blocked --limit N)
   optimize [target...]        Run maintenance (VACUUM + ANALYZE + PRAGMA optimize)
                               on the named databases, or all of them if no
                               target is given. Targets: main, llm-logs,

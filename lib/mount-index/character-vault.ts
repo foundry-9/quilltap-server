@@ -26,7 +26,6 @@ import type {
   PhysicalDescription,
   CharacterSystemPrompt,
   CharacterScenario,
-  ClothingRecord,
 } from '@/lib/schemas/character.types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
@@ -88,7 +87,20 @@ export async function ensureCharacterVault(
   return { mountPointId: mountPoint.id, created: true };
 }
 
-async function populateVaultWithCharacterData(
+/**
+ * Project every vault-managed character field out to the vault's files.
+ *
+ * One-way DB → vault sync: reads the fields from the passed-in character
+ * object (and, for wardrobe, from `repos.wardrobe.findByCharacterIdRaw`)
+ * and writes a faithful snapshot of those values into the vault. This is
+ * **destructive** for any existing vault files that disagree with the
+ * passed-in character — the caller is responsible for ensuring the source
+ * is authoritative.
+ *
+ * Used at vault provisioning time and by the Phase 3 vault-cutover
+ * migration (only on characters whose DB row is the source of truth).
+ */
+export async function populateVaultWithCharacterData(
   mountPointId: string,
   character: Character,
 ): Promise<void> {
@@ -99,7 +111,7 @@ async function populateVaultWithCharacterData(
   await writeDatabaseDocument(mountPointId, 'manifesto.md', character.manifesto ?? '');
   await writeDatabaseDocument(mountPointId, 'personality.md', character.personality ?? '');
 
-  const primaryPhysical = (character.physicalDescriptions ?? [])[0];
+  const primaryPhysical = character.physicalDescription ?? null;
   await writeDatabaseDocument(
     mountPointId,
     'physical-description.md',
@@ -136,11 +148,7 @@ async function populateVaultWithCharacterData(
   // Raw read so the populator writes DB values to the vault, never the
   // overlaid (vault-sourced) values it would otherwise see.
   const wardrobeItems = await repos.wardrobe.findByCharacterIdRaw(character.id);
-  const migratedClothingItems = migrateClothingRecordsToItems(
-    character.id,
-    character.clothingRecords ?? [],
-  );
-  const allItems: WardrobeItem[] = [...wardrobeItems, ...migratedClothingItems];
+  const allItems: WardrobeItem[] = [...wardrobeItems];
   const slugByItemId = buildSlugByItemIdMap(allItems);
 
   await writeNamedArrayIntoFolder(
@@ -174,7 +182,7 @@ async function populateVaultWithCharacterData(
   );
 }
 
-export function renderPhysicalPromptsJson(primary: PhysicalDescription | undefined): string {
+export function renderPhysicalPromptsJson(primary: PhysicalDescription | null | undefined): string {
   return JSON.stringify(
     {
       short: primary?.shortPrompt ?? null,
@@ -185,26 +193,6 @@ export function renderPhysicalPromptsJson(primary: PhysicalDescription | undefin
     null,
     2,
   );
-}
-
-function migrateClothingRecordsToItems(
-  characterId: string,
-  records: ClothingRecord[],
-): WardrobeItem[] {
-  return records.map((r) => ({
-    id: crypto.randomUUID(),
-    characterId,
-    title: r.name,
-    description: r.description ?? null,
-    types: ['accessories' as const],
-    componentItemIds: [],
-    appropriateness: r.usageContext ?? null,
-    isDefault: false,
-    migratedFromClothingRecordId: r.id,
-    archivedAt: null,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-  }));
 }
 
 async function writeNamedArrayIntoFolder<T>(

@@ -178,42 +178,43 @@ CREATE INDEX "idx_api_keys_userId" ON "api_keys" ("userId");
 
 ### characters
 
+The `characters` table holds only identity, reference fields, behavior
+flags, and the vault pointer. Every content field — identity, description,
+manifesto, personality, exampleDialogues, firstMessage, scenarios,
+systemPrompts, physicalDescription (singular, previously a
+`physicalDescriptions` array), title, talkativeness, aliases, pronouns —
+lives only in the per-character document vault (linked via
+`characterDocumentMountPointId`). The 4.6 `cutover-characters-to-vault-v1`
+migration dropped those columns, along with the now-defunct `avatarUrl`,
+`clothingRecords` (folded into wardrobe_items in 4.5), and
+`readPropertiesFromDocumentStore` opt-in flag (vault-sourcing is now
+unconditional).
+
+`systemTransparency` is **intentionally still a DB column** — it is
+access-control application state, not character content, and is therefore
+not vault-mirrored.
+
 ```sql
 CREATE TABLE "characters" (
   "id" TEXT PRIMARY KEY,
   "userId" TEXT NOT NULL,
   "name" TEXT NOT NULL,
-  "title" TEXT,                           -- The user's or character's own private label/framing (e.g. "the protagonist", "the rival"). Not how others refer to them.
-  "identity" TEXT,                        -- Surface-level public-knowledge view: name, station, occupation, reputation. What strangers know on sight.
-  "description" TEXT,                     -- Acquaintance-perceivable behaviour, mannerisms, verbal patterns. NOT physical (see physicalDescriptions).
-  "manifesto" TEXT,                       -- The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Synced as `manifesto.md` in the character vault.
-  "personality" TEXT,                     -- The character's own self-knowledge — internal driver of speech and behaviour.
-  "scenario" TEXT,                        -- DEPRECATED: use scenarios instead
-  "scenarios" TEXT DEFAULT '[]',          -- JSON array of { id, title, content, createdAt, updatedAt }
-  "firstMessage" TEXT,
-  "exampleDialogues" TEXT,
-  "systemPrompts" TEXT DEFAULT '[]',
-  "avatarUrl" TEXT,
-  "defaultImageId" TEXT,                  -- Vault link id (doc_mount_file_links.id) of the character's portrait. Pre-photos-Phase-3 this was a legacy files.id; the photo-gallery cutover translates every value to the matching vault link id by sha256.
+  "scenario" TEXT,                        -- DEPRECATED legacy column (pre-scenarios-array, also pre-cutover); see convert-scenario-to-scenarios-v1
+  "defaultImageId" TEXT,                  -- Vault link id (doc_mount_file_links.id) of the character's portrait.
   "defaultConnectionProfileId" TEXT,
   "defaultPartnerId" TEXT,
   "defaultRoleplayTemplateId" TEXT,
   "sillyTavernData" TEXT,
   "isFavorite" INTEGER DEFAULT 0,
   "npc" INTEGER DEFAULT 0,
-  "talkativeness" REAL DEFAULT 0.5,
   "controlledBy" TEXT DEFAULT 'llm',
   "partnerLinks" TEXT DEFAULT '[]',
   "tags" TEXT DEFAULT '[]',
-  "avatarOverrides" TEXT DEFAULT '[]',    -- JSON array of { chatId, imageId } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
-  "physicalDescriptions" TEXT DEFAULT '[]',
+  "avatarOverrides" TEXT DEFAULT '[]',    -- JSON array of { chatId, imageId } where imageId is a vault link id.
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL,
   "defaultImageProfileId" TEXT,
   "defaultAgentModeEnabled" INTEGER DEFAULT NULL,
-  "aliases" TEXT DEFAULT '[]',
-  "pronouns" TEXT DEFAULT NULL,
-  "clothingRecords" TEXT DEFAULT '[]',
   "defaultHelpToolsEnabled" INTEGER DEFAULT NULL,
   "defaultTimestampConfig" TEXT DEFAULT NULL,
   "defaultScenarioId" TEXT DEFAULT NULL,
@@ -221,13 +222,37 @@ CREATE TABLE "characters" (
   "canDressThemselves" INTEGER DEFAULT NULL,
   "canCreateOutfits" INTEGER DEFAULT NULL,
   "characterDocumentMountPointId" TEXT DEFAULT NULL,
-  "readPropertiesFromDocumentStore" INTEGER DEFAULT NULL,  -- when 1, pronouns/aliases/title/firstMessage/talkativeness are read from the linked vault's properties.json; identity/description/personality/exampleDialogues are read from their respective .md files
   "systemTransparency" INTEGER DEFAULT NULL  -- when 1 (true), this character may inspect "the Staff" — the chat-level toggles for self_inventory, Staff messages (Lantern/Aurora/Librarian/Prospero/Host), and character vaults still apply. When NULL or 0 (false), the character cannot see Staff messages, the self_inventory tool is withheld, and all character vaults (own + peers) are hidden from doc_* tools — a hard override on top of chat/project settings. Default NULL (opaque).
 );
 
 CREATE INDEX "idx_characters_createdAt" ON "characters" ("createdAt" DESC);
 CREATE INDEX "idx_characters_userId" ON "characters" ("userId");
 ```
+
+#### Vault-managed content fields
+
+These fields no longer live in the DB row. They are stored under
+`<dataDir>/data/quilltap-mount-index.db` in `doc_mount_documents` rows
+keyed by `(mountPointId, relativePath)` where `mountPointId` matches
+`characters.characterDocumentMountPointId`:
+
+| Field | Vault path |
+|---|---|
+| identity | `identity.md` |
+| description | `description.md` |
+| manifesto | `manifesto.md` |
+| personality | `personality.md` |
+| exampleDialogues | `example-dialogues.md` |
+| pronouns, aliases, title, firstMessage, talkativeness | `properties.json` |
+| physicalDescription.fullDescription | `physical-description.md` |
+| physicalDescription.{short,medium,long,complete}Prompt | `physical-prompts.json` |
+| systemPrompts[] | `Prompts/<sanitized-name>.md` (one file per record) |
+| scenarios[] | `Scenarios/<sanitized-title>.md` (one file per record) |
+
+Reads go through `applyDocumentStoreOverlay()` in
+`lib/database/repositories/character-properties-overlay.ts`; writes through
+`applyDocumentStoreWriteOverlay()`. The repository's `*Raw` helpers bypass
+the overlay (used by exports and the migration's populator).
 
 ### wardrobe_items
 

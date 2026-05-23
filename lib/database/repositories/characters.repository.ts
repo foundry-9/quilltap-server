@@ -6,7 +6,7 @@
  * Handles CRUD operations and advanced queries for Character entities.
  */
 
-import { Character, CharacterInput, CharacterSchema, PhysicalDescription, ClothingRecord, CharacterSystemPrompt, CharacterScenario } from '@/lib/schemas/types';
+import { Character, CharacterInput, CharacterSchema, CharacterSystemPrompt, CharacterScenario } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
 import { TypedQueryFilter } from '../interfaces';
@@ -38,7 +38,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   /**
    * Find a character by ID without applying the document-store properties overlay.
    * Used by the export path and the sync-back action, where the canonical DB row
-   * is required regardless of the `readPropertiesFromDocumentStore` switch.
+   * is required regardless of the vault's contents.
    */
   async findByIdRaw(id: string): Promise<Character | null> {
     return this._findById(id);
@@ -194,14 +194,9 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
           isFavorite: data.isFavorite ?? false,
           partnerLinks: data.partnerLinks ?? [],
           avatarOverrides: data.avatarOverrides ?? [],
-          physicalDescriptions: data.physicalDescriptions ?? [],
+          physicalDescription: data.physicalDescription ?? null,
           systemPrompts: data.systemPrompts ?? [],
           scenarios: data.scenarios ?? [],
-          // New characters default to vault-backed properties. The vault is
-          // provisioned synchronously by callers; if provisioning fails the
-          // overlay short-circuits on the missing mount point and the row
-          // values are used until the next startup backfill.
-          readPropertiesFromDocumentStore: data.readPropertiesFromDocumentStore ?? true,
         } as Omit<Character, 'id' | 'createdAt' | 'updatedAt'>;
 
         const character = await this._create(characterData, options);
@@ -220,14 +215,14 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Update a character. When the character is in vault mode
-   * (`readPropertiesFromDocumentStore` on with a linked vault), managed
-   * fields in `data` are routed to vault files instead of the DB row;
-   * non-managed fields still go to DB. The returned character is overlaid
-   * so callers see vault-backed values just like findById would.
+   * Update a character. When the character has a linked vault, managed
+   * content fields in `data` are routed to vault files instead of the DB
+   * row; non-managed fields still go to DB. The returned character is
+   * read through the vault overlay so callers see vault-backed values just
+   * like findById would.
    *
-   * Use `updateRaw` to bypass the write overlay (e.g. the sync-back action
-   * pulling vault values into the DB row).
+   * Use `updateRaw` to bypass the vault routing (e.g. the sync-back
+   * action pulling vault values into the DB row).
    */
   async update(id: string, data: Partial<Character>): Promise<Character | null> {
     return this.safeQuery(
@@ -511,184 +506,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   // ============================================================================
   // PHYSICAL DESCRIPTION OPERATIONS
   // ============================================================================
-
-  /**
-   * Add a physical description to a character
-   * @param characterId The character ID
-   * @param data The physical description data (without id, createdAt, updatedAt)
-   * @returns Promise<PhysicalDescription | null> The added description if successful, null if character not found
-   */
-  async addDescription(
-    characterId: string,
-    data: Omit<PhysicalDescription, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<PhysicalDescription | null> {
-    return this.addToSubArray<PhysicalDescription>(
-      characterId,
-      (c) => c.physicalDescriptions ?? [],
-      (id, now) => ({ ...data, id, createdAt: now, updatedAt: now }),
-      (items) => ({ physicalDescriptions: items }),
-      'Error adding physical description',
-      { descriptionName: data.name }
-    );
-  }
-
-  /**
-   * Update a physical description
-   * @param characterId The character ID
-   * @param descriptionId The description ID
-   * @param data Partial description data to update
-   * @returns Promise<PhysicalDescription | null> The updated description if found, null otherwise
-   */
-  async updateDescription(
-    characterId: string,
-    descriptionId: string,
-    data: Partial<Omit<PhysicalDescription, 'id' | 'createdAt' | 'updatedAt'>>
-  ): Promise<PhysicalDescription | null> {
-    return this.updateInSubArray<PhysicalDescription>(
-      characterId,
-      descriptionId,
-      (c) => c.physicalDescriptions ?? [],
-      (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
-      (items) => ({ physicalDescriptions: items }),
-      'Error updating physical description',
-      { descriptionId }
-    );
-  }
-
-  /**
-   * Remove a physical description from a character
-   * @param characterId The character ID
-   * @param descriptionId The description ID
-   * @returns Promise<boolean> True if description was deleted, false if not found
-   */
-  async removeDescription(characterId: string, descriptionId: string): Promise<boolean> {
-    return this.removeFromSubArray<PhysicalDescription>(
-      characterId,
-      descriptionId,
-      (c) => c.physicalDescriptions ?? [],
-      (items) => ({ physicalDescriptions: items }),
-      'Error removing physical description'
-    );
-  }
-
-  /**
-   * Get a single physical description by ID
-   * @param characterId The character ID
-   * @param descriptionId The description ID
-   * @returns Promise<PhysicalDescription | null> The description if found, null otherwise
-   */
-  async getDescription(characterId: string, descriptionId: string): Promise<PhysicalDescription | null> {
-    return this.getFromSubArray<PhysicalDescription>(
-      characterId,
-      descriptionId,
-      (c) => c.physicalDescriptions ?? [],
-      'Error getting physical description'
-    );
-  }
-
-  /**
-   * Get all physical descriptions for a character
-   * @param characterId The character ID
-   * @returns Promise<PhysicalDescription[]> Array of all descriptions for the character
-   */
-  async getDescriptions(characterId: string): Promise<PhysicalDescription[]> {
-    return this.getAllFromSubArray<PhysicalDescription>(
-      characterId,
-      (c) => c.physicalDescriptions ?? [],
-      'Error getting physical descriptions'
-    );
-  }
-
-  // ============================================================================
-  // CLOTHING RECORD OPERATIONS
-  // ============================================================================
-
-  /**
-   * Add a clothing record to a character
-   * @param characterId The character ID
-   * @param data The clothing record data (without id, createdAt, updatedAt)
-   * @returns Promise<ClothingRecord | null> The added record if successful, null if character not found
-   */
-  async addClothingRecord(
-    characterId: string,
-    data: Omit<ClothingRecord, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<ClothingRecord | null> {
-    return this.addToSubArray<ClothingRecord>(
-      characterId,
-      (c) => c.clothingRecords ?? [],
-      (id, now) => ({ ...data, id, createdAt: now, updatedAt: now }),
-      (items) => ({ clothingRecords: items }),
-      'Error adding clothing record',
-      { recordName: data.name }
-    );
-  }
-
-  /**
-   * Update a clothing record
-   * @param characterId The character ID
-   * @param recordId The clothing record ID
-   * @param data Partial clothing record data to update
-   * @returns Promise<ClothingRecord | null> The updated record if found, null otherwise
-   */
-  async updateClothingRecord(
-    characterId: string,
-    recordId: string,
-    data: Partial<Omit<ClothingRecord, 'id' | 'createdAt' | 'updatedAt'>>
-  ): Promise<ClothingRecord | null> {
-    return this.updateInSubArray<ClothingRecord>(
-      characterId,
-      recordId,
-      (c) => c.clothingRecords ?? [],
-      (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
-      (items) => ({ clothingRecords: items }),
-      'Error updating clothing record',
-      { recordId }
-    );
-  }
-
-  /**
-   * Remove a clothing record from a character
-   * @param characterId The character ID
-   * @param recordId The clothing record ID
-   * @returns Promise<boolean> True if record was deleted, false if not found
-   */
-  async removeClothingRecord(characterId: string, recordId: string): Promise<boolean> {
-    return this.removeFromSubArray<ClothingRecord>(
-      characterId,
-      recordId,
-      (c) => c.clothingRecords ?? [],
-      (items) => ({ clothingRecords: items }),
-      'Error removing clothing record'
-    );
-  }
-
-  /**
-   * Get a single clothing record by ID
-   * @param characterId The character ID
-   * @param recordId The clothing record ID
-   * @returns Promise<ClothingRecord | null> The record if found, null otherwise
-   */
-  async getClothingRecord(characterId: string, recordId: string): Promise<ClothingRecord | null> {
-    return this.getFromSubArray<ClothingRecord>(
-      characterId,
-      recordId,
-      (c) => c.clothingRecords ?? [],
-      'Error getting clothing record'
-    );
-  }
-
-  /**
-   * Get all clothing records for a character
-   * @param characterId The character ID
-   * @returns Promise<ClothingRecord[]> Array of all clothing records for the character
-   */
-  async getClothingRecords(characterId: string): Promise<ClothingRecord[]> {
-    return this.getAllFromSubArray<ClothingRecord>(
-      characterId,
-      (c) => c.clothingRecords ?? [],
-      'Error getting clothing records'
-    );
-  }
 
   // ============================================================================
   // SYSTEM PROMPT OPERATIONS
