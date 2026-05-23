@@ -73,6 +73,11 @@ export const LLMLogResponseSummarySchema = z.object({
   contentLength: z.number(),
   fullContent: z.string().nullable().optional(), // Deprecated: kept for backward compat with old log entries
   error: z.string().nullable().optional(),
+  // Provider-reported reason for ending generation. Normalized to the raw provider
+  // string (e.g. OpenAI/Z.AI `stop`/`length`/`tool_calls`/`content_filter`,
+  // Anthropic `end_turn`/`max_tokens`/`tool_use`/`stop_sequence`,
+  // Google `STOP`/`MAX_TOKENS`/`SAFETY`, OpenAI Responses `completed`/`incomplete`).
+  finishReason: z.string().nullable().optional(),
   toolCalls: z.array(z.object({
     name: z.string(),
     arguments: z.record(z.string(), z.unknown()),

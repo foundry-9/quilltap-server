@@ -13,6 +13,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
 import { buildPromptCacheKey } from '@/lib/llm/cache-key'
+import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
@@ -361,6 +362,7 @@ export async function* streamMessage(
       if (userId) {
         const durationMs = Date.now() - startTime
         const requestHashes = computeRequestPrefixHashes(llmMessages, tools.length > 0 ? tools : undefined)
+        const finishReason = extractFinishReason(chunk.rawResponse)
 
         logLLMCall({
           userId,
@@ -382,6 +384,7 @@ export async function* streamMessage(
           },
           response: {
             content: accumulatedContent,
+            finishReason,
           },
           usage: lastUsage,
           cacheUsage: lastCacheUsage,

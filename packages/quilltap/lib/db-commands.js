@@ -561,6 +561,12 @@ function cmdLog(args, ctx) {
     if (!row) throw new Error(`No llm_log with id ${id}`);
     if (json) return printJson(row);
 
+    let finishReason = null;
+    try {
+      const parsed = typeof row.response === 'string' ? JSON.parse(row.response) : row.response;
+      if (parsed && typeof parsed.finishReason === 'string') finishReason = parsed.finishReason;
+    } catch { /* leave null */ }
+
     printRecord(`LLM log ${row.id}`, {
       createdAt: row.createdAt,
       type: row.type,
@@ -570,6 +576,7 @@ function cmdLog(args, ctx) {
       messageId: row.messageId,
       characterId: row.characterId,
       durationMs: row.durationMs,
+      finishReason,
       usage: row.usage,
       cacheUsage: row.cacheUsage,
     });

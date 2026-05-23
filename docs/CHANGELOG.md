@@ -4,6 +4,18 @@
 
 ### 4.6-dev
 
+#### Change: LLM logs now record the provider's reported finish reason
+
+The streaming chat-message path captures `finish_reason` / `stop_reason` / `finishReason` / `status` from the provider's raw response and stores it on the log row.
+
+- `LLMLogResponseSummarySchema` (`lib/schemas/llm-log.types.ts`) gains an optional `finishReason: string | null` field. JSON blob, no migration needed.
+- New helper `lib/llm/extract-finish-reason.ts` sniffs the well-known raw-response shapes (OpenAI `choices[0].finish_reason`, Anthropic `stop_reason`, Google `candidates[0].finishReason`, OpenAI Responses `status`). Pure, provider-agnostic.
+- `streamMessage` in `lib/services/chat-message/streaming.service.ts` calls the helper on the `done` chunk's `rawResponse` and passes the value through `logLLMCall`.
+- `LogLLMCallParams.response` and `summarizeResponse()` in `lib/services/llm-logging.service.ts` thread the field through to the stored row.
+- `npx quilltap db log <id>` (`packages/quilltap/lib/db-commands.js`) surfaces `finishReason` as a top-line field alongside `durationMs`, `usage`, and `cacheUsage`. Old rows display nothing (printRecord skips null), new rows show e.g. `stop`, `length`, `tool_calls`, `content_filter`, `end_turn`, `STOP`, `completed`.
+
+Motivation: diagnosing a GLM 5.1 cutoff where the model halted mid-sentence at an opening backtick whenever tools were present in the request. Without `finishReason` in the log, we couldn't tell whether the provider reported `stop`, `length`, `tool_calls`, or `content_filter`.
+
 #### Change: Composer spellcheck toggle (Salon composer + Document Mode rich editor)
 
 A new `composerSpellcheck` boolean (default on) governs browser spellcheck on the two Lexical rich-text surfaces — the Salon `ChatComposer` (`components/chat/lexical/LexicalComposerWrapper.tsx`) and the Document Mode rich editor (`app/salon/[id]/components/DocumentPane.tsx`'s `DocumentEditorPlugins`). Source-mode editors (the Markdown source view and plain-text source view in `DocumentPane`, plus `components/markdown-editor/MarkdownLexicalEditor.tsx`) keep their explicit `spellCheck={false}` — Markdown syntax against a monospace font becomes squiggle noise.

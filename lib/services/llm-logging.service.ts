@@ -52,6 +52,7 @@ export interface LogLLMCallParams {
   response: {
     content: string;
     error?: string;
+    finishReason?: string | null;
     toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
   };
   usage?: {
@@ -129,6 +130,7 @@ function summarizeResponse(
     content: response.content || '',
     contentLength: response.content?.length || 0,
     error: response.error ?? null,
+    finishReason: response.finishReason ?? null,
   };
 
   if (response.toolCalls && response.toolCalls.length > 0) {
