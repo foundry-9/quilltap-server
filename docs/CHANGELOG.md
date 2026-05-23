@@ -4,6 +4,24 @@
 
 ### 4.6-dev
 
+#### Change: Composer text replacement (Layer 1.5 of the spellcheck/autocorrect plan)
+
+Salon composer and Document Mode rich editor now apply user-defined word-boundary text replacements as you type (e.g. `teh ` → `the `, `Aris ` → `Aristarchus the Wise `). Cross-platform substitute for OS autocorrect, which Chromium does not run on contentEditable. Literal-string matching only; no snippets, no regex.
+
+New table `text_replacement_rules` (`migrations/scripts/add-text-replacement-rules-table.ts`): per-rule `fromText`, `toText`, `caseSensitive`, `enabled`, `sortOrder`, timestamps. Global per instance (no userId — single-user model). New `chat_settings.textReplacementsEnabled` boolean (default 1; `migrations/scripts/add-text-replacements-enabled-field.ts`) is the master toggle, kept separate from the rule list so the feature can be A/B'd without losing rules. Both migrations registered in `migrations/scripts/index.ts` with pretty labels in `lib/startup/prettify.ts`. DDL.md updated.
+
+Zod schemas at `lib/schemas/text-replacement.types.ts` (rule + input + patch shapes). Repository at `lib/database/repositories/text-replacement-rules.repository.ts`: standard CRUD plus `list({ enabledOnly })`, `bulkReplace(rules)`, and a `TextReplacementRuleConflictError` that the API translates to 409. Conflict detection on `(fromText, caseSensitive)` — two case-insensitive rules with the same lower-cased trigger are rejected; case-sensitive vs case-insensitive rules with the same `fromText` are legal (case-sensitive wins at lookup time). Repository registered in `lib/database/repositories/index.ts` as `repos.textReplacementRules`.
+
+REST endpoints under `app/api/v1/settings/text-replacements/`: `GET` lists, `POST` creates, `POST?action=bulk-replace` swaps the full list, `PATCH /[id]` updates, `DELETE /[id]` removes. Master toggle persisted via the existing `PUT /api/v1/settings/chat` route (extended to accept `textReplacementsEnabled`).
+
+Renderer hook at `lib/text-replacement/useTextReplacementRules.ts` fetches via SWR and memoises two lookup maps (`caseSensitive`, `caseInsensitive`) plus an `empty` short-circuit flag. Lexical plugin at `components/chat/lexical/plugins/TextReplacementPlugin.tsx` registers a `KEY_DOWN_COMMAND` listener at `COMMAND_PRIORITY_LOW`, bails on IME composition / master-toggle-off / empty rules, and only fires when the cursor sits at the end of a `TextNode`. Trigger characters: ASCII space, NBSP, tab, and `. , ; : ! ? )`. Newline is intentionally excluded so submit/paragraph-break handlers own that key. Replacement is wrapped in `editor.update(..., { tag: 'text-replacement' })` so one Cmd-Z reverts to the literal typed text. Plugin mounted in both `components/chat/lexical/LexicalComposerWrapper.tsx` and `app/salon/[id]/components/DocumentPane.tsx`'s `DocumentEditorPlugins`. Source-mode textareas keep their explicit `spellCheck={false}` and are unaffected.
+
+Settings UI at `components/settings/chat-settings/TextReplacementSettings.tsx`: master toggle, add-rule form (trigger + replacement + case-sensitive), editable rule list (in-place edits commit on blur/Enter, plus per-row Enabled and Delete), and a scratch "Try it" textarea. Mounted in a new "Text Replacement" `CollapsibleCard` (`sectionId="text-replacements"`) on the Chat tab in `components/settings/tabs/ChatTabContent.tsx`. New `handleTextReplacementsEnabledChange` handler in `useChatSettings` mirrors the spellcheck-toggle pattern. `ChatSettings` interface in `components/settings/chat-settings/types.ts` gains `textReplacementsEnabled?`.
+
+Help docs: new **Text Replacement** section in `help/chat-settings.md` (Quilltap voice).
+
+Not in qtap-export: chat_settings and text_replacement_rules are global per-instance state, not per-entity. SQLCipher backup via `npx quilltap db backup` captures both automatically.
+
 #### Change: LLM logs now record the provider's reported finish reason
 
 The streaming chat-message path captures `finish_reason` / `stop_reason` / `finishReason` / `status` from the provider's raw response and stores it on the log row.

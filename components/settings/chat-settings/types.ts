@@ -80,6 +80,8 @@ export interface ChatSettings {
   compositionModeDefault?: boolean
   /** Whether browser spellcheck is enabled in the composer and rich-text Document Mode editor */
   composerSpellcheck?: boolean
+  /** Master switch for user-defined word-boundary text replacements in the composer and Document Mode editor */
+  textReplacementsEnabled?: boolean
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings?: AgentModeSettings
   /** Story backgrounds settings for AI-generated chat backgrounds */

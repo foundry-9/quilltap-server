@@ -39,7 +39,8 @@ async function updateChatSettings(
   dangerousContentSettings?: unknown,
   autoLockSettings?: unknown,
   compositionModeDefault?: boolean,
-  composerSpellcheck?: boolean
+  composerSpellcheck?: boolean,
+  textReplacementsEnabled?: boolean
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -176,6 +177,12 @@ async function updateChatSettings(
     }
     updateData.composerSpellcheck = composerSpellcheck
   }
+  if (typeof textReplacementsEnabled !== 'undefined') {
+    if (typeof textReplacementsEnabled !== 'boolean') {
+      throw new Error('Invalid textReplacementsEnabled value (must be boolean)')
+    }
+    updateData.textReplacementsEnabled = textReplacementsEnabled
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -239,6 +246,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       autoLockSettings,
       compositionModeDefault,
       composerSpellcheck,
+      textReplacementsEnabled,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -263,7 +271,8 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       dangerousContentSettings,
       autoLockSettings,
       compositionModeDefault,
-      composerSpellcheck
+      composerSpellcheck,
+      textReplacementsEnabled
     )
 
     return successResponse(chatSettings)

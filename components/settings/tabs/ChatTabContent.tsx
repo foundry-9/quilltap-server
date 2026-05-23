@@ -5,6 +5,7 @@ import { useChatSettingsContext } from '@/components/settings/chat-settings/Chat
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { CompositionModeDefaultSettings } from '@/components/settings/chat-settings/CompositionModeDefaultSettings'
 import { ComposerSpellcheckSettings } from '@/components/settings/chat-settings/ComposerSpellcheckSettings'
+import { TextReplacementSettings } from '@/components/settings/chat-settings/TextReplacementSettings'
 import { TokenDisplaySettingsComponent } from '@/components/settings/chat-settings/TokenDisplaySettings'
 import { ContextCompressionSettingsComponent } from '@/components/settings/chat-settings/ContextCompressionSettings'
 import { MemoryCascadeSettings } from '@/components/settings/chat-settings/MemoryCascadeSettings'
@@ -27,6 +28,7 @@ export function ChatTabContent() {
     handleTokenDisplayChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
+    handleTextReplacementsEnabledChange,
     handleContextCompressionUpdate,
     handleMemoryCascadeUpdate,
     handleImageDescriptionProfileChange,
@@ -68,6 +70,14 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onChange={handleComposerSpellcheckChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Text Replacement" description="Replace literal triggers with replacement text on word boundaries" sectionId="text-replacements" forceOpen={activeSection === 'text-replacements'}>
+          <TextReplacementSettings
+            settings={settings}
+            saving={saving}
+            onMasterToggleChange={handleTextReplacementsEnabledChange}
           />
         </CollapsibleCard>
 

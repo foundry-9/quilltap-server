@@ -124,6 +124,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-document-mode-fields-v1': 'Adding document mode fields to chats',
   'add-composition-mode-default-field-v1': 'Adding composition-mode default to chat settings',
   'add-composer-spellcheck-field-v1': 'Teaching the composer to flag misspellings',
+  'add-text-replacement-rules-table-v1': 'Building the autocorrect ledger',
+  'add-text-replacements-enabled-field-v1': 'Wiring the autocorrect master switch',
   'add-auto-housekeeping-settings-field-v1': 'Adding auto-housekeeping settings to chats',
   'add-auto-lock-settings-field-v1': 'Adding auto-lock settings to chats',
   'add-auto-detect-rng-field-v1': 'Adding auto-detect-RNG flag to chats',

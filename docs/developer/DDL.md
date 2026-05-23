@@ -574,12 +574,35 @@ CREATE TABLE "chat_settings" (
   "autoLockSettings" TEXT DEFAULT '{"enabled":false,"idleMinutes":15}',
   "compositionModeDefault" INTEGER DEFAULT 0,
   "composerSpellcheck" INTEGER DEFAULT 1, -- added in 4.6 (add-composer-spellcheck-field-v1): governs browser spellcheck on Salon composer + Document Mode rich editor
+  "textReplacementsEnabled" INTEGER DEFAULT 1, -- added in 4.6 (add-text-replacements-enabled-field-v1): master switch for the Layer 1.5 text-replacement plugin; rule list lives in text_replacement_rules
   UNIQUE("userId")
 );
 
 CREATE INDEX "idx_chat_settings_createdAt" ON "chat_settings" ("createdAt" DESC);
 CREATE INDEX "idx_chat_settings_userId" ON "chat_settings" ("userId" ASC);
 ```
+
+### text_replacement_rules
+
+Global list (no `userId` — single-user model) of literal `from → to` text replacements applied on word boundaries by the Lexical `TextReplacementPlugin`. The master switch sits on `chat_settings.textReplacementsEnabled`; this table holds the rules themselves.
+
+```sql
+CREATE TABLE "text_replacement_rules" (
+  "id" TEXT PRIMARY KEY,
+  "fromText" TEXT NOT NULL,                       -- literal trigger; whole-word match only (no leading/trailing whitespace enforced by the API)
+  "toText" TEXT NOT NULL,                         -- replacement output (verbatim)
+  "caseSensitive" INTEGER NOT NULL DEFAULT 0,     -- 0 = case-insensitive lookup; 1 = exact-case lookup
+  "enabled" INTEGER NOT NULL DEFAULT 1,           -- 0 = rule skipped at compile time
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,         -- UI presentation order; does NOT affect match priority
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
+CREATE INDEX "idx_text_replacement_rules_enabled" ON "text_replacement_rules" ("enabled");
+CREATE INDEX "idx_text_replacement_rules_sortOrder" ON "text_replacement_rules" ("sortOrder");
+```
+
+Match priority is *not* keyed off `sortOrder`. The renderer compiles enabled rows into two maps — `caseSensitive` and `caseInsensitive` (keyed on `fromText.toLowerCase()`) — and looks them up in that order. A `(fromText, caseSensitive)` collision is rejected at the API with 409.
 
 ### connection_profiles
 

@@ -362,6 +362,8 @@ export const ChatSettingsSchema = z.object({
   compositionModeDefault: z.boolean().default(false),
   /** Whether browser spellcheck is enabled in the Salon composer and Document Mode rich editor (default: true) */
   composerSpellcheck: z.boolean().default(true),
+  /** Master switch for user-defined word-boundary text replacements in the Salon composer and Document Mode rich editor (default: true). Rule list lives in the text_replacement_rules table. */
+  textReplacementsEnabled: z.boolean().default(true),
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings: AgentModeSettingsSchema.default({
     maxTurns: 10,

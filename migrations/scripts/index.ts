@@ -291,6 +291,10 @@ import { repairFilesMimeAndSizeFromMountBlobMigration } from './repair-files-mim
 import { addChatConciergeOverrideMigration } from './add-chat-concierge-override';
 // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
 import { addComposerSpellcheckFieldMigration } from './add-composer-spellcheck-field';
+// Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
+import { addTextReplacementRulesTableMigration } from './add-text-replacement-rules-table';
+// Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
+import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
 
 /**
  * All available migrations.
@@ -577,6 +581,10 @@ export const migrations: Migration[] = [
   addChatConciergeOverrideMigration,
   // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
   addComposerSpellcheckFieldMigration,
+  // Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
+  addTextReplacementRulesTableMigration,
+  // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
+  addTextReplacementsEnabledFieldMigration,
 ];
 
 export {
@@ -848,5 +856,9 @@ export {
   addChatConciergeOverrideMigration,
   // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
   addComposerSpellcheckFieldMigration,
+  // Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
+  addTextReplacementRulesTableMigration,
+  // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
+  addTextReplacementsEnabledFieldMigration,
 };
 

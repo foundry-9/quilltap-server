@@ -43,6 +43,7 @@ import {
   type ExternalControlHandle,
 } from './plugins/ExternalControlPlugin'
 import { FormattingCommandPlugin } from './plugins/FormattingCommandPlugin'
+import { TextReplacementPlugin } from './plugins/TextReplacementPlugin'
 
 interface LexicalComposerWrapperProps {
   /** Current markdown string from parent state */
@@ -136,6 +137,7 @@ const ComposerPlugins = forwardRef<
       <ImagePastePlugin onImagePaste={onImagePaste} />
       <ExternalControlPlugin controlRef={controlRef} />
       <FormattingCommandPlugin />
+      <TextReplacementPlugin />
     </>
   )
 })

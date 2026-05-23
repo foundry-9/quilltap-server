@@ -51,6 +51,7 @@ interface UseChatSettingsReturn {
   handleAutoDetectRngChange: (value: boolean) => Promise<void>
   handleCompositionModeDefaultChange: (value: boolean) => Promise<void>
   handleComposerSpellcheckChange: (value: boolean) => Promise<void>
+  handleTextReplacementsEnabledChange: (value: boolean) => Promise<void>
   handleAgentModeDefaultEnabledChange: (value: boolean) => Promise<void>
   handleAgentModeMaxTurnsChange: (value: number) => Promise<void>
   handleStoryBackgroundsEnabledChange: (value: boolean) => Promise<void>
@@ -527,6 +528,40 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Update text-replacements master toggle
+   */
+  const handleTextReplacementsEnabledChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ textReplacementsEnabled: value }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update text-replacements setting')
+        }
+
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update text-replacements setting', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
    * Update agent mode default enabled setting
    */
   const handleAgentModeDefaultEnabledChange = useCallback(
@@ -777,6 +812,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleAutoDetectRngChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
+    handleTextReplacementsEnabledChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
     handleStoryBackgroundsEnabledChange,

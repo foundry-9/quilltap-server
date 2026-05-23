@@ -32,6 +32,7 @@ import { TableNode, TableCellNode, TableRowNode } from '@lexical/table'
 import { composerTheme } from '@/components/chat/lexical/theme'
 import { MarkdownBridgePlugin, COMPOSER_TRANSFORMERS } from '@/components/chat/lexical/plugins/MarkdownBridgePlugin'
 import { FormattingCommandPlugin } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
+import { TextReplacementPlugin } from '@/components/chat/lexical/plugins/TextReplacementPlugin'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import DocumentChangeTracker from './DocumentChangeTracker'
 import DocumentFocusPlugin from './DocumentFocusPlugin'
@@ -150,6 +151,7 @@ function DocumentEditorPlugins({
         preserveAsterisks
       />
       <FormattingCommandPlugin />
+      <TextReplacementPlugin />
       <DocumentChangeTracker
         baselineContent={baselineContent}
         onChangedLines={onChangedLines}
