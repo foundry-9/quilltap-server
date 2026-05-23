@@ -26,7 +26,7 @@ Bring browser-native spellcheck to the Salon ChatComposer and Document Mode rich
 
 ## Known State (verified 2026-05-22)
 
-- **Electron version**: `^40.8.5` in `quilltap-shell/package.json`. Spellchecker APIs (`session.setSpellCheckerLanguages`, `addWordToSpellCheckerDictionary`, `removeWordFromSpellCheckerDictionary`, `listWordsInSpellCheckerDictionary`) and `webContents.on('context-menu', ...)` are all available.
+- **Electron version**: `^41.7.0` in `quilltap-shell/package.json`. Spellchecker APIs (`session.setSpellCheckerLanguages`, `addWordToSpellCheckerDictionary`, `removeWordFromSpellCheckerDictionary`, `listWordsInSpellCheckerDictionary`, `isSpellCheckerEnabled`, `setSpellCheckerEnabled`) and `webContents.on('context-menu', ...)` are all available.
 - **Shell `webPreferences`**: no `spellcheck: false` anywhere. The main content `BrowserWindow` in `electron/main.ts` around line 793 sets only `preload`, `contextIsolation`, `nodeIntegration`. Default `spellcheck: true` applies.
 - **ChatComposer ContentEditable** (`components/chat/lexical/LexicalComposerWrapper.tsx` lines 107–115): does **not** set `spellCheck`. Currently inherits the HTML default.
 - **DocumentPane rich editor** (`app/salon/[id]/components/DocumentPane.tsx` lines 125–136, `DocumentEditorPlugins`): same — no explicit `spellCheck`.
