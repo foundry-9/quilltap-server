@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Chore: Version string normalized to 4.6.0-dev after Phase 2 squash merge
+
+The Phase 2 user-character-rotation squash merge carried over its branch-derived version (`4.6.0-phase-2-wip-user-character-rotation.42`). Re-ran `scripts/update_version.sh` on `main` to reset to `4.6.0-dev.39` and sync `packages/quilltap/package.json` and the README badge.
+
 #### Fix: Agent mode — submit_final_response no longer overwrites roleplay prose or drops sibling tools
 
 Two coupled bugs in `lib/services/chat-message/native-tool-loop.service.ts` that surface most visibly in autonomous rooms (where the same characters speak many times and pattern-match against their own past output).
