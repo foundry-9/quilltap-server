@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Fix: Suppress react-hooks/set-state-in-effect lint error in DescriptionsTab
+
+`app/aurora/[id]/view/components/DescriptionsTab.tsx`: added the standard `// eslint-disable-next-line react-hooks/set-state-in-effect` directive to the fetch-on-mount effect, matching the pattern used in `useCharacterEdit.ts` and other Aurora hooks.
+
 #### Change: Always inline `[Name]` prefix on user-role turns in multi-character chats
 
 In `lib/llm/message-formatter.ts`, `formatMessagesForProvider` now prepends a `[Name]` tag to every user-role message that carries a participant name, regardless of whether the provider supports the OpenAI-style `name` field. When the provider supports `name`, we send both. Assistant-role turns are unchanged (native `name` field when supported, prefix fallback otherwise).

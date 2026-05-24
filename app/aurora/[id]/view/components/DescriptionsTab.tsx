@@ -72,6 +72,7 @@ export function DescriptionsTab({ characterId }: DescriptionsTabProps) {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount; setState lands inside async fetchCharacter()
     fetchCharacter()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [characterId])
