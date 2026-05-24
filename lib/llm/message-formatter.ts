@@ -156,39 +156,51 @@ export function formatMessagesForProvider(
     }
 
     const roleForProvider = msg.role === 'assistant' ? 'assistant' : 'user'
+    const supportsNativeName =
+      nameSupport.supportsNameField && nameSupport.supportedRoles.includes(roleForProvider)
 
-    // Check if provider supports name field for this role
-    if (nameSupport.supportsNameField && nameSupport.supportedRoles.includes(roleForProvider)) {
-      // Use native name field
-      const formattedName = formatParticipantName(msg.name, nameSupport.maxNameLength)
+    // Assistant turns belong to the responding character themselves — prefer
+    // the native name field when available and only fall back to prefixing.
+    if (roleForProvider === 'assistant') {
+      if (supportsNativeName) {
+        return {
+          role: roleForProvider,
+          content: msg.content,
+          name: formatParticipantName(msg.name, nameSupport.maxNameLength),
+          thoughtSignature: msg.thoughtSignature ?? undefined,
+        }
+      }
+      const displayName = formatDisplayName(msg.name)
+      const existingPrefixPattern = new RegExp(`^\\[${displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\s*`, 'i')
+      const prefixedContent = existingPrefixPattern.test(msg.content)
+        ? msg.content
+        : `[${displayName}] ${msg.content}`
       return {
         role: roleForProvider,
-        content: msg.content,
-        name: formattedName,
+        content: prefixedContent,
         thoughtSignature: msg.thoughtSignature ?? undefined,
       }
     }
 
-    // Fallback: prefix content with [Name]
-    // Only add prefix if it's a multi-character scenario (i.e., the name matters)
+    // User-role messages mix the actual user, other characters' downgraded
+    // assistant turns, and system narration. The OpenAI-style `name` field is
+    // a weak signal for cross-speaker attribution, so always inline the
+    // [Name] prefix; if the provider also supports the name field, send both.
     const displayName = formatDisplayName(msg.name)
-
-    // Check if content already has this name prefix to avoid duplication
-    // Pattern: content starts with [Name] where Name matches (case-insensitive)
     const existingPrefixPattern = new RegExp(`^\\[${displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\s*`, 'i')
-    const alreadyPrefixed = existingPrefixPattern.test(msg.content)
+    const prefixedContent = existingPrefixPattern.test(msg.content)
+      ? msg.content
+      : `[${displayName}] ${msg.content}`
 
-    const prefixedContent = alreadyPrefixed ? msg.content : `[${displayName}] ${msg.content}`
-
-    if (alreadyPrefixed) {
-
-    }
-
-    return {
-      role: roleForProvider,
+    const result: { role: 'user'; content: string; name?: string; thoughtSignature?: string } = {
+      role: 'user',
       content: prefixedContent,
       thoughtSignature: msg.thoughtSignature ?? undefined,
     }
+    if (supportsNativeName) {
+      result.name = formatParticipantName(msg.name, nameSupport.maxNameLength)
+    }
+    return result
   })
 }
 

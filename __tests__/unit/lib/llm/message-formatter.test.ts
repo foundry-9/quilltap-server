@@ -62,10 +62,14 @@ describe('message formatter utilities', () => {
       { role: 'assistant' as const, content: 'Hi', name: 'Lyra', thoughtSignature: 'sig' },
     ]
 
-    it('uses native name field when supported by provider', () => {
+    it('inlines [Name] prefix on user turns and uses native name field for assistant turns when supported', () => {
       const formatted = formatMessagesForProvider(messages, 'OPENAI', 'Lyra')
       expect(formatted[0]).toEqual({ role: 'system', content: 'Rules' })
-      expect(formatted[1]).toMatchObject({ role: 'user', name: 'Alicia_Keys', content: 'Hello' })
+      expect(formatted[1]).toMatchObject({
+        role: 'user',
+        name: 'Alicia_Keys',
+        content: '[Alicia Keys] Hello',
+      })
       expect(formatted[2]).toMatchObject({ role: 'assistant', name: 'Lyra', content: 'Hi', thoughtSignature: 'sig' })
     })
 
@@ -73,6 +77,18 @@ describe('message formatter utilities', () => {
       const formatted = formatMessagesForProvider(messages, 'ANTHROPIC', 'Lyra')
       expect(formatted[1]).toEqual({ role: 'user', content: '[Alicia Keys] Hello' })
       expect(formatted[2]).toEqual({ role: 'assistant', content: '[Lyra] Hi', thoughtSignature: 'sig' })
+    })
+
+    it('does not double-prefix user turns whose content already starts with [Name]', () => {
+      const prefixed = [
+        { role: 'user' as const, content: '[Alicia Keys] Already tagged', name: 'Alicia Keys' },
+      ]
+      const formatted = formatMessagesForProvider(prefixed, 'OPENAI', 'Lyra')
+      expect(formatted[0]).toMatchObject({
+        role: 'user',
+        content: '[Alicia Keys] Already tagged',
+        name: 'Alicia_Keys',
+      })
     })
   })
 

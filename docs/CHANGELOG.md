@@ -4,6 +4,16 @@
 
 ### 4.6-dev
 
+#### Change: Always inline `[Name]` prefix on user-role turns in multi-character chats
+
+In `lib/llm/message-formatter.ts`, `formatMessagesForProvider` now prepends a `[Name]` tag to every user-role message that carries a participant name, regardless of whether the provider supports the OpenAI-style `name` field. When the provider supports `name`, we send both. Assistant-role turns are unchanged (native `name` field when supported, prefix fallback otherwise).
+
+Why: in multi-character chats, every other character's previous turn is downgraded from `ASSISTANT` → `user` and given `name: <CharacterName>`. The `name` field is a weak attribution signal on OpenAI-compatible providers — the model attends much more strongly to role + content. With multiple characters speaking in first person under the `user` role, the responding character would sometimes echo the immediately-preceding "I"-voice (e.g. Amy parroting Friday's `*I feel her.*` opening word-for-word). Inlining `[Friday] *I feel her.*` gives the model a strong in-content anchor for cross-speaker attribution.
+
+Response-side `stripCharacterNamePrefix` is unchanged — it already only strips the responding character's own name, so a mirrored `[Amy]` at the start of Amy's reply still gets removed.
+
+Test updated: `__tests__/unit/lib/llm/message-formatter.test.ts` OPENAI case now expects both `name: 'Alicia_Keys'` and `content: '[Alicia Keys] Hello'`; added a no-double-prefix case.
+
 #### Change: Aurora UI follow-up to the character vault cutover
 
 Tore out the dead multi-`physicalDescription` and `readPropertiesFromDocumentStore` UI left over from the Phase 3 cutover, and migrated callers off the deleted `/api/v1/characters/[id]/descriptions/*` and `/clothing/*` routes.
