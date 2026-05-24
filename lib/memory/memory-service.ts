@@ -159,6 +159,14 @@ export interface CreateMemoryOptions {
   sourceMessageId?: string | null
   /** Override createdAt/updatedAt with source message timestamp (for batch extraction) */
   sourceMessageTimestamp?: string
+  /**
+   * Provenance of the conversational moment that produced this memory (4.6
+   * Private Character Rooms). 'user_present' for chats with a user opener,
+   * 'autonomous_room' for autonomous character-to-character chats, 'manual'
+   * for memories created outside the extraction path. Null is treated as
+   * legacy (pre-4.6) and left unset.
+   */
+  witnessedContext?: 'user_present' | 'autonomous_room' | 'manual' | null
 }
 
 /**
@@ -338,6 +346,7 @@ async function createMemoryDirect(
     chatId: data.chatId || null,
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,
+    witnessedContext: data.witnessedContext ?? null,
     reinforcementCount: 1,
     relatedMemoryIds: [],
     reinforcedImportance: importance,
@@ -408,6 +417,7 @@ async function createMemoryDirectWithEmbedding(
     chatId: data.chatId || null,
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,
+    witnessedContext: data.witnessedContext ?? null,
     reinforcementCount: 1,
     relatedMemoryIds: [],
     reinforcedImportance: importance,
