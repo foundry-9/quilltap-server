@@ -475,6 +475,81 @@
         "conciergeOverride": {
           "enum": ["OFF", null],
           "description": "Per-chat Concierge mode override. NULL = follow the global Concierge setting; 'OFF' = the Concierge is off-duty for this chat and no moderation effects apply."
+        },
+
+        "chatType": {
+          "enum": ["salon", "help", "autonomous"],
+          "description": "Chat type discriminator. 'salon' = regular human-driven chat; 'help' = help-assistant chat; 'autonomous' = private character-to-character room (4.6 Private Character Rooms)."
+        },
+
+        "budgetMaxTurns": {
+          "type": ["integer", "null"],
+          "description": "Autonomous-room cap on character turns per run. NULL = unlimited."
+        },
+        "budgetMaxTokens": {
+          "type": ["integer", "null"],
+          "description": "Autonomous-room cap on cumulative prompt + completion tokens per run."
+        },
+        "budgetMaxWallClockMs": {
+          "type": ["integer", "null"],
+          "description": "Autonomous-room wall-clock cap per run, in milliseconds."
+        },
+        "budgetEstimatedSpendCapUSD": {
+          "type": ["number", "null"],
+          "description": "Optional autonomous-room spend cap in USD, evaluated against llm_logs."
+        },
+        "scheduleCron": {
+          "type": ["string", "null"],
+          "description": "Cron expression governing autonomous-room runs. NULL = manual-only."
+        },
+        "scheduleFreshnessWindowMs": {
+          "type": ["integer", "null"],
+          "description": "Catch-up freshness window in ms; NULL = inherit user default."
+        },
+        "scheduleNextRunAt": {
+          "type": ["string", "null"],
+          "description": "ISO timestamp of the next scheduled autonomous-room run."
+        },
+        "scheduleLastRunAt": {
+          "type": ["string", "null"],
+          "description": "ISO timestamp of the most recent autonomous-room run start."
+        },
+        "runState": {
+          "enum": ["idle", "running", "paused", "stopped", "budgetExhausted", "error", null],
+          "description": "Lifecycle state of the current/most-recent autonomous-room run. NULL on non-autonomous chats."
+        },
+        "currentRunId": {
+          "type": ["string", "null"],
+          "description": "UUID of the authoritative autonomous-room run. Stale-run guard target."
+        },
+        "runStateMessage": {
+          "type": ["string", "null"],
+          "description": "Human-readable detail for paused/error states."
+        },
+        "runStartedAt": {
+          "type": ["string", "null"],
+          "description": "ISO timestamp of the current/most-recent run start."
+        },
+        "runEndedAt": {
+          "type": ["string", "null"],
+          "description": "ISO timestamp of the current/most-recent run end."
+        },
+        "runTurnsConsumed": {
+          "type": ["integer", "null"],
+          "description": "Turns consumed in the current/most-recent autonomous-room run."
+        },
+        "runTokensConsumed": {
+          "type": ["integer", "null"],
+          "description": "Tokens consumed in the current/most-recent autonomous-room run."
+        },
+        "runDestructiveToolsAllowed": {
+          "type": "integer",
+          "enum": [0, 1],
+          "description": "1 = destructive tools pre-authorized for this autonomous room; 0 = disabled."
+        },
+        "runVisibility": {
+          "enum": ["owner_only", "household", "open", null],
+          "description": "Per-room visibility override for autonomous rooms; NULL = inherit user default."
         }
       }
     },

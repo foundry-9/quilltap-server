@@ -114,6 +114,14 @@ export interface TurnMemoryExtractionContext {
   sourceMessageTimestamp?: string
   /** When true, run all extraction passes but skip persistence — candidates are returned on the result instead. */
   dryRun?: boolean
+  /**
+   * Autonomous-room provenance (4.6 Private Character Rooms). When true,
+   * the extraction prompts prepend a user-absence clause, and resulting
+   * memory records are written with witnessedContext = 'autonomous_room'.
+   * Chats with chatType = 'autonomous' set this; ordinary chats leave it
+   * false and the extractor falls back to 'user_present' attribution.
+   */
+  inAutonomousRoom?: boolean
 }
 
 /**
@@ -212,6 +220,11 @@ async function writeCandidate(opts: WriteOptions): Promise<void> {
       sourceMessageId: opts.sourceMessageId ?? undefined,
       sourceMessageTimestamp: opts.ctx.sourceMessageTimestamp,
       tags: [],
+      // 4.6 Private Character Rooms: provenance for auto-extracted memories.
+      // Autonomous rooms get explicit attribution; ordinary chats get
+      // 'user_present' (the extractor only runs in chats with content, and
+      // a user opener is implicit on non-autonomous chats).
+      witnessedContext: opts.ctx.inAutonomousRoom ? 'autonomous_room' : 'user_present',
     },
     { userId: opts.ctx.userId }
   )
@@ -383,7 +396,8 @@ export async function processTurnForMemory(
         ctx.userId,
         uncensoredFallback,
         ctx.chatId,
-        cheapMaxTokens
+        cheapMaxTokens,
+        ctx.inAutonomousRoom === true,
       )
 
       if (selfResult.usage) {
@@ -476,7 +490,8 @@ export async function processTurnForMemory(
         ctx.userId,
         uncensoredFallback,
         ctx.chatId,
-        cheapMaxTokens
+        cheapMaxTokens,
+        ctx.inAutonomousRoom === true,
       )
 
       if (otherResult.usage) {

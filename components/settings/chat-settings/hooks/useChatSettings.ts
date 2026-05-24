@@ -26,6 +26,7 @@ import {
   DEFAULT_STORY_BACKGROUNDS_SETTINGS,
   DangerousContentSettings,
   DEFAULT_DANGEROUS_CONTENT_SETTINGS,
+  AutonomousRoomSettings,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -58,6 +59,7 @@ interface UseChatSettingsReturn {
   handleStoryBackgroundsProfileChange: (profileId: string | null) => Promise<void>
   handleDangerousContentUpdate: (updates: Partial<DangerousContentSettings>) => Promise<void>
   handleTimezoneChange: (timezone: string | null) => Promise<void>
+  handleAutonomousRoomSettingsUpdate: (updates: Partial<AutonomousRoomSettings>) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -562,6 +564,44 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * 4.6 Private Character Rooms — update user-level autonomous-room defaults.
+   * Merges the partial onto the current value so the form can fire one field
+   * at a time without clobbering siblings.
+   */
+  const handleAutonomousRoomSettingsUpdate = useCallback(
+    async (updates: Partial<AutonomousRoomSettings>) => {
+      if (!settings) return
+
+      const merged: AutonomousRoomSettings = {
+        ...(settings.autonomousRoomSettings ?? {}),
+        ...updates,
+      }
+
+      try {
+        setSaving(true)
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ autonomousRoomSettings: merged }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update autonomous-room settings')
+        }
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update autonomous-room settings', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
    * Update agent mode default enabled setting
    */
   const handleAgentModeDefaultEnabledChange = useCallback(
@@ -819,5 +859,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleStoryBackgroundsProfileChange,
     handleDangerousContentUpdate,
     handleTimezoneChange,
+    handleAutonomousRoomSettingsUpdate,
   }
 }

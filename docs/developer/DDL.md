@@ -397,13 +397,36 @@ CREATE TABLE "chats" (
   "allowCrossCharacterVaultReads" INTEGER DEFAULT 0,
   "compiledIdentityStacks" TEXT DEFAULT NULL,
   "courierCheckpoints" TEXT DEFAULT NULL,
-  "commonplaceSceneCache" TEXT DEFAULT NULL
+  "commonplaceSceneCache" TEXT DEFAULT NULL,
+  -- 4.6 Private Character Rooms: budget caps, schedule, run lifecycle, and visibility
+  -- (populated only when chatType = 'autonomous'; NULL on other chats)
+  "budgetMaxTurns" INTEGER DEFAULT NULL,
+  "budgetMaxTokens" INTEGER DEFAULT NULL,
+  "budgetMaxWallClockMs" INTEGER DEFAULT NULL,
+  "budgetEstimatedSpendCapUSD" REAL DEFAULT NULL,
+  "scheduleCron" TEXT DEFAULT NULL,
+  "scheduleFreshnessWindowMs" INTEGER DEFAULT NULL,
+  "scheduleNextRunAt" TEXT DEFAULT NULL,
+  "scheduleLastRunAt" TEXT DEFAULT NULL,
+  "runState" TEXT DEFAULT NULL,            -- 'idle' | 'running' | 'paused' | 'stopped' | 'budgetExhausted' | 'error'
+  "currentRunId" TEXT DEFAULT NULL,        -- UUID of authoritative run; stale-run guard target
+  "runStateMessage" TEXT DEFAULT NULL,
+  "runStartedAt" TEXT DEFAULT NULL,
+  "runEndedAt" TEXT DEFAULT NULL,
+  "runTurnsConsumed" INTEGER DEFAULT NULL,
+  "runTokensConsumed" INTEGER DEFAULT NULL,
+  "runDestructiveToolsAllowed" INTEGER DEFAULT 0,
+  "runVisibility" TEXT DEFAULT NULL        -- 'owner_only' | 'household' | 'open'; NULL = inherit user default
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");
 CREATE INDEX "idx_chats_createdAt" ON "chats" ("createdAt" DESC);
 CREATE INDEX "idx_chats_projectId" ON "chats" ("projectId");
 CREATE INDEX "idx_chats_userId" ON "chats" ("userId");
+
+-- 4.6 Private Character Rooms — partial indexes driving the scheduler tick and management list
+CREATE INDEX "idx_chats_autonomous_nextRunAt" ON "chats"("scheduleNextRunAt") WHERE "chatType" = 'autonomous';
+CREATE INDEX "idx_chats_autonomous_runState"  ON "chats"("runState")          WHERE "chatType" = 'autonomous';
 ```
 
 ### chat_documents
@@ -600,6 +623,7 @@ CREATE TABLE "chat_settings" (
   "compositionModeDefault" INTEGER DEFAULT 0,
   "composerSpellcheck" INTEGER DEFAULT 1, -- added in 4.6 (add-composer-spellcheck-field-v1): governs browser spellcheck on Salon composer + Document Mode rich editor
   "textReplacementsEnabled" INTEGER DEFAULT 1, -- added in 4.6 (add-text-replacements-enabled-field-v1): master switch for the Layer 1.5 text-replacement plugin; rule list lives in text_replacement_rules
+  "autonomousRoomSettings" TEXT DEFAULT '{}', -- added in 4.6 (add-autonomous-rooms-fields-v1): user-level defaults for autonomous rooms { dailyTokenBudget, defaultFreshnessWindowMs, visibilityDefault, destructiveToolPolicy }
   UNIQUE("userId")
 );
 
@@ -814,7 +838,8 @@ CREATE TABLE "memories" (
   "reinforcementCount" INTEGER DEFAULT 1,
   "lastReinforcedAt" TEXT DEFAULT NULL,
   "relatedMemoryIds" TEXT DEFAULT '[]',
-  "reinforcedImportance" REAL DEFAULT 0.5
+  "reinforcedImportance" REAL DEFAULT 0.5,
+  "witnessedContext" TEXT DEFAULT NULL   -- added in 4.6 (add-autonomous-rooms-fields-v1): 'user_present' | 'autonomous_room' | 'manual'. NULL on legacy rows.
 );
 
 CREATE INDEX "idx_memories_characterId" ON "memories" ("characterId");

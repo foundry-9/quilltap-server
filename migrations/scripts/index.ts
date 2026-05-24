@@ -297,6 +297,8 @@ import { addTextReplacementRulesTableMigration } from './add-text-replacement-ru
 import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
 // 4.6 character vault cutover: move every content field into the vault and drop the DB columns
 import { cutoverCharactersToVaultMigration } from './cutover-characters-to-vault';
+// 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
+import { addAutonomousRoomsFieldsMigration } from './add-autonomous-rooms-fields';
 
 /**
  * All available migrations.
@@ -589,6 +591,8 @@ export const migrations: Migration[] = [
   addTextReplacementsEnabledFieldMigration,
   // 4.6 character vault cutover: settle every character into its vault and drop the legacy content columns
   cutoverCharactersToVaultMigration,
+  // 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
+  addAutonomousRoomsFieldsMigration,
 ];
 
 export {
@@ -864,5 +868,7 @@ export {
   addTextReplacementRulesTableMigration,
   // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
   addTextReplacementsEnabledFieldMigration,
+  // 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
+  addAutonomousRoomsFieldsMigration,
 };
 

@@ -180,10 +180,16 @@ export async function handleSendMessage(
             repos,
             chatId,
             userId,
-            chainOptions,
+            // Autonomous-room chain turns inherit the same flags as the initial call.
+            {
+              ...chainOptions,
+              neverPauseForUser: options.neverPauseForUser,
+              suppressAutomaticImages: options.suppressAutomaticImages,
+            },
             controller,
             encoder
           ),
+          neverPauseForUser: options.neverPauseForUser === true,
         })
 
         // Trigger scene state tracking once after processing (and after any turn chain)
@@ -719,6 +725,34 @@ async function processMessage(
     tools = builtTools.tools
     modelSupportsNativeTools = builtTools.modelSupportsNativeTools
     useNativeWebSearch = builtTools.useNativeWebSearch
+
+    // 4.6 Private Character Rooms — destructive-tool filter for autonomous rooms.
+    // Apply BEFORE the LLM call so the model never sees disallowed tools.
+    // User-level destructiveToolPolicy is a CEILING: 'always_refuse' overrides
+    // any permissive per-room runDestructiveToolsAllowed flag.
+    if (chat.chatType === 'autonomous') {
+      const { DESTRUCTIVE_TOOL_NAMES } = await import('@/lib/tools/destructive-tools')
+      const chatSettings = await repos.chatSettings.findByUserId(userId)
+      const policy = chatSettings?.autonomousRoomSettings?.destructiveToolPolicy ?? 'opt_in_per_room'
+      const allowedAtRoom = (chat as { runDestructiveToolsAllowed?: number }).runDestructiveToolsAllowed === 1
+      const destructiveAllowed = policy !== 'always_refuse' && allowedAtRoom
+      if (!destructiveAllowed) {
+        const before = tools.length
+        tools = tools.filter((tool: unknown) => {
+          const toolObj = tool as { function?: { name?: string }; name?: string }
+          const toolName = toolObj.function?.name || toolObj.name
+          return !toolName || !DESTRUCTIVE_TOOL_NAMES.has(toolName)
+        })
+        if (before !== tools.length) {
+          logger.info('Autonomous room: destructive tools filtered from per-turn list', {
+            chatId,
+            policy,
+            allowedAtRoom,
+            removed: before - tools.length,
+          })
+        }
+      }
+    }
   }
 
   const profilePseudoToolMode = (streamingState.effectiveProfile as { pseudoToolMode?: 'auto' | 'native' | 'simple-json' | 'text-block' }).pseudoToolMode

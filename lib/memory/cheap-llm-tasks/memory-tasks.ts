@@ -133,12 +133,30 @@ Return JSON array only. No prose, no code fences. If nothing meets
 the bar, return [].`
 }
 
+/**
+ * 4.6 Private Character Rooms — user-absence clause for memory extraction.
+ *
+ * Prepended to the SELF and OTHER prompts when the source chat is autonomous
+ * (chatType = 'autonomous'). Constrains the extractor so the resulting
+ * memories don't falsely imply the user was present, agreed to, or was
+ * informed of the exchange. Memories about the participants' shared
+ * experience remain in scope; user-attributed memories are out of scope.
+ */
+const AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE =
+  `IMPORTANT: This exchange occurred in an autonomous character-to-character ` +
+  `room with no user present. Do not produce memories that imply the user ` +
+  `witnessed, agreed to, or was informed of any part of this exchange. ` +
+  `Memories about the participants' shared experience are allowed; memories ` +
+  `that name or address the user are not.\n\n`
+
 function getSelfMemoryExtractionPrompt(
   maxMemories: number,
   observerName: string,
   canonBlock: string,
+  inAutonomousRoom: boolean = false,
 ): string {
-  return `${selfBodyForCap(maxMemories)}
+  const preamble = inAutonomousRoom ? AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE : ''
+  return `${preamble}${selfBodyForCap(maxMemories)}
 
 CONTEXT
 SUBJECT: ${observerName}
@@ -287,6 +305,7 @@ function getOtherMemoryExtractionPrompt(
   perSubjectCap: number,
   observerName: string,
   subjects: ReadonlyArray<{ name: string; pronouns: Pronouns | null; isUser: boolean; canonBlock: string }>,
+  inAutonomousRoom: boolean = false,
 ): string {
   const subjectsBlock = subjects.map((s, i) => {
     const label = formatNameWithPronouns(s.name, s.pronouns)
@@ -294,7 +313,8 @@ function getOtherMemoryExtractionPrompt(
     return `SUBJECT ${i + 1}: ${label}${userTag}\n${s.canonBlock}`
   }).join('\n\n')
 
-  return `${otherBodyForCap(perSubjectCap)}
+  const preamble = inAutonomousRoom ? AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE : ''
+  return `${preamble}${otherBodyForCap(perSubjectCap)}
 
 CONTEXT
 OBSERVER: ${observerName}
@@ -502,7 +522,8 @@ export async function extractSelfMemoriesFromTurn(
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
   chatId?: string,
-  resolvedMaxTokens?: number
+  resolvedMaxTokens?: number,
+  inAutonomousRoom: boolean = false,
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
   const target = transcript.characterSlices.find(s => s.characterId === targetCharacterId)
   if (!target) {
@@ -515,7 +536,7 @@ export async function extractSelfMemoriesFromTurn(
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: getSelfMemoryExtractionPrompt(maxMemories, targetLabel, canonBlock),
+      content: getSelfMemoryExtractionPrompt(maxMemories, targetLabel, canonBlock, inAutonomousRoom),
     },
     {
       role: 'user',
@@ -562,7 +583,8 @@ export async function extractOtherMemoriesFromTurn(
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
   chatId?: string,
-  resolvedMaxTokens?: number
+  resolvedMaxTokens?: number,
+  inAutonomousRoom: boolean = false,
 ): Promise<CheapLLMTaskResult<Map<string, MemoryCandidate[]>>> {
   const observer = transcript.characterSlices.find(s => s.characterId === observerCharacterId)
   if (!observer || subjects.length === 0) {
@@ -577,7 +599,7 @@ export async function extractOtherMemoriesFromTurn(
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: getOtherMemoryExtractionPrompt(perSubjectCap, observerLabel, subjects),
+      content: getOtherMemoryExtractionPrompt(perSubjectCap, observerLabel, subjects, inAutonomousRoom),
     },
     {
       role: 'user',

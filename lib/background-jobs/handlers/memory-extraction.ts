@@ -147,6 +147,10 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
     isDangerousChat: isChatActiveDangerous(chat),
     memoryExtractionLimits,
     sourceMessageTimestamp,
+    // 4.6 Private Character Rooms: autonomous-source attribution for the
+    // extractor — the prompts get the user-absence clause and the resulting
+    // memory rows carry witnessedContext = 'autonomous_room'.
+    inAutonomousRoom: chat.chatType === 'autonomous',
   });
 
   if (!result.success) {

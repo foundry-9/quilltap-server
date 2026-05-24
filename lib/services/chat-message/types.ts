@@ -90,6 +90,20 @@ export interface SendMessageOptions {
   targetParticipantIds?: string[] | null
   /** Browser User-Agent string from the originating request (scrubbed of Electron/Quilltap tokens) */
   browserUserAgent?: string
+  /**
+   * Autonomous-room turn flag: when true, the turn-chain pause threshold for
+   * all-LLM chats (shouldPauseForAllLLM) is bypassed so the loop continues
+   * indefinitely until budget caps or stop conditions fire. Set by the
+   * autonomous-room turn handler in `lib/background-jobs/handlers/autonomous-room-turn.ts`.
+   */
+  neverPauseForUser?: boolean
+  /**
+   * Autonomous-room turn flag: when true, automatic image pipelines (the
+   * Lantern story-background trigger and the wardrobe-driven avatar refresh)
+   * are skipped for this turn. Character-invoked image-generation tool calls
+   * are unaffected. Set by the autonomous-room turn handler.
+   */
+  suppressAutomaticImages?: boolean
 }
 
 /**

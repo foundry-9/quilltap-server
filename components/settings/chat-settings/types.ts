@@ -90,8 +90,25 @@ export interface ChatSettings {
   dangerousContentSettings?: DangerousContentSettings
   /** Default IANA timezone for timestamp formatting */
   timezone?: string | null
+  /** 4.6 Private Character Rooms — user-level defaults */
+  autonomousRoomSettings?: AutonomousRoomSettings
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * 4.6 Private Character Rooms — user-level defaults applied across the
+ * householder's autonomous rooms. Per-room overrides live on the chat row.
+ */
+export interface AutonomousRoomSettings {
+  /** Daily cumulative-token cap for all autonomous-room turns (instance-local-midnight rollover). null = no cap. */
+  dailyTokenBudget?: number | null
+  /** Default catch-up freshness window for scheduled runs (ms). */
+  defaultFreshnessWindowMs?: number
+  /** Default visibility for new autonomous rooms in the Salon chat list. */
+  visibilityDefault?: 'owner_only' | 'household' | 'open'
+  /** User-level ceiling for destructive-tool exposure in autonomous rooms. */
+  destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
 }
 
 export interface ApiKey {

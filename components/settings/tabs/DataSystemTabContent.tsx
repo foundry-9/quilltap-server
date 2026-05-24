@@ -12,6 +12,7 @@ import LLMLogsCard from '@/components/tools/llm-logs-card'
 import { DeleteDataCard } from '@/components/tools/delete-data-card'
 import { ChangePassphraseCard } from '@/components/settings/ChangePassphraseCard'
 import { AutoLockSettingsCard } from '@/components/settings/AutoLockSettingsCard'
+import { AutonomousRoomsCard } from '@/components/tools/autonomous-rooms-card'
 import { useSettingsSection } from './useSettingsSection'
 
 export function DataSystemTabContent() {
@@ -67,6 +68,10 @@ export function DataSystemTabContent() {
 
         <CollapsibleCard title="Tasks Queue" description="View and manage background tasks" sectionId="tasks-queue" forceOpen={activeSection === 'tasks-queue'}>
           <TasksQueueCard />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Autonomous Rooms" description="Pause, resume, or stop private character-to-character rooms" sectionId="autonomous-rooms" forceOpen={activeSection === 'autonomous-rooms'}>
+          <AutonomousRoomsCard />
         </CollapsibleCard>
 
         <CollapsibleCard title="LLM Logs" description="View detailed logs of LLM requests and responses" sectionId="llm-logs" forceOpen={activeSection === 'llm-logs'}>

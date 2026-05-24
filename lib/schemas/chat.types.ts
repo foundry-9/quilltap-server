@@ -65,8 +65,25 @@ export type SceneState = z.infer<typeof SceneStateSchema>;
 // CHAT TYPE
 // ============================================================================
 
-export const ChatTypeEnum = z.enum(['salon', 'help']);
+export const ChatTypeEnum = z.enum(['salon', 'help', 'autonomous']);
 export type ChatType = z.infer<typeof ChatTypeEnum>;
+
+// ============================================================================
+// AUTONOMOUS-ROOM RUN STATE
+// ============================================================================
+
+export const AutonomousRunStateEnum = z.enum([
+  'idle',
+  'running',
+  'paused',
+  'stopped',
+  'budgetExhausted',
+  'error',
+]);
+export type AutonomousRunState = z.infer<typeof AutonomousRunStateEnum>;
+
+export const AutonomousRunVisibilityEnum = z.enum(['owner_only', 'household', 'open']);
+export type AutonomousRunVisibility = z.infer<typeof AutonomousRunVisibilityEnum>;
 
 // ============================================================================
 // MESSAGE EVENTS
@@ -586,8 +603,8 @@ export const ChatMetadataSchema = z.object({
   /** Whether to auto-generate character avatars when outfits change (null = disabled) */
   avatarGenerationEnabled: z.boolean().nullable().optional(),
 
-  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
-  chatType: z.enum(['salon', 'help']).default('salon'),
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms */
+  chatType: ChatTypeEnum.default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
 
@@ -633,6 +650,49 @@ export const ChatMetadataSchema = z.object({
    * Commonplace Book whisper.
    */
   commonplaceSceneCache: JsonSchema.nullable().optional(),
+
+  // ==========================================================================
+  // 4.6 Private Character Rooms — autonomous-room runtime + scheduling
+  // Populated only when chatType === 'autonomous'; null/zero on other chats.
+  // ==========================================================================
+
+  /** Hard cap on character turns per run. NULL = unlimited (use other caps). */
+  budgetMaxTurns: z.number().int().positive().nullable().optional(),
+  /** Cap on cumulative `promptTokens + completionTokens` per run. */
+  budgetMaxTokens: z.number().int().positive().nullable().optional(),
+  /** Cap on wall-clock duration per run, in milliseconds. */
+  budgetMaxWallClockMs: z.number().int().positive().nullable().optional(),
+  /** Optional spend cap in USD, evaluated against running spend from llm_logs. */
+  budgetEstimatedSpendCapUSD: z.number().positive().nullable().optional(),
+
+  /** Cron expression. NULL = manual-only room. */
+  scheduleCron: z.string().nullable().optional(),
+  /** Catch-up window in ms; NULL = use user-default (12h). */
+  scheduleFreshnessWindowMs: z.number().int().positive().nullable().optional(),
+  /** ISO timestamp of the next scheduled run. */
+  scheduleNextRunAt: TimestampSchema.nullable().optional(),
+  /** ISO timestamp of the most recent run start (manual or scheduled). */
+  scheduleLastRunAt: TimestampSchema.nullable().optional(),
+
+  /** Current run-state lifecycle. NULL on non-autonomous chats. */
+  runState: AutonomousRunStateEnum.nullable().optional(),
+  /** UUID of the run currently authoritative for this room (stale-run guard). */
+  currentRunId: UUIDSchema.nullable().optional(),
+  /** Human-readable detail for paused/error states. */
+  runStateMessage: z.string().nullable().optional(),
+  /** ISO timestamp of the current/most-recent run start. */
+  runStartedAt: TimestampSchema.nullable().optional(),
+  /** ISO timestamp of the current/most-recent run end. */
+  runEndedAt: TimestampSchema.nullable().optional(),
+  /** Turns consumed in the current/most-recent run. */
+  runTurnsConsumed: z.number().int().nonnegative().nullable().optional(),
+  /** Tokens consumed in the current/most-recent run. */
+  runTokensConsumed: z.number().int().nonnegative().nullable().optional(),
+
+  /** 1 = owner pre-authorized destructive tools (DESTRUCTIVE_TOOL_NAMES); 0 = disabled. */
+  runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),
+  /** Per-room override of user-default visibility; NULL = inherit user default. */
+  runVisibility: AutonomousRunVisibilityEnum.nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
@@ -791,8 +851,8 @@ export const ChatMetadataBaseSchema = z.object({
   /** Whether to auto-generate character avatars when outfits change (null = disabled) */
   avatarGenerationEnabled: z.boolean().nullable().optional(),
 
-  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
-  chatType: z.enum(['salon', 'help']).default('salon'),
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms */
+  chatType: ChatTypeEnum.default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
 
@@ -815,6 +875,28 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** The Commonplace Book — per-target scene-state emission cache. See ChatMetadataSchema for the contract. */
   commonplaceSceneCache: JsonSchema.nullable().optional(),
+
+  // ==========================================================================
+  // 4.6 Private Character Rooms — autonomous-room runtime + scheduling.
+  // See ChatMetadataSchema for the per-field contract.
+  // ==========================================================================
+  budgetMaxTurns: z.number().int().positive().nullable().optional(),
+  budgetMaxTokens: z.number().int().positive().nullable().optional(),
+  budgetMaxWallClockMs: z.number().int().positive().nullable().optional(),
+  budgetEstimatedSpendCapUSD: z.number().positive().nullable().optional(),
+  scheduleCron: z.string().nullable().optional(),
+  scheduleFreshnessWindowMs: z.number().int().positive().nullable().optional(),
+  scheduleNextRunAt: TimestampSchema.nullable().optional(),
+  scheduleLastRunAt: TimestampSchema.nullable().optional(),
+  runState: AutonomousRunStateEnum.nullable().optional(),
+  currentRunId: UUIDSchema.nullable().optional(),
+  runStateMessage: z.string().nullable().optional(),
+  runStartedAt: TimestampSchema.nullable().optional(),
+  runEndedAt: TimestampSchema.nullable().optional(),
+  runTurnsConsumed: z.number().int().nonnegative().nullable().optional(),
+  runTokensConsumed: z.number().int().nonnegative().nullable().optional(),
+  runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),
+  runVisibility: AutonomousRunVisibilityEnum.nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

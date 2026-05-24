@@ -469,6 +469,47 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   }
 
   /**
+   * Get total token usage for a user since a given timestamp.
+   *
+   * Used by the autonomous-room daily user-token budget check (4.6 Private
+   * Character Rooms) — the rollover boundary is instance-local midnight, so
+   * the caller computes the ISO timestamp for that boundary and passes it
+   * here. Returns zeroed totals when no logs match.
+   */
+  async getTotalTokenUsageSince(
+    userId: string,
+    sinceTimestamp: string,
+  ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
+    return this.safeQuery(
+      async () => {
+        const filter: TypedQueryFilter<LLMLog> = {
+          userId,
+          usage: { $exists: true, $ne: null },
+          createdAt: { $gte: sinceTimestamp },
+        };
+
+        const logs = await this.findByFilter(filter);
+
+        let totalPromptTokens = 0;
+        let totalCompletionTokens = 0;
+        let totalTokens = 0;
+
+        for (const log of logs) {
+          if (log.usage) {
+            totalPromptTokens += log.usage.promptTokens || 0;
+            totalCompletionTokens += log.usage.completionTokens || 0;
+            totalTokens += log.usage.totalTokens || 0;
+          }
+        }
+        return { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens, totalTokens };
+      },
+      'Error getting total token usage since timestamp',
+      { userId, sinceTimestamp },
+      { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+    );
+  }
+
+  /**
    * Count logs associated with a message ID
    * @param messageId The message ID
    * @returns Promise<number> Number of logs for the message

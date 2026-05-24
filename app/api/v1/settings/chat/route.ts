@@ -40,7 +40,8 @@ async function updateChatSettings(
   autoLockSettings?: unknown,
   compositionModeDefault?: boolean,
   composerSpellcheck?: boolean,
-  textReplacementsEnabled?: boolean
+  textReplacementsEnabled?: boolean,
+  autonomousRoomSettings?: unknown,
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -183,6 +184,38 @@ async function updateChatSettings(
     }
     updateData.textReplacementsEnabled = textReplacementsEnabled
   }
+  if (typeof autonomousRoomSettings !== 'undefined') {
+    // 4.6 Private Character Rooms — shape validation kept lightweight here;
+    // the Zod schema on chat_settings ultimately governs the persisted shape.
+    if (autonomousRoomSettings !== null && typeof autonomousRoomSettings !== 'object') {
+      throw new Error('Invalid autonomousRoomSettings value (must be an object)')
+    }
+    const validVisibilities = ['owner_only', 'household', 'open']
+    const validPolicies = ['always_refuse', 'opt_in_per_room']
+    if (autonomousRoomSettings && typeof autonomousRoomSettings === 'object') {
+      const s = autonomousRoomSettings as Record<string, unknown>
+      if (
+        typeof s.dailyTokenBudget !== 'undefined'
+        && s.dailyTokenBudget !== null
+        && (typeof s.dailyTokenBudget !== 'number' || !Number.isFinite(s.dailyTokenBudget) || s.dailyTokenBudget <= 0)
+      ) {
+        throw new Error('Invalid dailyTokenBudget (must be positive number or null)')
+      }
+      if (
+        typeof s.defaultFreshnessWindowMs !== 'undefined'
+        && (typeof s.defaultFreshnessWindowMs !== 'number' || !Number.isFinite(s.defaultFreshnessWindowMs) || s.defaultFreshnessWindowMs <= 0)
+      ) {
+        throw new Error('Invalid defaultFreshnessWindowMs (must be positive number)')
+      }
+      if (typeof s.visibilityDefault !== 'undefined' && !validVisibilities.includes(s.visibilityDefault as string)) {
+        throw new Error('Invalid visibilityDefault')
+      }
+      if (typeof s.destructiveToolPolicy !== 'undefined' && !validPolicies.includes(s.destructiveToolPolicy as string)) {
+        throw new Error('Invalid destructiveToolPolicy')
+      }
+    }
+    updateData.autonomousRoomSettings = autonomousRoomSettings
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -247,6 +280,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       compositionModeDefault,
       composerSpellcheck,
       textReplacementsEnabled,
+      autonomousRoomSettings,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -272,7 +306,8 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       autoLockSettings,
       compositionModeDefault,
       composerSpellcheck,
-      textReplacementsEnabled
+      textReplacementsEnabled,
+      autonomousRoomSettings,
     )
 
     return successResponse(chatSettings)

@@ -265,6 +265,29 @@ export interface SceneStateTrackingPayload {
 }
 
 /**
+ * Payload for an autonomous-room turn (4.6 Private Character Rooms).
+ *
+ * `runId` is matched against `chats.currentRunId` by the handler's stale-run
+ * guard: a queued turn whose runId no longer matches a newer authoritative
+ * run exits cleanly without enqueueing a successor.
+ */
+export interface AutonomousRoomTurnPayload {
+  chatId: string;
+  runId: string;
+}
+
+/**
+ * Payload for the autonomous-room scheduler tick (singleton; the parent-
+ * process timer enqueues one of these per minute). The handler scans
+ * `chats` for autonomous rooms due to run per their cron + freshness window
+ * and enqueues `AUTONOMOUS_ROOM_TURN` jobs for the ones it picks up.
+ */
+export interface AutonomousRoomScheduleTickPayload {
+  // No fields — the tick handler reads global chat state.
+  // Empty object kept for shape clarity.
+}
+
+/**
  * Result of enqueueing a scene state tracking job
  */
 export interface SceneStateTrackingEnqueueResult {
@@ -608,6 +631,57 @@ export async function enqueueLLMLogCleanup(
   options?: EnqueueJobOptions
 ): Promise<string> {
   return enqueueJob(userId, 'LLM_LOG_CLEANUP', payload as unknown as Record<string, unknown>, options);
+}
+
+/**
+ * Enqueue an autonomous-room turn job (4.6 Private Character Rooms).
+ *
+ * Each turn re-enqueues itself if the run is still alive. The handler's
+ * stale-run guard uses `payload.runId` against `chats.currentRunId` to drop
+ * jobs left behind by superseded runs. No dedup here — multiple in-flight
+ * turn jobs for the same chat is exactly the failure mode the guard catches.
+ *
+ * `maxAttempts: 1` because the per-room procedure already classifies fatal
+ * vs non-fatal errors and decides whether to re-enqueue itself; the job
+ * processor's automatic retry would muddle that lifecycle.
+ */
+export async function enqueueAutonomousRoomTurn(
+  userId: string,
+  payload: AutonomousRoomTurnPayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  return enqueueJob(
+    userId,
+    'AUTONOMOUS_ROOM_TURN',
+    payload as unknown as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
+}
+
+/**
+ * Enqueue the autonomous-room scheduler tick (4.6 Private Character Rooms).
+ *
+ * Called once per minute by the parent-process timer in
+ * `lib/background-jobs/scheduled-autonomous-rooms.ts`. Dedup-aware: if an
+ * unprocessed tick is already in flight, return its ID instead of stacking
+ * up duplicate scans.
+ */
+export async function enqueueAutonomousRoomScheduleTick(
+  userId: string,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  const repos = getRepositories();
+  const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+  const existing = pending.find((job) => job.type === 'AUTONOMOUS_ROOM_SCHEDULE_TICK');
+  if (existing) {
+    return existing.id;
+  }
+  return enqueueJob(
+    userId,
+    'AUTONOMOUS_ROOM_SCHEDULE_TICK',
+    {} as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1, priority: options?.priority ?? -1 },
+  );
 }
 
 /**

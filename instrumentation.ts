@@ -667,6 +667,9 @@ export async function register() {
         const { scheduleDangerScan } = await import('./lib/background-jobs/scheduled-danger-scan');
         await scheduleDangerScan();
 
+        const { scheduleAutonomousRooms } = await import('./lib/background-jobs/scheduled-autonomous-rooms');
+        scheduleAutonomousRooms();
+
         // Start filesystem watcher for real-time sync
         const { startWatcher } = await import('./lib/file-storage/watcher');
         startWatcher();
