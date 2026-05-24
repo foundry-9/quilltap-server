@@ -168,6 +168,35 @@ export const MemoryExtractionLimitsSchema = z.object({
 export type MemoryExtractionLimits = z.infer<typeof MemoryExtractionLimitsSchema>;
 
 // ============================================================================
+// AUTONOMOUS ROOM SETTINGS (4.6 Private Character Rooms)
+// ============================================================================
+
+export const AutonomousRoomVisibilityDefaultEnum = z.enum(['owner_only', 'household', 'open']);
+export type AutonomousRoomVisibilityDefault = z.infer<typeof AutonomousRoomVisibilityDefaultEnum>;
+
+export const AutonomousRoomDestructiveToolPolicyEnum = z.enum(['always_refuse', 'opt_in_per_room']);
+export type AutonomousRoomDestructiveToolPolicy = z.infer<typeof AutonomousRoomDestructiveToolPolicyEnum>;
+
+/**
+ * User-level defaults that govern every autonomous room owned by the user.
+ *  - dailyTokenBudget: daily cap on cumulative tokens spent by autonomous-room
+ *    turns for this user, evaluated at instance-local midnight (pilot: 1,000,000).
+ *    null = no daily cap.
+ *  - defaultFreshnessWindowMs: per-room override falls back to this. 12h default.
+ *  - visibilityDefault: applied at room creation; per-room override on chats.runVisibility.
+ *  - destructiveToolPolicy: 'always_refuse' is a ceiling — overrides any permissive
+ *    per-room runDestructiveToolsAllowed flag. 'opt_in_per_room' honors the per-room flag.
+ */
+export const AutonomousRoomSettingsSchema = z.object({
+  dailyTokenBudget: z.number().int().positive().nullable().default(null),
+  defaultFreshnessWindowMs: z.number().int().positive().default(12 * 60 * 60 * 1000),
+  visibilityDefault: AutonomousRoomVisibilityDefaultEnum.default('owner_only'),
+  destructiveToolPolicy: AutonomousRoomDestructiveToolPolicyEnum.default('opt_in_per_room'),
+});
+
+export type AutonomousRoomSettings = z.infer<typeof AutonomousRoomSettingsSchema>;
+
+// ============================================================================
 // TOKEN DISPLAY SETTINGS
 // ============================================================================
 
@@ -334,6 +363,13 @@ export const ChatSettingsSchema = z.object({
     maxPerHour: 20,
     softStartFraction: 0.7,
     softFloor: 0.7,
+  }),
+  /** 4.6 Private Character Rooms — user-level defaults for autonomous rooms */
+  autonomousRoomSettings: AutonomousRoomSettingsSchema.default({
+    dailyTokenBudget: null,
+    defaultFreshnessWindowMs: 12 * 60 * 60 * 1000,
+    visibilityDefault: 'owner_only',
+    destructiveToolPolicy: 'opt_in_per_room',
   }),
   /** Token display settings for showing usage and costs */
   tokenDisplaySettings: TokenDisplaySettingsSchema.default({

@@ -189,6 +189,12 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               softStartFraction: 0.7,
               softFloor: 0.7,
             },
+            autonomousRoomSettings: {
+              dailyTokenBudget: null,
+              defaultFreshnessWindowMs: 12 * 60 * 60 * 1000,
+              visibilityDefault: 'owner_only',
+              destructiveToolPolicy: 'opt_in_per_room',
+            },
             tokenDisplaySettings: {
               showPerMessageTokens: false,
               showPerMessageCost: false,

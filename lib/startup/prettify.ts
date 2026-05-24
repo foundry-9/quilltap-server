@@ -129,6 +129,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-composer-spellcheck-field-v1': 'Teaching the composer to flag misspellings',
   'add-text-replacement-rules-table-v1': 'Building the autocorrect ledger',
   'add-text-replacements-enabled-field-v1': 'Wiring the autocorrect master switch',
+  'add-autonomous-rooms-fields-v1': 'Preparing the autonomous salon quarters',
   'add-auto-housekeeping-settings-field-v1': 'Adding auto-housekeeping settings to chats',
   'add-auto-lock-settings-field-v1': 'Adding auto-lock settings to chats',
   'add-auto-detect-rng-field-v1': 'Adding auto-detect-RNG flag to chats',

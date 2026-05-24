@@ -29,6 +29,16 @@ import { handleWardrobeOutfitAnnouncement } from './wardrobe-announcement';
  */
 export type JobHandler = (job: import('@/lib/schemas/types').BackgroundJob) => Promise<void>;
 
+// 4.6 Private Character Rooms — handlers land in Sub-task B/E. The enum values
+// are present from Sub-task A so the schema and queue helpers can ship without
+// the runtime; until the handlers exist, any accidental dispatch fails loud.
+const handleAutonomousRoomTurnNotImplemented: JobHandler = async () => {
+  throw new Error('AUTONOMOUS_ROOM_TURN handler not yet implemented (4.6 Sub-task B)');
+};
+const handleAutonomousRoomScheduleTickNotImplemented: JobHandler = async () => {
+  throw new Error('AUTONOMOUS_ROOM_SCHEDULE_TICK handler not yet implemented (4.6 Sub-task E)');
+};
+
 /**
  * Handler registry
  */
@@ -51,6 +61,8 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   MEMORY_REGENERATE_CHAT: handleMemoryRegenerateChat,
   MEMORY_REGENERATE_ALL: handleMemoryRegenerateAll,
   WARDROBE_OUTFIT_ANNOUNCEMENT: handleWardrobeOutfitAnnouncement,
+  AUTONOMOUS_ROOM_TURN: handleAutonomousRoomTurnNotImplemented,
+  AUTONOMOUS_ROOM_SCHEDULE_TICK: handleAutonomousRoomScheduleTickNotImplemented,
 };
 
 /**

@@ -4,6 +4,20 @@
 
 ### 4.6-dev
 
+#### Feature: Private Character Rooms — schema substrate (Sub-task A)
+
+Schema-only first slice of 4.6 Private Character Rooms (autonomous character-to-character chats). No runtime behavior yet; this slice only widens the schema so subsequent sub-tasks have something to write to.
+
+- New migration `add-autonomous-rooms-fields-v1` (`migrations/scripts/add-autonomous-rooms-fields.ts`): adds nullable columns to `chats` (`budgetMaxTurns`, `budgetMaxTokens`, `budgetMaxWallClockMs`, `budgetEstimatedSpendCapUSD`, `scheduleCron`, `scheduleFreshnessWindowMs`, `scheduleNextRunAt`, `scheduleLastRunAt`, `runState`, `currentRunId`, `runStateMessage`, `runStartedAt`, `runEndedAt`, `runTurnsConsumed`, `runTokensConsumed`, `runDestructiveToolsAllowed`, `runVisibility`); adds partial indexes `idx_chats_autonomous_nextRunAt` and `idx_chats_autonomous_runState`; adds `autonomousRoomSettings` JSON column to `chat_settings`; adds `witnessedContext` TEXT column to `memories`.
+- `lib/schemas/chat.types.ts`: `ChatTypeEnum` extended to include `'autonomous'`; new `AutonomousRunStateEnum` and `AutonomousRunVisibilityEnum`; the new autonomous-room fields added to both `ChatMetadataSchema` and `ChatMetadataBaseSchema`.
+- `lib/schemas/job.types.ts`: `BackgroundJobTypeEnum` extended with `'AUTONOMOUS_ROOM_TURN'` and `'AUTONOMOUS_ROOM_SCHEDULE_TICK'`.
+- `lib/schemas/memory.types.ts`: new `WitnessedContextEnum` and a nullable `witnessedContext` field on `MemorySchema`. Existing rows stay NULL; the memory-extraction path will start writing this in Sub-task D.
+- `lib/schemas/settings.types.ts`: new `AutonomousRoomSettingsSchema` (with `dailyTokenBudget`, `defaultFreshnessWindowMs`, `visibilityDefault`, `destructiveToolPolicy`) added to `ChatSettingsSchema`.
+- `lib/tools/destructive-tools.ts` (new): exports `DESTRUCTIVE_TOOL_NAMES` (`'doc_delete_file'`, `'doc_delete_folder'`) and an `isDestructiveTool()` predicate. Not consumed yet; the per-turn filter in Sub-task C will read from this set.
+- `lib/startup/prettify.ts`: added the migration's pretty label ("Preparing the autonomous salon quarters").
+- `docs/developer/DDL.md`: `chats`, `chat_settings`, `memories` sections updated; partial indexes documented.
+- `public/schemas/qtap-export.schema.json`: extended `Chat` properties with all new autonomous-room fields after `conciergeOverride`.
+
 #### Fix: Suppress react-hooks/set-state-in-effect lint error in DescriptionsTab
 
 `app/aurora/[id]/view/components/DescriptionsTab.tsx`: added the standard `// eslint-disable-next-line react-hooks/set-state-in-effect` directive to the fetch-on-mount effect, matching the pattern used in `useCharacterEdit.ts` and other Aurora hooks.
