@@ -185,11 +185,13 @@ export async function handleSendMessage(
               ...chainOptions,
               neverPauseForUser: options.neverPauseForUser,
               suppressAutomaticImages: options.suppressAutomaticImages,
+              singleTurn: options.singleTurn,
             },
             controller,
             encoder
           ),
           neverPauseForUser: options.neverPauseForUser === true,
+          singleTurn: options.singleTurn === true,
         })
 
         // Trigger scene state tracking once after processing (and after any turn chain)

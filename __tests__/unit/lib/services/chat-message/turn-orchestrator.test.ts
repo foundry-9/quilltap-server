@@ -300,6 +300,37 @@ describe('turn-orchestrator.service', () => {
       }));
     });
 
+    it('skips the chain loop entirely when singleTurn is set', async () => {
+      // singleTurn is the autonomous-room flag: each handler invocation is one
+      // character turn, the caller enqueues the next. Verify that no chained
+      // turn fires, no chainComplete event is emitted (callers handle their
+      // own lifecycle), and no turn-participant persistence happens.
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest.fn();
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      const processChainedMessage = jest.fn();
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult,
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage,
+        decideNextTurn,
+        persistTurnParticipant,
+        singleTurn: true,
+      });
+
+      expect(decideNextTurn).not.toHaveBeenCalled();
+      expect(processChainedMessage).not.toHaveBeenCalled();
+      expect(persistTurnParticipant).not.toHaveBeenCalled();
+      expect(controller.enqueue).not.toHaveBeenCalled();
+    });
+
     it('pauses the chat and stops when a chained turn throws', async () => {
       const repos = createMockRepos();
       const controller = { enqueue: jest.fn() } as any;

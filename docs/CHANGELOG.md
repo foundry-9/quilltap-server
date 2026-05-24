@@ -4,6 +4,16 @@
 
 ### 4.6-dev
 
+#### Fix: Autonomous-room turns are one-job-per-character-turn
+
+The autonomous-room handler was calling `handleSendMessage` with `neverPauseForUser: true` but no other chain-control flag, so the orchestrator's `executeTurnChain` looped up to 20 character turns inside a single background job before returning. Three observable problems fell out of that:
+
+- **Same character every iteration.** The forked job child buffers all repository writes in `AsyncLocalStorage` until the job ends. `shouldChainNext` re-reads `repos.chats.getMessages()` mid-chain, so on every iteration it saw the same pre-job message history, `lastSpeakerId` stayed frozen at whoever spoke *before* the job started, and `selectNextSpeaker` re-picked the same participant. In a two-character Friday-instance run, Friday spoke 20 consecutive times; Amy was never picked.
+- **Per-turn budget check bypassed.** `handleAutonomousRoomTurn`'s pre-turn budget enforcement only fires between jobs, so a 20-deep chain overshot the configured 250K-token room cap by ~7× before the next job's check caught it.
+- **Long turn latency.** One "autonomous turn" was actually 20 character responses (+ 20× commonplace whispers + 20× host time-stamp whispers); ~3-4 minutes of LLM time per job.
+
+`SendMessageOptions.singleTurn` and `ExecuteTurnChainOptions.singleTurn` are new flags; `executeTurnChain` early-returns when set. The autonomous-room handler now passes `singleTurn: true` alongside the existing `neverPauseForUser` / `suppressAutomaticImages` flags, and the existing self-re-enqueue at the bottom of `handleAutonomousRoomTurn` handles the next turn — one job per character turn, buffered writes flush at job end, budget check fires every turn. `neverPauseForUser` is now defensive (the chain it gates no longer runs in this path), kept for code clarity. Other chat types are unaffected — the flag defaults to `false`.
+
 #### Fix: Skip async pre-compression in autonomous-room chains
 
 `lib/services/chat-message/message-finalizer.service.ts` no longer calls `triggerAsyncCompression` after each assistant message when `chat.chatType === 'autonomous'`. The async pre-compression path exists to make the next human message feel fast; autonomous-room chains have no human, and each chain step appends enough messages (character + host + commonplace whispers) to trip the staleness threshold within ~2 iterations — so the post-message trigger was firing the cheap-LLM compression call dozens of times per turn for a cache that no one inside the turn ever read. Observed in a Friday-instance turn: 59 compression starts for 20 chain iterations, 0 cache hits within the turn. Skipping the trigger drops autonomous-room cheap-LLM compression calls from dozens per turn to 0–2 (only when the next turn's first chain step misses the cache and falls back to sync compression in-line). Other chat types are unaffected.

@@ -332,6 +332,14 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
       respondingParticipantId,
       neverPauseForUser: true,
       suppressAutomaticImages: true,
+      // One job = one character turn. The forked job child buffers writes
+      // in AsyncLocalStorage until the job ends; without singleTurn the
+      // turn-chain loops up to depth-20 on a single job and every iteration
+      // of `shouldChainNext` re-reads the same pre-job message history,
+      // re-picking the same speaker (Friday → Friday → Friday → …) and
+      // bypassing this handler's per-turn budget check. We re-enqueue at
+      // the end of this function instead.
+      singleTurn: true,
     });
     await drainStream(stream);
     turnSucceeded = true;

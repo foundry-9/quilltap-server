@@ -104,6 +104,25 @@ export interface SendMessageOptions {
    * are unaffected. Set by the autonomous-room turn handler.
    */
   suppressAutomaticImages?: boolean
+  /**
+   * Autonomous-room turn flag: when true, `executeTurnChain` returns
+   * immediately after the initial turn instead of looping to depth-20. The
+   * caller (currently the autonomous-room handler) is responsible for
+   * enqueueing the next turn as a separate job — that's what gives us:
+   *
+   *   1. Per-turn flush of buffered writes from the forked job child, so the
+   *      next turn's speaker selection sees the messages just written. Without
+   *      this, `shouldChainNext` re-reads stale chat history (writes are
+   *      buffered in AsyncLocalStorage until job end) and re-picks the same
+   *      character every iteration — producing 20× "Friday → Friday → Friday"
+   *      chains where Amy is never seen as having spoken.
+   *   2. Per-turn budget enforcement. The autonomous-room handler's pre-turn
+   *      budget check only fires between jobs, so a 20-deep chain can blow
+   *      through caps before anyone notices.
+   *
+   * Set by `lib/background-jobs/handlers/autonomous-room-turn.ts`.
+   */
+  singleTurn?: boolean
 }
 
 /**
