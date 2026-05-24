@@ -21,6 +21,7 @@ export interface TurnManagementActions {
   handleQueue: (participantId: string) => void | Promise<void>
   handleDequeue: (participantId: string) => void | Promise<void>
   handleContinue: () => void | Promise<void>
+  handleSkipUserTurn: (participantId: string) => void | Promise<void>
   handleDismissEphemeral: (ephemeralId: string) => void
 }
 
@@ -54,7 +55,7 @@ interface TurnActionResponse {
  */
 async function callTurnAction(
   chatId: string,
-  action: 'nudge' | 'queue' | 'dequeue' | 'query',
+  action: 'nudge' | 'queue' | 'dequeue' | 'query' | 'skipUserTurn',
   participantId?: string,
 ): Promise<TurnActionResponse | null> {
   try {
@@ -215,11 +216,33 @@ export function useTurnManagement(
     setEphemeralMessages(ephemeralMessages.filter(em => em.id !== ephemeralId))
   }, [ephemeralMessages, setEphemeralMessages])
 
+  const handleSkipUserTurn = useCallback(async (participantId: string) => {
+    const participant = participantsAsBase.find(p => p.id === participantId)
+    if (participant?.controlledBy !== 'user') {
+      showErrorToast('Only user-controlled characters can be skipped.')
+      return
+    }
+
+    const response = await callTurnAction(chatId, 'skipUserTurn', participantId)
+    if (!response) {
+      showErrorToast('Failed to skip turn. Please try again.')
+      return
+    }
+
+    applyServerResponse(response, setTurnState, setTurnSelectionResult, turnState)
+
+    const { nextSpeakerId, nextSpeakerControlledBy } = response.turn
+    if (nextSpeakerId && nextSpeakerControlledBy !== 'user') {
+      triggerContinueMode(nextSpeakerId)
+    }
+  }, [chatId, participantsAsBase, turnState, setTurnState, setTurnSelectionResult, triggerContinueMode])
+
   return {
     handleNudge,
     handleQueue,
     handleDequeue,
     handleContinue,
+    handleSkipUserTurn,
     handleDismissEphemeral,
     hasActiveCharacters,
   }

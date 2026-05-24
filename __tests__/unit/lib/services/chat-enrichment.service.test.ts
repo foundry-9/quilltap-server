@@ -336,6 +336,7 @@ describe('chat-enrichment.service', () => {
         connectionProfile: expect.objectContaining({ id: 'conn-1' }),
         imageProfile: expect.objectContaining({ id: 'img-1' }),
         selectedSystemPromptId: null,
+        talkativeness: null,
         createdAt: expect.any(String),
         updatedAt: expect.any(String),
       })

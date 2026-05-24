@@ -99,6 +99,15 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
 
   const effectiveMaxTurns = agentMode.enabled ? agentMode.maxTurns : 5
   let toolIterations = 0
+  // Tracks iterations in which the model actually invoked at least one
+  // non-`submit_final_response` tool. Used to distinguish "model wrapped a
+  // turn that included real agentic work" (replace prose with args.response,
+  // the polished summary) from "model spuriously wrapped a conversational
+  // turn with a stale-feeling 'task completed' payload" (preserve prose).
+  // The latter shows up in autonomous rooms once the chat history contains
+  // a few legitimate submit_final_response calls — the model pattern-matches
+  // and keeps wrapping every other turn even when it's purely roleplay.
+  let realWorkIterations = 0
   let agentModeCompleted = false
 
   while (currentRawResponse && toolIterations < effectiveMaxTurns) {
@@ -108,6 +117,9 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
     const submitFinalCall = agentMode.enabled
       ? toolCalls.find(tc => tc.name === 'submit_final_response')
       : undefined
+    const nonSubmitToolCalls = submitFinalCall
+      ? toolCalls.filter(tc => tc.name !== 'submit_final_response')
+      : toolCalls
 
     // Ghost-wrap guardrail: an iteration-0, sole submit_final_response with
     // no accompanying prose is almost always re-wrapping a previously-
@@ -119,8 +131,24 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
       !(currentResponse && currentResponse.trim().length > 0)
 
     if (submitFinalCall && !isGhostWrapUp) {
+      // Process sibling tool calls *first* so they don't get silently dropped.
+      // The old logic broke on submit_final_response before any other tool in
+      // the same response could run — meaning `[edit_file, submit_final_response]`
+      // would lose the file edit.
+      if (nonSubmitToolCalls.length > 0) {
+        const siblingResults = await processToolCalls(
+          nonSubmitToolCalls,
+          toolContext,
+          controller,
+          encoder,
+          { characterName: character.name, characterId: character.id },
+        )
+        toolMessages.push(...siblingResults.toolMessages)
+        generatedImagePaths.push(...siblingResults.generatedImagePaths)
+        realWorkIterations++
+      }
+
       const args = submitFinalCall.arguments as { response?: string; summary?: string; confidence?: number }
-      const agentFinalResponse = args.response || currentResponse
       agentModeCompleted = true
 
       safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -130,15 +158,30 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
         characterId: character.id,
       }))
 
-      logger.info('Agent mode completed via submit_final_response', {
-        chatId,
-        iterations: toolIterations,
-        responseLength: agentFinalResponse?.length,
-        summary: args.summary,
-        confidence: args.confidence,
-      })
-
-      streaming.fullResponse = agentFinalResponse
+      if (realWorkIterations === 0) {
+        // No real tool work happened this turn — preserve the streamed prose
+        // instead of letting args.response overwrite it. Protects against the
+        // autonomous-room "replay the completion summary every other turn"
+        // pattern.
+        logger.info('Agent mode completed via submit_final_response — preserving streamed prose (no real work this turn)', {
+          chatId,
+          iterations: toolIterations,
+          proseLength: currentResponse.length,
+          suppressedFinalResponseLength: args.response?.length,
+          summary: args.summary,
+          confidence: args.confidence,
+        })
+      } else {
+        const agentFinalResponse = args.response || currentResponse
+        logger.info('Agent mode completed via submit_final_response', {
+          chatId,
+          iterations: toolIterations,
+          responseLength: agentFinalResponse?.length,
+          summary: args.summary,
+          confidence: args.confidence,
+        })
+        streaming.fullResponse = agentFinalResponse
+      }
       break
     }
 
@@ -176,6 +219,11 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
       }
     } else {
       results = await processToolCalls(toolCalls, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
+      // Any non-ghost-wrap iteration that reaches this branch processed
+      // non-`submit_final_response` tool calls (we'd be in the submit-accept
+      // branch above otherwise). Count it as real work for the prose-
+      // preservation gate.
+      realWorkIterations++
     }
     toolMessages.push(...results.toolMessages)
     generatedImagePaths.push(...results.generatedImagePaths)

@@ -247,13 +247,20 @@ export async function finalizeMessageResponse({
       isDangerousChat: isChatActiveDangerous(chat),
     }
 
-    // Per-turn memory extraction: fire only when the turn closes (control
-    // returns to the user). On earlier characters' finalize calls in a
-    // multi-character turn, `turnInfo.isUsersTurn` is false and we leave
-    // extraction for the last speaker. Tool / continuation cycles inside
-    // a single character's response don't toggle isUsersTurn either, so
-    // those won't trigger spurious extractions.
-    if (turnInfo.isUsersTurn) {
+    // Per-turn memory extraction.
+    //
+    // - Normal chats: fire only when the turn closes (control returns to the
+    //   user). On earlier characters' finalize calls in a multi-character
+    //   turn, `turnInfo.isUsersTurn` is false and we leave extraction for
+    //   the last speaker. Tool / continuation cycles inside a single
+    //   character's response don't toggle isUsersTurn either, so those
+    //   won't trigger spurious extractions.
+    // - Autonomous rooms: there's no user, so `isUsersTurn` is permanently
+    //   false. Without this branch, autonomous chats would *never* extract
+    //   memories. Fire on every character turn instead — each speaker is
+    //   the natural extraction point.
+    const isAutonomous = chat.chatType === 'autonomous'
+    if (turnInfo.isUsersTurn || isAutonomous) {
       await triggerTurnMemoryExtraction(repos, {
         chatId,
         userId,
@@ -383,10 +390,14 @@ export async function calculateNextSpeaker(
     (m): m is typeof m & { type: 'message' } => m.type === 'message'
   ) as unknown as MessageEvent[]
 
+  // Re-read the chat so spokenThisCycleParticipantIds reflects the most
+  // recent persistence (the orchestrator updates this field after each save).
+  const freshChat = await repos.chats.findById(chatId)
   const turnState = calculateTurnStateFromHistory({
     messages: messageEvents,
     participants: chat.participants,
     userParticipantId,
+    spokenThisCycleParticipantIds: freshChat?.spokenThisCycleParticipantIds ?? chat.spokenThisCycleParticipantIds,
   })
 
   const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants)

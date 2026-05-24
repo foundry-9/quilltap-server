@@ -20,6 +20,8 @@ export {
   createInitialTurnState,
   calculateTurnStateFromHistory,
   updateTurnStateAfterMessage,
+  computeSpokenThisCycleAfterMessage,
+  computeSpokenThisCycleAfterSkip,
 } from './state';
 
 // Turn selection

@@ -13,21 +13,23 @@ import { isParticipantPresent } from '@/lib/schemas/types';
 /**
  * Selects the next speaker based on turn state and talkativeness weights.
  *
+ * Both LLM-controlled and user-controlled CHARACTER participants are in the
+ * rotation, each weighted by their character's `talkativeness`. The orchestrator
+ * stops the chain when the selection lands on a user-controlled participant
+ * (the chat then waits for the human to type or click Skip).
+ *
  * Algorithm:
- * 1. If queue is not empty, pop and return first queued participant
- * 2. If user hasn't spoken since all characters got a turn, return null (user's turn)
- * 3. Filter out:
- *    - The last speaker (unless they're the only character)
- *    - Participants who have spoken since user's last turn
- *    - Inactive participants
- * 4. If no eligible speakers remain, return null (user's turn, cycle complete)
- * 5. For eligible speakers, calculate weighted random selection based on talkativeness
+ * 1. If the manual queue is not empty, pop and return its head.
+ * 2. Otherwise, weighted-random pick from { active CHARACTER participants } minus
+ *    { last speaker, anyone in spokenThisCycle }.
+ * 3. If no candidates remain (cycle complete), wrap: weighted-random pick from
+ *    { active - last speaker }. The orchestrator clears spokenThisCycle on wrap.
  */
 export function selectNextSpeaker(
   participants: ChatParticipantBase[],
   characters: Map<string, Character>,
   turnState: TurnState,
-  userParticipantId: string | null
+  _userParticipantId: string | null
 ): TurnSelectionResult {
   // Step 1: Check queue first
   if (turnState.queue.length > 0) {
@@ -39,12 +41,13 @@ export function selectNextSpeaker(
     };
   }
 
-  // Get active LLM-controlled participants only (user-controlled don't take autonomous turns)
+  // All present CHARACTER participants are in the rotation — including
+  // user-controlled ones. Their talkativeness biases ordering; when picked, the
+  // orchestrator pauses the chain so the human can type or skip.
   const activeCharacterParticipants = participants.filter(
-    p => isParticipantPresent(p.status) && p.characterId &&
-    (p.controlledBy === 'llm' || (p.controlledBy === undefined && p.type === 'CHARACTER'))
+    p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId,
   );
-  // If no active characters, it's always user's turn
+
   if (activeCharacterParticipants.length === 0) {
     return {
       nextSpeakerId: null,
@@ -53,108 +56,40 @@ export function selectNextSpeaker(
     };
   }
 
-  // Special case: only one character
+  // Special case: only one CHARACTER participant. If they just spoke, let them
+  // continue (monologue / single-speaker chat); the no-back-to-back guard is
+  // pointless with nobody else to alternate with.
   if (activeCharacterParticipants.length === 1) {
     const onlyCharacter = activeCharacterParticipants[0];
-
-    // If they just spoke...
-    if (turnState.lastSpeakerId === onlyCharacter.id) {
-      // In all-LLM chats, let them continue speaking (monologue mode)
-      if (userParticipantId === null) {
-        return {
-          nextSpeakerId: onlyCharacter.id,
-          reason: 'only_character',
-          cycleComplete: true, // Signal cycle complete for pause logic
-        };
-      }
-      // Otherwise, it's user's turn
-      return {
-        nextSpeakerId: null,
-        reason: 'user_turn',
-        cycleComplete: true,
-      };
-    }
-
-    // Otherwise, they speak
-    return {
-      nextSpeakerId: onlyCharacter.id,
-      reason: 'only_character',
-      cycleComplete: false,
-    };
+    return buildResult(onlyCharacter, 'only_character', false);
   }
 
-  // Step 3: Filter eligible speakers
+  // Step 2: Weighted-random pick from eligible (not last speaker, not yet
+  // spoken this cycle).
   const eligibleParticipants = activeCharacterParticipants.filter(p => {
-    // Filter out last speaker (unless queued - but we already checked queue)
-    if (p.id === turnState.lastSpeakerId) {
-      return false;
-    }
-
-    // Filter out those who have spoken since user's last turn
-    if (turnState.spokenSinceUserTurn.includes(p.id)) {
-      return false;
-    }
-
+    if (p.id === turnState.lastSpeakerId) return false;
+    if (turnState.spokenSinceUserTurn.includes(p.id)) return false;
     return true;
   });
-  // Step 4: If no eligible speakers, cycle is complete
-  if (eligibleParticipants.length === 0) {
-    // If there's no user-controlled participant (all-LLM chat), start a new cycle
-    // instead of returning user's turn
-    if (userParticipantId === null) {
-      // Select from all active characters except the last speaker
-      const newCycleParticipants = activeCharacterParticipants.filter(
-        p => p.id !== turnState.lastSpeakerId
-      );
 
-      if (newCycleParticipants.length > 0) {
-        // Use weighted selection for new cycle
-        const weights: Record<string, number> = {};
-        let totalWeight = 0;
+  if (eligibleParticipants.length > 0) {
+    const pick = pickWeighted(eligibleParticipants, characters);
+    return buildResult(pick.participant, 'weighted_selection', false, {
+      eligibleSpeakers: eligibleParticipants.map(p => p.id),
+      weights: pick.weights,
+      randomValue: pick.randomValue,
+    });
+  }
 
-        for (const participant of newCycleParticipants) {
-          const character = characters.get(participant.characterId!);
-          const talkativeness = character?.talkativeness ?? 0.5;
-          weights[participant.id] = talkativeness;
-          totalWeight += talkativeness;
-        }
+  // Step 3: Cycle wrapped. Weighted-random pick from { all - last speaker }.
+  // The orchestrator clears spokenThisCycle when it observes cycleComplete=true.
+  const newCycleParticipants = activeCharacterParticipants.filter(
+    p => p.id !== turnState.lastSpeakerId,
+  );
 
-        if (totalWeight === 0) {
-          for (const participant of newCycleParticipants) {
-            weights[participant.id] = 1;
-            totalWeight += 1;
-          }
-        }
-
-        const randomValue = Math.random() * totalWeight;
-        let cumulative = 0;
-        let selectedId: string | null = null;
-
-        for (const participant of newCycleParticipants) {
-          cumulative += weights[participant.id];
-          if (randomValue < cumulative) {
-            selectedId = participant.id;
-            break;
-          }
-        }
-
-        if (!selectedId) {
-          selectedId = newCycleParticipants[0].id;
-        }
-
-        return {
-          nextSpeakerId: selectedId,
-          reason: 'weighted_selection',
-          cycleComplete: true, // Signal that we completed a cycle (for pause logic)
-          debug: {
-            eligibleSpeakers: newCycleParticipants.map(p => p.id),
-            weights,
-            randomValue,
-            allLLMNewCycle: true,
-          },
-        };
-      }
-    }
+  if (newCycleParticipants.length === 0) {
+    // Only the last speaker is left (shouldn't happen with >=2 participants),
+    // but be defensive.
     return {
       nextSpeakerId: null,
       reason: 'cycle_complete',
@@ -162,53 +97,58 @@ export function selectNextSpeaker(
     };
   }
 
-  // Step 5: Weighted random selection based on talkativeness
+  const wrapPick = pickWeighted(newCycleParticipants, characters);
+  return buildResult(wrapPick.participant, 'weighted_selection', true, {
+    eligibleSpeakers: newCycleParticipants.map(p => p.id),
+    weights: wrapPick.weights,
+    randomValue: wrapPick.randomValue,
+    allLLMNewCycle: true,
+  });
+}
+
+function buildResult(
+  participant: ChatParticipantBase,
+  reason: TurnSelectionResult['reason'],
+  cycleComplete: boolean,
+  debug?: TurnSelectionResult['debug'],
+): TurnSelectionResult {
+  const isUserControlled = participant.controlledBy === 'user';
+  return {
+    nextSpeakerId: participant.id,
+    reason: isUserControlled ? 'user_turn' : reason,
+    cycleComplete,
+    debug,
+  };
+}
+
+function pickWeighted(
+  candidates: ChatParticipantBase[],
+  characters: Map<string, Character>,
+): { participant: ChatParticipantBase; weights: Record<string, number>; randomValue: number } {
   const weights: Record<string, number> = {};
   let totalWeight = 0;
-
-  for (const participant of eligibleParticipants) {
-    const character = characters.get(participant.characterId!);
-    // Default talkativeness is 0.5 if character not found or no talkativeness set
-    const talkativeness = character?.talkativeness ?? 0.5;
-    weights[participant.id] = talkativeness;
+  for (const p of candidates) {
+    const character = characters.get(p.characterId!);
+    // Per-chat override (participant.talkativeness) wins; fall back to the
+    // character's value; final default is 0.5.
+    const talkativeness = p.talkativeness ?? character?.talkativeness ?? 0.5;
+    weights[p.id] = talkativeness;
     totalWeight += talkativeness;
   }
-
-  // If total weight is 0 (shouldn't happen with valid talkativeness), use equal weights
   if (totalWeight === 0) {
-    logger.warn('[Turn Manager] Total weight is 0, using equal weights');
-    for (const participant of eligibleParticipants) {
-      weights[participant.id] = 1;
+    logger.warn('[Turn Manager] Total talkativeness is 0, using equal weights');
+    for (const p of candidates) {
+      weights[p.id] = 1;
       totalWeight += 1;
     }
   }
-
-  // Generate random value and select based on cumulative weights
   const randomValue = Math.random() * totalWeight;
   let cumulative = 0;
-  let selectedId: string | null = null;
-
-  for (const participant of eligibleParticipants) {
-    cumulative += weights[participant.id];
+  for (const p of candidates) {
+    cumulative += weights[p.id];
     if (randomValue < cumulative) {
-      selectedId = participant.id;
-      break;
+      return { participant: p, weights, randomValue };
     }
   }
-
-  // Fallback to last eligible participant if random selection somehow failed
-  if (!selectedId && eligibleParticipants.length > 0) {
-    selectedId = eligibleParticipants[eligibleParticipants.length - 1].id;
-    logger.warn('[Turn Manager] Random selection fallback', { selectedId });
-  }
-  return {
-    nextSpeakerId: selectedId,
-    reason: 'weighted_selection',
-    cycleComplete: false,
-    debug: {
-      eligibleSpeakers: eligibleParticipants.map(p => p.id),
-      weights,
-      randomValue,
-    },
-  };
+  return { participant: candidates[candidates.length - 1], weights, randomValue };
 }

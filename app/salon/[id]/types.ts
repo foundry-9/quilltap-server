@@ -128,6 +128,8 @@ export interface Participant {
   // Multi-character chat fields
   hasHistoryAccess?: boolean
   joinScenario?: string | null
+  /** Per-chat talkativeness override (0.1–1.0). Null/undefined → inherit from character. */
+  talkativeness?: number | null
   createdAt?: string
   updatedAt?: string
 }
@@ -155,6 +157,8 @@ export interface Chat {
   activeTypingParticipantId?: string | null
   /** Turns since last user input or pause (for all-LLM pause logic) */
   allLLMPauseTurnCount?: number
+  /** JSON-encoded array of participantIds that have spoken in the current rotation cycle */
+  spokenThisCycleParticipantIds?: string
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode?: boolean
   /** Document Mode layout state: normal (chat only), split (chat + document), focus (document only) */

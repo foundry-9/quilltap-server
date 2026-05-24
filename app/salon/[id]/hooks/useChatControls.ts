@@ -447,6 +447,38 @@ export function useChatControls({
     }
   }, [chatId, fetchChat])
 
+  // Handle per-chat talkativeness override. Debounced so a slider drag fires
+  // one request when the user releases, not on every value change.
+  const talkativenessTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const handleTalkativenessChange = useCallback((participantId: string, value: number) => {
+    // Clear any pending request for this participant.
+    const pending = talkativenessTimerRef.current[participantId]
+    if (pending) clearTimeout(pending)
+
+    talkativenessTimerRef.current[participantId] = setTimeout(async () => {
+      delete talkativenessTimerRef.current[participantId]
+      try {
+        const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            updateParticipant: {
+              participantId,
+              talkativeness: value,
+            },
+          }),
+        })
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}))
+          throw new Error(errorData.error || 'Failed to update talkativeness')
+        }
+        await fetchChat()
+      } catch (err) {
+        showErrorToast(err instanceof Error ? err.message : 'Failed to update talkativeness')
+      }
+    }, 400)
+  }, [chatId, fetchChat])
+
   // All-LLM pause handlers
   const handleAllLLMContinue = useCallback(() => {
     // The caller should close the modal
@@ -477,6 +509,7 @@ export function useChatControls({
     handleSystemPromptChange,
     handleRebuildSystemPrompt,
     handleParticipantSettingsChange,
+    handleTalkativenessChange,
     handleAllLLMContinue,
     handleAllLLMStop,
   }

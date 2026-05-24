@@ -364,6 +364,7 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     participants: chat.participants,
     // Autonomous rooms have no user participant by definition.
     userParticipantId: null,
+    spokenThisCycleParticipantIds: chat.spokenThisCycleParticipantIds,
   });
   const selection = selectNextSpeaker(chat.participants, charactersMap, turnState, null);
 

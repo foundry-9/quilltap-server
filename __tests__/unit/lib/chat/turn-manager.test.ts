@@ -14,6 +14,8 @@ import {
   findUserParticipant,
   getActiveCharacterParticipants,
   isMultiCharacterChat,
+  computeSpokenThisCycleAfterMessage,
+  computeSpokenThisCycleAfterSkip,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character, MessageEvent } from '@/lib/schemas/types'
 
@@ -92,7 +94,7 @@ const makeMessage = (id: string, role: 'USER' | 'ASSISTANT', participantId?: str
 })
 
 describe('turn manager state', () => {
-  it('builds state from history and tracks speakers since last user turn', () => {
+  it('derives lastSpeakerId from history and sources spokenSinceUserTurn from persisted state', () => {
     const participants = [
       makeCharacterParticipant('p1', 'char-1'),
       makeCharacterParticipant('p2', 'char-2'),
@@ -103,9 +105,20 @@ describe('turn manager state', () => {
       makeMessage('m-2', 'ASSISTANT', 'p2'),
     ]
 
-    const state = calculateTurnStateFromHistory({ messages, participants, userParticipantId: null })
-    expect(state.spokenSinceUserTurn).toEqual(['p1', 'p2'])
-    expect(state.lastSpeakerId).toBe('p2')
+    // No persisted field — spoken cycle defaults to empty regardless of history.
+    const fresh = calculateTurnStateFromHistory({ messages, participants, userParticipantId: null })
+    expect(fresh.spokenSinceUserTurn).toEqual([])
+    expect(fresh.lastSpeakerId).toBe('p2')
+
+    // With a persisted field — that's the authoritative source.
+    const restored = calculateTurnStateFromHistory({
+      messages,
+      participants,
+      userParticipantId: null,
+      spokenThisCycleParticipantIds: JSON.stringify(['p1', 'p2']),
+    })
+    expect(restored.spokenSinceUserTurn).toEqual(['p1', 'p2'])
+    expect(restored.lastSpeakerId).toBe('p2')
   })
 
   it('selects next speaker from queue before random selection', () => {
@@ -140,7 +153,11 @@ describe('turn manager state', () => {
     expect(selection.debug?.eligibleSpeakers).toEqual(['p2'])
   })
 
-  it('falls back to user turn when all characters have spoken (with user participant)', () => {
+  it('wraps the cycle by picking a fresh weighted speaker once everyone has spoken', () => {
+    // Phase 2: salon chats wrap (rather than bailing to user_turn) because
+    // user-controlled CHARACTER participants now sit in the rotation
+    // themselves; rotation continues weighted-randomly with the previous
+    // speaker excluded.
     const participants = [makeCharacterParticipant('p1', 'char-1'), makeCharacterParticipant('p2', 'char-2')]
     const characters = new Map<string, Character>([
       ['char-1', makeCharacter('char-1')],
@@ -148,9 +165,10 @@ describe('turn manager state', () => {
     ])
     const turnState = { ...createInitialTurnState(), spokenSinceUserTurn: ['p1', 'p2'], lastSpeakerId: 'p2' }
 
-    // With a user participant, returns user's turn when cycle complete
     const selection = selectNextSpeaker(participants, characters, turnState, 'user-1')
-    expect(selection).toEqual({ nextSpeakerId: null, reason: 'cycle_complete', cycleComplete: true })
+    expect(selection.nextSpeakerId).toBe('p1')
+    expect(selection.reason).toBe('weighted_selection')
+    expect(selection.cycleComplete).toBe(true)
   })
 
   it('auto-continues in all-LLM chat when all characters have spoken', () => {
@@ -168,7 +186,11 @@ describe('turn manager state', () => {
     expect(selection.cycleComplete).toBe(true)
   })
 
-  it('honors single-character special case (with user participant)', () => {
+  it('honors single-character monologue mode regardless of user participant', () => {
+    // Phase 2: `selectNextSpeaker` no longer cares whether a user participant
+    // exists in the chat — the only signal that pauses for a human is the
+    // selection landing on a user-controlled CHARACTER participant. With only
+    // one LLM character present, it speaks every turn.
     const participant = makeCharacterParticipant('p1', 'char-1')
     const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])
     const state = { ...createInitialTurnState(), lastSpeakerId: null }
@@ -177,9 +199,19 @@ describe('turn manager state', () => {
     expect(selection.nextSpeakerId).toBe('p1')
     expect(selection.reason).toBe('only_character')
 
-    // With user participant, after character speaks it's user's turn
-    const userTurn = selectNextSpeaker([participant], characters, { ...state, lastSpeakerId: 'p1' }, 'user-1')
-    expect(userTurn.reason).toBe('user_turn')
+    const repeat = selectNextSpeaker([participant], characters, { ...state, lastSpeakerId: 'p1' }, 'user-1')
+    expect(repeat.nextSpeakerId).toBe('p1')
+    expect(repeat.reason).toBe('only_character')
+  })
+
+  it('returns user_turn when the only character is user-controlled', () => {
+    const userChar = makeUserControlledParticipant('u1', 'char-user')
+    const characters = new Map<string, Character>([['char-user', makeCharacter('char-user')]])
+    const state = createInitialTurnState()
+
+    const selection = selectNextSpeaker([userChar], characters, state, 'u1')
+    expect(selection.nextSpeakerId).toBe('u1')
+    expect(selection.reason).toBe('user_turn')
   })
 
   it('single-character all-LLM chat continues in monologue mode', () => {
@@ -191,20 +223,30 @@ describe('turn manager state', () => {
     expect(selection.nextSpeakerId).toBe('p1')
     expect(selection.reason).toBe('only_character')
 
-    // With no user participant (all-LLM), single character continues speaking
+    // With no user participant (all-LLM), single character continues speaking.
+    // The 'only_character' path doesn't set cycleComplete — monologue mode
+    // never "completes" a rotation in the wrap sense.
     const continueMonologue = selectNextSpeaker([participant], characters, { ...state, lastSpeakerId: 'p1' }, null)
     expect(continueMonologue.nextSpeakerId).toBe('p1')
     expect(continueMonologue.reason).toBe('only_character')
-    expect(continueMonologue.cycleComplete).toBe(true)
+    expect(continueMonologue.cycleComplete).toBe(false)
   })
 
-  it('updates turn state after user and assistant messages', () => {
+  it('treats USER and ASSISTANT messages symmetrically when updating turn state', () => {
+    // Phase 2: USER messages no longer reset the cycle. A USER message with a
+    // participantId (i.e. typed as a user-controlled character) counts as
+    // that participant taking their turn; a USER message with no
+    // participantId is a no-op.
     const initial = { ...createInitialTurnState(), queue: ['p1'], spokenSinceUserTurn: ['p2'], lastSpeakerId: 'p2' }
-    const afterUser = updateTurnStateAfterMessage(initial, makeMessage('m-user', 'USER'), 'persona-1')
-    expect(afterUser.spokenSinceUserTurn).toEqual([])
-    expect(afterUser.queue).toEqual(['p1'])
+    const afterUserNoParticipant = updateTurnStateAfterMessage(initial, makeMessage('m-user', 'USER'), 'persona-1')
+    expect(afterUserNoParticipant.spokenSinceUserTurn).toEqual(['p2'])
+    expect(afterUserNoParticipant.queue).toEqual(['p1'])
 
-    const afterAssistant = updateTurnStateAfterMessage(afterUser, makeMessage('m-ai', 'ASSISTANT', 'p1'), null)
+    const afterUserAsCharacter = updateTurnStateAfterMessage(initial, makeMessage('m-user', 'USER', 'u1'), 'u1')
+    expect(afterUserAsCharacter.spokenSinceUserTurn).toEqual(['p2', 'u1'])
+    expect(afterUserAsCharacter.lastSpeakerId).toBe('u1')
+
+    const afterAssistant = updateTurnStateAfterMessage(afterUserAsCharacter, makeMessage('m-ai', 'ASSISTANT', 'p1'), 'u1')
     expect(afterAssistant.spokenSinceUserTurn).toContain('p1')
     expect(afterAssistant.queue).toEqual([])
     expect(afterAssistant.lastSpeakerId).toBe('p1')
@@ -295,19 +337,20 @@ describe('turn manager rapid sequential messages', () => {
     expect(state.lastSpeakerId).toBe('p1')
   })
 
-  it('correctly resets state after user message following rapid assistant messages', () => {
+  it('keeps the cycle intact after a participantId-less user interrupt', () => {
+    // Phase 2: a bare USER message (no participantId) doesn't disturb turn
+    // state. The cycle is only advanced or reset by participant-attributed
+    // turns and the cycle-wrap helper.
     let state = createInitialTurnState()
 
-    // Rapid assistant messages
     state = updateTurnStateAfterMessage(state, makeMessage('m1', 'ASSISTANT', 'p1'), null)
     state = updateTurnStateAfterMessage(state, makeMessage('m2', 'ASSISTANT', 'p2'), null)
     state = updateTurnStateAfterMessage(state, makeMessage('m3', 'ASSISTANT', 'p3'), null)
 
-    // User interrupts
     state = updateTurnStateAfterMessage(state, makeMessage('m-user', 'USER'), 'persona-1')
 
-    expect(state.spokenSinceUserTurn).toEqual([])
-    expect(state.lastSpeakerId).toBeNull()
+    expect(state.spokenSinceUserTurn).toEqual(['p1', 'p2', 'p3'])
+    expect(state.lastSpeakerId).toBe('p3')
     expect(state.currentTurnParticipantId).toBeNull()
   })
 })
@@ -529,24 +572,20 @@ describe('turn manager edge cases', () => {
   })
 
   describe('single participant', () => {
-    it('single active character alternates with user', () => {
+    it('a single LLM character runs monologue regardless of user-participant hint', () => {
+      // Phase 2: with only one LLM CHARACTER participant in the chat, the
+      // rotation degenerates into monologue mode. Whether or not a user
+      // participant exists somewhere outside the participant list, the next
+      // speaker is always that one character.
       const participant = makeCharacterParticipant('p1', 'char-1')
       const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])
 
-      // Initial state - character speaks
       let state = createInitialTurnState()
       let selection = selectNextSpeaker([participant], characters, state, 'user-1')
       expect(selection.nextSpeakerId).toBe('p1')
       expect(selection.reason).toBe('only_character')
 
-      // After character speaks - user turn (when there's a user participant)
       state = updateTurnStateAfterMessage(state, makeMessage('m1', 'ASSISTANT', 'p1'), 'user-1')
-      selection = selectNextSpeaker([participant], characters, state, 'user-1')
-      expect(selection.nextSpeakerId).toBeNull()
-      expect(selection.reason).toBe('user_turn')
-
-      // After user speaks - character turn again
-      state = updateTurnStateAfterMessage(state, makeMessage('m2', 'USER'), 'user-1')
       selection = selectNextSpeaker([participant], characters, state, 'user-1')
       expect(selection.nextSpeakerId).toBe('p1')
       expect(selection.reason).toBe('only_character')
@@ -586,16 +625,19 @@ describe('turn manager edge cases', () => {
     })
 
     it('handles mixed active/inactive with only user-controlled active', () => {
+      // Phase 2: a single active user-controlled character is still the only
+      // viable next speaker; the selection surfaces their participantId with
+      // reason 'user_turn' so the UI can label the pause.
       const participants = [
         makeCharacterParticipant('p1', 'char-1', { isActive: false, status: 'absent' }),
-        makeUserControlledParticipant('u1', 'char-user'), // User-controlled character is active
+        makeUserControlledParticipant('u1', 'char-user'),
       ]
       const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])
       const state = createInitialTurnState()
 
       const selection = selectNextSpeaker(participants, characters, state, 'u1')
 
-      expect(selection.nextSpeakerId).toBeNull()
+      expect(selection.nextSpeakerId).toBe('u1')
       expect(selection.reason).toBe('user_turn')
     })
   })
@@ -645,5 +687,156 @@ describe('turn manager edge cases', () => {
       // Both should be eligible, using weights 0.8 and 0.5 (default)
       expect(selection.debug?.weights).toEqual({ 'p1': 0.8, 'p2': 0.5 })
     })
+  })
+})
+
+describe('per-chat talkativeness override', () => {
+  it('participant.talkativeness wins over character.talkativeness in weighted selection', () => {
+    // Friday character has talkativeness 0.5; bump her participant override to 0.95.
+    // Amy character has 0.5; leave her override null.
+    // After enough trials, Friday should win the lion's share.
+    const friday = makeCharacterParticipant('p1', 'char-1', { talkativeness: 0.95 })
+    const amy = makeCharacterParticipant('p2', 'char-2')  // no override
+    const participants = [friday, amy]
+    const characters = new Map<string, Character>([
+      ['char-1', makeCharacter('char-1', { talkativeness: 0.5 })],
+      ['char-2', makeCharacter('char-2', { talkativeness: 0.5 })],
+    ])
+    const turnState = createInitialTurnState()
+
+    let fridayWins = 0
+    for (let i = 0; i < 200; i++) {
+      const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(i / 200)
+      const selection = selectNextSpeaker(participants, characters, turnState, null)
+      randomSpy.mockRestore()
+      if (selection.nextSpeakerId === 'p1') fridayWins++
+    }
+    // With weights 0.95 vs 0.5 (total 1.45), Friday's share is ~65.5%. Allow
+    // ±5pp wiggle room for the deterministic random spy sweep.
+    expect(fridayWins / 200).toBeGreaterThan(0.6)
+    expect(fridayWins / 200).toBeLessThan(0.72)
+  })
+
+  it('null override falls through to the character value', () => {
+    // Confirm the fallback chain: participant null → character 0.8.
+    const participants = [
+      makeCharacterParticipant('p1', 'char-1'),  // no override
+      makeCharacterParticipant('p2', 'char-2'),  // no override
+    ]
+    const characters = new Map<string, Character>([
+      ['char-1', makeCharacter('char-1', { talkativeness: 0.2 })],
+      ['char-2', makeCharacter('char-2', { talkativeness: 0.8 })],
+    ])
+    const turnState = createInitialTurnState()
+
+    const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.5)
+    const selection = selectNextSpeaker(participants, characters, turnState, null)
+    randomSpy.mockRestore()
+
+    // 0.5 * (0.2 + 0.8) = 0.5; cumulative for p1 = 0.2 < 0.5, so p2 picked.
+    expect(selection.nextSpeakerId).toBe('p2')
+    expect(selection.debug?.weights).toEqual({ p1: 0.2, p2: 0.8 })
+  })
+})
+
+describe('computeSpokenThisCycleAfterMessage', () => {
+  const participants = [
+    makeCharacterParticipant('p1', 'char-1'),
+    makeCharacterParticipant('p2', 'char-2'),
+    makeCharacterParticipant('p3', 'char-3'),
+  ]
+
+  it('returns null for non-turn messages', () => {
+    const sys: MessageEvent = {
+      type: 'message',
+      id: 'm1',
+      role: 'SYSTEM',
+      content: 'system',
+      attachments: [],
+      createdAt: now,
+      participantId: null,
+    }
+    expect(computeSpokenThisCycleAfterMessage(sys, participants, '[]')).toBeNull()
+  })
+
+  it('returns null for messages with no participantId', () => {
+    const noPid = makeMessage('m', 'ASSISTANT', null)
+    expect(computeSpokenThisCycleAfterMessage(noPid, participants, '[]')).toBeNull()
+  })
+
+  it('returns null for whisper messages', () => {
+    const whisper: MessageEvent = {
+      type: 'message',
+      id: 'm1',
+      role: 'ASSISTANT',
+      content: 'hi',
+      attachments: [],
+      createdAt: now,
+      participantId: 'p1',
+      targetParticipantIds: ['p2'],
+    }
+    expect(computeSpokenThisCycleAfterMessage(whisper, participants, '[]')).toBeNull()
+  })
+
+  it('appends a new speaker to the cycle', () => {
+    const msg = makeMessage('m', 'ASSISTANT', 'p1')
+    const result = computeSpokenThisCycleAfterMessage(msg, participants, '[]')
+    expect(result).not.toBeNull()
+    expect(JSON.parse(result!)).toEqual(['p1'])
+  })
+
+  it('returns null when the speaker is already in the cycle and no wrap is triggered', () => {
+    const msg = makeMessage('m', 'ASSISTANT', 'p1')
+    const result = computeSpokenThisCycleAfterMessage(msg, participants, JSON.stringify(['p1']))
+    expect(result).toBeNull()
+  })
+
+  it('wraps the cycle when every active participant has now spoken', () => {
+    // 3 active participants, persisted spoken = [p1, p2]; this message is p3.
+    // After append, [p1, p2, p3] equals the active set — wrap to [p3].
+    const msg = makeMessage('m', 'ASSISTANT', 'p3')
+    const result = computeSpokenThisCycleAfterMessage(msg, participants, JSON.stringify(['p1', 'p2']))
+    expect(result).not.toBeNull()
+    expect(JSON.parse(result!)).toEqual(['p3'])
+  })
+
+  it('tolerates malformed persisted JSON by treating the cycle as empty', () => {
+    const msg = makeMessage('m', 'ASSISTANT', 'p1')
+    const result = computeSpokenThisCycleAfterMessage(msg, participants, 'not-json')
+    expect(result).not.toBeNull()
+    expect(JSON.parse(result!)).toEqual(['p1'])
+  })
+
+  it('counts user-controlled participants when checking cycle completion', () => {
+    const mixed = [
+      makeCharacterParticipant('p1', 'char-1'),
+      makeUserControlledParticipant('u1', 'char-user'),
+    ]
+    const msg = makeMessage('m', 'USER', 'u1')
+    const result = computeSpokenThisCycleAfterMessage(msg, mixed, JSON.stringify(['p1']))
+    // [p1, u1] = full active set → wrap to [u1].
+    expect(JSON.parse(result!)).toEqual(['u1'])
+  })
+})
+
+describe('computeSpokenThisCycleAfterSkip', () => {
+  const participants = [
+    makeCharacterParticipant('p1', 'char-1'),
+    makeUserControlledParticipant('u1', 'char-user'),
+  ]
+
+  it('appends the skipped user participant to the cycle', () => {
+    const result = computeSpokenThisCycleAfterSkip('u1', participants, '[]')
+    expect(JSON.parse(result!)).toEqual(['u1'])
+  })
+
+  it('returns null when the user participant is already recorded', () => {
+    const result = computeSpokenThisCycleAfterSkip('u1', participants, JSON.stringify(['u1']))
+    expect(result).toBeNull()
+  })
+
+  it('wraps the cycle when the skip completes the active set', () => {
+    const result = computeSpokenThisCycleAfterSkip('u1', participants, JSON.stringify(['p1']))
+    expect(JSON.parse(result!)).toEqual(['u1'])
   })
 })

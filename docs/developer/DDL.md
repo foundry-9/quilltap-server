@@ -379,6 +379,7 @@ CREATE TABLE "chats" (
   "dangerClassifiedAtMessageCount" INTEGER DEFAULT NULL,
   "conciergeOverride" TEXT DEFAULT NULL,  -- per-chat Concierge mode: NULL = follow global; 'OFF' = off-duty (skip every Concierge effect)
   "turnQueue" TEXT DEFAULT '[]',
+  "spokenThisCycleParticipantIds" TEXT DEFAULT '[]',  -- JSON array of participantIds that have spoken in the current rotation cycle (includes user-controlled characters)
   "sceneState" TEXT DEFAULT NULL,
   "renderedMarkdown" TEXT DEFAULT NULL,
   "equippedOutfit" TEXT DEFAULT NULL,

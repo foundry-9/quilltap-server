@@ -11,6 +11,8 @@ import {
   findUserParticipant,
   isMultiCharacterChat,
   getActiveCharacterParticipants,
+  selectNextSpeaker,
+  calculateTurnStateFromHistory,
 } from '@/lib/chat/turn-manager'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type {
@@ -18,6 +20,7 @@ import type {
   ChatParticipantBase,
   Character,
   ConnectionProfile,
+  MessageEvent,
 } from '@/lib/schemas/types'
 import { isParticipantPresent } from '@/lib/schemas/chat.types'
 
@@ -103,10 +106,71 @@ export async function resolveRespondingParticipant(
       )
     }
   } else {
-    // Normal mode or continue mode without specific participant - use first active character
-    characterParticipant = chat.participants.find(
-      p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId
+    // Normal mode or continue mode without specific participant — pick the
+    // next LLM responder by weighted talkativeness. Excludes user-controlled
+    // characters from the candidate set (those wait for the human to type),
+    // and respects the persisted `spokenThisCycleParticipantIds` so the cycle
+    // is preserved across turns.
+    const llmCandidates = chat.participants.filter(
+      p => p.type === 'CHARACTER'
+        && isParticipantPresent(p.status)
+        && !!p.characterId
+        && p.controlledBy !== 'user'
     )
+
+    if (llmCandidates.length === 0) {
+      // No LLM characters present (e.g. solo user-character chat). Fall back
+      // to the original first-active-character behaviour so downstream code
+      // sees a recognisable error rather than a silent null pick.
+      characterParticipant = chat.participants.find(
+        p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId
+      )
+    } else if (llmCandidates.length === 1) {
+      characterParticipant = llmCandidates[0]
+    } else {
+      // Build characters map (talkativeness lives on the character record).
+      const charactersMap = new Map<string, Character>()
+      for (const p of llmCandidates) {
+        if (!p.characterId) continue
+        const char = await repos.characters.findById(p.characterId)
+        if (char) charactersMap.set(p.characterId, char)
+      }
+
+      const messages = await repos.chats.getMessages(chat.id)
+      const messageEvents = messages.filter(
+        (m): m is typeof m & { type: 'message' } => m.type === 'message'
+      ) as unknown as MessageEvent[]
+
+      const turnState = calculateTurnStateFromHistory({
+        messages: messageEvents,
+        participants: chat.participants,
+        userParticipantId,
+        spokenThisCycleParticipantIds: chat.spokenThisCycleParticipantIds,
+      })
+
+      const selection = selectNextSpeaker(
+        llmCandidates,
+        charactersMap,
+        turnState,
+        userParticipantId
+      )
+
+      if (selection.nextSpeakerId) {
+        characterParticipant = chat.participants.find(p => p.id === selection.nextSpeakerId)
+      }
+
+      // Defensive fallback if selection somehow yielded nothing.
+      if (!characterParticipant) {
+        characterParticipant = llmCandidates[0]
+      }
+
+      logger.info('Picked first responder via weighted selection', {
+        chatId: chat.id,
+        participantId: characterParticipant.id,
+        reason: selection.reason,
+        cycleComplete: selection.cycleComplete,
+      })
+    }
   }
 
   if (!characterParticipant?.characterId) {

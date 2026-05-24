@@ -546,6 +546,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       messages: messageEvents,
       participants: participantsWithImpersonation.participantsAsBase,
       userParticipantId: participantsWithImpersonation.userParticipantId,
+      spokenThisCycleParticipantIds: chat?.spokenThisCycleParticipantIds,
     })
 
     setTurnState(newTurnState)
@@ -577,7 +578,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
 
     setTurnSelectionResult(result)
-  }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId])
+  }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId, chat?.spokenThisCycleParticipantIds])
 
   // --- Handle scroll-to-message from memory provenance navigation ---
   useEffect(() => {
@@ -1220,6 +1221,32 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </div>
         )}
 
+        {/* User-turn indicator: shown when the rotation has landed on a
+            user-controlled character. The human can type as them, or Skip to
+            let the rotation move on to the next LLM character. */}
+        {(() => {
+          if (sseStreaming.streaming || sseStreaming.waitingForResponse) return null
+          const nextId = turnSelectionResult?.nextSpeakerId
+          if (!nextId) return null
+          const next = participantsWithImpersonation.participantData.find(p => p.id === nextId)
+          if (!next || next.controlledBy !== 'user') return null
+          const name = next.character?.name ?? 'this character'
+          return (
+            <div className="qt-chat-user-turn-banner flex items-center justify-between px-4 py-2 border-t qt-border-default text-sm">
+              <span className="qt-text-secondary">
+                {name}&apos;s turn — type as them, or skip to let someone else respond.
+              </span>
+              <button
+                type="button"
+                onClick={() => turnManagement.handleSkipUserTurn(next.id)}
+                className="qt-button-secondary px-3 py-1 rounded text-sm"
+              >
+                Skip
+              </button>
+            </div>
+          )
+        })()}
+
         {/* Chat Composer */}
         <ChatComposer
           id={id}
@@ -1485,7 +1512,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onDequeue={turnManagement.handleDequeue}
           onSkip={turnManagement.handleContinue}
           onStopStreaming={sseStreaming.stopStreaming}
-          onTalkativenessChange={() => {}}
+          onTalkativenessChange={chatControls.handleTalkativenessChange}
           onAddCharacter={modals.openAddCharacter}
           onRemoveCharacter={chatControls.handleRemoveCharacter}
           impersonatingParticipantIds={impersonation.impersonatingParticipantIds}

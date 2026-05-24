@@ -94,6 +94,7 @@ export async function shouldChainNext(
     messages: messageEvents,
     participants: freshChat.participants,
     userParticipantId,
+    spokenThisCycleParticipantIds: freshChat.spokenThisCycleParticipantIds,
   })
 
   // Check all-LLM pause thresholds
@@ -189,7 +190,19 @@ export async function shouldChainNext(
   }
 
   if (nextParticipant.controlledBy === 'user') {
-    return { chain: false, reason: 'user_turn' }
+    // Surface which user character is "up" so the salon UI can label the
+    // pause and offer a Skip button targeted at that participant.
+    let characterName: string | undefined
+    if (nextParticipant.characterId) {
+      const char = await repos.characters.findById(nextParticipant.characterId)
+      if (char) characterName = char.name
+    }
+    return {
+      chain: false,
+      reason: 'user_turn',
+      participantId: nextParticipantId,
+      characterName,
+    }
   }
 
   // Find character name for logging/events

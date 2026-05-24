@@ -152,6 +152,8 @@ export interface EnrichedParticipantDetail {
   connectionProfile: EnrichedConnectionProfile | null
   imageProfile: EnrichedImageProfile | null
   selectedSystemPromptId: string | null
+  /** Per-chat talkativeness override (0.1–1.0). Null/undefined → inherit from character. */
+  talkativeness?: number | null
   createdAt: string
   updatedAt: string
 }
@@ -443,6 +445,7 @@ export async function enrichParticipantDetail(
     connectionProfile,
     imageProfile,
     selectedSystemPromptId: participant.selectedSystemPromptId ?? null,
+    talkativeness: participant.talkativeness ?? null,
     createdAt: participant.createdAt,
     updatedAt: participant.updatedAt,
   }

@@ -248,21 +248,57 @@ describe('native-tool-loop.service', () => {
     expect(streamMessageCalls).toHaveLength(1)
   })
 
-  it('agent mode: submit_final_response with two tool calls on iteration 0 is NOT ghost-wrap (terminates)', async () => {
+  it('agent mode: sibling tool calls alongside submit_final_response are processed (not silently dropped) and the response arg replaces prose', async () => {
+    // Earlier behaviour: the loop broke on submit_final_response before any
+    // accompanying tool could run, so `[edit_file, submit_final_response]`
+    // would lose the file edit. Fix: sibling tools run first, then submit
+    // takes effect.
     mockDetectToolCalls.mockReturnValueOnce([
       { name: 'submit_final_response', arguments: { response: 'final' }, callId: 'tc-final' },
-      { name: 'doc_open_file', arguments: {}, callId: 'tc-1' },
+      { name: 'doc_open_file', arguments: { path: 'a.md' }, callId: 'tc-1' },
     ])
+    mockProcessToolCalls.mockResolvedValueOnce({
+      toolMessages: [{ toolName: 'doc_open_file', content: 'opened', callId: 'tc-1', success: true }],
+      generatedImagePaths: [],
+    })
     const opts = makeBaseOpts({
       agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
       streaming: makeStreaming({ fullResponse: '' }),
     })
     await runNativeToolLoop(opts as any)
     expect(opts.streaming.fullResponse).toBe('final')
+    expect(mockProcessToolCalls).toHaveBeenCalledTimes(1)
+    // The sibling-processing call only passes the non-submit tool calls.
+    const callArgs = mockProcessToolCalls.mock.calls[0]
+    const passedToolCalls = callArgs?.[0] as Array<{ name: string }>
+    expect(passedToolCalls.map(tc => tc.name)).toEqual(['doc_open_file'])
+    expect(opts.toolMessages).toHaveLength(1)
+    expect(opts.toolMessages[0]?.toolName).toBe('doc_open_file')
+  })
+
+  it('agent mode: submit_final_response with prose and no real tool work preserves the streamed prose (autonomous-room replay guard)', async () => {
+    // This is the autonomous-room "every other turn repeats the completion
+    // summary" pattern. Old behaviour: streaming.fullResponse gets overwritten
+    // by args.response (or currentResponse when args.response is missing).
+    // Fix: when no non-submit tool work happened this turn, preserve the
+    // streamed prose instead of replacing it.
+    mockDetectToolCalls.mockReturnValueOnce([
+      { name: 'submit_final_response', arguments: { response: 'I have successfully completed the task...' }, callId: 'tc-final' },
+    ])
+    const opts = makeBaseOpts({
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
+      streaming: makeStreaming({ fullResponse: '*Amy leans into the embrace, the warm light catching her hair.*' }),
+    })
+    await runNativeToolLoop(opts as any)
+    expect(opts.streaming.fullResponse).toBe('*Amy leans into the embrace, the warm light catching her hair.*')
     expect(mockProcessToolCalls).not.toHaveBeenCalled()
   })
 
-  it('agent mode: submit_final_response with prose on iteration 0 is NOT ghost-wrap (terminates, falls back to currentResponse when no response arg)', async () => {
+  it('agent mode: submit_final_response with prose and no response arg also preserves prose', async () => {
+    // Same prose-preservation guard, but the model omits the response
+    // argument entirely. Old behaviour fell back to `currentResponse`, which
+    // happens to equal the prose anyway, so the visible outcome was already
+    // correct — this test pins the behaviour.
     mockDetectToolCalls.mockReturnValueOnce([
       { name: 'submit_final_response', arguments: {}, callId: 'tc-final' },
     ])

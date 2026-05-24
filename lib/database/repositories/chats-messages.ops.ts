@@ -18,6 +18,7 @@ import { QueryFilter, SortSpec } from '../interfaces';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
 import { safeQuery } from './safe-query';
+import { computeSpokenThisCycleAfterMessage } from '@/lib/chat/turn-manager';
 
 /**
  * Schema for individual chat message rows in SQLite
@@ -199,6 +200,14 @@ export class ChatMessagesOps {
           updateData.lastMessageAt = now;
           updateData.updatedAt = now;
         }
+        const cycleUpdate = computeSpokenThisCycleAfterMessage(
+          validated,
+          chat.participants,
+          chat.spokenThisCycleParticipantIds,
+        );
+        if (cycleUpdate !== null) {
+          updateData.spokenThisCycleParticipantIds = cycleUpdate;
+        }
         await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
       }
       return validated;
@@ -241,6 +250,20 @@ export class ChatMessagesOps {
         if (hasActualMessages) {
           updateData.lastMessageAt = now;
           updateData.updatedAt = now;
+        }
+        // Fold each message through the cycle helper in order so a batch that
+        // wraps the cycle mid-stream still lands on the right final state.
+        let currentSpoken = chat.spokenThisCycleParticipantIds;
+        let spokenChanged = false;
+        for (const msg of validated) {
+          const next = computeSpokenThisCycleAfterMessage(msg, chat.participants, currentSpoken);
+          if (next !== null) {
+            currentSpoken = next;
+            spokenChanged = true;
+          }
+        }
+        if (spokenChanged) {
+          updateData.spokenThisCycleParticipantIds = currentSpoken;
         }
         await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
       }

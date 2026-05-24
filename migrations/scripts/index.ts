@@ -299,6 +299,8 @@ import { addTextReplacementsEnabledFieldMigration } from './add-text-replacement
 import { cutoverCharactersToVaultMigration } from './cutover-characters-to-vault';
 // 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
 import { addAutonomousRoomsFieldsMigration } from './add-autonomous-rooms-fields';
+// 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
+import { addSpokenThisCycleFieldMigration } from './add-spoken-this-cycle-field';
 
 /**
  * All available migrations.
@@ -593,6 +595,8 @@ export const migrations: Migration[] = [
   cutoverCharactersToVaultMigration,
   // 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
   addAutonomousRoomsFieldsMigration,
+  // 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
+  addSpokenThisCycleFieldMigration,
 ];
 
 export {
@@ -870,5 +874,7 @@ export {
   addTextReplacementsEnabledFieldMigration,
   // 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
   addAutonomousRoomsFieldsMigration,
+  // 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
+  addSpokenThisCycleFieldMigration,
 };
 

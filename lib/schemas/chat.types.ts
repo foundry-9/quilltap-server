@@ -391,6 +391,12 @@ export const ChatParticipantSchema = z.object({
   hasHistoryAccess: z.boolean().default(false),  // Whether this participant can see messages from before they joined
   joinScenario: z.string().nullable().optional(), // Custom scenario text for how they joined the chat
 
+  // Per-chat talkativeness override. When null/undefined, the turn manager
+  // falls back to the underlying character's talkativeness. Lets a chat
+  // boost a normally-quiet character (or vice versa) without editing the
+  // character record.
+  talkativeness: z.number().min(0.1).max(1.0).nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -420,6 +426,8 @@ export const ChatParticipantBaseSchema = z.object({
   removedAt: TimestampSchema.nullable().optional(),  // Soft-delete timestamp
   hasHistoryAccess: z.boolean().default(false),
   joinScenario: z.string().nullable().optional(),
+  // Per-chat talkativeness override. Null/undefined → inherit from character.
+  talkativeness: z.number().min(0.1).max(1.0).nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -487,6 +495,13 @@ export const ChatMetadataSchema = z.object({
   allLLMPauseTurnCount: z.number().default(0),
   /** Server-side turn queue for chained responses (JSON array of participant IDs) */
   turnQueue: z.string().default('[]'),
+  /**
+   * Participants (LLM + user) who have spoken in the current rotation cycle.
+   * Stored as a JSON array of participant IDs. The turn manager refuses to
+   * pick anyone in this list again until the cycle wraps (i.e. everyone has
+   * spoken at least once). Cleared automatically when the cycle completes.
+   */
+  spokenThisCycleParticipantIds: z.string().default('[]'),
 
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
@@ -740,6 +755,13 @@ export const ChatMetadataBaseSchema = z.object({
   allLLMPauseTurnCount: z.number().default(0),
   /** Server-side turn queue for chained responses (JSON array of participant IDs) */
   turnQueue: z.string().default('[]'),
+  /**
+   * Participants (LLM + user) who have spoken in the current rotation cycle.
+   * Stored as a JSON array of participant IDs. The turn manager refuses to
+   * pick anyone in this list again until the cycle wraps (i.e. everyone has
+   * spoken at least once). Cleared automatically when the cycle completes.
+   */
+  spokenThisCycleParticipantIds: z.string().default('[]'),
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
 

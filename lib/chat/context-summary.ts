@@ -124,9 +124,18 @@ export function calculateInterchangeCount(
 }
 
 /**
- * Determines if we should check for title update at this interchange count
- * Regular chats: checks at 2, 3, 5, 7, 10, then every 10 after
- * Help chats: checks at 1, 2, 3, 5, 7, 10, then every 10 after (fires immediately after first Q&A)
+ * Determines if we should check for title update at this interchange count.
+ *
+ * - Regular chats: checks at 2, 3, 5, 7, 10, then every 10 after
+ * - Help chats: checks at 1, 2, 3, 5, 7, 10, then every 10 after (fires
+ *   immediately after first Q&A)
+ *
+ * Crossing semantics: each checkpoint fires when the counter has *reached
+ * or passed* it since the last check. This matters for autonomous rooms,
+ * where the interchange counter is "assistant messages including staff
+ * whispers" and a single character turn can bump the count by 5+ — easily
+ * skipping past exact 10/20/30 marks. Using `>=` here means the check
+ * fires on the first turn after we cross 10, then again after 20, etc.
  */
 export function shouldCheckTitleAtInterchange(
   currentInterchange: number,
@@ -142,15 +151,23 @@ export function shouldCheckTitleAtInterchange(
     return false
   }
 
-  // If we haven't checked yet, and we're at one of the early checkpoints
+  // Fire if we've crossed any not-yet-checked early checkpoint.
   const earlyCheckpoints = isHelpChat ? [1, 2, 3, 5, 7, 10] : [2, 3, 5, 7, 10]
-  if (earlyCheckpoints.includes(currentInterchange) && currentInterchange > lastCheckedInterchange) {
-    return true
+  for (const checkpoint of earlyCheckpoints) {
+    if (currentInterchange >= checkpoint && lastCheckedInterchange < checkpoint) {
+      return true
+    }
   }
 
-  // After 10, check every 10 interchanges
-  if (currentInterchange >= 10 && currentInterchange % 10 === 0 && currentInterchange > lastCheckedInterchange) {
-    return true
+  // After 10, fire if the most recently crossed multiple of 10 is one we
+  // haven't checked yet. `Math.floor(n / 10) * 10` is the highest multiple
+  // of 10 ≤ n; if that's greater than `lastCheckedInterchange`, we've
+  // crossed a new boundary since the last check.
+  if (currentInterchange >= 10) {
+    const lastCrossedMultipleOf10 = Math.floor(currentInterchange / 10) * 10
+    if (lastCrossedMultipleOf10 > lastCheckedInterchange) {
+      return true
+    }
   }
 
   return false
@@ -257,10 +274,19 @@ interface FoldedTurn {
  * turn numbering. ASSISTANT-only greeting messages before any USER message
  * are folded into turn 1.
  */
-export function partitionMessagesIntoTurns(allMessages: ChatEvent[]): FoldedTurn[] {
+export function partitionMessagesIntoTurns(
+  allMessages: ChatEvent[],
+  chatType?: string,
+): FoldedTurn[] {
   const turns: FoldedTurn[] = []
   let currentTurn: FoldedTurn | null = null
   let leadingAssistant: { messages: MessageEvent[]; ids: string[] } | null = null
+  // Autonomous rooms have no USER pivot — partition on each character-
+  // attributed ASSISTANT message instead. Without this, `turns.length` is
+  // permanently 0 for autonomous chats and summarisation always bails with
+  // "No messages to summarize". Staff whispers (systemSender set) are still
+  // skipped by the filter below.
+  const isAutonomous = chatType === 'autonomous'
 
   for (const msg of allMessages) {
     if (msg.type !== 'message') continue
@@ -268,7 +294,10 @@ export function partitionMessagesIntoTurns(allMessages: ChatEvent[]): FoldedTurn
     if (m.role !== 'USER' && m.role !== 'ASSISTANT') continue
     if (m.systemSender) continue
 
-    if (m.role === 'USER') {
+    const startsNewTurn = m.role === 'USER'
+      || (isAutonomous && m.role === 'ASSISTANT')
+
+    if (startsNewTurn) {
       const turnNumber = turns.length + 1
       const startMessages = leadingAssistant ? [...leadingAssistant.messages, m] : [m]
       const startIds = leadingAssistant ? [...leadingAssistant.ids, m.id] : [m.id]
@@ -350,7 +379,7 @@ export async function generateContextSummary(
     }
 
     const allChatMessages = await repos.chats.getMessages(chatId)
-    const allTurns = partitionMessagesIntoTurns(allChatMessages)
+    const allTurns = partitionMessagesIntoTurns(allChatMessages, chat.chatType)
     const currentTurn = allTurns.length
 
     if (currentTurn === 0) {

@@ -565,6 +565,12 @@
         "status": {
           "enum": ["active", "silent", "absent", "removed"],
           "description": "Participation status: active (normal), silent (inner thoughts only), absent (away), removed (left chat)"
+        },
+        "talkativeness": {
+          "type": ["number", "null"],
+          "minimum": 0.1,
+          "maximum": 1.0,
+          "description": "Per-chat talkativeness override (0.1–1.0). Null/omitted means inherit from the character record."
         }
       }
     },

@@ -81,6 +81,10 @@ const createMockRepos = () => ({
       { type: 'message', role: 'USER', content: 'Hello there' },
       { type: 'message', role: 'ASSISTANT', content: 'Previous reply', participantId: 'participant-1' },
     ]),
+    // computeNextSpeakerInfo re-reads the chat row to pick up the freshest
+    // `spokenThisCycleParticipantIds`; stub it as empty since the existing
+    // tests don't exercise turn-rotation persistence.
+    findById: jest.fn().mockResolvedValue({ spokenThisCycleParticipantIds: '[]' }),
     update: jest.fn().mockResolvedValue(undefined),
   },
   files: {
@@ -293,6 +297,89 @@ describe('message-finalizer.service', () => {
         } as any,
         participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
         resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
+        userCharacterId: undefined,
+      },
+    })
+
+    expect(memoryTriggers.triggerTurnMemoryExtraction).toHaveBeenCalled()
+  })
+
+  it('finalizeMessageResponse fires per-turn memory extraction on every character turn in autonomous chats', async () => {
+    // Autonomous rooms have no user → isUsersTurn is permanently false.
+    // Without the chatType branch, the autonomous run would never extract
+    // memories. selectNextSpeaker returns another character (LLM not user)
+    // so isUsersTurn=false, but the autonomous branch should fire anyway.
+    const turnManager = jest.requireMock('@/lib/chat/turn-manager') as {
+      selectNextSpeaker: jest.Mock
+    }
+    turnManager.selectNextSpeaker.mockReturnValueOnce({
+      nextSpeakerId: 'participant-2',
+      reason: 'weighted_selection',
+      cycleComplete: false,
+    })
+
+    const repos = createMockRepos()
+    const controller = { enqueue: jest.fn() } as any
+    const encoder = new TextEncoder()
+
+    await finalizeMessageResponse({
+      repos: repos as any,
+      chatId: 'chat-auto',
+      userId: 'user-1',
+      chat: {
+        id: 'chat-auto',
+        chatType: 'autonomous',
+        participants: [
+          { id: 'participant-1', characterId: 'char-1', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+          { id: 'participant-2', characterId: 'char-2', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+        ],
+        isDangerousChat: false,
+      } as any,
+      character: { id: 'char-1', name: 'Friday', aliases: [], pronouns: null } as any,
+      characterParticipant: { id: 'participant-1', status: 'active' } as any,
+      userParticipantId: null,
+      isMultiCharacter: true,
+      isContinueMode: false,
+      generatedImagePaths: [],
+      toolMessages: [],
+      preGeneratedAssistantMessageId: 'assistant-auto',
+      connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+      controller,
+      encoder,
+      streaming: {
+        fullResponse: 'Friday speaks',
+        effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+        effectiveApiKey: 'sk-test',
+        usage: null,
+        cacheUsage: null,
+        attachmentResults: null,
+        rawResponse: { provider: 'raw' },
+        thoughtSignature: undefined,
+        hasStartedStreaming: true,
+      },
+      compression: {
+        existingMessages: [],
+        content: 'hello',
+        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        compressionEnabled: false,
+        cheapLLMSelection: null,
+        contextCompressionSettings: {
+          enabled: true,
+          windowSize: 5,
+          compressionTargetTokens: 800,
+          systemPromptTargetTokens: 1500,
+          projectContextReinjectInterval: 5,
+        },
+        allProfiles: [],
+      },
+      triggers: {
+        dangerSettings: { mode: 'OFF' } as any,
+        chatSettings: {
+          cheapLLMSettings: { strategy: 'USER_DEFINED' },
+          autoDetectRng: false,
+        } as any,
+        participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Friday', pronouns: null }]]),
+        resolvedIdentity: { name: 'Friday', description: 'desc', characterId: 'char-1' },
         userCharacterId: undefined,
       },
     })

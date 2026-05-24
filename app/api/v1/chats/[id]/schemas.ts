@@ -37,6 +37,11 @@ export const updateParticipantSchema = z.object({
   controlledBy: z.enum(['llm', 'user']).optional(),
   hasHistoryAccess: z.boolean().optional(),
   joinScenario: z.string().nullish(),
+  /**
+   * Per-chat talkativeness override (0.1–1.0). Pass `null` to clear the
+   * override and inherit from the character record again.
+   */
+  talkativeness: z.number().min(0.1).max(1.0).nullish(),
 });
 
 export const addParticipantSchema = z.object({
@@ -102,6 +107,7 @@ export const turnActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('queue'), participantId: z.uuid() }),
   z.object({ action: z.literal('dequeue'), participantId: z.uuid() }),
   z.object({ action: z.literal('query') }),
+  z.object({ action: z.literal('skipUserTurn'), participantId: z.uuid() }),
 ]);
 
 export const persistTurnSchema = z.object({
