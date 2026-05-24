@@ -35,6 +35,8 @@ import type {
   MessageEvent,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
+import { Cron } from 'croner';
+import { randomUUID } from 'node:crypto';
 import type { AutonomousRoomTurnPayload } from '../queue-service';
 import { enqueueAutonomousRoomTurn } from '../queue-service';
 
@@ -124,6 +126,7 @@ async function transitionRunState(
     runStartedAt: string | null;
     runTurnsConsumed: number;
     runTokensConsumed: number;
+    scheduleNextRunAt: string | null;
   }> = {},
 ): Promise<void> {
   const repos = getRepositories();
@@ -131,6 +134,59 @@ async function transitionRunState(
     runState: to,
     ...extra,
   } as unknown as Partial<ChatMetadataBase>);
+}
+
+/**
+ * Post a Host-authored `autonomous-room-*` system message. The Host owns the
+ * announcement surface for autonomous rooms (start / end / paused). Uses
+ * `host-avatar.webp` via the existing chat-UI lookup keyed on `systemSender`.
+ */
+async function postAutonomousRoomAnnouncement(
+  chatId: string,
+  systemKind: 'autonomous-room-start' | 'autonomous-room-end' | 'autonomous-room-paused',
+  content: string,
+): Promise<void> {
+  const repos = getRepositories();
+  const message: MessageEvent = {
+    type: 'message',
+    id: randomUUID(),
+    role: 'ASSISTANT',
+    content,
+    attachments: [],
+    createdAt: new Date().toISOString(),
+    participantId: null,
+    systemSender: 'host',
+    systemKind,
+  };
+  try {
+    await repos.chats.addMessage(chatId, message);
+  } catch (error) {
+    logger.warn('Autonomous-room: failed to post announcement', {
+      context: HANDLER, chatId, systemKind,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Compute the next cron occurrence strictly after the given anchor time.
+ * Returns null if the cron is missing or invalid — the caller treats null as
+ * "leave scheduleNextRunAt where it is" so a misconfigured cron does not
+ * accidentally clear the timestamp.
+ */
+function recomputeNextRun(cronExpr: string | null | undefined, anchor: Date): string | null {
+  if (!cronExpr) return null;
+  try {
+    const next = new Cron(cronExpr).nextRun(anchor);
+    return next ? next.toISOString() : null;
+  } catch (error) {
+    logger.warn('Autonomous-room: invalid cron expression at run end', {
+      context: HANDLER,
+      cronExpr,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void> {
@@ -175,10 +231,12 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   const nowIso = new Date(now).toISOString();
 
   if (chat.runState == null || chat.runState === 'idle') {
-    // Run start. Model-availability precondition lands in Sub-task C; for the
-    // Sub-task B verification path we trust the connection profile already
-    // resolves for each participant (the manual-start helper will gate this
-    // up-front once Sub-task C lands).
+    // Run start. The model-availability precondition for individual
+    // participants is enforced by the connection-profile resolution path that
+    // runs inside handleSendMessage; if a participant's model isn't
+    // available the orchestrator will surface that as a turn error which
+    // this handler classifies as 'error'. (A pre-flight check that names
+    // the missing model and refuses earlier is a future refinement.)
     await transitionRunState(chatId, 'running', {
       runStartedAt: nowIso,
       runEndedAt: null,
@@ -190,6 +248,18 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     chat.runStartedAt = nowIso;
     chat.runTurnsConsumed = 0;
     chat.runTokensConsumed = 0;
+
+    // Post the run-start announcement.
+    const caps: string[] = [];
+    if (chat.budgetMaxTurns != null) caps.push(`${chat.budgetMaxTurns} turn(s)`);
+    if (chat.budgetMaxTokens != null) caps.push(`${chat.budgetMaxTokens.toLocaleString()} token(s)`);
+    if (chat.budgetMaxWallClockMs != null) caps.push(`${Math.round(chat.budgetMaxWallClockMs / 60000)} min`);
+    const capSummary = caps.length > 0 ? `Caps: ${caps.join(', ')}.` : 'No caps configured.';
+    await postAutonomousRoomAnnouncement(
+      chatId,
+      'autonomous-room-start',
+      `Autonomous room run begun. ${capSummary} Run id: ${runId}.`,
+    );
   }
 
   // 4. Pre-turn budget check
@@ -207,10 +277,17 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     logger.info('Autonomous-room turn: budget exhausted before turn', {
       context: HANDLER, chatId, reason: budget.reason, dailyTokensSpent, dailyTokenBudget,
     });
+    const nextRunIso = recomputeNextRun(chat.scheduleCron, new Date(now));
     await transitionRunState(chatId, budget.nextState, {
       runEndedAt: nowIso,
       runStateMessage: `budget:${budget.reason}`,
+      ...(nextRunIso ? { scheduleNextRunAt: nextRunIso } : {}),
     });
+    const kind = budget.nextState === 'paused' ? 'autonomous-room-paused' : 'autonomous-room-end';
+    const reasonText = budget.reason === 'tokens_user_daily'
+      ? `Daily user-token budget reached. The room will resume when the budget rolls over (instance-local midnight).`
+      : `Budget exhausted (reason: ${budget.reason}).`;
+    await postAutonomousRoomAnnouncement(chatId, kind, reasonText);
     return;
   }
 
@@ -321,14 +398,19 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     logger.info('Autonomous-room turn: run exhausted post-turn', {
       context: HANDLER, chatId, reason: verdict.reason, turns: newTurnsConsumed, tokens: newTokensConsumed,
     });
+    const endNow = new Date();
+    const nextRunIso = recomputeNextRun(postCheck.scheduleCron, endNow);
     await transitionRunState(chatId, verdict.nextState, {
-      runEndedAt: new Date().toISOString(),
+      runEndedAt: endNow.toISOString(),
       runStateMessage: `budget:${verdict.reason}`,
+      ...(nextRunIso ? { scheduleNextRunAt: nextRunIso } : {}),
     });
-    // 10. The host-authored 'autonomous-room-end' system message lands in
-    //     Sub-task E alongside the cron-recompute. Sub-task B's verification
-    //     path is the clean run-state transition; the announcement is a
-    //     surface improvement on top.
+    const kind = verdict.nextState === 'paused' ? 'autonomous-room-paused' : 'autonomous-room-end';
+    const elapsedMs = postCheck.runStartedAt ? Date.now() - Date.parse(postCheck.runStartedAt) : 0;
+    const reasonText = verdict.reason === 'tokens_user_daily'
+      ? `Daily user-token budget reached after ${newTurnsConsumed} turn(s) and ${newTokensConsumed.toLocaleString()} token(s). The room will resume when the budget rolls over.`
+      : `Autonomous run ended. Reason: ${verdict.reason}. ${newTurnsConsumed} turn(s), ${newTokensConsumed.toLocaleString()} token(s), ${Math.round(elapsedMs / 1000)}s elapsed.`;
+    await postAutonomousRoomAnnouncement(chatId, kind, reasonText);
     return;
   }
 

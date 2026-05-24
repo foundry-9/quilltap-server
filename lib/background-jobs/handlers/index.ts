@@ -24,17 +24,12 @@ import { handleMemoryRegenerateChat } from './memory-regenerate-chat';
 import { handleMemoryRegenerateAll } from './memory-regenerate-all';
 import { handleWardrobeOutfitAnnouncement } from './wardrobe-announcement';
 import { handleAutonomousRoomTurn } from './autonomous-room-turn';
+import { handleAutonomousRoomScheduleTick } from './autonomous-room-schedule-tick';
 
 /**
  * Job handler function type
  */
 export type JobHandler = (job: import('@/lib/schemas/types').BackgroundJob) => Promise<void>;
-
-// 4.6 Private Character Rooms — the schedule-tick handler lands in Sub-task E.
-// Until then, any accidental dispatch fails loud.
-const handleAutonomousRoomScheduleTickNotImplemented: JobHandler = async () => {
-  throw new Error('AUTONOMOUS_ROOM_SCHEDULE_TICK handler not yet implemented (4.6 Sub-task E)');
-};
 
 /**
  * Handler registry
@@ -59,7 +54,7 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   MEMORY_REGENERATE_ALL: handleMemoryRegenerateAll,
   WARDROBE_OUTFIT_ANNOUNCEMENT: handleWardrobeOutfitAnnouncement,
   AUTONOMOUS_ROOM_TURN: handleAutonomousRoomTurn,
-  AUTONOMOUS_ROOM_SCHEDULE_TICK: handleAutonomousRoomScheduleTickNotImplemented,
+  AUTONOMOUS_ROOM_SCHEDULE_TICK: handleAutonomousRoomScheduleTick,
 };
 
 /**
@@ -93,3 +88,4 @@ export { handleMemoryRegenerateChat };
 export { handleMemoryRegenerateAll };
 export { handleWardrobeOutfitAnnouncement };
 export { handleAutonomousRoomTurn };
+export { handleAutonomousRoomScheduleTick };

@@ -78,6 +78,7 @@
     "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.9.0",
     "chokidar": "^5.0.0",
     "create-quilltap-theme": "^2.0.9",
+    "croner": "^10.0.1",
     "jest-fetch-mock": "^3.0.3",
     "jsonrepair": "^3.14.0",
     "lexical": "^0.43.0",
