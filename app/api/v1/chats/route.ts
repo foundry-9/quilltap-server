@@ -135,6 +135,8 @@ const createChatSchema = z.object({
 type ParticipantBuildSuccess = {
   participant: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>;
   tags: string[];
+  /** Character.talkativeness for non-user-controlled characters; undefined otherwise. */
+  talkativeness?: number;
 };
 type ParticipantBuildError = { error: string };
 type ParticipantBuildResult = ParticipantBuildSuccess | ParticipantBuildError;
@@ -200,6 +202,7 @@ async function buildCharacterParticipant(
       isActive: true,
     },
     tags: character.tags || [],
+    talkativeness: isUserControlled ? undefined : (character.talkativeness ?? 0.5),
   };
 }
 
@@ -211,7 +214,7 @@ async function buildAllParticipants(
 ): Promise<BuildParticipantsResult> {
   const builtParticipants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[] = [];
   const allTagIds = new Set<string>();
-  let firstLLMCharacter: { characterId: string; userCharacterId?: string; selectedSystemPromptId?: string } | null = null;
+  const llmCandidates: Array<{ characterId: string; selectedSystemPromptId?: string; talkativeness: number }> = [];
   let firstUserCharacterId: string | null = null;
   let firstImageProfileId: string | null = null;
 
@@ -234,11 +237,12 @@ async function buildAllParticipants(
     }
 
     const isUserControlled = result.participant.controlledBy === 'user';
-    if (!isUserControlled && !firstLLMCharacter && participantData.characterId) {
-      firstLLMCharacter = {
+    if (!isUserControlled && participantData.characterId) {
+      llmCandidates.push({
         characterId: participantData.characterId,
         selectedSystemPromptId: participantData.selectedSystemPromptId || undefined,
-      };
+        talkativeness: result.talkativeness ?? 0.5,
+      });
     }
 
     if (isUserControlled && !firstUserCharacterId && participantData.characterId) {
@@ -246,13 +250,39 @@ async function buildAllParticipants(
     }
   }
 
-  if (!firstLLMCharacter) {
+  if (llmCandidates.length === 0) {
     return { error: 'At least one LLM-controlled CHARACTER participant is required' };
   }
 
-  firstLLMCharacter.userCharacterId = firstUserCharacterId || undefined;
+  // Pick the opening character by weighted-random on talkativeness, matching the
+  // algorithm used by selectNextSpeaker for subsequent turns. Without this the
+  // first character in the list always delivered the greeting, which biased
+  // multi-character chats toward whichever participant the UI happened to list
+  // first.
+  const chosen = pickWeightedByTalkativeness(llmCandidates);
+
+  const firstLLMCharacter = {
+    characterId: chosen.characterId,
+    selectedSystemPromptId: chosen.selectedSystemPromptId,
+    userCharacterId: firstUserCharacterId || undefined,
+  };
 
   return { participants: builtParticipants, tags: allTagIds, firstCharacter: firstLLMCharacter, firstImageProfileId };
+}
+
+function pickWeightedByTalkativeness<T extends { talkativeness: number }>(candidates: T[]): T {
+  let totalWeight = 0;
+  for (const c of candidates) totalWeight += c.talkativeness;
+  if (totalWeight <= 0) {
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+  const r = Math.random() * totalWeight;
+  let cumulative = 0;
+  for (const c of candidates) {
+    cumulative += c.talkativeness;
+    if (r < cumulative) return c;
+  }
+  return candidates[candidates.length - 1];
 }
 
 /**

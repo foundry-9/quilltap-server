@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Change: Pick the opening character at random, weighted by talkativeness
+
+`buildAllParticipants` in `app/api/v1/chats/route.ts` was hard-coded to use the first LLM-controlled character in the request as `firstLLMCharacter`, which meant the auto-generated greeting always came from whichever participant the UI happened to list first. It now collects all non-user CHARACTER candidates with each character's `talkativeness` and picks one via the same weighted-random algorithm `selectNextSpeaker` uses for subsequent turns (default 0.5; single-LLM-character chats trivially pick that one character). Applies to both salon and autonomous-room chats. Side effect: when a caller passes `scenarioId`, the randomly chosen character may not own that scenario — the existing "scenarioId not found on character" warning still fires and the chat starts without the scenario. Single-character workflows are unaffected.
+
 #### Fix: Autonomous-room polish — user-char intro, run-start naming, rename, project picker
 
 Four small fixes shaken out by reviewing a 369-message Friday-instance autonomous room (Friday + Amy, no human user character).
