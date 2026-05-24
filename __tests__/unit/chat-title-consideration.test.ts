@@ -58,6 +58,16 @@ describe('calculateInterchangeCount', () => {
   it('should return 0 for empty messages', () => {
     expect(calculateInterchangeCount([])).toBe(0)
   })
+
+  it('counts each assistant turn as one interchange for autonomous chats', () => {
+    const messages = [
+      { role: 'ASSISTANT', type: 'message' },
+      { role: 'ASSISTANT', type: 'message' },
+      { role: 'ASSISTANT', type: 'message' },
+    ]
+    expect(calculateInterchangeCount(messages, 'autonomous')).toBe(3)
+    expect(calculateInterchangeCount(messages, 'salon')).toBe(0)
+  })
 })
 
 describe('shouldCheckTitleAtInterchange', () => {

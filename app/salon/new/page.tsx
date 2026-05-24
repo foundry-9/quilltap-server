@@ -41,6 +41,9 @@ export default function NewChatPage() {
     project,
     projectScenarios,
     generalScenarios,
+    availableProjects,
+    selectedProjectId,
+    setSelectedProjectId,
     selectedCharacters,
     setSelectedCharacters,
     state,
@@ -147,6 +150,9 @@ export default function NewChatPage() {
             project={project}
             projectScenarios={projectScenarios}
             generalScenarios={generalScenarios}
+            availableProjects={availableProjects}
+            selectedProjectId={selectedProjectId}
+            onSelectedProjectIdChange={setSelectedProjectId}
             creating={creating}
             showSingleCharacterControls={false}
             autonomousSettingsHint={autonomousHint}

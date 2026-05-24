@@ -135,6 +135,13 @@ async function transitionRunState(
   } as unknown as Partial<ChatMetadataBase>);
 }
 
+function formatNameList(names: string[]): string {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+}
+
 /**
  * Post a Host-authored `autonomous-room-*` system message. The Host owns the
  * announcement surface for autonomous rooms (start / end / paused). Uses
@@ -291,10 +298,22 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     if (chat.budgetMaxTokens != null) caps.push(`${chat.budgetMaxTokens.toLocaleString()} token(s)`);
     if (chat.budgetMaxWallClockMs != null) caps.push(`${Math.round(chat.budgetMaxWallClockMs / 60000)} min`);
     const capSummary = caps.length > 0 ? `Caps: ${caps.join(', ')}.` : 'No caps configured.';
+
+    const startParticipants = getActiveCharacterParticipants(chat.participants);
+    const startNames: string[] = [];
+    for (const p of startParticipants) {
+      if (!p.characterId) continue;
+      const c = await repos.characters.findById(p.characterId);
+      if (c?.name) startNames.push(c.name);
+    }
+    const participantsSummary = formatNameList(startNames);
+    const prefix = participantsSummary
+      ? `Autonomous room run begun with ${participantsSummary}.`
+      : `Autonomous room run begun.`;
     await postAutonomousRoomAnnouncement(
       chatId,
       'autonomous-room-start',
-      `Autonomous room run begun. ${capSummary} Run id: ${runId}.`,
+      `${prefix} ${capSummary} Run id: ${runId}.`,
     );
   }
 

@@ -21,6 +21,7 @@ import type {
   SelectedCharacter,
   UserControlledCharacter,
 } from './types'
+import type { ProjectListEntry } from './hooks/useNewChat'
 import {
   CUSTOM_SCENARIO_VALUE,
   GENERAL_SCENARIO_PREFIX,
@@ -40,6 +41,16 @@ interface NewChatFormProps {
   projectScenarios?: ProjectScenarioOption[]
   /** General scenarios from `/api/v1/scenarios`; fetched for every non-help chat. */
   generalScenarios?: GeneralScenarioOption[]
+  /**
+   * In-form project picker plumbing. When `availableProjects` is non-empty and
+   * `onSelectedProjectIdChange` is supplied, the form renders a dropdown so the
+   * user can file the chat under any of their projects (or none) at submit
+   * time. Callers that render their own picker (NewChatModal's continuation
+   * mode) can omit these.
+   */
+  availableProjects?: ProjectListEntry[]
+  selectedProjectId?: string | null
+  onSelectedProjectIdChange?: (id: string | null) => void
   creating: boolean
   /**
    * When true, renders connection-profile and system-prompt selects inline for a
@@ -81,6 +92,9 @@ export function NewChatForm({
   project,
   projectScenarios = [],
   generalScenarios = [],
+  availableProjects,
+  selectedProjectId,
+  onSelectedProjectIdChange,
   creating,
   showSingleCharacterControls = false,
   continuationFromChatId,
@@ -548,7 +562,40 @@ export function NewChatForm({
         </div>
       )}
 
-      {project && (
+      {onSelectedProjectIdChange && availableProjects && availableProjects.length > 0 ? (
+        <div className="md:col-span-2 rounded-lg border qt-border-default qt-bg-card/50 p-3 space-y-2">
+          <label htmlFor="new-chat-project-select" className="qt-text-xs qt-text-muted">
+            File this chat under a project
+          </label>
+          <div className="flex items-center gap-3">
+            <div
+              className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+              style={{
+                backgroundColor:
+                  availableProjects.find((p) => p.id === selectedProjectId)?.color || 'var(--muted)',
+              }}
+            >
+              <svg className="w-3 h-3 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+            </div>
+            <select
+              id="new-chat-project-select"
+              value={selectedProjectId ?? ''}
+              onChange={(e) => onSelectedProjectIdChange(e.target.value || null)}
+              disabled={creating}
+              className="qt-select flex-1 min-w-0"
+            >
+              <option value="">— None (General) —</option>
+              {availableProjects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      ) : project ? (
         <div className="md:col-span-2 rounded-lg border qt-border-default qt-bg-card/50 p-3">
           <div className="flex items-center gap-3">
             <div
@@ -565,7 +612,7 @@ export function NewChatForm({
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

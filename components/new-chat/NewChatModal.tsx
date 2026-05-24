@@ -7,12 +7,6 @@ import { useNewChat } from './hooks'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import type { PreviousOutfitSummary } from '@/components/wardrobe'
 
-interface ProjectListEntry {
-  id: string
-  name: string
-  color?: string | null
-}
-
 interface NewChatModalProps {
   isOpen: boolean
   onClose: () => void
@@ -61,46 +55,6 @@ export function NewChatModal({
   // see (and remove or augment) the carried-over cast without an extra click.
   const [pickerExpanded, setPickerExpanded] = useState(isContinuation)
 
-  // Mutable project ID — only mutable in continuation mode (the regular
-  // new-chat flows pin to the page they were launched from). Initialised
-  // from the prop and reset whenever the prop changes (the props-as-state
-  // sync pattern uses a tracking state value updated during render so
-  // React's prop-derived-state guidance is satisfied without an effect).
-  const [currentProjectId, setCurrentProjectId] = useState<string | undefined>(projectId)
-  const [lastSeenProjectId, setLastSeenProjectId] = useState<string | undefined>(projectId)
-  if (projectId !== lastSeenProjectId) {
-    setLastSeenProjectId(projectId)
-    setCurrentProjectId(projectId)
-  }
-
-  // Continuation mode: list of all the user's projects for the project
-  // selector. Fetched once when the modal opens.
-  const [availableProjects, setAvailableProjects] = useState<ProjectListEntry[]>([])
-  useEffect(() => {
-    if (!isOpen || !isContinuation) return
-    let cancelled = false
-    fetch('/api/v1/projects')
-      .then((res) => (res.ok ? res.json() : { projects: [] }))
-      .then((data) => {
-        if (cancelled) return
-        const list: ProjectListEntry[] = Array.isArray(data?.projects)
-          ? data.projects.map((p: { id: string; name: string; color?: string | null }) => ({
-              id: p.id,
-              name: p.name,
-              color: p.color ?? null,
-            }))
-          : []
-        setAvailableProjects(list)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setAvailableProjects([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [isOpen, isContinuation])
-
   // Continuation mode: per-character per-slot summary of what was equipped at
   // the end of the source chat. Threaded through NewChatForm to OutfitSelector
   // so the "Same as last conversation" option can render a preview.
@@ -133,6 +87,9 @@ export function NewChatModal({
     project,
     projectScenarios,
     generalScenarios,
+    availableProjects,
+    selectedProjectId,
+    setSelectedProjectId,
     selectedCharacters,
     setSelectedCharacters,
     state,
@@ -140,7 +97,7 @@ export function NewChatModal({
     handleCreateChat,
   } = useNewChat({
     initialCharacterId: isOpen && !isContinuation ? characterId : undefined,
-    projectId: isOpen ? currentProjectId : undefined,
+    projectId: isOpen ? projectId : undefined,
     continuationFromChatId: isOpen ? continuationFromChatId : undefined,
     initialSelectedCharacterIds: isOpen ? initialSelectedCharacterIds : undefined,
     initialUserCharacterId: isOpen ? initialUserCharacterId : undefined,
@@ -211,8 +168,8 @@ export function NewChatModal({
                 </label>
                 <select
                   id="continuation-project-select"
-                  value={currentProjectId ?? ''}
-                  onChange={(e) => setCurrentProjectId(e.target.value || undefined)}
+                  value={selectedProjectId ?? ''}
+                  onChange={(e) => setSelectedProjectId(e.target.value || null)}
                   disabled={creating}
                   className="qt-select w-full"
                 >
@@ -251,6 +208,9 @@ export function NewChatModal({
               project={project}
               projectScenarios={projectScenarios}
               generalScenarios={generalScenarios}
+              availableProjects={isContinuation ? undefined : availableProjects}
+              selectedProjectId={isContinuation ? undefined : selectedProjectId}
+              onSelectedProjectIdChange={isContinuation ? undefined : setSelectedProjectId}
               creating={creating}
               showSingleCharacterControls={!pickerExpanded}
               continuationFromChatId={continuationFromChatId ?? null}

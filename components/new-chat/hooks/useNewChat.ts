@@ -44,6 +44,17 @@ interface UseNewChatOptions {
   initialAutonomous?: boolean
 }
 
+/**
+ * Slim project record used by the in-form project picker. The full `Project`
+ * with defaults still loads via `/api/v1/projects/[id]` once a project is
+ * selected, since the list endpoint omits the default-* fields.
+ */
+export interface ProjectListEntry {
+  id: string
+  name: string
+  color?: string | null
+}
+
 interface UseNewChatReturn {
   loading: boolean
   creating: boolean
@@ -57,6 +68,11 @@ interface UseNewChatReturn {
   projectScenarios: ProjectScenarioOption[]
   /** General scenarios from `/api/v1/scenarios`; fetched for every non-help chat. */
   generalScenarios: GeneralScenarioOption[]
+  /** Every project the user owns, for the in-form picker. */
+  availableProjects: ProjectListEntry[]
+  /** Currently chosen project ID, or null for "no project (general)". */
+  selectedProjectId: string | null
+  setSelectedProjectId: (id: string | null) => void
   // Form state
   selectedCharacters: SelectedCharacter[]
   setSelectedCharacters: React.Dispatch<React.SetStateAction<SelectedCharacter[]>>
@@ -122,6 +138,18 @@ export function useNewChat({
   const [project, setProject] = useState<Project | null>(null)
   const [projectScenarios, setProjectScenarios] = useState<ProjectScenarioOption[]>([])
   const [generalScenarios, setGeneralScenarios] = useState<GeneralScenarioOption[]>([])
+  const [availableProjects, setAvailableProjects] = useState<ProjectListEntry[]>([])
+
+  // selectedProjectId is the live picker value. It seeds from the `projectId`
+  // prop (set by the URL on /salon/new or by the parent on the modal) and
+  // re-syncs whenever the prop changes — the same props-as-state pattern
+  // NewChatModal previously implemented locally for continuation mode.
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId ?? null)
+  const [lastSeenProjectIdProp, setLastSeenProjectIdProp] = useState<string | undefined>(projectId)
+  if (projectId !== lastSeenProjectIdProp) {
+    setLastSeenProjectIdProp(projectId)
+    setSelectedProjectId(projectId ?? null)
+  }
 
   const [selectedCharacters, setSelectedCharacters] = useState<SelectedCharacter[]>([])
   const [state, setState] = useState<NewChatFormState>(() => ({
@@ -147,10 +175,11 @@ export function useNewChat({
           fetch('/api/v1/image-profiles'),
           fetch('/api/v1/scenarios'),
           fetch('/api/v1/settings/chat'),
+          fetch('/api/v1/projects'),
         ]
-        if (projectId) {
-          requests.push(fetch(`/api/v1/projects/${projectId}`))
-          requests.push(fetch(`/api/v1/projects/${projectId}/scenarios`))
+        if (selectedProjectId) {
+          requests.push(fetch(`/api/v1/projects/${selectedProjectId}`))
+          requests.push(fetch(`/api/v1/projects/${selectedProjectId}/scenarios`))
         }
         if (initialCharacterId) {
           requests.push(fetch(`/api/v1/characters/${initialCharacterId}`))
@@ -166,8 +195,9 @@ export function useNewChat({
         const imageProfilesRes = responses[idx++]
         const generalScenariosRes = responses[idx++]
         const chatSettingsRes = responses[idx++]
-        const projectRes = projectId ? responses[idx++] : null
-        const projectScenariosRes = projectId ? responses[idx++] : null
+        const projectListRes = responses[idx++]
+        const projectRes = selectedProjectId ? responses[idx++] : null
+        const projectScenariosRes = selectedProjectId ? responses[idx++] : null
         const seedCharacterRes = initialCharacterId ? responses[idx++] : null
         const seedPartnerRes = initialCharacterId ? responses[idx++] : null
 
@@ -207,12 +237,26 @@ export function useNewChat({
             status: generalScenariosRes.status,
           })
         }
+        let loadedAvailableProjects: ProjectListEntry[] = []
+        if (projectListRes && projectListRes.ok) {
+          const data = await projectListRes.json()
+          loadedAvailableProjects = Array.isArray(data?.projects)
+            ? data.projects.map((p: { id: string; name: string; color?: string | null }) => ({
+                id: p.id,
+                name: p.name,
+                color: p.color ?? null,
+              }))
+            : []
+        } else if (projectListRes && !projectListRes.ok) {
+          console.warn('[useNewChat] Failed to load project list', { status: projectListRes.status })
+        }
+
         let loadedProject: Project | null = null
         if (projectRes && projectRes.ok) {
           const data = await projectRes.json()
           loadedProject = data.project || data
         } else if (projectRes && !projectRes.ok) {
-          console.warn('[useNewChat] Failed to load project', { projectId, status: projectRes.status })
+          console.warn('[useNewChat] Failed to load project', { projectId: selectedProjectId, status: projectRes.status })
         }
 
         let loadedProjectScenarios: ProjectScenarioOption[] = []
@@ -229,7 +273,7 @@ export function useNewChat({
           }))
         } else if (projectScenariosRes && !projectScenariosRes.ok) {
           console.warn('[useNewChat] Failed to load project scenarios', {
-            projectId,
+            projectId: selectedProjectId,
             status: projectScenariosRes.status,
           })
         }
@@ -275,6 +319,7 @@ export function useNewChat({
         setProject(loadedProject)
         setProjectScenarios(loadedProjectScenarios)
         setGeneralScenarios(loadedGeneralScenarios)
+        setAvailableProjects(loadedAvailableProjects)
 
         // Project default wins over general default for pre-selection. When a
         // project default exists, seed `projectScenarioPath`; otherwise fall
@@ -425,7 +470,7 @@ export function useNewChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     initialCharacterId,
-    projectId,
+    selectedProjectId,
     continuationFromChatId,
     initialSelectedKey,
     initialUserCharacterId,
@@ -545,8 +590,8 @@ export function useNewChat({
         requestBody.timestampConfig = state.timestampConfig
       }
 
-      if (project?.id) {
-        requestBody.projectId = project.id
+      if (selectedProjectId) {
+        requestBody.projectId = selectedProjectId
       }
 
       if (!isAutonomous && state.avatarGenerationEnabled) {
@@ -629,6 +674,9 @@ export function useNewChat({
     project,
     projectScenarios,
     generalScenarios,
+    availableProjects,
+    selectedProjectId,
+    setSelectedProjectId,
     selectedCharacters,
     setSelectedCharacters,
     state,

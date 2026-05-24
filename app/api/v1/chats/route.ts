@@ -330,7 +330,10 @@ async function createInitialMessagesScenarioAndStaff(
     await postHostScenarioAnnouncement({ chatId, scenarioText });
   }
 
-  if (context.userCharacter) {
+  const hasUserParticipant = participants.some(
+    (p) => p.type === 'CHARACTER' && p.controlledBy === 'user',
+  );
+  if (context.userCharacter && hasUserParticipant) {
     await postHostUserCharacterAnnouncement({
       chatId,
       userCharacterName: context.userCharacter.name,

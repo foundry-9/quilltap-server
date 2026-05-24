@@ -85,19 +85,27 @@ export function evaluateSummarizationGate(
 }
 
 /**
- * Calculates the number of interchanges in a chat
- * An interchange is one user message + one assistant response
+ * Calculates the number of interchanges in a chat.
+ *
+ * For normal chats an interchange is one user message + one assistant
+ * response — count is the minimum of the two so partial pairs don't tick the
+ * meter. Autonomous rooms have no human user, so that floor is permanently
+ * zero; instead, count each assistant turn as one interchange so the title
+ * check and summarization gate fire on the natural cadence of the room.
  */
-export function calculateInterchangeCount(messages: Array<{ role?: string; type?: string }>): number {
+export function calculateInterchangeCount(
+  messages: Array<{ role?: string; type?: string }>,
+  chatType?: string,
+): number {
   let userMessages = 0
   let assistantMessages = 0
-  
+
   for (const msg of messages) {
     // Skip non-message types (like context-summary, tool-result, etc.)
     if (msg.type && msg.type !== 'message') {
       continue
     }
-    
+
     const role = msg.role?.toUpperCase()
     if (role === 'USER') {
       userMessages++
@@ -105,7 +113,11 @@ export function calculateInterchangeCount(messages: Array<{ role?: string; type?
       assistantMessages++
     }
   }
-  
+
+  if (chatType === 'autonomous') {
+    return assistantMessages
+  }
+
   // An interchange is complete when both user and assistant have spoken
   // Return the minimum of the two (limiting factor)
   return Math.min(userMessages, assistantMessages)
@@ -779,7 +791,7 @@ export async function checkAndGenerateSummaryIfNeeded(
 
   // Get all messages to calculate interchange count
   const allMessages = await repos.chats.getMessages(chatId)
-  const currentInterchange = calculateInterchangeCount(allMessages)
+  const currentInterchange = calculateInterchangeCount(allMessages, chat.chatType)
 
   // Check if we should consider updating the title
   const lastCheckedInterchange = chat.lastRenameCheckInterchange || 0
