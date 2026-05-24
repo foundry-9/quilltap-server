@@ -217,6 +217,43 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     return;
   }
 
+  // 2a. Concurrency guard. The stale-run guard above only catches jobs whose
+  // `runId` was *displaced* by a newer run. It does NOT catch the case where
+  // two AUTONOMOUS_ROOM_TURN jobs end up PROCESSING in parallel with the same
+  // `runId` — which can happen if the dispatcher's stuck-job sweep
+  // (lib/background-jobs/host/job-dispatcher.ts, default 10-min timeout) flips
+  // a hung PROCESSING job back to PENDING and the dispatcher then re-claims
+  // it while the original handler is still alive in another child. With the
+  // singleTurn fix that lands in 43e8ce35, individual turns are short enough
+  // that this is very unlikely, but it's cheap insurance against future
+  // regressions or unusually long single-turn LLM stalls.
+  //
+  // Resolution: if there's another PROCESSING AUTONOMOUS_ROOM_TURN for this
+  // chat with an earlier (createdAt, id) than mine, yield to it. The
+  // tie-break on id makes the decision deterministic when createdAt collides
+  // at millisecond resolution, so exactly one of the two siblings proceeds.
+  const inFlight = await repos.backgroundJobs.findPendingForChat(chatId);
+  const concurrentSiblings = inFlight.filter(
+    (j) => j.type === 'AUTONOMOUS_ROOM_TURN' && j.id !== job.id && j.status === 'PROCESSING',
+  );
+  const elderSibling = concurrentSiblings.find((j) => {
+    if (j.createdAt < job.createdAt) return true;
+    if (j.createdAt > job.createdAt) return false;
+    return j.id < job.id;
+  });
+  if (elderSibling) {
+    logger.info('Autonomous-room turn: concurrent sibling already PROCESSING, yielding', {
+      context: HANDLER,
+      chatId,
+      runId,
+      myJobId: job.id,
+      elderJobId: elderSibling.id,
+      elderCreatedAt: elderSibling.createdAt,
+      myCreatedAt: job.createdAt,
+    });
+    return;
+  }
+
   // 3. Lifecycle entry
   if (chat.runState === 'paused' || chat.runState === 'stopped'
    || chat.runState === 'budgetExhausted' || chat.runState === 'error') {

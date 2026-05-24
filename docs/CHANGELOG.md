@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Fix: Concurrency guard against parallel autonomous-room turns
+
+Adds a handler-entry guard in `handleAutonomousRoomTurn` (right after the existing stale-run guard) that detects another PROCESSING `AUTONOMOUS_ROOM_TURN` job for the same chatId and yields to the elder. The stale-run guard only catches jobs whose `runId` was *displaced* by a newer run; it does not catch the case where two jobs end up PROCESSING in parallel with the *same* runId, which can happen if the dispatcher's stuck-job sweep (default 10-min timeout) flips a hung PROCESSING job back to PENDING and the dispatcher re-claims it while the original handler is still alive in another child. Tie-break is `(createdAt, id)` so exactly one sibling proceeds when two race in. With the singleTurn fix in 43e8ce35, individual turns are short enough that hitting the stuck-job threshold is very unlikely, but the guard is cheap (one extra read) and the failure mode without it is two parallel chains writing to the same chat. Scheduler-tick and manual-start paths already filter on `runState === 'running'`; no change needed there.
+
 #### Fix: Autonomous-room turns are one-job-per-character-turn
 
 The autonomous-room handler was calling `handleSendMessage` with `neverPauseForUser: true` but no other chain-control flag, so the orchestrator's `executeTurnChain` looped up to 20 character turns inside a single background job before returning. Three observable problems fell out of that:
