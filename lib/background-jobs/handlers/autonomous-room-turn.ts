@@ -53,11 +53,30 @@ interface BudgetExhausted {
 type BudgetCheckResult = BudgetVerdict | BudgetExhausted;
 
 /**
- * Pre-turn budget verdict. Sub-task B only enforces the caps that read off
- * the chat row directly — wall-clock, turns, and room tokens. Daily user-
- * token cap and spend cap arrive in Sub-task C.
+ * Compute the ISO timestamp of the most recent instance-local midnight.
+ * The autonomous-room daily user-token cap rolls over at the *instance's*
+ * local-time midnight (per the resolved-decisions section of the spec).
  */
-function checkBudget(chat: ChatMetadataBase, now: number): BudgetCheckResult {
+function lastLocalMidnightIso(now: number): string {
+  const d = new Date(now);
+  // Construct a Date at 00:00:00 in the instance's local timezone.
+  const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  return midnight.toISOString();
+}
+
+/**
+ * Pre-turn budget verdict. Reads the per-row chat caps directly; for the
+ * daily user-token cap, the caller passes in the summed usage since
+ * instance-local midnight (read off llm_logs).
+ */
+function checkBudget(
+  chat: ChatMetadataBase,
+  now: number,
+  options: {
+    dailyTokenBudget: number | null;
+    dailyTokensSpent: number;
+  },
+): BudgetCheckResult {
   if (chat.budgetMaxWallClockMs != null && chat.runStartedAt) {
     const elapsed = now - Date.parse(chat.runStartedAt);
     if (elapsed >= chat.budgetMaxWallClockMs) {
@@ -69,6 +88,11 @@ function checkBudget(chat: ChatMetadataBase, now: number): BudgetCheckResult {
   }
   if (chat.budgetMaxTokens != null && (chat.runTokensConsumed ?? 0) >= chat.budgetMaxTokens) {
     return { exhausted: true, nextState: 'budgetExhausted', reason: 'tokens_room' };
+  }
+  // Daily user-token cap: transitions to 'paused' (not 'budgetExhausted')
+  // because the room resumes tomorrow when the scheduler re-evaluates.
+  if (options.dailyTokenBudget != null && options.dailyTokensSpent >= options.dailyTokenBudget) {
+    return { exhausted: true, nextState: 'paused', reason: 'tokens_user_daily' };
   }
   return { exhausted: false };
 }
@@ -169,10 +193,19 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   }
 
   // 4. Pre-turn budget check
-  const budget = checkBudget(chat, now);
+  const chatSettings = await repos.chatSettings.findByUserId(userId);
+  const dailyTokenBudget = chatSettings?.autonomousRoomSettings?.dailyTokenBudget ?? null;
+  let dailyTokensSpent = 0;
+  if (dailyTokenBudget != null) {
+    const since = lastLocalMidnightIso(now);
+    const usage = await repos.llmLogs.getTotalTokenUsageSince(userId, since);
+    dailyTokensSpent = usage.totalTokens;
+  }
+
+  const budget = checkBudget(chat, now, { dailyTokenBudget, dailyTokensSpent });
   if (budget.exhausted) {
     logger.info('Autonomous-room turn: budget exhausted before turn', {
-      context: HANDLER, chatId, reason: budget.reason,
+      context: HANDLER, chatId, reason: budget.reason, dailyTokensSpent, dailyTokenBudget,
     });
     await transitionRunState(chatId, budget.nextState, {
       runEndedAt: nowIso,
@@ -274,7 +307,16 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   if (!postCheck || postCheck.currentRunId !== runId) {
     return;
   }
-  const verdict = checkBudget(postCheck, Date.now());
+  let postDailySpent = 0;
+  if (dailyTokenBudget != null) {
+    const since = lastLocalMidnightIso(Date.now());
+    const usage = await repos.llmLogs.getTotalTokenUsageSince(userId, since);
+    postDailySpent = usage.totalTokens;
+  }
+  const verdict = checkBudget(postCheck, Date.now(), {
+    dailyTokenBudget,
+    dailyTokensSpent: postDailySpent,
+  });
   if (verdict.exhausted) {
     logger.info('Autonomous-room turn: run exhausted post-turn', {
       context: HANDLER, chatId, reason: verdict.reason, turns: newTurnsConsumed, tokens: newTokensConsumed,
