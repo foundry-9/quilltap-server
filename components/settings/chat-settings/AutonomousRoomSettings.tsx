@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type { AutonomousRoomSettings, ChatSettings } from './types'
 
 const DEFAULTS: Required<Omit<AutonomousRoomSettings, 'dailyTokenBudget'>> & Pick<AutonomousRoomSettings, 'dailyTokenBudget'> = {
@@ -28,42 +28,12 @@ export function AutonomousRoomSettingsComponent({
     destructiveToolPolicy: settings.autonomousRoomSettings?.destructiveToolPolicy ?? DEFAULTS.destructiveToolPolicy,
   }
 
-  // Local state for the daily-token-budget input — typing 5 then 0 should not
-  // race the autosave handler. We commit on blur.
-  const [dailyTokenInput, setDailyTokenInput] = useState<string>(
-    current.dailyTokenBudget != null ? String(current.dailyTokenBudget) : '',
-  )
-  const [freshnessHoursInput, setFreshnessHoursInput] = useState<string>(
-    String(Math.round(current.defaultFreshnessWindowMs / (60 * 60 * 1000))),
-  )
-
-  useEffect(() => {
-    setDailyTokenInput(current.dailyTokenBudget != null ? String(current.dailyTokenBudget) : '')
-    setFreshnessHoursInput(String(Math.round(current.defaultFreshnessWindowMs / (60 * 60 * 1000))))
-  }, [current.dailyTokenBudget, current.defaultFreshnessWindowMs])
-
-  const commitDailyTokenBudget = async () => {
-    const trimmed = dailyTokenInput.trim()
-    if (trimmed === '') {
-      await onUpdate({ dailyTokenBudget: null })
-      return
-    }
-    const parsed = Number.parseInt(trimmed, 10)
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      setDailyTokenInput(current.dailyTokenBudget != null ? String(current.dailyTokenBudget) : '')
-      return
-    }
-    await onUpdate({ dailyTokenBudget: parsed })
-  }
-
-  const commitFreshnessHours = async () => {
-    const parsed = Number.parseInt(freshnessHoursInput.trim(), 10)
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      setFreshnessHoursInput(String(Math.round(current.defaultFreshnessWindowMs / (60 * 60 * 1000))))
-      return
-    }
-    await onUpdate({ defaultFreshnessWindowMs: parsed * 60 * 60 * 1000 })
-  }
+  // Local state for the numeric inputs — typing 5 then 0 should not race the
+  // autosave handler. We commit on blur. After a successful save, the form
+  // re-renders with the new saved value; we key the inputs on that value so
+  // they reset only when the persisted value genuinely changes.
+  const savedDailyTokenKey = current.dailyTokenBudget != null ? String(current.dailyTokenBudget) : ''
+  const savedFreshnessKey = String(Math.round(current.defaultFreshnessWindowMs / (60 * 60 * 1000)))
 
   return (
     <div className="space-y-4">
@@ -74,21 +44,12 @@ export function AutonomousRoomSettingsComponent({
             Caps the cumulative input + output tokens spent across every autonomous room you own,
             rolled over at instance-local midnight. Leave blank for no cap. Pilot value: 1,000,000.
           </span>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder="(no cap)"
-              className="qt-input w-48"
-              value={dailyTokenInput}
-              onChange={(e) => setDailyTokenInput(e.target.value)}
-              onBlur={commitDailyTokenBudget}
-              onKeyDown={(e) => { if (e.key === 'Enter') commitDailyTokenBudget() }}
-              disabled={saving}
-            />
-            <span className="qt-text-small">tokens / day</span>
-          </div>
+          <DailyTokenBudgetInput
+            key={savedDailyTokenKey}
+            initial={savedDailyTokenKey}
+            saving={saving}
+            onCommit={(parsed) => onUpdate({ dailyTokenBudget: parsed })}
+          />
         </label>
       </div>
 
@@ -99,20 +60,12 @@ export function AutonomousRoomSettingsComponent({
             How long after a missed scheduled run the scheduler should still consider catching up,
             in hours. Per-room overrides are honored. Default: 12 hours.
           </span>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              className="qt-input w-24"
-              value={freshnessHoursInput}
-              onChange={(e) => setFreshnessHoursInput(e.target.value)}
-              onBlur={commitFreshnessHours}
-              onKeyDown={(e) => { if (e.key === 'Enter') commitFreshnessHours() }}
-              disabled={saving}
-            />
-            <span className="qt-text-small">hours</span>
-          </div>
+          <FreshnessHoursInput
+            key={savedFreshnessKey}
+            initial={savedFreshnessKey}
+            saving={saving}
+            onCommit={(hours) => onUpdate({ defaultFreshnessWindowMs: hours * 60 * 60 * 1000 })}
+          />
         </label>
       </div>
 
@@ -140,7 +93,7 @@ export function AutonomousRoomSettingsComponent({
           <span className="font-medium text-foreground">Destructive-tool policy</span>
           <span className="block qt-text-small mt-1 mb-2">
             Acts as a ceiling: <em>Always refuse</em> blocks destructive tools across every autonomous
-            room regardless of per-room settings; <em>Opt in per room</em> honors a room's explicit
+            room regardless of per-room settings; <em>Opt in per room</em> honors a room&rsquo;s explicit
             pre-authorization.
           </span>
           <select
@@ -154,6 +107,84 @@ export function AutonomousRoomSettingsComponent({
           </select>
         </label>
       </div>
+    </div>
+  )
+}
+
+function DailyTokenBudgetInput({
+  initial,
+  saving,
+  onCommit,
+}: {
+  initial: string
+  saving: boolean
+  onCommit: (value: number | null) => Promise<void>
+}) {
+  const [value, setValue] = useState(initial)
+  const commit = async () => {
+    const trimmed = value.trim()
+    if (trimmed === '') {
+      await onCommit(null)
+      return
+    }
+    const parsed = Number.parseInt(trimmed, 10)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setValue(initial)
+      return
+    }
+    await onCommit(parsed)
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        placeholder="(no cap)"
+        className="qt-input w-48"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur() }}
+        disabled={saving}
+      />
+      <span className="qt-text-small">tokens / day</span>
+    </div>
+  )
+}
+
+function FreshnessHoursInput({
+  initial,
+  saving,
+  onCommit,
+}: {
+  initial: string
+  saving: boolean
+  onCommit: (hours: number) => Promise<void>
+}) {
+  const [value, setValue] = useState(initial)
+  const commit = async () => {
+    const parsed = Number.parseInt(value.trim(), 10)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setValue(initial)
+      return
+    }
+    await onCommit(parsed)
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        className="qt-input w-24"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur() }}
+        disabled={saving}
+      />
+      <span className="qt-text-small">hours</span>
     </div>
   )
 }
