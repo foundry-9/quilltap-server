@@ -107,7 +107,14 @@ export async function finalizeMessageResponse({
     whisperContext
   )
 
-  if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
+  // Async pre-compression exists to make the *next human message* feel fast.
+  // Autonomous-room chains never wait on a human, and each chain step appends
+  // enough messages (character + host + commonplace whispers) to trip the
+  // staleness threshold within ~2 iterations — so the trigger re-fires the
+  // cheap-LLM compression call dozens of times per turn for a cache that no
+  // one inside the turn ever reads. Skip it; the next turn's first chain step
+  // will fall back to sync compression on demand if no cache is available.
+  if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt && chat.chatType !== 'autonomous') {
     const updatedMessages = [
       ...extractVisibleConversation(existingMessages),
       ...(content && !isContinueMode ? [{

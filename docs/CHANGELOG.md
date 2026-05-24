@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Fix: Skip async pre-compression in autonomous-room chains
+
+`lib/services/chat-message/message-finalizer.service.ts` no longer calls `triggerAsyncCompression` after each assistant message when `chat.chatType === 'autonomous'`. The async pre-compression path exists to make the next human message feel fast; autonomous-room chains have no human, and each chain step appends enough messages (character + host + commonplace whispers) to trip the staleness threshold within ~2 iterations — so the post-message trigger was firing the cheap-LLM compression call dozens of times per turn for a cache that no one inside the turn ever read. Observed in a Friday-instance turn: 59 compression starts for 20 chain iterations, 0 cache hits within the turn. Skipping the trigger drops autonomous-room cheap-LLM compression calls from dozens per turn to 0–2 (only when the next turn's first chain step misses the cache and falls back to sync compression in-line). Other chat types are unaffected.
+
 #### Fix: Child-process readonly DB writes + autonomous-room startup reconcile
 
 Three correctness fixes uncovered while investigating a stuck autonomous room in development. All three were silent failures masked by surrounding code.
