@@ -21,7 +21,7 @@
 
 import { extname } from 'node:path';
 import { logger } from '@/lib/logger';
-import { getRepositories } from '@/lib/database/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { SINGLE_USER_ID } from '@/lib/auth/single-user';
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';

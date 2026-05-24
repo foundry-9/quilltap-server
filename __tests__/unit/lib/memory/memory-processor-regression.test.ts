@@ -429,6 +429,7 @@ describe('processTurnForMemory regressions', () => {
       undefined,               // uncensoredFallback
       'chat-1',                // chatId
       2048,                    // resolvedMaxTokens
+      false,                   // inAutonomousRoom (added in b437f0af, Sub-task D)
     )
     expect(createMemoryWithGate).toHaveBeenCalledWith(
       expect.objectContaining({

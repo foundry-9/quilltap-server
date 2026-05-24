@@ -9,10 +9,12 @@ import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalE
 import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardrobe'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
+import { Cron } from 'croner'
 import type {
   ConnectionProfile,
   GeneralScenarioOption,
   ImageProfile,
+  NewChatAutonomousState,
   NewChatFormState,
   Project,
   ProjectScenarioOption,
@@ -55,6 +57,17 @@ interface NewChatFormProps {
    * character was wearing at the end of the source chat.
    */
   previousOutfitSummary?: PreviousOutfitSummary | null
+  /**
+   * Optional hints from the user's chat_settings.autonomousRoomSettings.
+   * Used to label "Inherit" radio with the current default, and to disable
+   * the destructive-tools checkbox when the user-level policy is the
+   * always-refuse ceiling.
+   */
+  autonomousSettingsHint?: {
+    visibilityDefault?: 'owner_only' | 'household' | 'open'
+    destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
+    defaultFreshnessHours?: number
+  }
 }
 
 export function NewChatForm({
@@ -72,6 +85,7 @@ export function NewChatForm({
   showSingleCharacterControls = false,
   continuationFromChatId,
   previousOutfitSummary,
+  autonomousSettingsHint,
 }: NewChatFormProps) {
   const { formatCharacterName } = useUserCharacterDisplayName()
 
@@ -232,6 +246,30 @@ export function NewChatForm({
     [setState]
   )
 
+  const isAutonomous = state.autonomous.enabled
+  const updateAutonomous = useCallback(
+    (patch: Partial<NewChatAutonomousState>) => {
+      setState((prev) => ({
+        ...prev,
+        autonomous: { ...prev.autonomous, ...patch },
+      }))
+    },
+    [setState]
+  )
+
+  const handleAutonomousToggle = useCallback(
+    (next: boolean) => {
+      setState((prev) => ({
+        ...prev,
+        autonomous: { ...prev.autonomous, enabled: next },
+        // Strip the Play-As selection when flipping into autonomous mode —
+        // autonomous rooms have no user. We leave it alone if flipping back.
+        selectedUserCharacterId: next ? '' : prev.selectedUserCharacterId,
+      }))
+    },
+    [setState]
+  )
+
   const handleTimestampConfigChange = useCallback(
     (config: TimestampConfig) => {
       setState((prev) => ({ ...prev, timestampConfig: config }))
@@ -247,6 +285,35 @@ export function NewChatForm({
 
   return (
     <div className="new-chat-form grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+      {/* Autonomous toggle (spans both columns) */}
+      <div className="md:col-span-2 rounded-xl border qt-border-default qt-bg-card/60 p-4">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isAutonomous}
+            onChange={(e) => handleAutonomousToggle(e.target.checked)}
+            className="qt-checkbox mt-1"
+            disabled={creating}
+          />
+          <span>
+            <span className="font-medium text-foreground">Make this an autonomous room</span>
+            <span className="block qt-text-xs qt-text-muted mt-1">
+              Autonomous rooms run when scheduled or started manually. They have no human user, no
+              composer, and pause for nobody.{' '}
+              <Link href="/help/autonomous-rooms" className="underline hover:no-underline qt-text-primary">
+                Learn more
+              </Link>
+              .
+            </span>
+          </span>
+        </label>
+        {isAutonomous && state.selectedUserCharacterId && (
+          <p className="mt-2 qt-text-xs qt-text-warning">
+            User character will be removed on submit — autonomous rooms have no user.
+          </p>
+        )}
+      </div>
+
       {/* Left card: Character Customization */}
       <div className="rounded-xl border qt-border-default qt-bg-card p-6 space-y-4">
         <h3 className="qt-section-title">Character Customization</h3>
@@ -309,7 +376,7 @@ export function NewChatForm({
           </div>
         )}
 
-        {userControlledCharacters.length > 0 && (
+        {!isAutonomous && userControlledCharacters.length > 0 && (
           <div>
             <label htmlFor="new-chat-partner" className="mb-2 block text-sm qt-text-primary">
               Play As (Optional)
@@ -440,35 +507,46 @@ export function NewChatForm({
           />
         )}
 
-        <div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={state.avatarGenerationEnabled}
-              onChange={(e) =>
-                setState((prev) => ({ ...prev, avatarGenerationEnabled: e.target.checked }))
-              }
-              className="qt-checkbox"
-              disabled={creating}
-            />
-            <span className="qt-text-small">Auto-generate character avatars</span>
-          </label>
-          <p className="qt-text-xs qt-text-muted mt-1">
-            Generate new portraits when outfits change (uses image API)
-          </p>
-        </div>
+        {!isAutonomous && (
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={state.avatarGenerationEnabled}
+                onChange={(e) =>
+                  setState((prev) => ({ ...prev, avatarGenerationEnabled: e.target.checked }))
+                }
+                className="qt-checkbox"
+                disabled={creating}
+              />
+              <span className="qt-text-small">Auto-generate character avatars</span>
+            </label>
+            <p className="qt-text-xs qt-text-muted mt-1">
+              Generate new portraits when outfits change (uses image API)
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Right card: Reality Injection Mode */}
-      <div className="rounded-xl border qt-border-default qt-bg-card p-6 space-y-4">
-        <h3 className="qt-section-title">Reality Injection Mode</h3>
-        <TimestampConfigCard
-          value={state.timestampConfig}
-          onChange={handleTimestampConfigChange}
-          compact
+      {/* Right card: Reality Injection Mode (chat) or Autonomous Room (autonomous) */}
+      {isAutonomous ? (
+        <AutonomousRoomCard
+          value={state.autonomous}
+          onChange={updateAutonomous}
+          settingsHint={autonomousSettingsHint}
           disabled={creating}
         />
-      </div>
+      ) : (
+        <div className="rounded-xl border qt-border-default qt-bg-card p-6 space-y-4">
+          <h3 className="qt-section-title">Reality Injection Mode</h3>
+          <TimestampConfigCard
+            value={state.timestampConfig}
+            onChange={handleTimestampConfigChange}
+            compact
+            disabled={creating}
+          />
+        </div>
+      )}
 
       {project && (
         <div className="md:col-span-2 rounded-lg border qt-border-default qt-bg-card/50 p-3">
@@ -488,6 +566,261 @@ export function NewChatForm({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ============================================================================
+// AutonomousRoomCard — schedule, budget, visibility, destructive-tool inputs
+// ============================================================================
+
+interface AutonomousRoomCardProps {
+  value: NewChatAutonomousState
+  onChange: (patch: Partial<NewChatAutonomousState>) => void
+  settingsHint?: {
+    visibilityDefault?: 'owner_only' | 'household' | 'open'
+    destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
+    defaultFreshnessHours?: number
+  }
+  disabled: boolean
+}
+
+function tryCronNextRun(expr: string): { ok: true; next: Date | null } | { ok: false; error: string } {
+  const trimmed = expr.trim()
+  if (!trimmed) return { ok: true, next: null }
+  try {
+    const job = new Cron(trimmed)
+    const next = job.nextRun(new Date())
+    return { ok: true, next: next ?? null }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'invalid cron' }
+  }
+}
+
+function visibilityDefaultLabel(v?: 'owner_only' | 'household' | 'open'): string {
+  switch (v) {
+    case 'household': return 'household'
+    case 'open': return 'open'
+    case 'owner_only':
+    default: return 'owner only'
+  }
+}
+
+function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: AutonomousRoomCardProps) {
+  const cronResult = useMemo(() => tryCronNextRun(value.scheduleCron), [value.scheduleCron])
+  const policyAlwaysRefuse = settingsHint?.destructiveToolPolicy === 'always_refuse'
+  const freshnessPlaceholder = settingsHint?.defaultFreshnessHours
+    ? `${settingsHint.defaultFreshnessHours} (your default)`
+    : '12'
+
+  const setNumber = (field: keyof NewChatAutonomousState, raw: string) => {
+    const trimmed = raw.trim()
+    if (trimmed === '') {
+      onChange({ [field]: null } as Partial<NewChatAutonomousState>)
+      return
+    }
+    const parsed = field === 'budgetEstimatedSpendCapUSD'
+      ? Number.parseFloat(trimmed)
+      : Number.parseInt(trimmed, 10)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      onChange({ [field]: null } as Partial<NewChatAutonomousState>)
+      return
+    }
+    onChange({ [field]: parsed } as Partial<NewChatAutonomousState>)
+  }
+
+  return (
+    <div className="rounded-xl border qt-border-default qt-bg-card p-6 space-y-5">
+      <h3 className="qt-section-title">Autonomous Room</h3>
+
+      <div>
+        <label htmlFor="autonomous-cron" className="mb-2 block text-sm qt-text-primary">
+          Schedule (cron, optional)
+        </label>
+        <input
+          id="autonomous-cron"
+          type="text"
+          value={value.scheduleCron}
+          onChange={(e) => onChange({ scheduleCron: e.target.value })}
+          disabled={disabled}
+          placeholder="0 4 * * *"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
+        />
+        <p className="mt-1 qt-text-xs qt-text-muted">
+          Five-field cron in instance-local time (minute hour dom month dow). Leave blank to run only when started manually.
+        </p>
+        {value.scheduleCron.trim().length > 0 && (
+          cronResult.ok ? (
+            cronResult.next ? (
+              <p className="mt-1 qt-text-xs qt-text-secondary">
+                Next run: {cronResult.next.toLocaleString()}
+              </p>
+            ) : (
+              <p className="mt-1 qt-text-xs qt-text-muted">
+                Parses, but never fires from now.
+              </p>
+            )
+          ) : (
+            <p className="mt-1 qt-text-xs qt-text-destructive">
+              Invalid cron: {cronResult.error}
+            </p>
+          )
+        )}
+      </div>
+
+      <div>
+        <label htmlFor="autonomous-freshness" className="mb-2 block text-sm qt-text-primary">
+          Catch-up freshness window (hours)
+        </label>
+        <input
+          id="autonomous-freshness"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={value.scheduleFreshnessHours == null ? '' : String(value.scheduleFreshnessHours)}
+          onChange={(e) => setNumber('scheduleFreshnessHours', e.target.value)}
+          disabled={disabled}
+          placeholder={freshnessPlaceholder}
+          className="w-32 rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        <p className="mt-1 qt-text-xs qt-text-muted">
+          How long after a missed scheduled slot the scheduler should still consider catching up. Blank = your default.
+        </p>
+      </div>
+
+      <div>
+        <p className="mb-2 block text-sm qt-text-primary">Budget caps (per run)</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label htmlFor="autonomous-budget-turns" className="block qt-text-xs qt-text-muted mb-1">Max turns</label>
+            <input
+              id="autonomous-budget-turns"
+              type="text"
+              inputMode="numeric"
+              value={value.budgetMaxTurns == null ? '' : String(value.budgetMaxTurns)}
+              onChange={(e) => setNumber('budgetMaxTurns', e.target.value)}
+              disabled={disabled}
+              placeholder="(none)"
+              className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label htmlFor="autonomous-budget-tokens" className="block qt-text-xs qt-text-muted mb-1">Max tokens</label>
+            <input
+              id="autonomous-budget-tokens"
+              type="text"
+              inputMode="numeric"
+              value={value.budgetMaxTokens == null ? '' : String(value.budgetMaxTokens)}
+              onChange={(e) => setNumber('budgetMaxTokens', e.target.value)}
+              disabled={disabled}
+              placeholder="(none)"
+              className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label htmlFor="autonomous-budget-wall" className="block qt-text-xs qt-text-muted mb-1">Max wall-clock (min)</label>
+            <input
+              id="autonomous-budget-wall"
+              type="text"
+              inputMode="numeric"
+              value={value.budgetMaxWallClockMinutes == null ? '' : String(value.budgetMaxWallClockMinutes)}
+              onChange={(e) => setNumber('budgetMaxWallClockMinutes', e.target.value)}
+              disabled={disabled}
+              placeholder="(none)"
+              className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="col-span-2 md:col-span-3">
+            <label htmlFor="autonomous-budget-spend" className="block qt-text-xs qt-text-muted mb-1">Spend cap (USD, optional)</label>
+            <input
+              id="autonomous-budget-spend"
+              type="text"
+              inputMode="decimal"
+              value={value.budgetEstimatedSpendCapUSD == null ? '' : String(value.budgetEstimatedSpendCapUSD)}
+              onChange={(e) => setNumber('budgetEstimatedSpendCapUSD', e.target.value)}
+              disabled={disabled}
+              placeholder="(none)"
+              className="w-40 rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+        <p className="mt-1 qt-text-xs qt-text-muted">
+          The first cap to hit ends the run. Leave any blank to skip that cap.
+        </p>
+      </div>
+
+      <div>
+        <p className="mb-2 block text-sm qt-text-primary">Visibility</p>
+        <div className="space-y-1.5">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="autonomous-visibility"
+              checked={value.runVisibility == null}
+              onChange={() => onChange({ runVisibility: null })}
+              disabled={disabled}
+              className="mt-1"
+            />
+            <span className="qt-text-small">
+              Inherit your default <span className="qt-text-muted">(currently: {visibilityDefaultLabel(settingsHint?.visibilityDefault)})</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="autonomous-visibility"
+              checked={value.runVisibility === 'owner_only'}
+              onChange={() => onChange({ runVisibility: 'owner_only' })}
+              disabled={disabled}
+              className="mt-1"
+            />
+            <span className="qt-text-small">Owner only — hidden from the main Salon list</span>
+          </label>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="autonomous-visibility"
+              checked={value.runVisibility === 'household'}
+              onChange={() => onChange({ runVisibility: 'household' })}
+              disabled={disabled}
+              className="mt-1"
+            />
+            <span className="qt-text-small">Household — visible per chat-sharing rules</span>
+          </label>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="autonomous-visibility"
+              checked={value.runVisibility === 'open'}
+              onChange={() => onChange({ runVisibility: 'open' })}
+              disabled={disabled}
+              className="mt-1"
+            />
+            <span className="qt-text-small">Open — always visible in the Salon list</span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={value.runDestructiveToolsAllowed && !policyAlwaysRefuse}
+            onChange={(e) => onChange({ runDestructiveToolsAllowed: e.target.checked })}
+            disabled={disabled || policyAlwaysRefuse}
+            className="qt-checkbox mt-1"
+          />
+          <span>
+            <span className="qt-text-small font-medium text-foreground">Pre-authorize destructive tools</span>
+            <span className="block qt-text-xs qt-text-muted mt-1">
+              Allows tools like <code>doc_delete_file</code> and <code>doc_delete_folder</code> in this room.
+              {policyAlwaysRefuse && (
+                <> Your user-level policy is set to <em>always refuse</em>; this cannot be overridden per room.</>
+              )}
+            </span>
+          </span>
+        </label>
+      </div>
     </div>
   )
 }

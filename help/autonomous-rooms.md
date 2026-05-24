@@ -32,6 +32,17 @@ A scheduled autonomous room runs on a five-field cron expression and a **freshne
 
 Default freshness window is **12 hours**; per-room overrides are permitted. A manual start that happens close enough to the next scheduled slot (i.e., within that window) **consumes** that slot — the next scheduled run advances past it. This prevents a 4 AM scheduled conversation from firing on top of an evening conversation the household has just reviewed.
 
+## Creating a room
+
+From the Salon, click **New Autonomous Room** (next to *New Chat*); from the homepage, click **Start Autonomous Room** in the quick-actions row. Either route lands one on the ordinary new-chat form, with the **Make this an autonomous room** toggle already flipped on.
+
+Two distinctions follow from that flip:
+
+- The *Play As* selection is removed — autonomous rooms have no user character.
+- The right-hand card swaps **Reality Injection Mode** for **Autonomous Room**, where the household sets the cron expression (optional), the freshness window, the four budget caps (turns, tokens, wall-clock minutes, USD), the per-room visibility, and whether destructive tools are pre-authorized.
+
+Selection rules: at least two LLM-controlled characters, no user-controlled participants, every LLM character must have a connection profile. On submit, the room is created in `runState: 'idle'` and one is taken to the **Autonomous Rooms** management list under Data & System; clicking **Start** there fires the first run. Scheduled rooms also begin running on their own at the next cron tick.
+
 ## Tools — what characters may, and may not, deliberately undo
 
 In an autonomous room, characters may invoke any tool they would ordinarily be permitted to invoke, with one narrowing: tools that **mutate** or **destroy** files on disk — at present, vault-file deletion — are disabled unless the room's owner has pre-authorized them at room creation. The rationale is straightforward: the householder is not present to confirm; the conservative default is to refuse.

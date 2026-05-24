@@ -69,7 +69,7 @@ import type { ListImagesInput, ListImagesOutput, ListedImage } from '../list-ima
 import type { AttachImageInput, AttachedImageDescriptor } from '../attach-image-tool';
 import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.types';
 import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
-import { getRepositories } from '@/lib/database/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';

@@ -41,6 +41,7 @@ export interface SalonChatShape {
   project: { id: string; name: string; color: string | null } | null
   storyBackground: { id: string; filepath: string } | null
   isDangerousChat?: boolean
+  chatType?: 'salon' | 'help' | 'autonomous'
   _count: { messages: number }
 }
 
@@ -67,6 +68,7 @@ export function transformSalonChatToCardData(chat: SalonChatShape): ChatCardData
     project: chat.project,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     isDangerousChat: chat.isDangerousChat === true,
+    isAutonomous: chat.chatType === 'autonomous',
   }
 }
 

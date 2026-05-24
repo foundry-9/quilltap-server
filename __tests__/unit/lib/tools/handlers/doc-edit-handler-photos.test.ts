@@ -166,6 +166,13 @@ jest.mock('@/lib/database/repositories', () => ({
   getRepositories: jest.fn(() => mockRepos),
 }));
 
+// The handler imports `getRepositories` from the factory, not the raw module.
+// Mock the factory directly so the proxy-routing branch can't sneak past the
+// raw-module mock and hit a real repository.
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: jest.fn(() => mockRepos),
+}));
+
 import { executeDocEditTool, DOC_EDIT_TOOL_NAMES } from '@/lib/tools/handlers/doc-edit-handler';
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
 import { getImageById, readImageBuffer } from '@/lib/images-v2';

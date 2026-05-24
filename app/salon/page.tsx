@@ -14,15 +14,39 @@ import {
 
 type Chat = SalonChatShape
 
+interface ChatSettingsResponse {
+  autonomousRoomSettings?: {
+    visibilityDefault?: 'owner_only' | 'household' | 'open'
+  }
+}
+
+interface AutonomousRoomsListResponse {
+  rooms: Array<{ id: string }>
+}
+
 export default function ChatsPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
-  const { shouldHideByIds, hideDangerousChats } = useQuickHide()
+  const { shouldHideByIds, hideDangerousChats, includeAutonomousRooms } = useQuickHide()
 
-  const { data: chatsData, isLoading: chatsLoading, error: chatsError, mutate: mutateChats } = useSWR<{ chats: Chat[] }>('/api/v1/chats')
+  const { data: chatSettings } = useSWR<ChatSettingsResponse>('/api/v1/settings/chat')
+  const visibilityDefault = chatSettings?.autonomousRoomSettings?.visibilityDefault ?? 'owner_only'
+  const wantsAutonomousByDefault = visibilityDefault !== 'owner_only'
+  const effectiveIncludeAutonomous = wantsAutonomousByDefault || includeAutonomousRooms
+  const chatsKey = effectiveIncludeAutonomous ? '/api/v1/chats?includeAutonomous=true' : '/api/v1/chats'
+
+  const { data: chatsData, isLoading: chatsLoading, error: chatsError, mutate: mutateChats } = useSWR<{ chats: Chat[] }>(chatsKey)
   const { data: charactersData, isLoading: charactersLoading } = useSWR<{ characters: Array<{ id: string; name: string; title?: string | null }> }>('/api/v1/characters')
   const { data: profilesData, isLoading: profilesLoading } = useSWR<{ profiles: Array<{ id: string; name: string }> }>('/api/v1/connection-profiles')
+
+  // Whether the user actually owns any autonomous rooms — used to decide
+  // whether to surface the "hidden" hint when the toggle is off. Cheap GET;
+  // the management endpoint is already user-scoped.
+  const { data: autonomousRoomsData } = useSWR<AutonomousRoomsListResponse>(
+    effectiveIncludeAutonomous ? null : '/api/v1/system/autonomous-rooms'
+  )
+  const hasHiddenAutonomous = !effectiveIncludeAutonomous && (autonomousRoomsData?.rooms?.length ?? 0) > 0
 
   const chats = useMemo(() => chatsData?.chats ?? [], [chatsData])
   const characters = useMemo(
@@ -130,6 +154,13 @@ export default function ChatsPage() {
             Import SillyTavern Chat
           </button>
           <Link
+            href="/salon/new?autonomous=1"
+            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Create an autonomous character-to-character room"
+          >
+            New Autonomous Room
+          </Link>
+          <Link
             href="/salon/new"
             className="qt-button chat-toolbar__button chat-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -137,6 +168,12 @@ export default function ChatsPage() {
           </Link>
         </div>
       </div>
+
+      {hasHiddenAutonomous && (
+        <div className="mb-6 rounded-lg border qt-border-default qt-bg-muted/40 px-4 py-3 qt-text-secondary qt-body-sm">
+          You have autonomous rooms hidden by your visibility default. Toggle <em>Show Autonomous Rooms</em> in the user menu to include them.
+        </div>
+      )}
 
       {visibleChats.length === 0 ? (
         <div className="chat-empty-state mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">

@@ -166,3 +166,52 @@ export async function resumeAutonomousRoom(
   // prior idle/paused/budgetExhausted state.
   return startAutonomousRoomManually(chatId, userId);
 }
+
+/**
+ * Startup reconcile for autonomous-room runs interrupted by a server crash
+ * or restart. Any chat with `chatType = 'autonomous'` and `runState =
+ * 'running'` had its turn-worker killed mid-execution; without this sweep
+ * the row stays `running` forever and `startAutonomousRoomManually` refuses
+ * to re-engage. We transition it back to `idle`, bump `currentRunId` so any
+ * zombie AUTONOMOUS_ROOM_TURN job that gets re-claimed by the dispatcher's
+ * orphan reset exits cleanly via the stale-run guard, and record the
+ * reconcile event on the row.
+ *
+ * Parent-process only. Idempotent — when nothing is stuck this is a single
+ * findAll + filter with no writes.
+ */
+export async function reconcileAutonomousRunsAtStartup(): Promise<{ reconciledCount: number }> {
+  const repos = getRepositories();
+
+  const allChats = await repos.chats.findAll();
+  const stuck = allChats.filter(
+    (c) => c.chatType === 'autonomous' && c.runState === 'running',
+  );
+
+  if (stuck.length === 0) {
+    return { reconciledCount: 0 };
+  }
+
+  const nowIso = new Date().toISOString();
+  for (const chat of stuck) {
+    await repos.chats.update(chat.id, {
+      runState: 'idle',
+      runStateMessage: 'restart:reconciled',
+      currentRunId: randomUUID(),
+      runEndedAt: nowIso,
+    } as unknown as Partial<ChatMetadataBase>);
+    logger.info('Autonomous-room: reconciled stuck run at startup', {
+      context: HANDLER,
+      chatId: chat.id,
+      previousRunId: chat.currentRunId,
+      runTurnsConsumed: chat.runTurnsConsumed,
+      runTokensConsumed: chat.runTokensConsumed,
+    });
+  }
+
+  logger.info('Autonomous-room startup reconcile complete', {
+    context: HANDLER,
+    reconciledCount: stuck.length,
+  });
+  return { reconciledCount: stuck.length };
+}

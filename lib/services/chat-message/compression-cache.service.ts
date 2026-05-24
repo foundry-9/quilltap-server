@@ -139,9 +139,12 @@ async function persistToDatabase(
   entry: PersistedCompressionCache
 ): Promise<void> {
   try {
-    // Dynamic import to avoid circular dependencies
-    const { getRepositories } = await import('@/lib/database/repositories')
-    const repos = await getRepositories()
+    // Dynamic import to avoid circular dependencies. Must use the factory so
+    // child-process callers go through the buffered-write proxy; the raw
+    // `@/lib/database/repositories` module would throw "attempt to write a
+    // readonly database" against the child's readonly SQLCipher connection.
+    const { getRepositories } = await import('@/lib/repositories/factory')
+    const repos = getRepositories()
 
     if (participantId) {
       // Multi-character chat: store as Record<participantId, cache>
@@ -171,9 +174,10 @@ async function persistToDatabase(
  */
 async function loadFromDatabase(chatId: string, participantId?: string): Promise<PersistedCompressionCache | null> {
   try {
-    // Dynamic import to avoid circular dependencies
-    const { getRepositories } = await import('@/lib/database/repositories')
-    const repos = await getRepositories()
+    // Dynamic import to avoid circular dependencies. See persistToDatabase
+    // above for why this must be the factory, not the raw module.
+    const { getRepositories } = await import('@/lib/repositories/factory')
+    const repos = getRepositories()
 
     const chat = await repos.chats.findById(chatId)
     if (!chat?.compressionCache) {
@@ -218,9 +222,10 @@ async function loadFromDatabase(chatId: string, participantId?: string): Promise
  */
 async function clearFromDatabase(chatId: string, participantId?: string): Promise<void> {
   try {
-    // Dynamic import to avoid circular dependencies
-    const { getRepositories } = await import('@/lib/database/repositories')
-    const repos = await getRepositories()
+    // Dynamic import to avoid circular dependencies. See persistToDatabase
+    // above for why this must be the factory, not the raw module.
+    const { getRepositories } = await import('@/lib/repositories/factory')
+    const repos = getRepositories()
 
     if (participantId) {
       // Multi-character chat: delete specific participant key from record

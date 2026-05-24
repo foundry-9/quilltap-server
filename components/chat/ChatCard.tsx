@@ -75,6 +75,8 @@ export interface ChatCardData {
   isDangerousChat?: boolean
   /** Scriptorium rendering status: none = not rendered, rendered = markdown only, embedded = fully indexed */
   scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
+  /** Whether this chat is an autonomous character-to-character room (4.6) */
+  isAutonomous?: boolean
 }
 
 export interface ChatCardProps {
@@ -293,6 +295,18 @@ export function ChatCard({
               )}
               {chat.isDangerousChat && (
                 <span className="qt-text-destructive text-sm flex-shrink-0" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>
+              )}
+              {chat.isAutonomous && (
+                <span
+                  className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-muted qt-text-secondary px-2 py-0.5 qt-body-sm font-semibold flex-shrink-0"
+                  title="Autonomous character-to-character room"
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <polyline points="12 7 12 12 15 14" />
+                  </svg>
+                  Autonomous
+                </span>
               )}
             </div>
 

@@ -46,6 +46,22 @@ export async function seedInitialData(): Promise<void> {
   try {
     const repos = getRepositories();
 
+    // Built-in roleplay templates: idempotent insert-or-update. Runs on every
+    // startup (not gated by the first-startup check below) so changes to the
+    // BUILT_IN_TEMPLATES table in roleplay-templates.repository.ts propagate
+    // into the database. Must run on the parent — the read-path lazy-seed
+    // that used to live in findById/findAll/findBuiltIn/findAllForUser was
+    // removed because it tried to write through a readonly DB connection
+    // when those reads happened inside a forked job-runner child.
+    try {
+      await repos.roleplayTemplates.seedBuiltInTemplates();
+    } catch (templateError) {
+      logger.error('Failed to seed built-in roleplay templates', {
+        context,
+        error: templateError instanceof Error ? templateError.message : String(templateError),
+      });
+    }
+
     // Check if any characters exist for the default user
     const existingCharacters = await repos.characters.findByUserId(SINGLE_USER_ID);
 

@@ -667,6 +667,19 @@ export async function register() {
         const { scheduleDangerScan } = await import('./lib/background-jobs/scheduled-danger-scan');
         await scheduleDangerScan();
 
+        // Reconcile autonomous-room rows that were mid-run when the server
+        // last shut down. Must happen BEFORE scheduleAutonomousRooms() ticks,
+        // so we don't race a fresh schedule against a stuck-running row.
+        try {
+          const { reconcileAutonomousRunsAtStartup } = await import('./lib/services/chat-message/autonomous-room.service');
+          await reconcileAutonomousRunsAtStartup();
+        } catch (reconcileError) {
+          logger.warn('Failed to reconcile autonomous-room runs at startup, continuing', {
+            context: 'instrumentation.register',
+            error: reconcileError instanceof Error ? reconcileError.message : String(reconcileError),
+          });
+        }
+
         const { scheduleAutonomousRooms } = await import('./lib/background-jobs/scheduled-autonomous-rooms');
         scheduleAutonomousRooms();
 

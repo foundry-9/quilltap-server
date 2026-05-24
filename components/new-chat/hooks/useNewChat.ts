@@ -36,6 +36,12 @@ interface UseNewChatOptions {
   initialImageProfileId?: string | null
   initialAvatarGenerationEnabled?: boolean
   initialTimestampConfig?: TimestampConfig | null
+  /**
+   * When true, the form starts in autonomous-room mode: `state.autonomous.enabled`
+   * is true at mount, and freshness-window / visibility defaults are seeded
+   * from the user's chat_settings.autonomousRoomSettings.
+   */
+  initialAutonomous?: boolean
 }
 
 interface UseNewChatReturn {
@@ -70,6 +76,17 @@ const INITIAL_STATE: NewChatFormState = {
   timestampConfig: null,
   avatarGenerationEnabled: false,
   outfitSelections: [],
+  autonomous: {
+    enabled: false,
+    scheduleCron: '',
+    scheduleFreshnessHours: null,
+    budgetMaxTurns: null,
+    budgetMaxTokens: null,
+    budgetMaxWallClockMinutes: null,
+    budgetEstimatedSpendCapUSD: null,
+    runVisibility: null,
+    runDestructiveToolsAllowed: false,
+  },
 }
 
 function generateTitle(selected: SelectedCharacter[]): string {
@@ -92,6 +109,7 @@ export function useNewChat({
   initialImageProfileId,
   initialAvatarGenerationEnabled,
   initialTimestampConfig,
+  initialAutonomous = false,
 }: UseNewChatOptions = {}): UseNewChatReturn {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -106,7 +124,10 @@ export function useNewChat({
   const [generalScenarios, setGeneralScenarios] = useState<GeneralScenarioOption[]>([])
 
   const [selectedCharacters, setSelectedCharacters] = useState<SelectedCharacter[]>([])
-  const [state, setState] = useState<NewChatFormState>(INITIAL_STATE)
+  const [state, setState] = useState<NewChatFormState>(() => ({
+    ...INITIAL_STATE,
+    autonomous: { ...INITIAL_STATE.autonomous, enabled: initialAutonomous },
+  }))
 
   const seededRef = useRef(false)
   const prevLlmIdsRef = useRef<string>('')
@@ -125,6 +146,7 @@ export function useNewChat({
           fetch('/api/v1/connection-profiles'),
           fetch('/api/v1/image-profiles'),
           fetch('/api/v1/scenarios'),
+          fetch('/api/v1/settings/chat'),
         ]
         if (projectId) {
           requests.push(fetch(`/api/v1/projects/${projectId}`))
@@ -143,6 +165,7 @@ export function useNewChat({
         const profilesRes = responses[idx++]
         const imageProfilesRes = responses[idx++]
         const generalScenariosRes = responses[idx++]
+        const chatSettingsRes = responses[idx++]
         const projectRes = projectId ? responses[idx++] : null
         const projectScenariosRes = projectId ? responses[idx++] : null
         const seedCharacterRes = initialCharacterId ? responses[idx++] : null
@@ -220,6 +243,29 @@ export function useNewChat({
         if (seedPartnerRes && seedPartnerRes.ok) {
           const data = await seedPartnerRes.json()
           seededPartnerId = data.partnerId || null
+        }
+
+        // Autonomous-room defaults from chat_settings.autonomousRoomSettings.
+        // Only seeded when starting in autonomous mode — non-autonomous chats
+        // don't need them. Stored unconditionally on state.autonomous so the
+        // toggle can flip without re-fetching.
+        let autonomousSeedFreshnessHours: number | null = null
+        let autonomousSeedDestructivePolicyAlwaysRefuse = false
+        if (chatSettingsRes && chatSettingsRes.ok) {
+          try {
+            const settings = await chatSettingsRes.json()
+            const ar = settings?.autonomousRoomSettings ?? {}
+            if (typeof ar.defaultFreshnessWindowMs === 'number' && ar.defaultFreshnessWindowMs > 0) {
+              autonomousSeedFreshnessHours = Math.round(ar.defaultFreshnessWindowMs / (60 * 60 * 1000))
+            }
+            if (ar.destructiveToolPolicy === 'always_refuse') {
+              autonomousSeedDestructivePolicyAlwaysRefuse = true
+            }
+          } catch (err) {
+            console.warn('[useNewChat] Failed to parse chat-settings response', {
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
         }
 
         setCharacters(loadedCharacters)
@@ -340,6 +386,24 @@ export function useNewChat({
             generalScenarioPath: generalDefaultScenarioPath,
           }))
         }
+
+        // Always merge autonomous-room defaults from user settings so the
+        // freshness-window placeholder and the "always refuse" ceiling are
+        // available even before the user flips the toggle on.
+        setState((prev) => ({
+          ...prev,
+          autonomous: {
+            ...prev.autonomous,
+            scheduleFreshnessHours:
+              prev.autonomous.scheduleFreshnessHours ?? autonomousSeedFreshnessHours,
+            // If the user's chat-settings ceiling is "always refuse", force the
+            // per-room checkbox off and disabled in the form. The form reads
+            // back the same chat-settings response from SWR to disable the input.
+            runDestructiveToolsAllowed: autonomousSeedDestructivePolicyAlwaysRefuse
+              ? false
+              : prev.autonomous.runDestructiveToolsAllowed,
+          },
+        }))
       } catch (err) {
         if (cancelled) return
         console.error('[useNewChat] Failed to fetch data', {
@@ -401,6 +465,20 @@ export function useNewChat({
       return null
     }
 
+    const isAutonomous = state.autonomous.enabled
+
+    if (isAutonomous) {
+      const llmSelected = selectedCharacters.filter((sc) => sc.controlledBy === 'llm')
+      if (llmSelected.length < 2) {
+        showErrorToast('Autonomous rooms need at least two LLM-controlled characters')
+        return null
+      }
+      if (selectedCharacters.some((sc) => sc.controlledBy === 'user')) {
+        showErrorToast('Autonomous rooms have no user — remove user-controlled characters')
+        return null
+      }
+    }
+
     const llmMissingProfile = selectedCharacters.filter(
       (sc) => sc.controlledBy === 'llm' && !sc.connectionProfileId
     )
@@ -434,7 +512,8 @@ export function useNewChat({
         controlledBy: sc.controlledBy,
       }))
 
-      if (state.selectedUserCharacterId) {
+      // Autonomous rooms have no user character; suppress the Play-As entry.
+      if (!isAutonomous && state.selectedUserCharacterId) {
         participants.push({
           type: 'CHARACTER' as const,
           characterId: state.selectedUserCharacterId,
@@ -470,7 +549,7 @@ export function useNewChat({
         requestBody.projectId = project.id
       }
 
-      if (state.avatarGenerationEnabled) {
+      if (!isAutonomous && state.avatarGenerationEnabled) {
         requestBody.avatarGenerationEnabled = true
       }
 
@@ -480,6 +559,34 @@ export function useNewChat({
 
       if (continuationFromChatId) {
         requestBody.continuationFromChatId = continuationFromChatId
+      }
+
+      if (isAutonomous) {
+        requestBody.chatType = 'autonomous'
+        const auto = state.autonomous
+        const cron = auto.scheduleCron.trim()
+        if (cron.length > 0) requestBody.scheduleCron = cron
+        if (auto.scheduleFreshnessHours != null && auto.scheduleFreshnessHours > 0) {
+          requestBody.scheduleFreshnessWindowMs = auto.scheduleFreshnessHours * 60 * 60 * 1000
+        }
+        if (auto.budgetMaxTurns != null && auto.budgetMaxTurns > 0) {
+          requestBody.budgetMaxTurns = auto.budgetMaxTurns
+        }
+        if (auto.budgetMaxTokens != null && auto.budgetMaxTokens > 0) {
+          requestBody.budgetMaxTokens = auto.budgetMaxTokens
+        }
+        if (auto.budgetMaxWallClockMinutes != null && auto.budgetMaxWallClockMinutes > 0) {
+          requestBody.budgetMaxWallClockMs = auto.budgetMaxWallClockMinutes * 60 * 1000
+        }
+        if (auto.budgetEstimatedSpendCapUSD != null && auto.budgetEstimatedSpendCapUSD > 0) {
+          requestBody.budgetEstimatedSpendCapUSD = auto.budgetEstimatedSpendCapUSD
+        }
+        if (auto.runVisibility) {
+          requestBody.runVisibility = auto.runVisibility
+        }
+        if (auto.runDestructiveToolsAllowed) {
+          requestBody.runDestructiveToolsAllowed = true
+        }
       }
 
       const res = await fetch('/api/v1/chats', {
@@ -494,8 +601,13 @@ export function useNewChat({
       }
 
       const data = await res.json()
-      showSuccessToast(continuationFromChatId ? 'Conversation continued in a new chat!' : 'Chat created!')
-      router.push(`/salon/${data.chat.id}`)
+      if (isAutonomous) {
+        showSuccessToast('Autonomous room created!')
+        router.push('/settings?tab=system&section=autonomous-rooms')
+      } else {
+        showSuccessToast(continuationFromChatId ? 'Conversation continued in a new chat!' : 'Chat created!')
+        router.push(`/salon/${data.chat.id}`)
+      }
       return { chatId: data.chat.id }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create chat'

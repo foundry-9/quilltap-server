@@ -199,6 +199,7 @@ export interface EnrichedChatSummary {
   storyBackground: EnrichedStoryBackground | null
   isDangerousChat: boolean
   conciergeOverride: 'OFF' | null
+  chatType: 'salon' | 'help' | 'autonomous'
   _count: { messages: number }
   _allTagIds: string[] // Internal field for filtering
 }
@@ -548,6 +549,7 @@ export async function enrichChatForList(
     storyBackground,
     isDangerousChat: chat.isDangerousChat === true,
     conciergeOverride: chat.conciergeOverride ?? null,
+    chatType: (chat.chatType ?? 'salon') as 'salon' | 'help' | 'autonomous',
     _count: { messages: messageCount },
     _allTagIds: allTagIds,
   }

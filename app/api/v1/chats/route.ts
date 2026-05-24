@@ -22,6 +22,7 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { z } from 'zod';
 import type { ChatEvent, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
 import { TimestampConfigSchema } from '@/lib/schemas/types';
+import { Cron } from 'croner';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   OutfitSelectionSchema,
@@ -113,6 +114,18 @@ const createChatSchema = z.object({
    * The source chat must belong to the same user.
    */
   continuationFromChatId: z.uuid().optional(),
+
+  // 4.6 Private Character Rooms — autonomous-room creation fields.
+  // All only consulted when chatType === 'autonomous'.
+  chatType: z.enum(['salon', 'autonomous']).optional(),
+  scheduleCron: z.string().max(120).optional(),
+  scheduleFreshnessWindowMs: z.number().int().positive().optional(),
+  budgetMaxTurns: z.number().int().positive().optional(),
+  budgetMaxTokens: z.number().int().positive().optional(),
+  budgetMaxWallClockMs: z.number().int().positive().optional(),
+  budgetEstimatedSpendCapUSD: z.number().positive().optional(),
+  runVisibility: z.enum(['owner_only', 'household', 'open']).optional(),
+  runDestructiveToolsAllowed: z.boolean().optional(),
 });
 
 // ============================================================================
@@ -732,11 +745,23 @@ async function handleList(req: NextRequest, context: AuthenticatedContext) {
     const { searchParams } = req.nextUrl;
     const excludeTagIdsParam = searchParams.get('excludeTagIds');
     const limitParam = searchParams.get('limit');
+    const includeAutonomous = searchParams.get('includeAutonomous') === 'true';
     const excludeTagIds = excludeTagIdsParam ? excludeTagIdsParam.split(',').filter(Boolean) : [];
     const limit = limitParam ? parseInt(limitParam, 10) : undefined;
     const allChatMetadata = await repos.chats.findByUserId(user.id);
-    // Filter out help chats from salon listing
-    const chatMetadata = allChatMetadata.filter((c: any) => !c.chatType || c.chatType === 'salon');
+    // Default Salon listing: salon chats only (no help, no autonomous unless asked).
+    // Autonomous rooms with per-room runVisibility = 'household' | 'open' are
+    // visible regardless of the includeAutonomous flag (per-room override
+    // wins over the user-level visibility default).
+    const chatMetadata = allChatMetadata.filter((c: any) => {
+      if (!c.chatType || c.chatType === 'salon') return true;
+      if (c.chatType === 'autonomous') {
+        if (includeAutonomous) return true;
+        if (c.runVisibility === 'household' || c.runVisibility === 'open') return true;
+        return false;
+      }
+      return false;
+    });
     const enrichedChats = await enrichChatsForList(chatMetadata, repos);
     let filteredChats = filterChatsByExcludedTags(enrichedChats, excludeTagIds);
 
@@ -777,12 +802,16 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
   const body = await req.json();
   const validatedData = createChatSchema.parse(body);
+  const isAutonomous = validatedData.chatType === 'autonomous';
 
   // Permission-check the continuation source up front, before doing any
   // create work. The user-scoped repos.chats.findById returns null for chats
   // that don't belong to the current user, which is exactly the rejection
   // we want.
   if (validatedData.continuationFromChatId) {
+    if (isAutonomous) {
+      return badRequest('Autonomous rooms cannot be created via continuation');
+    }
     const sourceChat = await repos.chats.findById(validatedData.continuationFromChatId);
     if (!sourceChat) {
       logger.warn('[Chats v1] continuationFromChatId references a chat not owned by current user', {
@@ -790,6 +819,40 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
         continuationFromChatId: validatedData.continuationFromChatId,
       });
       return notFound('Source chat');
+    }
+  }
+
+  // Autonomous-room preconditions (validated before participant-build to fail fast).
+  let autonomousNextRunAt: string | null = null;
+  if (isAutonomous) {
+    const userParticipants = validatedData.participants.filter((p) => p.controlledBy === 'user');
+    if (userParticipants.length > 0) {
+      return badRequest('Autonomous rooms cannot include user-controlled participants');
+    }
+    const llmCharacterParticipants = validatedData.participants.filter(
+      (p) => p.type === 'CHARACTER' && (!p.controlledBy || p.controlledBy === 'llm'),
+    );
+    if (llmCharacterParticipants.length < 2) {
+      return badRequest('Autonomous rooms require at least two LLM-controlled characters');
+    }
+    if (validatedData.scheduleCron) {
+      const expr = validatedData.scheduleCron.trim();
+      if (expr.length === 0) {
+        // Treat all-whitespace as "no schedule" (manual-only).
+      } else {
+        try {
+          const job = new Cron(expr);
+          const next = job.nextRun(new Date());
+          autonomousNextRunAt = next ? next.toISOString() : null;
+        } catch (error) {
+          logger.warn('[Chats v1] Invalid cron expression on autonomous-room create', {
+            userId: user.id,
+            scheduleCron: expr,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return badRequest(`Invalid cron expression: ${expr}`);
+        }
+      }
     }
   }
 
@@ -930,8 +993,26 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     disabledTools: projectToolDefaults.disabledTools,
     disabledToolGroups: projectToolDefaults.disabledToolGroups,
     imageProfileId: chatImageProfileId,
-    avatarGenerationEnabled: validatedData.avatarGenerationEnabled ?? projectAvatarGenerationDefault ?? null,
+    avatarGenerationEnabled: isAutonomous
+      ? false
+      : validatedData.avatarGenerationEnabled ?? projectAvatarGenerationDefault ?? null,
     documentEditingMode: chatSettings?.compositionModeDefault ?? false,
+    ...(isAutonomous ? {
+      chatType: 'autonomous' as const,
+      scheduleCron: validatedData.scheduleCron?.trim() ? validatedData.scheduleCron.trim() : null,
+      scheduleFreshnessWindowMs: validatedData.scheduleFreshnessWindowMs ?? null,
+      scheduleNextRunAt: autonomousNextRunAt,
+      budgetMaxTurns: validatedData.budgetMaxTurns ?? null,
+      budgetMaxTokens: validatedData.budgetMaxTokens ?? null,
+      budgetMaxWallClockMs: validatedData.budgetMaxWallClockMs ?? null,
+      budgetEstimatedSpendCapUSD: validatedData.budgetEstimatedSpendCapUSD ?? null,
+      runVisibility: validatedData.runVisibility ?? null,
+      runDestructiveToolsAllowed: validatedData.runDestructiveToolsAllowed ? 1 : 0,
+      runState: 'idle' as const,
+      currentRunId: null,
+      runTurnsConsumed: 0,
+      runTokensConsumed: 0,
+    } : {}),
   });
 
   // Apply outfit selections to the newly created chat
@@ -1014,6 +1095,22 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
         error: getErrorMessage(error),
       }, error instanceof Error ? error : undefined);
     }
+    await createInitialMessagesScenarioAndStaff(
+      chat.id,
+      chatContext,
+      participantsWithTimestamps,
+      user.id,
+      repos,
+      validatedData.projectId || null,
+      resolvedScenario || null,
+      { skipFirstMessage: true },
+    );
+  } else if (isAutonomous) {
+    // Autonomous rooms: seed system-prompt + scenario/Host whispers (so the
+    // participating characters know the scene), but skip the auto first
+    // "Hello!" message — there's no user to greet, and the first turn is
+    // produced by the per-room procedure when the run starts.
+    await writeSystemPromptMessage(chat.id, chatContext, repos);
     await createInitialMessagesScenarioAndStaff(
       chat.id,
       chatContext,
