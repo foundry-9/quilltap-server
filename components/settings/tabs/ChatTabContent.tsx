@@ -13,6 +13,7 @@ import { ImageDescriptionSettings } from '@/components/settings/chat-settings/Im
 import { AutomationSettings } from '@/components/settings/chat-settings/AutomationSettings'
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
 import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
+import { AutonomousRoomSettingsComponent } from '@/components/settings/chat-settings/AutonomousRoomSettings'
 import { useSettingsSection } from './useSettingsSection'
 
 export function ChatTabContent() {
@@ -38,6 +39,7 @@ export function ChatTabContent() {
     handleAgentModeMaxTurnsChange,
     handleDangerousContentUpdate,
     handleCheapLLMUpdate,
+    handleAutonomousRoomSettingsUpdate,
   } = useChatSettingsContext()
 
   if (loading) {
@@ -143,6 +145,14 @@ export function ChatTabContent() {
             onUpdate={handleDangerousContentUpdate}
             imagePromptProfileId={settings.cheapLLMSettings.imagePromptProfileId}
             onImagePromptProfileChange={(id) => handleCheapLLMUpdate({ imagePromptProfileId: id })}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Autonomous Rooms" description="Defaults for private character-to-character rooms" sectionId="autonomous-rooms" forceOpen={activeSection === 'autonomous-rooms'}>
+          <AutonomousRoomSettingsComponent
+            settings={settings}
+            saving={saving}
+            onUpdate={handleAutonomousRoomSettingsUpdate}
           />
         </CollapsibleCard>
       </div>

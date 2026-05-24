@@ -4,6 +4,22 @@
 
 ### 4.6-dev
 
+#### Feature: Private Character Rooms — turn driver, scheduler, API, help doc (Sub-tasks B-E, partial F-G, H)
+
+Builds the runtime, scheduler, API surface, and help documentation for 4.6 autonomous character-to-character chat rooms.
+
+**Sub-task B — turn driver core.** SendMessageOptions gains `neverPauseForUser` (bypasses the all-LLM pause threshold so the autonomous-room runner can drive its own lifecycle) and `suppressAutomaticImages` (skips automatic Lantern + avatar-refresh triggers; deliberate character image-tool calls still work). New handler `lib/background-jobs/handlers/autonomous-room-turn.ts` drives one turn of an autonomous chat — stale-run guard against `payload.runId !== chat.currentRunId`, idle→running transition with counter reset, pre-turn budget check, speaker selection via `selectNextSpeaker`, message via `handleSendMessage` with the new flags, post-turn bookkeeping, self-re-enqueue. Avatar-refresh gate in `lib/wardrobe/avatar-generation.ts:143` and story-background gate in `lib/background-jobs/handlers/title-update.ts` short-circuit on `chatType === 'autonomous'`.
+
+**Sub-task C — tool filtering + daily user-token cap.** `lib/services/chat-message/orchestrator.service.ts` filters `DESTRUCTIVE_TOOL_NAMES` from the per-turn tool list when the chat is autonomous and either `runDestructiveToolsAllowed === 0` or the user-level `destructiveToolPolicy === 'always_refuse'` (the user policy is a ceiling). New `lib/database/repositories/llm-logs.repository.ts:getTotalTokenUsageSince()` powers the daily user-token budget; the rollover boundary is instance-local midnight. The cap transitions the run to `paused` (resumed by the scheduler at the next midnight), not `budgetExhausted`.
+
+**Sub-task D — memory attribution.** `lib/memory/memory-processor.ts:TurnMemoryExtractionContext` gains `inAutonomousRoom`. The SELF and OTHER extraction prompt builders in `lib/memory/cheap-llm-tasks/memory-tasks.ts` prepend a user-absence clause when set; memories are written with `witnessedContext: 'autonomous_room'`. Ordinary chats write `'user_present'`. The memory-extraction handler reads `chat.chatType === 'autonomous'` and forwards.
+
+**Sub-task E — scheduler + manual-start service + Host announcements.** `lib/background-jobs/scheduled-autonomous-rooms.ts` (new) is a parent-process `setInterval(60_000)` that enqueues per-user `AUTONOMOUS_ROOM_SCHEDULE_TICK` jobs; started from `instrumentation.ts` Phase 3.5 alongside the existing schedulers. `lib/background-jobs/handlers/autonomous-room-schedule-tick.ts` (new) scans autonomous rooms with cron + non-terminal state; for each due row within the freshness window, generates a `runId`, atomically transitions to `'idle'`, advances `scheduleNextRunAt`, enqueues a turn. Stale slots are logged + skipped, never caught up. Cron evaluation via `croner ^10.0.1` (new dependency). `lib/services/chat-message/autonomous-room.service.ts` (new) houses `startAutonomousRoomManually` / `pauseAutonomousRoom` / `stopAutonomousRoom` / `resumeAutonomousRoom`. Manual start refuses on `runState === 'running'` and consumes any cron slot inside the current freshness window. The turn handler posts Host-authored `autonomous-room-start` / `autonomous-room-end` / `autonomous-room-paused` system messages at lifecycle transitions and recomputes `scheduleNextRunAt` from the cron when a run ends cleanly.
+
+**API surface (partial F-G).** `app/api/v1/chats/[id]/autonomous-room/route.ts` exposes the management endpoints — POST with `?action=start|pause|stop|resume` and GET for a status snapshot — wired to the manual-start service. UI scaffolding for `/settings?tab=chat&section=autonomous-rooms`, `/settings?tab=system&section=autonomous-rooms`, and the Salon room-creation flow remain TODO; the backend is ready for them.
+
+**Sub-task H — help doc.** `help/autonomous-rooms.md` walks the household through budgets, scheduling, freshness windows, tool restrictions, automatic-image suppression, the Concierge's adjusted behavior, memory provenance, and the settings surfaces, in the project's Wodehouse-steampunk voice.
+
 #### Feature: Private Character Rooms — schema substrate (Sub-task A)
 
 Schema-only first slice of 4.6 Private Character Rooms (autonomous character-to-character chats). No runtime behavior yet; this slice only widens the schema so subsequent sub-tasks have something to write to.
