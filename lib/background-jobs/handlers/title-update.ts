@@ -152,6 +152,14 @@ export async function queueStoryBackgroundIfEnabled(
     return;
   }
 
+  // Autonomous rooms (4.6 Private Character Rooms): the Lantern's auto-trigger
+  // is disabled. Backgrounds are token-budget-conscious; the user is not in
+  // the room to see them, and a character can still deliberately invoke
+  // image-generation tools when desired.
+  if (chat.chatType === 'autonomous') {
+    return;
+  }
+
   // Determine the image profile to use
   const repos = getRepositories();
   const imageProfileId = await resolveImageProfileForChat(userId, chat, chatSettings, repos);

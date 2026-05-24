@@ -180,10 +180,16 @@ export async function handleSendMessage(
             repos,
             chatId,
             userId,
-            chainOptions,
+            // Autonomous-room chain turns inherit the same flags as the initial call.
+            {
+              ...chainOptions,
+              neverPauseForUser: options.neverPauseForUser,
+              suppressAutomaticImages: options.suppressAutomaticImages,
+            },
             controller,
             encoder
           ),
+          neverPauseForUser: options.neverPauseForUser === true,
         })
 
         // Trigger scene state tracking once after processing (and after any turn chain)

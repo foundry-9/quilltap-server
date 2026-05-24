@@ -39,13 +39,24 @@ export interface ChainDecision {
 
 const logger = createServiceLogger('TurnOrchestrator')
 
+export interface ChainGuards {
+  /**
+   * Autonomous-room flag: when true, the all-LLM pause threshold
+   * (`shouldPauseForAllLLM`) is bypassed and the chat is not marked
+   * `isPaused`. The autonomous-room runner enforces its own budget caps
+   * and lifecycle transitions; the in-chain pause would short-circuit it.
+   */
+  neverPauseForUser?: boolean
+}
+
 export async function shouldChainNext(
   repos: ReturnType<typeof getRepositories>,
   chatId: string,
   userParticipantId: string | null,
   chainDepth: number,
   chainStartTime: number,
-  config: ChainConfig = DEFAULT_CHAIN_CONFIG
+  config: ChainConfig = DEFAULT_CHAIN_CONFIG,
+  guards: ChainGuards = {}
 ): Promise<ChainDecision> {
   // Re-read chat for fresh state (isPaused may have been set by stop button)
   const freshChat = await repos.chats.findById(chatId)
@@ -100,7 +111,7 @@ export async function shouldChainNext(
       if (messageEvents[i].role === 'ASSISTANT') turnCount++
     }
 
-    if (shouldPauseForAllLLM(turnCount) && turnCount > 0) {
+    if (shouldPauseForAllLLM(turnCount) && turnCount > 0 && !guards.neverPauseForUser) {
       logger.info('[TurnOrchestrator] All-LLM pause threshold reached', { chatId, turnCount, chainDepth })
       // Pause the chat
       await repos.chats.update(chatId, { isPaused: true })
@@ -237,6 +248,12 @@ export interface ExecuteTurnChainOptions {
   }) => Promise<ProcessMessageResult>
   decideNextTurn?: typeof shouldChainNext
   persistTurnParticipant?: typeof persistTurnParticipantId
+  /**
+   * Autonomous-room flag passed through to `shouldChainNext` so the all-LLM
+   * pause threshold is bypassed for the duration of the chain. The autonomous-
+   * room runner is responsible for its own budget caps and lifecycle.
+   */
+  neverPauseForUser?: boolean
 }
 
 /**
@@ -253,6 +270,7 @@ export async function executeTurnChain({
   processChainedMessage,
   decideNextTurn = shouldChainNext,
   persistTurnParticipant = persistTurnParticipantId,
+  neverPauseForUser = false,
 }: ExecuteTurnChainOptions): Promise<void> {
   if (!initialResult.isMultiCharacter || !initialResult.hasContent || initialResult.isPaused) {
     return
@@ -271,7 +289,8 @@ export async function executeTurnChain({
       effectiveUserParticipantId,
       chainDepth,
       chainStartTime,
-      DEFAULT_CHAIN_CONFIG
+      DEFAULT_CHAIN_CONFIG,
+      { neverPauseForUser }
     )
 
     if (!decision.chain || !decision.participantId) {
