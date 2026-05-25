@@ -227,6 +227,8 @@ import { reabsorbLeftoverProjectFilesMigration } from './reabsorb-leftover-proje
 import { relinkFilesToMountBlobsMigration } from './relink-files-to-mount-blobs';
 // Add requestHashes column to llm_logs (cache-stability instrumentation)
 import { addLLMLogsRequestHashesColumnMigration } from './add-llm-logs-request-hashes-column';
+// Add rawProviderUsage column to llm_logs (Layer-1 raw-usage snapshot)
+import { addLLMLogsRawProviderUsageColumnMigration } from './add-llm-logs-raw-provider-usage-column';
 // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
 import { addSummarizationGateFieldsMigration } from './add-summarization-gate-fields';
 // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
@@ -523,6 +525,8 @@ export const migrations: Migration[] = [
   relinkFilesToMountBlobsMigration,
   // Add requestHashes column to llm_logs (cache-stability instrumentation)
   addLLMLogsRequestHashesColumnMigration,
+  // Add rawProviderUsage column to llm_logs (Layer-1 raw-usage snapshot)
+  addLLMLogsRawProviderUsageColumnMigration,
   // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
   addSummarizationGateFieldsMigration,
   // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
@@ -804,6 +808,8 @@ export {
   relinkFilesToMountBlobsMigration,
   // Add requestHashes column to llm_logs (cache-stability instrumentation)
   addLLMLogsRequestHashesColumnMigration,
+  // Add rawProviderUsage column to llm_logs (Layer-1 raw-usage snapshot)
+  addLLMLogsRawProviderUsageColumnMigration,
   // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
   addSummarizationGateFieldsMigration,
   // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)

@@ -74,6 +74,7 @@ export type StreamChunkCallback = (chunk: {
   done?: boolean
   usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }
   cacheUsage?: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number }
+  rawProviderUsage?: Record<string, unknown> | null
   attachmentResults?: { sent: string[]; failed: { id: string; error: string }[] }
   rawResponse?: unknown
   thoughtSignature?: string
@@ -288,6 +289,7 @@ export async function* streamMessage(
   done?: boolean
   usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }
   cacheUsage?: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number }
+  rawProviderUsage?: Record<string, unknown> | null
   attachmentResults?: { sent: string[]; failed: { id: string; error: string }[] }
   rawResponse?: unknown
   thoughtSignature?: string
@@ -318,6 +320,7 @@ export async function* streamMessage(
   let accumulatedContent = ''
   let lastUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined
   let lastCacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | undefined
+  let lastRawProviderUsage: Record<string, unknown> | null = null
 
   const promptCacheKey = buildPromptCacheKey(chatId)
   const profileParametersWithCache: Record<string, unknown> = promptCacheKey
@@ -356,6 +359,16 @@ export async function* streamMessage(
     if (chunk.cacheUsage) {
       lastCacheUsage = chunk.cacheUsage
     }
+    // Snapshot the provider-shape `usage` object pre-normalization so future
+    // plugin regressions (provider reports cached tokens but plugin never
+    // reads the field) show up as `rawProviderUsage` populated while
+    // `cacheUsage` is null. Each plugin populates this on its terminal chunk;
+    // shape is provider-specific (OpenAI/Grok/Z.AI: `prompt_tokens_details`
+    // or `input_tokens_details`; Anthropic: `cache_read_input_tokens`;
+    // Google: `usageMetadata.cachedContentTokenCount`).
+    if (chunk.rawProviderUsage && typeof chunk.rawProviderUsage === 'object') {
+      lastRawProviderUsage = chunk.rawProviderUsage as Record<string, unknown>
+    }
     if (chunk.done) {
 
       // Log the LLM call if userId is provided
@@ -388,6 +401,7 @@ export async function* streamMessage(
           },
           usage: lastUsage,
           cacheUsage: lastCacheUsage,
+          rawProviderUsage: lastRawProviderUsage,
           requestHashes,
           durationMs,
         }).catch(err => {

@@ -64,6 +64,7 @@ export interface LogLLMCallParams {
     cacheCreationInputTokens?: number;
     cacheReadInputTokens?: number;
   };
+  rawProviderUsage?: Record<string, unknown> | null;
   requestHashes?: LLMLogRequestHashes;
   durationMs?: number;
 }
@@ -190,11 +191,15 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
     if (
       params.requestHashes?.systemBlock1Hash !== undefined ||
       params.requestHashes?.systemBlock2Hash !== undefined ||
+      params.requestHashes?.systemBlock3Hash !== undefined ||
       params.requestHashes?.toolsArrayHash !== undefined ||
       params.requestHashes?.historyTailHash !== undefined
     ) {
       requestHashes = { ...params.requestHashes };
     }
+
+    const rawProviderUsage =
+      params.rawProviderUsage !== undefined ? params.rawProviderUsage : null;
 
     // Create the log entry
     const repos = getRepositories();
@@ -210,6 +215,7 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
       response: responseSummary,
       usage,
       cacheUsage,
+      rawProviderUsage,
       requestHashes,
       durationMs: params.durationMs ?? null,
     });

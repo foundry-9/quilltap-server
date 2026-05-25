@@ -66,7 +66,32 @@ describe('computeRequestPrefixHashes', () => {
     const result = computeRequestPrefixHashes(messages, undefined)
     expect(result.systemBlock1Hash).toBeUndefined()
     expect(result.systemBlock2Hash).toBeUndefined()
+    expect(result.systemBlock3Hash).toBeUndefined()
     expect(result.toolsArrayHash).toBeUndefined()
     expect(result.historyTailHash).toBeUndefined()
+  })
+
+  it('hashes a third system block (compressed history) without disturbing blocks 1 and 2', () => {
+    const persona = 'You are Friday.'
+    const identity = 'Stay in character.'
+    const turn1: LLMMessage[] = [
+      { role: 'system', content: persona },
+      { role: 'system', content: identity },
+      { role: 'system', content: 'Compressed history v1' },
+      { role: 'user', content: 'Hi' },
+    ]
+    const turn2: LLMMessage[] = [
+      { role: 'system', content: persona },
+      { role: 'system', content: identity },
+      { role: 'system', content: 'Compressed history v2 — refreshed' },
+      { role: 'user', content: 'Hi again' },
+    ]
+    const a = computeRequestPrefixHashes(turn1, undefined)
+    const b = computeRequestPrefixHashes(turn2, undefined)
+    expect(a.systemBlock3Hash).toBeDefined()
+    expect(b.systemBlock3Hash).toBeDefined()
+    expect(a.systemBlock1Hash).toBe(b.systemBlock1Hash)
+    expect(a.systemBlock2Hash).toBe(b.systemBlock2Hash)
+    expect(a.systemBlock3Hash).not.toBe(b.systemBlock3Hash)
   })
 })

@@ -4,6 +4,19 @@
 
 ### 4.6-dev
 
+#### Feat: Cache-observability follow-up — block-3 hash, raw provider usage snapshot, per-plugin reference table
+
+Finishes the unfinished pieces of the 2026-04-30 cache-observability design doc. The structural fix from that doc (commit 24215b2c, splitting the rolling compressed history into its own system block so the persona prefix stays byte-stable) had a self-inflicted gap: `computeRequestPrefixHashes` only hashed the first two system blocks, so the new churning block 3 it introduced was invisible to the diagnostic.
+
+- `lib/llm/cache-prefix-hashes.ts`: hash `systemBlocks[2]` when present, emit `systemBlock3Hash`. `lib/schemas/llm-log.types.ts`: new optional `systemBlock3Hash` on `LLMLogRequestHashesSchema`. No DB migration — `requestHashes` is a TEXT JSON column.
+- `lib/schemas/llm-log.types.ts`: new `rawProviderUsage` field on `LLMLogSchema` (`z.record(z.string(), z.unknown())` so the schema translator stores it as a JSON column). Captures each provider's unmodified `usage` sub-object pre-normalization. Lets a single SQL query (`WHERE rawProviderUsage IS NOT NULL AND cacheUsage IS NULL`) catch the next Z.AI-style normalization regression — provider reported cache hits but the plugin never read the field. Migration `add-llm-logs-raw-provider-usage-column-v1` adds the column on existing instances.
+- All five provider plugins (Anthropic, OpenAI, Grok, Google, Z.AI) now emit `rawProviderUsage` on their terminal stream chunk. Anthropic merges `message_start.usage` and `message_delta.usage` because both carry pieces of the provider envelope. Google's lives in `usageMetadata` (different field name from the OpenAI-family `usage`); the others pass through `usage` directly.
+- `packages/plugin-types` bumped to 2.3.3 to add `rawProviderUsage` to the `StreamChunk` interface. Each plugin's `package.json` + `manifest.json` patch-bumped: anthropic 1.0.35, openai 1.0.41, grok 1.0.34, google 1.1.30, z-ai 1.1.5.
+- `docs/developer/features/llm_api_costs_breakdown.md`: new "Per-plugin cache-field reference" subsection with a table covering each plugin's provider field path, normalized target, raw passthrough location, and the SQL probe for spotting future gaps.
+- `__tests__/unit/lib/llm/cache-prefix-hashes.test.ts`: new fixture covering three system messages — asserts block 3 is hashed and that blocks 1/2 stay pinned when block 3 churns.
+
+The labeled block-hash array (§5 of the design doc) and the turn-over-turn tool-manifest auto-diff (§2) remain deferred. With only one new tier to track today (compressed history), the flat `systemBlock3Hash` is the right shape; the labeled array form can wait for a 4th tier. The tool-manifest hash is already logged per turn, so drift can be queried after the fact without a write-time differ.
+
 #### Fix: PhotoGalleryModal character/persona mode tests against stale endpoint
 
 The character-mode and user-character-mode test cases in `__tests__/unit/photo-gallery-modal-deleted-handling.test.tsx` were still mocking `/api/v1/images` with the legacy `{data: [{id, filename, filepath, ...}]}` shape. After PR #19 moved the gallery to `/api/v1/characters/[id]/photos` returning `{entries: [{linkId, fileName, blobUrl, mimeType, fileSizeBytes, keptAt, ...}]}`, the component received zero photos and rendered the empty state, so `getByRole('img')` failed. Updated both `beforeEach` blocks to match the `/photos` URL and return the new entries shape; `linkId` values preserved so the existing `deleted-placeholder-img-1` / `deleted-placeholder-img-2` testid assertions still match.

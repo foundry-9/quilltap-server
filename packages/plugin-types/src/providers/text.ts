@@ -135,8 +135,17 @@ export interface StreamChunk {
   rawResponse?: unknown;
   /** Google Gemini thought signature */
   thoughtSignature?: string;
-  /** Cache usage statistics */
+  /** Cache usage statistics (normalized) */
   cacheUsage?: CacheUsage;
+  /**
+   * Provider-shape `usage` sub-object, captured pre-normalization for
+   * cache-instrumentation diagnostics. Each provider's shape differs
+   * (OpenAI/Grok/Z.AI: `prompt_tokens_details.cached_tokens`; Anthropic:
+   * `cache_read_input_tokens`; Google: `cachedContentTokenCount`).
+   * Lets the logger compare provider-reported cache hits against the
+   * normalized `cacheUsage` and catch field-mapping regressions.
+   */
+  rawProviderUsage?: Record<string, unknown> | null;
 }
 
 /**
