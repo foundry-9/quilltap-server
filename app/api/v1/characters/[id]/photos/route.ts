@@ -19,6 +19,7 @@ import { successResponse, created, badRequest, notFound, serverError } from '@/l
 import {
   saveToCharacterGallery,
   saveFileToCharacterGallery,
+  saveLinkToCharacterGallery,
   listCharacterGallery,
 } from '@/lib/photos/character-gallery-service';
 
@@ -64,11 +65,17 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   }
 );
 
-const saveByFileIdSchema = z.object({
-  fileId: z.string().min(1, 'fileId is required'),
-  caption: z.string().nullable().optional(),
-  tags: z.array(z.string()).optional(),
-});
+const saveByIdSchema = z
+  .object({
+    fileId: z.string().min(1).optional(),
+    linkId: z.string().min(1).optional(),
+    caption: z.string().nullable().optional(),
+    tags: z.array(z.string()).optional(),
+  })
+  .refine(
+    v => (v.fileId ? 1 : 0) + (v.linkId ? 1 : 0) === 1,
+    { message: 'Provide exactly one of fileId or linkId' }
+  );
 
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
@@ -79,18 +86,26 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (contentType.includes('application/json')) {
         const body = await req.json();
-        const parsed = saveByFileIdSchema.safeParse(body);
+        const parsed = saveByIdSchema.safeParse(body);
         if (!parsed.success) {
           return badRequest(parsed.error.issues.map(i => i.message).join('; '));
         }
 
-        const result = await saveFileToCharacterGallery({
-          characterId: id,
-          fileId: parsed.data.fileId,
-          caption: parsed.data.caption ?? null,
-          tags: parsed.data.tags,
-          repos,
-        });
+        const result = parsed.data.linkId
+          ? await saveLinkToCharacterGallery({
+              characterId: id,
+              sourceLinkId: parsed.data.linkId,
+              caption: parsed.data.caption ?? null,
+              tags: parsed.data.tags,
+              repos,
+            })
+          : await saveFileToCharacterGallery({
+              characterId: id,
+              fileId: parsed.data.fileId!,
+              caption: parsed.data.caption ?? null,
+              tags: parsed.data.tags,
+              repos,
+            });
 
         return created(result);
       }

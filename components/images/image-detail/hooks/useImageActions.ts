@@ -43,10 +43,13 @@ export function useImageActions(
       try {
         setSavingToGalleryFor((prev) => new Set(prev).add(characterId))
 
+        const payload = image.linkId
+          ? { linkId: image.linkId }
+          : { fileId: image.id }
         const response = await fetch(`/api/v1/characters/${characterId}/photos`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileId: image.id }),
+          body: JSON.stringify(payload),
         })
 
         if (!response.ok) {
@@ -78,7 +81,7 @@ export function useImageActions(
         })
       }
     },
-    [image.id, internalCharacters]
+    [image.id, image.linkId, internalCharacters]
   )
 
   const removeFromCharacterGallery = useCallback(

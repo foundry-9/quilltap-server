@@ -4,6 +4,15 @@
 
 ### 4.6-dev
 
+#### Fix: Save-to-character-gallery from a vault photo
+
+Clicking "Save to character gallery" in the image-detail modal when the image came from a character or user vault gallery (Aurora's embedded gallery or `PhotoGalleryModal` in `character`/`user-character` mode) was failing with an "Image not found" 400 from the server. The two gallery callers set `image.id = entry.linkId` (a `doc_mount_file_links.id` post-Phase-3), but the modal's `addToCharacterGallery` POSTed `{ fileId: image.id }` to `/api/v1/characters/[id]/photos`, and `saveFileToCharacterGallery` looked the value up in `repos.files` (images-v2 FileEntry) — nothing matched, since Phase-3 photos no longer have a FileEntry. The chat-files gallery path was unaffected because chat files still use real FileEntry ids.
+
+- Added `saveLinkToCharacterGallery({ characterId, sourceLinkId, ... })` in `lib/photos/character-gallery-service.ts`. Reads the source link via `repos.docMountFileLinks.findByIdWithContent`, fetches bytes from the existing blob via `repos.docMountBlobs.readDataByFileId`, then delegates to `saveToCharacterGallery` to hard-link them into the target character's `photos/` folder. Existing same-vault dedup (`Image already in <name>'s photo album`) still applies.
+- Route `app/api/v1/characters/[id]/photos/route.ts` accepts either `fileId` or `linkId` (exactly one required, enforced via Zod `.refine`) and dispatches to the matching service helper.
+- Added `linkId?: string` to `ImageData` in `components/images/image-detail/types.ts`. `useImageActions.ts` sends `{ linkId }` when populated, else falls back to `{ fileId: image.id }`.
+- `components/images/embedded-gallery/EmbeddedPhotoGallery.tsx` and `components/images/PhotoGalleryModal.tsx` (character / user-character modes) now set `linkId: entry.linkId` on the ImageData they hand to the modal. The chat-files path is untouched.
+
 #### Feature: Post-hoc Concierge reroute on image moderation rejection
 
 Story-background generation already had this: when the image provider rejects an already-issued request for content moderation, retry once with the Concierge's configured uncensored profile. Now the character-avatar background job and the inline `generate_image` tool do the same. Mostly relevant when the cheap-LLM pre-flight classifier rates a prompt below the danger threshold but the provider's own safety filter is stricter and refuses.

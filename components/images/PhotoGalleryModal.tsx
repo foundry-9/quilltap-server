@@ -20,6 +20,7 @@ interface ChatFile {
 
 interface GalleryImage {
   id: string
+  linkId?: string
   filename: string
   filepath: string
   url?: string
@@ -129,6 +130,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
           kind: 'image' as const,
           data: {
             id: entry.linkId,
+            linkId: entry.linkId,
             filename: entry.fileName,
             filepath: entry.blobUrl,
             url: entry.blobUrl,
