@@ -4,9 +4,10 @@
  *
  * This plugin provides:
  * - Chat completion using DeepSeek's OpenAI-compatible Chat Completions API
- * - Function / tool calling on `deepseek-chat`
+ * - Function / tool calling across the V4 family
  * - JSON mode and JSON-schema response formats
- * - The `deepseek-reasoner` chain-of-thought model (R1 family)
+ * - Thinking mode on `deepseek-v4-pro` via the `thinking` / `reasoning_effort`
+ *   profile parameters
  *
  * Built on the OpenAICompatibleProvider base class shipped in
  * @quilltap/plugin-utils. The DeepSeek provider extends it to add
@@ -33,7 +34,7 @@ const logger = createPluginLogger('qtap-plugin-deepseek');
 const metadata = {
   providerName: 'DEEPSEEK',
   displayName: 'DeepSeek',
-  description: 'DeepSeek-V3 chat and DeepSeek-R1 reasoning models',
+  description: 'DeepSeek V4 chat and reasoning models',
   colors: {
     bg: 'bg-sky-100',
     text: 'text-sky-800',
@@ -69,8 +70,8 @@ const messageFormat = {
 };
 
 const cheapModels = {
-  defaultModel: 'deepseek-chat',
-  recommendedModels: ['deepseek-chat'],
+  defaultModel: 'deepseek-v4-flash',
+  recommendedModels: ['deepseek-v4-flash'],
 };
 
 export const plugin: TextProviderPlugin = {

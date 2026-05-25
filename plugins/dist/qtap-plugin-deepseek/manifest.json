@@ -2,8 +2,8 @@
   "$schema": "../../../public/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-deepseek",
   "title": "DeepSeek",
-  "description": "DeepSeek chat and reasoning models for Quilltap",
-  "version": "1.0.0",
+  "description": "DeepSeek V4 chat and reasoning models for Quilltap",
+  "version": "1.0.1",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -35,7 +35,7 @@
   "providerConfig": {
     "providerName": "DEEPSEEK",
     "displayName": "DeepSeek",
-    "description": "DeepSeek-V3 chat and DeepSeek-R1 reasoning models via DeepSeek's OpenAI-compatible API",
+    "description": "DeepSeek V4 chat and reasoning models via DeepSeek's OpenAI-compatible API",
     "abbreviation": "DSK",
     "colors": {
       "bg": "bg-sky-100",

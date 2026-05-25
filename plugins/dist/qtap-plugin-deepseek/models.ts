@@ -3,30 +3,31 @@
  * `getModelInfo()` and as a fallback list for `getAvailableModels()`
  * when the /models endpoint is unreachable.
  *
- * Both flagship models share a 128K context window. `deepseek-chat`
- * is the general-purpose conversational model (DeepSeek-V3 family);
- * `deepseek-reasoner` is the R1-style reasoning model that returns
- * a separate chain-of-thought channel alongside the final answer.
+ * Both flagship models share a 1M-token context window and a 384K
+ * max output. `deepseek-v4-flash` is the faster, cheaper tier;
+ * `deepseek-v4-pro` is the higher-quality tier and supports DeepSeek's
+ * thinking mode (forward `thinking` / `reasoning_effort` via profile
+ * parameters to enable it).
  */
 
 import type { ModelInfo } from './types';
 
 export const STATIC_MODELS: ModelInfo[] = [
   {
-    id: 'deepseek-chat',
-    name: 'DeepSeek Chat (V3)',
-    contextWindow: 131072,
-    maxOutputTokens: 8192,
+    id: 'deepseek-v4-flash',
+    name: 'DeepSeek V4 Flash',
+    contextWindow: 1048576,
+    maxOutputTokens: 393216,
     supportsImages: false,
     supportsTools: true,
   },
   {
-    id: 'deepseek-reasoner',
-    name: 'DeepSeek Reasoner (R1)',
-    contextWindow: 131072,
-    maxOutputTokens: 8192,
+    id: 'deepseek-v4-pro',
+    name: 'DeepSeek V4 Pro',
+    contextWindow: 1048576,
+    maxOutputTokens: 393216,
     supportsImages: false,
-    supportsTools: false,
+    supportsTools: true,
   },
 ];
 

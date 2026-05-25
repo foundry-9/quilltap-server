@@ -4,6 +4,17 @@
 
 ### 4.6-dev
 
+#### Feat: DeepSeek plugin updated for V4 catalog and thinking-mode passthrough
+
+DeepSeek's `/models` endpoint now returns `deepseek-v4-flash` and `deepseek-v4-pro`; the static catalog still listed the retired V3 IDs (`deepseek-chat`, `deepseek-reasoner`). Updated the catalog and added profile-parameter passthrough for thinking mode.
+
+- `plugins/dist/qtap-plugin-deepseek/models.ts`: replaced `deepseek-chat` / `deepseek-reasoner` with `deepseek-v4-flash` and `deepseek-v4-pro`. Both share a 1M-token context window and a 384K max output; both report `supportsTools: true`.
+- `plugins/dist/qtap-plugin-deepseek/provider.ts`: added `thinking` and `reasoning_effort` to `DEEPSEEK_PROFILE_PARAM_ALLOWLIST` so they flow verbatim into the request body. Same raw-passthrough pattern as `frequency_penalty` / `logprobs`. When `thinking.type === 'enabled'` the plugin strips `temperature`, `top_p`, `frequency_penalty`, and `presence_penalty` from the body — DeepSeek ignores them in thinking mode and sending them produces noise in the logs.
+- `plugins/dist/qtap-plugin-deepseek/index.ts`: `cheapModels.defaultModel` and `recommendedModels` point at `deepseek-v4-flash`. Metadata description updated.
+- `plugins/dist/qtap-plugin-deepseek/README.md`: model table and profile-parameter section refreshed.
+- `plugins/dist/qtap-plugin-deepseek/{package,manifest}.json`: bumped to 1.0.1.
+- `reasoning_content` capture on the response side is deliberately deferred — needs a cross-provider channel design before any one plugin starts surfacing it.
+
 #### Feat: Cache-observability follow-up — block-3 hash, raw provider usage snapshot, per-plugin reference table
 
 Finishes the unfinished pieces of the 2026-04-30 cache-observability design doc. The structural fix from that doc (commit 24215b2c, splitting the rolling compressed history into its own system block so the persona prefix stays byte-stable) had a self-inflicted gap: `computeRequestPrefixHashes` only hashed the first two system blocks, so the new churning block 3 it introduced was invisible to the diagnostic.

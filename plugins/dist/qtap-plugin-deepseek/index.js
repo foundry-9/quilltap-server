@@ -10113,8 +10113,21 @@ var DEEPSEEK_PROFILE_PARAM_ALLOWLIST = [
   "frequency_penalty",
   "presence_penalty",
   "logprobs",
-  "top_logprobs"
+  "top_logprobs",
+  "thinking",
+  "reasoning_effort"
 ];
+function isThinkingEnabled(body) {
+  const thinking = body.thinking;
+  return typeof thinking === "object" && thinking !== null && thinking.type === "enabled";
+}
+function stripThinkingIncompatibleParams(body) {
+  if (!isThinkingEnabled(body)) return;
+  delete body.temperature;
+  delete body.top_p;
+  delete body.frequency_penalty;
+  delete body.presence_penalty;
+}
 var DeepSeekProvider = class extends OpenAICompatibleProvider {
   constructor(config2) {
     super({
@@ -10212,6 +10225,7 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
       }
     }
     this.applyProfileParameters(body, params);
+    stripThinkingIncompatibleParams(body);
     try {
       const response = await client.chat.completions.create(
         body
@@ -10285,6 +10299,7 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
       }
     }
     this.applyProfileParameters(body, params);
+    stripThinkingIncompatibleParams(body);
     try {
       const stream = await client.chat.completions.create(
         body
@@ -10362,20 +10377,20 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
 // models.ts
 var STATIC_MODELS = [
   {
-    id: "deepseek-chat",
-    name: "DeepSeek Chat (V3)",
-    contextWindow: 131072,
-    maxOutputTokens: 8192,
+    id: "deepseek-v4-flash",
+    name: "DeepSeek V4 Flash",
+    contextWindow: 1048576,
+    maxOutputTokens: 393216,
     supportsImages: false,
     supportsTools: true
   },
   {
-    id: "deepseek-reasoner",
-    name: "DeepSeek Reasoner (R1)",
-    contextWindow: 131072,
-    maxOutputTokens: 8192,
+    id: "deepseek-v4-pro",
+    name: "DeepSeek V4 Pro",
+    contextWindow: 1048576,
+    maxOutputTokens: 393216,
     supportsImages: false,
-    supportsTools: false
+    supportsTools: true
   }
 ];
 var STATIC_MODEL_IDS = STATIC_MODELS.map((m) => m.id);
@@ -10710,7 +10725,7 @@ var logger = createPluginLogger("qtap-plugin-deepseek");
 var metadata = {
   providerName: "DEEPSEEK",
   displayName: "DeepSeek",
-  description: "DeepSeek-V3 chat and DeepSeek-R1 reasoning models",
+  description: "DeepSeek V4 chat and reasoning models",
   colors: {
     bg: "bg-sky-100",
     text: "text-sky-800",
@@ -10741,8 +10756,8 @@ var messageFormat = {
   maxNameLength: 64
 };
 var cheapModels = {
-  defaultModel: "deepseek-chat",
-  recommendedModels: ["deepseek-chat"]
+  defaultModel: "deepseek-v4-flash",
+  recommendedModels: ["deepseek-v4-flash"]
 };
 var plugin = {
   metadata,

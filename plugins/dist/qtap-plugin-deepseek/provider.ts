@@ -34,13 +34,36 @@ const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
 // model, messages, stream, etc. See https://api-docs.deepseek.com —
 // `frequency_penalty` and `presence_penalty` are standard OpenAI params
 // but DeepSeek calls them out specifically; `logprobs` and `top_logprobs`
-// are supported on chat completions.
+// are supported on chat completions. `thinking` toggles reasoning mode
+// (`{ type: 'enabled' | 'disabled' }`); `reasoning_effort` is `'high'`
+// or `'max'` on DeepSeek's scale (low/medium fold to high, xhigh to max).
 const DEEPSEEK_PROFILE_PARAM_ALLOWLIST = [
   'frequency_penalty',
   'presence_penalty',
   'logprobs',
   'top_logprobs',
+  'thinking',
+  'reasoning_effort',
 ] as const;
+
+// Params DeepSeek ignores when thinking mode is enabled. Strip them so we
+// don't send conflicting signals.
+function isThinkingEnabled(body: Record<string, unknown>): boolean {
+  const thinking = body.thinking;
+  return (
+    typeof thinking === 'object' &&
+    thinking !== null &&
+    (thinking as { type?: string }).type === 'enabled'
+  );
+}
+
+function stripThinkingIncompatibleParams(body: Record<string, unknown>): void {
+  if (!isThinkingEnabled(body)) return;
+  delete body.temperature;
+  delete body.top_p;
+  delete body.frequency_penalty;
+  delete body.presence_penalty;
+}
 
 type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 
@@ -167,6 +190,7 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
     }
 
     this.applyProfileParameters(body, params);
+    stripThinkingIncompatibleParams(body);
 
     try {
       const response = (await client.chat.completions.create(
@@ -254,6 +278,7 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
     }
 
     this.applyProfileParameters(body, params);
+    stripThinkingIncompatibleParams(body);
 
     try {
       const stream = (await client.chat.completions.create(
