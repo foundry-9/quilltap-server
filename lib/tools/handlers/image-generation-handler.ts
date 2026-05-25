@@ -44,6 +44,8 @@ import {
 } from '@/lib/services/dangerous-content/gatekeeper.service';
 import {
   resolveImageProviderForDangerousContent,
+  isImageModerationError,
+  resolveUncensoredImageProfileForReroute,
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
@@ -301,6 +303,7 @@ async function generateImagesWithProvider(
   toolInput: ImageGenerationToolInput,
   imageProfile: any,
   userId: string,
+  dangerSettings: DangerousContentSettings,
   chatId?: string,
   callingParticipantId?: string
 ): Promise<GeneratedImageResult[]> {
@@ -316,7 +319,11 @@ async function generateImagesWithProvider(
     imageProfile.modelName
   );
 
-  // Generate images
+  // Generate images. Tracks the profile that actually produced the final
+  // response — updated if the Concierge swaps in the uncensored profile
+  // after a post-hoc moderation rejection. Drives the saved-file metadata.
+  let activeProvider = imageProfile.provider as string;
+  let activeModel = imageProfile.modelName as string;
   let generationResponse;
   const genStartTime = Date.now();
   try {
@@ -363,12 +370,101 @@ async function generateImagesWithProvider(
       durationMs: genDurationMs,
     }).catch(() => { /* never block on logging */ });
 
-    logger.error('Image generation failed:', { errorMessage }, error as Error);
-    throw new ImageGenerationError(
-      'PROVIDER_ERROR',
-      `Image generation failed: ${errorMessage}`,
-      error
+    // Post-hoc Concierge reroute: if the provider rejected for content
+    // moderation and the user has AUTO_ROUTE on with a configured uncensored
+    // profile, take the second door. Pre-flight prompt expansion may already
+    // have routed us to the uncensored profile — the helper detects that and
+    // declines, so we won't loop.
+    const reroute = isImageModerationError(error)
+      ? await resolveUncensoredImageProfileForReroute(imageProfile.id, dangerSettings, userId)
+      : null;
+
+    if (!reroute) {
+      logger.error('Image generation failed:', {
+        errorMessage,
+        moderationRejection: isImageModerationError(error),
+      }, error as Error);
+      throw new ImageGenerationError(
+        'PROVIDER_ERROR',
+        `Image generation failed: ${errorMessage}`,
+        error
+      );
+    }
+
+    logger.info('[Image Generation] Image provider rejected for content moderation, rerouting through Concierge uncensored profile', {
+      originalProfileId: imageProfile.id,
+      originalProvider: imageProfile.provider,
+      fallbackProfileId: reroute.profile.id,
+      fallbackProvider: reroute.profile.provider,
+      originalError: errorMessage,
+    });
+
+    const rerouteProvider = createImageProvider(reroute.profile.provider);
+    const rerouteMergedParams = mergeParameters(
+      toolInput,
+      reroute.profile.parameters as Record<string, unknown>,
+      reroute.profile.modelName
     );
+    const rerouteStartTime = Date.now();
+    try {
+      generationResponse = await rerouteProvider.generateImage(rerouteMergedParams, reroute.apiKey);
+
+      const rerouteDurationMs = Date.now() - rerouteStartTime;
+      const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
+
+      logLLMCall({
+        userId,
+        type: 'IMAGE_GENERATION',
+        chatId,
+        provider: reroute.profile.provider,
+        modelName: reroute.profile.modelName,
+        request: {
+          messages: [{ role: 'user', content: toolInput.prompt }],
+        },
+        response: {
+          content: rerouteRevisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s) (Concierge reroute)`,
+        },
+        durationMs: rerouteDurationMs,
+      }).catch(() => { /* never block on logging */ });
+
+      activeProvider = reroute.profile.provider;
+      activeModel = reroute.profile.modelName;
+
+      logger.info('[Image Generation] Concierge uncensored reroute succeeded', {
+        fallbackProvider: reroute.profile.provider,
+        fallbackModel: reroute.profile.modelName,
+        rerouteDurationMs,
+      });
+    } catch (rerouteError) {
+      const rerouteErrorMessage = getErrorMessage(rerouteError);
+      const rerouteDurationMs = Date.now() - rerouteStartTime;
+
+      logLLMCall({
+        userId,
+        type: 'IMAGE_GENERATION',
+        chatId,
+        provider: reroute.profile.provider,
+        modelName: reroute.profile.modelName,
+        request: {
+          messages: [{ role: 'user', content: toolInput.prompt }],
+        },
+        response: {
+          content: '',
+          error: rerouteErrorMessage,
+        },
+        durationMs: rerouteDurationMs,
+      }).catch(() => { /* never block on logging */ });
+
+      logger.error('Image generation failed (Concierge reroute also failed):', {
+        originalError: errorMessage,
+        rerouteError: rerouteErrorMessage,
+      }, rerouteError as Error);
+      throw new ImageGenerationError(
+        'PROVIDER_ERROR',
+        `Image generation failed after Concierge reroute: ${rerouteErrorMessage}`,
+        rerouteError
+      );
+    }
   }
 
   // Save images and create database records
@@ -378,8 +474,8 @@ async function generateImagesWithProvider(
         saveGeneratedImage(img.data || img.b64Json || '', img.mimeType || 'image/png', userId, chatId, callingParticipantId, {
           prompt: toolInput.prompt,
           revisedPrompt: img.revisedPrompt,
-          model: imageProfile.modelName,
-          provider: imageProfile.provider,
+          model: activeModel,
+          provider: activeProvider,
         })
       )
     );
@@ -1111,6 +1207,7 @@ export async function executeImageGenerationTool(
       finalInput,
       finalProfile,
       context.userId,
+      dangerSettings,
       context.chatId,
       context.callingParticipantId
     );

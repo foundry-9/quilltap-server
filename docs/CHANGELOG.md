@@ -4,6 +4,23 @@
 
 ### 4.6-dev
 
+#### Feature: Post-hoc Concierge reroute on image moderation rejection
+
+Story-background generation already had this: when the image provider rejects an already-issued request for content moderation, retry once with the Concierge's configured uncensored profile. Now the character-avatar background job and the inline `generate_image` tool do the same. Mostly relevant when the cheap-LLM pre-flight classifier rates a prompt below the danger threshold but the provider's own safety filter is stricter and refuses.
+
+- Extracted `isImageModerationError(error)` and `resolveUncensoredImageProfileForReroute(currentProfileId, dangerSettings, userId)` from the inline story-background implementation into `lib/services/dangerous-content/provider-routing.service.ts`.
+- The resolver returns `null` (no reroute) when AUTO_ROUTE is off, no `uncensoredImageProfileId` is configured, the configured uncensored profile equals the one that just rejected (prevents loops when pre-flight already rerouted), or the profile / API key can't be loaded. Deliberately does not fall back to scanning `isDangerousCompatible` profiles — post-hoc reroute requires the user's explicit choice.
+- `lib/background-jobs/handlers/character-avatar.ts` and `lib/tools/handlers/image-generation-handler.ts` now wrap the provider's `generateImage` call: on a moderation rejection they look up the uncensored profile via the helper, retry once, log the reroute attempt, and update downstream metadata (`generationModel`, saved-file provider/model) to reflect the profile that actually produced the image.
+- `lib/background-jobs/handlers/story-background.ts` refactored onto the shared helpers — its local `isImageModerationError` and the inline profile / key lookup block are gone.
+
+#### Fix: characters._update wrote vault-managed columns that no longer exist
+
+The 4.6 cutover dropped DB columns for vault-managed character fields (`title`, `identity`, `description`, `manifesto`, `personality`, `physicalDescription`, `pronouns`, `aliases`, `firstMessage`, `talkativeness`, `exampleDialogues`, `systemPrompts`, `scenarios`) — they live in the character vault now. The `CharactersRepository.update` wrapper correctly stripped managed keys from the *incoming patch* via `applyDocumentStoreWriteOverlay`, but then deferred to the base `_update`, which re-read existing state through the overlay-aware `findById`. The overlay rehydrates the dropped fields from the vault; the base `$set: validated` then wrote the full record back, generating SQL like `UPDATE characters SET title = ?, ...` and SQLite responded with `no such column: title`. Most visibly fatal for character-avatar background jobs, which generated the image successfully (bytes hit disk) but then rolled back the whole apply transaction in the parent — file rows never materialized, `chat.characterAvatars` stayed null, and the job was marked DEAD after three retries.
+
+- Added `_update` override on `CharactersRepository` (`lib/database/repositories/characters.repository.ts`) that reads via `findByIdRaw` so the merge base never carries vault-hydrated keys, and strips every `MANAGED_FIELDS` entry from the validated record before `$set` as a defensive backstop. Both `update()` and `updateRaw()` now route through the override.
+- Added a parallel `_create` override with the same managed-field strip, so callers that pass e.g. `title` or `description` to `characters.create` don't blow up either. Same latent bug shape, different code path.
+- No DDL change — the columns were already dropped at 4.6. This restores the matching write-side behavior.
+
 #### Fix: Participant talkativeness slider now reflects the character's actual value
 
 The Salon participant slider was initializing to 50% for every character that didn't have a per-chat override, regardless of the character's vault-stored `talkativeness`. A character set to 0.8 in `properties.json` would show as 0.5 in the sidebar, and the predicted-turn-order sidebar plus the client-side "next speaker" preview both treated everyone as equal-weighted (0.5) for the same reason. Server-side speaker selection was unaffected — it reads the override from `chat.participants[].talkativeness` and falls through to `repos.characters.findById().talkativeness`, both of which were correct. The bug was purely on the chat-detail enrichment payload.
