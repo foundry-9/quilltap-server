@@ -14,6 +14,7 @@ import { AutomationSettings } from '@/components/settings/chat-settings/Automati
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
 import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
 import { AutonomousRoomSettingsComponent } from '@/components/settings/chat-settings/AutonomousRoomSettings'
+import { AutonomousRoomsCard } from '@/components/tools/autonomous-rooms-card'
 import { useSettingsSection } from './useSettingsSection'
 
 export function ChatTabContent() {
@@ -154,6 +155,10 @@ export function ChatTabContent() {
             saving={saving}
             onUpdate={handleAutonomousRoomSettingsUpdate}
           />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Scheduled Autonomous Rooms" description="Pause, resume, or stop scheduled rooms (and any ad-hoc room currently running)" sectionId="autonomous-room-schedules" forceOpen={activeSection === 'autonomous-room-schedules'}>
+          <AutonomousRoomsCard />
         </CollapsibleCard>
       </div>
     </div>

@@ -101,11 +101,15 @@ export function AutonomousRoomsCard() {
   if (error) {
     return <div className="qt-alert-error">Failed to load autonomous rooms.</div>
   }
-  const rooms = data?.rooms ?? []
+  const allRooms = data?.rooms ?? []
+  const rooms = allRooms.filter((room) => {
+    if (room.scheduleCron) return true
+    return room.runState === 'running' || room.runState === 'paused'
+  })
   if (rooms.length === 0) {
     return (
       <div className="qt-text-small qt-text-muted">
-        No autonomous rooms yet. Create one from the Salon&rsquo;s chat-creation flow when ready.
+        No scheduled autonomous rooms. Set a cron expression on a room when you create it from the Salon to have it appear here. Ad-hoc rooms only show up while they&rsquo;re actively running.
       </div>
     )
   }

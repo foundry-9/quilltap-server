@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Change: Autonomous-rooms management list moved to Chat tab, filtered to scheduled rooms
+
+The autonomous-rooms management card (pause/resume/stop) used to live at `/settings?tab=system&section=autonomous-rooms` and listed every autonomous chat ever created, including ad-hoc rooms that had long since completed — clutter that grew unbounded.
+
+- Moved the card from `DataSystemTabContent` to `ChatTabContent`, placed immediately after the user-level Autonomous Rooms defaults card so all autonomous-room controls live together. New sectionId `autonomous-room-schedules` (the defaults card keeps `autonomous-rooms`).
+- Filtered the list to rooms that are either scheduled (`scheduleCron` set) or actively running/paused. Idle, stopped, error, and budget-exhausted ad-hoc rooms no longer appear. Empty-state copy updated accordingly.
+- Updated `help/autonomous-rooms.md` settings-reference and in-chat-navigation links to point at the new tab/section. The defaults link is unchanged.
+
 #### Fix: Autonomous rooms — title renames now actually persist
 
 Follow-up to the earlier autonomous-rooms title-rename fix (which made `shouldCheckTitleAtInterchange` actually fire at the right checkpoints). The check was firing — the cheap LLM was happily proposing new titles ("The Estate of Friday and Amy", "The East Pool Covenant", "Cedar, Water, and the Quiet Covenant", …), the log line `[Title Update] Updated title for chat ... to: ...` was being written, and the database row was sitting unchanged at `Chat with Friday and Amy` with `lastRenameCheckInterchange = 0`. Same shape as before, different root cause.

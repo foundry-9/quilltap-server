@@ -78,10 +78,11 @@ This dual safeguard (a prompt-level instruction *and* a structural provenance fl
   - **Default freshness window** (default 12h)
   - **Default visibility** (Owner only / Household / Open)
   - **Destructive-tool policy** (Always refuse / Opt in per room)
-- `/settings?tab=system&section=autonomous-rooms` — management list:
+- `/settings?tab=chat&section=autonomous-room-schedules` — scheduled-room management list:
   - Per-room run-state badge, last run, next run, run budgets consumed
   - **Pause**, **Resume**, **Stop** controls
   - Direct link to the chat transcript and `.qtap` export
+  - Only scheduled rooms (those with a cron expression) appear here; an ad-hoc room is included only while it is actively running, and falls off the list when it finishes
 
 ## In-Chat Navigation
 
@@ -90,5 +91,5 @@ help_navigate(url: "/settings?tab=chat&section=autonomous-rooms")
 ```
 
 ```
-help_navigate(url: "/settings?tab=system&section=autonomous-rooms")
+help_navigate(url: "/settings?tab=chat&section=autonomous-room-schedules")
 ```
