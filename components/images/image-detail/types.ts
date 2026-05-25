@@ -2,6 +2,12 @@
  * TypeScript interfaces and types for ImageDetailModal
  */
 
+export interface CharacterGalleryLink {
+  characterId: string
+  characterName: string
+  linkId: string
+}
+
 export interface ImageData {
   id: string
   filename: string
@@ -17,6 +23,7 @@ export interface ImageData {
     tagType: string
     tagId: string
   }>
+  characterGalleryLinks?: CharacterGalleryLink[]
 }
 
 export interface Character {

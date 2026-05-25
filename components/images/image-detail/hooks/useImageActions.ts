@@ -4,19 +4,20 @@ import { useState, useCallback } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { triggerDownload } from '@/lib/download-utils'
 import { copyImageToClipboard } from '@/lib/clipboard-utils'
-import type { ImageData, Character, EntityType } from '../types'
+import type { ImageData, Character, EntityType, CharacterGalleryLink } from '../types'
 
 interface UseImageActionsReturn {
-  taggedCharacterIds: Set<string>
-  taggingInProgress: Set<string>
+  characterGalleryLinks: CharacterGalleryLink[]
+  savingToGalleryFor: Set<string>
   settingAvatar: Set<string>
-  toggleCharacterTag: (characterId: string) => Promise<void>
+  addToCharacterGallery: (characterId: string) => Promise<void>
+  removeFromCharacterGallery: (characterId: string) => Promise<void>
   setAsAvatar: (entityType: EntityType, entityId: string) => Promise<void>
   handleDownload: () => Promise<void>
   handleCopyToClipboard: () => Promise<void>
   handleSaveToGallery: () => Promise<void>
   savingToGallery: boolean
-  updateTaggedCharacters: (charIds: Set<string>) => void
+  updateCharacterGalleryLinks: (links: CharacterGalleryLink[]) => void
   setCharacters: (characters: Character[]) => void
 }
 
@@ -27,75 +28,92 @@ export function useImageActions(
 ): Omit<UseImageActionsReturn, 'setCharacters'> & {
   setCharacters: (fn: (prev: Character[]) => Character[]) => void
 } {
-  const [taggedCharacterIds, setTaggedCharacterIds] = useState<Set<string>>(new Set())
-  const [taggingInProgress, setTaggingInProgress] = useState<Set<string>>(new Set())
+  const [characterGalleryLinks, setCharacterGalleryLinks] = useState<CharacterGalleryLink[]>([])
+  const [savingToGalleryFor, setSavingToGalleryFor] = useState<Set<string>>(new Set())
   const [settingAvatar, setSettingAvatar] = useState<Set<string>>(new Set())
   const [internalCharacters, setInternalCharacters] = useState<Character[]>(characters)
   const [savingToGallery, setSavingToGallery] = useState(false)
 
-  const updateTaggedCharacters = useCallback((charIds: Set<string>) => {
-    setTaggedCharacterIds(charIds)
+  const updateCharacterGalleryLinks = useCallback((links: CharacterGalleryLink[]) => {
+    setCharacterGalleryLinks(links)
   }, [])
 
-  const toggleCharacterTag = useCallback(
+  const addToCharacterGallery = useCallback(
     async (characterId: string) => {
-      const isTagged = taggedCharacterIds.has(characterId)
-      const key = `char-${characterId}`
-
       try {
-        setTaggingInProgress((prev) => new Set(prev).add(key))
+        setSavingToGalleryFor((prev) => new Set(prev).add(characterId))
 
-        if (isTagged) {
-          // Remove tag using v1 action dispatch API
-          const response = await fetch(`/api/v1/images/${image.id}?action=remove-tag`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tagId: characterId }),
-          })
+        const response = await fetch(`/api/v1/characters/${characterId}/photos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileId: image.id }),
+        })
 
-          if (!response.ok) {
-            const data = await response.json()
-            throw new Error(data.error || 'Failed to remove tag')
-          }
-
-          setTaggedCharacterIds((prev) => {
-            const newSet = new Set(prev)
-            newSet.delete(characterId)
-            return newSet
-          })
-          showSuccessToast('Removed from character gallery')
-        } else {
-          // Add tag using v1 action dispatch API
-          const response = await fetch(`/api/v1/images/${image.id}?action=add-tag`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'CHARACTER',
-              tagId: characterId,
-            }),
-          })
-
-          if (!response.ok) {
-            const data = await response.json()
-            throw new Error(data.error || 'Failed to add tag')
-          }
-
-          setTaggedCharacterIds((prev) => new Set(prev).add(characterId))
-          showSuccessToast('Added to character gallery')
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}))
+          throw new Error(data.error || 'Failed to save to photo album')
         }
+
+        const data = await response.json()
+        const character = internalCharacters.find((c) => c.id === characterId)
+
+        setCharacterGalleryLinks((prev) => [
+          ...prev,
+          {
+            characterId,
+            characterName: character?.name ?? 'Character',
+            linkId: data.linkId,
+          },
+        ])
+        showSuccessToast(`Saved to ${character?.name ?? 'character'}'s photo album`)
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to update tag'
-        console.error('Character tag toggle failed', { characterId, error: errorMessage })
+        const errorMessage = error instanceof Error ? error.message : 'Failed to save to photo album'
+        console.error('Save to character gallery failed', { characterId, error: errorMessage })
         showErrorToast(errorMessage)
       } finally {
-        setTaggingInProgress((prev) => {
+        setSavingToGalleryFor((prev) => {
           const newSet = new Set(prev)
-          newSet.delete(key)
+          newSet.delete(characterId)
           return newSet
         })
       }
     },
-    [image.id, taggedCharacterIds]
+    [image.id, internalCharacters]
+  )
+
+  const removeFromCharacterGallery = useCallback(
+    async (characterId: string) => {
+      const link = characterGalleryLinks.find((l) => l.characterId === characterId)
+      if (!link) return
+
+      try {
+        setSavingToGalleryFor((prev) => new Set(prev).add(characterId))
+
+        const response = await fetch(
+          `/api/v1/characters/${characterId}/photos/${link.linkId}`,
+          { method: 'DELETE' }
+        )
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}))
+          throw new Error(data.error || 'Failed to remove from photo album')
+        }
+
+        setCharacterGalleryLinks((prev) => prev.filter((l) => l.characterId !== characterId))
+        showSuccessToast(`Removed from ${link.characterName}'s photo album`)
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to remove from photo album'
+        console.error('Remove from character gallery failed', { characterId, error: errorMessage })
+        showErrorToast(errorMessage)
+      } finally {
+        setSavingToGalleryFor((prev) => {
+          const newSet = new Set(prev)
+          newSet.delete(characterId)
+          return newSet
+        })
+      }
+    },
+    [characterGalleryLinks]
   )
 
   const setAsAvatar = useCallback(
@@ -192,16 +210,17 @@ export function useImageActions(
   }, [image.id, image.url, image.filepath])
 
   return {
-    taggedCharacterIds,
-    taggingInProgress,
+    characterGalleryLinks,
+    savingToGalleryFor,
     settingAvatar,
-    toggleCharacterTag,
+    addToCharacterGallery,
+    removeFromCharacterGallery,
     setAsAvatar,
     handleDownload,
     handleCopyToClipboard,
     handleSaveToGallery,
     savingToGallery,
-    updateTaggedCharacters,
+    updateCharacterGalleryLinks,
     setCharacters: setInternalCharacters,
   }
 }
