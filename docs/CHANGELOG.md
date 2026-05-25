@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Fix: Streaming bubble avatar matches the actual responder from the first character
+
+While a response was streaming in, the streaming bubble's avatar/name could show one character while the green "X is responding…" chip below the composer named another. The two indicators read from different sources: the chip uses a server-baked status string (`${character.name} is responding...` from `lib/services/chat-message/primary-stream.service.ts`), and the bubble's avatar reads from `respondingParticipantId`, which `useSSEStreaming.sendMessage` initialized to a *client-side guess* (`getFirstCharacterParticipant()` — the first active character in the participants array). Under turn rotation, autonomous rooms, or any user-controlled-character setup, that guess routinely disagrees with the server's `resolveRespondingParticipant` choice. The mismatch only existed during streaming — the final `done` event carries the authoritative `participantId`, so the saved message attaches to the correct character.
+
+- For chained turns 2+, `lib/services/chat-message/turn-orchestrator.service.ts` already emits a `turnStart` SSE event that the client uses to correct `respondingParticipantId`. The first turn had no analog.
+- Fix: `processMessage` in `lib/services/chat-message/orchestrator.service.ts` now emits `turnStart` (with `chainDepth: 0`) immediately after `resolveRespondingParticipant` returns, before the "Setting up …" status. The client's existing `onTurnStart` handler in `app/salon/[id]/hooks/useSSEStreaming.ts` realigns `respondingParticipantId` to the server's choice with no client changes.
+- The chained path still emits its own `turnStart` from the orchestrator first; the inner `processMessage` will emit a redundant second event with the same `participantId`, which the client treats as a no-op.
+
 #### Feature: DeepSeek provider plugin
 
 New bundled provider at `plugins/dist/qtap-plugin-deepseek` (`providerName: DEEPSEEK`). Talks to DeepSeek's OpenAI-compatible Chat Completions API at `https://api.deepseek.com`.

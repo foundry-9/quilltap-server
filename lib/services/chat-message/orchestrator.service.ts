@@ -45,6 +45,7 @@ import {
   encodeDoneEvent,
   encodeErrorEvent,
   encodeStatusEvent,
+  encodeTurnStartEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
@@ -280,6 +281,17 @@ async function processMessage(
     userParticipantId,
     isMultiCharacter,
   } = participantResult
+
+  // Tell the client which participant is actually responding before any
+  // content arrives. Without this, the streaming bubble's avatar/name comes
+  // from the client's `getFirstCharacterParticipant()` guess, which diverges
+  // from the server's choice under turn rotation. Chained turns 2+ get the
+  // same event from the turn orchestrator; this is the first-turn analog.
+  safeEnqueue(controller, encodeTurnStartEvent(encoder, {
+    participantId: characterParticipant.id,
+    characterName: character.name,
+    chainDepth: 0,
+  }))
 
   // Now that we know who's responding, update status with character name
   safeEnqueue(controller, encodeStatusEvent(encoder, {
