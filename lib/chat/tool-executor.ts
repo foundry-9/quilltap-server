@@ -577,24 +577,25 @@ export async function executeToolCallWithContext(
       const result = await executeSelfInventoryTool(toolCall.arguments, selfInventoryContext);
       const formattedResult = formatSelfInventoryResults(result);
 
+      const structuredResult: Record<string, unknown> = {
+        formattedText: formattedResult,
+        quilltapVersion: result.quilltapVersion,
+        characterId: result.characterId,
+        characterName: result.characterName,
+      };
+      if (result.vault) structuredResult.vault = result.vault;
+      if (result.vaultAccess) structuredResult.vaultAccess = result.vaultAccess;
+      if (result.memory) structuredResult.memory = result.memory;
+      if (result.loadedMemories) structuredResult.loadedMemories = result.loadedMemories;
+      if (result.chats) structuredResult.chats = result.chats;
+      if (result.prompt) structuredResult.prompt = result.prompt;
+      if (result.lastTurn) structuredResult.lastTurn = result.lastTurn;
+      if (result.quilltap) structuredResult.quilltap = result.quilltap;
+
       return {
         toolName: 'self_inventory',
         success: result.success,
-        result: result.success
-          ? {
-              formattedText: formattedResult,
-              quilltapVersion: result.quilltapVersion,
-              characterId: result.characterId,
-              characterName: result.characterName,
-              vault: result.vault,
-              vaultAccess: result.vaultAccess,
-              memory: result.memory,
-              loadedMemories: result.loadedMemories,
-              chats: result.chats,
-              prompt: result.prompt,
-              lastTurn: result.lastTurn,
-            }
-          : null,
+        result: result.success ? structuredResult : null,
         error: result.success ? undefined : result.error,
       };
     }
