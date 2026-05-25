@@ -4,6 +4,16 @@
 
 ### 4.6-dev
 
+#### Feature: DeepSeek provider plugin
+
+New bundled provider at `plugins/dist/qtap-plugin-deepseek` (`providerName: DEEPSEEK`). Talks to DeepSeek's OpenAI-compatible Chat Completions API at `https://api.deepseek.com`.
+
+- `DeepSeekProvider` in `provider.ts` extends `OpenAICompatibleProvider` from `@quilltap/plugin-utils` and overrides `sendMessage` / `streamMessage` to forward `tools`, `tool_choice`, `response_format` (JSON object and JSON Schema), and DeepSeek-specific profile parameters (`frequency_penalty`, `presence_penalty`, `logprobs`, `top_logprobs`).
+- Surfaces DeepSeek's `prompt_cache_hit_tokens` as Quilltap's `cacheUsage.cacheReadInputTokens` so cached-prompt savings show up in usage reporting.
+- Static model catalog: `deepseek-chat` (128K context, tools) and `deepseek-reasoner` (128K context, R1-style reasoning). The plugin merges DeepSeek's `/models` output with the static list before sorting so the chat picker stays populated if the endpoint omits a flagship name.
+- No file attachments, no embeddings, no image generation, no web search — those capabilities are explicitly off in the manifest and the provider returns attachment failures for any incoming images.
+- Bundles the standard OpenAI SDK as a direct dep; built via the shared `npm run build:plugins` flow.
+
 #### Change: Autonomous-rooms management list moved to Chat tab, filtered to scheduled rooms
 
 The autonomous-rooms management card (pause/resume/stop) used to live at `/settings?tab=system&section=autonomous-rooms` and listed every autonomous chat ever created, including ad-hoc rooms that had long since completed — clutter that grew unbounded.
