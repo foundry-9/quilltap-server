@@ -9,11 +9,12 @@
 import { Character, CharacterInput, CharacterSchema, CharacterSystemPrompt, CharacterScenario } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
-import { TypedQueryFilter } from '../interfaces';
+import { TypedQueryFilter, UpdateSpec } from '../interfaces';
 import {
   applyDocumentStoreOverlay,
   applyDocumentStoreOverlayOne,
   applyDocumentStoreWriteOverlay,
+  MANAGED_FIELDS,
 } from './character-properties-overlay';
 
 /**
@@ -251,6 +252,98 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       'Error updating character (raw)',
       { characterId: id }
     );
+  }
+
+  /**
+   * Vault-aware override of the base `_create`. Mirrors `_update`: strips
+   * vault-managed keys before INSERT so callers that pass e.g. `title` or
+   * `description` to `create()` don't blow up with "no such column" — those
+   * fields belong in the character vault, not the DB row.
+   */
+  protected async _create(
+    data: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
+  ): Promise<Character> {
+    return this.safeQuery(async () => {
+      const id = options?.id || crypto.randomUUID();
+      const now = this.getCurrentTimestamp();
+      const createdAt = options?.createdAt || now;
+      const updatedAt = options?.updatedAt || now;
+
+      const entityInput = {
+        ...data,
+        id,
+        createdAt,
+        updatedAt,
+      };
+
+      const validated = this.validate(entityInput);
+
+      const dbRow = { ...validated } as Record<string, unknown>;
+      for (const f of MANAGED_FIELDS) {
+        delete dbRow[f as string];
+      }
+
+      const collection = await this.getCollection();
+      await collection.insertOne(dbRow as Character);
+
+      logger.info('Entity created', {
+        collection: 'characters',
+        id,
+      });
+
+      return validated;
+    }, 'Error creating character entity');
+  }
+
+  /**
+   * Vault-aware override of the base `_update`. The 4.6 cutover dropped DB
+   * columns for vault-managed fields (title, identity, description, manifesto,
+   * personality, physicalDescription, pronouns, aliases, firstMessage,
+   * talkativeness, exampleDialogues, systemPrompts, scenarios) — they live in
+   * the character vault now. The base implementation reads existing state
+   * through the overlay-aware `findById`, which rehydrates those fields from
+   * the vault; spreading them into `$set` produces UPDATE statements SQLite
+   * rejects with "no such column". Read raw here, and strip any managed-field
+   * keys before writing as a defensive backstop.
+   */
+  protected async _update(id: string, data: Partial<Character>): Promise<Character | null> {
+    return this.safeQuery(async () => {
+      const existing = await this.findByIdRaw(id);
+      if (!existing) {
+        logger.warn('Entity not found for update', {
+          collection: 'characters',
+          id,
+        });
+        return null;
+      }
+
+      const now = this.getCurrentTimestamp();
+      const merged = {
+        ...existing,
+        ...data,
+        id: existing.id,
+        createdAt: existing.createdAt,
+        updatedAt: ('updatedAt' in data)
+          ? (data as Record<string, unknown>).updatedAt as string
+          : now,
+      } as Character;
+
+      const validated = this.validate(merged);
+
+      const dbRow = { ...validated } as Record<string, unknown>;
+      for (const f of MANAGED_FIELDS) {
+        delete dbRow[f as string];
+      }
+
+      const collection = await this.getCollection();
+      await collection.updateOne(
+        { id } as TypedQueryFilter<Character>,
+        { $set: dbRow } as UpdateSpec<Character>
+      );
+
+      return validated;
+    }, 'Error updating character entity', { id });
   }
 
   /**

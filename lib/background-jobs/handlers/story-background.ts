@@ -31,6 +31,10 @@ import {
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
+import {
+  isImageModerationError as isImageModerationErrorShared,
+  resolveUncensoredImageProfileForReroute,
+} from '@/lib/services/dangerous-content/provider-routing.service';
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
@@ -38,25 +42,9 @@ import { postLanternImageNotification } from '@/lib/services/lantern-notificatio
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import type { Character } from '@/lib/schemas/types';
 
-/**
- * Detect post-hoc content-moderation rejections from image providers.
- * OpenAI DALL-E returns "Your request was rejected as a result of our safety
- * system."; Grok returns "Generated image rejected by content moderation.";
- * other providers use similar phrasings. Matching on a handful of keywords
- * covers the common shapes without tying us to any single provider's error
- * type.
- */
-function isImageModerationError(error: unknown): boolean {
-  const message = getErrorMessage(error).toLowerCase();
-  return (
-    message.includes('content moderation') ||
-    message.includes('content_policy') ||
-    message.includes('content policy') ||
-    message.includes('safety system') ||
-    message.includes('rejected by content') ||
-    message.includes('moderation_blocked')
-  );
-}
+// Detection helper lives in the shared dangerous-content service so the
+// character-avatar and inline `generate_image` handlers can reuse it.
+const isImageModerationError = isImageModerationErrorShared;
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -668,13 +656,11 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     // moderation, the Concierge has a second door: retry with the configured
     // uncensored image profile. Mirrors the appearance-resolution and
     // prompt-crafting fallbacks above.
-    const uncensoredImageProfileId = dangerSettings.uncensoredImageProfileId ?? null;
-    const canRerouteViaConcierge =
-      isImageModerationError(error)
-      && uncensoredImageProfileId
-      && uncensoredImageProfileId !== imageProfile.id;
+    const reroute = isImageModerationError(error)
+      ? await resolveUncensoredImageProfileForReroute(imageProfile.id, dangerSettings, job.userId)
+      : null;
 
-    if (!canRerouteViaConcierge) {
+    if (!reroute) {
       logger.error('[StoryBackground] Image generation failed', {
         context: 'background-jobs.story-background',
         jobId: job.id,
@@ -690,51 +676,22 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       jobId: job.id,
       originalProfileId: imageProfile.id,
       originalProvider: imageProfile.provider,
-      fallbackProfileId: uncensoredImageProfileId,
+      fallbackProfileId: reroute.profile.id,
+      fallbackProvider: reroute.profile.provider,
       originalError: errorMessage,
     });
 
-    const uncensoredProfile = await repos.imageProfiles.findById(uncensoredImageProfileId);
-    if (!uncensoredProfile) {
-      logger.error('[StoryBackground] Concierge uncensored image profile not found', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        fallbackProfileId: uncensoredImageProfileId,
-      });
-      throw new Error(`Image generation failed: ${errorMessage}`);
-    }
-    if (!uncensoredProfile.apiKeyId) {
-      logger.error('[StoryBackground] Concierge uncensored image profile has no API key', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        fallbackProfileId: uncensoredImageProfileId,
-      });
-      throw new Error(`Image generation failed: ${errorMessage}`);
-    }
-    const uncensoredKey = await repos.connections.findApiKeyByIdAndUserId(
-      uncensoredProfile.apiKeyId,
-      job.userId
-    );
-    if (!uncensoredKey?.key_value) {
-      logger.error('[StoryBackground] Concierge uncensored image profile API key missing or invalid', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        fallbackProfileId: uncensoredImageProfileId,
-      });
-      throw new Error(`Image generation failed: ${errorMessage}`);
-    }
-
-    const rerouteProvider = createImageProvider(uncensoredProfile.provider);
+    const rerouteProvider = createImageProvider(reroute.profile.provider);
     const rerouteStartTime = Date.now();
     try {
       generationResponse = await rerouteProvider.generateImage({
         prompt: finalPrompt,
-        model: uncensoredProfile.modelName,
+        model: reroute.profile.modelName,
         n: 1,
         size: '1792x1024',
-        quality: (uncensoredProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
+        quality: (reroute.profile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
         style: 'natural',
-      }, uncensoredKey.key_value);
+      }, reroute.apiKey);
 
       const rerouteDurationMs = Date.now() - rerouteStartTime;
       const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
@@ -743,8 +700,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         userId: job.userId,
         type: 'IMAGE_GENERATION',
         chatId: payload.chatId,
-        provider: uncensoredProfile.provider,
-        modelName: uncensoredProfile.modelName,
+        provider: reroute.profile.provider,
+        modelName: reroute.profile.modelName,
         request: {
           messages: [{ role: 'user', content: finalPrompt }],
         },
@@ -754,13 +711,13 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         durationMs: rerouteDurationMs,
       });
 
-      activeImageProfile = uncensoredProfile;
+      activeImageProfile = reroute.profile;
 
       logger.info('[StoryBackground] Concierge uncensored reroute succeeded', {
         context: 'background-jobs.story-background',
         jobId: job.id,
-        fallbackProvider: uncensoredProfile.provider,
-        fallbackModel: uncensoredProfile.modelName,
+        fallbackProvider: reroute.profile.provider,
+        fallbackModel: reroute.profile.modelName,
         rerouteDurationMs,
       });
     } catch (rerouteError) {
@@ -771,8 +728,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         userId: job.userId,
         type: 'IMAGE_GENERATION',
         chatId: payload.chatId,
-        provider: uncensoredProfile.provider,
-        modelName: uncensoredProfile.modelName,
+        provider: reroute.profile.provider,
+        modelName: reroute.profile.modelName,
         request: {
           messages: [{ role: 'user', content: finalPrompt }],
         },

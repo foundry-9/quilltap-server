@@ -297,3 +297,81 @@ async function decryptImageProfileApiKey(
     return null
   }
 }
+
+/**
+ * Detect post-hoc content-moderation rejections from image providers.
+ * OpenAI DALL-E returns "Your request was rejected as a result of our safety
+ * system."; Grok returns "Generated image rejected by content moderation.";
+ * other providers use similar phrasings. Matching on a handful of keywords
+ * covers the common shapes without tying us to any single provider's error
+ * type.
+ */
+export function isImageModerationError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase()
+  return (
+    message.includes('content moderation') ||
+    message.includes('content_policy') ||
+    message.includes('content policy') ||
+    message.includes('safety system') ||
+    message.includes('rejected by content') ||
+    message.includes('moderation_blocked')
+  )
+}
+
+/**
+ * Resolution payload for a post-hoc image-generation reroute.
+ */
+export interface PostHocImageReroute {
+  profile: ImageProfile
+  apiKey: string
+}
+
+/**
+ * Resolve the Concierge's configured uncensored image profile + decrypted key
+ * for a post-hoc reroute, after a provider rejects an already-issued image
+ * request for moderation reasons. Returns null when no reroute is possible —
+ * the caller should surface the original error in that case.
+ *
+ * Returns null when:
+ *   - `dangerSettings.mode` is not AUTO_ROUTE
+ *   - no `uncensoredImageProfileId` is configured
+ *   - the configured profile equals the one that just rejected (would loop)
+ *   - the configured profile or its API key cannot be loaded
+ *
+ * Unlike {@link resolveImageProviderForDangerousContent}, this helper does NOT
+ * fall back to scanning for any `isDangerousCompatible` profile. Post-hoc
+ * reroute is a deliberate second-chance escape hatch keyed on the user's
+ * explicit uncensored choice; we don't want a silent scan to surface a
+ * profile the user didn't pick.
+ */
+export async function resolveUncensoredImageProfileForReroute(
+  currentProfileId: string,
+  dangerSettings: DangerousContentSettings,
+  userId: string,
+): Promise<PostHocImageReroute | null> {
+  if (dangerSettings.mode !== 'AUTO_ROUTE') return null
+
+  const uncensoredImageProfileId = dangerSettings.uncensoredImageProfileId ?? null
+  if (!uncensoredImageProfileId) return null
+  if (uncensoredImageProfileId === currentProfileId) return null
+
+  const repos = getRepositories()
+  const profile = await repos.imageProfiles.findById(uncensoredImageProfileId)
+  if (!profile || profile.userId !== userId) {
+    logger.warn('[DangerousContent] Configured uncensored image profile not found or owned by another user', {
+      uncensoredImageProfileId,
+      foundForUser: profile?.userId,
+    })
+    return null
+  }
+
+  const apiKey = await decryptImageProfileApiKey(profile, userId)
+  if (!apiKey) {
+    logger.warn('[DangerousContent] Configured uncensored image profile has no usable API key', {
+      uncensoredImageProfileId,
+    })
+    return null
+  }
+
+  return { profile, apiKey }
+}
