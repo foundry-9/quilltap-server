@@ -21,8 +21,6 @@
  * - set-default-partner - Set default partner
  * - generate-external-prompt - Generate standalone system prompt for external tools
  * - refresh-archive - Re-render and re-embed all conversations for this character
- * - sync-properties-from-vault - Copy vault-managed fields from vault files into the DB row
- * - sync-properties-to-vault - Copy the DB row's values out into the vault files (reverse of above)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -42,11 +40,6 @@ import { runCharacterOptimizer } from '@/lib/services/character-optimizer.servic
 import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.service';
 import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
-import {
-  readCharacterVaultManagedFields,
-  readCharacterVaultWardrobe,
-  writeCharacterVaultManagedFields,
-} from '@/lib/database/repositories/character-properties-overlay';
 
 // ============================================================================
 // Schemas
@@ -149,7 +142,7 @@ const generateExternalPromptSchema = z.object({
   maxTokens: z.number().int().min(1000).max(20000),
 });
 
-const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive', 'sync-properties-from-vault', 'sync-properties-to-vault'] as const;
+const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive'] as const;
 type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 // ============================================================================
@@ -753,141 +746,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       }
 
       return NextResponse.json({ prompt: result.prompt, tokensUsed: result.tokensUsed });
-    },
-
-    'sync-properties-from-vault': async () => {
-      try {
-        // Use the raw character so we see the canonical DB state, not the overlay.
-        const rawCharacter = await repos.characters.findByIdRaw(id);
-        if (!rawCharacter) {
-          return notFound('Character');
-        }
-        if (!rawCharacter.characterDocumentMountPointId) {
-          return badRequest('Character has no linked document-store vault to sync from');
-        }
-
-        const mountId = rawCharacter.characterDocumentMountPointId;
-        const existingPhysical = rawCharacter.physicalDescription ?? null;
-        const [snapshot, vaultWardrobe] = await Promise.all([
-          readCharacterVaultManagedFields(mountId, rawCharacter.id, existingPhysical),
-          readCharacterVaultWardrobe(mountId, rawCharacter.id),
-        ]);
-        const patch = snapshot;
-
-        // Wardrobe syncs against separate tables (wardrobe_items,
-        // outfit_presets), not character-row columns, so it doesn't feed
-        // `patch`. When the vault file is valid we replace the character's
-        // active wardrobe wholesale — the same "vault is the list" semantics
-        // used for systemPrompts / scenarios above.
-        let wardrobeItemsWritten = 0;
-        const wardrobeSynced = vaultWardrobe !== null;
-        if (vaultWardrobe) {
-          // Use the *Raw / FromVault repo methods throughout: the standard
-          // `delete` and `create` paths fire `syncCharacterVaultWardrobe` as a
-          // post-write side effect, which calls back into
-          // `ingestVaultOnlyWardrobeIntoDb` and re-promotes the vault file we
-          // just deleted (or are about to insert). On a multi-item rebuild the
-          // table never empties and the recreate phase hits
-          // `UNIQUE constraint failed: wardrobe_items.id`.
-          const existingItems = await repos.wardrobe.findByCharacterIdRaw(
-            rawCharacter.id,
-            true,
-          );
-          for (const item of existingItems) {
-            await repos.wardrobe.deleteRaw(item.id);
-          }
-
-          // Outfit presets are gone as a separate table — composite items
-          // (with `componentItemIds`) replace them entirely and round-trip
-          // via the same `Wardrobe/` folder. Anything the vault still calls
-          // a "preset" gets ignored at the read layer.
-          for (const item of vaultWardrobe.items) {
-            await repos.wardrobe.createFromVault({
-              ...item,
-              characterId: rawCharacter.id,
-            });
-            wardrobeItemsWritten++;
-          }
-        }
-
-        if (Object.keys(patch).length === 0 && !wardrobeSynced) {
-          return badRequest(
-            "This character's vault has no valid overlay files to sync; nothing to do"
-          );
-        }
-
-        // updateRaw bypasses the write overlay; sync-back is the one path that
-        // intentionally writes managed fields straight to the DB row.
-        const updatedCharacter =
-          Object.keys(patch).length > 0
-            ? await repos.characters.updateRaw(id, patch)
-            : await repos.characters.findById(id);
-
-        logger.info('[Characters v1] Synced character properties from vault', {
-          characterId: id,
-          mountPointId: mountId,
-          syncedProperties: snapshot.aliases !== undefined,
-          syncedDescription: snapshot.description !== undefined,
-          syncedManifesto: snapshot.manifesto !== undefined,
-          syncedPersonality: snapshot.personality !== undefined,
-          syncedExampleDialogues: snapshot.exampleDialogues !== undefined,
-          syncedPhysical: snapshot.physicalDescription !== undefined,
-          syncedSystemPromptCount: snapshot.systemPrompts?.length ?? 0,
-          syncedScenarioCount: snapshot.scenarios?.length ?? 0,
-          syncedWardrobe: wardrobeSynced,
-          wardrobeItemsWritten,
-        });
-
-        return NextResponse.json({ character: updatedCharacter });
-      } catch (error) {
-        logger.error('[Characters v1] Error syncing properties from vault', { characterId: id }, error instanceof Error ? error : undefined);
-        return serverError('Failed to sync properties from vault');
-      }
-    },
-
-    'sync-properties-to-vault': async () => {
-      try {
-        // Read the raw character so we project the canonical DB state into the
-        // vault, not values that would themselves be overlaid from vault files.
-        const rawCharacter = await repos.characters.findByIdRaw(id);
-        if (!rawCharacter) {
-          return notFound('Character');
-        }
-        if (!rawCharacter.characterDocumentMountPointId) {
-          return badRequest('Character has no linked document-store vault to sync to');
-        }
-
-        const mountId = rawCharacter.characterDocumentMountPointId;
-        const wardrobeItems = await repos.wardrobe.findByCharacterIdRaw(
-          rawCharacter.id,
-          true,
-        );
-
-        // Outfit presets are gone — composite wardrobe items round-trip via
-        // the same `Wardrobe/` folder, so we project just the items list.
-        const writeResult = await writeCharacterVaultManagedFields(mountId, {
-          character: rawCharacter,
-          wardrobeItems,
-        });
-
-        logger.info('[Characters v1] Synced character properties to vault', {
-          characterId: id,
-          mountPointId: mountId,
-          singleFileWriteCount: writeResult.singleFileWriteCount,
-          systemPromptsWritten: writeResult.systemPromptsWritten,
-          scenariosWritten: writeResult.scenariosWritten,
-          wardrobeItemsWritten: writeResult.wardrobeItemsWritten,
-          physicalSkippedNoPrimary: writeResult.physicalSkippedNoPrimary,
-        });
-
-        // Return the overlaid character so the UI picks up vault-backed values
-        // immediately if the overlay switch happens to be on.
-        const refreshed = await repos.characters.findById(id);
-        return NextResponse.json({ character: refreshed });
-      } catch (error) {
-        logger.error('[Characters v1] Error syncing properties to vault', { characterId: id }, error instanceof Error ? error : undefined);
-        return serverError('Failed to sync properties to vault');
-      }
     },
 
     'refresh-archive': async () => {

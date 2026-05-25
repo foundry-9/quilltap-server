@@ -4,6 +4,33 @@
 
 ### 4.6-dev
 
+#### Fix: .qtap export emitted hollow characters
+
+Re-exporting a vault-linked character via `.qtap` was producing a record with empty `identity`, `description`, `manifesto`, `personality`, `exampleDialogues`, `title`, `firstMessage`, `talkativeness`, `pronouns`, `aliases`, `physicalDescription`, `systemPrompts`, and `scenarios`. The export service was calling `repos.characters.findByIdRaw(id)` — the variant that skips the vault overlay — and the 4.6 cutover dropped the matching DB columns, so the raw row had no managed-field data left. Reimporting such an export would land an empty shell on the target instance.
+
+- `lib/export/quilltap-export-service.ts` and `lib/export/ndjson-writer.ts` now read characters via `findById` / `findAll`, which apply the vault overlay before returning. Same fix for the small number of incidental lookups that only used `character.name` — kept consistent so future contributors don't have to remember which lookups are safe.
+- Bundled export → reimport round-trips now preserve managed fields end-to-end.
+
+#### Refactor: CharactersRepository owns vault provisioning end-to-end
+
+Creating a character used to require two coordinated calls: `repos.characters.create(data)` to insert the DB row, then `ensureCharacterVault(character)` (or `provisionImportedCharacterVault`, depending on the caller) to set up the document-store vault and project the managed fields into it. Every API handler, importer, and seed script had to remember the second step. Skip it and the character ended up with an empty vault and no managed-field data anywhere.
+
+- `lib/database/repositories/characters.repository.ts`: `create()` now provisions the vault, scaffolds folders, writes every managed field via `writeCharacterVaultManagedFields`, sets `characterDocumentMountPointId` on the row, and returns the overlaid character — atomic from the caller's perspective. Any `characterDocumentMountPointId` in the input is dropped; new rows always get a freshly-provisioned vault.
+- Removed the post-create `provisionVault` / `ensureCharacterVault` / `provisionImportedCharacterVault` calls from `app/api/v1/characters/route.ts`, `lib/import/quilltap-import-service.ts`. The startup backfill at `lib/startup/backfill-character-vaults.ts` and the avatar-reseed path in `lib/startup/seed-initial-data.ts` keep their `ensureCharacterVault` calls as recovery paths for older characters that might predate the inline provisioning.
+- Added `repos.characters.syncWardrobeToVault(id)` as a thin wrapper for import paths that create wardrobe items after the character — wardrobe items already trigger their own per-row sync via `repos.wardrobe.create`, so the wrapper is currently belt-and-braces.
+
+#### Refactor: Consolidated vault writers; deprecated DB↔vault sync API actions
+
+`populateVaultWithCharacterData` (in `lib/mount-index/character-vault.ts`) and `writeCharacterVaultManagedFields` (in `lib/database/repositories/character-properties-overlay.ts`) were two implementations of the same character-row → vault-files projection, with subtle differences in physical-description handling and folder-projection semantics. They've been collapsed into the latter; `ensureCharacterVault` now reads wardrobe via `repos.wardrobe.findByCharacterIdRaw` and delegates to the unified writer. The Phase 3 cutover migration was updated to call the unified writer too.
+
+The `sync-properties-from-vault` and `sync-properties-to-vault` POST actions on `/api/v1/characters/[id]` have been removed. Post-cutover, the DB columns for managed fields no longer exist, so `sync-properties-from-vault` was logging "synced N properties" while silently writing nothing useful. `sync-properties-to-vault` was worse — it read the character's raw row (managed fields all null) and projected those nulls back into the vault, which would have wiped existing vault content. No UI surface invoked either action, so this is purely a cleanup. The unused `wardrobe.deleteRaw` helper (only used by the removed sync action) and `characters.updateRaw` (same) have also been dropped.
+
+#### Fix: update() now auto-provisions a vault if one is missing
+
+`applyDocumentStoreWriteOverlay` had a silent escape hatch: when a character had no `characterDocumentMountPointId`, the function returned the patch unmodified and let it flow through to the base `_update`, which would then strip every managed field (the columns are gone) and write nothing. Any character that lost its vault link by some other bug would have silently lost any managed-field write performed against it. Every character is supposed to have a vault — the startup backfill provisions one for any that don't — so reaching this branch was a bug, but a quiet one.
+
+- The branch now checks whether the patch carries any managed fields. If yes, it logs a loud `logger.error` (so the upstream bug surfaces) and calls `ensureCharacterVault` to provision one on the fly, then reloads the row and proceeds with the routed write. If no managed fields, the patch passes through unchanged as before.
+
 #### Fix: Save-to-character-gallery from a vault photo
 
 Clicking "Save to character gallery" in the image-detail modal when the image came from a character or user vault gallery (Aurora's embedded gallery or `PhotoGalleryModal` in `character`/`user-character` mode) was failing with an "Image not found" 400 from the server. The two gallery callers set `image.id = entry.linkId` (a `doc_mount_file_links.id` post-Phase-3), but the modal's `addToCharacterGallery` POSTed `{ fileId: image.id }` to `/api/v1/characters/[id]/photos`, and `saveFileToCharacterGallery` looked the value up in `repos.files` (images-v2 FileEntry) — nothing matched, since Phase-3 photos no longer have a FileEntry. The chat-files gallery path was unaffected because chat files still use real FileEntry ids.

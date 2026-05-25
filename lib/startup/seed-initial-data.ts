@@ -304,12 +304,12 @@ async function seedAvatars(
           }
         }
 
-        // Seed characters created during first-startup do not auto-provision a
-        // vault the way API-created ones do, so ensure one exists here.
-        // ensureCharacterVault is idempotent and reads the current DB row, so
-        // a character that already carries characterDocumentMountPointId
-        // returns unchanged. Re-fetch first so we see vaults provisioned by
-        // an upstream step like seedFromImports.
+        // Defensive vault check. repos.characters.create() now provisions the
+        // vault inline, but this avatar-reseed path also runs against older
+        // characters (e.g. ones predating the inline provisioning) — keep
+        // ensureCharacterVault here as a recovery for those. Idempotent for
+        // characters that already have a vault. Re-fetch first so we see
+        // vaults provisioned by an upstream step like seedFromImports.
         const freshCharacter = await repos.characters.findById(character.id) ?? character;
         await ensureCharacterVault(freshCharacter);
         const vault = await getCharacterVaultStore(character.id);

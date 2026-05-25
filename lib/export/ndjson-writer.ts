@@ -119,7 +119,11 @@ async function* streamCharacters(
   const globalRepos = getRepositories();
 
   for (const id of ids) {
-    const character = await repos.characters.findByIdRaw(id);
+    // Use the vault-aware lookup so managed fields (identity, description,
+    // manifesto, personality, etc.) land in the export. The raw lookup would
+    // skip the overlay and emit the empty DB columns left behind by the 4.6
+    // cutover, producing a hollow record.
+    const character = await repos.characters.findById(id);
     if (!character) continue;
 
     const tagNames = await resolveTagNames(repos, character.tags);
@@ -199,7 +203,7 @@ async function* streamChats(
 
   // For chat-memory collection we filter all characters' memories by chatId.
   // Load the character list once up front so we're not doing it per chat.
-  const allCharacters = includeMemories ? await repos.characters.findAllRaw() : [];
+  const allCharacters = includeMemories ? await repos.characters.findAll() : [];
 
   for (const id of ids) {
     const chat = await repos.chats.findById(id);
@@ -211,7 +215,7 @@ async function* streamChats(
       chat.participants.map(async (p) => {
         let characterName: string | undefined;
         if (p.type === 'CHARACTER' && p.characterId) {
-          const char = await repos.characters.findByIdRaw(p.characterId);
+          const char = await repos.characters.findById(p.characterId);
           characterName = char?.name;
         }
         return { participantId: p.id, characterName, type: p.type };
@@ -389,7 +393,7 @@ async function* streamProjects(
 
     const characterRosterNames: string[] = [];
     for (const characterId of project.characterRoster ?? []) {
-      const character = await repos.characters.findByIdRaw(characterId);
+      const character = await repos.characters.findById(characterId);
       if (character) characterRosterNames.push(character.name);
     }
 
@@ -558,7 +562,7 @@ async function resolveExportIds(
 
   switch (options.type) {
     case 'characters':
-      return (await repos.characters.findAllRaw()).map((c) => c.id);
+      return (await repos.characters.findAll()).map((c) => c.id);
     case 'chats':
       return (await repos.chats.findAll()).map((c) => c.id);
     case 'roleplay-templates':

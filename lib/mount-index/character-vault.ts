@@ -14,13 +14,11 @@
  * @module mount-index/character-vault
  */
 
-import crypto from 'node:crypto';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
 import { serializeFrontmatter } from '@/lib/doc-edit/markdown-parser';
+import { writeCharacterVaultManagedFields } from '@/lib/database/repositories/character-properties-overlay';
 import type {
   Character,
   PhysicalDescription,
@@ -72,7 +70,14 @@ export async function ensureCharacterVault(
   });
 
   await scaffoldCharacterMount(mountPoint.id);
-  await populateVaultWithCharacterData(mountPoint.id, character);
+
+  // Read wardrobe raw so the projection writes DB values into the vault, not
+  // overlaid (vault-sourced) values it would otherwise see.
+  const wardrobeItems = await repos.wardrobe.findByCharacterIdRaw(character.id);
+  await writeCharacterVaultManagedFields(mountPoint.id, {
+    character,
+    wardrobeItems,
+  });
 
   await repos.characters.update(character.id, {
     characterDocumentMountPointId: mountPoint.id,
@@ -87,101 +92,6 @@ export async function ensureCharacterVault(
   return { mountPointId: mountPoint.id, created: true };
 }
 
-/**
- * Project every vault-managed character field out to the vault's files.
- *
- * One-way DB → vault sync: reads the fields from the passed-in character
- * object (and, for wardrobe, from `repos.wardrobe.findByCharacterIdRaw`)
- * and writes a faithful snapshot of those values into the vault. This is
- * **destructive** for any existing vault files that disagree with the
- * passed-in character — the caller is responsible for ensuring the source
- * is authoritative.
- *
- * Used at vault provisioning time and by the Phase 3 vault-cutover
- * migration (only on characters whose DB row is the source of truth).
- */
-export async function populateVaultWithCharacterData(
-  mountPointId: string,
-  character: Character,
-): Promise<void> {
-  const repos = getRepositories();
-
-  await writeDatabaseDocument(mountPointId, 'identity.md', character.identity ?? '');
-  await writeDatabaseDocument(mountPointId, 'description.md', character.description ?? '');
-  await writeDatabaseDocument(mountPointId, 'manifesto.md', character.manifesto ?? '');
-  await writeDatabaseDocument(mountPointId, 'personality.md', character.personality ?? '');
-
-  const primaryPhysical = character.physicalDescription ?? null;
-  await writeDatabaseDocument(
-    mountPointId,
-    'physical-description.md',
-    primaryPhysical?.fullDescription ?? '',
-  );
-  await writeDatabaseDocument(
-    mountPointId,
-    'physical-prompts.json',
-    renderPhysicalPromptsJson(primaryPhysical),
-  );
-
-  await writeDatabaseDocument(
-    mountPointId,
-    'example-dialogues.md',
-    character.exampleDialogues ?? '',
-  );
-
-  await writeDatabaseDocument(
-    mountPointId,
-    'properties.json',
-    JSON.stringify(
-      {
-        pronouns: character.pronouns ?? null,
-        aliases: character.aliases ?? [],
-        title: character.title ?? '',
-        firstMessage: character.firstMessage ?? '',
-        talkativeness: character.talkativeness ?? 0.5,
-      },
-      null,
-      2,
-    ),
-  );
-
-  // Raw read so the populator writes DB values to the vault, never the
-  // overlaid (vault-sourced) values it would otherwise see.
-  const wardrobeItems = await repos.wardrobe.findByCharacterIdRaw(character.id);
-  const allItems: WardrobeItem[] = [...wardrobeItems];
-  const slugByItemId = buildSlugByItemIdMap(allItems);
-
-  await writeNamedArrayIntoFolder(
-    mountPointId,
-    CHARACTER_WARDROBE_FOLDER,
-    allItems,
-    (item) => ({
-      fileName: `${sanitizeFileName(item.title)}.md`,
-      content: buildWardrobeItemFile(item, slugByItemId),
-    }),
-  );
-
-  await writeNamedArrayIntoFolder(
-    mountPointId,
-    'Prompts',
-    character.systemPrompts ?? [],
-    (p: CharacterSystemPrompt) => ({
-      fileName: `${sanitizeFileName(p.name)}.md`,
-      content: buildSystemPromptFile(p),
-    }),
-  );
-
-  await writeNamedArrayIntoFolder(
-    mountPointId,
-    'Scenarios',
-    character.scenarios ?? [],
-    (s: CharacterScenario) => ({
-      fileName: `${sanitizeFileName(s.title)}.md`,
-      content: buildScenarioFile(s),
-    }),
-  );
-}
-
 export function renderPhysicalPromptsJson(primary: PhysicalDescription | null | undefined): string {
   return JSON.stringify(
     {
@@ -193,31 +103,6 @@ export function renderPhysicalPromptsJson(primary: PhysicalDescription | null | 
     null,
     2,
   );
-}
-
-async function writeNamedArrayIntoFolder<T>(
-  mountPointId: string,
-  folder: string,
-  items: T[],
-  mapper: (item: T) => { fileName: string; content: string },
-): Promise<void> {
-  if (items.length === 0) return;
-  await ensureFolderPath(mountPointId, folder);
-  const seen = new Set<string>();
-  for (const item of items) {
-    const mapped = mapper(item);
-    let candidate = mapped.fileName;
-    let n = 1;
-    while (seen.has(candidate.toLowerCase())) {
-      const dot = mapped.fileName.lastIndexOf('.');
-      const base = dot >= 0 ? mapped.fileName.slice(0, dot) : mapped.fileName;
-      const ext = dot >= 0 ? mapped.fileName.slice(dot) : '';
-      candidate = `${base}-${n}${ext}`;
-      n++;
-    }
-    seen.add(candidate.toLowerCase());
-    await writeDatabaseDocument(mountPointId, `${folder}/${candidate}`, mapped.content);
-  }
 }
 
 export function buildSystemPromptFile(p: CharacterSystemPrompt): string {

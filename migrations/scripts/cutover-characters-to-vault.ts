@@ -17,7 +17,7 @@
  *     expected file is missing, merge the existing vault snapshot back on
  *     top of the DB row and re-populate — this preserves present files and
  *     fills only the gaps from the (stale) DB row.
- *   - flag == 0 / NULL (DB authoritative): call populateVaultWithCharacterData
+ *   - flag == 0 / NULL (DB authoritative): call writeCharacterVaultManagedFields
  *     to push the DB row into the vault wholesale.
  *
  * After the per-character loop, drop the 16 content columns in a single
@@ -61,10 +61,8 @@ import {
   parseLLMLogsBackupFilename,
   parseMountIndexBackupFilename,
 } from '../../lib/database/backends/sqlite/physical-backup';
-import {
-  ensureCharacterVault,
-  populateVaultWithCharacterData,
-} from '../../lib/mount-index/character-vault';
+import { ensureCharacterVault } from '../../lib/mount-index/character-vault';
+import { writeCharacterVaultManagedFields } from '../../lib/database/repositories/character-properties-overlay';
 import { getRepositories } from '../../lib/repositories/factory';
 import { writeDatabaseDocument } from '../../lib/mount-index/database-store';
 import type { Character } from '../../lib/schemas/character.types';
@@ -415,7 +413,11 @@ async function processOneCharacter(character: Character): Promise<CharacterOutco
   // `readPropertiesFromDocumentStore` flag, so the only remaining path is
   // "DB row is authoritative; push it into the vault wholesale".
   try {
-    await populateVaultWithCharacterData(mountPointId, character);
+    const wardrobeItems = await getRepositories().wardrobe.findByCharacterIdRaw(character.id);
+    await writeCharacterVaultManagedFields(mountPointId, {
+      character,
+      wardrobeItems,
+    });
     outcome.action = 'populated';
   } catch (err) {
     outcome.action = 'blocked';

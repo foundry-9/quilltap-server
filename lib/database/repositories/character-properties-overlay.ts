@@ -90,6 +90,7 @@ import {
   slugifyWardrobeTitle,
   sanitizeFileName,
   renderPhysicalPromptsJson,
+  ensureCharacterVault,
   CHARACTER_WARDROBE_FOLDER,
 } from '@/lib/mount-index/character-vault';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
@@ -144,7 +145,7 @@ const LegacyVaultWardrobeJsonSchema = z.object({
 
 /**
  * The relative paths of the overlay documents inside a character vault.
- * Mirrors `populateVaultWithCharacterData()` in character-vault.ts.
+ * Mirrors `writeCharacterVaultManagedFields()` below.
  */
 export const CHARACTER_PROPERTIES_JSON_PATH = 'properties.json';
 export const CHARACTER_IDENTITY_MD_PATH = 'identity.md';
@@ -1724,13 +1725,41 @@ export async function applyDocumentStoreWriteOverlay(
   patch: Partial<Character>,
 ): Promise<Partial<Character>> {
   const repos = getRepositories();
-  const character = await repos.characters.findByIdRaw(characterId);
+  let character = await repos.characters.findByIdRaw(characterId);
   if (!character) {
     // Caller will hit the same not-found in _update; let it surface there.
     return patch;
   }
+
   if (!hasLinkedVault(character)) {
-    return patch;
+    const wouldRouteManagedField = Array.from(MANAGED_FIELDS).some((f) => (f as string) in patch);
+    if (!wouldRouteManagedField) {
+      // No managed fields in the patch — nothing to route. Let the unmanaged
+      // bits flow to the DB row unchanged.
+      return patch;
+    }
+
+    // The post-4.6 cutover dropped the DB columns for managed fields, so a
+    // character without a vault would silently lose them on the way through
+    // `_update`. Every character is supposed to have a vault — the startup
+    // backfill provisions one for any that don't — so reaching this branch is
+    // a bug elsewhere. Provision a vault now so the write doesn't get
+    // dropped, but log loudly so the upstream issue surfaces.
+    logger.error(
+      'applyDocumentStoreWriteOverlay: character has no linked vault but the patch carries managed fields; provisioning on the fly',
+      {
+        characterId,
+        managedFieldsInPatch: Array.from(MANAGED_FIELDS).filter((f) => (f as string) in patch),
+      },
+    );
+    await ensureCharacterVault(character);
+    // Reload — ensureCharacterVault sets characterDocumentMountPointId.
+    character = await repos.characters.findByIdRaw(characterId);
+    if (!character || !hasLinkedVault(character)) {
+      throw new Error(
+        `applyDocumentStoreWriteOverlay: failed to provision vault for ${characterId}`,
+      );
+    }
   }
 
   const mountPointId = character.characterDocumentMountPointId as string;

@@ -9,7 +9,6 @@ import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import { getRepositories } from '@/lib/repositories/factory';
-import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 import type {
   Character,
   ChatMetadata,
@@ -1127,31 +1126,6 @@ function migrateCharacterScenarios(character: any): any {
   };
 }
 
-/**
- * Provision a character vault for a newly imported character. Awaited so the
- * import's reported success state matches reality (vault-aware features like
- * the Scriptorium can see the character immediately). Failures are recorded
- * as warnings rather than aborting the import — the startup backfill will
- * retry, since `ensureCharacterVault` is idempotent.
- */
-async function provisionImportedCharacterVault(
-  character: Character,
-  warnings: string[]
-): Promise<void> {
-  try {
-    await ensureCharacterVault(character);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    warnings.push(
-      `Failed to provision character vault for "${character.name}": ${message}`
-    );
-    moduleLogger.warn('Failed to provision vault during import', {
-      characterId: character.id,
-      error: message,
-    });
-  }
-}
-
 async function importCharacters(
   userId: string,
   characters: Character[],
@@ -1208,6 +1182,9 @@ async function importCharacters(
 
         if (options.conflictStrategy === 'duplicate') {
           const { id: _, userId: __, createdAt, updatedAt, ...charData } = character;
+          // create() provisions the vault and projects every managed field
+          // (identity / description / manifesto / personality / etc.) into it
+          // atomically — no follow-up ensureCharacterVault call is needed.
           const newCharacter = await repos.characters.create({
             ...charData,
             name: `${charData.name} (imported)`,
@@ -1216,6 +1193,8 @@ async function importCharacters(
 
           // Import wardrobe items for duplicated character (folding any legacy
           // outfitPresets into composites for pre-rework `.qtap` exports).
+          // wardrobe.create() reprojects the vault's Wardrobe/ folder after
+          // each insert, so by the time this returns the vault is in sync.
           await importCharacterWardrobeItems(
             (rawCharacter as ExportedCharacter).wardrobeItems,
             (rawCharacter as ExportedCharacter & { outfitPresets?: LegacyOutfitPreset[] }).outfitPresets,
@@ -1230,14 +1209,13 @@ async function importCharacters(
             warnings
           );
 
-          await provisionImportedCharacterVault(newCharacter, warnings);
-
           imported++;
           continue;
         }
       }
 
       const { id: _, userId: __, createdAt, updatedAt, ...charData } = character;
+      // create() provisions vault + projects managed fields atomically.
       const newCharacter = await repos.characters.create(charData);
       idMaps.characters.set(character.id, newCharacter.id);
 
@@ -1256,8 +1234,6 @@ async function importCharacters(
         newCharacter.id,
         warnings
       );
-
-      await provisionImportedCharacterVault(newCharacter, warnings);
 
       imported++;
     } catch (error) {
@@ -1871,12 +1847,12 @@ async function reconcileRelationships(
 
       // Remap characterDocumentMountPointId. Only rewrite when the imported
       // value resolves to a remapped mount-point row — character vaults are
-      // typically provisioned fresh at import time by
-      // provisionImportedCharacterVault, and the post-provision row holds a
-      // freshly-allocated id we must not blow away. The earlier behavior of
-      // nulling the field on a failed remap created orphaned vaults: the
-      // importer would provision a vault, then this pass would clear the link,
-      // and the startup vault backfill would provision yet another one.
+      // provisioned fresh at import time by `repos.characters.create()`, and
+      // the post-create row holds a freshly-allocated id we must not blow
+      // away. The earlier behavior of nulling the field on a failed remap
+      // created orphaned vaults: the importer would provision a vault, then
+      // this pass would clear the link, and the startup vault backfill would
+      // provision yet another one.
       if (character.characterDocumentMountPointId) {
         const newMountId = remapId(character.characterDocumentMountPointId, idMaps.mountPoints);
         if (newMountId) {

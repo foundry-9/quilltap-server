@@ -14,8 +14,10 @@ import {
   applyDocumentStoreOverlay,
   applyDocumentStoreOverlayOne,
   applyDocumentStoreWriteOverlay,
+  syncCharacterVaultWardrobe,
   MANAGED_FIELDS,
 } from './character-properties-overlay';
+import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 
 /**
  * Characters Repository
@@ -37,9 +39,25 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Find a character by ID without applying the document-store properties overlay.
-   * Used by the export path and the sync-back action, where the canonical DB row
-   * is required regardless of the vault's contents.
+   * Find a character by ID **without applying the vault overlay**. The returned
+   * Character has empty / default values for every managed field (identity,
+   * description, manifesto, personality, exampleDialogues, title, firstMessage,
+   * talkativeness, pronouns, aliases, physicalDescription, systemPrompts,
+   * scenarios) because the DB columns for those fields were dropped in the 4.6
+   * cutover and now live exclusively in the character vault.
+   *
+   * **Almost no caller wants this.** Use {@link findById} for any normal
+   * read — it overlays the vault and returns the character users see in the
+   * UI. The legitimate exceptions are:
+   *
+   * - The overlay's own bootstrap code (it needs to read the row before it can
+   *   apply itself), inside {@link ./character-properties-overlay}.
+   * - Startup migrations and backfills that operate on the DB row directly
+   *   (e.g. {@link ../../startup/backfill-character-vaults}), where the
+   *   overlay either isn't ready or isn't desired.
+   *
+   * Adding new callers requires a comment justifying why the overlay must be
+   * skipped — otherwise you almost certainly want `findById`.
    */
   async findByIdRaw(id: string): Promise<Character | null> {
     return this._findById(id);
@@ -55,8 +73,9 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Find all characters without applying the document-store properties overlay.
-   * Used by the export path.
+   * Find all characters **without applying the vault overlay**. See the warnings
+   * on {@link findByIdRaw}. Reserved for startup migrations / backfills and the
+   * overlay's own bootstrap.
    */
   async findAllRaw(): Promise<Character[]> {
     return this._findAll();
@@ -175,10 +194,23 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Create a new character
+   * Create a new character.
+   *
+   * Atomic from the caller's perspective: validates input, inserts the DB row,
+   * provisions the character's document-store vault, projects every vault-managed
+   * field (identity, description, manifesto, personality, exampleDialogues,
+   * title, firstMessage, talkativeness, pronouns, aliases, physicalDescription,
+   * systemPrompts, scenarios) into the freshly-scaffolded vault, and sets
+   * `characterDocumentMountPointId` on the row. Callers should NOT call
+   * `ensureCharacterVault` afterwards — `create()` owns the full operation.
+   *
+   * Any `characterDocumentMountPointId` in `data` is dropped: a freshly-created
+   * character always gets a freshly-provisioned vault, since pointing a new
+   * row at an existing vault would cross-link unrelated content.
+   *
    * @param data The character data (without id, createdAt, updatedAt). Fields with defaults are optional.
    * @param options Optional CreateOptions to specify ID and createdAt (for sync)
-   * @returns Promise<Character> The created character with generated id and timestamps
+   * @returns Promise<Character> The created character with generated id, timestamps, and linked vault
    */
   async create(
     data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>,
@@ -186,29 +218,49 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   ): Promise<Character> {
     return this.safeQuery(
       async () => {
-        // Ensure required defaults for Character from CharacterInput
+        // Drop any incoming mountPointId — create always provisions a fresh
+        // vault. Importers that carry a source mountPointId in the payload
+        // shouldn't reuse it; the import-reconciliation pass remaps that
+        // pointer to a vault the importer separately created if applicable.
+        const { characterDocumentMountPointId: _droppedMountId, ...rest } = data as Record<string, unknown> & {
+          characterDocumentMountPointId?: string | null;
+        };
+
         const characterData = {
-          ...data,
-          tags: data.tags ?? [],
-          aliases: data.aliases ?? [],
-          pronouns: data.pronouns ?? null,
-          isFavorite: data.isFavorite ?? false,
-          partnerLinks: data.partnerLinks ?? [],
-          avatarOverrides: data.avatarOverrides ?? [],
-          physicalDescription: data.physicalDescription ?? null,
-          systemPrompts: data.systemPrompts ?? [],
-          scenarios: data.scenarios ?? [],
+          ...rest,
+          tags: (rest as Partial<Character>).tags ?? [],
+          aliases: (rest as Partial<Character>).aliases ?? [],
+          pronouns: (rest as Partial<Character>).pronouns ?? null,
+          isFavorite: (rest as Partial<Character>).isFavorite ?? false,
+          partnerLinks: (rest as Partial<Character>).partnerLinks ?? [],
+          avatarOverrides: (rest as Partial<Character>).avatarOverrides ?? [],
+          physicalDescription: (rest as Partial<Character>).physicalDescription ?? null,
+          systemPrompts: (rest as Partial<Character>).systemPrompts ?? [],
+          scenarios: (rest as Partial<Character>).scenarios ?? [],
+          characterDocumentMountPointId: null,
         } as Omit<Character, 'id' | 'createdAt' | 'updatedAt'>;
 
-        const character = await this._create(characterData, options);
+        const created = await this._create(characterData, options);
+
+        // Provision the vault using the in-memory character (which carries the
+        // input's managed-field values). ensureCharacterVault scaffolds folders,
+        // writes every managed file via writeCharacterVaultManagedFields, and
+        // updates the DB row with the new characterDocumentMountPointId.
+        await ensureCharacterVault(created);
 
         logger.info('Character created', {
-          characterId: character.id,
+          characterId: created.id,
           userId: data.userId,
           name: data.name,
         });
 
-        return character;
+        // Reload through the overlay so the returned character reflects the
+        // vault-backed state, including the freshly-set mountPointId.
+        const finalCharacter = await this.findById(created.id);
+        if (!finalCharacter) {
+          throw new Error(`Character ${created.id} disappeared immediately after creation`);
+        }
+        return finalCharacter;
       },
       'Error creating character',
       { userId: data.userId, name: data.name }
@@ -216,14 +268,32 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Update a character. When the character has a linked vault, managed
-   * content fields in `data` are routed to vault files instead of the DB
-   * row; non-managed fields still go to DB. The returned character is
-   * read through the vault overlay so callers see vault-backed values just
-   * like findById would.
+   * Re-project a character's wardrobe items into its vault `Wardrobe/` folder.
    *
-   * Use `updateRaw` to bypass the vault routing (e.g. the sync-back
-   * action pulling vault values into the DB row).
+   * Called by import paths that create wardrobe items AFTER the character
+   * itself (so the wardrobe rows didn't exist when `create()` ran its initial
+   * projection). Idempotent — safe to call even when the vault is already in
+   * sync. Equivalent to `repos.wardrobe.create()`'s post-write side effect,
+   * but explicitly invoked so importers don't have to know about it.
+   */
+  async syncWardrobeToVault(characterId: string): Promise<void> {
+    await syncCharacterVaultWardrobe(characterId);
+  }
+
+  /**
+   * Update a character.
+   *
+   * Managed content fields (identity, description, manifesto, personality,
+   * exampleDialogues, title, firstMessage, talkativeness, pronouns, aliases,
+   * physicalDescription, systemPrompts, scenarios) in `data` are routed to
+   * the character's vault via {@link applyDocumentStoreWriteOverlay}; the
+   * remaining DB-only fields are written through `_update`. The returned
+   * character is overlaid through {@link applyDocumentStoreOverlayOne} so
+   * callers see the vault-backed view just as {@link findById} would.
+   *
+   * If a character somehow lacks a vault, `applyDocumentStoreWriteOverlay`
+   * auto-provisions one (loud `logger.error` so the upstream bug surfaces)
+   * before routing the patch — managed fields are never silently dropped.
    */
   async update(id: string, data: Partial<Character>): Promise<Character | null> {
     return this.safeQuery(
@@ -234,22 +304,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         return applyDocumentStoreOverlayOne(result);
       },
       'Error updating character',
-      { characterId: id }
-    );
-  }
-
-  /**
-   * Update a character bypassing the document-store write overlay. Writes go
-   * directly to the DB row regardless of vault-mode state. Used by the
-   * `sync-properties-from-vault` action so vault values can be copied into
-   * the canonical DB row.
-   */
-  async updateRaw(id: string, data: Partial<Character>): Promise<Character | null> {
-    return this.safeQuery(
-      async () => {
-        return await this._update(id, data);
-      },
-      'Error updating character (raw)',
       { characterId: id }
     );
   }

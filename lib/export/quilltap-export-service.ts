@@ -130,7 +130,7 @@ async function collectChatMemories(
 ): Promise<Memory[]> {
   try {
     // Get all characters and collect their memories filtered by chatId
-    const characters = await repos.characters.findAllRaw();
+    const characters = await repos.characters.findAll();
     const memoriesArrays = await Promise.all(
       characters.map(char => repos.memories.findByCharacterId(char.id))
     );
@@ -204,10 +204,15 @@ export async function exportCharacters(
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
 
-  // Fetch characters
+  // Fetch characters with the vault overlay applied so managed fields
+  // (identity, description, manifesto, personality, exampleDialogues, title,
+  // firstMessage, talkativeness, pronouns, aliases, physicalDescription,
+  // systemPrompts, scenarios) are exported with their current values. Reading
+  // raw would skip the overlay and emit the empty DB columns the 4.6 cutover
+  // left behind, producing a hollow export.
   const characters: ExportedCharacter[] = [];
   for (const id of characterIds) {
-    const character = await repos.characters.findByIdRaw(id);
+    const character = await repos.characters.findById(id);
     if (character) {
       const tagNames = await resolveTagNames(repos, character.tags);
 
@@ -287,7 +292,7 @@ export async function exportChats(
           let characterName: string | undefined;
 
           if (p.type === 'CHARACTER' && p.characterId) {
-            const char = await repos.characters.findByIdRaw(p.characterId);
+            const char = await repos.characters.findById(p.characterId);
             characterName = char?.name;
           }
 
@@ -473,7 +478,7 @@ export async function exportProjects(
       // Resolve character roster names
       const characterRosterNames: string[] = [];
       for (const characterId of project.characterRoster ?? []) {
-        const character = await repos.characters.findByIdRaw(characterId);
+        const character = await repos.characters.findById(characterId);
         if (character) characterRosterNames.push(character.name);
       }
 
@@ -633,7 +638,7 @@ export async function createExport(
     switch (options.type) {
       case 'characters': {
         const allCharacters = options.scope === 'all'
-          ? await repos.characters.findAllRaw()
+          ? await repos.characters.findAll()
           : [];
         const ids = options.scope === 'all'
           ? allCharacters.map(c => c.id)
@@ -811,14 +816,14 @@ export async function previewExport(
     switch (options.type) {
       case 'characters': {
         const allCharacters = options.scope === 'all'
-          ? await repos.characters.findAllRaw()
+          ? await repos.characters.findAll()
           : [];
         const ids = options.scope === 'all'
           ? allCharacters.map(c => c.id)
           : entityIds;
 
         for (const id of ids) {
-          const char = await repos.characters.findByIdRaw(id);
+          const char = await repos.characters.findById(id);
           if (char) {
             entities.push({ id: char.id, name: char.name });
             if (options.includeMemories) {

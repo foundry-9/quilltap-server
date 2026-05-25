@@ -21,30 +21,7 @@ import { executeCascadeDelete } from '@/lib/cascade-delete';
 import { getSeedImports } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
 import { reseedAvatarsForCharacters } from '@/lib/startup/seed-initial-data';
-import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 import { writeCharacterAvatarToVault } from '@/lib/file-storage/character-vault-bridge';
-import type { Character } from '@/lib/schemas/character.types';
-
-/**
- * Provision the character's vault synchronously before returning from the
- * create API, so the vault is ready by the time the response is sent.
- * Failures are logged but don't fail the request — the character record
- * still exists and the next startup backfill will retry (the helper is
- * idempotent). The previous fire-and-forget version was unreliable: a
- * dangling promise started after `return NextResponse.json(...)` in a
- * Next.js route can be torn down before it completes, leaving the
- * character vault-less until next restart.
- */
-async function provisionVault(character: Character): Promise<void> {
-  try {
-    await ensureCharacterVault(character);
-  } catch (err) {
-    logger.warn('[Characters v1] Vault provisioning failed; will retry on next startup', {
-      characterId: character.id,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-}
 
 const CHARACTERS_POST_ACTIONS = ['ai-wizard', 'ai-wizard-stream', 'import', 'quick-create', 'reset-builtins'] as const;
 type CharactersPostAction = typeof CHARACTERS_POST_ACTIONS[number];
@@ -450,8 +427,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     npc: character.npc,
   });
 
-  await provisionVault(character);
-
   return NextResponse.json({ character }, { status: 201 });
 }
 
@@ -489,8 +464,6 @@ async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext
     characterId: character.id,
     name: character.name,
   });
-
-  await provisionVault(character);
 
   return NextResponse.json({ character }, { status: 201 });
 }
@@ -557,12 +530,11 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
 
     let defaultImageId: string | null = null;
     if (pngAvatarBytes) {
-      // Provision the vault synchronously so the imported portrait lands inside
-      // it. There is no disk fallback: if the vault write fails the character
-      // is still created (avatar regen from the UI can recover), but bytes
-      // never leak into the catch-all _general/ space.
+      // create() has already provisioned the vault; land the imported PNG
+      // portrait inside it. No disk fallback: if the vault write fails the
+      // character is still created (avatar regen from the UI can recover),
+      // but bytes never leak into the catch-all _general/ space.
       try {
-        await ensureCharacterVault(character);
         const filename = `${character.name || 'avatar'}.png`;
         const written = await writeCharacterAvatarToVault({
           characterId: character.id,
@@ -585,8 +557,6 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
           },
         );
       }
-    } else {
-      await provisionVault(character);
     }
 
     const chats = await repos.chats.findByCharacterId(character.id);
