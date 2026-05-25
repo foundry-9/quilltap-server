@@ -84,11 +84,15 @@ describe('shouldCheckTitleAtInterchange', () => {
     expect(shouldCheckTitleAtInterchange(10, 0)).toBe(true)
   })
 
-  it('should not check at non-checkpoint interchanges', () => {
-    expect(shouldCheckTitleAtInterchange(4, 0)).toBe(false)
-    expect(shouldCheckTitleAtInterchange(6, 0)).toBe(false)
-    expect(shouldCheckTitleAtInterchange(8, 0)).toBe(false)
-    expect(shouldCheckTitleAtInterchange(9, 0)).toBe(false)
+  it('should not check at non-checkpoint interchanges once the preceding checkpoint has been recorded', () => {
+    // Crossing semantics: a checkpoint fires when the counter has reached or
+    // passed it since the last check. Once `lastChecked` records the most
+    // recent crossed checkpoint, intermediate non-checkpoint counts no
+    // longer fire.
+    expect(shouldCheckTitleAtInterchange(4, 3)).toBe(false)
+    expect(shouldCheckTitleAtInterchange(6, 5)).toBe(false)
+    expect(shouldCheckTitleAtInterchange(8, 7)).toBe(false)
+    expect(shouldCheckTitleAtInterchange(9, 7)).toBe(false)
   })
 
   it('should check every 10 interchanges after 10', () => {

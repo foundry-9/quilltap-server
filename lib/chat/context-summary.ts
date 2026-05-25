@@ -8,7 +8,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { foldChatSummary, ChatMessage, generateTitleFromSummary, considerTitleUpdate, considerHelpChatTitleUpdate, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
+import { foldChatSummary, ChatMessage, generateTitleFromSummary, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent } from '@/lib/schemas/types'
@@ -17,7 +17,7 @@ import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-ove
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
-import { queueStoryBackgroundIfEnabled } from '@/lib/background-jobs/handlers/title-update'
+import { enqueueTitleUpdate } from '@/lib/background-jobs/queue-service'
 import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
 
 /**
@@ -660,143 +660,6 @@ export function generateContextSummaryAsync(options: GenerateSummaryOptions): vo
 }
 
 /**
- * Considers updating the chat title based on recent messages
- * Runs asynchronously in the background
- */
-async function considerTitleUpdateAsync(
-  chatId: string,
-  userId: string,
-  connectionProfile: ConnectionProfile,
-  cheapLLMSettings: CheapLLMSettings,
-  availableProfiles: ConnectionProfile[],
-  currentInterchange: number
-): Promise<void> {
-  try {
-    const repos = getRepositories()
-    const chat = await repos.chats.findById(chatId)
-
-    if (!chat) {
-      logger.warn(`[Title Update] Chat ${chatId} not found`)
-      return
-    }
-
-    // Skip title update if user has manually renamed the chat
-    if (chat.isManuallyRenamed) {
-
-      return
-    }
-
-    // Get cheap LLM provider
-    const cheapLLM = getCheapLLMProvider(
-      connectionProfile,
-      {
-        strategy: cheapLLMSettings.strategy,
-        userDefinedProfileId: cheapLLMSettings.userDefinedProfileId ?? undefined,
-        defaultCheapProfileId: cheapLLMSettings.defaultCheapProfileId ?? undefined,
-        fallbackToLocal: cheapLLMSettings.fallbackToLocal,
-      },
-      availableProfiles
-    )
-    if (!cheapLLM) {
-      logger.warn(`[Title Update] No cheap LLM available for chat ${chatId}`)
-      return
-    }
-
-    // Get messages for context
-    const allMessages = await repos.chats.getMessages(chatId)
-    const conversationMessages: ChatMessage[] = allMessages
-      .filter(msg => msg.type === 'message')
-      .filter(msg => {
-        const role = (msg as { role: string }).role
-        return role === 'USER' || role === 'ASSISTANT'
-      })
-      .map(msg => ({
-        role: (msg as { role: string }).role.toLowerCase() as 'user' | 'assistant',
-        content: (msg as { content: string }).content,
-      }))
-    
-    if (conversationMessages.length === 0) {
-      return
-    }
-    
-    // Get recent messages since last check
-    // We'll take the last 10 messages as "recent" context
-    const recentMessages = conversationMessages.slice(-10)
-    
-    // Use existing summary if available, otherwise use current title
-    const context = chat.contextSummary || chat.title
-    
-    // Ask the cheap LLM if title needs updating — use help-specific prompt for help chats
-    const isHelpChat = chat.chatType === 'help'
-    const considerationResult = isHelpChat
-      ? await considerHelpChatTitleUpdate(chat.title, recentMessages, context, cheapLLM, userId, chatId)
-      : await considerTitleUpdate(chat.title, recentMessages, context, cheapLLM, userId, chatId)
-    
-    if (considerationResult.success && considerationResult.result) {
-      const { needsNewTitle, reason, suggestedTitle } = considerationResult.result
-
-      logger.info(`[Title Update] Chat ${chatId} - needsNewTitle: ${needsNewTitle}, reason: ${reason}`)
-
-      // Create system event for title consideration token tracking
-      if (considerationResult.usage && (considerationResult.usage.promptTokens > 0 || considerationResult.usage.completionTokens > 0)) {
-        try {
-          const costResult = await estimateMessageCost(
-            cheapLLM.provider,
-            cheapLLM.modelName,
-            considerationResult.usage.promptTokens,
-            considerationResult.usage.completionTokens,
-            userId
-          )
-          await createTitleGenerationEvent(
-            chatId,
-            considerationResult.usage,
-            cheapLLM.provider,
-            cheapLLM.modelName,
-            costResult.cost
-          )
-        } catch (e) {
-          logger.error('[Title Update] Failed to create system event:', {}, e instanceof Error ? e : new Error(String(e)))
-        }
-      }
-
-      if (needsNewTitle && suggestedTitle) {
-        // Update the chat title
-        await repos.chats.update(chatId, {
-          title: suggestedTitle,
-          lastRenameCheckInterchange: currentInterchange,
-          updatedAt: new Date().toISOString(),
-        })
-        logger.info(`[Title Update] Updated title for chat ${chatId} to: "${suggestedTitle}"`)
-
-        // Queue story background generation if enabled (skip for help chats — no Lantern support)
-        if (!isHelpChat) {
-          const chatSettings = await repos.chatSettings.findByUserId(userId)
-          if (chatSettings) {
-            // Re-fetch chat to get updated title
-            const updatedChat = await repos.chats.findById(chatId)
-            if (updatedChat) {
-              queueStoryBackgroundIfEnabled(userId, updatedChat, chatSettings, suggestedTitle).catch(error => {
-                logger.error(`[Title Update] Failed to queue story background for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
-              })
-            }
-          }
-        }
-      } else {
-        // Still update the last check interchange even if no title change
-        await repos.chats.update(chatId, {
-          lastRenameCheckInterchange: currentInterchange,
-          updatedAt: new Date().toISOString(),
-        })
-      }
-    } else {
-      logger.warn(`[Title Update] Failed for chat ${chatId}: ${considerationResult.error}`)
-    }
-  } catch (error) {
-    logger.error(`[Title Update] Error for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
-  }
-}
-
-/**
  * Check and generate summary if needed after a message
  * Also checks if title should be updated based on interchange count
  * Call this after message exchanges to maintain context
@@ -830,17 +693,23 @@ export async function checkAndGenerateSummaryIfNeeded(
   if (isAtTitleCheckpoint) {
     logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for ${chat.chatType === 'help' ? 'help ' : ''}chat ${chatId}`)
 
-    // Run title consideration in background (non-blocking)
-    considerTitleUpdateAsync(
-      chatId,
-      userId,
-      connectionProfile,
-      cheapLLMSettings,
-      availableProfiles,
-      currentInterchange
-    ).catch(error => {
-      logger.error(`[Title Update] Background error for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
-    })
+    // Enqueue a TITLE_UPDATE job rather than running the cheap-LLM call
+    // inline. Inline used to leak writes when this path ran inside the
+    // forked job-runner child (autonomous rooms): the title update's
+    // `repos.chats.update` was detached from the handler's write-buffer
+    // flush, so the rename happened in the LLM but never reached the DB.
+    // The job gets its own AsyncLocalStorage scope, so its writes flush
+    // back to the parent normally. Dedup on chatId folds repeat firings
+    // at the same checkpoint into a single pending job.
+    try {
+      await enqueueTitleUpdate(userId, {
+        chatId,
+        connectionProfileId: connectionProfile.id,
+        currentInterchange,
+      })
+    } catch (error) {
+      logger.error(`[Title Update] Failed to enqueue title-update job for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
+    }
   }
 
   const decision = evaluateSummarizationGate({

@@ -3,17 +3,30 @@
  *
  * Handles TITLE_UPDATE background jobs by evaluating whether a chat
  * needs a new title based on recent conversation content.
+ *
+ * Driven by `checkAndGenerateSummaryIfNeeded` in `lib/chat/context-summary.ts`,
+ * which enqueues one of these jobs at each title checkpoint
+ * (see `shouldCheckTitleAtInterchange`). Running through the queue means the
+ * cheap-LLM call and the resulting `repos.chats.update` flush back to the
+ * parent via the child-write-buffer pattern — running this inline inside an
+ * autonomous-room-turn handler used to drop the write on the floor.
  */
 
 import { BackgroundJob, ChatSettings } from '@/lib/schemas/types';
 import type { ChatMetadata } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { considerTitleUpdate, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
+import {
+  considerTitleUpdate,
+  considerHelpChatTitleUpdate,
+  extractVisibleConversation,
+} from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { resolveImageProfileForChat } from '@/lib/image-gen/profile-resolution';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { createTitleGenerationEvent } from '@/lib/services/system-events.service';
+import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import type { TitleUpdatePayload } from '../queue-service';
 import { enqueueStoryBackgroundGeneration } from '../queue-service';
 
@@ -29,6 +42,19 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   if (!chat) {
     throw new Error(`Chat not found: ${payload.chatId}`);
   }
+
+  // Respect the user's choice: a manually-renamed chat is never re-titled by
+  // the cheap LLM. Still advance the checkpoint cursor so we don't keep
+  // re-firing at the same interchange.
+  if (chat.isManuallyRenamed) {
+    await repos.chats.update(payload.chatId, {
+      lastRenameCheckInterchange: payload.currentInterchange,
+      updatedAt: new Date().toISOString(),
+    });
+    return;
+  }
+
+  const isHelpChat = chat.chatType === 'help';
 
   // Get connection profile
   const connectionProfile = await repos.connections.findById(payload.connectionProfileId);
@@ -59,6 +85,13 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
     cheapLLMConfig,
     availableProfiles
   );
+  if (!cheapLLMSelection) {
+    logger.warn('[Title Update] No cheap LLM available', {
+      jobId: job.id,
+      chatId: payload.chatId,
+    });
+    return;
+  }
 
   // For dangerous chats, use uncensored provider to avoid content refusals.
   // Off-duty chats are explicitly opted out of uncensored routing.
@@ -76,7 +109,6 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   const allMessages = await repos.chats.getMessages(payload.chatId);
 
   // Extract only visible conversational messages (USER/ASSISTANT, tool artifacts stripped)
-  const totalCount = allMessages.length;
   const chatMessages = extractVisibleConversation(allMessages);
 
   // Use last 5 messages or fewer if the chat is shorter
@@ -87,53 +119,93 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   }
 
   // Get existing summary for context
-  const existingContext = chat.contextSummary || null;
+  const existingContext = chat.contextSummary || chat.title;
 
-  // Evaluate whether title needs updating
-  const result = await considerTitleUpdate(
-    chat.title,
-    recentMessages,
-    existingContext,
-    cheapLLMSelection,
-    job.userId,
-    payload.chatId
-  );
+  // Evaluate whether title needs updating (help chats use a different prompt)
+  const result = isHelpChat
+    ? await considerHelpChatTitleUpdate(
+        chat.title,
+        recentMessages,
+        existingContext,
+        cheapLLMSelection,
+        job.userId,
+        payload.chatId,
+      )
+    : await considerTitleUpdate(
+        chat.title,
+        recentMessages,
+        existingContext,
+        cheapLLMSelection,
+        job.userId,
+        payload.chatId,
+      );
 
   if (!result.success) {
-    logger.warn('[TitleUpdate] Title evaluation failed', {
-      jobId: job.id,
-      chatId: payload.chatId,
-      error: result.error,
+    logger.warn(`[Title Update] Failed for chat ${payload.chatId}: ${result.error}`);
+    return;
+  }
+
+  // Record the title-consideration LLM spend as a system event (matches the
+  // legacy inline path so users still see the token / cost trace).
+  if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {
+    try {
+      const costResult = await estimateMessageCost(
+        cheapLLMSelection.provider,
+        cheapLLMSelection.modelName,
+        result.usage.promptTokens,
+        result.usage.completionTokens,
+        job.userId,
+      );
+      await createTitleGenerationEvent(
+        payload.chatId,
+        result.usage,
+        cheapLLMSelection.provider,
+        cheapLLMSelection.modelName,
+        costResult.cost,
+      );
+    } catch (e) {
+      logger.error('[Title Update] Failed to create system event:', {}, e instanceof Error ? e : new Error(String(e)));
+    }
+  }
+
+  if (!result.result || !result.result.needsNewTitle || !result.result.suggestedTitle) {
+    // No rename needed — but still advance the checkpoint so we don't
+    // re-evaluate at the same interchange on every following turn.
+    await repos.chats.update(payload.chatId, {
+      lastRenameCheckInterchange: payload.currentInterchange,
+      updatedAt: new Date().toISOString(),
     });
     return;
   }
 
-  // If no update needed, we're done
-  if (!result.result || !result.result.needsNewTitle || !result.result.suggestedTitle) {
-    return;
-  }
+  logger.info(
+    `[Title Update] Chat ${payload.chatId} - needsNewTitle: true, reason: ${result.result.reason}`,
+  );
 
   // Update the chat title
   await repos.chats.update(payload.chatId, {
     title: result.result.suggestedTitle,
     lastRenameCheckInterchange: payload.currentInterchange,
+    updatedAt: new Date().toISOString(),
   });
 
-  logger.info('[TitleUpdate] Title updated', {
-    jobId: job.id,
-    chatId: payload.chatId,
-    previousTitle: chat.title,
-    newTitle: result.result.suggestedTitle,
-    reason: result.result.reason,
-  });
+  logger.info(`[Title Update] Updated title for chat ${payload.chatId} to: "${result.result.suggestedTitle}"`);
 
-  // Queue story background generation if enabled
-  await queueStoryBackgroundIfEnabled(
-    job.userId,
-    chat,
-    chatSettings,
-    result.result.suggestedTitle
-  );
+  // Story-background generation runs for normal chats only — help chats and
+  // autonomous rooms are skipped (the latter inside queueStoryBackgroundIfEnabled).
+  if (!isHelpChat) {
+    // Re-fetch so the helper sees the freshly written title (the chat we
+    // loaded above still has the old one in memory).
+    const updatedChat = await repos.chats.findById(payload.chatId);
+    if (updatedChat) {
+      await queueStoryBackgroundIfEnabled(
+        job.userId,
+        updatedChat,
+        chatSettings,
+        result.result.suggestedTitle,
+      );
+    }
+  }
 }
 
 /**
@@ -187,7 +259,7 @@ export async function queueStoryBackgroundIfEnabled(
     });
 
     if (isNew) {
-      logger.info('[TitleUpdate] Queued story background generation', {
+      logger.info('[Title Update] Queued story background generation', {
         context: 'background-jobs.title-update',
         chatId: chat.id,
         jobId,
@@ -196,11 +268,10 @@ export async function queueStoryBackgroundIfEnabled(
       });
     }
   } catch (error) {
-    logger.warn('[TitleUpdate] Failed to queue story background generation', {
+    logger.warn('[Title Update] Failed to queue story background generation', {
       context: 'background-jobs.title-update',
       chatId: chat.id,
       error: error instanceof Error ? error.message : String(error),
     });
   }
 }
-

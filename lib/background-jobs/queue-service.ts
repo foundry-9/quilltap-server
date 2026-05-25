@@ -612,13 +612,43 @@ export async function enqueueContextSummary(
 }
 
 /**
- * Enqueue a title update job
+ * Enqueue a title update job.
+ *
+ * Dedupe: if a PENDING or PROCESSING TITLE_UPDATE job already exists for the
+ * same chatId, this is a no-op that returns the existing job ID. Multiple
+ * finalizer firings at the same interchange checkpoint (multi-character
+ * turns, autonomous rooms re-firing every assistant turn) all fold into a
+ * single pending job.
  */
 export async function enqueueTitleUpdate(
   userId: string,
   payload: TitleUpdatePayload,
   options?: EnqueueJobOptions
 ): Promise<string> {
+  if (options?.skipDedupCheck) {
+    return enqueueJob(userId, 'TITLE_UPDATE', payload as unknown as Record<string, unknown>, options);
+  }
+
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'TITLE_UPDATE') return false;
+      const existingPayload = j.payload as unknown as TitleUpdatePayload;
+      return existingPayload.chatId === payload.chatId;
+    });
+    if (existing) {
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[Title Update] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through and enqueue anyway.
+  }
+
   return enqueueJob(userId, 'TITLE_UPDATE', payload as unknown as Record<string, unknown>, options);
 }
 

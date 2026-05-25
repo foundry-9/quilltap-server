@@ -4,6 +4,15 @@
 
 ### 4.6-dev
 
+#### Fix: Autonomous rooms — title renames now actually persist
+
+Follow-up to the earlier autonomous-rooms title-rename fix (which made `shouldCheckTitleAtInterchange` actually fire at the right checkpoints). The check was firing — the cheap LLM was happily proposing new titles ("The Estate of Friday and Amy", "The East Pool Covenant", "Cedar, Water, and the Quiet Covenant", …), the log line `[Title Update] Updated title for chat ... to: ...` was being written, and the database row was sitting unchanged at `Chat with Friday and Amy` with `lastRenameCheckInterchange = 0`. Same shape as before, different root cause.
+
+- `checkAndGenerateSummaryIfNeeded` in `lib/chat/context-summary.ts` called the title-update code via a detached `considerTitleUpdateAsync(...).catch(...)` promise. Inside the autonomous-room turn handler — which runs in the forked job-runner child — the handler's `runWithJobScope` flushes pending writes back to the parent the moment the handler returns. The fire-and-forget title-update promise finishes 3–4 seconds later (after the LLM round-trip), calls `repos.chats.update(...)`, which pushes the write into the same per-job buffer that has already been flushed. `appendWrite` doesn't throw (the `AsyncLocalStorage` scope still exists), so the new payload silently rots. Normal chats were unaffected because the route handler runs in the parent, where `getRepositories()` is the real writable container.
+- Replaced the inline call with `enqueueTitleUpdate(...)`. The existing `TITLE_UPDATE` handler at `lib/background-jobs/handlers/title-update.ts` was already wired up but had no callers; ported the missing bits from the inline path so behavior is preserved: `isManuallyRenamed` short-circuit, help-chat branch (`considerHelpChatTitleUpdate`), `createTitleGenerationEvent` for token-cost tracking, advance `lastRenameCheckInterchange` even when the LLM says no rename is needed, skip story-background queueing for help chats, and unified the log prefix to `[Title Update]`.
+- Added a chatId-keyed dedup in `enqueueTitleUpdate` (PENDING/PROCESSING scan, same pattern as `enqueueMemoryExtraction`) so multi-character turns and the every-character-turn autonomous re-fire fold into a single pending job.
+- Same architectural pattern leaks for `generateContextSummaryAsync` (also detached, also called from `checkAndGenerateSummaryIfNeeded`) — the inline summary path eats its writes inside the child too. Not fixed in this commit; deferred follow-up to convert it to a `CONTEXT_SUMMARY` job enqueue analogously.
+
 #### Chore: Version string normalized to 4.6.0-dev after Phase 2 squash merge
 
 The Phase 2 user-character-rotation squash merge carried over its branch-derived version (`4.6.0-phase-2-wip-user-character-rotation.42`). Re-ran `scripts/update_version.sh` on `main` to reset to `4.6.0-dev.39` and sync `packages/quilltap/package.json` and the README badge.
