@@ -1,11 +1,13 @@
 /**
  * Self-Inventory Tool Handler
  *
- * Assembles the seven-section introspection report. Each section is wrapped
+ * Assembles the eight-section introspection report. Each section is wrapped
  * in a try/catch so a single failing lookup yields an "unavailable" marker
  * rather than throwing the whole report away.
  */
 
+import fs from 'fs';
+import path from 'path';
 import packageJson from '@/package.json';
 import { logger } from '@/lib/logger';
 import { formatBytes } from '@/lib/utils/format-bytes';
@@ -18,6 +20,13 @@ import { getModelContextLimit } from '@/lib/llm/model-context-data';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types';
 import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
+import {
+  isDockerEnvironment,
+  isElectronShell,
+  isLimaEnvironment,
+  getElectronShellVersion,
+} from '@/lib/paths';
+import { isDevelopment } from '@/lib/env';
 import {
   SELF_INVENTORY_SECTIONS,
   SelfInventoryToolInput,
@@ -32,6 +41,9 @@ import {
   SelfInventoryChatSection,
   SelfInventoryPromptSection,
   SelfInventoryLastTurnSection,
+  SelfInventoryQuilltapSection,
+  SelfInventoryRuntimeMode,
+  SelfInventoryClientShell,
   validateSelfInventoryInput,
   type SelfInventorySection,
 } from '../self-inventory-tool';
@@ -572,6 +584,113 @@ async function buildLastTurnSection(
   }
 }
 
+function resolveRuntimeMode(): SelfInventoryRuntimeMode {
+  const shell = isElectronShell();
+  const docker = isDockerEnvironment();
+  const vm = isLimaEnvironment();
+
+  if (shell && vm) return 'electron-vm';
+  if (shell && docker) return 'electron-docker';
+  if (shell) return 'electron';
+  if (vm) return 'vm';
+  if (docker) return 'docker';
+  if (isDevelopment) return 'local-dev';
+  return 'local-production';
+}
+
+function resolveClientShell(): SelfInventoryClientShell {
+  const shellVersion = getElectronShellVersion();
+  if (shellVersion) return { type: 'electron', shellVersion };
+  if (isElectronShell()) return { type: 'electron', shellVersion: 'unknown' };
+  return { type: 'browser' };
+}
+
+function parseSemanticVersion(version: string): [number, number, number] {
+  const base = version.split('-')[0];
+  const parts = base.split('.').map(Number);
+  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+}
+
+function findReleaseNotesFile(version: string): { filePath: string; version: string } | null {
+  const releasesDir = path.join(process.cwd(), 'docs', 'releases');
+
+  let files: string[];
+  try {
+    files = fs.readdirSync(releasesDir).filter((f) => f.endsWith('.md'));
+  } catch {
+    return null;
+  }
+
+  const [targetMajor, targetMinor, targetPatch] = parseSemanticVersion(version);
+
+  const candidates: { file: string; version: string; major: number; minor: number; patch: number }[] = [];
+  for (const file of files) {
+    const stem = file.replace(/\.md$/, '');
+    const parts = stem.split('.').map(Number);
+    if (parts.some(isNaN)) continue;
+
+    const major = parts[0] ?? 0;
+    const minor = parts[1] ?? 0;
+    const patch = parts[2] ?? 0;
+
+    if (
+      major < targetMajor ||
+      (major === targetMajor && minor < targetMinor) ||
+      (major === targetMajor && minor === targetMinor && patch <= targetPatch)
+    ) {
+      candidates.push({ file, version: stem, major, minor, patch });
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (a.major !== b.major) return b.major - a.major;
+    if (a.minor !== b.minor) return b.minor - a.minor;
+    return b.patch - a.patch;
+  });
+
+  return {
+    filePath: path.join(releasesDir, candidates[0].file),
+    version: candidates[0].version,
+  };
+}
+
+function buildQuilltapSection(): SelfInventoryQuilltapSection {
+  const version = packageJson.version;
+  const runtimeMode = resolveRuntimeMode();
+  const clientShell = resolveClientShell();
+
+  let releaseNotes: string | null = null;
+  let releaseNotesVersion: string | null = null;
+  const found = findReleaseNotesFile(version);
+  if (found) {
+    try {
+      releaseNotes = fs.readFileSync(found.filePath, 'utf-8');
+      releaseNotesVersion = found.version;
+    } catch {
+      // File disappeared between readdir and readFile
+    }
+  }
+
+  let changelog: string | null = null;
+  try {
+    changelog = fs.readFileSync(path.join(process.cwd(), 'docs', 'CHANGELOG.md'), 'utf-8');
+  } catch {
+    // Changelog not available (e.g. standalone/Docker build without docs)
+  }
+
+  return {
+    available: true,
+    version,
+    runtimeMode,
+    clientShell,
+    releaseNotes,
+    releaseNotesVersion,
+    changelog,
+  };
+}
+
 function resolveRequestedSections(input: unknown): Set<SelfInventorySection> {
   const parsed = input as { sections?: SelfInventorySection[] } | null | undefined;
   const requested = parsed?.sections;
@@ -705,6 +824,23 @@ export async function executeSelfInventoryTool(
       loggedAt: null,
       message: getErrorMessage(err),
     }));
+  }
+
+  if (requested.has('quilltap')) {
+    try {
+      result.quilltap = buildQuilltapSection();
+    } catch (err) {
+      result.quilltap = {
+        available: false,
+        version: packageJson.version,
+        runtimeMode: 'local-dev',
+        clientShell: { type: 'unknown' },
+        releaseNotes: null,
+        releaseNotesVersion: null,
+        changelog: null,
+        message: getErrorMessage(err),
+      };
+    }
   }
 
   logger.debug('self_inventory: sections resolved', {
@@ -877,6 +1013,50 @@ function formatLastTurnSection(section: SelfInventoryLastTurnSection): string {
   ].join('\n');
 }
 
+const RUNTIME_MODE_LABELS: Record<SelfInventoryRuntimeMode, string> = {
+  'local-dev': 'Local (development)',
+  'local-production': 'Local (production)',
+  'docker': 'Docker',
+  'vm': 'VM (Lima/WSL2)',
+  'electron': 'Electron desktop app',
+  'electron-docker': 'Electron + Docker',
+  'electron-vm': 'Electron + VM',
+};
+
+function formatQuilltapSection(section: SelfInventoryQuilltapSection): string {
+  if (!section.available) {
+    return `## Quilltap\nUnavailable — ${section.message ?? 'unknown error'}`;
+  }
+
+  const parts: string[] = [
+    `## Quilltap`,
+    `Version: ${section.version}`,
+    `Runtime: ${RUNTIME_MODE_LABELS[section.runtimeMode] ?? section.runtimeMode}`,
+  ];
+
+  if (section.clientShell.type === 'electron') {
+    parts.push(`Client: Electron shell v${section.clientShell.shellVersion}`);
+  } else if (section.clientShell.type === 'browser') {
+    parts.push(`Client: Web browser`);
+  } else {
+    parts.push(`Client: (unknown)`);
+  }
+
+  if (section.releaseNotes) {
+    parts.push('', `### Release Notes (v${section.releaseNotesVersion})`, section.releaseNotes);
+  } else {
+    parts.push('', `### Release Notes`, '(no release notes found for this version)');
+  }
+
+  if (section.changelog) {
+    parts.push('', `### Changelog`, section.changelog);
+  } else {
+    parts.push('', `### Changelog`, '(changelog not available)');
+  }
+
+  return parts.join('\n');
+}
+
 export function formatSelfInventoryResults(output: SelfInventoryToolOutput): string {
   if (!output.success) {
     return `You are running on Quilltap v${output.quilltapVersion}.\n\nSelf-Inventory Error: ${output.error ?? 'Unknown error'}`;
@@ -909,6 +1089,9 @@ export function formatSelfInventoryResults(output: SelfInventoryToolOutput): str
   }
   if (output.lastTurn) {
     lines.push('', formatLastTurnSection(output.lastTurn));
+  }
+  if (output.quilltap) {
+    lines.push('', formatQuilltapSection(output.quilltap));
   }
 
   return lines.join('\n');

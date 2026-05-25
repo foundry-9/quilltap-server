@@ -1255,9 +1255,9 @@ exports[`tool definitions: derived OpenAI parameters selfInventory: parameters s
   "additionalProperties": false,
   "properties": {
     "sections": {
-      "description": "Optional list of section names to return. If omitted or empty, all seven sections are returned. Pass one or more section names to receive only those sections — useful for saving tokens when you only need specific information.",
+      "description": "Optional list of section names to return. If omitted or empty, all eight sections are returned. Pass one or more section names to receive only those sections — useful for saving tokens when you only need specific information.",
       "items": {
-        "description": "Which section(s) to include. Options: "vault" (files in your character vault), "vaultAccess" (who can read/write your vault in this chat), "memory" (total and high-importance memory counts), "loadedMemories" (memories actually loaded into this turn's prompt), "chats" (conversation count and date range), "prompt" (the static system prompt assembled for every turn), "lastTurn" (provider/model/token usage from the most recent LLM call).",
+        "description": "Which section(s) to include. Options: "vault" (files in your character vault), "vaultAccess" (who can read/write your vault in this chat), "memory" (total and high-importance memory counts), "loadedMemories" (memories actually loaded into this turn's prompt), "chats" (conversation count and date range), "prompt" (the static system prompt assembled for every turn), "lastTurn" (provider/model/token usage from the most recent LLM call), "quilltap" (Quilltap version, release notes, changelog, runtime environment, and client shell).",
         "enum": [
           "vault",
           "vaultAccess",
@@ -1266,6 +1266,7 @@ exports[`tool definitions: derived OpenAI parameters selfInventory: parameters s
           "chats",
           "prompt",
           "lastTurn",
+          "quilltap",
         ],
         "type": "string",
       },

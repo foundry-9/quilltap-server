@@ -590,6 +590,7 @@ export async function executeToolCallWithContext(
       if (result.chats) structuredResult.chats = result.chats;
       if (result.prompt) structuredResult.prompt = result.prompt;
       if (result.lastTurn) structuredResult.lastTurn = result.lastTurn;
+      if (result.quilltap) structuredResult.quilltap = result.quilltap;
 
       return {
         toolName: 'self_inventory',

@@ -19,6 +19,7 @@ export const SELF_INVENTORY_SECTIONS = [
   'chats',
   'prompt',
   'lastTurn',
+  'quilltap',
 ] as const;
 
 export type SelfInventorySection = typeof SELF_INVENTORY_SECTIONS[number];
@@ -37,11 +38,12 @@ export const selfInventoryToolInputSchema = z.object({
         '"loadedMemories" (memories actually loaded into this turn\'s prompt), ' +
         '"chats" (conversation count and date range), ' +
         '"prompt" (the static system prompt assembled for every turn), ' +
-        '"lastTurn" (provider/model/token usage from the most recent LLM call).'
+        '"lastTurn" (provider/model/token usage from the most recent LLM call), ' +
+        '"quilltap" (Quilltap version, release notes, changelog, runtime environment, and client shell).'
       )
   ).optional()
     .describe(
-      'Optional list of section names to return. If omitted or empty, all seven sections are returned. ' +
+      'Optional list of section names to return. If omitted or empty, all eight sections are returned. ' +
       'Pass one or more section names to receive only those sections — useful for saving tokens when ' +
       'you only need specific information.'
     ),
@@ -149,6 +151,31 @@ export type SelfInventoryVaultAccessSection =
 
 export type SelfInventoryLastTurnSource = 'llm_log' | 'profile_fallback';
 
+export type SelfInventoryRuntimeMode =
+  | 'local-dev'
+  | 'local-production'
+  | 'docker'
+  | 'vm'
+  | 'electron'
+  | 'electron-docker'
+  | 'electron-vm';
+
+export type SelfInventoryClientShell =
+  | { type: 'electron'; shellVersion: string }
+  | { type: 'browser' }
+  | { type: 'unknown' };
+
+export interface SelfInventoryQuilltapSection {
+  available: boolean;
+  version: string;
+  runtimeMode: SelfInventoryRuntimeMode;
+  clientShell: SelfInventoryClientShell;
+  releaseNotes: string | null;
+  releaseNotesVersion: string | null;
+  changelog: string | null;
+  message?: string;
+}
+
 export interface SelfInventoryLastTurnSection {
   available: boolean;
   source: SelfInventoryLastTurnSource | null;
@@ -175,6 +202,7 @@ export interface SelfInventoryToolOutput {
   chats?: SelfInventoryChatSection;
   prompt?: SelfInventoryPromptSection;
   lastTurn?: SelfInventoryLastTurnSection;
+  quilltap?: SelfInventoryQuilltapSection;
   error?: string;
 }
 
@@ -183,16 +211,18 @@ export const selfInventoryToolDefinition = {
   function: {
     name: 'self_inventory',
     description:
-      'Return an introspection report about yourself in this chat. Seven sections are available: ' +
+      'Return an introspection report about yourself in this chat. Eight sections are available: ' +
       '"vault" (every file in your character vault, with metadata for doc_read_file), ' +
       '"vaultAccess" (who in this chat can read or write your vault right now), ' +
       '"memory" (total and high-importance memory counts), ' +
       '"loadedMemories" (the actual memories loaded into this turn\'s prompt), ' +
       '"chats" (conversation count and date range), ' +
       '"prompt" (the static system prompt assembled for every turn), ' +
-      '"lastTurn" (provider/model/token usage from the most recent LLM call). ' +
+      '"lastTurn" (provider/model/token usage from the most recent LLM call), ' +
+      '"quilltap" (Quilltap version, release notes for the current or most recent release, ' +
+      'the current changelog, runtime environment, and client shell). ' +
       'Pass a "sections" array to request only specific sections and save tokens; ' +
-      'omit it to receive all seven. Use this when you need to know what source material ' +
+      'omit it to receive all eight. Use this when you need to know what source material ' +
       'you have access to, how you are currently configured, or how close the last turn was ' +
       'to the context window limit.',
     parameters: zodToOpenAISchema(selfInventoryToolInputSchema),

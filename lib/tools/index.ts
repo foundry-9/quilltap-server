@@ -201,6 +201,9 @@ export {
   type SelfInventoryPromptSection,
   type SelfInventoryLastTurnSection,
   type SelfInventoryLastTurnSource,
+  type SelfInventoryQuilltapSection,
+  type SelfInventoryRuntimeMode,
+  type SelfInventoryClientShell,
 } from './self-inventory-tool';
 
 export {
