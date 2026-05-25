@@ -6,7 +6,7 @@ import DeletedImagePlaceholder from '../DeletedImagePlaceholder'
 import { ImageActions } from './ImageActions'
 import { ImageMetadata } from './ImageMetadata'
 import { useImageActions } from './hooks/useImageActions'
-import type { ImageDetailModalProps, Character } from './types'
+import type { ImageDetailModalProps, Character, CharacterGalleryLink } from './types'
 
 export default function ImageDetailModal({
   isOpen,
@@ -21,28 +21,39 @@ export default function ImageDetailModal({
   const [imageMissing, setImageMissing] = useState(false)
 
   const {
-    taggedCharacterIds,
-    taggingInProgress,
+    characterGalleryLinks,
+    savingToGalleryFor,
     settingAvatar,
-    toggleCharacterTag,
+    addToCharacterGallery,
+    removeFromCharacterGallery,
     setAsAvatar,
     handleDownload,
     handleCopyToClipboard,
     handleSaveToGallery,
     savingToGallery,
-    updateTaggedCharacters,
+    updateCharacterGalleryLinks,
   } = useImageActions(image, characters, onAvatarSet)
 
-  // Load characters on mount (includes former personas now with controlledBy: 'user')
+  // Load characters and character gallery links on mount
   useEffect(() => {
     const loadEntities = async () => {
       try {
         setLoadingEntities(true)
-        const charsRes = await fetch('/api/v1/characters')
+
+        const [charsRes, imageRes] = await Promise.all([
+          fetch('/api/v1/characters'),
+          fetch(`/api/v1/images/${image.id}`),
+        ])
 
         if (charsRes.ok) {
           const charsData = await charsRes.json()
           setCharacters(charsData.characters || [])
+        }
+
+        if (imageRes.ok) {
+          const imageData = await imageRes.json()
+          const links: CharacterGalleryLink[] = imageData?.data?.characterGalleryLinks ?? []
+          updateCharacterGalleryLinks(links)
         }
       } catch (error) {
         console.error('Failed to load entities:', {
@@ -56,25 +67,7 @@ export default function ImageDetailModal({
     if (isOpen) {
       loadEntities()
     }
-  }, [isOpen])
-
-  // Update tagged entities when image changes
-  useEffect(() => {
-    if (image.tags) {
-      const charIds = new Set<string>()
-
-      image.tags.forEach((tag) => {
-        const tagId = tag.tagId
-        if (tag.tagType === 'CHARACTER' && characters.some((c) => c.id === tagId)) {
-          charIds.add(tagId)
-        }
-      })
-
-      updateTaggedCharacters(charIds)
-    } else {
-      updateTaggedCharacters(new Set())
-    }
-  }, [image, characters, updateTaggedCharacters])
+  }, [isOpen, image.id, updateCharacterGalleryLinks])
 
   // Keyboard navigation (Escape, arrow keys)
   useImageNavigation({
@@ -118,7 +111,7 @@ export default function ImageDetailModal({
             height={400}
           />
         ) : (
-           
+
           <img
             src={imageSrc}
             alt={image.filename}
@@ -127,16 +120,17 @@ export default function ImageDetailModal({
           />
         )}
 
-        {/* Tag buttons panel */}
+        {/* Character gallery panel */}
         {!imageMissing && (
           <ImageMetadata
             imageId={image.id}
             characters={characters}
             loadingEntities={loadingEntities}
-            taggedCharacterIds={taggedCharacterIds}
-            taggingInProgress={taggingInProgress}
+            characterGalleryLinks={characterGalleryLinks}
+            savingToGalleryFor={savingToGalleryFor}
             settingAvatar={settingAvatar}
-            onToggleCharacterTag={toggleCharacterTag}
+            onAddToCharacterGallery={addToCharacterGallery}
+            onRemoveFromCharacterGallery={removeFromCharacterGallery}
             onSetAsAvatar={setAsAvatar}
           />
         )}

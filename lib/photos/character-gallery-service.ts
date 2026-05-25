@@ -345,6 +345,50 @@ export async function removeFromCharacterGallery(
   return { deleted: true, fileGC: result.fileGC };
 }
 
+export interface SaveFileToCharacterGalleryInput {
+  characterId: string;
+  /** image-v2 FileEntry id to save. */
+  fileId: string;
+  caption?: string | null;
+  tags?: string[];
+  repos: ReturnType<typeof getRepositories>;
+}
+
+/**
+ * Save an existing image-v2 FileEntry into a character's vault `photos/`
+ * folder. Reads the bytes from storage and delegates to
+ * {@link saveToCharacterGallery}.
+ */
+export async function saveFileToCharacterGallery(
+  input: SaveFileToCharacterGalleryInput
+): Promise<SaveToCharacterGalleryOutput> {
+  const { characterId, fileId, caption, tags, repos } = input;
+
+  const fileEntry = await repos.files.findById(fileId);
+  if (!fileEntry) {
+    throw new Error(`Image not found: ${fileId}`);
+  }
+  if (fileEntry.category !== 'IMAGE' && !fileEntry.mimeType.startsWith('image/')) {
+    throw new Error(`File ${fileId} is not an image`);
+  }
+
+  const { fileStorageManager } = await import('@/lib/file-storage/manager');
+  const buffer = await fileStorageManager.downloadFile(fileEntry);
+  if (!buffer || buffer.length === 0) {
+    throw new Error(`Image ${fileId} has empty bytes`);
+  }
+
+  return saveToCharacterGallery({
+    characterId,
+    data: buffer,
+    filename: fileEntry.originalFilename,
+    mimeType: fileEntry.mimeType,
+    caption,
+    tags,
+    repos,
+  });
+}
+
 const UNSAFE_LEAF_CHARS = /[\/\\:*?"<>|\x00-\x1f\x7f]/g;
 function sanitizeLeafName(name: string): string {
   const basename = name.split(/[\\/]/).pop() ?? name;

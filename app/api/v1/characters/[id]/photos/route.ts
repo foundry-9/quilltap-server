@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 import { successResponse, created, badRequest, notFound, serverError } from '@/lib/api/responses';
 import {
   saveToCharacterGallery,
+  saveFileToCharacterGallery,
   listCharacterGallery,
 } from '@/lib/photos/character-gallery-service';
 
@@ -63,14 +64,40 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   }
 );
 
+const saveByFileIdSchema = z.object({
+  fileId: z.string().min(1, 'fileId is required'),
+  caption: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     try {
       if (!id) return badRequest('Missing character id');
 
+      const contentType = req.headers.get('content-type') ?? '';
+
+      if (contentType.includes('application/json')) {
+        const body = await req.json();
+        const parsed = saveByFileIdSchema.safeParse(body);
+        if (!parsed.success) {
+          return badRequest(parsed.error.issues.map(i => i.message).join('; '));
+        }
+
+        const result = await saveFileToCharacterGallery({
+          characterId: id,
+          fileId: parsed.data.fileId,
+          caption: parsed.data.caption ?? null,
+          tags: parsed.data.tags,
+          repos,
+        });
+
+        return created(result);
+      }
+
       const formData = await req.formData().catch(() => null);
       if (!formData) {
-        return badRequest('Request body must be multipart/form-data');
+        return badRequest('Request body must be multipart/form-data or JSON with fileId');
       }
 
       const fileField = formData.get('file');
@@ -103,7 +130,10 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         message.includes('already in') ||
         message.includes('no linked database-backed vault') ||
         message.includes('Unsupported MIME type') ||
-        message.includes('Uploaded image is empty')
+        message.includes('Uploaded image is empty') ||
+        message.includes('not an image') ||
+        message.includes('not found') ||
+        message.includes('empty bytes')
       ) {
         return badRequest(message);
       }
