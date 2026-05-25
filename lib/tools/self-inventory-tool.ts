@@ -11,10 +11,41 @@
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 
+export const SELF_INVENTORY_SECTIONS = [
+  'vault',
+  'vaultAccess',
+  'memory',
+  'loadedMemories',
+  'chats',
+  'prompt',
+  'lastTurn',
+] as const;
+
+export type SelfInventorySection = typeof SELF_INVENTORY_SECTIONS[number];
+
 /**
  * Zod schema for the self inventory tool's input.
  */
-export const selfInventoryToolInputSchema = z.object({})
+export const selfInventoryToolInputSchema = z.object({
+  sections: z.array(
+    z.enum(SELF_INVENTORY_SECTIONS)
+      .describe(
+        'Which section(s) to include. Options: ' +
+        '"vault" (files in your character vault), ' +
+        '"vaultAccess" (who can read/write your vault in this chat), ' +
+        '"memory" (total and high-importance memory counts), ' +
+        '"loadedMemories" (memories actually loaded into this turn\'s prompt), ' +
+        '"chats" (conversation count and date range), ' +
+        '"prompt" (the static system prompt assembled for every turn), ' +
+        '"lastTurn" (provider/model/token usage from the most recent LLM call).'
+      )
+  ).optional()
+    .describe(
+      'Optional list of section names to return. If omitted or empty, all seven sections are returned. ' +
+      'Pass one or more section names to receive only those sections — useful for saving tokens when ' +
+      'you only need specific information.'
+    ),
+});
 
 export type SelfInventoryToolInput = z.infer<typeof selfInventoryToolInputSchema>;
 
@@ -137,13 +168,13 @@ export interface SelfInventoryToolOutput {
   quilltapVersion: string;
   characterId: string;
   characterName: string;
-  vault: SelfInventoryVaultSection;
-  vaultAccess: SelfInventoryVaultAccessSection;
-  memory: SelfInventoryMemorySection;
-  loadedMemories: SelfInventoryLoadedMemoriesSection;
-  chats: SelfInventoryChatSection;
-  prompt: SelfInventoryPromptSection;
-  lastTurn: SelfInventoryLastTurnSection;
+  vault?: SelfInventoryVaultSection;
+  vaultAccess?: SelfInventoryVaultAccessSection;
+  memory?: SelfInventoryMemorySection;
+  loadedMemories?: SelfInventoryLoadedMemoriesSection;
+  chats?: SelfInventoryChatSection;
+  prompt?: SelfInventoryPromptSection;
+  lastTurn?: SelfInventoryLastTurnSection;
   error?: string;
 }
 
@@ -152,13 +183,18 @@ export const selfInventoryToolDefinition = {
   function: {
     name: 'self_inventory',
     description:
-      'Return an introspection report about yourself in this chat: every file in your character vault ' +
-      '(with the metadata needed to read it via doc_read_file), who else in this chat can read or write ' +
-      'that vault right now, memory statistics (total and high-importance), the actual memories loaded ' +
-      'into this turn\'s prompt, conversation statistics (chat count and date range), the static system ' +
-      'prompt assembled for every turn, and provider/model/token usage from the most recent LLM call. ' +
-      'Takes no arguments. Use this when you need to know what source material you have access to, how ' +
-      'you are currently configured, or how close the last turn was to the context window limit.',
+      'Return an introspection report about yourself in this chat. Seven sections are available: ' +
+      '"vault" (every file in your character vault, with metadata for doc_read_file), ' +
+      '"vaultAccess" (who in this chat can read or write your vault right now), ' +
+      '"memory" (total and high-importance memory counts), ' +
+      '"loadedMemories" (the actual memories loaded into this turn\'s prompt), ' +
+      '"chats" (conversation count and date range), ' +
+      '"prompt" (the static system prompt assembled for every turn), ' +
+      '"lastTurn" (provider/model/token usage from the most recent LLM call). ' +
+      'Pass a "sections" array to request only specific sections and save tokens; ' +
+      'omit it to receive all seven. Use this when you need to know what source material ' +
+      'you have access to, how you are currently configured, or how close the last turn was ' +
+      'to the context window limit.',
     parameters: zodToOpenAISchema(selfInventoryToolInputSchema),
   },
 };

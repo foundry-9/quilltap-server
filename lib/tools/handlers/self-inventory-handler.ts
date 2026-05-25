@@ -19,6 +19,7 @@ import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types';
 import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
 import {
+  SELF_INVENTORY_SECTIONS,
   SelfInventoryToolInput,
   SelfInventoryToolOutput,
   SelfInventoryVaultSection,
@@ -32,6 +33,7 @@ import {
   SelfInventoryPromptSection,
   SelfInventoryLastTurnSection,
   validateSelfInventoryInput,
+  type SelfInventorySection,
 } from '../self-inventory-tool';
 
 export interface SelfInventoryToolContext {
@@ -570,6 +572,15 @@ async function buildLastTurnSection(
   }
 }
 
+function resolveRequestedSections(input: unknown): Set<SelfInventorySection> {
+  const parsed = input as { sections?: SelfInventorySection[] } | null | undefined;
+  const requested = parsed?.sections;
+  if (!requested || requested.length === 0) {
+    return new Set(SELF_INVENTORY_SECTIONS);
+  }
+  return new Set(requested);
+}
+
 export async function executeSelfInventoryTool(
   input: unknown,
   context: SelfInventoryToolContext
@@ -581,57 +592,14 @@ export async function executeSelfInventoryTool(
     });
   }
 
+  const requested = resolveRequestedSections(input);
+
   if (!context.characterId) {
     return {
       success: false,
       quilltapVersion: packageJson.version,
       characterId: '',
       characterName: '',
-      vault: { available: false, reason: 'error', message: 'Missing characterId.' },
-      vaultAccess: {
-        available: false,
-        sharedVaultsEnabled: false,
-        message: 'Missing characterId.',
-      },
-      memory: {
-        available: false,
-        totalCount: 0,
-        highImportanceCount: 0,
-        highImportancePercent: 0,
-        threshold: HIGH_IMPORTANCE_THRESHOLD,
-        message: 'Missing characterId.',
-      },
-      loadedMemories: {
-        available: false,
-        message: 'Missing characterId.',
-      },
-      chats: {
-        available: false,
-        chatCount: 0,
-        earliestCreatedAt: null,
-        latestActivityAt: null,
-        message: 'Missing characterId.',
-      },
-      prompt: {
-        available: false,
-        systemPrompt: null,
-        characterCount: 0,
-        approxTokens: null,
-        message: 'Missing characterId.',
-      },
-      lastTurn: {
-        available: false,
-        source: null,
-        provider: null,
-        modelName: null,
-        promptTokens: null,
-        completionTokens: null,
-        totalTokens: null,
-        contextWindow: null,
-        utilizationPercent: null,
-        loggedAt: null,
-        message: 'Missing characterId.',
-      },
       error: 'self_inventory requires a character context',
     };
   }
@@ -644,138 +612,108 @@ export async function executeSelfInventoryTool(
       quilltapVersion: packageJson.version,
       characterId: context.characterId,
       characterName: '',
-      vault: { available: false, reason: 'error', message: 'Character not found.' },
-      vaultAccess: {
-        available: false,
-        sharedVaultsEnabled: false,
-        message: 'Character not found.',
-      },
-      memory: {
-        available: false,
-        totalCount: 0,
-        highImportanceCount: 0,
-        highImportancePercent: 0,
-        threshold: HIGH_IMPORTANCE_THRESHOLD,
-        message: 'Character not found.',
-      },
-      loadedMemories: {
-        available: false,
-        message: 'Character not found.',
-      },
-      chats: {
-        available: false,
-        chatCount: 0,
-        earliestCreatedAt: null,
-        latestActivityAt: null,
-        message: 'Character not found.',
-      },
-      prompt: {
-        available: false,
-        systemPrompt: null,
-        characterCount: 0,
-        approxTokens: null,
-        message: 'Character not found.',
-      },
-      lastTurn: {
-        available: false,
-        source: null,
-        provider: null,
-        modelName: null,
-        promptTokens: null,
-        completionTokens: null,
-        totalTokens: null,
-        contextWindow: null,
-        utilizationPercent: null,
-        loggedAt: null,
-        message: 'Character not found.',
-      },
       error: `Character ${context.characterId} not found`,
     };
   }
 
-  const vault: SelfInventoryVaultSection = await buildVaultSection(character).catch(
-    (err) => ({
-      available: false as const,
-      reason: 'error' as const,
-      message: getErrorMessage(err),
-    })
-  );
-
-  const vaultAccess: SelfInventoryVaultAccessSection = await buildVaultAccessSection(
-    character,
-    context
-  ).catch((err) => ({
-    available: false as const,
-    sharedVaultsEnabled: false,
-    message: getErrorMessage(err),
-  }));
-
-  const memory: SelfInventoryMemorySection = await buildMemorySection(
-    context.characterId
-  ).catch((err) => ({
-    available: false,
-    totalCount: 0,
-    highImportanceCount: 0,
-    highImportancePercent: 0,
-    threshold: HIGH_IMPORTANCE_THRESHOLD,
-    message: getErrorMessage(err),
-  }));
-
-  const loadedMemories: SelfInventoryLoadedMemoriesSection = buildLoadedMemoriesSection(
-    context.loadedMemories
-  );
-
-  const chats: SelfInventoryChatSection = await buildChatsSection(
-    context.characterId
-  ).catch((err) => ({
-    available: false,
-    chatCount: 0,
-    earliestCreatedAt: null,
-    latestActivityAt: null,
-    message: getErrorMessage(err),
-  }));
-
-  const prompt: SelfInventoryPromptSection = await buildPromptSection(
-    character,
-    context
-  ).catch((err) => ({
-    available: false,
-    systemPrompt: null,
-    characterCount: 0,
-    approxTokens: null,
-    message: getErrorMessage(err),
-  }));
-
-  const lastTurn: SelfInventoryLastTurnSection = await buildLastTurnSection(
-    character,
-    context
-  ).catch((err) => ({
-    available: false,
-    source: null,
-    provider: null,
-    modelName: null,
-    promptTokens: null,
-    completionTokens: null,
-    totalTokens: null,
-    contextWindow: null,
-    utilizationPercent: null,
-    loggedAt: null,
-    message: getErrorMessage(err),
-  }));
-
-  return {
+  const result: SelfInventoryToolOutput = {
     success: true,
     quilltapVersion: packageJson.version,
     characterId: character.id,
     characterName: character.name,
-    vault,
-    vaultAccess,
-    memory,
-    loadedMemories,
-    chats,
-    prompt,
-    lastTurn,
   };
+
+  if (requested.has('vault')) {
+    result.vault = await buildVaultSection(character).catch(
+      (err) => ({
+        available: false as const,
+        reason: 'error' as const,
+        message: getErrorMessage(err),
+      })
+    );
+  }
+
+  if (requested.has('vaultAccess')) {
+    result.vaultAccess = await buildVaultAccessSection(
+      character,
+      context
+    ).catch((err) => ({
+      available: false as const,
+      sharedVaultsEnabled: false,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  if (requested.has('memory')) {
+    result.memory = await buildMemorySection(
+      context.characterId
+    ).catch((err) => ({
+      available: false,
+      totalCount: 0,
+      highImportanceCount: 0,
+      highImportancePercent: 0,
+      threshold: HIGH_IMPORTANCE_THRESHOLD,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  if (requested.has('loadedMemories')) {
+    result.loadedMemories = buildLoadedMemoriesSection(
+      context.loadedMemories
+    );
+  }
+
+  if (requested.has('chats')) {
+    result.chats = await buildChatsSection(
+      context.characterId
+    ).catch((err) => ({
+      available: false,
+      chatCount: 0,
+      earliestCreatedAt: null,
+      latestActivityAt: null,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  if (requested.has('prompt')) {
+    result.prompt = await buildPromptSection(
+      character,
+      context
+    ).catch((err) => ({
+      available: false,
+      systemPrompt: null,
+      characterCount: 0,
+      approxTokens: null,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  if (requested.has('lastTurn')) {
+    result.lastTurn = await buildLastTurnSection(
+      character,
+      context
+    ).catch((err) => ({
+      available: false,
+      source: null,
+      provider: null,
+      modelName: null,
+      promptTokens: null,
+      completionTokens: null,
+      totalTokens: null,
+      contextWindow: null,
+      utilizationPercent: null,
+      loggedAt: null,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  logger.debug('self_inventory: sections resolved', {
+    context: 'self-inventory-handler',
+    characterId: character.id,
+    requestedSections: [...requested],
+  });
+
+  return result;
 }
 
 function formatVaultSection(section: SelfInventoryVaultSection): string {
@@ -949,21 +887,29 @@ export function formatSelfInventoryResults(output: SelfInventoryToolOutput): str
     ``,
     `# Self-Inventory Report`,
     `Character: ${output.characterName} (id: ${output.characterId})`,
-    ``,
-    formatVaultSection(output.vault),
-    ``,
-    formatVaultAccessSection(output.vaultAccess),
-    ``,
-    formatMemorySection(output.memory),
-    ``,
-    formatLoadedMemoriesSection(output.loadedMemories),
-    ``,
-    formatChatsSection(output.chats),
-    ``,
-    formatPromptSection(output.prompt),
-    ``,
-    formatLastTurnSection(output.lastTurn),
   ];
+
+  if (output.vault) {
+    lines.push('', formatVaultSection(output.vault));
+  }
+  if (output.vaultAccess) {
+    lines.push('', formatVaultAccessSection(output.vaultAccess));
+  }
+  if (output.memory) {
+    lines.push('', formatMemorySection(output.memory));
+  }
+  if (output.loadedMemories) {
+    lines.push('', formatLoadedMemoriesSection(output.loadedMemories));
+  }
+  if (output.chats) {
+    lines.push('', formatChatsSection(output.chats));
+  }
+  if (output.prompt) {
+    lines.push('', formatPromptSection(output.prompt));
+  }
+  if (output.lastTurn) {
+    lines.push('', formatLastTurnSection(output.lastTurn));
+  }
 
   return lines.join('\n');
 }

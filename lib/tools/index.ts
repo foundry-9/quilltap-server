@@ -188,8 +188,10 @@ export {
 
 // Self-Inventory Tool (character introspection)
 export {
+  SELF_INVENTORY_SECTIONS,
   selfInventoryToolDefinition,
   validateSelfInventoryInput,
+  type SelfInventorySection,
   type SelfInventoryToolInput,
   type SelfInventoryToolOutput,
   type SelfInventoryVaultFile,
