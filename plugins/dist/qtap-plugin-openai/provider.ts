@@ -552,6 +552,7 @@ export class OpenAIProvider implements TextProvider {
         },
         attachmentResults,
         rawResponse: raw,
+        rawProviderUsage: (finalResponse.usage ?? null) as Record<string, unknown> | null,
         ...(cacheUsage ? { cacheUsage } : {}),
       };
     } else {

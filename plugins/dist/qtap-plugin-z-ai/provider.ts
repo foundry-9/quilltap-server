@@ -439,6 +439,7 @@ export class ZAIProvider implements TextProvider {
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       attachmentResults,
       rawResponse,
+      rawProviderUsage: (usage ?? null) as Record<string, unknown> | null,
       ...(cacheUsage ? { cacheUsage } : {}),
     };
   }

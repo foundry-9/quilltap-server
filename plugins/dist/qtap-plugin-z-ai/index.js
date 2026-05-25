@@ -10284,6 +10284,7 @@ var ZAIProvider = class {
       toolCalls: toolCalls.length > 0 ? toolCalls : void 0,
       attachmentResults,
       rawResponse,
+      rawProviderUsage: usage ?? null,
       ...cacheUsage ? { cacheUsage } : {}
     };
   }

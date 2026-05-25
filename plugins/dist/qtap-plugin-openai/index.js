@@ -9661,6 +9661,7 @@ var OpenAIProvider = class {
         },
         attachmentResults,
         rawResponse: raw,
+        rawProviderUsage: finalResponse.usage ?? null,
         ...cacheUsage ? { cacheUsage } : {}
       };
     } else {

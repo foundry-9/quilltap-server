@@ -49951,6 +49951,10 @@ var GoogleProvider = class {
         attachmentResults,
         // Convert SDK response class to plain object for Zod validation
         rawResponse: lastResponse ? JSON.parse(JSON.stringify(lastResponse)) : void 0,
+        // usage lives in usageMetadata on the Google SDK response — preserve the
+        // full provider-shape sub-object (incl. cachedContentTokenCount) for
+        // cache-instrumentation diagnostics.
+        rawProviderUsage: usage ? JSON.parse(JSON.stringify(usage)) : null,
         thoughtSignature,
         ...cacheUsage ? { cacheUsage } : {}
       };

@@ -15409,6 +15409,7 @@ var AnthropicProvider = class {
     let model = null;
     let cacheCreationInputTokens;
     let cacheReadInputTokens;
+    let rawProviderUsage = null;
     const contentBlocks = [];
     for await (const event of stream) {
       if (event.type === "content_block_start") {
@@ -15466,11 +15467,17 @@ var AnthropicProvider = class {
         const rawUsage = event.message.usage;
         cacheCreationInputTokens = rawUsage.cache_creation_input_tokens;
         cacheReadInputTokens = rawUsage.cache_read_input_tokens;
+        rawProviderUsage = { ...rawUsage };
       }
       if (event.type === "message_delta") {
         totalOutputTokens = event.usage.output_tokens;
         if (event.delta.stop_reason) {
           stopReason = event.delta.stop_reason;
+        }
+        if (rawProviderUsage) {
+          rawProviderUsage = { ...rawProviderUsage, ...event.usage };
+        } else {
+          rawProviderUsage = { ...event.usage };
         }
       }
       if (event.type === "message_stop") {
@@ -15501,6 +15508,7 @@ var AnthropicProvider = class {
           },
           attachmentResults,
           rawResponse: fullMessage,
+          rawProviderUsage,
           cacheUsage
         };
       }

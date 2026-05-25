@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Fix: PhotoGalleryModal character/persona mode tests against stale endpoint
+
+The character-mode and user-character-mode test cases in `__tests__/unit/photo-gallery-modal-deleted-handling.test.tsx` were still mocking `/api/v1/images` with the legacy `{data: [{id, filename, filepath, ...}]}` shape. After PR #19 moved the gallery to `/api/v1/characters/[id]/photos` returning `{entries: [{linkId, fileName, blobUrl, mimeType, fileSizeBytes, keptAt, ...}]}`, the component received zero photos and rendered the empty state, so `getByRole('img')` failed. Updated both `beforeEach` blocks to match the `/photos` URL and return the new entries shape; `linkId` values preserved so the existing `deleted-placeholder-img-1` / `deleted-placeholder-img-2` testid assertions still match.
+
 #### Fix: Compression cache lost participant entries under concurrent writes
 
 In multi-character chats, every assistant turn finishes by triggering an async pre-compression for that participant; the result is persisted into `chats.compressionCache`, a JSON object keyed by participantId. The persist path did a load-modify-save (read the full field, splice in this participant's entry, write the whole field back). Two finalizers completing back-to-back could interleave their reads and writes so the later writer overwrote the earlier writer's entry — silently erasing it. Caches for characters that finalize in the same window as other characters could be wiped permanently, forcing them to pay full sync compression on every subsequent turn.

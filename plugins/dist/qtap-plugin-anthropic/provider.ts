@@ -565,6 +565,7 @@ export class AnthropicProvider implements TextProvider {
     let model: string | null = null
     let cacheCreationInputTokens: number | undefined
     let cacheReadInputTokens: number | undefined
+    let rawProviderUsage: Record<string, unknown> | null = null
 
     // Track all content blocks (text and tool_use) for proper tool call detection
     const contentBlocks: Array<{
@@ -649,6 +650,9 @@ export class AnthropicProvider implements TextProvider {
         const rawUsage = event.message.usage as any
         cacheCreationInputTokens = rawUsage.cache_creation_input_tokens
         cacheReadInputTokens = rawUsage.cache_read_input_tokens
+        // Snapshot the provider-shape usage object pre-normalization so the
+        // logger can detect cache-field-mapping regressions in a SQL query.
+        rawProviderUsage = { ...rawUsage }
       }
 
       // Track usage and stop reason from message_delta event
@@ -656,6 +660,14 @@ export class AnthropicProvider implements TextProvider {
         totalOutputTokens = event.usage.output_tokens
         if (event.delta.stop_reason) {
           stopReason = event.delta.stop_reason
+        }
+        // Merge the delta usage (carries output_tokens and may carry updated
+        // cache_*_input_tokens) into the snapshot so the terminal yield
+        // surfaces the full provider-shape usage including cache fields.
+        if (rawProviderUsage) {
+          rawProviderUsage = { ...rawProviderUsage, ...(event.usage as Record<string, unknown>) }
+        } else {
+          rawProviderUsage = { ...(event.usage as Record<string, unknown>) }
         }
       }
 
@@ -697,6 +709,7 @@ export class AnthropicProvider implements TextProvider {
           },
           attachmentResults,
           rawResponse: fullMessage,
+          rawProviderUsage,
           cacheUsage,
         }
       }
