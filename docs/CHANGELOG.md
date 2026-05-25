@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Fix: Compression cache lost participant entries under concurrent writes
+
+In multi-character chats, every assistant turn finishes by triggering an async pre-compression for that participant; the result is persisted into `chats.compressionCache`, a JSON object keyed by participantId. The persist path did a load-modify-save (read the full field, splice in this participant's entry, write the whole field back). Two finalizers completing back-to-back could interleave their reads and writes so the later writer overwrote the earlier writer's entry — silently erasing it. Caches for characters that finalize in the same window as other characters could be wiped permanently, forcing them to pay full sync compression on every subsequent turn.
+
+- `lib/services/chat-message/compression-cache.service.ts`: added `withPersistLock(chatId, fn)`, an in-process mutex chained via `prev.then(fn, fn)` so a failed write doesn't jam the queue and the map entry is dropped only when nothing newer is chained on top. `persistToDatabase` and `clearFromDatabase` are now wrapped in the lock; the clear has to share the same lock or it could wipe the field between a concurrent persist's read and write.
+- The lock is per-`chatId`, so unrelated chats still run concurrently.
+- Doesn't change the cold-cache-on-next-speaker behavior — only the previous speaker's cache is still pre-warmed. That's a separate issue.
+
 #### Fix: .qtap export emitted hollow characters
 
 Re-exporting a vault-linked character via `.qtap` was producing a record with empty `identity`, `description`, `manifesto`, `personality`, `exampleDialogues`, `title`, `firstMessage`, `talkativeness`, `pronouns`, `aliases`, `physicalDescription`, `systemPrompts`, and `scenarios`. The export service was calling `repos.characters.findByIdRaw(id)` — the variant that skips the vault overlay — and the 4.6 cutover dropped the matching DB columns, so the raw row had no managed-field data left. Reimporting such an export would land an empty shell on the target instance.

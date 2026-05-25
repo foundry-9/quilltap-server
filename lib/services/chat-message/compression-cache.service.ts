@@ -75,6 +75,37 @@ export interface AsyncCompressionOptions {
 // Value: CompressionCacheEntry
 const compressionCache = new Map<string, CompressionCacheEntry>()
 
+// Per-chat persistence locks. Serializes load-modify-save of `chat.compressionCache`
+// so two finalizers writing different participantId keys can't clobber each other.
+// Parent-process only — child handlers never call persistToDatabase/clearFromDatabase.
+const persistLocks = new Map<string, Promise<unknown>>()
+
+/**
+ * Serialize a load-modify-save block on `chat.compressionCache` for a given chat.
+ *
+ * The cache is a JSON object keyed by participantId. In a multi-character chat,
+ * two finalizers can race: each reads `chat.compressionCache`, sets its own
+ * participant's entry, and writes back the whole field. Whichever writes second
+ * wins and silently erases the other participant's entry. This chains all writes
+ * for a given chatId through a single promise so reads always see the latest
+ * persisted state.
+ *
+ * @internal exported for tests
+ */
+export function withPersistLock<T>(chatId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = persistLocks.get(chatId) ?? Promise.resolve()
+  // Run fn whether prev settled successfully or threw — one bad write must not
+  // jam the queue. The .then(fn, fn) form invokes fn in either case.
+  const next = prev.then(fn, fn)
+  persistLocks.set(chatId, next)
+  return (next as Promise<T>).finally(() => {
+    // Drop the map entry only if nothing newer chained on top.
+    if (persistLocks.get(chatId) === next) {
+      persistLocks.delete(chatId)
+    }
+  })
+}
+
 /**
  * Simple hash function for system prompt change detection
  */
@@ -138,35 +169,40 @@ async function persistToDatabase(
   participantId: string | undefined,
   entry: PersistedCompressionCache
 ): Promise<void> {
-  try {
-    // Dynamic import to avoid circular dependencies. Must use the factory so
-    // child-process callers go through the buffered-write proxy; the raw
-    // `@/lib/database/repositories` module would throw "attempt to write a
-    // readonly database" against the child's readonly SQLCipher connection.
-    const { getRepositories } = await import('@/lib/repositories/factory')
-    const repos = getRepositories()
+  // Serialize against other writers on this chat — otherwise concurrent
+  // finalizers for different participants will load the same snapshot, each
+  // add their own participantId key, and the second write erases the first.
+  return withPersistLock(chatId, async () => {
+    try {
+      // Dynamic import to avoid circular dependencies. Must use the factory so
+      // child-process callers go through the buffered-write proxy; the raw
+      // `@/lib/database/repositories` module would throw "attempt to write a
+      // readonly database" against the child's readonly SQLCipher connection.
+      const { getRepositories } = await import('@/lib/repositories/factory')
+      const repos = getRepositories()
 
-    if (participantId) {
-      // Multi-character chat: store as Record<participantId, cache>
-      const chat = await repos.chats.findById(chatId)
-      const existingCache = (chat?.compressionCache || {}) as Record<string, PersistedCompressionCache>
-      existingCache[participantId] = entry
-      await repos.chats.update(chatId, {
-        compressionCache: existingCache as unknown as Record<string, unknown>,
-      })
-    } else {
-      // Single-character chat: store directly (backward compatible)
-      await repos.chats.update(chatId, {
-        compressionCache: entry as unknown as Record<string, unknown>,
-      })
+      if (participantId) {
+        // Multi-character chat: store as Record<participantId, cache>
+        const chat = await repos.chats.findById(chatId)
+        const existingCache = (chat?.compressionCache || {}) as Record<string, PersistedCompressionCache>
+        existingCache[participantId] = entry
+        await repos.chats.update(chatId, {
+          compressionCache: existingCache as unknown as Record<string, unknown>,
+        })
+      } else {
+        // Single-character chat: store directly (backward compatible)
+        await repos.chats.update(chatId, {
+          compressionCache: entry as unknown as Record<string, unknown>,
+        })
+      }
+    } catch (error) {
+      logger.error('[CompressionCache] Failed to persist to database', {
+        chatId,
+        participantId,
+      }, error instanceof Error ? error : undefined)
+      // Don't throw - persistence failure shouldn't break the flow
     }
-  } catch (error) {
-    logger.error('[CompressionCache] Failed to persist to database', {
-      chatId,
-      participantId,
-    }, error instanceof Error ? error : undefined)
-    // Don't throw - persistence failure shouldn't break the flow
-  }
+  })
 }
 
 /**
@@ -221,35 +257,40 @@ async function loadFromDatabase(chatId: string, participantId?: string): Promise
  * Clear compression cache from database
  */
 async function clearFromDatabase(chatId: string, participantId?: string): Promise<void> {
-  try {
-    // Dynamic import to avoid circular dependencies. See persistToDatabase
-    // above for why this must be the factory, not the raw module.
-    const { getRepositories } = await import('@/lib/repositories/factory')
-    const repos = getRepositories()
+  // Share the persist lock so a clear can't slip between a persist's read and
+  // write (or vice versa). Otherwise a clear can wipe the field after a
+  // concurrent persist has already merged its own entry into the snapshot.
+  return withPersistLock(chatId, async () => {
+    try {
+      // Dynamic import to avoid circular dependencies. See persistToDatabase
+      // above for why this must be the factory, not the raw module.
+      const { getRepositories } = await import('@/lib/repositories/factory')
+      const repos = getRepositories()
 
-    if (participantId) {
-      // Multi-character chat: delete specific participant key from record
-      const chat = await repos.chats.findById(chatId)
-      if (chat?.compressionCache) {
-        const record = (chat.compressionCache as unknown as Record<string, PersistedCompressionCache>)
-        delete record[participantId]
-        const isEmpty = Object.keys(record).length === 0
+      if (participantId) {
+        // Multi-character chat: delete specific participant key from record
+        const chat = await repos.chats.findById(chatId)
+        if (chat?.compressionCache) {
+          const record = (chat.compressionCache as unknown as Record<string, PersistedCompressionCache>)
+          delete record[participantId]
+          const isEmpty = Object.keys(record).length === 0
+          await repos.chats.update(chatId, {
+            compressionCache: isEmpty ? null : (record as unknown as Record<string, unknown>),
+          })
+        }
+      } else {
+        // Single-character chat: clear entire field
         await repos.chats.update(chatId, {
-          compressionCache: isEmpty ? null : (record as unknown as Record<string, unknown>),
+          compressionCache: null,
         })
       }
-    } else {
-      // Single-character chat: clear entire field
-      await repos.chats.update(chatId, {
-        compressionCache: null,
-      })
+    } catch (error) {
+      logger.error('[CompressionCache] Failed to clear from database', {
+        chatId,
+        participantId,
+      }, error instanceof Error ? error : undefined)
     }
-  } catch (error) {
-    logger.error('[CompressionCache] Failed to clear from database', {
-      chatId,
-      participantId,
-    }, error instanceof Error ? error : undefined)
-  }
+  })
 }
 
 /**
