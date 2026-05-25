@@ -4,6 +4,15 @@
 
 ### 4.6-dev
 
+#### Fix: Participant talkativeness slider now reflects the character's actual value
+
+The Salon participant slider was initializing to 50% for every character that didn't have a per-chat override, regardless of the character's vault-stored `talkativeness`. A character set to 0.8 in `properties.json` would show as 0.5 in the sidebar, and the predicted-turn-order sidebar plus the client-side "next speaker" preview both treated everyone as equal-weighted (0.5) for the same reason. Server-side speaker selection was unaffected — it reads the override from `chat.participants[].talkativeness` and falls through to `repos.characters.findById().talkativeness`, both of which were correct. The bug was purely on the chat-detail enrichment payload.
+
+- `EnrichedCharacterBase` in `lib/services/chat-enrichment.service.ts` did not declare a `talkativeness` field, and neither `getCharacterSummary` nor `getCharacterDetail` populated one. The client then read `p.character?.talkativeness` (`useParticipants.ts`, `ParticipantCard.tsx`, `turn-order.ts`) and got undefined every time, falling through to the literal 0.5.
+- Added `talkativeness: number` to `EnrichedCharacterBase` and populated it from `character.talkativeness ?? 0.5` in `getCharacterSummary` and both return branches of `getCharacterDetail` (default and avatar-override).
+- No data-model or DDL change: `talkativeness` already lives on the character row (via the `properties.json` overlay) and on `ChatParticipantBase` for the per-chat override. This fix just stops the enrichment layer from dropping the field on its way to the client.
+- No behavior change to actual speaker picking; the slider and order preview now match what the server was already doing.
+
 #### Fix: Streaming bubble avatar matches the actual responder from the first character
 
 While a response was streaming in, the streaming bubble's avatar/name could show one character while the green "X is responding…" chip below the composer named another. The two indicators read from different sources: the chip uses a server-baked status string (`${character.name} is responding...` from `lib/services/chat-message/primary-stream.service.ts`), and the bubble's avatar reads from `respondingParticipantId`, which `useSSEStreaming.sendMessage` initialized to a *client-side guess* (`getFirstCharacterParticipant()` — the first active character in the participants array). Under turn rotation, autonomous rooms, or any user-controlled-character setup, that guess routinely disagrees with the server's `resolveRespondingParticipant` choice. The mismatch only existed during streaming — the final `done` event carries the authoritative `participantId`, so the saved message attaches to the correct character.

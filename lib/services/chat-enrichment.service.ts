@@ -71,6 +71,7 @@ export interface EnrichedCharacterBase {
   avatarUrl: string | null
   defaultImageId: string | null
   defaultImage: EnrichedImage | null
+  talkativeness: number
 }
 
 /**
@@ -263,6 +264,7 @@ export async function getCharacterSummary(
     avatarUrl,
     defaultImageId: character.defaultImageId ?? null,
     defaultImage,
+    talkativeness: character.talkativeness ?? 0.5,
     tags: character.tags || [],
   }
 }
@@ -302,6 +304,7 @@ export async function getCharacterDetail(
           avatarUrl: resolved.url,
           defaultImageId: override.imageId,
           defaultImage: overrideImage,
+          talkativeness: character.talkativeness ?? 0.5,
           systemPrompts,
         }
       }
@@ -326,6 +329,7 @@ export async function getCharacterDetail(
     avatarUrl,
     defaultImageId: character.defaultImageId ?? null,
     defaultImage,
+    talkativeness: character.talkativeness ?? 0.5,
     systemPrompts,
   }
 }

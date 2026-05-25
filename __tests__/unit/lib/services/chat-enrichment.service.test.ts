@@ -114,6 +114,7 @@ describe('chat-enrichment.service', () => {
           filepath: '/api/v1/files/img-1',
           url: null,
         },
+        talkativeness: 0.5,
         tags: ['tag-1', 'tag-2'],
       })
     })
@@ -159,6 +160,7 @@ describe('chat-enrichment.service', () => {
         avatarUrl: null,
         defaultImageId: null,
         defaultImage: null,
+        talkativeness: 0.5,
         systemPrompts: [],
       })
       expect(result).not.toHaveProperty('tags')
