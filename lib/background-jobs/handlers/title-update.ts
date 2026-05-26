@@ -90,6 +90,14 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
       jobId: job.id,
       chatId: payload.chatId,
     });
+    // Advance the cursor so a misconfigured / unavailable cheap LLM doesn't
+    // re-fire this same job every following turn. The next checkpoint
+    // (e.g., 3 → 5 → 7 → 10) will try again — by which point the
+    // configuration may have been fixed.
+    await repos.chats.update(payload.chatId, {
+      lastRenameCheckInterchange: payload.currentInterchange,
+      updatedAt: new Date().toISOString(),
+    });
     return;
   }
 
@@ -142,6 +150,16 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
 
   if (!result.success) {
     logger.warn(`[Title Update] Failed for chat ${payload.chatId}: ${result.error}`);
+    // Advance the cursor so a persistently-failing cheap LLM (e.g., an
+    // exhausted OpenAI quota) doesn't re-fire this same job every following
+    // turn — `shouldCheckTitleAtInterchange` keeps crossing checkpoint 2 as
+    // long as the cursor sits at 0. Burning the current checkpoint on a
+    // failure means a transient one-off failure will skip this title check,
+    // but the next checkpoint (3 → 5 → 7 → 10 → …) still gets its chance.
+    await repos.chats.update(payload.chatId, {
+      lastRenameCheckInterchange: payload.currentInterchange,
+      updatedAt: new Date().toISOString(),
+    });
     return;
   }
 

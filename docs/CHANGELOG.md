@@ -4,6 +4,22 @@
 
 ### 4.6-dev
 
+#### Fix: Title-update cursor advances on cheap-LLM failure to stop per-turn re-fires
+
+`handleTitleUpdate` only advanced `chats.lastRenameCheckInterchange` on success paths (rename applied, no rename needed, or manually-renamed). On any cheap-LLM failure — including a persistent `429 quota exceeded` from OpenAI — the handler logged the error and returned with the cursor untouched. Because `shouldCheckTitleAtInterchange(N, 0)` always crosses checkpoint 2 for any `N >= 2`, every following turn re-enqueued a fresh TITLE_UPDATE job, all of which failed the same way. Observed on a 31-message chat in the wild: five title-update jobs all 429'd, cursor stuck at 0, no rename, and (because story backgrounds queue only after a successful rename) no background generation either.
+
+The handler now advances the cursor on the `!result.success` branch and on the `!cheapLLMSelection` short-circuit. Trade-off: a one-off transient failure now skips that single checkpoint instead of retrying every turn, but the next checkpoint (3 → 5 → 7 → 10 → …) still gets its chance.
+
+- `lib/background-jobs/handlers/title-update.ts`: write `lastRenameCheckInterchange: payload.currentInterchange` in both the no-cheap-LLM and the LLM-call-failed branches.
+- `__tests__/unit/lib/background-jobs/handlers/title-update.test.ts` (new): three cases covering cursor advancement on cheap-LLM failure, on no-cheap-LLM, and on the existing no-rename-needed success branch.
+
+#### Fix: Autonomous-room turn counter resets per run instead of accumulating across runs
+
+`runTurnsConsumed` on an autonomous chat was accumulating across every run for the lifetime of the chat, because the post-turn bookkeeping in `handleAutonomousRoomTurn` did a read-modify-write off a freshly re-read chat row. The forked job child opens a readonly DB connection and buffers writes in `AsyncLocalStorage`; the `runTurnsConsumed: 0` reset queued at the idle → running transition was therefore invisible to the post-turn `findById`. The handler picked up the previous run's stale counter and queued an increment-write that landed *after* the reset at flush time, clobbering it ("last write wins") and leaving the counter to grow forever. On a chat observed in the wild the counter had reached 446 across three sequential runs that produced 447 character messages total — but inside any single run, the value looked like 3×–4× the actual number of messages, which would trip `budgetExhausted` after a single message on any run with `budgetMaxTurns` set after the first.
+
+- `lib/background-jobs/handlers/autonomous-room-turn.ts`: the post-turn increment now reads from the local in-handler `chat` snapshot (already mutated to 0 on the idle → running transition when applicable), not the re-read `post`. The end-of-run budget check also passes the freshly-computed `runTurnsConsumed` / `runTokensConsumed` into `checkBudget` so it sees the value just queued, not the stale re-read.
+- `__tests__/unit/lib/background-jobs/handlers/autonomous-room-turn.test.ts` (new): mock harness that simulates the readonly-DB + buffered-writes semantics; covers reset-on-new-run, continue-on-existing-run, error-doesn't-increment, no-false-exhaustion-on-first-turn-of-new-run, and exhaustion-on-the-turn-the-cap-is-hit.
+
 #### Feat: Autonomous-room badges in the page toolbar
 
 The page toolbar now shows a compact badge for every autonomous chat in `idle`, `paused`, or `running` state, placed just before the background-job queue badges. Each badge abbreviates the chat title (and the parent project, if any: e.g. `QP:CWAaF` for "Chat With Amy and Friday" inside "Quilltap Plans"), shows a single budget-remaining readout (tokens > messages > time), and exposes an inline play/pause button. Running rooms are green; idle and paused rooms share a muted slate. Hovering reveals a multi-line tooltip with the unabridged project / chat title / used-vs-total / status. Clicking the body of the badge navigates to `/salon/[id]`; clicking the button toggles `start`/`resume`/`pause`.

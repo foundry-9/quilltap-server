@@ -416,9 +416,20 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     return;
   }
 
-  // 8. Post-turn bookkeeping. Re-read the chat so we increment off the freshest
-  //    counters (memory-extraction or other jobs that ran inside handleSendMessage
-  //    may have touched the row).
+  // 8. Post-turn bookkeeping. Re-read the chat to run the stale-run guard
+  //    against fresh DB state; for the actual counter values we deliberately
+  //    do NOT use `post.run{Turns,Tokens}Consumed`, because the forked-job
+  //    child's repo proxy buffers writes in AsyncLocalStorage and serves
+  //    reads from a readonly DB connection. On the first turn of every new
+  //    run, the `runTurnsConsumed: 0` reset issued at the idle→running
+  //    transition (line 283-289) is still pending in the buffer when we get
+  //    here, so a read-modify-write off `post.runTurnsConsumed` would pick
+  //    up the *previous* run's stale value; the write we then queue lands
+  //    after the reset at flush time and clobbers it ("last write wins"),
+  //    so the counter accumulates across every run forever and a room with
+  //    `budgetMaxTurns` set trips `budgetExhausted` after a single message
+  //    on its second-or-later run. The local `chat` object is the only
+  //    post-reset view of the counter that's available before writes flush.
   const post = await repos.chats.findById(chatId);
   if (!post || post.currentRunId !== runId) {
     logger.info('Autonomous-room turn: superseded during turn, not re-enqueueing', {
@@ -428,22 +439,23 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   }
 
   // Token accounting: sum llm_logs for this chat since the run started.
-  // We cannot delta `chats.totalPromptTokens` inside a single job — the
-  // forked-job child's repository proxy buffers writes in
-  // AsyncLocalStorage and serves reads from a readonly DB connection, so
-  // any totals updated by handleSendMessage on this turn are invisible
-  // here and the delta is always zero. The llm_logs sum runs one turn
-  // behind for the same reason (this turn's log entry is also buffered)
-  // but converges on the next turn once writes flush. A future refinement
-  // (sub-task C) is to tag each llm_logs row with the autonomous `runId`
-  // and sum by that instead of the timestamp window.
+  // The llm_logs sum runs one turn behind because this turn's log entry is
+  // also buffered, but converges on the next turn once writes flush. A
+  // future refinement (sub-task C) is to tag each llm_logs row with the
+  // autonomous `runId` and sum by that instead of the timestamp window.
+  // `chat.runStartedAt` is preferred over `post.runStartedAt` for the same
+  // read-your-writes reason as the turn counter below.
   const runWindowStart = chat.runStartedAt ?? post.runStartedAt ?? null;
   let newTokensConsumed = post.runTokensConsumed ?? 0;
   if (runWindowStart) {
     const usage = await repos.llmLogs.getTotalTokenUsageForChatSince(chatId, runWindowStart);
     newTokensConsumed = usage.totalTokens;
   }
-  const newTurnsConsumed = (post.runTurnsConsumed ?? 0) + 1;
+
+  // Turn accounting: increment off the local `chat` snapshot (already
+  // mutated to 0 on the idle→running transition when applicable), not the
+  // re-read `post`. See the long comment above.
+  const newTurnsConsumed = (chat.runTurnsConsumed ?? 0) + 1;
 
   await repos.chats.update(chatId, {
     runTurnsConsumed: newTurnsConsumed,
@@ -461,10 +473,15 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     const usage = await repos.llmLogs.getTotalTokenUsageSince(userId, since);
     postDailySpent = usage.totalTokens;
   }
-  const verdict = checkBudget(postCheck, Date.now(), {
-    dailyTokenBudget,
-    dailyTokensSpent: postDailySpent,
-  });
+  // Pass the freshly-computed counter values into the budget check rather
+  // than `postCheck.run{Turns,Tokens}Consumed` — the update we just queued
+  // is still in the buffer, so the re-read sees the previous turn's value
+  // and would miss budget exhaustion that just happened this turn.
+  const verdict = checkBudget(
+    { ...postCheck, runTurnsConsumed: newTurnsConsumed, runTokensConsumed: newTokensConsumed },
+    Date.now(),
+    { dailyTokenBudget, dailyTokensSpent: postDailySpent },
+  );
   if (verdict.exhausted) {
     logger.info('Autonomous-room turn: run exhausted post-turn', {
       context: HANDLER, chatId, reason: verdict.reason, turns: newTurnsConsumed, tokens: newTokensConsumed,
