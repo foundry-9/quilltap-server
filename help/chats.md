@@ -233,6 +233,8 @@ Quilltap thereupon does the heavy lifting:
 
 The original chat is not deleted; you may always return to it. But henceforth the canonical thread continues at the new address.
 
+A particularly civilised variation: in the same dialog you may flip the chat over to an **autonomous room**, taking yourself out of the picture entirely and letting the LLMs carry the conversation forward without you. Remove your own character from the cast, enable the autonomous controls (cadence, budget, visibility), and press **Continue**. The carryover proceeds as above — Librarian summary, recent messages, turn order, Host bookends — and the new room then runs on its own schedule, with you free to attend to other matters. Autonomous rooms require at least two LLM-controlled characters and no user-controlled participant, which the dialog will enforce before letting you proceed.
+
 ## Advanced Features
 
 ### Memory Integration

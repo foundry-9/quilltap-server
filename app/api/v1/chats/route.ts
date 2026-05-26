@@ -842,9 +842,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // that don't belong to the current user, which is exactly the rejection
   // we want.
   if (validatedData.continuationFromChatId) {
-    if (isAutonomous) {
-      return badRequest('Autonomous rooms cannot be created via continuation');
-    }
     const sourceChat = await repos.chats.findById(validatedData.continuationFromChatId);
     if (!sourceChat) {
       logger.warn('[Chats v1] continuationFromChatId references a chat not owned by current user', {

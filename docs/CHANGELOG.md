@@ -4,6 +4,13 @@
 
 ### 4.6-dev
 
+#### Fix: Allow "Continue Elsewhere" to hand off into an autonomous room
+
+`POST /api/v1/chats` previously returned 400 ("Autonomous rooms cannot be created via continuation") when a request set both `continuationFromChatId` and `chatType: 'autonomous'`. The NewChatModal's "Continue Conversation Elsewhere" flow surfaced this as a toast and a `console.error` of an empty-looking object whenever the user tried to withdraw from a salon and let the LLMs continue autonomously. The block has been removed; the existing branching already routes continuation requests through `writeSystemPromptMessage → applyChatContinuation → createInitialMessagesScenarioAndStaff({ skipFirstMessage: true })`, which is exactly the right shape for an autonomous handoff (carry over source-chat tail, no auto-greeting). Autonomous preconditions (≥2 LLM characters, no user-controlled participants, cron validity) still apply.
+
+- `app/api/v1/chats/route.ts`: dropped the early `badRequest('Autonomous rooms cannot be created via continuation')` from `handleCreate`. No other logic changes — the continuation branch already runs the right initialization sequence for the autonomous case.
+- `__tests__/unit/app/api/v1/chats/route.continuation-autonomous.test.ts` (new): regression test that POSTs both fields together, asserts the formerly-rejected combination returns 201 and triggers `applyChatContinuation`, and confirms the autonomous min-characters guard still rejects a 1-LLM continuation.
+
 #### Refactor: Provider-options refactor — plugins own the connection-profile schema
 
 `ProfileModal` no longer carries hand-rolled per-provider option blocks. Each LLM plugin now exports a `getProviderOptionsSchema()` describing the fields the host should render, and a single generic `ProviderOptionsPanel` consumes whatever the active provider declares. DeepSeek picks up its first UI surface for thinking-mode in the process; the wire-side passthrough already shipped in DeepSeek 1.0.1.
