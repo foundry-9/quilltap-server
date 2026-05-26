@@ -4,6 +4,13 @@
 
 ### 4.6-dev
 
+#### Fix: Autonomous-room token budget no longer stuck at zero
+
+`runTokensConsumed` on an autonomous chat was permanently zero because the post-turn bookkeeping in `runAutonomousRoomTurn` tried to delta `chats.totalPromptTokens + totalCompletionTokens` between two reads inside the same job. The forked job child opens a readonly DB connection and buffers writes in `AsyncLocalStorage` until the job ends, so the post-turn read always returned the same totals as the pre-turn read and the delta was always 0. The token-budget check (`chat.runTokensConsumed >= chat.budgetMaxTokens`) therefore never tripped, and rooms with only a token cap ran indefinitely (seen in the wild at 4.6M prompt tokens against a 250K cap).
+
+- `lib/database/repositories/llm-logs.repository.ts`: new `getTotalTokenUsageForChatSince(chatId, sinceTimestamp)` that sums prompt/completion/total tokens from `llm_logs` for one chat since a given ISO timestamp. The filter uses `usage: { $exists: true }` only — adding `$ne: null` (as the sibling per-user helpers do) translates to `usage != NULL` in the SQLite query, which is always unknown/false under SQL NULL semantics and silently matches zero rows. A comment in the new method calls out the latent bug in the sibling methods.
+- `lib/background-jobs/handlers/autonomous-room-turn.ts`: post-turn bookkeeping now calls `getTotalTokenUsageForChatSince(chatId, chat.runStartedAt)` instead of computing a chat-row delta. The previous turn's log writes have flushed by the time the next turn's job opens its DB connection, so the sum converges with a one-turn lag. The pre-existing TODO comment about swapping to an `llm_logs`-keyed accumulator was the planned trajectory; this is its cheaper, no-schema-change form. Tagging logs with `runId` for an exact (non-windowed) sum is still the eventual refinement.
+
 #### Fix: Ad-hoc autonomous rooms now auto-start and stay visible while idle
 
 Creating an autonomous room without a cron schedule used to leave it sitting in `runState: 'idle'` with no way to launch a run. The Chat-tab management list was the only Start surface, and commit `1900d780` had narrowed it to "rooms with a cron expression, plus ad-hoc rooms currently running or paused" — so a freshly-created idle ad-hoc room could not appear in the list, and therefore could not be started. Two changes:

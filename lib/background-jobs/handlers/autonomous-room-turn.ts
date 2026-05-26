@@ -427,16 +427,23 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     return;
   }
 
-  // Token accounting: take the delta on the chat's per-chat token totals
-  // (chats.totalPromptTokens + totalCompletionTokens), which the message
-  // pipeline updates after each turn. Sub-task C will swap this for an
-  // llm_logs-keyed accumulator once turns are tagged with `runId`.
-  const totalBefore = (chat.totalPromptTokens ?? 0) + (chat.totalCompletionTokens ?? 0);
-  const totalAfter = (post.totalPromptTokens ?? 0) + (post.totalCompletionTokens ?? 0);
-  const turnDelta = Math.max(0, totalAfter - totalBefore);
-
+  // Token accounting: sum llm_logs for this chat since the run started.
+  // We cannot delta `chats.totalPromptTokens` inside a single job — the
+  // forked-job child's repository proxy buffers writes in
+  // AsyncLocalStorage and serves reads from a readonly DB connection, so
+  // any totals updated by handleSendMessage on this turn are invisible
+  // here and the delta is always zero. The llm_logs sum runs one turn
+  // behind for the same reason (this turn's log entry is also buffered)
+  // but converges on the next turn once writes flush. A future refinement
+  // (sub-task C) is to tag each llm_logs row with the autonomous `runId`
+  // and sum by that instead of the timestamp window.
+  const runWindowStart = chat.runStartedAt ?? post.runStartedAt ?? null;
+  let newTokensConsumed = post.runTokensConsumed ?? 0;
+  if (runWindowStart) {
+    const usage = await repos.llmLogs.getTotalTokenUsageForChatSince(chatId, runWindowStart);
+    newTokensConsumed = usage.totalTokens;
+  }
   const newTurnsConsumed = (post.runTurnsConsumed ?? 0) + 1;
-  const newTokensConsumed = (post.runTokensConsumed ?? 0) + turnDelta;
 
   await repos.chats.update(chatId, {
     runTurnsConsumed: newTurnsConsumed,

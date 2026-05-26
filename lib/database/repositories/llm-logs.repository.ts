@@ -510,6 +510,57 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   }
 
   /**
+   * Get total token usage for a specific chat since a given timestamp.
+   *
+   * Used by the autonomous-room turn handler to compute per-run token spend
+   * across turn-job boundaries. The forked-job child's repository proxy
+   * buffers writes and uses a readonly DB connection for reads, which makes
+   * the chats.totalPromptTokens delta unreliable mid-job; summing llm_logs
+   * is authoritative as soon as the previous turn's job has flushed. A
+   * future refinement is to tag each log with the autonomous run's UUID
+   * and sum by that instead of a timestamp window.
+   */
+  async getTotalTokenUsageForChatSince(
+    chatId: string,
+    sinceTimestamp: string,
+  ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
+    return this.safeQuery(
+      async () => {
+        // Only `$exists: true` (→ `usage IS NOT NULL`) — do NOT add
+        // `$ne: null`. The SQLite translator emits `usage != NULL`
+        // literally, which is unknown/false for every row by SQL NULL
+        // semantics, so the filter would return zero matches and the
+        // sum would always be 0. The sibling methods getTotalTokenUsage
+        // and getTotalTokenUsageSince still carry the latent `$ne: null`
+        // bug — they happen to be safe today because nothing trips them.
+        const filter: TypedQueryFilter<LLMLog> = {
+          chatId,
+          usage: { $exists: true },
+          createdAt: { $gte: sinceTimestamp },
+        };
+
+        const logs = await this.findByFilter(filter);
+
+        let totalPromptTokens = 0;
+        let totalCompletionTokens = 0;
+        let totalTokens = 0;
+
+        for (const log of logs) {
+          if (log.usage) {
+            totalPromptTokens += log.usage.promptTokens || 0;
+            totalCompletionTokens += log.usage.completionTokens || 0;
+            totalTokens += log.usage.totalTokens || 0;
+          }
+        }
+        return { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens, totalTokens };
+      },
+      'Error getting total token usage for chat since timestamp',
+      { chatId, sinceTimestamp },
+      { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+    );
+  }
+
+  /**
    * Count logs associated with a message ID
    * @param messageId The message ID
    * @returns Promise<number> Number of logs for the message
