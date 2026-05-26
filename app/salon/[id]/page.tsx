@@ -389,11 +389,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (success && (name === 'doc_open_document' || name === 'doc_close_document')) {
         documentModeHook.reloadFromServer()
       }
-      // React to LLM writing/moving/deleting files — any of these can invalidate
-      // the editor's cached content or mtime. reloadFromServer re-reads the
-      // active document (if still open) and refreshes state, keeping the next
-      // autosave from racing on a stale mtime or missing path.
-      if (success && (name === 'doc_write_file' || name === 'doc_move_file' || name === 'doc_delete_file')) {
+      // React to LLM writing/moving/deleting files or folders — any of these can
+      // invalidate the editor's cached content, mtime, or path. The server-side
+      // move handlers sync chat_documents.filePath so the reload picks up the
+      // new path automatically; folder-level renames likewise rewrite the
+      // prefix. reloadFromServer re-reads the active document (if still open)
+      // and refreshes state, keeping the next autosave from racing on a stale
+      // mtime or missing path.
+      if (
+        success &&
+        (name === 'doc_write_file' ||
+          name === 'doc_move_file' ||
+          name === 'doc_move_folder' ||
+          name === 'doc_delete_file' ||
+          name === 'doc_delete_folder')
+      ) {
         documentModeHook.reloadFromServer()
       }
       // React to LLM focusing on document location

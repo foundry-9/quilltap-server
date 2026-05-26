@@ -1468,6 +1468,86 @@ async function handleUpdateHeading(
 // Tier 3: File Management Handlers (Scriptorium Phase 3.4)
 // ============================================================================
 
+/**
+ * Keep any chat's Document Mode pointer in sync when an LLM moves the file
+ * underneath it. Without this, the next `reloadFromServer` on the salon page
+ * would refetch the (now-stale) chat_documents row and 404 reading the old
+ * path. Errors are logged but never thrown — a sync failure must not block
+ * the move tool result. Best-effort by design.
+ */
+async function syncChatDocumentsAfterFileMove(
+  scope: DocEditScope,
+  mountPoint: string | undefined,
+  oldPath: string,
+  newPath: string,
+): Promise<void> {
+  try {
+    const newDisplayTitle = path.basename(newPath);
+    const updated = await getRepositories().chatDocuments.renameFilePathInStore(
+      scope,
+      mountPoint ?? null,
+      oldPath,
+      newPath,
+      newDisplayTitle,
+    );
+    if (updated > 0) {
+      logger.info('Synced chat_documents after file move', {
+        scope,
+        mountPoint,
+        from: oldPath,
+        to: newPath,
+        rowsUpdated: updated,
+      });
+    }
+  } catch (error) {
+    logger.warn('Failed to sync chat_documents after file move', {
+      scope,
+      mountPoint,
+      from: oldPath,
+      to: newPath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Folder-level counterpart to `syncChatDocumentsAfterFileMove`. Rewrites the
+ * `oldFolderPath/` prefix on any chat_documents row in the same store so a
+ * file open under that folder follows the rename instead of going stale.
+ */
+async function syncChatDocumentsAfterFolderMove(
+  scope: DocEditScope,
+  mountPoint: string | undefined,
+  oldFolderPath: string,
+  newFolderPath: string,
+): Promise<void> {
+  try {
+    const updated = await getRepositories().chatDocuments.renameFolderPathInStore(
+      scope,
+      mountPoint ?? null,
+      oldFolderPath,
+      newFolderPath,
+    );
+    if (updated > 0) {
+      logger.info('Synced chat_documents after folder move', {
+        scope,
+        mountPoint,
+        from: oldFolderPath,
+        to: newFolderPath,
+        rowsUpdated: updated,
+      });
+    }
+  } catch (error) {
+    logger.warn('Failed to sync chat_documents after folder move', {
+      scope,
+      mountPoint,
+      from: oldFolderPath,
+      to: newFolderPath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 // --- doc_move_file ---
 
 async function handleMoveFile(
@@ -1497,6 +1577,7 @@ async function handleMoveFile(
       resolvedSource.relativePath,
       resolvedDest.relativePath
     );
+    await syncChatDocumentsAfterFileMove(scope, input.mount_point, input.path, input.new_path);
     logger.info('Moved database document', {
       from: input.path,
       to: input.new_path,
@@ -1533,6 +1614,8 @@ async function handleMoveFile(
 
   // Perform the move
   await fs.rename(resolvedSource.absolutePath, resolvedDest.absolutePath);
+
+  await syncChatDocumentsAfterFileMove(scope, input.mount_point, input.path, input.new_path);
 
   logger.info('Moved file', {
     from: input.path,
@@ -2009,6 +2092,7 @@ async function handleMoveFolder(
         resolvedSource.relativePath,
         resolvedDest.relativePath
       );
+      await syncChatDocumentsAfterFolderMove(scope, input.mount_point, input.path, input.new_path);
       logger.info('Moved database folder', {
         from: input.path,
         to: input.new_path,
@@ -2054,6 +2138,8 @@ async function handleMoveFolder(
 
   // Perform the move
   await fs.rename(resolvedSource.absolutePath, resolvedDest.absolutePath);
+
+  await syncChatDocumentsAfterFolderMove(scope, input.mount_point, input.path, input.new_path);
 
   logger.info('Moved folder', {
     from: input.path,

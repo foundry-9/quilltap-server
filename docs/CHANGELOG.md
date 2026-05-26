@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Fix: Document Mode follows LLM-driven file/folder renames instead of 404'ing
+
+When a character called `doc_move_file` (or `doc_move_folder`) on a file currently open in the chat's Document Mode pane, the salon page's existing `reloadFromServer` trigger re-fetched the stale `chat_documents` row, which still pointed at the old path. The next `read-document` request 404'd with `File not found: <old path>` and bubbled up as a Next.js dev error overlay. Seen on a `Small Group/How People Change/Chatper 05 - Discussion Notes.md → Chapter 05 - Discussion Notes.md` rename in the wild.
+
+- `lib/database/repositories/chat-documents.repository.ts`: new `renameFilePathInStore(scope, mountPoint, oldPath, newPath, newDisplayTitle)` and `renameFolderPathInStore(scope, mountPoint, oldFolderPath, newFolderPath)`. Both scope-guard by `(scope, mountPoint)` so overlapping paths in different stores don't collide; the folder variant rewrites the `oldFolderPath/` prefix and refreshes `displayTitle` to the new basename. The pre-existing unscoped `renameFilePath` (used by startup migrations) is left alone.
+- `lib/tools/handlers/doc-edit-handler.ts`: `handleMoveFile` and `handleMoveFolder` now call new internal helpers `syncChatDocumentsAfterFileMove` / `syncChatDocumentsAfterFolderMove` after the move succeeds (both DB-backed and filesystem branches). Failures are logged and swallowed so a sync miss can't block the tool result.
+- `app/salon/[id]/page.tsx`: `doc_move_folder` and `doc_delete_folder` join `doc_write_file` / `doc_move_file` / `doc_delete_file` in the SSE `onToolResult` set that triggers `documentModeHook.reloadFromServer()`. With chat_documents now correctly updated on the server side, the reload reads the new path on the first try.
+
 #### Fix: Title-update cursor advances on cheap-LLM failure to stop per-turn re-fires
 
 `handleTitleUpdate` only advanced `chats.lastRenameCheckInterchange` on success paths (rename applied, no rename needed, or manually-renamed). On any cheap-LLM failure — including a persistent `429 quota exceeded` from OpenAI — the handler logged the error and returned with the cursor untouched. Because `shouldCheckTitleAtInterchange(N, 0)` always crosses checkpoint 2 for any `N >= 2`, every following turn re-enqueued a fresh TITLE_UPDATE job, all of which failed the same way. Observed on a 31-message chat in the wild: five title-update jobs all 429'd, cursor stuck at 0, no rename, and (because story backgrounds queue only after a successful rename) no background generation either.
