@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-05-25
+
+### Added
+
+- `getProviderOptionsSchema?` optional method on `TextProviderPlugin` — lets a provider plugin describe the provider-specific configuration fields the host's connection-profile editor should render. Fields map directly to keys on the `parameters` blob the plugin already receives via `LLMParams.profileParameters`.
+- `ProviderOptionsSchema`, `ProviderOptionGroup`, `ProviderOptionField`, `ProviderOptionEnumValue`, `ProviderOptionFieldType`, `ProviderOptionDirective`, `ProviderOptionShowIf`, `ProviderOptionsSchemaContext` exported from the root and `/plugins` entrypoints.
+- `PLUGIN_TYPES_VERSION` constant updated to track package version (was stale at 2.2.1).
+
 ## [2.3.0] - 2026-04-15
 
 ### Added

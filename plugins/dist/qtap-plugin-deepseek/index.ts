@@ -14,7 +14,7 @@
  * tool forwarding, response_format, and prompt-cache usage reporting.
  */
 
-import type { TextProviderPlugin } from './types';
+import type { TextProviderPlugin, ProviderOptionsSchema } from './types';
 import { DeepSeekProvider } from './provider';
 import { STATIC_MODELS, STATIC_MODEL_IDS } from './models';
 import {
@@ -74,6 +74,48 @@ const cheapModels = {
   recommendedModels: ['deepseek-v4-flash'],
 };
 
+/**
+ * Connection-profile options schema rendered by the Quilltap host.
+ * `thinking` is stored as a flat string in `parameters`; the provider
+ * normalizes it to DeepSeek's wire shape (`{ type: 'enabled' | 'disabled' }`)
+ * at request time in `applyProfileParameters`.
+ */
+const optionsSchema: ProviderOptionsSchema = {
+  groups: [
+    {
+      title: 'DeepSeek Options',
+      helpText:
+        'Thinking mode enables DeepSeek\'s extended reasoning. While enabled, temperature, top_p, and frequency / presence penalties are ignored. Reasoning effort is only effective with thinking enabled.',
+      fields: [
+        {
+          key: 'thinking',
+          label: 'Thinking Mode',
+          type: 'enum',
+          default: '',
+          enumValues: [
+            { value: '', label: '(model default)' },
+            { value: 'enabled', label: 'Enabled' },
+            { value: 'disabled', label: 'Disabled' },
+          ],
+        },
+        {
+          key: 'reasoning_effort',
+          label: 'Reasoning Effort',
+          type: 'enum',
+          default: '',
+          helpText:
+            'DeepSeek\'s reasoning scale. low/medium fold to high; xhigh folds to max.',
+          enumValues: [
+            { value: '', label: '(model default)' },
+            { value: 'high', label: 'High' },
+            { value: 'max', label: 'Max' },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 export const plugin: TextProviderPlugin = {
   metadata,
 
@@ -99,6 +141,11 @@ export const plugin: TextProviderPlugin = {
   toolFormat: 'openai',
   cheapModels,
   defaultContextWindow: 131072,
+
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
 
   createProvider: (_baseUrl?: string) => {
     return new DeepSeekProvider();

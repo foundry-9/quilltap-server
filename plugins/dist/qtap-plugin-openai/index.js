@@ -10397,6 +10397,42 @@ var cheapModels = {
   defaultModel: "gpt-4o-mini",
   recommendedModels: ["gpt-4o-mini", "gpt-3.5-turbo"]
 };
+var optionsSchema = {
+  groups: [
+    {
+      title: "OpenAI Options",
+      fields: [
+        {
+          key: "verbosity",
+          label: "Verbosity",
+          type: "enum",
+          default: "",
+          helpText: "Scales how long and detailed the answer is. Supported on GPT-5 and newer models; older models will ignore it.",
+          enumValues: [
+            { value: "", label: "(model default)" },
+            { value: "low", label: "Low" },
+            { value: "medium", label: "Medium" },
+            { value: "high", label: "High" }
+          ]
+        },
+        {
+          key: "reasoningEffort",
+          label: "Reasoning Effort",
+          type: "enum",
+          default: "",
+          helpText: "How hard the model thinks before responding. Applies to reasoning models (o-series, GPT-5); ignored on non-reasoning models. Background tasks always use Low regardless of this setting.",
+          enumValues: [
+            { value: "", label: "(model default)" },
+            { value: "minimal", label: "Minimal" },
+            { value: "low", label: "Low" },
+            { value: "medium", label: "Medium" },
+            { value: "high", label: "High" }
+          ]
+        }
+      ]
+    }
+  ]
+};
 var plugin = {
   metadata,
   icon: {
@@ -10414,6 +10450,10 @@ var plugin = {
   toolFormat: "openai",
   cheapModels,
   defaultContextWindow: 128e3,
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
   /**
    * Factory method to create an OpenAI LLM provider instance
    */

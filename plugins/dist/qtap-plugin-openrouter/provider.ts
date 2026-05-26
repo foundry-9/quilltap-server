@@ -35,13 +35,38 @@ interface OpenRouterProviderPreferences {
 
 /**
  * OpenRouter-specific profile parameters
+ *
+ * Two shapes are accepted for backward compatibility:
+ * - The original nested `providerPreferences` object — still written by
+ *   profiles that predate the provider-options-schema refactor.
+ * - The flat keys (`enableZDR`, `useCustomModel`, etc.) written by the
+ *   schema-driven profile editor. `useCustomModel` is a UI directive and
+ *   is intentionally not consumed here.
  */
 interface OpenRouterProfileParams {
   fallbackModels?: string[];
   providerPreferences?: OpenRouterProviderPreferences;
+  enableZDR?: boolean;
+  useCustomModel?: boolean;
   temperature?: number;
   maxTokens?: number;
   topP?: number;
+}
+
+/**
+ * Merge the legacy nested `providerPreferences` shape with the flat keys
+ * written by the schema-driven profile editor. Flat keys take precedence
+ * because they are what the new UI emits.
+ */
+function resolveProviderPrefs(
+  profileParams: OpenRouterProfileParams | undefined
+): OpenRouterProviderPreferences | undefined {
+  if (!profileParams) return undefined;
+  const merged: OpenRouterProviderPreferences = { ...(profileParams.providerPreferences ?? {}) };
+  if (profileParams.enableZDR === true) {
+    merged.dataCollection = 'deny';
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 type OpenAIContentPart =
@@ -193,7 +218,7 @@ export class OpenRouterProvider implements TextProvider {
     }
 
     // Add provider preferences if configured
-    const providerPrefs = profileParams?.providerPreferences;
+    const providerPrefs = resolveProviderPrefs(profileParams);
     if (providerPrefs) {
       requestParams.provider = {};
       if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
@@ -327,7 +352,7 @@ export class OpenRouterProvider implements TextProvider {
     }
 
     // Add provider preferences if configured
-    const providerPrefs = profileParams?.providerPreferences;
+    const providerPrefs = resolveProviderPrefs(profileParams);
     if (providerPrefs) {
       requestParams.provider = {};
       if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;

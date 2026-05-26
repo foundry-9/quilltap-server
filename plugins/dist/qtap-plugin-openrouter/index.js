@@ -28587,6 +28587,14 @@ var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
 var logger = createPluginLogger("qtap-plugin-openrouter");
+function resolveProviderPrefs(profileParams) {
+  if (!profileParams) return void 0;
+  const merged = { ...profileParams.providerPreferences ?? {} };
+  if (profileParams.enableZDR === true) {
+    merged.dataCollection = "deny";
+  }
+  return Object.keys(merged).length > 0 ? merged : void 0;
+}
 var SUPPORTED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 var OpenRouterProvider = class {
   constructor() {
@@ -28704,7 +28712,7 @@ var OpenRouterProvider = class {
       requestParams.route = "fallback";
       delete requestParams.model;
     }
-    const providerPrefs = profileParams?.providerPreferences;
+    const providerPrefs = resolveProviderPrefs(profileParams);
     if (providerPrefs) {
       requestParams.provider = {};
       if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
@@ -28803,7 +28811,7 @@ var OpenRouterProvider = class {
       requestParams.models = [params.model, ...profileParams.fallbackModels];
       delete requestParams.model;
     }
-    const providerPrefs = profileParams?.providerPreferences;
+    const providerPrefs = resolveProviderPrefs(profileParams);
     if (providerPrefs) {
       requestParams.provider = {};
       if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
@@ -29819,6 +29827,38 @@ var cheapModels = {
     "mistralai/mistral-7b-instruct"
   ]
 };
+var optionsSchema = {
+  groups: [
+    {
+      title: "OpenRouter Options",
+      fields: [
+        {
+          key: "enableZDR",
+          label: "Enable Zero Data Retention (ZDR)",
+          helpText: "Providers will not store or log your prompts and responses.",
+          type: "boolean",
+          default: false
+        },
+        {
+          key: "useCustomModel",
+          label: "Use Custom Model ID",
+          helpText: "Enter an arbitrary model ID not in the fetched list.",
+          type: "boolean",
+          default: false,
+          affects: "modelInput"
+        },
+        {
+          key: "fallbackModels",
+          label: "Fallback Models (max 2)",
+          type: "multi-enum",
+          multiEnumSource: "fetchedModels",
+          max: 2,
+          default: []
+        }
+      ]
+    }
+  ]
+};
 var plugin = {
   metadata,
   icon: {
@@ -29837,6 +29877,10 @@ var plugin = {
   // OpenRouter uses OpenAI format
   cheapModels,
   defaultContextWindow: 128e3,
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
   /**
    * Factory method to create an OpenRouter LLM provider instance
    */

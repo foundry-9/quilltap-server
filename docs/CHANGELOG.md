@@ -4,6 +4,24 @@
 
 ### 4.6-dev
 
+#### Refactor: Provider-options refactor — plugins own the connection-profile schema
+
+`ProfileModal` no longer carries hand-rolled per-provider option blocks. Each LLM plugin now exports a `getProviderOptionsSchema()` describing the fields the host should render, and a single generic `ProviderOptionsPanel` consumes whatever the active provider declares. DeepSeek picks up its first UI surface for thinking-mode in the process; the wire-side passthrough already shipped in DeepSeek 1.0.1.
+
+- `packages/plugin-types` → 2.4.0: new `provider-options.ts` exporting `ProviderOptionsSchema`, `ProviderOptionField`, `ProviderOptionGroup`, `ProviderOptionEnumValue`, `ProviderOptionFieldType`, `ProviderOptionDirective`, `ProviderOptionShowIf`, `ProviderOptionsSchemaContext`. New optional `getProviderOptionsSchema?(context?)` method on `TextProviderPlugin`. `PLUGIN_TYPES_VERSION` updated to track package version (was stale at 2.2.1).
+- Plugin schemas (mirroring today's UI 1:1, no behavior change for existing profiles):
+  - `qtap-plugin-anthropic` → 1.0.36: `enableCacheBreakpoints`, `cacheStrategy`, `cacheTTL` with `showIf` gates.
+  - `qtap-plugin-openai` → 1.0.42: `verbosity`, `reasoningEffort` (empty string = use model default).
+  - `qtap-plugin-openrouter` → 1.0.39: `enableZDR`, `useCustomModel` (with `affects: 'modelInput'` directive), `fallbackModels`. Provider now reads the flat `enableZDR` key alongside the legacy nested `providerPreferences.dataCollection`, so existing profiles keep working unchanged.
+  - `qtap-plugin-deepseek` → 1.0.2: new UI for `thinking` and `reasoning_effort`. `applyProfileParameters` now normalizes a flat string `thinking: 'enabled' | 'disabled'` into DeepSeek's wire shape `{ type: ... }`, and skips empty-string defaults.
+- `app/api/v1/providers/route.ts`: response now includes each provider's `optionsSchema` (or `null` when the plugin declares none).
+- `components/settings/connection-profiles/ProviderOptionsPanel.tsx` (new): generic renderer for boolean / enum / multi-enum / string / number fields, with `showIf` conditional rendering and an `onDirective` callback for `affects: 'modelInput'`-style fields.
+- `components/settings/connection-profiles/ProfileModal.tsx`: deleted the three sub-components (`OpenRouterOptions`, `AnthropicOptions`, `OpenAIOptions`). The model-input branch no longer keys off `provider === 'OPENROUTER' && useCustomModel`; instead it tracks a `useCustomModelDirective` state driven by the schema's directive callback. No `provider === '...'` literals remain in the modal.
+- `components/settings/connection-profiles/hooks/useProfileForm.ts`: per-provider arms in `buildRequestBody` collapsed — provider-specific fields now flow through the new `parameters` form field. `loadProfileIntoForm` translates the legacy OpenRouter nested `providerPreferences.dataCollection: 'deny'` into the flat `enableZDR: true` key when hydrating an existing profile.
+- `components/settings/connection-profiles/types.ts`: `ProfileFormData` lost nine top-level provider-specific fields (`fallbackModels`, `enableZDR`, `providerOrder`, `useCustomModel`, `enableCacheBreakpoints`, `cacheStrategy`, `cacheTTL`, `verbosity`, `reasoningEffort`) and gained a single `parameters: Record<string, unknown>`. `ProviderConfig` gained an optional `optionsSchema`.
+- Tests: new `__tests__/unit/components/settings/provider-options-panel.test.tsx` covering each field type, `showIf` gating, directive callbacks, and multi-enum cap behavior. New `__tests__/unit/plugins/provider-options-schema-snapshot.test.ts` snapshotting each plugin's schema so future drift is caught at review time.
+- No DB migration — `ConnectionProfile.parameters` stays a JSON blob and existing profiles keep their keys. The OpenRouter plugin reads both shapes; everything else was already flat.
+
 #### Feat: DeepSeek plugin updated for V4 catalog and thinking-mode passthrough
 
 DeepSeek's `/models` endpoint now returns `deepseek-v4-flash` and `deepseek-v4-pro`; the static catalog still listed the retired V3 IDs (`deepseek-chat`, `deepseek-reasoner`). Updated the catalog and added profile-parameter passthrough for thinking mode.

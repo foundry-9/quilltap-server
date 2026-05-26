@@ -1,0 +1,215 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`Provider options schemas Anthropic exposes an options schema 1`] = `
+{
+  "groups": [
+    {
+      "fields": [
+        {
+          "default": false,
+          "key": "enableCacheBreakpoints",
+          "label": "Enable Prompt Caching",
+          "type": "boolean",
+        },
+        {
+          "default": "system_and_long_context",
+          "enumValues": [
+            {
+              "label": "System message only",
+              "value": "system_only",
+            },
+            {
+              "label": "System + tools + conversation (recommended)",
+              "value": "system_and_long_context",
+            },
+          ],
+          "key": "cacheStrategy",
+          "label": "Cache Strategy",
+          "showIf": {
+            "equals": true,
+            "field": "enableCacheBreakpoints",
+          },
+          "type": "enum",
+        },
+        {
+          "default": "5m",
+          "enumValues": [
+            {
+              "label": "5 minutes (1.25x write cost)",
+              "value": "5m",
+            },
+            {
+              "label": "1 hour (2x write cost)",
+              "value": "1h",
+            },
+          ],
+          "key": "cacheTTL",
+          "label": "Cache Duration",
+          "showIf": {
+            "equals": true,
+            "field": "enableCacheBreakpoints",
+          },
+          "type": "enum",
+        },
+      ],
+      "helpText": "Prompt caching can reduce costs by up to 90% for repeated context.",
+      "title": "Anthropic Options",
+    },
+  ],
+}
+`;
+
+exports[`Provider options schemas DeepSeek exposes an options schema 1`] = `
+{
+  "groups": [
+    {
+      "fields": [
+        {
+          "default": "",
+          "enumValues": [
+            {
+              "label": "(model default)",
+              "value": "",
+            },
+            {
+              "label": "Enabled",
+              "value": "enabled",
+            },
+            {
+              "label": "Disabled",
+              "value": "disabled",
+            },
+          ],
+          "key": "thinking",
+          "label": "Thinking Mode",
+          "type": "enum",
+        },
+        {
+          "default": "",
+          "enumValues": [
+            {
+              "label": "(model default)",
+              "value": "",
+            },
+            {
+              "label": "High",
+              "value": "high",
+            },
+            {
+              "label": "Max",
+              "value": "max",
+            },
+          ],
+          "helpText": "DeepSeek's reasoning scale. low/medium fold to high; xhigh folds to max.",
+          "key": "reasoning_effort",
+          "label": "Reasoning Effort",
+          "type": "enum",
+        },
+      ],
+      "helpText": "Thinking mode enables DeepSeek's extended reasoning. While enabled, temperature, top_p, and frequency / presence penalties are ignored. Reasoning effort is only effective with thinking enabled.",
+      "title": "DeepSeek Options",
+    },
+  ],
+}
+`;
+
+exports[`Provider options schemas OpenAI exposes an options schema 1`] = `
+{
+  "groups": [
+    {
+      "fields": [
+        {
+          "default": "",
+          "enumValues": [
+            {
+              "label": "(model default)",
+              "value": "",
+            },
+            {
+              "label": "Low",
+              "value": "low",
+            },
+            {
+              "label": "Medium",
+              "value": "medium",
+            },
+            {
+              "label": "High",
+              "value": "high",
+            },
+          ],
+          "helpText": "Scales how long and detailed the answer is. Supported on GPT-5 and newer models; older models will ignore it.",
+          "key": "verbosity",
+          "label": "Verbosity",
+          "type": "enum",
+        },
+        {
+          "default": "",
+          "enumValues": [
+            {
+              "label": "(model default)",
+              "value": "",
+            },
+            {
+              "label": "Minimal",
+              "value": "minimal",
+            },
+            {
+              "label": "Low",
+              "value": "low",
+            },
+            {
+              "label": "Medium",
+              "value": "medium",
+            },
+            {
+              "label": "High",
+              "value": "high",
+            },
+          ],
+          "helpText": "How hard the model thinks before responding. Applies to reasoning models (o-series, GPT-5); ignored on non-reasoning models. Background tasks always use Low regardless of this setting.",
+          "key": "reasoningEffort",
+          "label": "Reasoning Effort",
+          "type": "enum",
+        },
+      ],
+      "title": "OpenAI Options",
+    },
+  ],
+}
+`;
+
+exports[`Provider options schemas OpenRouter exposes an options schema 1`] = `
+{
+  "groups": [
+    {
+      "fields": [
+        {
+          "default": false,
+          "helpText": "Providers will not store or log your prompts and responses.",
+          "key": "enableZDR",
+          "label": "Enable Zero Data Retention (ZDR)",
+          "type": "boolean",
+        },
+        {
+          "affects": "modelInput",
+          "default": false,
+          "helpText": "Enter an arbitrary model ID not in the fetched list.",
+          "key": "useCustomModel",
+          "label": "Use Custom Model ID",
+          "type": "boolean",
+        },
+        {
+          "default": [],
+          "key": "fallbackModels",
+          "label": "Fallback Models (max 2)",
+          "max": 2,
+          "multiEnumSource": "fetchedModels",
+          "type": "multi-enum",
+        },
+      ],
+      "title": "OpenRouter Options",
+    },
+  ],
+}
+`;

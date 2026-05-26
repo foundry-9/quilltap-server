@@ -208,6 +208,16 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - Excellent long-context support
 - Temperature: 0-1
 - Strong at reasoning and complex tasks
+- **Enable Prompt Caching** — invites Anthropic to mark the steady portions of your prompt as a cache breakpoint. On the next call within the cache's lifetime, those portions are charged at a steep discount instead of full freight. Worth the indulgence on long-running chats where the system prompt and tools repeat verbatim turn after turn.
+- **Cache Strategy** *(visible only when Prompt Caching is enabled)* — *System message only* caches just the persona/tools header; *System + tools + conversation* (recommended) extends the breakpoint deeper into the conversation so the savings compound across turns.
+- **Cache Duration** *(visible only when Prompt Caching is enabled)* — five minutes is the default and the cheapest to write; one hour costs more upfront but pays off when a chat sprawls past the five-minute window. Pick the longer setting for slow-and-deliberate writing sessions; leave it at five minutes for everyday chatting.
+
+### DeepSeek
+
+- DeepSeek's V4 family with native function calling and a 1M-token context window
+- Temperature: 0-2 (default 1)
+- **Thinking Mode** — toggles DeepSeek's extended reasoning. *Enabled* lets the model deliberate before answering, at the cost of latency; *Disabled* forces a direct reply. While thinking is enabled DeepSeek ignores `temperature`, `top_p`, and the frequency/presence penalties, so Quilltap quietly omits them from the wire to keep the logs tidy.
+- **Reasoning Effort** — DeepSeek's reasoning scale, *High* or *Max*. Only effective with thinking enabled; the lower OpenAI-style values (minimal / low / medium) fold up to *High* on DeepSeek's side.
 
 ### Google (Gemini)
 
@@ -215,6 +225,13 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - Good for vision tasks
 - Competitive pricing
 - Supports real-time APIs
+
+### OpenRouter
+
+- Single account, hundreds of models — useful as a backstop when first-party access lapses
+- **Enable Zero Data Retention (ZDR)** — instructs OpenRouter to route only through providers that promise not to store or log your prompts. Worth ticking for sensitive writing.
+- **Use Custom Model ID** — when ticked, the *Model* field becomes a free-text input so you can supply an obscure model identifier that hasn't yet appeared in OpenRouter's fetched list. Untick it to return to the model selector.
+- **Fallback Models** — pick up to two models OpenRouter will fall back to if the primary fails (rate-limited, down for maintenance, etc.). Available only after *Fetch Models* has populated the list.
 
 ### Local Providers (Ollama)
 

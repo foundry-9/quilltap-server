@@ -10186,9 +10186,13 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
     if (!profile || typeof profile !== "object") return;
     for (const key of DEEPSEEK_PROFILE_PARAM_ALLOWLIST) {
       const value = profile[key];
-      if (value !== void 0) {
-        body[key] = value;
+      if (value === void 0) continue;
+      if (typeof value === "string" && value === "") continue;
+      if (key === "thinking" && typeof value === "string") {
+        body[key] = { type: value };
+        continue;
       }
+      body[key] = value;
     }
   }
   extractCacheUsage(usage) {
@@ -10759,6 +10763,39 @@ var cheapModels = {
   defaultModel: "deepseek-v4-flash",
   recommendedModels: ["deepseek-v4-flash"]
 };
+var optionsSchema = {
+  groups: [
+    {
+      title: "DeepSeek Options",
+      helpText: "Thinking mode enables DeepSeek's extended reasoning. While enabled, temperature, top_p, and frequency / presence penalties are ignored. Reasoning effort is only effective with thinking enabled.",
+      fields: [
+        {
+          key: "thinking",
+          label: "Thinking Mode",
+          type: "enum",
+          default: "",
+          enumValues: [
+            { value: "", label: "(model default)" },
+            { value: "enabled", label: "Enabled" },
+            { value: "disabled", label: "Disabled" }
+          ]
+        },
+        {
+          key: "reasoning_effort",
+          label: "Reasoning Effort",
+          type: "enum",
+          default: "",
+          helpText: "DeepSeek's reasoning scale. low/medium fold to high; xhigh folds to max.",
+          enumValues: [
+            { value: "", label: "(model default)" },
+            { value: "high", label: "High" },
+            { value: "max", label: "Max" }
+          ]
+        }
+      ]
+    }
+  ]
+};
 var plugin = {
   metadata,
   icon: {
@@ -10779,6 +10816,10 @@ var plugin = {
   toolFormat: "openai",
   cheapModels,
   defaultContextWindow: 131072,
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
   createProvider: (_baseUrl) => {
     return new DeepSeekProvider();
   },

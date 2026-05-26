@@ -15933,6 +15933,47 @@ var cheapModels = {
   defaultModel: "claude-haiku-4-5-20251001",
   recommendedModels: ["claude-haiku-4-5-20251001", "claude-3-haiku-20240307"]
 };
+var optionsSchema = {
+  groups: [
+    {
+      title: "Anthropic Options",
+      helpText: "Prompt caching can reduce costs by up to 90% for repeated context.",
+      fields: [
+        {
+          key: "enableCacheBreakpoints",
+          label: "Enable Prompt Caching",
+          type: "boolean",
+          default: false
+        },
+        {
+          key: "cacheStrategy",
+          label: "Cache Strategy",
+          type: "enum",
+          default: "system_and_long_context",
+          enumValues: [
+            { value: "system_only", label: "System message only" },
+            {
+              value: "system_and_long_context",
+              label: "System + tools + conversation (recommended)"
+            }
+          ],
+          showIf: { field: "enableCacheBreakpoints", equals: true }
+        },
+        {
+          key: "cacheTTL",
+          label: "Cache Duration",
+          type: "enum",
+          default: "5m",
+          enumValues: [
+            { value: "5m", label: "5 minutes (1.25x write cost)" },
+            { value: "1h", label: "1 hour (2x write cost)" }
+          ],
+          showIf: { field: "enableCacheBreakpoints", equals: true }
+        }
+      ]
+    }
+  ]
+};
 var plugin = {
   metadata,
   icon: {
@@ -15950,6 +15991,12 @@ var plugin = {
   toolFormat: "anthropic",
   cheapModels,
   defaultContextWindow: 2e5,
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   * The `context` argument is currently advisory; the schema is returned
+   * unconditionally.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
   /**
    * Factory method to create an Anthropic LLM provider instance
    */

@@ -143,9 +143,19 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
     if (!profile || typeof profile !== 'object') return;
     for (const key of DEEPSEEK_PROFILE_PARAM_ALLOWLIST) {
       const value = (profile as Record<string, unknown>)[key];
-      if (value !== undefined) {
-        body[key] = value;
+      if (value === undefined) continue;
+      // Empty string from the schema-driven profile editor means
+      // "omit the parameter and use the model default." Skip those.
+      if (typeof value === 'string' && value === '') continue;
+      // The schema-driven editor stores `thinking` as a flat string
+      // ("enabled" / "disabled"); normalize to DeepSeek's wire shape
+      // `{ type: ... }`. Pre-existing profiles that already stored the
+      // object form continue to work unchanged.
+      if (key === 'thinking' && typeof value === 'string') {
+        body[key] = { type: value };
+        continue;
       }
+      body[key] = value;
     }
   }
 

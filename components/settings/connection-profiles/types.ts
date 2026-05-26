@@ -2,6 +2,10 @@
  * Type definitions for connection profiles
  */
 
+import type { ProviderOptionsSchema } from '@quilltap/plugin-types'
+
+export type { ProviderOptionsSchema }
+
 export interface ApiKey {
   id: string
   label: string
@@ -31,6 +35,13 @@ export interface ProviderConfig {
     webSearch: boolean
     toolUse?: boolean
   }
+  /**
+   * Provider-specific connection-profile options schema emitted by the
+   * plugin's `getProviderOptionsSchema()` hook. `null` (or missing) means
+   * the plugin declares no extra fields and the host should render no
+   * provider-options panel.
+   */
+  optionsSchema?: ProviderOptionsSchema | null
 }
 
 export interface ConnectionProfile {
@@ -100,18 +111,12 @@ export interface ProfileFormData {
   useNativeWebSearch: boolean
   modelClass: string
   maxContext: string
-  // OpenRouter-specific fields
-  fallbackModels: string[]
-  enableZDR: boolean
-  providerOrder: string[]
-  useCustomModel: boolean
-  // Anthropic-specific fields
-  enableCacheBreakpoints: boolean
-  cacheStrategy: 'system_only' | 'system_and_long_context'
-  cacheTTL: '5m' | '1h'
-  // OpenAI-specific fields. Empty string means "leave unset / use model default".
-  verbosity: '' | 'low' | 'medium' | 'high'
-  reasoningEffort: '' | 'minimal' | 'low' | 'medium' | 'high'
+  /**
+   * Provider-specific options written by the schema-driven options panel.
+   * Keys come from the active provider plugin's `getProviderOptionsSchema()`
+   * and flow straight into the saved profile's `parameters` JSON blob.
+   */
+  parameters: Record<string, unknown>
 }
 
 export const initialFormState: ProfileFormData = {
@@ -135,16 +140,5 @@ export const initialFormState: ProfileFormData = {
   useNativeWebSearch: false,
   modelClass: '',
   maxContext: '',
-  // OpenRouter-specific fields
-  fallbackModels: [],
-  enableZDR: false,
-  providerOrder: [],
-  useCustomModel: false,
-  // Anthropic-specific fields
-  enableCacheBreakpoints: false,
-  cacheStrategy: 'system_and_long_context',
-  cacheTTL: '5m',
-  // OpenAI-specific fields
-  verbosity: '',
-  reasoningEffort: '',
+  parameters: {},
 }

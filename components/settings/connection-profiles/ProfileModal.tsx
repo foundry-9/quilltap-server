@@ -9,6 +9,7 @@ import { getAttachmentSupportDescription, supportsMimeType } from '@/lib/llm/att
 import { FormActions } from '@/components/ui/FormActions'
 import { MODEL_CLASSES, getModelClass } from '@/lib/llm/model-classes'
 import type { ApiKey, ProviderConfig, ProfileFormData, ConnectionProfile } from './types'
+import { ProviderOptionsPanel } from './ProviderOptionsPanel'
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -179,6 +180,30 @@ export function ProfileModal({
   const reqs = operations.getProviderRequirements(form.formData.provider)
   const isCourier = form.formData.transport === 'courier'
   const isValid = form.formData.name.trim() && form.formData.modelName.trim()
+
+  // Active provider's options schema (if the plugin exposes one)
+  const activeProviderConfig = providers.find((p) => p.name === form.formData.provider)
+  const optionsSchema = activeProviderConfig?.optionsSchema ?? null
+
+  // Directive state: schema fields marked `affects: 'modelInput'` toggle
+  // between ModelSelector and free-text entry. The panel writes the
+  // parameter through `setParameter` and fires the directive in lockstep,
+  // so deriving directly from the parameter map keeps the model input in
+  // sync without an extra useState/useEffect.
+  const useCustomModelDirective = form.formData.parameters?.useCustomModel === true
+
+  const setParameter = useCallback(
+    (key: string, value: unknown) => {
+      const next = { ...form.formData.parameters }
+      if (value === undefined) {
+        delete next[key]
+      } else {
+        next[key] = value
+      }
+      form.setField('parameters', next)
+    },
+    [form]
+  )
 
   // Handle provider change - auto-fill base URL for providers that have defaults
   const handleProviderChange = (newProvider: string) => {
@@ -525,7 +550,7 @@ export function ProfileModal({
               <label htmlFor="modelName" className="block qt-text-label mb-2">
                 Model *
               </label>
-              {form.formData.provider === 'OPENROUTER' && form.formData.useCustomModel ? (
+              {useCustomModelDirective ? (
                 <>
                   <input
                     type="text"
@@ -810,17 +835,15 @@ export function ProfileModal({
             </div>
             )}
 
-            {/* Provider-specific options — API transport only */}
-            {!isCourier && form.formData.provider === 'OPENROUTER' && (
-              <OpenRouterOptions formData={form.formData} fetchedModels={fetchedModels} onSetField={form.setField} />
-            )}
-
-            {!isCourier && form.formData.provider === 'ANTHROPIC' && (
-              <AnthropicOptions formData={form.formData} onSetField={form.setField} />
-            )}
-
-            {!isCourier && form.formData.provider === 'OPENAI' && (
-              <OpenAIOptions formData={form.formData} onSetField={form.setField} />
+            {/* Provider-specific options — schema-driven, supplied by the active plugin */}
+            {!isCourier && optionsSchema && (
+              <ProviderOptionsPanel
+                schema={optionsSchema}
+                parameters={form.formData.parameters}
+                fetchedModels={fetchedModels}
+                modelName={form.formData.modelName}
+                onSetParameter={setParameter}
+              />
             )}
 
             {/* Tag Editor (only show when editing) — API path. Courier path renders its own above. */}
@@ -831,240 +854,6 @@ export function ProfileModal({
             )}
       </div>
     </BaseModal>
-  )
-}
-
-/**
- * OpenRouter-specific options component
- */
-function OpenRouterOptions({
-  formData,
-  fetchedModels,
-  onSetField,
-}: {
-  formData: ProfileFormData
-  fetchedModels: string[]
-  onSetField: (name: keyof ProfileFormData, value: any) => void
-}) {
-  return (
-    <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
-      <h4 className="font-medium text-sm mb-3">OpenRouter Options</h4>
-
-      <div className="flex items-center gap-2 mb-4">
-        <input
-          type="checkbox"
-          id="enableZDR"
-          checked={formData.enableZDR}
-          onChange={(e) => onSetField('enableZDR', e.target.checked)}
-          className="w-4 h-4 rounded"
-        />
-        <div className="flex flex-col gap-1">
-          <label htmlFor="enableZDR" className="text-sm">
-            Enable Zero Data Retention (ZDR)
-          </label>
-          <p className="qt-text-xs">
-            Providers will not store or log your prompts and responses.
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 mb-4">
-        <input
-          type="checkbox"
-          id="useCustomModel"
-          checked={formData.useCustomModel}
-          onChange={(e) => onSetField('useCustomModel', e.target.checked)}
-          className="w-4 h-4 rounded"
-        />
-        <div className="flex flex-col gap-1">
-          <label htmlFor="useCustomModel" className="text-sm">
-            Use Custom Model ID
-          </label>
-          <p className="qt-text-xs">
-            Enter an arbitrary model ID not in the fetched list.
-          </p>
-        </div>
-      </div>
-
-      {fetchedModels.length > 0 && (
-        <div className="mb-4">
-          <label className="block qt-text-label mb-2">Fallback Models (max 2)</label>
-          <div className="space-y-1 max-h-32 overflow-y-auto border qt-border-default rounded p-2 bg-background">
-            {fetchedModels
-              .filter((model) => model !== formData.modelName)
-              .slice(0, 50)
-              .map((model) => {
-                const isSelected = formData.fallbackModels.includes(model)
-                const isDisabled = !isSelected && formData.fallbackModels.length >= 2
-                return (
-                  <label
-                    key={model}
-                    className={`flex items-center gap-2 p-1 rounded ${
-                      isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:qt-bg-muted'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      disabled={isDisabled}
-                      onChange={(e) => {
-                        if (e.target.checked && formData.fallbackModels.length < 2) {
-                          onSetField('fallbackModels', [...formData.fallbackModels, model])
-                        } else if (!e.target.checked) {
-                          onSetField('fallbackModels', formData.fallbackModels.filter((m) => m !== model))
-                        }
-                      }}
-                      className="w-3 h-3 rounded"
-                    />
-                    <span className="qt-text-xs text-foreground truncate">{model}</span>
-                  </label>
-                )
-              })}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/**
- * Anthropic-specific options component
- */
-function AnthropicOptions({
-  formData,
-  onSetField,
-}: {
-  formData: ProfileFormData
-  onSetField: (name: keyof ProfileFormData, value: any) => void
-}) {
-  return (
-    <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
-      <h4 className="font-medium text-sm mb-3">Anthropic Options</h4>
-
-      <div className="flex items-center gap-2 mb-3">
-        <input
-          type="checkbox"
-          id="enableCacheBreakpoints"
-          checked={formData.enableCacheBreakpoints}
-          onChange={(e) => onSetField('enableCacheBreakpoints', e.target.checked)}
-          className="w-4 h-4 rounded"
-        />
-        <label htmlFor="enableCacheBreakpoints" className="text-sm">
-          Enable Prompt Caching
-        </label>
-      </div>
-      {formData.enableCacheBreakpoints && (
-        <div className="space-y-3 pl-6 mb-3">
-          <div className="space-y-2">
-            <p className="qt-text-label-xs">Cache Strategy</p>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="cacheStrategy"
-                value="system_only"
-                checked={formData.cacheStrategy === 'system_only'}
-                onChange={(e) => onSetField('cacheStrategy', e.target.value as any)}
-                className="w-3 h-3"
-              />
-              <span className="text-sm">System message only</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="cacheStrategy"
-                value="system_and_long_context"
-                checked={formData.cacheStrategy === 'system_and_long_context'}
-                onChange={(e) => onSetField('cacheStrategy', e.target.value as any)}
-                className="w-3 h-3"
-              />
-              <span className="text-sm">System + tools + conversation (recommended)</span>
-            </label>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="cacheTTL" className="qt-text-label-xs">
-              Cache Duration
-            </label>
-            <select
-              id="cacheTTL"
-              value={formData.cacheTTL}
-              onChange={(e) => onSetField('cacheTTL', e.target.value as '5m' | '1h')}
-              className="qt-select text-sm"
-            >
-              <option value="5m">5 minutes (1.25x write cost)</option>
-              <option value="1h">1 hour (2x write cost)</option>
-            </select>
-          </div>
-        </div>
-      )}
-      <p className="qt-text-xs">
-        Prompt caching can reduce costs by up to 90% for repeated context.
-      </p>
-    </div>
-  )
-}
-
-/**
- * OpenAI-specific options component
- */
-function OpenAIOptions({
-  formData,
-  onSetField,
-}: {
-  formData: ProfileFormData
-  onSetField: (name: keyof ProfileFormData, value: any) => void
-}) {
-  return (
-    <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
-      <h4 className="font-medium text-sm mb-3">OpenAI Options</h4>
-
-      <div className="grid grid-cols-2 gap-4">
-        {/* Verbosity */}
-        <div>
-          <label htmlFor="verbosity" className="qt-text-label-xs">
-            Verbosity
-          </label>
-          <select
-            id="verbosity"
-            value={formData.verbosity}
-            onChange={(e) => onSetField('verbosity', e.target.value)}
-            className="qt-select text-sm"
-          >
-            <option value="">(model default)</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-          <p className="qt-text-xs mt-1">
-            Scales how long and detailed the answer is. Supported on GPT-5 and newer models; older models will
-            ignore it.
-          </p>
-        </div>
-
-        {/* Reasoning Effort */}
-        <div>
-          <label htmlFor="reasoningEffort" className="qt-text-label-xs">
-            Reasoning Effort
-          </label>
-          <select
-            id="reasoningEffort"
-            value={formData.reasoningEffort}
-            onChange={(e) => onSetField('reasoningEffort', e.target.value)}
-            className="qt-select text-sm"
-          >
-            <option value="">(model default)</option>
-            <option value="minimal">Minimal</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-          <p className="qt-text-xs mt-1">
-            How hard the model thinks before responding. Applies to reasoning models (o-series, GPT-5); ignored on
-            non-reasoning models. Background tasks always use Low regardless of this setting.
-          </p>
-        </div>
-      </div>
-    </div>
   )
 }
 
