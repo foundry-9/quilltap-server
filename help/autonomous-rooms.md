@@ -41,7 +41,7 @@ Two distinctions follow from that flip:
 - The *Play As* selection is removed — autonomous rooms have no user character.
 - The right-hand card swaps **Reality Injection Mode** for **Autonomous Room**, where the household sets the cron expression (optional), the freshness window, the four budget caps (turns, tokens, wall-clock minutes, USD), the per-room visibility, and whether destructive tools are pre-authorized.
 
-Selection rules: at least two LLM-controlled characters, no user-controlled participants, every LLM character must have a connection profile. On submit, the room is created in `runState: 'idle'` and one is taken to the **Autonomous Rooms** management list under Data & System; clicking **Start** there fires the first run. Scheduled rooms also begin running on their own at the next cron tick.
+Selection rules: at least two LLM-controlled characters, no user-controlled participants, every LLM character must have a connection profile. On submit, an **ad-hoc room** (one without a cron expression) takes itself in hand at once: the first run begins immediately, in the spirit of the householder who set it on its way and then turned to other matters. A **scheduled room** (one with a cron expression) waits, idle, for its first scheduled tick. Either kind of room appears in the **Autonomous Rooms** management list under the Chat tab, where **Pause**, **Resume**, and **Stop** are at one's disposal at all hours.
 
 ## Tools — what characters may, and may not, deliberately undo
 
@@ -78,11 +78,11 @@ This dual safeguard (a prompt-level instruction *and* a structural provenance fl
   - **Default freshness window** (default 12h)
   - **Default visibility** (Owner only / Household / Open)
   - **Destructive-tool policy** (Always refuse / Opt in per room)
-- `/settings?tab=chat&section=autonomous-room-schedules` — scheduled-room management list:
+- `/settings?tab=chat&section=autonomous-room-schedules` — autonomous-room management list:
   - Per-room run-state badge, last run, next run, run budgets consumed
   - **Pause**, **Resume**, **Stop** controls
   - Direct link to the chat transcript and `.qtap` export
-  - Only scheduled rooms (those with a cron expression) appear here; an ad-hoc room is included only while it is actively running, and falls off the list when it finishes
+  - Cron-scheduled rooms always appear here; ad-hoc rooms appear while they are idle, running, or paused, and fall off the list once stopped, errored, or budget-exhausted
 
 ## In-Chat Navigation
 

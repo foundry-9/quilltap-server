@@ -60,6 +60,7 @@ import {
 } from '@/lib/services/prospero-notifications/writer';
 import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
+import { startAutonomousRoomManually } from '@/lib/services/chat-message/autonomous-room.service';
 
 type Repos = RepositoryContainer;
 const CHAT_GET_ACTIONS = ['has-dangerous'] as const;
@@ -1171,6 +1172,27 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     chatId: chat.id,
     continuationFromChatId: validatedData.continuationFromChatId ?? null,
   });
+
+  // Ad-hoc autonomous rooms (no cron schedule) start immediately on create —
+  // the user just configured the participants and budget; there's no separate
+  // Start step. Cron-scheduled rooms wait for the scheduler instead.
+  if (isAutonomous && !chat.scheduleCron) {
+    try {
+      const result = await startAutonomousRoomManually(chat.id, user.id);
+      if (!result.ok) {
+        logger.warn('[Chats v1] Auto-start of ad-hoc autonomous room declined', {
+          chatId: chat.id,
+          reason: result.reason,
+          message: result.message,
+        });
+      }
+    } catch (error) {
+      logger.error('[Chats v1] Auto-start of ad-hoc autonomous room threw', {
+        chatId: chat.id,
+        error: getErrorMessage(error, 'Unknown autonomous-start error'),
+      }, error instanceof Error ? error : undefined);
+    }
+  }
 
   return NextResponse.json({ chat: { ...chat, participants: enrichedParticipants } }, { status: 201 });
 }

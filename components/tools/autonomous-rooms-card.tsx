@@ -104,12 +104,12 @@ export function AutonomousRoomsCard() {
   const allRooms = data?.rooms ?? []
   const rooms = allRooms.filter((room) => {
     if (room.scheduleCron) return true
-    return room.runState === 'running' || room.runState === 'paused'
+    return room.runState === 'idle' || room.runState === 'running' || room.runState === 'paused'
   })
   if (rooms.length === 0) {
     return (
       <div className="qt-text-small qt-text-muted">
-        No scheduled autonomous rooms. Set a cron expression on a room when you create it from the Salon to have it appear here. Ad-hoc rooms only show up while they&rsquo;re actively running.
+        No active autonomous rooms. Cron-scheduled rooms always appear here; ad-hoc rooms appear while idle, running, or paused.
       </div>
     )
   }

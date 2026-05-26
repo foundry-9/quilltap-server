@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Fix: Ad-hoc autonomous rooms now auto-start and stay visible while idle
+
+Creating an autonomous room without a cron schedule used to leave it sitting in `runState: 'idle'` with no way to launch a run. The Chat-tab management list was the only Start surface, and commit `1900d780` had narrowed it to "rooms with a cron expression, plus ad-hoc rooms currently running or paused" — so a freshly-created idle ad-hoc room could not appear in the list, and therefore could not be started. Two changes:
+
+- `app/api/v1/chats/route.ts`: `handleCreate` now calls `startAutonomousRoomManually(chat.id, user.id)` after the autonomous-room initialization steps when `isAutonomous && !chat.scheduleCron`. Failures are logged at warn/error and do not roll back the chat creation.
+- `components/tools/autonomous-rooms-card.tsx`: the visible-rooms filter now also includes `runState === 'idle'`. Empty-state copy updated. Cron rooms still always appear; stopped/error/budgetExhausted ad-hoc rooms still drop off after a run ends.
+- `help/autonomous-rooms.md`: copy updated to describe the new auto-start behavior for ad-hoc rooms and the loosened list filter.
+
 #### Fix: Allow "Continue Elsewhere" to hand off into an autonomous room
 
 `POST /api/v1/chats` previously returned 400 ("Autonomous rooms cannot be created via continuation") when a request set both `continuationFromChatId` and `chatType: 'autonomous'`. The NewChatModal's "Continue Conversation Elsewhere" flow surfaced this as a toast and a `console.error` of an empty-looking object whenever the user tried to withdraw from a salon and let the LLMs continue autonomously. The block has been removed; the existing branching already routes continuation requests through `writeSystemPromptMessage → applyChatContinuation → createInitialMessagesScenarioAndStaff({ skipFirstMessage: true })`, which is exactly the right shape for an autonomous handoff (carry over source-chat tail, no auto-greeting). Autonomous preconditions (≥2 LLM characters, no user-controlled participants, cron validity) still apply.
