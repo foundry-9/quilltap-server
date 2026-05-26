@@ -13,6 +13,7 @@ const {
   loadDbKey,
 } = require('../lib/db-helpers');
 const { resolveInstance } = require('../lib/instances');
+const { resolveModuleDir, ensureNativeModules } = require('../lib/native-modules');
 
 const PACKAGE_DIR = path.resolve(__dirname, '..');
 
@@ -135,85 +136,6 @@ function openBrowser(url) {
       console.log(`Could not open browser automatically. Visit: ${url}`);
     }
   });
-}
-
-// Resolve a native module's directory, handling npm hoisting.
-// Returns the directory containing package.json, or null if not found.
-function resolveModuleDir(moduleName) {
-  try {
-    const pkgJson = require.resolve(moduleName + '/package.json');
-    return path.dirname(pkgJson);
-  } catch {
-    return null;
-  }
-}
-
-// Check if native modules are compiled for the current Node.js version.
-// This handles the case where npx caches the package but the user upgrades
-// Node.js — the cached native modules will have a stale NODE_MODULE_VERSION.
-function ensureNativeModules() {
-  const needsRebuild = [];
-
-  // Check better-sqlite3-multiple-ciphers (provides SQLCipher encryption support).
-  // The main app depends on this via an npm alias as 'better-sqlite3', so we must
-  // ensure the SQLCipher-capable version is available and link it as 'better-sqlite3'.
-  // We must load the native binding directly to detect NODE_MODULE_VERSION mismatches.
-  try {
-    const modDir = resolveModuleDir('better-sqlite3-multiple-ciphers')
-                || resolveModuleDir('better-sqlite3');
-    if (!modDir) throw Object.assign(new Error('not found'), { code: 'MODULE_NOT_FOUND' });
-    const bindingsPath = path.join(modDir, 'build', 'Release', 'better_sqlite3.node');
-    require(bindingsPath);
-  } catch (err) {
-    if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
-      needsRebuild.push('better-sqlite3-multiple-ciphers');
-    } else if (err.code === 'MODULE_NOT_FOUND') {
-      needsRebuild.push('better-sqlite3-multiple-ciphers');
-    }
-  }
-
-  // Check sharp: loads its native binding eagerly on require, but we use
-  // the same explicit-path approach for consistency and reliability.
-  try {
-    require('sharp');
-  } catch (err) {
-    if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
-      needsRebuild.push('sharp');
-    } else if (err.code === 'MODULE_NOT_FOUND') {
-      needsRebuild.push('sharp');
-    }
-  }
-
-  // Check node-pty: backs the Ariel terminal feature. Loaded dynamically by
-  // pty-manager in the standalone server, so resolution must succeed and the
-  // native binding's NODE_MODULE_VERSION must match the runtime.
-  try {
-    require('node-pty');
-  } catch (err) {
-    if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
-      needsRebuild.push('node-pty');
-    } else if (err.code === 'MODULE_NOT_FOUND') {
-      needsRebuild.push('node-pty');
-    }
-  }
-
-  if (needsRebuild.length === 0) return;
-
-  console.log(`  Rebuilding native modules for Node.js ${process.version}...`);
-
-  try {
-    execSync(`npm rebuild ${needsRebuild.join(' ')}`, {
-      cwd: PACKAGE_DIR,
-      stdio: 'inherit',
-    });
-    console.log('  Done.');
-    console.log('');
-  } catch (err) {
-    console.error('');
-    console.error(`  Warning: Failed to rebuild native modules: ${err.message}`);
-    console.error('  Try running: npm rebuild --prefix ' + PACKAGE_DIR);
-    console.error('');
-  }
 }
 
 // Symlink native modules into the standalone directory's node_modules

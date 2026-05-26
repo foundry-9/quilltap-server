@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Fix: `quilltap` CLI postinstall verifies native modules against the current Node ABI
+
+A stale `better-sqlite3-multiple-ciphers` binary in `packages/quilltap/node_modules/` (compiled against NODE_MODULE_VERSION 127 / Node 22, running under Node 24's MODULE_VERSION 137) was crashing four unit-test suites with `Cannot read properties of null (reading 'close')` after their `new Database(...)` calls threw at load time. `bin/quilltap.js` already had a runtime self-heal (`ensureNativeModules`), but it only fired when a user actually invoked the CLI — `npm install` left the stale binary in place, and tests that loaded the native binding directly bypassed the self-heal entirely.
+
+- `packages/quilltap/lib/native-modules.js` (new): extracted `resolveModuleDir` and `ensureNativeModules` from `bin/quilltap.js` into a shared module. When `require.main === module`, runs the check and exits 0 — used as the package's `postinstall` script. `require.resolve` calls now pass `{ paths: [PACKAGE_DIR] }` so resolution works correctly under both hoisted installs and the package's own `node_modules/`.
+- `packages/quilltap/bin/quilltap.js`: replaced the inline `resolveModuleDir` and `ensureNativeModules` definitions with `require('../lib/native-modules')`. No behavioural change to the runtime self-heal — same ABI check, same `npm rebuild` invocation, same warning-not-error failure mode.
+- `packages/quilltap/package.json`: added `"scripts": { "postinstall": "node lib/native-modules.js" }`. Silent on healthy installs; rebuilds when a stale or missing binding is detected; warns (but does not fail the install) on rebuild failure.
+
 #### Fix: Document Mode follows LLM-driven file/folder renames instead of 404'ing
 
 When a character called `doc_move_file` (or `doc_move_folder`) on a file currently open in the chat's Document Mode pane, the salon page's existing `reloadFromServer` trigger re-fetched the stale `chat_documents` row, which still pointed at the old path. The next `read-document` request 404'd with `File not found: <old path>` and bubbled up as a Next.js dev error overlay. Seen on a `Small Group/How People Change/Chatper 05 - Discussion Notes.md → Chapter 05 - Discussion Notes.md` rename in the wild.
