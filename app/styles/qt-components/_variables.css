@@ -465,6 +465,13 @@
   --qt-queue-badge-story-fg: hsl(0 0% 100%);
   --qt-queue-badge-idle-opacity: 0.35;
 
+  /* Autonomous-room badge colors (shares queue-badge structural tokens) */
+  --qt-autonomous-badge-running-bg: hsl(152 55% 38%);
+  --qt-autonomous-badge-running-fg: hsl(0 0% 100%);
+  --qt-autonomous-badge-idle-bg: hsl(225 12% 38%);
+  --qt-autonomous-badge-idle-fg: hsl(0 0% 100%);
+  --qt-autonomous-badge-button-hover-bg: hsl(0 0% 100% / 0.18);
+
   /* ==========================================================================
      AVATAR VARIABLES
      ========================================================================== */

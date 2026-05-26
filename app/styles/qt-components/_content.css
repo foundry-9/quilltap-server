@@ -325,6 +325,65 @@
   }
 
   /* ==========================================================================
+     AUTONOMOUS-ROOM BADGES
+     Compact handles in the page toolbar for autonomous chats that are idle,
+     paused, or running. Wraps to a second line when there are too many to
+     fit. Each badge is an anchor to the chat with an inline play/pause
+     button that stops propagation.
+     ========================================================================== */
+
+  .qt-autonomous-badge-group {
+    @apply inline-flex items-center flex-wrap;
+    gap: var(--qt-queue-badge-group-gap);
+  }
+
+  .qt-autonomous-badge {
+    @apply inline-flex items-center gap-1 flex-shrink-0 leading-none whitespace-nowrap no-underline;
+    padding: var(--qt-queue-badge-padding-y) var(--qt-queue-badge-padding-x);
+    font-size: var(--qt-queue-badge-font-size);
+    font-weight: var(--qt-queue-badge-font-weight);
+    border-radius: var(--qt-queue-badge-radius);
+    cursor: pointer;
+    transition: opacity 200ms ease, filter 200ms ease;
+  }
+
+  .qt-autonomous-badge:hover {
+    filter: brightness(1.1);
+  }
+
+  .qt-autonomous-badge-running {
+    background: var(--qt-autonomous-badge-running-bg);
+    color: var(--qt-autonomous-badge-running-fg);
+  }
+
+  .qt-autonomous-badge-idle {
+    background: var(--qt-autonomous-badge-idle-bg);
+    color: var(--qt-autonomous-badge-idle-fg);
+  }
+
+  .qt-autonomous-badge-button {
+    @apply inline-flex items-center justify-center;
+    background: transparent;
+    color: inherit;
+    border: 0;
+    padding: 0 1px;
+    margin-left: 2px;
+    border-radius: 2px;
+    cursor: pointer;
+    line-height: 0;
+    transition: background 150ms ease, opacity 150ms ease;
+  }
+
+  .qt-autonomous-badge-button:hover {
+    background: var(--qt-autonomous-badge-button-hover-bg);
+  }
+
+  .qt-autonomous-badge-button:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  /* ==========================================================================
      TAG BADGES
      ========================================================================== */
 

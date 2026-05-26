@@ -51,6 +51,14 @@ The user-level **destructive-tool policy** (`/settings?tab=chat`, *Autonomous Ro
 
 A character invoking the image-generation tool deliberately is unaffected — that path runs as in any chat. What is suppressed in autonomous rooms is the *automatic* image pipelines: the Lantern's story-background trigger does not fire, and wardrobe changes do not regenerate avatars. (Wardrobe state still advances. Only the image generation is skipped.)
 
+## A glance at the mantelpiece — the toolbar badges
+
+Just to the left of the background-job-queue indicators in the page toolbar, the Estate now keeps a small row of badges, one per autonomous room currently *idle*, *paused*, or *running*. Each badge is a study in compression: the chat's title is abbreviated to its initial letters (a chat called *Chat With Amy and Friday* becomes `CWAaF`), and if the room belongs to a project, that project is likewise initialed and set before a colon (*Quilltap Plans* → `QP:CWAaF`).
+
+Hard upon the abbreviation sits a single readout of how much budget remains. The Estate picks one to display, in order: tokens, then messages, then time. Tokens are abbreviated with proper 1024-based mathematics (`936K`, `1.5M`); message counts are written out plain; time counts down in `MM:SS`, refreshing each second for rooms actually running. A small play button starts or resumes a stilled room; a small pause button quiets one in motion. A click anywhere *but* on the button opens the transcript.
+
+A running room wears green; a paused or idle one wears slate. Hover, and the tooltip discloses the full project name, the full chat title, the precise used-versus-total of whichever budget is binding, and the current status. Rooms in *stopped*, *budget-exhausted*, or *error* states do not appear in the toolbar; they remain reviewable in the management list.
+
 ## Visibility — discoverable, not surfaced
 
 Autonomous-room transcripts are by default **hidden from the main Salon chat list**. They are findable, exportable as `.qtap` archives, and reviewable from a dedicated **Autonomous Rooms** subsection under Data & System settings. Other households may choose a more open default at the Chat-tab setting:

@@ -22,40 +22,59 @@ export const GET = createAuthenticatedHandler(
   async (_req: NextRequest, ctx: AuthenticatedContext) => {
     try {
       const userChats = await ctx.repos.chats.findByUserId(ctx.user.id);
-      const rooms = userChats
-        .filter((c) => c.chatType === 'autonomous')
-        .map((c) => {
-          const cAny = c as unknown as Record<string, unknown>;
-          return {
-            id: c.id,
-            title: c.title,
-            participants: c.participants.map((p) => ({
-              id: p.id,
-              type: p.type,
-              characterId: p.characterId ?? null,
-              status: p.status,
-            })),
-            runState: cAny.runState ?? null,
-            runStateMessage: cAny.runStateMessage ?? null,
-            currentRunId: cAny.currentRunId ?? null,
-            runStartedAt: cAny.runStartedAt ?? null,
-            runEndedAt: cAny.runEndedAt ?? null,
-            runTurnsConsumed: cAny.runTurnsConsumed ?? 0,
-            runTokensConsumed: cAny.runTokensConsumed ?? 0,
-            scheduleCron: cAny.scheduleCron ?? null,
-            scheduleNextRunAt: cAny.scheduleNextRunAt ?? null,
-            scheduleLastRunAt: cAny.scheduleLastRunAt ?? null,
-            scheduleFreshnessWindowMs: cAny.scheduleFreshnessWindowMs ?? null,
-            budgetMaxTurns: cAny.budgetMaxTurns ?? null,
-            budgetMaxTokens: cAny.budgetMaxTokens ?? null,
-            budgetMaxWallClockMs: cAny.budgetMaxWallClockMs ?? null,
-            budgetEstimatedSpendCapUSD: cAny.budgetEstimatedSpendCapUSD ?? null,
-            runDestructiveToolsAllowed: cAny.runDestructiveToolsAllowed ?? 0,
-            runVisibility: cAny.runVisibility ?? null,
-            createdAt: c.createdAt,
-            updatedAt: c.updatedAt,
-          };
-        });
+      const autonomousChats = userChats.filter((c) => c.chatType === 'autonomous');
+
+      const projectIds = Array.from(
+        new Set(
+          autonomousChats
+            .map((c) => (c as unknown as Record<string, unknown>).projectId)
+            .filter((v): v is string => typeof v === 'string' && v.length > 0),
+        ),
+      );
+      const projectNameById = new Map<string, string>();
+      for (const projectId of projectIds) {
+        const project = await ctx.repos.projects.findById(projectId);
+        if (project) projectNameById.set(projectId, project.name);
+      }
+
+      const rooms = autonomousChats.map((c) => {
+        const cAny = c as unknown as Record<string, unknown>;
+        const projectId =
+          typeof cAny.projectId === 'string' && cAny.projectId.length > 0
+            ? (cAny.projectId as string)
+            : null;
+        return {
+          id: c.id,
+          title: c.title,
+          projectId,
+          projectName: projectId ? projectNameById.get(projectId) ?? null : null,
+          participants: c.participants.map((p) => ({
+            id: p.id,
+            type: p.type,
+            characterId: p.characterId ?? null,
+            status: p.status,
+          })),
+          runState: cAny.runState ?? null,
+          runStateMessage: cAny.runStateMessage ?? null,
+          currentRunId: cAny.currentRunId ?? null,
+          runStartedAt: cAny.runStartedAt ?? null,
+          runEndedAt: cAny.runEndedAt ?? null,
+          runTurnsConsumed: cAny.runTurnsConsumed ?? 0,
+          runTokensConsumed: cAny.runTokensConsumed ?? 0,
+          scheduleCron: cAny.scheduleCron ?? null,
+          scheduleNextRunAt: cAny.scheduleNextRunAt ?? null,
+          scheduleLastRunAt: cAny.scheduleLastRunAt ?? null,
+          scheduleFreshnessWindowMs: cAny.scheduleFreshnessWindowMs ?? null,
+          budgetMaxTurns: cAny.budgetMaxTurns ?? null,
+          budgetMaxTokens: cAny.budgetMaxTokens ?? null,
+          budgetMaxWallClockMs: cAny.budgetMaxWallClockMs ?? null,
+          budgetEstimatedSpendCapUSD: cAny.budgetEstimatedSpendCapUSD ?? null,
+          runDestructiveToolsAllowed: cAny.runDestructiveToolsAllowed ?? 0,
+          runVisibility: cAny.runVisibility ?? null,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+        };
+      });
       // Stable sort: running first, then idle/paused/budgetExhausted, then
       // stopped/error; within each band, most recently updated first.
       const stateOrder: Record<string, number> = {

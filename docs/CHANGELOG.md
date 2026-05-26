@@ -4,6 +4,16 @@
 
 ### 4.6-dev
 
+#### Feat: Autonomous-room badges in the page toolbar
+
+The page toolbar now shows a compact badge for every autonomous chat in `idle`, `paused`, or `running` state, placed just before the background-job queue badges. Each badge abbreviates the chat title (and the parent project, if any: e.g. `QP:CWAaF` for "Chat With Amy and Friday" inside "Quilltap Plans"), shows a single budget-remaining readout (tokens > messages > time), and exposes an inline play/pause button. Running rooms are green; idle and paused rooms share a muted slate. Hovering reveals a multi-line tooltip with the unabridged project / chat title / used-vs-total / status. Clicking the body of the badge navigates to `/salon/[id]`; clicking the button toggles `start`/`resume`/`pause`.
+
+- `components/layout/autonomous-room-badges.tsx` (new): SWR-polling client component (5s refresh, matching the queue badges and the management list). A 1s local tick refreshes the MM:SS readout between polls for time-budgeted running rooms. Token formatting uses 1024-based units (`950K`, `1.5M`, etc.); message budgets show raw integers remaining; time budgets show `MM:SS`. Play/pause button stops propagation and calls `POST /api/v1/chats/[id]/autonomous-room?action=pause|resume|start`, then `mutate()`s the SWR cache immediately.
+- `components/layout/page-toolbar.tsx`: inserted `<AutonomousRoomBadges />` as the first child of `qt-page-toolbar-right`, immediately before `<QueueStatusBadges />`. The toolbar's existing `gap-2` provides visual separation from the queue badges, which keep their own tight 1px internal gap.
+- `app/api/v1/system/autonomous-rooms/route.ts`: response now includes `projectId` and `projectName` for each room (resolved via `repos.projects.findById` over the distinct project IDs in the result set). Existing fields and sort order unchanged.
+- `app/styles/qt-components/_content.css`: added `.qt-autonomous-badge-group`, `.qt-autonomous-badge`, `.qt-autonomous-badge-running`, `.qt-autonomous-badge-idle`, and `.qt-autonomous-badge-button` classes. Group allows wrap.
+- `app/styles/qt-components/_variables.css`: added `--qt-autonomous-badge-running-{bg,fg}`, `--qt-autonomous-badge-idle-{bg,fg}`, and `--qt-autonomous-badge-button-hover-bg` tokens (light mode only; dark mode reuses the same values since they already read well on the toolbar background).
+
 #### Fix: Autonomous-room token budget no longer stuck at zero
 
 `runTokensConsumed` on an autonomous chat was permanently zero because the post-turn bookkeeping in `runAutonomousRoomTurn` tried to delta `chats.totalPromptTokens + totalCompletionTokens` between two reads inside the same job. The forked job child opens a readonly DB connection and buffers writes in `AsyncLocalStorage` until the job ends, so the post-turn read always returned the same totals as the pre-turn read and the delta was always 0. The token-budget check (`chat.runTokensConsumed >= chat.budgetMaxTokens`) therefore never tripped, and rooms with only a token cap ran indefinitely (seen in the wild at 4.6M prompt tokens against a 250K cap).
