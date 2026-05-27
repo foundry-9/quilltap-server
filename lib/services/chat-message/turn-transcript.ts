@@ -58,6 +58,13 @@ export function findTurnOpenerMessageId(messages: MessageEvent[]): string | null
 interface BuildTurnTranscriptOptions {
   /** The USER message that opened the turn. Pass null for greeting-only turns. */
   turnOpenerMessageId: string | null
+  /**
+   * Optional terminal ASSISTANT message ID. When set, the forward walk
+   * stops after collecting the message whose id matches — used by
+   * autonomous chats so each speaker's turn becomes its own transcript
+   * rather than re-extracting the whole tail every time.
+   */
+  extractionAnchorMessageId?: string | null
   userCharacterId?: string
   userCharacterName?: string
   userCharacterPronouns?: Pronouns | null
@@ -73,7 +80,9 @@ interface BuildTurnTranscriptOptions {
  *
  * If `turnOpenerMessageId` is null we treat every assistant message in the
  * history as belonging to "the current turn"; the user-message side of the
- * transcript is null and the user-pass extraction skips itself.
+ * transcript is null and the user-pass extraction skips itself. When
+ * `extractionAnchorMessageId` is set, the walk stops after collecting the
+ * anchor — autonomous chats use this to bound each character's slice.
  */
 export function buildTurnTranscript(
   messages: MessageEvent[],
@@ -131,6 +140,10 @@ export function buildTurnTranscript(
     }
 
     latestAssistantMessageId = m.id
+
+    if (options.extractionAnchorMessageId && m.id === options.extractionAnchorMessageId) {
+      break
+    }
   }
 
   return {

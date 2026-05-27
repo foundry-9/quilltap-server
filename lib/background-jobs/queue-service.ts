@@ -36,18 +36,33 @@ export interface EnqueueJobOptions {
  * The handler rebuilds the TurnTranscript from chat state at execution time
  * (the chat is the source of truth — pre-serialising the transcript into
  * the job would just stale faster than the job drains). Dedup is keyed on
- * (chatId, turnOpenerMessageId): the first response of a turn enqueues the
- * job; subsequent responses in the same turn no-op against the existing
- * pending job.
+ * (chatId, turnOpenerMessageId, extractionAnchorMessageId): the first
+ * response of a turn enqueues the job; subsequent responses in the same
+ * turn no-op against the existing pending job. The anchor field lets
+ * autonomous chats (no USER openers) key each character's turn distinctly
+ * — without it, every autonomous trigger would dedupe to (chatId, null).
  */
 export interface MemoryExtractionPayload {
   chatId: string;
   /**
-   * USER message ID that opened this turn. May be null for greeting-only or
-   * continue/nudge turns where there's no fresh user input — the handler
-   * skips the user-pass and runs only the self / inter-character passes.
+   * USER message ID that opened this turn. May be null for greeting-only,
+   * continue/nudge turns, and autonomous chats where there's no fresh user
+   * input — the handler skips the user-pass and runs only the self /
+   * inter-character passes.
    */
   turnOpenerMessageId: string | null;
+  /**
+   * Optional terminal anchor: the ASSISTANT message ID that marks the end
+   * of this turn's transcript window. When set, buildTurnTranscript stops
+   * after collecting the message whose id matches, and the queue dedupes
+   * on (chatId, turnOpenerMessageId, extractionAnchorMessageId) instead
+   * of just the first two fields.
+   *
+   * Set this for autonomous chats so each speaker's turn becomes its own
+   * job; leave undefined for normal salon chats where turnOpenerMessageId
+   * is unique per turn already.
+   */
+  extractionAnchorMessageId?: string | null;
   connectionProfileId: string;
 }
 
@@ -432,12 +447,15 @@ export async function enqueueJob(
  * Enqueue a per-turn memory extraction job.
  *
  * Dedupe: if a PENDING or PROCESSING MEMORY_EXTRACTION job already exists
- * for the same (chatId, turnOpenerMessageId) pair, this is a no-op that
- * returns the existing job ID. The first character to finalize in a multi-
- * character turn creates the job; later characters' finalize calls fall
- * through to dedup. Greeting / continue turns (where turnOpenerMessageId
- * is null) dedupe on (chatId, null) so a single extraction job covers the
- * greeting tail rather than producing one per assistant message.
+ * for the same (chatId, turnOpenerMessageId, extractionAnchorMessageId)
+ * triple, this is a no-op that returns the existing job ID. The first
+ * character to finalize in a multi-character turn creates the job; later
+ * characters' finalize calls fall through to dedup. Greeting / continue
+ * turns (where turnOpenerMessageId is null and no anchor is set) dedupe
+ * on (chatId, null, null) so a single extraction job covers the greeting
+ * tail rather than producing one per assistant message. Autonomous chats
+ * set extractionAnchorMessageId per speaker so successive triggers don't
+ * collapse to the same null/null key.
  */
 export async function enqueueMemoryExtraction(
   userId: string,
@@ -453,11 +471,14 @@ export async function enqueueMemoryExtraction(
   try {
     const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
     const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const incomingAnchor = payload.extractionAnchorMessageId ?? null;
     const existing = [...pending, ...processing].find(j => {
       if (j.type !== 'MEMORY_EXTRACTION') return false;
       const existingPayload = j.payload as unknown as MemoryExtractionPayload;
+      const existingAnchor = existingPayload.extractionAnchorMessageId ?? null;
       return existingPayload.chatId === payload.chatId
-        && existingPayload.turnOpenerMessageId === payload.turnOpenerMessageId;
+        && existingPayload.turnOpenerMessageId === payload.turnOpenerMessageId
+        && existingAnchor === incomingAnchor;
     });
     if (existing) {
       return existing.id;
@@ -856,42 +877,60 @@ export async function enqueueStoryBackgroundGeneration(
  * Batch enqueue per-turn memory extraction jobs.
  *
  * Used by the "queue memories for this entire chat" UI action and by the
- * SillyTavern import path. Caller supplies one entry per turn (keyed by
- * the USER message that opened it). The handler rebuilds the transcript
- * from chat state at execution time, so this enqueue API doesn't need
- * the per-turn message contents — only the turn-opener IDs.
+ * SillyTavern import path. Caller supplies one entry per turn — either a
+ * USER turn-opener message ID (salon chats), null (greeting-only), or a
+ * `{ turnOpenerMessageId, extractionAnchorMessageId }` object (autonomous
+ * chats, where the anchor is the ASSISTANT message that closes the turn
+ * and keeps each speaker's job distinct in the dedupe table). The handler
+ * rebuilds the transcript from chat state at execution time, so this
+ * enqueue API doesn't need the per-turn message contents.
  */
+export type MemoryExtractionBatchEntry =
+  | string
+  | null
+  | {
+      turnOpenerMessageId: string | null;
+      extractionAnchorMessageId?: string | null;
+    };
+
 export async function enqueueMemoryExtractionBatch(
   userId: string,
   chatId: string,
   connectionProfileId: string,
-  turnOpenerMessageIds: Array<string | null>,
+  entries: MemoryExtractionBatchEntry[],
   options?: EnqueueJobOptions
 ): Promise<string[]> {
-  if (turnOpenerMessageIds.length === 0) {
+  if (entries.length === 0) {
     return [];
   }
 
   const repos = getRepositories();
   const now = new Date().toISOString();
 
-  const jobs = turnOpenerMessageIds.map((turnOpenerMessageId) => ({
-    userId,
-    type: 'MEMORY_EXTRACTION' as const,
-    status: 'PENDING' as const,
-    payload: {
-      chatId,
-      turnOpenerMessageId,
-      connectionProfileId,
-    },
-    priority: options?.priority ?? 0,
-    attempts: 0,
-    maxAttempts: options?.maxAttempts ?? 3,
-    lastError: null,
-    scheduledAt: options?.scheduledAt?.toISOString() ?? now,
-    startedAt: null,
-    completedAt: null,
-  }));
+  const jobs = entries.map((entry) => {
+    const turnOpenerMessageId =
+      typeof entry === 'object' && entry !== null ? entry.turnOpenerMessageId : entry;
+    const extractionAnchorMessageId =
+      typeof entry === 'object' && entry !== null ? entry.extractionAnchorMessageId ?? null : null;
+    return {
+      userId,
+      type: 'MEMORY_EXTRACTION' as const,
+      status: 'PENDING' as const,
+      payload: {
+        chatId,
+        turnOpenerMessageId,
+        extractionAnchorMessageId,
+        connectionProfileId,
+      },
+      priority: options?.priority ?? 0,
+      attempts: 0,
+      maxAttempts: options?.maxAttempts ?? 3,
+      lastError: null,
+      scheduledAt: options?.scheduledAt?.toISOString() ?? now,
+      startedAt: null,
+      completedAt: null,
+    };
+  });
 
   const jobIds = await repos.backgroundJobs.createBatch(jobs);
 

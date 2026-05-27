@@ -47,7 +47,10 @@ export interface MemoryChatSettings {
  * most recent non-system USER message). When no qualifying user message
  * exists (greeting-only chats, fresh chats), the trigger still enqueues
  * a job with `turnOpenerMessageId: null` so self-pass extraction still
- * runs against the assistant tail.
+ * runs against the assistant tail. For autonomous chats — which never
+ * have a USER opener — the latest non-system ASSISTANT message ID is
+ * passed as the dedupe anchor so successive triggers enqueue distinct
+ * jobs instead of collapsing into a single (chatId, null) row.
  */
 export async function triggerTurnMemoryExtraction(
   repos: ReturnType<typeof getRepositories>,
@@ -70,9 +73,24 @@ export async function triggerTurnMemoryExtraction(
 
     const turnOpenerMessageId = findTurnOpenerMessageId(messageEvents)
 
+    let extractionAnchorMessageId: string | null = null
+    if (turnOpenerMessageId === null) {
+      for (let i = messageEvents.length - 1; i >= 0; i--) {
+        const m = messageEvents[i]
+        if (m.type !== 'message') continue
+        if (m.role !== 'ASSISTANT') continue
+        if (m.systemSender) continue
+        if (m.isSilentMessage) continue
+        if (!m.participantId) continue
+        extractionAnchorMessageId = m.id
+        break
+      }
+    }
+
     await enqueueMemoryExtraction(options.userId, {
       chatId: options.chatId,
       turnOpenerMessageId,
+      extractionAnchorMessageId,
       connectionProfileId: options.connectionProfile.id,
     })
   } catch (error) {

@@ -94,6 +94,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
     participantCharacters,
     {
       turnOpenerMessageId: payload.turnOpenerMessageId,
+      extractionAnchorMessageId: payload.extractionAnchorMessageId ?? null,
       userCharacterId: userCharacter?.id,
       userCharacterName: userCharacter?.name,
       userCharacterPronouns: userCharacter?.pronouns ?? null,
@@ -164,6 +165,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
       jobId: job.id,
       chatId: payload.chatId,
       turnOpenerMessageId: payload.turnOpenerMessageId,
+      extractionAnchorMessageId: payload.extractionAnchorMessageId ?? null,
       created: result.memoriesCreatedCount,
       reinforced: result.memoriesReinforcedCount,
     });
