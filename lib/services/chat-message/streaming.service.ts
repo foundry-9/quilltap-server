@@ -31,6 +31,7 @@ export interface StreamOptions {
     attachments?: unknown[]
     name?: string
     thoughtSignature?: string
+    reasoningContent?: string
     toolCallId?: string
     toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
     cacheControl?: { type: 'ephemeral' }
@@ -78,6 +79,7 @@ export type StreamChunkCallback = (chunk: {
   attachmentResults?: { sent: string[]; failed: { id: string; error: string }[] }
   rawResponse?: unknown
   thoughtSignature?: string
+  reasoningContent?: string
 }) => void
 
 /**
@@ -293,6 +295,7 @@ export async function* streamMessage(
   attachmentResults?: { sent: string[]; failed: { id: string; error: string }[] }
   rawResponse?: unknown
   thoughtSignature?: string
+  reasoningContent?: string
 }> {
   const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId, stop } = options
 
@@ -308,6 +311,7 @@ export async function* streamMessage(
     attachments: m.attachments,
     name: m.name,
     thoughtSignature: m.thoughtSignature,
+    reasoningContent: m.reasoningContent,
     toolCallId: m.toolCallId,
     toolCalls: m.toolCalls,
     cacheControl: m.cacheControl,
@@ -629,7 +633,8 @@ export function createStreamingResult(
   cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null,
   attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null,
   rawResponse: unknown,
-  thoughtSignature?: string
+  thoughtSignature?: string,
+  reasoningContent?: string
 ): StreamingResult {
   return {
     fullResponse,
@@ -638,5 +643,6 @@ export function createStreamingResult(
     attachmentResults,
     rawResponse,
     thoughtSignature,
+    reasoningContent,
   }
 }

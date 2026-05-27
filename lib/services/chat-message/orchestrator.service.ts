@@ -436,6 +436,7 @@ async function processMessage(
     attachmentResults: null,
     rawResponse: null,
     thoughtSignature: undefined,
+    reasoningContent: undefined,
     hasStartedStreaming: false,
   }
 

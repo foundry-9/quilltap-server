@@ -31,6 +31,13 @@ export interface LLMMessage {
   cacheControl?: { type: 'ephemeral' };
   /** Google Gemini thought signature for thinking models */
   thoughtSignature?: string;
+  /**
+   * Reasoning / chain-of-thought content from thinking-mode providers
+   * (e.g. DeepSeek V4 Pro `reasoning_content`). Must be passed back on
+   * assistant turns that carry `toolCalls` or DeepSeek's API returns 400.
+   * Providers that don't expose a separate reasoning channel ignore this.
+   */
+  reasoningContent?: string;
 }
 
 /**
@@ -113,6 +120,8 @@ export interface LLMResponse {
   attachmentResults?: AttachmentResults;
   /** Google Gemini thought signature */
   thoughtSignature?: string;
+  /** Reasoning / chain-of-thought content (DeepSeek thinking mode, etc.) */
+  reasoningContent?: string;
   /** Cache usage statistics */
   cacheUsage?: CacheUsage;
 }
@@ -135,6 +144,8 @@ export interface StreamChunk {
   rawResponse?: unknown;
   /** Google Gemini thought signature */
   thoughtSignature?: string;
+  /** Reasoning / chain-of-thought content, typically on final chunk */
+  reasoningContent?: string;
   /** Cache usage statistics (normalized) */
   cacheUsage?: CacheUsage;
   /**

@@ -185,6 +185,13 @@ export interface StreamingResult {
   attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
   rawResponse: unknown
   thoughtSignature?: string
+  /**
+   * Reasoning / chain-of-thought content captured from the stream (DeepSeek
+   * `reasoning_content`, etc.). Carried through the in-turn native-tool loop
+   * so providers that require it on tool-call round-trips don't 400 on the
+   * next request.
+   */
+  reasoningContent?: string
 }
 
 /**
@@ -243,6 +250,8 @@ export interface StreamingState {
   attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
   rawResponse: unknown
   thoughtSignature?: string
+  /** Reasoning / chain-of-thought content (DeepSeek thinking mode, etc.). */
+  reasoningContent?: string
   hasStartedStreaming: boolean
 }
 

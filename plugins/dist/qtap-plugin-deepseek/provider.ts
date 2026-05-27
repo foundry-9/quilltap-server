@@ -106,7 +106,11 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
       }
 
       if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
-        out.push({
+        // DeepSeek thinking-mode rule: when the assistant turn carries tool
+        // calls, `reasoning_content` from the original response MUST be sent
+        // back on this turn or the next request 400s. See
+        // https://api-docs.deepseek.com/guides/thinking_mode#tool-calls
+        const assistantMessage: Record<string, unknown> = {
           role: 'assistant',
           content: msg.content || null,
           tool_calls: msg.toolCalls.map((tc) => ({
@@ -117,7 +121,11 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
               arguments: tc.function.arguments,
             },
           })),
-        });
+        };
+        if (msg.reasoningContent) {
+          assistantMessage.reasoning_content = msg.reasoningContent;
+        }
+        out.push(assistantMessage as ChatMessage);
         continue;
       }
 
@@ -209,6 +217,7 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
 
       const choice = response.choices[0];
       const msg = choice.message;
+      const reasoningContent = (msg as { reasoning_content?: string }).reasoning_content;
 
       const toolCalls = (msg.tool_calls ?? [])
         .filter((tc): tc is OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall =>
@@ -240,6 +249,7 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
         raw: response,
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         attachmentResults,
+        ...(reasoningContent ? { reasoningContent } : {}),
         ...(cacheUsage ? { cacheUsage } : {}),
       };
     } catch (error) {
@@ -301,6 +311,7 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
       >();
       let finishReason: string | null = null;
       let usage: DeepSeekUsage | null = null;
+      let reasoningContent = '';
 
       for await (const chunk of stream) {
         const choice = chunk.choices[0];
@@ -312,6 +323,11 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
 
         if (delta?.content) {
           yield { content: delta.content, done: false };
+        }
+
+        const deltaReasoning = (delta as { reasoning_content?: string } | undefined)?.reasoning_content;
+        if (deltaReasoning) {
+          reasoningContent += deltaReasoning;
         }
 
         if (delta?.tool_calls) {
@@ -343,6 +359,7 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
               role: 'assistant',
               content: '',
               tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+              ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
             },
             finish_reason: finishReason,
           },
@@ -363,6 +380,7 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         attachmentResults,
         rawResponse,
+        ...(reasoningContent ? { reasoningContent } : {}),
         ...(cacheUsage ? { cacheUsage } : {}),
       };
     } catch (error) {

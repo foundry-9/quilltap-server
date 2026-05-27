@@ -196,6 +196,7 @@ export async function runTextToolPass(opts: RunTextToolPassOptions): Promise<voi
         role: 'assistant',
         content: latest,
         thoughtSignature: streaming.thoughtSignature,
+        reasoningContent: streaming.reasoningContent,
         name: undefined,
       })
       ledger.push({
@@ -206,6 +207,7 @@ export async function runTextToolPass(opts: RunTextToolPassOptions): Promise<voi
           `You already have the data you need — do NOT call any more tools. ` +
           `Respond now, in character, using what you've already learned.`,
         thoughtSignature: undefined,
+        reasoningContent: undefined,
         name: undefined,
       })
 
@@ -268,6 +270,7 @@ export async function runTextToolPass(opts: RunTextToolPassOptions): Promise<voi
       role: 'assistant',
       content: latest,
       thoughtSignature: streaming.thoughtSignature,
+      reasoningContent: streaming.reasoningContent,
       name: undefined,
     })
     for (const toolMsg of results.toolMessages) {
@@ -275,6 +278,7 @@ export async function runTextToolPass(opts: RunTextToolPassOptions): Promise<voi
         role: 'user',
         content: strategy.formatToolResult(toolMsg.toolName, toolMsg.content),
         thoughtSignature: undefined,
+        reasoningContent: undefined,
         name: undefined,
       })
     }
@@ -387,6 +391,9 @@ async function streamContinuation(args: StreamContinuationArgs): Promise<void> {
       streaming.rawResponse = chunk.rawResponse
       if (chunk.thoughtSignature) {
         streaming.thoughtSignature = chunk.thoughtSignature
+      }
+      if (chunk.reasoningContent) {
+        streaming.reasoningContent = chunk.reasoningContent
       }
     }
   }

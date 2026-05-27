@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-05-27
+
+### Added
+
+- `reasoningContent?: string` field on `LLMMessage`, `LLMResponse`, and `StreamChunk` — carries chain-of-thought / reasoning content from thinking-mode providers (e.g. DeepSeek V4 Pro `reasoning_content`). Required on assistant turns with `toolCalls` for DeepSeek; ignored by providers that don't expose a separate reasoning channel.
+
 ## [2.4.0] - 2026-05-25
 
 ### Added

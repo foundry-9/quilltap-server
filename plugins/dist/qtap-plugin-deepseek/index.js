@@ -10155,7 +10155,7 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
         continue;
       }
       if (msg.role === "assistant" && msg.toolCalls && msg.toolCalls.length > 0) {
-        out.push({
+        const assistantMessage = {
           role: "assistant",
           content: msg.content || null,
           tool_calls: msg.toolCalls.map((tc) => ({
@@ -10166,7 +10166,11 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
               arguments: tc.function.arguments
             }
           }))
-        });
+        };
+        if (msg.reasoningContent) {
+          assistantMessage.reasoning_content = msg.reasoningContent;
+        }
+        out.push(assistantMessage);
         continue;
       }
       if (msg.role === "system") {
@@ -10236,6 +10240,7 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
       );
       const choice = response.choices[0];
       const msg = choice.message;
+      const reasoningContent = msg.reasoning_content;
       const toolCalls = (msg.tool_calls ?? []).filter(
         (tc) => tc.type === "function" || "function" in tc
       ).map((tc) => {
@@ -10262,6 +10267,7 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
         raw: response,
         toolCalls: toolCalls.length > 0 ? toolCalls : void 0,
         attachmentResults,
+        ...reasoningContent ? { reasoningContent } : {},
         ...cacheUsage ? { cacheUsage } : {}
       };
     } catch (error) {
@@ -10311,6 +10317,7 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
       const toolCallAccumulator = /* @__PURE__ */ new Map();
       let finishReason = null;
       let usage = null;
+      let reasoningContent = "";
       for await (const chunk of stream) {
         const choice = chunk.choices[0];
         if (!choice) {
@@ -10320,6 +10327,10 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
         const delta = choice.delta;
         if (delta?.content) {
           yield { content: delta.content, done: false };
+        }
+        const deltaReasoning = delta?.reasoning_content;
+        if (deltaReasoning) {
+          reasoningContent += deltaReasoning;
         }
         if (delta?.tool_calls) {
           for (const tcDelta of delta.tool_calls) {
@@ -10346,7 +10357,8 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
             message: {
               role: "assistant",
               content: "",
-              tool_calls: toolCalls.length > 0 ? toolCalls : void 0
+              tool_calls: toolCalls.length > 0 ? toolCalls : void 0,
+              ...reasoningContent ? { reasoning_content: reasoningContent } : {}
             },
             finish_reason: finishReason
           }
@@ -10365,6 +10377,7 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
         toolCalls: toolCalls.length > 0 ? toolCalls : void 0,
         attachmentResults,
         rawResponse,
+        ...reasoningContent ? { reasoningContent } : {},
         ...cacheUsage ? { cacheUsage } : {}
       };
     } catch (error) {

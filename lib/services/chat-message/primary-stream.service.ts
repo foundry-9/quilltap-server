@@ -18,7 +18,7 @@
  * gate that flips on the first content chunk, and the previousResponseId
  * extraction all live here. Mutations: `streaming.fullResponse`,
  * `streaming.usage`, `streaming.cacheUsage`, `streaming.attachmentResults`,
- * `streaming.rawResponse`, `streaming.thoughtSignature`, and
+ * `streaming.rawResponse`, `streaming.thoughtSignature`, `streaming.reasoningContent`, and
  * `streaming.hasStartedStreaming` are written in place.
  *
  * `makePreservePartialOnError` builds the idempotent partial-preserver that
@@ -210,6 +210,9 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
         if (chunk.thoughtSignature) {
           streaming.thoughtSignature = chunk.thoughtSignature
         }
+        if (chunk.reasoningContent) {
+          streaming.reasoningContent = chunk.reasoningContent
+        }
       }
     }
   } catch (streamingError) {
@@ -264,6 +267,9 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
             streaming.rawResponse = chunk.rawResponse
             if (chunk.thoughtSignature) {
               streaming.thoughtSignature = chunk.thoughtSignature
+            }
+            if (chunk.reasoningContent) {
+              streaming.reasoningContent = chunk.reasoningContent
             }
           }
         }

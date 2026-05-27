@@ -26,9 +26,10 @@
  *      just logs the cap.
  *
  * Mutations: `streaming.fullResponse`, `streaming.usage`, `streaming.cacheUsage`,
- * `streaming.attachmentResults`, `streaming.rawResponse`, `streaming.thoughtSignature`
- * are all written in place. `toolMessages` and `generatedImagePaths` are
- * appended via `.push(...)` so the orchestrator's bindings stay live.
+ * `streaming.attachmentResults`, `streaming.rawResponse`, `streaming.thoughtSignature`,
+ * `streaming.reasoningContent` are all written in place. `toolMessages` and
+ * `generatedImagePaths` are appended via `.push(...)` so the orchestrator's
+ * bindings stay live.
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
@@ -247,6 +248,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
         role: 'assistant' as const,
         content: currentResponse && currentResponse.trim().length > 0 ? currentResponse : '',
         thoughtSignature: streaming.thoughtSignature,
+        reasoningContent: streaming.reasoningContent,
         name: undefined,
         toolCalls: assistantToolCalls,
       },
@@ -256,12 +258,12 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
       if (toolMsg.callId) {
         currentMessages = [
           ...currentMessages,
-          { role: 'tool' as const, content: toolMsg.content, toolCallId: toolMsg.callId, name: toolMsg.toolName, thoughtSignature: undefined },
+          { role: 'tool' as const, content: toolMsg.content, toolCallId: toolMsg.callId, name: toolMsg.toolName, thoughtSignature: undefined, reasoningContent: undefined },
         ]
       } else {
         currentMessages = [
           ...currentMessages,
-          { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, name: undefined },
+          { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, reasoningContent: undefined, name: undefined },
         ]
       }
     }
@@ -316,6 +318,9 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
           if (chunk.thoughtSignature) {
             streaming.thoughtSignature = chunk.thoughtSignature
           }
+          if (chunk.reasoningContent) {
+            streaming.reasoningContent = chunk.reasoningContent
+          }
         }
       }
     } catch (toolLoopStreamError) {
@@ -353,8 +358,8 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
       const forceFinalMessage = buildForceFinalMessage()
       currentMessages = [
         ...currentMessages,
-        { role: 'assistant' as const, content: currentResponse, thoughtSignature: streaming.thoughtSignature, name: undefined },
-        { role: 'user' as const, content: forceFinalMessage, thoughtSignature: undefined, name: undefined },
+        { role: 'assistant' as const, content: currentResponse, thoughtSignature: streaming.thoughtSignature, reasoningContent: streaming.reasoningContent, name: undefined },
+        { role: 'user' as const, content: forceFinalMessage, thoughtSignature: undefined, reasoningContent: undefined, name: undefined },
       ]
 
       try {
@@ -381,6 +386,9 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
             streaming.rawResponse = chunk.rawResponse
             if (chunk.thoughtSignature) {
               streaming.thoughtSignature = chunk.thoughtSignature
+            }
+            if (chunk.reasoningContent) {
+              streaming.reasoningContent = chunk.reasoningContent
             }
 
             // If the force-final call still contains submit_final_response,

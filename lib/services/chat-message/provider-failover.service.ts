@@ -33,6 +33,7 @@ export interface AttemptEmptyResponseRecoveryOptions {
     attachments?: unknown[]
     name?: string
     thoughtSignature?: string
+    reasoningContent?: string
     toolCallId?: string
     toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
   }>
@@ -292,6 +293,9 @@ async function restreamInto(
       state.rawResponse = chunk.rawResponse
       if (chunk.thoughtSignature) {
         state.thoughtSignature = chunk.thoughtSignature
+      }
+      if (chunk.reasoningContent) {
+        state.reasoningContent = chunk.reasoningContent
       }
     }
   }
