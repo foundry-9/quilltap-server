@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Chore: Remove dead embedding-job-scheduler helpers
+
+Removed `scheduleEmbedding`, `scheduleMemoryEmbedding`, and `cancelPendingRefit` from `lib/embedding/embedding-job-scheduler.ts` — none had callers, and memory embeddings are generated inline inside the memory gate rather than as queued `EMBEDDING_GENERATE` jobs. `scheduleRefit` (debounced BUILTIN-profile refits) and `handleEntityDeletion` (embedding-status cleanup) remain, used by the memories API routes.
+
 #### Fix: "Re-extract memories" works on autonomous chats
 
 Clicking the recreate-memories badge on an autonomous chat (the salon list's memory-count badge runs `DELETE /api/v1/memories?chatId=...` followed by `POST /api/v1/chats/[id]?action=queue-memories`) returned `"No user messages found in this chat — nothing to extract memories from."` and never enqueued any extraction jobs. The cause was that `handleQueueMemories` only enumerated `role='USER'` messages as turn openers, but autonomous chats have no USER messages — only ASSISTANT messages from characters speaking among themselves. As a separate bug, the live autonomous trigger in `triggerTurnMemoryExtraction` enqueued every job with `(chatId, turnOpenerMessageId=null)`, so the queue's per-chat dedupe collapsed every successive trigger to the same row and only the first autonomous turn was ever extracted.
