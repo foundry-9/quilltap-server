@@ -4,6 +4,15 @@
 
 ### 4.6-dev
 
+#### Fix: Salon memory extraction no longer skipped when the rotation lands on a user-controlled character
+
+After commit `83f4368a` ("user-controlled characters take turns in the rotation, Phase 2"), `selectNextSpeaker` started returning the user character's participant ID (not `null`) with `reason: 'user_turn'` when the rotation picked them. Three sites still defined "user's turn" as `nextSpeakerId === null`, so they treated that case as "another LLM character is about to speak" and never closed the turn. The visible consequence: every salon chat with a user-controlled CHARACTER participant stopped producing memories — no `MEMORY_EXTRACTION` background jobs were enqueued at all. Autonomous rooms were unaffected (their separate `chatType === 'autonomous'` branch fires extraction regardless of `isUsersTurn`).
+
+- `lib/chat/turn-manager/utils.ts`: `isUsersTurn(result)` now returns true when either `nextSpeakerId === null` *or* `reason === 'user_turn'`. Doc-comment spells out both shapes so the predicate doesn't drift again.
+- `lib/services/chat-message/message-finalizer.service.ts`: `calculateNextSpeaker` imports and calls `isUsersTurn(nextSpeakerResult)` instead of duplicating the predicate inline. This is the gate on `triggerTurnMemoryExtraction`, so it's the load-bearing site.
+- `app/api/v1/chats/[id]/actions/turn.ts`: the turn-action API response uses the same helper, so the salon UI's "your turn" banner agrees with what the server thinks.
+- `__tests__/unit/lib/services/chat-message/message-finalizer.service.test.ts`: new regression test asserts that a `selectNextSpeaker` result with `nextSpeakerId: 'participant-user', reason: 'user_turn'` still triggers per-turn memory extraction. The existing `jest.mock('@/lib/chat/turn-manager', ...)` block gained an `isUsersTurn` mock implementation matching the helper.
+
 #### Feat: Memory / Scriptorium badges and copy-link button on the Salon list
 
 The Salon chat list (`/salon`) now shows the same memory-count and Scriptorium-status badges that the Aurora character "Conversations" tab already had, and both pages get a small copy-link button next to the badges that copies a deep link to the chat (`<origin>/salon/<chatId>`).

@@ -18,6 +18,7 @@ import {
   findUserParticipant,
   getSelectionExplanation,
   computeSpokenThisCycleAfterSkip,
+  isUsersTurn,
 } from '@/lib/chat/turn-manager';
 import { turnActionSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
@@ -159,7 +160,7 @@ export async function handleTurnAction(
       reason: nextSpeakerResult.reason,
       explanation: getSelectionExplanation(nextSpeakerResult),
       cycleComplete: nextSpeakerResult.cycleComplete,
-      isUsersTurn: nextSpeakerResult.nextSpeakerId === null,
+      isUsersTurn: isUsersTurn(nextSpeakerResult),
     },
     state: {
       queue: turnState.queue,

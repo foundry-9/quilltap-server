@@ -11,6 +11,7 @@ import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
   getActiveCharacterParticipants,
+  isUsersTurn,
 } from '@/lib/chat/turn-manager'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
@@ -425,6 +426,6 @@ export async function calculateNextSpeaker(
     nextSpeakerId: nextSpeakerResult.nextSpeakerId,
     reason: nextSpeakerResult.reason,
     cycleComplete: nextSpeakerResult.cycleComplete,
-    isUsersTurn: nextSpeakerResult.nextSpeakerId === null,
+    isUsersTurn: isUsersTurn(nextSpeakerResult),
   }
 }
