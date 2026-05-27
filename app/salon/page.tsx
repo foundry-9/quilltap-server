@@ -6,6 +6,9 @@ import useSWR from 'swr'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
 import { ChatCard } from '@/components/chat/ChatCard'
+import { showConfirmation } from '@/lib/alert'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import {
   confirmAndDeleteChat,
   transformSalonChatToCardData,
@@ -105,6 +108,53 @@ export default function ChatsPage() {
     }
   }
 
+  const handleReextractMemories = useCallback(async (chatId: string) => {
+    const confirmed = await showConfirmation(
+      'This will delete all existing memories from this chat and re-extract them from the conversation. Are you sure?'
+    )
+    if (!confirmed) return
+
+    try {
+      await fetch(`/api/v1/memories?chatId=${chatId}`, { method: 'DELETE' })
+
+      const res = await fetch(`/api/v1/chats/${chatId}?action=queue-memories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        showSuccessToast(`Queued ${data.jobCount} memory extraction jobs`)
+        notifyQueueChange()
+        await mutateChats()
+      } else {
+        showErrorToast(data.error || 'Failed to queue memory extraction')
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to re-extract memories')
+    }
+  }, [mutateChats])
+
+  const handleRenderConversation = useCallback(async (chatId: string) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=render-conversation`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        showSuccessToast('Conversation rendering queued')
+        notifyQueueChange()
+        await mutateChats()
+      } else {
+        showErrorToast(data.error || 'Failed to queue conversation rendering')
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to render conversation')
+    }
+  }, [mutateChats])
+
   /**
    * Handle import completion from the new wizard
    */
@@ -195,6 +245,8 @@ export default function ChatsPage() {
               showProject={true}
               actionType="delete"
               onDelete={deleteChat}
+              onReextractMemories={handleReextractMemories}
+              onRenderConversation={handleRenderConversation}
               highlighted={highlightedChatId === chat.id}
               cardRef={highlightedChatId === chat.id ? importedChatRef : undefined}
             />

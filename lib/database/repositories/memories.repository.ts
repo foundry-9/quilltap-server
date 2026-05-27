@@ -953,6 +953,31 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * Count memories per chat in bulk for a set of chat IDs. Single GROUP BY
+   * query — used by chat-list enrichment to avoid N+1 `countByChatId` calls.
+   * Chats with zero memories are absent from the returned map.
+   */
+  async countByChatIds(chatIds: string[]): Promise<Map<string, number>> {
+    return this.safeQuery(
+      async () => {
+        if (chatIds.length === 0) return new Map<string, number>();
+        const placeholders = chatIds.map(() => '?').join(', ');
+        const sql = `
+          SELECT chatId, COUNT(*) AS count
+          FROM memories
+          WHERE chatId IN (${placeholders})
+          GROUP BY chatId
+        `;
+        const rows = await rawQuery<Array<{ chatId: string; count: number | bigint }>>(sql, chatIds);
+        return new Map(rows.map((r) => [r.chatId, Number(r.count)]));
+      },
+      'Error counting memories for chats',
+      { chatIdCount: chatIds.length },
+      new Map<string, number>()
+    );
+  }
+
+  /**
    * Find every distinct, non-null chatId currently referenced by any memory.
    *
    * Used by the regenerate-all fan-out to spot orphan memories whose chat

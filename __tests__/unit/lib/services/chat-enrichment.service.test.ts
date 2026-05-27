@@ -73,6 +73,14 @@ function createMockRepositories(): RepositoryContainer {
     projects: {
       findById: jest.fn(),
     },
+    memories: {
+      countByChatId: jest.fn().mockResolvedValue(0),
+      countByChatIds: jest.fn().mockResolvedValue(new Map()),
+    },
+    conversationChunks: {
+      findByChatId: jest.fn().mockResolvedValue([]),
+      countByChatIds: jest.fn().mockResolvedValue(new Map()),
+    },
   } as any
 }
 
@@ -499,7 +507,8 @@ describe('chat-enrichment.service', () => {
           participants: [],
           tags: [],
           project: null,
-          _count: { messages: 0 },
+          scriptoriumStatus: 'none',
+          _count: { messages: 0, memories: 0 },
           _allTagIds: ['tag-1', 'tag-2'],
         },
         {
@@ -511,7 +520,8 @@ describe('chat-enrichment.service', () => {
           participants: [],
           tags: [],
           project: null,
-          _count: { messages: 0 },
+          scriptoriumStatus: 'none',
+          _count: { messages: 0, memories: 0 },
           _allTagIds: ['tag-3'],
         },
         {
@@ -523,7 +533,8 @@ describe('chat-enrichment.service', () => {
           participants: [],
           tags: [],
           project: null,
-          _count: { messages: 0 },
+          scriptoriumStatus: 'none',
+          _count: { messages: 0, memories: 0 },
           _allTagIds: ['tag-4', 'tag-5'],
         },
       ]
@@ -545,7 +556,8 @@ describe('chat-enrichment.service', () => {
           participants: [],
           tags: [],
           project: null,
-          _count: { messages: 0 },
+          scriptoriumStatus: 'none',
+          _count: { messages: 0, memories: 0 },
           _allTagIds: ['tag-1'],
         },
       ]
@@ -566,7 +578,8 @@ describe('chat-enrichment.service', () => {
           participants: [],
           tags: [],
           project: null,
-          _count: { messages: 0 },
+          scriptoriumStatus: 'none',
+          _count: { messages: 0, memories: 0 },
           _allTagIds: [],
         },
       ]
@@ -589,7 +602,8 @@ describe('chat-enrichment.service', () => {
           participants: [],
           tags: [],
           project: null,
-          _count: { messages: 0 },
+          scriptoriumStatus: 'none',
+          _count: { messages: 0, memories: 0 },
           _allTagIds: ['tag-1', 'tag-2'],
         },
       ]

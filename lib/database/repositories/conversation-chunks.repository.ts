@@ -17,7 +17,7 @@ import {
 import { AbstractBaseRepository } from './base.repository';
 import { logger } from '@/lib/logger';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
-import { registerBlobColumns } from '../manager';
+import { rawQuery, registerBlobColumns } from '../manager';
 
 /**
  * Conversation Chunks Repository
@@ -67,6 +67,44 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
   // ============================================================================
   // Custom query methods
   // ============================================================================
+
+  /**
+   * Total + embedded chunk counts per chat in bulk. One GROUP BY query —
+   * lets chat-list enrichment derive Scriptorium status without an N+1 walk
+   * of `findByChatId`. Chats with zero chunks are absent from the map.
+   */
+  async countByChatIds(
+    chatIds: string[]
+  ): Promise<Map<string, { total: number; embedded: number }>> {
+    return this.safeQuery(
+      async () => {
+        if (chatIds.length === 0) {
+          return new Map<string, { total: number; embedded: number }>();
+        }
+        const placeholders = chatIds.map(() => '?').join(', ');
+        const sql = `
+          SELECT chatId,
+                 COUNT(*) AS total,
+                 SUM(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END) AS embedded
+          FROM conversation_chunks
+          WHERE chatId IN (${placeholders})
+          GROUP BY chatId
+        `;
+        const rows = await rawQuery<
+          Array<{ chatId: string; total: number | bigint; embedded: number | bigint | null }>
+        >(sql, chatIds);
+        return new Map(
+          rows.map((r) => [
+            r.chatId,
+            { total: Number(r.total), embedded: Number(r.embedded ?? 0) },
+          ])
+        );
+      },
+      'Error counting conversation chunks for chats',
+      { chatIdCount: chatIds.length },
+      new Map<string, { total: number; embedded: number }>()
+    );
+  }
 
   /**
    * Find all chunks for a chat, ordered by interchangeIndex
