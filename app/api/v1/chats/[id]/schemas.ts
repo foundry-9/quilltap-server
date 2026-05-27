@@ -18,6 +18,8 @@ export const updateChatSchema = z.object({
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shared by all participants)
   alertCharactersOfLanternImages: z.boolean().nullish(),
   allowCrossCharacterVaultReads: z.boolean().optional(),
+  coreWhisperEnabled: z.boolean().nullish(),
+  coreWhisperInterval: z.number().int().min(1).nullish(),
   // Layout state for the salon split panes
   documentMode: z.enum(['normal', 'split', 'focus']).optional(),
   dividerPosition: z.number().min(20).max(80).optional(),

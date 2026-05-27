@@ -27,6 +27,7 @@ const INITIAL_FORM_DATA: CharacterFormData = {
   avatarUrl: '',
   defaultConnectionProfileId: '',
   systemTransparency: false,
+  coreWhisperEnabled: null,
 }
 
 /**
@@ -83,6 +84,10 @@ export function useCharacterEdit(id: string) {
           avatarUrl: char.avatarUrl || '',
           defaultConnectionProfileId: char.defaultConnectionProfileId || '',
           systemTransparency: char.systemTransparency === true,
+          coreWhisperEnabled:
+            char.coreWhisperEnabled === true || char.coreWhisperEnabled === false
+              ? char.coreWhisperEnabled
+              : null,
         }
 
         return {
@@ -179,6 +184,19 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({
       ...prev,
       formData: { ...prev.formData, systemTransparency: enabled },
+    }))
+  }
+
+  /**
+   * Handle per-character Core whisper override. Tri-state:
+   *   null  = inherit from global (default)
+   *   true  = always offer the Core packet
+   *   false = always skip the Core packet
+   */
+  const handleCoreWhisperEnabledChange = (value: boolean | null) => {
+    setState((prev) => ({
+      ...prev,
+      formData: { ...prev.formData, coreWhisperEnabled: value },
     }))
   }
 
@@ -353,6 +371,7 @@ export function useCharacterEdit(id: string) {
     handlePronounsChange,
     handleScenariosChange,
     handleSystemTransparencyChange,
+    handleCoreWhisperEnabledChange,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,

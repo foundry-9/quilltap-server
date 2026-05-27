@@ -554,6 +554,8 @@ export async function buildMessageContext(
     // Memory recap (chat start or character join)
     generateMemoryRecap: shouldGenerateRecap,
     uncensoredFallbackOptions,
+    // Aurora Core whisper: skip on continuation / nudge / chained autonomous turn
+    isContinueMode: options.isContinueMode,
     // Status callback for streaming events
     onStatusChange: options.onStatusChange,
   })

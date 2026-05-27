@@ -1559,6 +1559,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onToggleAllWhispers={() => setShowAllWhispers(!showAllWhispers)}
           allowCrossCharacterVaultReads={chatControls.allowCrossCharacterVaultReads}
           onToggleCrossCharacterVaultReads={chatControls.handleToggleCrossCharacterVaultReads}
+          coreWhisperEnabled={chatControls.coreWhisperEnabled}
+          onSetCoreWhisperEnabled={chatControls.handleSetCoreWhisperEnabled}
+          coreWhisperInterval={chatControls.coreWhisperInterval}
+          onSetCoreWhisperInterval={chatControls.handleSetCoreWhisperInterval}
           // Organize section
           onRenameClick={modals.openRename}
           onStateClick={modals.openStateEditor}

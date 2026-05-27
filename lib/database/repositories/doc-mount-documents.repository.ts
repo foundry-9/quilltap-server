@@ -222,20 +222,26 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
   }
 
   /**
-   * Find all top-level documents (no nested folders) with a specific
-   * extension inside a named folder, across many mount points. Used by
-   * overlay loaders that enumerate directories (Prompts/*.md, Scenarios/*.md)
-   * to avoid N+1 queries.
+   * Find documents with a specific extension inside a named folder, across
+   * many mount points. Used by overlay loaders that enumerate directories
+   * (Prompts/*.md, Scenarios/*.md) to avoid N+1 queries.
+   *
+   * Default behavior (`options.recursive = false`) returns only top-level
+   * files — nested folders are excluded so existing overlay loaders see the
+   * same shape as before. Pass `recursive: true` to include nested files
+   * (e.g. `Core/manifesto.md` + `Core/desires/love.md`).
    */
   async findManyByMountPointsInFolder(
     mountPointIds: string[],
     folder: string,
-    extension: string = '.md'
+    extension: string = '.md',
+    options: { recursive?: boolean } = {}
   ): Promise<DocMountDocumentWithLink[]> {
     if (mountPointIds.length === 0) return [];
     const prefix = `${folder}/`;
     const prefixLower = prefix.toLowerCase();
     const extensionLower = extension.toLowerCase();
+    const recursive = options.recursive === true;
     return this.safeQuery(
       async () => {
         const db = getRawMountIndexDatabase();
@@ -255,17 +261,17 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
            WHERE l.mountPointId IN (${placeholders})
              AND LOWER(l.relativePath) LIKE ?`
         ).all(...mountPointIds, `${prefixLower}%`) as DocMountDocumentWithLink[];
-        // Narrow to top-level + extension, mirroring the legacy filter.
         return rows.filter((doc) => {
           const pathLower = doc.relativePath.toLowerCase();
           if (!pathLower.startsWith(prefixLower)) return false;
           const rest = pathLower.slice(prefixLower.length);
-          if (rest.length === 0 || rest.includes('/')) return false;
+          if (rest.length === 0) return false;
+          if (!recursive && rest.includes('/')) return false;
           return rest.endsWith(extensionLower);
         });
       },
       'Error finding documents by mount point IDs and folder',
-      { mountPointIdCount: mountPointIds.length, folder, extension },
+      { mountPointIdCount: mountPointIds.length, folder, extension, recursive },
       []
     );
   }

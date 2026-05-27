@@ -71,6 +71,7 @@ export {
   DangerousContentSettingsSchema,
   ChatSettingsSchema,
   GeneralSettingsSchema,
+  CoreWhisperSettingsSchema,
 } from './settings.types';
 
 export type {
@@ -86,6 +87,7 @@ export type {
   DangerousContentSettings,
   ChatSettings,
   GeneralSettings,
+  CoreWhisperSettings,
 } from './settings.types';
 
 // ============================================================================

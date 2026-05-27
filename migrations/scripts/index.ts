@@ -303,6 +303,8 @@ import { cutoverCharactersToVaultMigration } from './cutover-characters-to-vault
 import { addAutonomousRoomsFieldsMigration } from './add-autonomous-rooms-fields';
 // 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
 import { addSpokenThisCycleFieldMigration } from './add-spoken-this-cycle-field';
+// Aurora Core whisper: per-chat + per-character override columns
+import { addCoreWhisperFieldsMigration } from './add-core-whisper-fields';
 
 /**
  * All available migrations.
@@ -601,6 +603,8 @@ export const migrations: Migration[] = [
   addAutonomousRoomsFieldsMigration,
   // 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
   addSpokenThisCycleFieldMigration,
+  // Aurora Core whisper: per-chat + per-character override columns
+  addCoreWhisperFieldsMigration,
 ];
 
 export {
@@ -882,5 +886,7 @@ export {
   addAutonomousRoomsFieldsMigration,
   // 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
   addSpokenThisCycleFieldMigration,
+  // Aurora Core whisper: per-chat + per-character override columns
+  addCoreWhisperFieldsMigration,
 };
 

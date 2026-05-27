@@ -290,6 +290,31 @@ export const AgentModeSettingsSchema = z.object({
 export type AgentModeSettings = z.infer<typeof AgentModeSettingsSchema>;
 
 // ============================================================================
+// CORE WHISPER SETTINGS (Aurora)
+// ============================================================================
+
+/**
+ * Aurora's Core whisper — global defaults for the periodic re-offering of each
+ * character's own `Core/` vault folder. Per-chat and per-character overrides
+ * live on the `chats` and `characters` tables respectively; resolution
+ * precedence is chat → character → global.
+ */
+export const CoreWhisperSettingsSchema = z.object({
+  /** Master switch. When false, no Core whispers fire anywhere. Default: true. */
+  enabled: z.boolean().default(true),
+  /** Assistant turns between periodic whispers for the same character. Default: 12. */
+  interval: z.number().int().min(3).max(50).default(12),
+  /** Whisper fires when this many consecutive visible turns by others precede the character's next turn. Default: 3. */
+  silenceThreshold: z.number().int().min(1).max(20).default(3),
+  /** Soft warning threshold (token estimate) on assembled Core packets. No truncation; an oversized packet logs a refactoring hint. Default: 4096. */
+  packetTokenBudget: z.number().int().positive().default(4096),
+  /** Fire the whisper after major context transitions (rolling-summary fold, transparency-affecting setting change). Default: true. */
+  fireOnContextTransition: z.boolean().default(true),
+});
+
+export type CoreWhisperSettings = z.infer<typeof CoreWhisperSettingsSchema>;
+
+// ============================================================================
 // STORY BACKGROUNDS SETTINGS
 // ============================================================================
 
@@ -404,6 +429,14 @@ export const ChatSettingsSchema = z.object({
   agentModeSettings: AgentModeSettingsSchema.default({
     maxTurns: 10,
     defaultEnabled: false,
+  }),
+  /** Aurora's Core whisper — global defaults for re-offering each character's own `Core/` vault folder before their next turn. */
+  coreWhisper: CoreWhisperSettingsSchema.default({
+    enabled: true,
+    interval: 12,
+    silenceThreshold: 3,
+    packetTokenBudget: 4096,
+    fireOnContextTransition: true,
   }),
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings: StoryBackgroundsSettingsSchema.default({

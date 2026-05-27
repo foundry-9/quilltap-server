@@ -30,6 +30,7 @@ export interface Character {
   pronouns?: { subject: string; object: string; possessive: string } | null
   characterDocumentMountPointId?: string | null
   systemTransparency?: boolean | null
+  coreWhisperEnabled?: boolean | null
   defaultImage?: {
     id: string
     filepath: string
@@ -53,6 +54,8 @@ export interface CharacterFormData {
   avatarUrl: string
   defaultConnectionProfileId: string
   systemTransparency: boolean
+  /** Tri-state per-character override for Aurora's Core whisper. null = inherit; true/false = explicit override. */
+  coreWhisperEnabled: boolean | null
 }
 
 export interface CharacterEditState {

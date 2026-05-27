@@ -195,6 +195,15 @@ export const CharacterSchema = z.object({
    */
   systemTransparency: z.boolean().nullable().optional(),
 
+  /**
+   * Aurora Core whisper — per-character override of the global `coreWhisper.enabled`
+   * setting. NULL = inherit from global default. When set, applies regardless
+   * of per-chat override (chat → character → global precedence). The Core
+   * whisper periodically re-offers this character's own `Core/` vault folder
+   * before their next turn.
+   */
+  coreWhisperEnabled: z.boolean().nullable().optional(),
+
   // Relationships
   partnerLinks: z.array(z.object({
     partnerId: UUIDSchema,

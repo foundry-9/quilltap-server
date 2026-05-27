@@ -222,7 +222,8 @@ CREATE TABLE "characters" (
   "canDressThemselves" INTEGER DEFAULT NULL,
   "canCreateOutfits" INTEGER DEFAULT NULL,
   "characterDocumentMountPointId" TEXT DEFAULT NULL,
-  "systemTransparency" INTEGER DEFAULT NULL  -- when 1 (true), this character may inspect "the Staff" — the chat-level toggles for self_inventory, Staff messages (Lantern/Aurora/Librarian/Prospero/Host), and character vaults still apply. When NULL or 0 (false), the character cannot see Staff messages, the self_inventory tool is withheld, and all character vaults (own + peers) are hidden from doc_* tools — a hard override on top of chat/project settings. Default NULL (opaque).
+  "systemTransparency" INTEGER DEFAULT NULL,  -- when 1 (true), this character may inspect "the Staff" — the chat-level toggles for self_inventory, Staff messages (Lantern/Aurora/Librarian/Prospero/Host), and character vaults still apply. When NULL or 0 (false), the character cannot see Staff messages, the self_inventory tool is withheld, and all character vaults (own + peers) are hidden from doc_* tools — a hard override on top of chat/project settings. Default NULL (opaque).
+  "coreWhisperEnabled" INTEGER DEFAULT NULL   -- per-character override of the global coreWhisper.enabled setting (Aurora's Core whisper). NULL = inherit from global. Resolution: chat → character → global.
 );
 
 CREATE INDEX "idx_characters_createdAt" ON "characters" ("createdAt" DESC);
@@ -417,7 +418,10 @@ CREATE TABLE "chats" (
   "runTurnsConsumed" INTEGER DEFAULT NULL,
   "runTokensConsumed" INTEGER DEFAULT NULL,
   "runDestructiveToolsAllowed" INTEGER DEFAULT 0,
-  "runVisibility" TEXT DEFAULT NULL        -- 'owner_only' | 'household' | 'open'; NULL = inherit user default
+  "runVisibility" TEXT DEFAULT NULL,       -- 'owner_only' | 'household' | 'open'; NULL = inherit user default
+  -- Aurora Core whisper per-chat overrides (NULL = inherit from character → global)
+  "coreWhisperEnabled" INTEGER DEFAULT NULL,
+  "coreWhisperInterval" INTEGER DEFAULT NULL
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");

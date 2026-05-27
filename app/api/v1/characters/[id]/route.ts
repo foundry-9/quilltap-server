@@ -89,6 +89,7 @@ const updateCharacterSchema = z.object({
     .or(z.literal('').transform(() => null))
     .nullable(),
   systemTransparency: z.boolean().nullable().optional(),
+  coreWhisperEnabled: z.boolean().nullable().optional(),
   physicalDescription: z
     .object({
       id: z.string().uuid().optional(),

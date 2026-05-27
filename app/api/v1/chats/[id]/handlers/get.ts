@@ -450,6 +450,8 @@ export async function handleGet(
       disabledTools: chatMetadata.disabledTools || [],
       disabledToolGroups: chatMetadata.disabledToolGroups || [],
       allowCrossCharacterVaultReads: chatMetadata.allowCrossCharacterVaultReads ?? false,
+      coreWhisperEnabled: chatMetadata.coreWhisperEnabled ?? null,
+      coreWhisperInterval: chatMetadata.coreWhisperInterval ?? null,
       agentModeEnabled: chatMetadata.agentModeEnabled ?? false,
       resolvedAgentModeEnabled: resolvedAgentMode.enabled,
       agentModeSource: resolvedAgentMode.enabledSource,

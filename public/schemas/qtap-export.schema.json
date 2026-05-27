@@ -328,6 +328,10 @@
           "type": ["boolean", "null"],
           "description": "When true, the character may inspect 'the Staff' (self_inventory, Staff messages from Lantern/Aurora/Librarian/Prospero/Host, and character vaults) subject to chat/project settings. When null or false, those three are hidden from this character regardless of any chat/project toggle — a hard character-level override. Default null (opaque)."
         },
+        "coreWhisperEnabled": {
+          "type": ["boolean", "null"],
+          "description": "Per-character override of the global coreWhisper.enabled setting (Aurora's Core whisper). Null = inherit from global. Default null."
+        },
         "wardrobeItems": {
           "type": "array",
           "items": { "$ref": "#/$defs/WardrobeItem" },
@@ -382,6 +386,15 @@
         "scenarioText": {
           "type": ["string", "null"],
           "description": "The resolved scenario content persisted on this chat at creation time"
+        },
+        "coreWhisperEnabled": {
+          "type": ["boolean", "null"],
+          "description": "Per-chat override of the global coreWhisper.enabled setting (Aurora's Core whisper). Null = inherit. Resolution: chat > character > global."
+        },
+        "coreWhisperInterval": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Per-chat override of the global coreWhisper.interval setting (assistant turns between periodic whispers). Null = inherit."
         },
         "_tagNames": {
           "type": "array",

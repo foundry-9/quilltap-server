@@ -110,6 +110,11 @@ export interface ChatSidebarProps {
   onToggleAllWhispers?: () => void
   allowCrossCharacterVaultReads?: boolean
   onToggleCrossCharacterVaultReads?: () => void
+  // Aurora's Core whisper — per-chat overrides (tri-state). null = inherit.
+  coreWhisperEnabled?: boolean | null
+  onSetCoreWhisperEnabled?: (value: boolean | null) => void
+  coreWhisperInterval?: number | null
+  onSetCoreWhisperInterval?: (value: number | null) => void
 
   // --- Organize section ---
   onRenameClick?: () => void
@@ -285,7 +290,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
           />
         </CollapsibleCard>
 
-        {props.isMultiChar && (
+        {(props.isMultiChar || props.onSetCoreWhisperEnabled || props.onSetCoreWhisperInterval) && (
           <CollapsibleCard
             title="Visibility"
             {...openController('visibility')}
@@ -295,6 +300,10 @@ export function ChatSidebar(props: ChatSidebarProps) {
               onToggleAllWhispers={props.onToggleAllWhispers}
               allowCrossCharacterVaultReads={props.allowCrossCharacterVaultReads}
               onToggleCrossCharacterVaultReads={props.onToggleCrossCharacterVaultReads}
+              coreWhisperEnabled={props.coreWhisperEnabled}
+              onSetCoreWhisperEnabled={props.onSetCoreWhisperEnabled}
+              coreWhisperInterval={props.coreWhisperInterval}
+              onSetCoreWhisperInterval={props.onSetCoreWhisperInterval}
             />
           </CollapsibleCard>
         )}
@@ -1025,13 +1034,35 @@ interface VisibilitySectionProps {
   onToggleAllWhispers?: () => void
   allowCrossCharacterVaultReads?: boolean
   onToggleCrossCharacterVaultReads?: () => void
+  coreWhisperEnabled?: boolean | null
+  onSetCoreWhisperEnabled?: (value: boolean | null) => void
+  coreWhisperInterval?: number | null
+  onSetCoreWhisperInterval?: (value: number | null) => void
 }
+
+const CORE_WHISPER_INTERVAL_OPTIONS = [
+  { value: '', label: 'Inherit' },
+  { value: '3', label: '3 turns' },
+  { value: '6', label: '6 turns' },
+  { value: '9', label: '9 turns' },
+  { value: '12', label: '12 turns' },
+  { value: '15', label: '15 turns' },
+  { value: '20', label: '20 turns' },
+  { value: '25', label: '25 turns' },
+  { value: '30', label: '30 turns' },
+  { value: '40', label: '40 turns' },
+  { value: '50', label: '50 turns' },
+] as const
 
 function VisibilitySection({
   showAllWhispers,
   onToggleAllWhispers,
   allowCrossCharacterVaultReads,
   onToggleCrossCharacterVaultReads,
+  coreWhisperEnabled,
+  onSetCoreWhisperEnabled,
+  coreWhisperInterval,
+  onSetCoreWhisperInterval,
 }: VisibilitySectionProps) {
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-visibility flex flex-col gap-3">
@@ -1078,6 +1109,50 @@ function VisibilitySection({
               }`}
             />
           </button>
+        </div>
+      )}
+
+      {(onSetCoreWhisperEnabled || onSetCoreWhisperInterval) && (
+        <div className="flex flex-col gap-2 pt-2 border-t qt-border-default">
+          <span className="qt-text-secondary text-xs">Aurora&apos;s Core Whisper</span>
+          {onSetCoreWhisperEnabled && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="qt-text-secondary text-xs">Offering</span>
+              <select
+                value={coreWhisperEnabled === true ? 'on' : coreWhisperEnabled === false ? 'off' : 'inherit'}
+                onChange={(e) => {
+                  const v = e.target.value
+                  onSetCoreWhisperEnabled(v === 'on' ? true : v === 'off' ? false : null)
+                }}
+                className="qt-bg-card border qt-border-default rounded text-xs px-2 py-1"
+                title="When does Aurora offer this chat's characters their own Core/ packet? Inherit defers to per-character and global settings."
+              >
+                <option value="inherit">Inherit</option>
+                <option value="on">Always</option>
+                <option value="off">Never</option>
+              </select>
+            </div>
+          )}
+          {onSetCoreWhisperInterval && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="qt-text-secondary text-xs">Cadence</span>
+              <select
+                value={coreWhisperInterval == null ? '' : String(coreWhisperInterval)}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  onSetCoreWhisperInterval(raw === '' ? null : parseInt(raw, 10))
+                }}
+                className="qt-bg-card border qt-border-default rounded text-xs px-2 py-1"
+                title="Assistant turns between periodic Core whispers in this chat. Inherit defers to the global default."
+              >
+                {CORE_WHISPER_INTERVAL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       )}
     </div>

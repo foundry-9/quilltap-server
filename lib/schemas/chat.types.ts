@@ -709,6 +709,20 @@ export const ChatMetadataSchema = z.object({
   /** Per-room override of user-default visibility; NULL = inherit user default. */
   runVisibility: AutonomousRunVisibilityEnum.nullable().optional(),
 
+  /**
+   * Aurora Core whisper — per-chat override of the global `coreWhisper.enabled`
+   * setting. NULL = inherit from character override → global default. The Core
+   * whisper periodically re-offers each character's own `Core/` vault folder
+   * before their next turn.
+   */
+  coreWhisperEnabled: z.boolean().nullable().optional(),
+  /**
+   * Aurora Core whisper — per-chat override of the global `coreWhisper.interval`
+   * setting (assistant turns between periodic whispers). NULL = inherit from
+   * global default.
+   */
+  coreWhisperInterval: z.number().int().min(1).nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -919,6 +933,11 @@ export const ChatMetadataBaseSchema = z.object({
   runTokensConsumed: z.number().int().nonnegative().nullable().optional(),
   runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),
   runVisibility: AutonomousRunVisibilityEnum.nullable().optional(),
+
+  /** Aurora Core whisper — per-chat override of the global `coreWhisper.enabled` setting. NULL = inherit. */
+  coreWhisperEnabled: z.boolean().nullable().optional(),
+  /** Aurora Core whisper — per-chat override of the global `coreWhisper.interval` setting (assistant turns between periodic whispers). NULL = inherit. */
+  coreWhisperInterval: z.number().int().min(1).nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

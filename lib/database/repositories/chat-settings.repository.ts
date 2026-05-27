@@ -238,6 +238,13 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               enabled: false,
               idleMinutes: 15,
             },
+            coreWhisper: {
+              enabled: true,
+              interval: 12,
+              silenceThreshold: 3,
+              packetTokenBudget: 4096,
+              fireOnContextTransition: true,
+            },
             defaultRoleplayTemplateId,
             ...data,
           };

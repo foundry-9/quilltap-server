@@ -59,6 +59,8 @@ export function useChatControls({
   const [agentModeEnabled, setAgentModeEnabled] = useState<boolean | null>(null)
   const [storyBackgroundsEnabled, setStoryBackgroundsEnabled] = useState(false)
   const [allowCrossCharacterVaultReads, setAllowCrossCharacterVaultReads] = useState(false)
+  const [coreWhisperEnabled, setCoreWhisperEnabled] = useState<boolean | null>(null)
+  const [coreWhisperInterval, setCoreWhisperInterval] = useState<number | null>(null)
 
   // Refs
   const userStoppedStreamRef = useRef<boolean>(false)
@@ -100,6 +102,20 @@ export function useChatControls({
       setAllowCrossCharacterVaultReads(chat.allowCrossCharacterVaultReads)
     }
   }, [chat?.allowCrossCharacterVaultReads])
+
+  // Initialize coreWhisperEnabled / coreWhisperInterval from chat data
+  useEffect(() => {
+    if (chat?.coreWhisperEnabled !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      setCoreWhisperEnabled(chat.coreWhisperEnabled ?? null)
+    }
+  }, [chat?.coreWhisperEnabled])
+  useEffect(() => {
+    if (chat?.coreWhisperInterval !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      setCoreWhisperInterval(chat.coreWhisperInterval ?? null)
+    }
+  }, [chat?.coreWhisperInterval])
 
   // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
   useEffect(() => {
@@ -183,6 +199,50 @@ export function useChatControls({
       showErrorToast('Could not update shared-vault setting')
     }
   }, [chatId, allowCrossCharacterVaultReads])
+
+  // Per-chat Core whisper enabled override. Tri-state: null = inherit, true/false = explicit.
+  const handleSetCoreWhisperEnabled = useCallback(async (value: boolean | null) => {
+    const previous = coreWhisperEnabled
+    setCoreWhisperEnabled(value)
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { coreWhisperEnabled: value } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist coreWhisperEnabled', response.status)
+        setCoreWhisperEnabled(previous)
+        showErrorToast('Could not update Core whisper setting')
+      }
+    } catch (error) {
+      console.error('[Chat] Error persisting coreWhisperEnabled', error)
+      setCoreWhisperEnabled(previous)
+      showErrorToast('Could not update Core whisper setting')
+    }
+  }, [chatId, coreWhisperEnabled])
+
+  // Per-chat Core whisper cadence override. null = inherit, positive integer = explicit.
+  const handleSetCoreWhisperInterval = useCallback(async (value: number | null) => {
+    const previous = coreWhisperInterval
+    setCoreWhisperInterval(value)
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { coreWhisperInterval: value } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist coreWhisperInterval', response.status)
+        setCoreWhisperInterval(previous)
+        showErrorToast('Could not update Core whisper cadence')
+      }
+    } catch (error) {
+      console.error('[Chat] Error persisting coreWhisperInterval', error)
+      setCoreWhisperInterval(previous)
+      showErrorToast('Could not update Core whisper cadence')
+    }
+  }, [chatId, coreWhisperInterval])
 
   // Toggle document editing mode and persist to database
   const handleToggleDocumentEditingMode = useCallback(async () => {
@@ -494,6 +554,10 @@ export function useChatControls({
     storyBackgroundsEnabled, setStoryBackgroundsEnabled,
     allowCrossCharacterVaultReads,
     handleToggleCrossCharacterVaultReads,
+    coreWhisperEnabled,
+    coreWhisperInterval,
+    handleSetCoreWhisperEnabled,
+    handleSetCoreWhisperInterval,
     connectionProfiles,
     userStoppedStreamRef,
     setPauseState,

@@ -92,8 +92,30 @@ export interface ChatSettings {
   timezone?: string | null
   /** 4.6 Private Character Rooms — user-level defaults */
   autonomousRoomSettings?: AutonomousRoomSettings
+  /** Aurora's Core whisper — global defaults */
+  coreWhisper?: CoreWhisperSettings
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * Aurora's Core whisper — global defaults. Per-chat and per-character overrides
+ * live on chat / character rows. Precedence: chat → character → global.
+ */
+export interface CoreWhisperSettings {
+  enabled?: boolean
+  interval?: number
+  silenceThreshold?: number
+  packetTokenBudget?: number
+  fireOnContextTransition?: boolean
+}
+
+export const DEFAULT_CORE_WHISPER_SETTINGS: CoreWhisperSettings = {
+  enabled: true,
+  interval: 12,
+  silenceThreshold: 3,
+  packetTokenBudget: 4096,
+  fireOnContextTransition: true,
 }
 
 /**

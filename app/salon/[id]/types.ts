@@ -187,6 +187,10 @@ export interface Chat {
   disabledToolGroups?: string[]
   /** When true, characters may read (read-only) other present participants' character vaults via doc_* tools */
   allowCrossCharacterVaultReads?: boolean
+  /** Per-chat override for Aurora's Core whisper enabled state (null = inherit from character → global). */
+  coreWhisperEnabled?: boolean | null
+  /** Per-chat override for Aurora's Core whisper cadence (assistant turns between offerings). null = inherit. */
+  coreWhisperInterval?: number | null
   /** Image profile ID for generating images in this chat (shared by all participants) */
   imageProfileId?: string | null
   /** Whether to auto-generate character avatars when outfits change */
