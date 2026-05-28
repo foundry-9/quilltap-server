@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-05-17
+**Last Updated**: 2026-05-28
 **Tool Used**: knip
-**Codebase**: Quilltap v4.4.0-dev.228
+**Codebase**: Quilltap v4.6.0-dev.74
 
 ---
 
@@ -12,14 +12,40 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | Cleaned up 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + 4 dead modal/form components + 2 sidebar components) |
+| Unused Files | Cleaned up 2026-05-28 (retired clothing-records/physical-descriptions components) and 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + 4 dead modal/form components + 2 sidebar components) |
 | Migration Scripts | Deleted (migrations complete) |
 | Unused Dependencies | @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom removed 2026-05-17; @aws-sdk/client-s3, svgo removed 2026-03-05; bcrypt, qrcode, ts-jest removed 2026-01-30 |
-| Unused Exported Types | ~700 flagged; most are intentional plugin/barrel re-exports |
+| Unused Exported Types | ~1215 flagged; most are intentional plugin/barrel/type-surface exports |
 | Unused Enum Members | 3 in ErrorCode (preserved for future use) |
-| Duplicate Exports | ~42 (named + default pattern, low priority) |
+| Duplicate Exports | ~44 (named + default pattern, low priority) |
 
 ---
+
+## 2026-05-28 — Remove retired clothing/descriptions components
+
+### Unused Files Removed
+
+| File | Reason |
+|------|--------|
+| `components/clothing-records/clothing-record-card.tsx` | Dead internal display component; only consumed by retired `clothing-record-list.tsx` |
+| `components/clothing-records/clothing-record-editor.tsx` | Dead internal editor component; only consumed by retired `clothing-record-list.tsx` |
+| `components/clothing-records/clothing-record-list.tsx` | Retired feature surface; no importers in app |
+| `components/clothing-records/index.ts` | Barrel with no importers |
+| `components/physical-descriptions/physical-description-card.tsx` | Dead internal display component; only consumed by retired `physical-description-list.tsx` |
+| `components/physical-descriptions/physical-description-editor.tsx` | Dead internal editor component; only consumed by retired `physical-description-list.tsx` |
+| `components/physical-descriptions/physical-description-list.tsx` | Retired feature surface; no importers in app |
+| `components/physical-descriptions/index.ts` | Barrel with no importers |
+
+### Verification
+
+- Before cleanup: `Unused files (8)`, `Unlisted dependencies (4)`
+- After cleanup: no `Unused files` section, no `Unlisted dependencies` section
+- Remaining major findings unchanged: `Unused exports (1215)`, `Unused exported enum members (3)`, `Duplicate exports (44)`, `Configuration hints (2)`
+
+### knip.json Updates
+
+- Updated `$schema` from `knip@5` to `knip@6` (installed version is 6.14.2)
+- Added `better-sqlite3-multiple-ciphers` to `ignoreDependencies`; 4 test files import it as the documented fallback when the root `better-sqlite3` alias is unavailable (see CLAUDE.md). Knip cannot see the conditional require, so it flags it as unlisted.
 
 ## 2026-05-17 — Barrel slim-down and dependency cleanup
 

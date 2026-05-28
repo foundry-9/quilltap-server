@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Chore: Remove dead clothing-record and physical-description components; tighten knip config
+
+Deleted 8 confirmed-unused component files knip flagged as unreferenced after the inline clothing-records and physical-descriptions surfaces were retired:
+`components/clothing-records/clothing-record-card.tsx`, `clothing-record-editor.tsx`, `clothing-record-list.tsx`, `index.ts`;
+`components/physical-descriptions/physical-description-card.tsx`, `physical-description-editor.tsx`, `physical-description-list.tsx`, `index.ts`.
+
+Updated `knip.json`: bumped `$schema` from `knip@5` to `knip@6`; added `better-sqlite3-multiple-ciphers` to `ignoreDependencies` (test-only conditional fallback, can't be detected statically). Updated `docs/developer/DEAD-CODE-REPORT.md` with 2026-05-28 findings.
+
 #### Refactor: Standardize new settings and autonomous-room UI on qt semantic utility classes
 
 Converted newly added settings and autonomous-room UI components away from direct Tailwind color/form wrappers to qt semantic classes.
