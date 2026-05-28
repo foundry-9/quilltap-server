@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Refactor: Split doc-edit tool handler into single-responsibility modules
+
+Broke up `lib/tools/handlers/doc-edit-handler.ts` (3,017 lines) into a thin dispatcher plus seven cohesive modules under `lib/tools/handlers/doc-edit/`: `shared.ts` (context type, logger, cross-cutting resolution/permission/reindex helpers), `text-handlers.ts`, `markdown-handlers.ts`, `file-management-handlers.ts`, `document-ui-handlers.ts`, `blob-handlers.ts`, and `photo-handlers.ts`. The public surface (`executeDocEditTool`, `formatDocEditResults`, `isDocEditTool`, `DOC_EDIT_TOOL_NAMES`, `DocEditToolContext`) is unchanged. Handler logic is byte-identical to the original; the only behavior change is removal of a dead empty `if` block in `buildReadResolutionContext`.
+
 #### Chore: Update npm dependencies across root, packages, and plugins
 
 Ran `npm update -S` on the root project, all `packages/*`, and all `plugins/dist/*`. Notable bumps: `better-sqlite3-multiple-ciphers` 12.9.0 → 12.10.0, `openai` 6.38.0 → 6.39.0, `@storybook/react` and `storybook` 10.4.0 → 10.4.1, plus `@tanstack/react-virtual`, `semver`, `ws`, and `yauzl` patch updates.
