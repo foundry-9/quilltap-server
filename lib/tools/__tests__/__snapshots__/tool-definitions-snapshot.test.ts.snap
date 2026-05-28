@@ -1255,9 +1255,9 @@ exports[`tool definitions: derived OpenAI parameters selfInventory: parameters s
   "additionalProperties": false,
   "properties": {
     "sections": {
-      "description": "Optional list of section names to return. If omitted or empty, all eight sections are returned. Pass one or more section names to receive only those sections — useful for saving tokens when you only need specific information.",
+      "description": "Optional list of section names to return. If omitted or empty, all top-level sections are returned (equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "quilltap"). Pass one or more section names to receive only those sections — useful for saving tokens when you only need specific information. The "quilltap.*" sub-sections let you fetch one piece of the Quilltap section without pulling the changelog (which can be large).",
       "items": {
-        "description": "Which section(s) to include. Options: "vault" (files in your character vault), "vaultAccess" (who can read/write your vault in this chat), "memory" (total and high-importance memory counts), "loadedMemories" (memories actually loaded into this turn's prompt), "chats" (conversation count and date range), "prompt" (the static system prompt assembled for every turn), "lastTurn" (provider/model/token usage from the most recent LLM call), "quilltap" (Quilltap version, release notes, changelog, runtime environment, and client shell).",
+        "description": "Which section(s) to include. Options: "vault" (files in your character vault), "vaultAccess" (who can read/write your vault in this chat), "memory" (total and high-importance memory counts), "loadedMemories" (memories actually loaded into this turn's prompt), "chats" (conversation count and date range), "prompt" (the static system prompt assembled for every turn), "lastTurn" (provider/model/token usage from the most recent LLM call), "quilltap" (Quilltap version, runtime environment, client shell, release notes, and changelog — all three parts). For finer-grained quilltap queries, ask for one or more of the dotted sub-sections: "quilltap.version" (version + runtime + client shell only), "quilltap.releaseNotes" (release notes for the current or most recent release only), "quilltap.changelog" (the changelog only).",
         "enum": [
           "vault",
           "vaultAccess",
@@ -1267,6 +1267,9 @@ exports[`tool definitions: derived OpenAI parameters selfInventory: parameters s
           "prompt",
           "lastTurn",
           "quilltap",
+          "quilltap.version",
+          "quilltap.releaseNotes",
+          "quilltap.changelog",
         ],
         "type": "string",
       },

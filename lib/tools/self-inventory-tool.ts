@@ -20,9 +20,20 @@ export const SELF_INVENTORY_SECTIONS = [
   'prompt',
   'lastTurn',
   'quilltap',
+  'quilltap.version',
+  'quilltap.releaseNotes',
+  'quilltap.changelog',
 ] as const;
 
 export type SelfInventorySection = typeof SELF_INVENTORY_SECTIONS[number];
+
+export const QUILLTAP_SUB_SECTIONS = [
+  'quilltap.version',
+  'quilltap.releaseNotes',
+  'quilltap.changelog',
+] as const satisfies readonly SelfInventorySection[];
+
+export type QuilltapSubSection = typeof QUILLTAP_SUB_SECTIONS[number];
 
 /**
  * Zod schema for the self inventory tool's input.
@@ -39,13 +50,19 @@ export const selfInventoryToolInputSchema = z.object({
         '"chats" (conversation count and date range), ' +
         '"prompt" (the static system prompt assembled for every turn), ' +
         '"lastTurn" (provider/model/token usage from the most recent LLM call), ' +
-        '"quilltap" (Quilltap version, release notes, changelog, runtime environment, and client shell).'
+        '"quilltap" (Quilltap version, runtime environment, client shell, release notes, and changelog — all three parts). ' +
+        'For finer-grained quilltap queries, ask for one or more of the dotted sub-sections: ' +
+        '"quilltap.version" (version + runtime + client shell only), ' +
+        '"quilltap.releaseNotes" (release notes for the current or most recent release only), ' +
+        '"quilltap.changelog" (the changelog only).'
       )
   ).optional()
     .describe(
-      'Optional list of section names to return. If omitted or empty, all eight sections are returned. ' +
+      'Optional list of section names to return. If omitted or empty, all top-level sections are returned ' +
+      '(equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "quilltap"). ' +
       'Pass one or more section names to receive only those sections — useful for saving tokens when ' +
-      'you only need specific information.'
+      'you only need specific information. The "quilltap.*" sub-sections let you fetch one piece of ' +
+      'the Quilltap section without pulling the changelog (which can be large).'
     ),
 });
 
@@ -165,8 +182,20 @@ export type SelfInventoryClientShell =
   | { type: 'browser' }
   | { type: 'unknown' };
 
+export interface SelfInventoryQuilltapIncludedParts {
+  version: boolean;
+  releaseNotes: boolean;
+  changelog: boolean;
+}
+
 export interface SelfInventoryQuilltapSection {
   available: boolean;
+  /**
+   * Which sub-parts the caller asked for. The formatter only renders the
+   * parts flagged true, so a request for just `quilltap.changelog` doesn't
+   * print version or "(no release notes found)" boilerplate.
+   */
+  includedParts: SelfInventoryQuilltapIncludedParts;
   version: string;
   runtimeMode: SelfInventoryRuntimeMode;
   clientShell: SelfInventoryClientShell;
@@ -211,7 +240,7 @@ export const selfInventoryToolDefinition = {
   function: {
     name: 'self_inventory',
     description:
-      'Return an introspection report about yourself in this chat. Eight sections are available: ' +
+      'Return an introspection report about yourself in this chat. Eight top-level sections are available: ' +
       '"vault" (every file in your character vault, with metadata for doc_read_file), ' +
       '"vaultAccess" (who in this chat can read or write your vault right now), ' +
       '"memory" (total and high-importance memory counts), ' +
@@ -219,12 +248,14 @@ export const selfInventoryToolDefinition = {
       '"chats" (conversation count and date range), ' +
       '"prompt" (the static system prompt assembled for every turn), ' +
       '"lastTurn" (provider/model/token usage from the most recent LLM call), ' +
-      '"quilltap" (Quilltap version, release notes for the current or most recent release, ' +
-      'the current changelog, runtime environment, and client shell). ' +
-      'Pass a "sections" array to request only specific sections and save tokens; ' +
-      'omit it to receive all eight. Use this when you need to know what source material ' +
-      'you have access to, how you are currently configured, or how close the last turn was ' +
-      'to the context window limit.',
+      '"quilltap" (Quilltap version, runtime environment, client shell, release notes for the current or most recent ' +
+      'release, and the current changelog — all three parts). The "quilltap" section can also be requested in three ' +
+      'finer-grained pieces: "quilltap.version" (version + runtime + client shell only), "quilltap.releaseNotes" ' +
+      '(release notes only), and "quilltap.changelog" (changelog only) — use these to save tokens when the changelog ' +
+      'is large and you only need part of the Quilltap section. ' +
+      'Pass a "sections" array to request only specific sections; omit it to receive all eight top-level sections. ' +
+      'Use this when you need to know what source material you have access to, how you are currently configured, ' +
+      'or how close the last turn was to the context window limit.',
     parameters: zodToOpenAISchema(selfInventoryToolInputSchema),
   },
 };

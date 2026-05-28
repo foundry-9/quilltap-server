@@ -42,6 +42,7 @@ import {
   SelfInventoryPromptSection,
   SelfInventoryLastTurnSection,
   SelfInventoryQuilltapSection,
+  SelfInventoryQuilltapIncludedParts,
   SelfInventoryRuntimeMode,
   SelfInventoryClientShell,
   validateSelfInventoryInput,
@@ -656,38 +657,69 @@ function findReleaseNotesFile(version: string): { filePath: string; version: str
   };
 }
 
-function buildQuilltapSection(): SelfInventoryQuilltapSection {
+function buildQuilltapSection(
+  includedParts: SelfInventoryQuilltapIncludedParts
+): SelfInventoryQuilltapSection {
+  // The top-level identity (version + runtime + clientShell) is always cheap
+  // to compute and lives at the top of the section header in the formatter,
+  // so we resolve it unconditionally. The two file reads (release notes,
+  // changelog) are skipped when not requested — saves an fs.readFileSync on
+  // a potentially large changelog when the caller only asked for the version.
   const version = packageJson.version;
   const runtimeMode = resolveRuntimeMode();
   const clientShell = resolveClientShell();
 
   let releaseNotes: string | null = null;
   let releaseNotesVersion: string | null = null;
-  const found = findReleaseNotesFile(version);
-  if (found) {
-    try {
-      releaseNotes = fs.readFileSync(found.filePath, 'utf-8');
-      releaseNotesVersion = found.version;
-    } catch {
-      // File disappeared between readdir and readFile
+  if (includedParts.releaseNotes) {
+    const found = findReleaseNotesFile(version);
+    if (found) {
+      try {
+        releaseNotes = fs.readFileSync(found.filePath, 'utf-8');
+        releaseNotesVersion = found.version;
+      } catch {
+        // File disappeared between readdir and readFile
+      }
     }
   }
 
   let changelog: string | null = null;
-  try {
-    changelog = fs.readFileSync(path.join(process.cwd(), 'docs', 'CHANGELOG.md'), 'utf-8');
-  } catch {
-    // Changelog not available (e.g. standalone/Docker build without docs)
+  if (includedParts.changelog) {
+    try {
+      changelog = fs.readFileSync(path.join(process.cwd(), 'docs', 'CHANGELOG.md'), 'utf-8');
+    } catch {
+      // Changelog not available (e.g. standalone/Docker build without docs)
+    }
   }
 
   return {
     available: true,
+    includedParts,
     version,
     runtimeMode,
     clientShell,
     releaseNotes,
     releaseNotesVersion,
     changelog,
+  };
+}
+
+function resolveQuilltapIncludedParts(
+  requested: Set<SelfInventorySection>
+): SelfInventoryQuilltapIncludedParts | null {
+  const wantsAll = requested.has('quilltap');
+  const wantsVersion = wantsAll || requested.has('quilltap.version');
+  const wantsReleaseNotes = wantsAll || requested.has('quilltap.releaseNotes');
+  const wantsChangelog = wantsAll || requested.has('quilltap.changelog');
+
+  if (!wantsVersion && !wantsReleaseNotes && !wantsChangelog) {
+    return null;
+  }
+
+  return {
+    version: wantsVersion,
+    releaseNotes: wantsReleaseNotes,
+    changelog: wantsChangelog,
   };
 }
 
@@ -826,12 +858,14 @@ export async function executeSelfInventoryTool(
     }));
   }
 
-  if (requested.has('quilltap')) {
+  const includedQuilltapParts = resolveQuilltapIncludedParts(requested);
+  if (includedQuilltapParts) {
     try {
-      result.quilltap = buildQuilltapSection();
+      result.quilltap = buildQuilltapSection(includedQuilltapParts);
     } catch (err) {
       result.quilltap = {
         available: false,
+        includedParts: includedQuilltapParts,
         version: packageJson.version,
         runtimeMode: 'local-dev',
         clientShell: { type: 'unknown' },
@@ -1028,30 +1062,36 @@ function formatQuilltapSection(section: SelfInventoryQuilltapSection): string {
     return `## Quilltap\nUnavailable — ${section.message ?? 'unknown error'}`;
   }
 
-  const parts: string[] = [
-    `## Quilltap`,
-    `Version: ${section.version}`,
-    `Runtime: ${RUNTIME_MODE_LABELS[section.runtimeMode] ?? section.runtimeMode}`,
-  ];
+  const parts: string[] = [`## Quilltap`];
 
-  if (section.clientShell.type === 'electron') {
-    parts.push(`Client: Electron shell v${section.clientShell.shellVersion}`);
-  } else if (section.clientShell.type === 'browser') {
-    parts.push(`Client: Web browser`);
-  } else {
-    parts.push(`Client: (unknown)`);
+  if (section.includedParts.version) {
+    parts.push(
+      `Version: ${section.version}`,
+      `Runtime: ${RUNTIME_MODE_LABELS[section.runtimeMode] ?? section.runtimeMode}`,
+    );
+    if (section.clientShell.type === 'electron') {
+      parts.push(`Client: Electron shell v${section.clientShell.shellVersion}`);
+    } else if (section.clientShell.type === 'browser') {
+      parts.push(`Client: Web browser`);
+    } else {
+      parts.push(`Client: (unknown)`);
+    }
   }
 
-  if (section.releaseNotes) {
-    parts.push('', `### Release Notes (v${section.releaseNotesVersion})`, section.releaseNotes);
-  } else {
-    parts.push('', `### Release Notes`, '(no release notes found for this version)');
+  if (section.includedParts.releaseNotes) {
+    if (section.releaseNotes) {
+      parts.push('', `### Release Notes (v${section.releaseNotesVersion})`, section.releaseNotes);
+    } else {
+      parts.push('', `### Release Notes`, '(no release notes found for this version)');
+    }
   }
 
-  if (section.changelog) {
-    parts.push('', `### Changelog`, section.changelog);
-  } else {
-    parts.push('', `### Changelog`, '(changelog not available)');
+  if (section.includedParts.changelog) {
+    if (section.changelog) {
+      parts.push('', `### Changelog`, section.changelog);
+    } else {
+      parts.push('', `### Changelog`, '(changelog not available)');
+    }
   }
 
   return parts.join('\n');

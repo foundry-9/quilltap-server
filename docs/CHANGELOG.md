@@ -4,6 +4,20 @@
 
 ### 4.6-dev
 
+#### Feat: self_inventory `quilltap` section gets three dotted sub-sections
+
+The `quilltap` section already returns version + runtime + client shell + release notes + changelog as one bundle. Added three finer-grained section identifiers so callers can pull just what they want:
+
+- `quilltap.version` — version, runtime mode, and client shell only
+- `quilltap.releaseNotes` — release notes for the current (or most recent matching) release only
+- `quilltap.changelog` — the changelog only
+
+`quilltap` continues to return all three parts. Passing a sub-section skips the file reads for the parts that weren't asked for — useful when the changelog is large and the caller only needs the version line.
+
+- `lib/tools/self-inventory-tool.ts`: extended `SELF_INVENTORY_SECTIONS` with the three dotted identifiers; new `QUILLTAP_SUB_SECTIONS` constant; added `includedParts: { version, releaseNotes, changelog }` to `SelfInventoryQuilltapSection` so the formatter knows which chunks to render; updated the Zod and tool descriptions to document the new identifiers.
+- `lib/tools/handlers/self-inventory-handler.ts`: `buildQuilltapSection` now takes an `includedParts` flag bag and gates the release-notes and changelog `fs.readFileSync` calls on it; new `resolveQuilltapIncludedParts` collapses `quilltap` + dotted sub-sections into a single flag bag (presence of `quilltap` triggers all three). `formatQuilltapSection` only emits each chunk when its `includedParts` flag is true — no more "(no release notes found)" boilerplate when the caller asked only for the changelog.
+- `lib/tools/__tests__/__snapshots__/tool-definitions-snapshot.test.ts.snap`: refreshed to reflect the three new enum values and updated descriptions.
+
 #### Feat: Per-character prompt caching
 
 Re-keyed the provider prompt-cache identifier from `chatId` to `characterId`. The persona block (manifesto / identity / description / personality) sits high in the prompt, so each speaker rotation already busts the cacheable prefix — keying by character matches reality, and lets the same character share a warm cache across chats. Multi-character group chats now keep N parallel caches by design.
