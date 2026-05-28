@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Refactor: Split restore service into single-responsibility modules
+
+Broke up `lib/backup/restore-service.ts` (2,124 lines) into a thin re-export barrel plus seven cohesive modules under `lib/backup/restore/`: `legacy-migrations.ts` (pure pre-rework backup-shape folding), `json-stream.ts` (disk-backed/streaming JSON readers), `archive.ts` (zip extract, parse, and extracted-dir readers), `delete-service.ts` (`deleteAllUserData`/`previewDeleteAllUserData` + replace-mode deletion), `uuid-remap.ts` (new-account UUID remapping), `preview.ts` (`previewRestore`), and `restore.ts` (the restore orchestrator). The public surface imported through `restore-service` is unchanged (`restore`, `previewRestore`, `parseBackupZip`, `getFileFromExtractedBackup`, `deleteAllUserData`, `previewDeleteAllUserData`, `DeleteSummary`). Logic is identical to the original; the only change is removal of a dead, never-used `ConversationChunk` type import.
+
 #### Refactor: Split character vault overlay into single-responsibility modules
 
 Broke up `lib/database/repositories/character-properties-overlay.ts` (1,944 lines) into a thin re-export barrel plus seven cohesive modules under `lib/database/repositories/vault-overlay/`: `schema.ts` (schemas, types, path constants, descriptor table, `MANAGED_FIELDS`), `parsers.ts` (pure parse/validate helpers), `vault-projection.ts` (generic folder projection), `vault-readers.ts` (per-field readers + `readVaultTextFile`), `read-overlay.ts` (`applyDocumentStoreOverlay`/`applyDocumentStoreOverlayOne`), `wardrobe-sync.ts` (wardrobe read overlay + write-back), and `managed-fields.ts` (`readCharacterVaultManagedFields`, `writeCharacterVaultManagedFields`, `applyDocumentStoreWriteOverlay`). The public surface imported through `character-properties-overlay` is unchanged. Handler logic is byte-identical to the original; the only behavior change is removal of a dead, never-read `routedFieldCount` counter and its empty `if` block in `applyDocumentStoreWriteOverlay`.

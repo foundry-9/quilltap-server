@@ -1,0 +1,791 @@
+/**
+ * Restore orchestrator. Extracts the archive once, optionally deletes existing
+ * data (replace mode) or remaps every UUID (new-account mode), then re-inserts
+ * every entity in dependency order with its backup/remapped id preserved so
+ * cross-references stay valid. Per-entity failures are collected as warnings
+ * rather than aborting the whole restore.
+ *
+ * @module backup/restore/restore
+ */
+
+import fs from 'fs';
+import path from 'path';
+import { logger } from '@/lib/logger';
+import { getUserRepositories } from '@/lib/repositories/user-scoped';
+import { getRepositories } from '@/lib/repositories/factory';
+import { fileStorageManager } from '@/lib/file-storage/manager';
+import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
+import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
+import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
+import { rawQuery } from '@/lib/database/manager';
+import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
+import type { RestoreOptions, RestoreSummary } from '../types';
+import { UuidRemapper } from '../uuid-remapper';
+import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
+import { deleteUserData } from './delete-service';
+import { remapBackupData } from './uuid-remap';
+
+const moduleLogger = logger.child({ module: 'backup:restore-service' });
+
+/**
+ * Restores data from a backup ZIP file on disk
+ */
+export async function restore(
+  zipPath: string,
+  options: RestoreOptions
+): Promise<RestoreSummary> {
+  const { mode, targetUserId } = options;
+
+  moduleLogger.info('Starting restore operation', { mode, targetUserId });
+
+  const warnings: string[] = [];
+
+  // Extract zip to temp directory once — all file reads come from disk
+  const { data: parsedData, extractDir, rootFolder } = await parseBackupZip(zipPath);
+  const rootPath = rootFolder ? path.join(extractDir, rootFolder) : extractDir;
+
+  try {
+    let data = parsedData;
+
+    // For replace mode, delete existing data first
+    if (mode === 'replace') {
+      await deleteUserData(targetUserId);
+    }
+
+    // For new-account mode, remap all UUIDs
+    if (mode === 'new-account') {
+      const remapper = new UuidRemapper();
+      data = remapBackupData(data, targetUserId, remapper);
+    }
+
+    const repos = getUserRepositories(targetUserId);
+
+    // Restore in dependency order
+    // All entities preserve their backup/remapped IDs via CreateOptions.id,
+    // so cross-references (characterId in participants, tags, etc.) are already correct.
+
+    // 1. Tags (no dependencies)
+    for (const tag of data.tags) {
+      try {
+        const { userId, createdAt, updatedAt, ...tagData } = tag;
+        await repos.tags.create({ ...tagData, nameLower: tagData.nameLower || tagData.name.toLowerCase() }, { id: tag.id });
+      } catch (error) {
+        warnings.push(`Failed to restore tag "${tag.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore tag', { tagId: tag.id, error });
+      }
+    }
+
+    // 2. Connection profiles (no entity dependencies, but have tag refs)
+    for (const profile of data.connectionProfiles) {
+      try {
+        const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+        // Note: apiKeyId is not restored as API keys are encrypted and can't be restored
+        await repos.connections.create({ ...profileData, apiKeyId: null }, { id: profile.id });
+      } catch (error) {
+        warnings.push(`Failed to restore connection profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore connection profile', { profileId: profile.id, error });
+      }
+    }
+
+    // 3. Image profiles
+    for (const profile of data.imageProfiles) {
+      try {
+        const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+        await repos.imageProfiles.create({ ...profileData, apiKeyId: null }, { id: profile.id });
+      } catch (error) {
+        warnings.push(`Failed to restore image profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore image profile', { profileId: profile.id, error });
+      }
+    }
+
+    // 4. Embedding profiles
+    for (const profile of data.embeddingProfiles) {
+      try {
+        const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+        await repos.embeddingProfiles.create({ ...profileData, apiKeyId: null }, { id: profile.id });
+      } catch (error) {
+        warnings.push(`Failed to restore embedding profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore embedding profile', { profileId: profile.id, error });
+      }
+    }
+
+    // 5. Files (read from extracted dir on disk, upload to storage)
+    // In new-account mode, file IDs are remapped but on-disk filenames use original IDs.
+    // Use parsedData.files (original) for disk lookup, data.files (remapped) for DB records.
+    let filesRestored = 0;
+    for (let i = 0; i < data.files.length; i++) {
+      const file = data.files[i];
+      const originalFile = parsedData.files[i]; // original IDs for disk lookup
+      try {
+        const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile, data.manifest?.backupFormat);
+        if (fileBuffer) {
+          // Project-bound files restore into the project mount (via FSM →
+          // project-store-bridge). Project-less files land in the Quilltap
+          // Uploads mount under restored/, not the catch-all _general/.
+          let restoredStorageKey: string;
+          let restoredMimeType: string;
+          let restoredSize: number;
+          if (file.projectId) {
+            const uploadResult = await fileStorageManager.uploadFile({
+              filename: file.originalFilename,
+              content: fileBuffer,
+              contentType: file.mimeType,
+              projectId: file.projectId,
+              folderPath: file.folderPath || '/',
+            });
+            restoredStorageKey = uploadResult.storageKey;
+            restoredMimeType = uploadResult.storedMimeType;
+            restoredSize = uploadResult.sizeBytes;
+          } else {
+            const written = await writeUserUploadToMountStore({
+              filename: file.originalFilename,
+              content: fileBuffer,
+              contentType: file.mimeType,
+              subfolder: 'restored',
+            });
+            restoredStorageKey = written.storageKey;
+            restoredMimeType = written.storedMimeType;
+            restoredSize = written.sizeBytes;
+          }
+
+          // Create file metadata with storage key. The bridges may transcode
+          // bytes (bitmaps → WebP), so we record the post-bridge mime/size
+          // rather than what the backup row claimed — a backup made before
+          // this fix may carry the pre-transcode lie, and re-writing it would
+          // re-introduce the "media_type X but bytes are Y" error.
+          // Strip auto-generated and legacy fields from backup data
+          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
+          // Remove legacy fields that may exist in older backups
+          delete (fileData as Record<string, unknown>).s3Key;
+          delete (fileData as Record<string, unknown>).s3Bucket;
+          delete (fileData as Record<string, unknown>).mountPointId;
+          await repos.files.create(
+            {
+              ...fileData,
+              mimeType: restoredMimeType,
+              size: restoredSize,
+              storageKey: restoredStorageKey,
+            },
+            { id: file.id }
+          );
+          filesRestored++;
+        } else {
+          warnings.push(`File not found in backup: ${file.originalFilename}`);
+        }
+      } catch (error) {
+        warnings.push(`Failed to restore file "${file.originalFilename}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore file', { fileId: file.id, error });
+      }
+    }
+
+    // 6. Characters
+    for (const character of data.characters) {
+      try {
+        const { userId, createdAt, updatedAt, ...charData } = character;
+        await repos.characters.create(charData, { id: character.id });
+      } catch (error) {
+        warnings.push(`Failed to restore character "${character.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore character', { characterId: character.id, error });
+      }
+    }
+
+    // 7. Chats (with messages)
+    let messagesRestored = 0;
+    for (const chat of data.chats) {
+      try {
+        const { userId, createdAt, updatedAt, messages, ...chatData } = chat;
+        const createdChat = await repos.chats.create(chatData, { id: chat.id });
+
+        // Add messages to the chat
+        for (const message of messages) {
+          try {
+            await repos.chats.addMessage(createdChat.id, message);
+            messagesRestored++;
+          } catch (msgError) {
+            warnings.push(`Failed to restore message in chat "${chat.title}": ${msgError instanceof Error ? msgError.message : String(msgError)}`);
+          }
+        }
+      } catch (error) {
+        warnings.push(`Failed to restore chat "${chat.title}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore chat', { chatId: chat.id, error });
+      }
+    }
+
+    // 9. Memories
+    // IDs are preserved during creation, so characterId/aboutCharacterId already point
+    // to the correct (preserved) character IDs — no remapping needed.
+    for (const memory of data.memories) {
+      try {
+        const { id, createdAt, updatedAt, ...memoryData } = memory;
+
+        // Strip legacy personaId from old backups (column no longer exists)
+        const { personaId: _legacyPersonaId, ...cleanMemoryData } = memoryData as Record<string, unknown>;
+        await repos.memories.create(cleanMemoryData as Parameters<typeof repos.memories.create>[0]);
+      } catch (error) {
+        warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore memory', { memoryId: memory.id, error });
+      }
+    }
+
+    // 10. Prompt Templates (user-created only)
+    const globalRepos = getRepositories();
+    let promptTemplatesRestored = 0;
+    for (const template of data.promptTemplates) {
+      try {
+        const { id, userId, createdAt, updatedAt, ...templateData } = template;
+        await globalRepos.promptTemplates.create({
+          ...templateData,
+          userId: targetUserId,
+        });
+        promptTemplatesRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore prompt template "${template.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore prompt template', { templateId: template.id, error });
+      }
+    }
+
+    // 11. Roleplay Templates (user-created only)
+    let roleplayTemplatesRestored = 0;
+    for (const template of data.roleplayTemplates) {
+      try {
+        const { id, userId, createdAt, updatedAt, ...templateData } = template;
+        await globalRepos.roleplayTemplates.create({
+          ...templateData,
+          userId: targetUserId,
+        });
+        roleplayTemplatesRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore roleplay template "${template.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore roleplay template', { templateId: template.id, error });
+      }
+    }
+
+    // 12. Provider Models (global cache)
+    let providerModelsRestored = 0;
+    for (const model of data.providerModels) {
+      try {
+        const { id, createdAt, updatedAt, ...modelData } = model;
+        await globalRepos.providerModels.upsertModel(modelData);
+        providerModelsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore provider model "${model.modelId}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore provider model', { modelId: model.modelId, error });
+      }
+    }
+
+    // 13. Projects
+    let projectsRestored = 0;
+    for (const project of data.projects) {
+      try {
+        const { userId, createdAt, updatedAt, ...projectData } = project;
+        await repos.projects.create(projectData, { id: project.id });
+        projectsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore project "${project.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore project', { projectId: project.id, error });
+      }
+    }
+
+    // 14. LLM Logs
+    let llmLogsRestored = 0;
+    if (isLLMLogsDegraded()) {
+      moduleLogger.warn('Skipping LLM logs restore — logs database is in degraded mode');
+      warnings.push('LLM logs were not restored because the logs database is in degraded mode');
+    } else {
+      for (const log of data.llmLogs) {
+        try {
+          const { id, createdAt, ...logData } = log;
+          await repos.llmLogs.create(logData, { id, createdAt });
+          llmLogsRestored++;
+        } catch (error) {
+          warnings.push(`Failed to restore LLM log: ${error instanceof Error ? error.message : String(error)}`);
+          moduleLogger.warn('Failed to restore LLM log', { logId: log.id, error });
+        }
+      }
+    }
+
+    // 15. Plugin Configs
+    let pluginConfigsRestored = 0;
+    for (const config of data.pluginConfigs || []) {
+      try {
+        const { id, createdAt, updatedAt, ...configData } = config;
+        // Use upsert to merge with existing configs or create new ones
+        await globalRepos.pluginConfigs.upsertForUserPlugin(
+          targetUserId,
+          configData.pluginName,
+          configData.config as Record<string, unknown>
+        );
+        pluginConfigsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore plugin config for "${config.pluginName}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore plugin config', { pluginName: config.pluginName, error });
+      }
+    }
+
+    // 16. Chat Settings
+    let chatSettingsRestored = 0;
+    for (const settings of data.chatSettings || []) {
+      try {
+        const { id, createdAt, updatedAt, ...settingsData } = settings;
+        await globalRepos.chatSettings.create(settingsData, { id });
+        chatSettingsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore chat settings: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore chat settings', { settingsId: settings.id, error });
+      }
+    }
+
+    // 17. Folders
+    let foldersRestored = 0;
+    for (const folder of data.folders || []) {
+      try {
+        const { id, createdAt, updatedAt, ...folderData } = folder;
+        await globalRepos.folders.create({ ...folderData, userId: targetUserId }, { id: folder.id });
+        foldersRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore folder "${folder.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore folder', { folderId: folder.id, error });
+      }
+    }
+
+    // 19. Wardrobe Items
+    let wardrobeItemsRestored = 0;
+    for (const item of data.wardrobeItems || []) {
+      try {
+        const { id, createdAt, updatedAt, ...itemData } = item;
+        await globalRepos.wardrobe.create(itemData, { id: item.id });
+        wardrobeItemsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore wardrobe item "${item.title}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore wardrobe item', { wardrobeItemId: item.id, error });
+      }
+    }
+
+    // 20. Outfit Presets — REMOVED: presets are now composite WardrobeItems and
+    // were folded into data.wardrobeItems at parse time for back-compat with
+    // older backups. Nothing to restore here.
+
+    // 21. Character Plugin Data (depends on characters)
+    let characterPluginDataRestored = 0;
+    for (const cpd of data.characterPluginData || []) {
+      try {
+        const { id, createdAt, updatedAt, ...cpdData } = cpd;
+        await globalRepos.characterPluginData.create(cpdData, { id: cpd.id });
+        characterPluginDataRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore character plugin data for plugin "${cpd.pluginName}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore character plugin data', { cpdId: cpd.id, pluginName: cpd.pluginName, error });
+      }
+    }
+
+    // 22. Conversation Annotations (depends on chats)
+    let conversationAnnotationsRestored = 0;
+    for (const annotation of data.conversationAnnotations || []) {
+      try {
+        const { id, createdAt, updatedAt, ...annotationData } = annotation;
+        await globalRepos.conversationAnnotations.create(annotationData, { id: annotation.id });
+        conversationAnnotationsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore conversation annotation: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore conversation annotation', { annotationId: annotation.id, error });
+      }
+    }
+
+    // ========================================================================
+    // Format-3 entities (depend on the entities created above)
+    // ========================================================================
+
+    // 22a. Document store mount points
+    let docMountPointsRestored = 0;
+    for (const mp of data.docMountPoints || []) {
+      try {
+        const { id, createdAt, updatedAt, ...mpData } = mp;
+        await globalRepos.docMountPoints.create(mpData, { id: mp.id });
+        docMountPointsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore document store "${mp.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount point', { mountPointId: mp.id, error });
+      }
+    }
+
+    // 22b. Document store folders — sort by path length so parents precede
+    // children (parentId is a self-FK into the same table).
+    let docMountFoldersRestored = 0;
+    const sortedFolders = [...(data.docMountFolders || [])].sort(
+      (a, b) => (a.path?.length ?? 0) - (b.path?.length ?? 0)
+    );
+    for (const folder of sortedFolders) {
+      try {
+        const { id, createdAt, updatedAt, ...folderData } = folder;
+        await globalRepos.docMountFolders.create(folderData, { id: folder.id });
+        docMountFoldersRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore doc-store folder "${folder.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount folder', { folderId: folder.id, error });
+      }
+    }
+
+    // 22c. Document store file content rows (content-addressed by sha256).
+    let docMountFilesRestored = 0;
+    for (const file of data.docMountFiles || []) {
+      try {
+        const { id, createdAt, updatedAt, ...fileData } = file;
+        await globalRepos.docMountFiles.create(fileData, { id: file.id });
+        docMountFilesRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore doc-store file row: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount file', { fileId: file.id, error });
+      }
+    }
+
+    // 22d. Document store file links (hard links to file content).
+    let docMountFileLinksRestored = 0;
+    for (const link of data.docMountFileLinks || []) {
+      try {
+        const { id, createdAt, updatedAt, ...linkData } = link;
+        await globalRepos.docMountFileLinks.create(linkData, { id: link.id });
+        docMountFileLinksRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore doc-store file link "${link.relativePath}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount file link', { linkId: link.id, error });
+      }
+    }
+
+    // 22e. Document store text documents (database-backed text content).
+    let docMountDocumentsRestored = 0;
+    for (const doc of data.docMountDocuments || []) {
+      try {
+        const { id, createdAt, updatedAt, ...docData } = doc;
+        await globalRepos.docMountDocuments.create(docData, { id: doc.id });
+        docMountDocumentsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore doc-store document: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount document', { documentId: doc.id, error });
+      }
+    }
+
+    // 22f. Document store binary blobs (metadata rows + bytes from disk).
+    // Bytes were staged in mount-blobs/<blobId> at backup time. We restore
+    // them by writing the metadata row + bytes directly to the mount-index
+    // DB so we preserve the original blob id (a UNIQUE column on fileId).
+    let docMountBlobsRestored = 0;
+    if ((data.docMountBlobs || []).length > 0) {
+      // In new-account mode the metadata id is remapped but the bytes on
+      // disk are still keyed by the *original* id. Pair them by index, the
+      // same trick used for user files higher up.
+      const originalBlobs = parsedData.docMountBlobs || [];
+      const blobsDir = path.join(rootPath, 'mount-blobs');
+      const mountIndexDb = isMountIndexDegraded() ? null : getRawMountIndexDatabase();
+      if (!mountIndexDb) {
+        warnings.push('Doc-store blobs were not restored — mount-index database is unavailable');
+      } else {
+        const insert = mountIndexDb.prepare(
+          `INSERT INTO "doc_mount_blobs" (id, fileId, sha256, sizeBytes, storedMimeType, data, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        for (let i = 0; i < (data.docMountBlobs || []).length; i++) {
+          const blob = (data.docMountBlobs || [])[i];
+          const original = originalBlobs[i] ?? blob;
+          try {
+            const bytesPath = path.join(blobsDir, original.id);
+            const bytes = await fs.promises.readFile(bytesPath);
+            insert.run(
+              blob.id,
+              blob.fileId,
+              blob.sha256,
+              blob.sizeBytes,
+              blob.storedMimeType,
+              bytes,
+              blob.createdAt,
+              blob.updatedAt
+            );
+            docMountBlobsRestored++;
+          } catch (error) {
+            warnings.push(`Failed to restore doc-store blob ${blob.id}: ${error instanceof Error ? error.message : String(error)}`);
+            moduleLogger.warn('Failed to restore doc mount blob', { blobId: blob.id, error });
+          }
+        }
+      }
+    }
+
+    // 22g. Document store embedded chunks. The repo's create() accepts the
+    // chunk in serialised form; the schema rehydrates embedding as Float32Array.
+    let docMountChunksRestored = 0;
+    for (const chunk of data.docMountChunks || []) {
+      try {
+        const { id, createdAt, updatedAt, ...chunkData } = chunk;
+        await globalRepos.docMountChunks.create(chunkData as unknown as Parameters<typeof globalRepos.docMountChunks.create>[0], { id: chunk.id });
+        docMountChunksRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore doc-store chunk: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore doc mount chunk', { chunkId: chunk.id, error });
+      }
+    }
+
+    // 22h. Project ↔ document-store links.
+    let projectDocMountLinksRestored = 0;
+    for (const link of data.projectDocMountLinks || []) {
+      try {
+        const { id, createdAt, updatedAt, ...linkData } = link;
+        await globalRepos.projectDocMountLinks.create(linkData, { id: link.id });
+        projectDocMountLinksRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore project↔store link: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore project doc mount link', { linkId: link.id, error });
+      }
+    }
+
+    // 22i. Chat documents (Document Mode pane state per chat).
+    let chatDocumentsRestored = 0;
+    for (const cd of data.chatDocuments || []) {
+      try {
+        const { id, createdAt, updatedAt, ...cdData } = cd;
+        await globalRepos.chatDocuments.create(cdData, { id: cd.id });
+        chatDocumentsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore chat document: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore chat document', { chatDocumentId: cd.id, error });
+      }
+    }
+
+    // 22j. Vector index metas + entries. Without these every memory would
+    // need to be re-embedded after restore.
+    let vectorIndexMetasRestored = 0;
+    for (const meta of data.vectorIndexMetas || []) {
+      try {
+        await globalRepos.vectorIndices.saveMeta(meta.characterId, meta.dimensions);
+        vectorIndexMetasRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore vector index meta for character ${meta.characterId}: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore vector index meta', { characterId: meta.characterId, error });
+      }
+    }
+
+    // The repo's addEntries batch path expects Float32Array; the serialised
+    // form holds plain number arrays, so rehydrate before insert.
+    let vectorEntriesRestored = 0;
+    if ((data.vectorEntries || []).length > 0) {
+      try {
+        const rehydrated = (data.vectorEntries || []).map((e) => ({
+          id: e.id,
+          characterId: e.characterId,
+          embedding: new Float32Array(e.embedding),
+        }));
+        await globalRepos.vectorIndices.addEntries(rehydrated);
+        vectorEntriesRestored = rehydrated.length;
+      } catch (error) {
+        warnings.push(`Failed to restore vector entries: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore vector entries batch', { error });
+      }
+    }
+
+    // 22k. Conversation chunks (semantic chunks with embeddings).
+    let conversationChunksRestored = 0;
+    for (const chunk of data.conversationChunks || []) {
+      try {
+        const { id, createdAt, updatedAt, ...chunkData } = chunk;
+        // The repo's create accepts ConversationChunkInput; embeddings come
+        // through as number[] and the Zod transform rehydrates them.
+        await globalRepos.conversationChunks.create(
+          chunkData as unknown as Parameters<typeof globalRepos.conversationChunks.create>[0],
+          { id: chunk.id }
+        );
+        conversationChunksRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore conversation chunk: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore conversation chunk', { chunkId: chunk.id, error });
+      }
+    }
+
+    // 22l. TF-IDF vocabularies (one per BUILTIN embedding profile).
+    let tfidfVocabulariesRestored = 0;
+    for (const voc of data.tfidfVocabularies || []) {
+      try {
+        const { id, createdAt, updatedAt, ...vocData } = voc;
+        await globalRepos.tfidfVocabularies.create(
+          { ...vocData, userId: targetUserId },
+          { id: voc.id }
+        );
+        tfidfVocabulariesRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore TF-IDF vocabulary: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore tfidf vocabulary', { vocabularyId: voc.id, error });
+      }
+    }
+
+    // 22m. Embedding status flags.
+    let embeddingStatusRestored = 0;
+    for (const es of data.embeddingStatus || []) {
+      try {
+        const { id, createdAt, updatedAt, ...esData } = es;
+        await globalRepos.embeddingStatus.create(
+          { ...esData, userId: targetUserId },
+          { id: es.id }
+        );
+        embeddingStatusRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore embedding status: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore embedding status', { statusId: es.id, error });
+      }
+    }
+
+    // 22n. Instance settings — applied last because the mount-point keys
+    // reference doc_mount_points that we just restored above. Upsert by key
+    // so a fresh instance's auto-provisioned defaults get overwritten by the
+    // backup's values.
+    let instanceSettingsRestored = 0;
+    for (const row of data.instanceSettings || []) {
+      try {
+        await rawQuery(
+          'INSERT INTO "instance_settings" ("key", "value") VALUES (?, ?) ' +
+            'ON CONFLICT("key") DO UPDATE SET "value" = excluded."value"',
+          [row.key, row.value]
+        );
+        instanceSettingsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore instance setting "${row.key}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore instance setting', { key: row.key, error });
+      }
+    }
+
+    // 23. NPM Plugins (copy from extracted dir to plugins/npm directory)
+    let npmPluginsRestored = 0;
+    const npmPluginsSrcDir = path.join(rootPath, 'plugins', 'npm');
+
+    try {
+      const pluginEntries = await fs.promises.readdir(npmPluginsSrcDir, { withFileTypes: true });
+      const npmPluginsDir = getNpmPluginsDir();
+
+      // Ensure the npm plugins directory exists
+      await fs.promises.mkdir(npmPluginsDir, { recursive: true });
+
+      for (const entry of pluginEntries) {
+        if (entry.isDirectory()) {
+          try {
+            const srcPath = path.join(npmPluginsSrcDir, entry.name);
+            const destPath = path.join(npmPluginsDir, entry.name);
+            await fs.promises.cp(srcPath, destPath, { recursive: true });
+            npmPluginsRestored++;
+            moduleLogger.debug('Restored npm plugin', { pluginName: entry.name });
+          } catch (error) {
+            warnings.push(`Failed to restore npm plugin "${entry.name}": ${error instanceof Error ? error.message : String(error)}`);
+            moduleLogger.warn('Failed to restore npm plugin', { pluginName: entry.name, error });
+          }
+        }
+      }
+
+      if (npmPluginsRestored > 0) {
+        moduleLogger.info('Restored npm plugins', {
+          count: npmPluginsRestored,
+          plugins: pluginEntries.filter((e) => e.isDirectory()).map((e) => e.name),
+        });
+      }
+    } catch {
+      // No plugins/npm directory in the backup — that's fine
+      moduleLogger.debug('No npm plugins directory in backup');
+    }
+
+    // 24. User-installed theme bundles (copy from extracted dir to themes directory)
+    let userInstalledThemesRestored = 0;
+    const themesSrcDir = path.join(rootPath, 'themes');
+
+    try {
+      const themeEntries = await fs.promises.readdir(themesSrcDir, { withFileTypes: true });
+      const themesDir = getThemesDir();
+
+      // Ensure the themes directory exists
+      await fs.promises.mkdir(themesDir, { recursive: true });
+
+      for (const entry of themeEntries) {
+        if (entry.isDirectory() && entry.name !== '.cache') {
+          try {
+            const srcPath = path.join(themesSrcDir, entry.name);
+            const destPath = path.join(themesDir, entry.name);
+            await fs.promises.cp(srcPath, destPath, { recursive: true, force: true });
+            userInstalledThemesRestored++;
+            moduleLogger.debug('Restored theme bundle', { themeId: entry.name });
+          } catch (error) {
+            warnings.push(`Failed to restore theme bundle "${entry.name}": ${error instanceof Error ? error.message : String(error)}`);
+            moduleLogger.warn('Failed to restore theme bundle', { themeId: entry.name, error });
+          }
+        } else if (entry.isFile() && entry.name === 'themes-index.json') {
+          // Restore the themes index file
+          try {
+            const themesDir2 = getThemesDir();
+            await fs.promises.cp(path.join(themesSrcDir, 'themes-index.json'), path.join(themesDir2, 'themes-index.json'), { force: true });
+          } catch (error) {
+            moduleLogger.warn('Failed to restore themes-index.json', { error });
+          }
+        }
+      }
+
+      if (userInstalledThemesRestored > 0) {
+        moduleLogger.info('Restored user-installed theme bundles', {
+          count: userInstalledThemesRestored,
+        });
+      }
+    } catch {
+      // No themes directory in the backup — that's fine
+      moduleLogger.debug('No themes directory in backup');
+    }
+
+    moduleLogger.info('All entities restored with preserved IDs - no reconciliation needed');
+
+    const summary: RestoreSummary = {
+      characters: data.characters.length,
+      chats: data.chats.length,
+      messages: messagesRestored,
+      tags: data.tags.length,
+      files: filesRestored,
+      memories: data.memories.length,
+      profiles: {
+        connection: data.connectionProfiles.length,
+        image: data.imageProfiles.length,
+        embedding: data.embeddingProfiles.length,
+      },
+      templates: {
+        prompt: promptTemplatesRestored,
+        roleplay: roleplayTemplatesRestored,
+      },
+      providerModels: providerModelsRestored,
+      projects: projectsRestored,
+      llmLogs: llmLogsRestored,
+      pluginConfigs: pluginConfigsRestored,
+      chatSettings: chatSettingsRestored,
+      folders: foldersRestored,
+      wardrobeItems: wardrobeItemsRestored,
+      npmPlugins: npmPluginsRestored,
+      characterPluginData: characterPluginDataRestored,
+      conversationAnnotations: conversationAnnotationsRestored,
+      userInstalledThemes: userInstalledThemesRestored,
+      chatDocuments: chatDocumentsRestored,
+      instanceSettings: instanceSettingsRestored,
+      embeddingStatus: embeddingStatusRestored,
+      conversationChunks: conversationChunksRestored,
+      tfidfVocabularies: tfidfVocabulariesRestored,
+      vectorIndexMetas: vectorIndexMetasRestored,
+      vectorEntries: vectorEntriesRestored,
+      docMountPoints: docMountPointsRestored,
+      docMountFolders: docMountFoldersRestored,
+      docMountFiles: docMountFilesRestored,
+      docMountFileLinks: docMountFileLinksRestored,
+      docMountChunks: docMountChunksRestored,
+      docMountDocuments: docMountDocumentsRestored,
+      docMountBlobs: docMountBlobsRestored,
+      projectDocMountLinks: projectDocMountLinksRestored,
+      warnings,
+    };
+
+    moduleLogger.info('Restore operation completed', {
+      targetUserId,
+      mode,
+      summary,
+      warningCount: warnings.length,
+    });
+
+    return summary;
+  } finally {
+    // Always clean up the extracted temp directory
+    await cleanupDir(extractDir);
+  }
+}
