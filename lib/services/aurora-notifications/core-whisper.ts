@@ -141,10 +141,6 @@ export async function assembleCorePacket(
     }
     const mountPointId = character.characterDocumentMountPointId ?? null;
     if (!mountPointId) {
-      logger.debug('[CoreWhisper] No DB-backed vault for character; skipping', {
-        context: LOG_CONTEXT,
-        characterId,
-      });
       return null;
     }
 
@@ -156,10 +152,6 @@ export async function assembleCorePacket(
     );
 
     if (docs.length === 0) {
-      logger.debug('[CoreWhisper] Character has no Core/ files; skipping', {
-        context: LOG_CONTEXT,
-        characterId,
-      });
       return null;
     }
 

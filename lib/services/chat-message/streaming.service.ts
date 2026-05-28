@@ -327,11 +327,6 @@ export async function* streamMessage(
   let lastRawProviderUsage: Record<string, unknown> | null = null
 
   const cacheKey = buildCharacterCacheKey(characterId)
-  if (cacheKey) {
-    logger.debug('cacheKey set', { characterId, cacheKey, chatId })
-  } else {
-    logger.debug('cacheKey skipped (no characterId)', { chatId })
-  }
 
   for await (const chunk of provider.streamMessage(
     {

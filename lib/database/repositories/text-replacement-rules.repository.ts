@@ -72,13 +72,7 @@ export class TextReplacementRulesRepository extends AbstractBaseRepository<TextR
     return this.safeQuery(
       async () => {
         await this.assertNoConflict(data.fromText, data.caseSensitive, null);
-        const result = await this._create(data, options);
-        logger.debug('Text replacement rule created', {
-          ruleId: result.id,
-          fromText: result.fromText,
-          caseSensitive: result.caseSensitive,
-        });
-        return result;
+        return this._create(data, options);
       },
       'Error creating text replacement rule',
       { fromText: data.fromText, caseSensitive: data.caseSensitive },
@@ -106,14 +100,7 @@ export class TextReplacementRulesRepository extends AbstractBaseRepository<TextR
           await this.assertNoConflict(nextFromText, nextCaseSensitive, id);
         }
 
-        const result = await this._update(id, updateData);
-        if (result) {
-          logger.debug('Text replacement rule updated', {
-            ruleId: id,
-            fromText: result.fromText,
-          });
-        }
-        return result;
+        return this._update(id, updateData);
       },
       'Error updating text replacement rule',
       { ruleId: id },
@@ -122,13 +109,7 @@ export class TextReplacementRulesRepository extends AbstractBaseRepository<TextR
 
   async delete(id: string): Promise<boolean> {
     return this.safeQuery(
-      async () => {
-        const deleted = await this._delete(id);
-        if (deleted) {
-          logger.debug('Text replacement rule deleted', { ruleId: id });
-        }
-        return deleted;
-      },
+      async () => this._delete(id),
       'Error deleting text replacement rule',
       { ruleId: id },
       false,

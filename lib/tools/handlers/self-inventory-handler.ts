@@ -877,12 +877,6 @@ export async function executeSelfInventoryTool(
     }
   }
 
-  logger.debug('self_inventory: sections resolved', {
-    context: 'self-inventory-handler',
-    characterId: character.id,
-    requestedSections: [...requested],
-  });
-
   return result;
 }
 

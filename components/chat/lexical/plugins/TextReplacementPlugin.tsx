@@ -158,12 +158,6 @@ export function TextReplacementPlugin(): null {
 
           const cursor = candidate.startOffset + replacement.length + triggerChar.length
           textNode.select(cursor, cursor)
-
-          console.debug('[text-replacement] applied', {
-            from: candidate.word,
-            to: replacement,
-            triggerChar,
-          })
         },
         { tag: 'text-replacement' },
       )

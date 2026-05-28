@@ -16,8 +16,6 @@
  * single biggest reliability lever for pseudo-tool reliability.
  */
 
-import { logger } from '@/lib/logger'
-
 import { rngToolDefinition } from './rng-tool'
 import { searchScriptoriumToolDefinition } from './search-scriptorium-tool'
 import { imageGenerationToolDefinition } from './image-generation-tool'
@@ -214,13 +212,6 @@ export function buildSimpleJsonToolInstructions(options: SimpleJsonPromptOptions
   if (entries.length === 0) {
     return ''
   }
-
-  logger.debug('[SimpleJsonPrompt] Built tool instruction block', {
-    toolCount: entries.length,
-    enabledOptions: Object.entries(options)
-      .filter(([, v]) => v !== false)
-      .map(([k]) => k),
-  })
 
   return `
 ## Available tools

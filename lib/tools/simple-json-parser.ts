@@ -272,12 +272,6 @@ export function parseSimpleJsonCalls(response: string): ParsedSimpleJsonCall[] {
       ? (argsRaw as Record<string, unknown>)
       : {}
 
-  logger.debug('[SimpleJsonParser] Parsed tool call', {
-    tier: parsed.tier,
-    toolName: nameRaw,
-    argKeys: Object.keys(args),
-  })
-
   return [
     {
       toolName: nameRaw.trim(),

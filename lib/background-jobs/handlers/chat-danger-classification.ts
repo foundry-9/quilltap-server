@@ -44,10 +44,6 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
   // Off-duty: the operator has explicitly waved the Concierge off for this
   // chat. A job may already be in the queue from before that flip — bail.
   if (chat.conciergeOverride === 'OFF') {
-    logger.debug('[ChatDangerClassification] Skipping Off-duty chat', {
-      jobId: job.id,
-      chatId: payload.chatId,
-    });
     return;
   }
 

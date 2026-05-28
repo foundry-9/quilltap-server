@@ -10027,12 +10027,7 @@ var ZAIProvider = class {
     const out = [];
     for (const msg of messages) {
       if (msg.role === "tool") {
-        if (!msg.toolCallId) {
-          logger.debug("Skipping tool message without toolCallId", {
-            context: "ZAIProvider.formatMessages"
-          });
-          continue;
-        }
+        if (!msg.toolCallId) continue;
         out.push({
           role: "tool",
           tool_call_id: msg.toolCallId,

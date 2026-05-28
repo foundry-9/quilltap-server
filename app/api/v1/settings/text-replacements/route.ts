@@ -32,7 +32,6 @@ export const GET = createAuthenticatedHandler(async () => {
   try {
     const repos = getRepositories();
     const rules = await repos.textReplacementRules.list();
-    logger.debug('[Text Replacements v1] Listed rules', { count: rules.length });
     return successResponse({ rules, count: rules.length });
   } catch (error) {
     logger.error(

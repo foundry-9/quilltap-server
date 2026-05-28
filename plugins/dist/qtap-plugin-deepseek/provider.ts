@@ -212,10 +212,6 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
     // already builds a per-character key in lib/llm/cache-key.ts.
     if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
       body.user_id = params.cacheKey;
-      this.logger.debug('DeepSeek user_id applied', {
-        context: 'DeepSeekProvider.sendMessage',
-        cacheKey: params.cacheKey,
-      });
     }
 
     this.applyProfileParameters(body, params);
@@ -313,10 +309,6 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
     // already builds a per-character key in lib/llm/cache-key.ts.
     if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
       body.user_id = params.cacheKey;
-      this.logger.debug('DeepSeek user_id applied', {
-        context: 'DeepSeekProvider.streamMessage',
-        cacheKey: params.cacheKey,
-      });
     }
 
     this.applyProfileParameters(body, params);

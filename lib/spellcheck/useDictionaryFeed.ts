@@ -72,9 +72,6 @@ export function useDictionaryFeed(): void {
 
     shell
       .setDictionaryWords(words)
-      .then(() => {
-        console.debug('[spellcheck-feed] pushed dictionary', { count: words.length })
-      })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err)
         console.error('[spellcheck-feed] push failed', { error: message })
