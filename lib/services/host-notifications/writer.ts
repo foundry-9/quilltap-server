@@ -680,6 +680,7 @@ interface OffSceneCharacterCard {
   name: string;
   aliases?: string[];
   pronouns?: { subject: string; object: string; possessive: string } | null;
+  identity?: string | null;
   description?: string | null;
 }
 
@@ -698,9 +699,9 @@ function renderOffSceneCard(
   if (c.pronouns) {
     lines.push(`Pronouns: ${c.pronouns.subject}/${c.pronouns.object}/${c.pronouns.possessive}`);
   }
-  const desc = (c.description ?? '').trim();
-  if (desc.length > 0) {
-    lines.push(applyHostTemplates(desc, c.name, userCharacterName));
+  const body = ((c.identity ?? '').trim() || (c.description ?? '').trim());
+  if (body.length > 0) {
+    lines.push(applyHostTemplates(body, c.name, userCharacterName));
   }
   return lines.join('\n');
 }

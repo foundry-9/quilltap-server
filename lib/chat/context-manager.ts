@@ -587,6 +587,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
               name: c.name,
               aliases: c.aliases ?? undefined,
               pronouns: c.pronouns ?? undefined,
+              identity: c.identity ?? undefined,
               description: c.description ?? undefined,
             })),
           })

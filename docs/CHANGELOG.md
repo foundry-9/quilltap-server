@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Feat: Host off-scene character introductions prefer `identity` over `description`
+
+The Host whisper that introduces characters who are mentioned in chat but not present (`systemKind: 'off-scene-characters'`) now uses each character's `identity` field as the body of its card, falling back to `description` only when `identity` is empty or whitespace. `manifesto` and `personality` remain excluded — `identity` is the public-facing vantage that fits a third-party introduction; `description` (acquaintance-facing behavior) is the next best match; the other two fields are either foundational truth or internal self-knowledge and don't belong in a Host-spoken card.
+
+- `lib/services/host-notifications/writer.ts`: added optional `identity?` to `OffSceneCharacterCard`; `renderOffSceneCard` resolves the body as `identity` (trimmed) → `description` (trimmed) → omitted.
+- `lib/chat/context-manager.ts`: the newcomer payload mapping now passes `identity: c.identity ?? undefined` through to `postHostOffSceneCharactersAnnouncement`.
+- `__tests__/unit/lib/services/host-notifications-phase-c.test.ts`: three new cases — identity preferred when both present, description fallback when identity absent, description fallback when identity is whitespace.
+
 #### Feat: self_inventory `quilltap` section gets three dotted sub-sections
 
 The `quilltap` section already returns version + runtime + client shell + release notes + changelog as one bundle. Added three finer-grained section identifiers so callers can pull just what they want:
