@@ -24,6 +24,16 @@ All four providers now support prompt caching, with the same fundamental contrac
 
 **The implication is that all four providers reward the same prompt shape**: a long, stable, sorted, canonicalized prefix of `tools → system_global → character_persona → memory_pool → frozen_history`, with all dynamic content (timestamps, identity reinforcement, scene-state deltas, memory rank instructions, the new user message) concatenated into a single tail user message. Anthropic gets explicit breakpoints; OpenAI/Grok/Z.AI inherit the structural win automatically.
 
+### Per-character cache identifier (2026-05)
+
+The provider cache identifier (`prompt_cache_key` for OpenAI/Grok, `user_id` for DeepSeek V4+, `user` field for OpenAI-compatible / Z.AI / OpenRouter) is keyed on `characterId`, not `chatId`. The persona block (manifesto / identity / description / personality) sits high in the prompt, so each speaker rotation in a group chat already busts the cacheable prefix — keying by chat buys nothing. Keying by character means the persona block becomes the actual cache prefix and the same character shares a warm cache across chats.
+
+**Multi-character group chats keep N parallel caches by design.** Each character in a group chat gets its own cache namespace. The cache-hit discount (~10× on Anthropic, ~120× on DeepSeek V4-Pro, 75–90% on OpenAI/Grok) trivially justifies running parallel caches per character — this is precisely the workload the feature is designed for.
+
+The single Quilltap-side cache identifier (`LLMParams.cacheKey`) is built in [`lib/llm/cache-key.ts`](../../../lib/llm/cache-key.ts) by `buildCharacterCacheKey(characterId)` → `quilltap:char:<characterId>:v<n>`. The version constant `PROMPT_CACHE_STRUCTURE_VERSION` (currently 2) is bumped whenever the cacheable prompt structure changes intentionally (tool-schema shape, system-prompt builder layout, persona-block format, memory-pool format). Bumping forces a clean cold-cache rollover at every provider on first use after deploy.
+
+Plugins apply the identifier differently per their provider's mechanics — OpenAI/Grok use it as a sticky routing hint, DeepSeek as a KV-cache isolation namespace, OpenAI-compatible plugins forward it as `user`, Anthropic ignores it (content-hashed `cache_control` is orthogonal). See [docs/developer/features/per-character-prompt-caching.md](per-character-prompt-caching.md) for the full design.
+
 ### Per-plugin cache-field reference
 
 When wiring or auditing a provider plugin, this is the single table to verify against. The "Provider field path" is where cached-token count lives on the raw provider response; the "Normalized to" column is the Quilltap-internal shape; "Raw passthrough" is the `rawProviderUsage` field on the terminal stream chunk (added 2026-05-25) which preserves the unmodified provider-shape `usage` object so SQL queries can detect future mapping regressions. If a future plugin author forgets to read the provider field, the raw passthrough column will still populate while `cacheUsage` is null — that mismatch is queryable.

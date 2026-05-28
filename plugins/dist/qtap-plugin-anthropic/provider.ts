@@ -49,6 +49,10 @@ interface AnthropicProfileParams {
   cacheTTL?: '5m' | '1h'
 }
 
+// Per-character caching is handled here via content-hashed `cache_control`
+// breakpoints in `buildCacheControl` and the message-formatting path —
+// `params.cacheKey` (Quilltap's per-character routing hint for OpenAI / Grok /
+// DeepSeek) is intentionally unused.
 export class AnthropicProvider implements TextProvider {
   readonly supportsFileAttachments = true
   readonly supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES

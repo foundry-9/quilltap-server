@@ -28685,6 +28685,9 @@ var OpenRouterProvider = class {
       stop: params.stop,
       stream: false
     };
+    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
+      requestParams.user = params.cacheKey;
+    }
     if (params.tools && params.tools.length > 0) {
       requestParams.tools = params.tools;
       requestParams.toolChoice = "auto";
@@ -28786,6 +28789,9 @@ var OpenRouterProvider = class {
       topP: params.topP ?? 1,
       stop: params.stop
     };
+    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
+      requestParams.user = params.cacheKey;
+    }
     if (params.webSearchEnabled) {
       requestParams.tools = requestParams.tools || [];
       requestParams.tools.push({ type: "web_search_preview" });

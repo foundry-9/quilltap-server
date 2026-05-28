@@ -207,6 +207,17 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
       }
     }
 
+    // DeepSeek V4+: user_id provides per-character KV-cache isolation
+    // (https://api-docs.deepseek.com/quick_start/rate_limit). Quilltap
+    // already builds a per-character key in lib/llm/cache-key.ts.
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      body.user_id = params.cacheKey;
+      this.logger.debug('DeepSeek user_id applied', {
+        context: 'DeepSeekProvider.sendMessage',
+        cacheKey: params.cacheKey,
+      });
+    }
+
     this.applyProfileParameters(body, params);
     stripThinkingIncompatibleParams(body);
 
@@ -295,6 +306,17 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
           json_schema: params.responseFormat.jsonSchema,
         };
       }
+    }
+
+    // DeepSeek V4+: user_id provides per-character KV-cache isolation
+    // (https://api-docs.deepseek.com/quick_start/rate_limit). Quilltap
+    // already builds a per-character key in lib/llm/cache-key.ts.
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      body.user_id = params.cacheKey;
+      this.logger.debug('DeepSeek user_id applied', {
+        context: 'DeepSeekProvider.streamMessage',
+        cacheKey: params.cacheKey,
+      });
     }
 
     this.applyProfileParameters(body, params);

@@ -9481,9 +9481,8 @@ ${textContent}`
     if (params.stop) {
       requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
-    const promptCacheKey = params.profileParameters?.promptCacheKey;
-    if (typeof promptCacheKey === "string" && promptCacheKey.length > 0) {
-      requestParams.prompt_cache_key = promptCacheKey;
+    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
+      requestParams.prompt_cache_key = params.cacheKey;
     }
     const tools = [];
     if (params.webSearchEnabled) {
@@ -9547,9 +9546,8 @@ ${textContent}`
     if (params.stop) {
       requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
-    const promptCacheKey = params.profileParameters?.promptCacheKey;
-    if (typeof promptCacheKey === "string" && promptCacheKey.length > 0) {
-      requestParams.prompt_cache_key = promptCacheKey;
+    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
+      requestParams.prompt_cache_key = params.cacheKey;
     }
     const tools = [];
     if (params.webSearchEnabled) {

@@ -263,6 +263,10 @@ export class ZAIProvider implements TextProvider {
       }
     }
 
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      body.user = params.cacheKey;
+    }
+
     this.applyProfileParameters(body, params);
 
     const response = (await client.chat.completions.create(
@@ -354,6 +358,10 @@ export class ZAIProvider implements TextProvider {
           json_schema: params.responseFormat.jsonSchema,
         };
       }
+    }
+
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      body.user = params.cacheKey;
     }
 
     this.applyProfileParameters(body, params);

@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-grok",
-  "version": "1.0.34",
+  "version": "1.0.35",
   "description": "Grok xAI provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
@@ -11,7 +11,7 @@
     "clean": "rm -f index.js"
   },
   "dependencies": {
-    "@quilltap/plugin-types": "^2.3.3",
+    "@quilltap/plugin-types": "^2.5.1",
     "@quilltap/plugin-utils": "^2.2.8",
     "openai": "^6.38.0"
   },

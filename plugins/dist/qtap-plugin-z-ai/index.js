@@ -10143,6 +10143,9 @@ var ZAIProvider = class {
         };
       }
     }
+    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
+      body.user = params.cacheKey;
+    }
     this.applyProfileParameters(body, params);
     const response = await client.chat.completions.create(
       body
@@ -10217,6 +10220,9 @@ var ZAIProvider = class {
           json_schema: params.responseFormat.jsonSchema
         };
       }
+    }
+    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
+      body.user = params.cacheKey;
     }
     this.applyProfileParameters(body, params);
     const stream = await client.chat.completions.create(

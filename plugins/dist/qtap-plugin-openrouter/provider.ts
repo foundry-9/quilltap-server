@@ -179,6 +179,13 @@ export class OpenRouterProvider implements TextProvider {
       stream: false,
     };
 
+    // Forward Quilltap's per-character cache identifier as `user`. OpenAI-
+    // routed downstreams use it as a sticky-routing hint; other downstreams
+    // (Anthropic, etc.) ignore it.
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      requestParams.user = params.cacheKey;
+    }
+
     // Add tools if provided
     if (params.tools && params.tools.length > 0) {
       requestParams.tools = params.tools;
@@ -317,6 +324,13 @@ export class OpenRouterProvider implements TextProvider {
       topP: params.topP ?? 1,
       stop: params.stop,
     };
+
+    // Forward Quilltap's per-character cache identifier as `user`. OpenAI-
+    // routed downstreams use it as a sticky-routing hint; other downstreams
+    // (Anthropic, etc.) ignore it.
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      requestParams.user = params.cacheKey;
+    }
 
     // Add web search tool if enabled
     if (params.webSearchEnabled) {

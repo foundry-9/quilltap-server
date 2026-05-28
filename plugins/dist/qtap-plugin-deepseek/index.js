@@ -10232,6 +10232,13 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
         };
       }
     }
+    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
+      body.user_id = params.cacheKey;
+      this.logger.debug("DeepSeek user_id applied", {
+        context: "DeepSeekProvider.sendMessage",
+        cacheKey: params.cacheKey
+      });
+    }
     this.applyProfileParameters(body, params);
     stripThinkingIncompatibleParams(body);
     try {
@@ -10307,6 +10314,13 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
           json_schema: params.responseFormat.jsonSchema
         };
       }
+    }
+    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
+      body.user_id = params.cacheKey;
+      this.logger.debug("DeepSeek user_id applied", {
+        context: "DeepSeekProvider.streamMessage",
+        cacheKey: params.cacheKey
+      });
     }
     this.applyProfileParameters(body, params);
     stripThinkingIncompatibleParams(body);

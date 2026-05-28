@@ -375,10 +375,10 @@ export class OpenAIProvider implements TextProvider {
     }
 
     // Pin sticky cache routing. Without prompt_cache_key, requests above
-    // ~15 RPM/key shard across machines and degrade hit rate.
-    const promptCacheKey = params.profileParameters?.promptCacheKey;
-    if (typeof promptCacheKey === 'string' && promptCacheKey.length > 0) {
-      requestParams.prompt_cache_key = promptCacheKey;
+    // ~15 RPM/key shard across machines and degrade hit rate. Quilltap
+    // builds a per-character key in lib/llm/cache-key.ts.
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      requestParams.prompt_cache_key = params.cacheKey;
       if (supportsExtendedCacheRetention(params.model)) {
         requestParams.prompt_cache_retention = '24h';
       }

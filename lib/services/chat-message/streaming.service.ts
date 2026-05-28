@@ -12,7 +12,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
-import { buildPromptCacheKey } from '@/lib/llm/cache-key'
+import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
@@ -326,10 +326,12 @@ export async function* streamMessage(
   let lastCacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | undefined
   let lastRawProviderUsage: Record<string, unknown> | null = null
 
-  const promptCacheKey = buildPromptCacheKey(chatId)
-  const profileParametersWithCache: Record<string, unknown> = promptCacheKey
-    ? { ...modelParams, promptCacheKey }
-    : modelParams
+  const cacheKey = buildCharacterCacheKey(characterId)
+  if (cacheKey) {
+    logger.debug('cacheKey set', { characterId, cacheKey, chatId })
+  } else {
+    logger.debug('cacheKey skipped (no characterId)', { chatId })
+  }
 
   for await (const chunk of provider.streamMessage(
     {
@@ -340,7 +342,8 @@ export async function* streamMessage(
       topP: modelParams.topP as number | undefined,
       tools: tools.length > 0 ? tools : undefined,
       webSearchEnabled: useNativeWebSearch,
-      profileParameters: profileParametersWithCache,
+      profileParameters: modelParams,
+      cacheKey,
       previousResponseId,
       stop,
     },

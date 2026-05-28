@@ -4,6 +4,7 @@
 
 import { createLLMProvider } from '@/lib/llm'
 import type { LLMMessage, LLMResponse } from '@/lib/llm/base'
+import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -116,11 +117,12 @@ async function sendToProvider(
   // model-specific minimums (e.g. reasoning model floors) that would cause
   // unnecessary verbosity and latency for background tasks
   const strictMaxTokens = true
+  const cacheKey = buildCharacterCacheKey(characterId)
 
   // Check if we already know this profile doesn't support custom temperature
   if (profilesWithoutCustomTemp.has(profileKey)) {
     const response: LLMResponse = await provider.sendMessage(
-      { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens },
+      { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey },
       apiKey
     )
     logCall(response)
@@ -130,7 +132,7 @@ async function sendToProvider(
   // Try with lower temperature for more consistent outputs
   try {
     const response: LLMResponse = await provider.sendMessage(
-      { messages, model: selection.modelName, temperature: 0.3, maxTokens: effectiveMaxTokens, strictMaxTokens },
+      { messages, model: selection.modelName, temperature: 0.3, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey },
       apiKey
     )
     logCall(response, 0.3)
@@ -142,7 +144,7 @@ async function sendToProvider(
       profilesWithoutCustomTemp.add(profileKey)
 
       const response: LLMResponse = await provider.sendMessage(
-        { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens },
+        { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey },
         apiKey
       )
       logCall(response)

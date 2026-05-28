@@ -247,6 +247,7 @@ export class OpenAICompatibleProvider implements TextProvider {
         max_tokens: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
         stop: params.stop,
+        ...(params.cacheKey ? { user: params.cacheKey } : {}),
       });
 
       const choice = response.choices[0];
@@ -329,6 +330,7 @@ export class OpenAICompatibleProvider implements TextProvider {
         stop: params.stop,
         stream: true,
         stream_options: { include_usage: true },
+        ...(params.cacheKey ? { user: params.cacheKey } : {}),
       });
 
       let chunkCount = 0;

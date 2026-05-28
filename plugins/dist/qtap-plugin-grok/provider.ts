@@ -304,9 +304,9 @@ export class GrokProvider implements TextProvider {
 
     // Pin sticky cache routing. Grok caches per-server, so requests without
     // a stable key round-robin across machines and effectively never hit cache.
-    const promptCacheKey = params.profileParameters?.promptCacheKey;
-    if (typeof promptCacheKey === 'string' && promptCacheKey.length > 0) {
-      requestParams.prompt_cache_key = promptCacheKey;
+    // Quilltap builds a per-character key in lib/llm/cache-key.ts.
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      requestParams.prompt_cache_key = params.cacheKey;
     }
 
     // Build tools - server-side (web search) + client-side (function calling)
@@ -387,9 +387,8 @@ export class GrokProvider implements TextProvider {
       requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
 
-    const promptCacheKey = params.profileParameters?.promptCacheKey;
-    if (typeof promptCacheKey === 'string' && promptCacheKey.length > 0) {
-      requestParams.prompt_cache_key = promptCacheKey;
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      requestParams.prompt_cache_key = params.cacheKey;
     }
 
     const tools: ResponsesTool[] = [];

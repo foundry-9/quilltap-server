@@ -100,6 +100,19 @@ export interface LLMParams {
   profileParameters?: Record<string, unknown>;
   /** Previous response ID for conversation chaining (OpenAI Responses API) */
   previousResponseId?: string;
+  /**
+   * Per-character cache identifier. Quilltap builds this from the
+   * speaking character's ID so the stable persona block (manifesto /
+   * description / personality) becomes the actual cache prefix. Each
+   * provider decides how to apply it:
+   *  - OpenAI / Grok use it as `prompt_cache_key` (sticky routing hint).
+   *  - DeepSeek uses it as `user_id` (KV-cache isolation namespace).
+   *  - OpenAI-compatible / Z.AI / OpenRouter forward it as `user`.
+   *  - Anthropic ignores it (content-hashed `cache_control` breakpoints).
+   *  - Ollama / Curl ignore it.
+   * Undefined when no character is active (e.g. user-only chats, titling).
+   */
+  cacheKey?: string;
 }
 
 /**

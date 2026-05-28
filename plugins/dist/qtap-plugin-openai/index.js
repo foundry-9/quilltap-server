@@ -9521,9 +9521,8 @@ var OpenAIProvider = class {
     if (Object.keys(textConfig).length > 0) {
       requestParams.text = textConfig;
     }
-    const promptCacheKey = params.profileParameters?.promptCacheKey;
-    if (typeof promptCacheKey === "string" && promptCacheKey.length > 0) {
-      requestParams.prompt_cache_key = promptCacheKey;
+    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
+      requestParams.prompt_cache_key = params.cacheKey;
       if (supportsExtendedCacheRetention(params.model)) {
         requestParams.prompt_cache_retention = "24h";
       }

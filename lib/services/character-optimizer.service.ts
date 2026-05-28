@@ -11,6 +11,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
+import { buildCharacterCacheKey } from '@/lib/llm/cache-key';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
@@ -405,7 +406,8 @@ async function callOptimizerLLM(
   options: {
     temperature: number;
     maxTokens: number;
-  }
+  },
+  characterId?: string
 ): Promise<string> {
   const messages = [
     { role: 'system' as const, content: SYSTEM_MESSAGE },
@@ -420,6 +422,7 @@ async function callOptimizerLLM(
       messages,
       maxTokens: options.maxTokens,
       temperature: options.temperature,
+      cacheKey: buildCharacterCacheKey(characterId),
     },
     apiKey
   );
@@ -604,7 +607,8 @@ export async function runCharacterOptimizer(
       characterContext,
       memoryContext,
       getAnalysisPrompt(),
-      { temperature: 0.5, maxTokens: 8000 }
+      { temperature: 0.5, maxTokens: 8000 },
+      characterId
     );
 
     let analysis: OptimizerAnalysis;
@@ -697,6 +701,7 @@ export async function runCharacterOptimizer(
           memoryContext,
           instruction,
           { temperature: 0.7, maxTokens: 6000 },
+          characterId,
         );
       } catch (callError) {
         logger.warn('[CharacterOptimizer] Sub-step LLM call failed; continuing', {

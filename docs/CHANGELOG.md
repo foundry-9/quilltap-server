@@ -4,6 +4,25 @@
 
 ### 4.6-dev
 
+#### Feat: Per-character prompt caching
+
+Re-keyed the provider prompt-cache identifier from `chatId` to `characterId`. The persona block (manifesto / identity / description / personality) sits high in the prompt, so each speaker rotation already busts the cacheable prefix — keying by character matches reality, and lets the same character share a warm cache across chats. Multi-character group chats now keep N parallel caches by design.
+
+- `lib/llm/cache-key.ts`: `buildPromptCacheKey(chatId)` → `buildCharacterCacheKey(characterId)`. Output prefix `quilltap:char:`. Bumped `PROMPT_CACHE_STRUCTURE_VERSION` from `1` → `2` so existing provider-side caches drop cleanly once on first use after deploy.
+- `@quilltap/plugin-types` → 2.5.1: new first-class `cacheKey?: string` on `LLMParams`. Replaces the previous `profileParameters.promptCacheKey` hack (that bag is for user-set profile knobs, not derived per-request values).
+- `@quilltap/plugin-utils` → 2.2.10: `OpenAICompatibleProvider` forwards `params.cacheKey` as `user` on both Chat Completions paths.
+- `lib/services/chat-message/streaming.service.ts`: builds the cache key from `characterId`, lifts onto the top-level `LLMParams.cacheKey` field, emits a debug log per call (`cacheKey set` / `cacheKey skipped (no characterId)`). The four other direct `provider.sendMessage` / `streamMessage` callsites where the persona block is genuinely in the prefix now also pass `cacheKey`: `lib/chat/initial-greeting.ts`, `lib/services/external-prompt-generator.service.ts`, `lib/services/character-optimizer.service.ts` (threaded `characterId` through `callOptimizerLLM`), and `lib/memory/cheap-llm-tasks/core-execution.ts` (all three send sites). Callsites where the persona is not in the prefix (wardrobe image analysis, auto-configure, ai-import, character-wizard, file-attachment-fallback, dangerous-content gatekeeper) intentionally do not key.
+- `qtap-plugin-deepseek` → 1.0.4: new `user_id` support on both `sendMessage` and `streamMessage` body construction. DeepSeek V4+ uses `user_id` as a true KV-cache isolation namespace (https://api-docs.deepseek.com/quick_start/rate_limit) rather than a routing hint.
+- `qtap-plugin-openai` → 1.0.43: clean cutover from `params.profileParameters?.promptCacheKey` to `params.cacheKey` on the Responses-API request build. Legacy path removed; `prompt_cache_retention: '24h'` opt-in on supported models is unchanged.
+- `qtap-plugin-grok` → 1.0.35: same cutover at both Responses-API code paths (non-streaming and streaming).
+- `qtap-plugin-z-ai` → 1.1.6: forwards `params.cacheKey` as `user` on both Chat Completions paths.
+- `qtap-plugin-openrouter` → 1.0.40: forwards `params.cacheKey` as `user` on both code paths. OpenAI-routed downstreams use it as a sticky-routing hint; other downstreams (Anthropic, etc.) ignore it.
+- `qtap-plugin-openai-compatible` → 1.0.28: picks up the new `OpenAICompatibleProvider` behavior via the plugin-utils bump.
+- `qtap-plugin-anthropic` → 1.0.37: comment-only — `params.cacheKey` is intentionally unused because Anthropic uses content-hashed `cache_control` breakpoints. Existing breakpoint placement is unchanged.
+- `qtap-plugin-google` → 1.1.31: `TODO(per-character-caching)` marker referencing the design doc for a future managed `cachedContents` resource per character. Out of scope this round.
+- `qtap-plugin-ollama` → 1.0.26: comment-only — Ollama runs locally and manages its own KV cache; no remote routing hint applies.
+- No DB migration. The cache key is derived per request, not stored. No `.qtap` or SillyTavern export schema change.
+
 #### Fix: DeepSeek V4 Pro thinking-mode tool calls no longer 400 on the follow-up request
 
 DeepSeek's thinking mode requires `reasoning_content` to be passed back on any assistant turn that carries `tool_calls`; the API returns 400 otherwise (see https://api-docs.deepseek.com/guides/thinking_mode#tool-calls). The DeepSeek plugin was silently dropping `delta.reasoning_content` from the stream, so the in-turn native tool loop sent the second request without it. Fixed end-to-end:

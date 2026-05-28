@@ -98,6 +98,12 @@ function sanitizeSchemaForGoogle(schema: any): any {
   return sanitized;
 }
 
+// TODO(per-character-caching): Wire `params.cacheKey` to a managed
+// `cachedContents` resource keyed by characterId. See
+// docs/developer/features/per-character-prompt-caching.md and
+// https://ai.google.dev/api/caching. Today this plugin only surfaces
+// `cachedContentTokenCount` on responses; it does not yet create or refresh
+// cached content on the request side.
 export class GoogleProvider implements TextProvider {
   readonly supportsFileAttachments = true;
   readonly supportedMimeTypes = GOOGLE_SUPPORTED_MIME_TYPES;
