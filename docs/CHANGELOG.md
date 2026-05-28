@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Feature: Duplicate a wardrobe item
+
+Added a **Duplicate** action to each item's `⋮` menu in the Wardrobe Control dialog. It creates an identical copy with a new UUID and "(copy)" appended to the title (escalating to "(copy 2)", "(copy 3)", … when earlier copies exist; an existing "(copy)"/"(copy N)" suffix on the source is stripped first). All fields are copied verbatim, including `componentItemIds` — so duplicating a composite outfit keeps the same component references rather than cloning the member items. Frontend-only: reuses the existing `POST /api/v1/characters/[id]/wardrobe` create path; no API or schema change. New pure helper `lib/wardrobe/next-copy-title.ts` (with unit tests) computes the copy title.
+
 #### Refactor: Split Quilltap import service into single-responsibility modules
 
 Broke up `lib/import/quilltap-import-service.ts` (2,100 lines) into a thin re-export barrel plus ten cohesive modules under `lib/import/quilltap-import/`: `types.ts` (shared types + public preview/options/result interfaces), `legacy-presets.ts` (fold pre-rework outfit presets into composites), `validation.ts` (`parseExportFile`/`validateExportFormat`), `import-profiles.ts` (connection/image/embedding profiles), `import-characters.ts` (characters + wardrobe + plugin data), `import-entities.ts` (tags/roleplay templates/projects/chats/memories), `import-document-stores.ts` (Scriptorium), `reconcile.ts` (post-import relationship reconciliation), `preview.ts` (`previewImport`), and `execute.ts` (the import orchestrator). The public surface imported through `quilltap-import-service` is unchanged (`parseExportFile`, `validateExportFormat`, `previewImport`, `executeImport`, and the `ImportPreviewEntity`/`ImportPreview`/`ImportOptions`/`ImportResult` types). Logic is byte-identical to the original — no behavior change.

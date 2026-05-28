@@ -12,8 +12,8 @@
  *  - `[+]` icon that adds the item to a slot. For single-slot items this
  *    targets the item's only slot directly; for multi-slot items it opens
  *    a small popover that lets the user pick.
- *  - `⋮` kebab menu with secondary actions: Edit, Delete, and toggle the
- *    default-outfit flag.
+ *  - `⋮` kebab menu with secondary actions: Edit, toggle the default-outfit
+ *    flag, Duplicate, and Delete.
  *
  * Composite items keep a `▶/▼` expander on the left so the user can peek at
  * the components without entering the editor.
@@ -38,6 +38,7 @@ interface WardrobeItemRowProps {
   isUpdatingDefault?: boolean
   onToggleDefault: (item: WardrobeItem) => void
   onEdit: (item: WardrobeItem) => void
+  onDuplicate: (item: WardrobeItem) => void
   onDelete: (item: WardrobeItem) => void
   onEquip?: (item: WardrobeItem) => void
   onAddToSlot?: (item: WardrobeItem, slot: WardrobeItemType) => void
@@ -68,6 +69,7 @@ export function WardrobeItemRow({
   isUpdatingDefault,
   onToggleDefault,
   onEdit,
+  onDuplicate,
   onDelete,
   onEquip,
   onAddToSlot,
@@ -317,6 +319,19 @@ export function WardrobeItemRow({
                         role="menuitem"
                         onClick={() => {
                           setKebabOpen(false)
+                          onDuplicate(item)
+                        }}
+                        className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
+                      >
+                        Duplicate
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setKebabOpen(false)
                           onDelete(item)
                         }}
                         className="block w-full text-left px-3 py-2 text-sm qt-text-destructive hover:qt-bg-muted"
@@ -348,6 +363,7 @@ export function WardrobeItemRow({
                 inChat={false}
                 onToggleDefault={onToggleDefault}
                 onEdit={onEdit}
+                onDuplicate={onDuplicate}
                 onDelete={onDelete}
                 depth={depth + 1}
               />

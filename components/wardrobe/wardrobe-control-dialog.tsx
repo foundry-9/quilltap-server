@@ -37,6 +37,7 @@ import {
   takeOffBundleFromSlots,
 } from '@/lib/wardrobe/bundle-mutations'
 import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
+import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
 import { WardrobeItemEditor } from './wardrobe-item-editor'
 import { WardrobeItemRow } from './wardrobe-item-row'
@@ -317,6 +318,51 @@ function WardrobeControlDialogInner({
       }
     },
     [selectedCharacterId, reloadItems, isInChat, outfit],
+  )
+
+  const handleDuplicate = useCallback(
+    async (item: WardrobeItem) => {
+      if (!selectedCharacterId) return
+      // Duplicate is only offered for character-owned items (the kebab is
+      // hidden for shared archetypes), so always POST to the character route.
+      const title = nextCopyTitle(
+        item.title,
+        items.map((i) => i.title),
+      )
+      console.debug('[WardrobeControlDialog] Duplicating wardrobe item', {
+        sourceId: item.id,
+        characterId: selectedCharacterId,
+        newTitle: title,
+        // Composite references are copied verbatim — member items are not cloned.
+        componentItemIds: item.componentItemIds,
+      })
+      const result = await fetchJson<{ wardrobeItem: WardrobeItem }>(
+        `/api/v1/characters/${selectedCharacterId}/wardrobe`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            description: item.description ?? null,
+            types: item.types,
+            appropriateness: item.appropriateness ?? null,
+            isDefault: item.isDefault,
+            componentItemIds: item.componentItemIds,
+          }),
+        },
+      )
+      if (!result.ok) {
+        showErrorToast(result.error || 'Failed to duplicate item')
+        return
+      }
+      showSuccessToast(`Duplicated "${item.title}"`)
+      await reloadItems()
+      if (isInChat) {
+        outfit.invalidateWardrobe(selectedCharacterId)
+        await outfit.refreshOutfit()
+      }
+    },
+    [selectedCharacterId, items, reloadItems, isInChat, outfit],
   )
 
   // Lookup map shared between Live-tab staging mutators and Builder-tab
@@ -868,6 +914,7 @@ function WardrobeControlDialogInner({
                     isUpdatingDefault={updatingDefaultId === item.id}
                     onToggleDefault={handleToggleDefault}
                     onEdit={(it) => setEditingItem(it)}
+                    onDuplicate={handleDuplicate}
                     onDelete={handleDelete}
                     onEquip={rowEquip}
                     onAddToSlot={rowAddToSlot}
