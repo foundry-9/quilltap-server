@@ -16,6 +16,9 @@ import {
   formatFrozenMemoryArchive,
   formatDynamicMemoryHead,
   formatCurrentSceneState,
+  formatMemoriesForContext,
+  formatInterCharacterMemoriesForContext,
+  formatMemoryMetadataTag,
   DYNAMIC_HEAD_TOKEN_BUDGET,
   DYNAMIC_HEAD_DEFAULT_SIZE,
 } from '@/lib/chat/context/memory-injector'
@@ -37,7 +40,12 @@ const provider: Provider = {
   updatedAt: '2025-01-01T00:00:00.000Z',
 } as unknown as Provider
 
-function memory(id: string, summary: string, content: string = summary): Memory {
+function memory(
+  id: string,
+  summary: string,
+  content: string = summary,
+  overrides: Partial<Memory> = {},
+): Memory {
   return {
     id,
     characterId: '00000000-0000-0000-0000-0000000000c1',
@@ -52,6 +60,7 @@ function memory(id: string, summary: string, content: string = summary): Memory 
     reinforcedImportance: 0.7,
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',
+    ...overrides,
   } as unknown as Memory
 }
 
@@ -361,5 +370,137 @@ describe('memory-injector: formatCurrentSceneState', () => {
     expect(next.content).toContain('### Friday — _unchanged_')
     expect(next.content).toContain('### Amy\n')
     expect(next.content).toContain('Forest Green Long Writing Cardigan')
+  })
+})
+
+describe('memory-injector: formatMemoryMetadataTag', () => {
+  it('returns empty string when no fields are provided', () => {
+    expect(formatMemoryMetadataTag({})).toBe('')
+  })
+
+  it('emits an italicised parenthetical with leading space when any field is set', () => {
+    const tag = formatMemoryMetadataTag({ importance: 0.98 })
+    expect(tag.startsWith(' _(')).toBe(true)
+    expect(tag.endsWith(')_')).toBe(true)
+  })
+
+  it('rounds numeric fields to two decimals', () => {
+    const tag = formatMemoryMetadataTag({ importance: 0.987654, relevance: 0.123456, weight: 0.555555 })
+    expect(tag).toContain('importance 0.99')
+    expect(tag).toContain('relevance 0.12')
+    expect(tag).toContain('weight 0.56')
+  })
+
+  it('separates fields with the middle-dot separator', () => {
+    const tag = formatMemoryMetadataTag({ importance: 0.5, weight: 0.5 })
+    expect(tag).toContain(' · ')
+  })
+
+  it('renders keywords as a comma-joined list after a "keywords:" label', () => {
+    const tag = formatMemoryMetadataTag({ keywords: ['titles', 'load-bearing', 'naming'] })
+    expect(tag).toContain('keywords: titles, load-bearing, naming')
+  })
+
+  it('omits the keywords segment when the array is empty', () => {
+    const tag = formatMemoryMetadataTag({ importance: 0.5, keywords: [] })
+    expect(tag).not.toContain('keywords')
+  })
+
+  it('omits blank/whitespace keywords from the list', () => {
+    const tag = formatMemoryMetadataTag({ keywords: ['real', '  ', '', 'also-real'] })
+    expect(tag).toContain('keywords: real, also-real')
+  })
+
+  it('skips non-finite numbers', () => {
+    const tag = formatMemoryMetadataTag({ importance: Number.NaN, relevance: 0.5, weight: Number.POSITIVE_INFINITY })
+    expect(tag).not.toContain('importance')
+    expect(tag).not.toContain('weight')
+    expect(tag).toContain('relevance 0.50')
+  })
+
+  it('tolerates null/undefined per field', () => {
+    const tag = formatMemoryMetadataTag({ importance: null, relevance: undefined, weight: 0.42, keywords: null })
+    expect(tag).toContain('weight 0.42')
+    expect(tag).not.toContain('importance')
+    expect(tag).not.toContain('relevance')
+    expect(tag).not.toContain('keywords')
+  })
+})
+
+describe('memory-injector: metadata tag on delivered memories', () => {
+  it('formatMemoriesForContext appends importance, relevance, weight, and keywords', () => {
+    const m = memory('1', 'short summary', 'body text', {
+      importance: 0.98,
+      keywords: ['titles', 'load-bearing'],
+    })
+    const r = formatMemoriesForContext(
+      [{ memory: m, score: 0.87, usedEmbedding: true, effectiveWeight: 0.92 }],
+      1000,
+      provider,
+    )
+    expect(r.content).toContain('body text')
+    expect(r.content).toContain('importance 0.98')
+    expect(r.content).toContain('relevance 0.87')
+    expect(r.content).toContain('weight 0.92')
+    expect(r.content).toContain('keywords: titles, load-bearing')
+  })
+
+  it('formatInterCharacterMemoriesForContext appends importance, weight, and keywords (no relevance)', () => {
+    const m = memory('1', 'lyra trusts iris', 'Lyra trusts Iris with the ledger', {
+      importance: 0.9,
+      keywords: ['trust', 'ledger'],
+      aboutCharacterId: '00000000-0000-0000-0000-000000000c02',
+    })
+    const r = formatInterCharacterMemoriesForContext(
+      [m],
+      new Map([['00000000-0000-0000-0000-000000000c02', 'Iris']]),
+      1000,
+      provider,
+    )
+    expect(r.content).toContain('About Iris')
+    expect(r.content).toContain('importance 0.90')
+    expect(r.content).toContain('weight ') // effective weight is computed from importance + decay
+    expect(r.content).toContain('keywords: trust, ledger')
+    expect(r.content).not.toContain('relevance')
+  })
+
+  it('formatFrozenMemoryArchive appends importance and keywords only (no weight, no relevance, byte-stable)', () => {
+    const m = memory('a-id', 'frozen anchor entry', undefined, {
+      importance: 0.81,
+      keywords: ['anchor', 'stable'],
+    })
+    const r = formatFrozenMemoryArchive([m], 1000, provider)
+    expect(r.content).toContain('frozen anchor entry')
+    expect(r.content).toContain('importance 0.81')
+    expect(r.content).toContain('keywords: anchor, stable')
+    expect(r.content).not.toContain('weight')
+    expect(r.content).not.toContain('relevance')
+  })
+
+  it('formatFrozenMemoryArchive byte-stability is preserved after adding metadata', () => {
+    const archive = [
+      memory('a', 'alpha', undefined, { importance: 0.7, keywords: ['x'] }),
+      memory('b', 'bravo', undefined, { importance: 0.8, keywords: ['y', 'z'] }),
+    ]
+    const first = formatFrozenMemoryArchive(archive, 1000, provider)
+    const second = formatFrozenMemoryArchive(archive, 1000, provider)
+    expect(second.content).toBe(first.content)
+  })
+
+  it('formatDynamicMemoryHead appends importance, relevance, weight, and keywords', () => {
+    const m = memory('11111111-aaaa-bbbb-cccc-000000000001', 'first relevant', undefined, {
+      importance: 0.95,
+      keywords: ['recall', 'turn'],
+    })
+    const r = formatDynamicMemoryHead(
+      [{ memory: m, score: 0.88, usedEmbedding: true, effectiveWeight: 0.83 }],
+      provider,
+    )
+    expect(r.content).toMatch(/\[m_1111\]/)
+    expect(r.content).toContain('first relevant')
+    expect(r.content).toContain('importance 0.95')
+    expect(r.content).toContain('relevance 0.88')
+    expect(r.content).toContain('weight 0.83')
+    expect(r.content).toContain('keywords: recall, turn')
   })
 })

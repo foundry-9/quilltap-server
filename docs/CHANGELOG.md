@@ -4,6 +4,20 @@
 
 ### 4.6-dev
 
+#### Feat: Commonplace Book whispers now include per-memory metadata (importance, relevance, weight, keywords)
+
+Every memory line the Commonplace Book delivers to a character now carries a trailing italicised parenthetical with the metadata the ranker used to surface it. The format is `body text _(importance 0.98 · relevance 0.87 · weight 0.92 · keywords: a, b)_`. Each metric is included only when applicable to the section it appears in:
+
+- `## Relevant Memories` (`formatMemoriesForContext`): all four — importance, relevance (semantic-search score), effective weight, keywords.
+- `## Memories About Other Characters` (`formatInterCharacterMemoriesForContext`): importance, effective weight, keywords. No relevance, because these come from a direct DB query (`findByCharacterAboutCharacters`) rather than semantic search.
+- `## Memory Anchors` (`formatFrozenMemoryArchive`): importance and keywords only. The frozen archive must be byte-stable across turns within a compaction generation for the prompt cache to hit, so `weight` (decayed by `now()`) and `relevance` (per-turn query similarity) are deliberately omitted.
+- Dynamic-head rank instruction (`formatDynamicMemoryHead`): all four. The 200-token budget will trim entries earlier, but each entry that fits carries the full metadata tag.
+
+The whisper appears in two places with the same body: the persona-voiced version posted to the chat transcript (visible in the salon with the Commonplace Book avatar) and the plain "you remember…" version spliced into the user message for the LLM call. Both paths see the new metadata.
+
+- `lib/chat/context/memory-injector.ts`: new `formatMemoryMetadataTag(...)` helper produces the trailing tag (returns `''` when no fields apply). All four formatters now call it and concatenate the result onto each memory line. Numbers are rounded to 2 decimals; non-finite values, null/undefined fields, and empty/whitespace keywords are dropped.
+- `__tests__/unit/lib/chat/context/memory-injector.test.ts`: 14 new tests — the helper's edge cases (empty input, rounding, separator, blank keywords, non-finite numbers, null/undefined tolerance) plus one assertion per formatter that the right subset of fields appears, plus a byte-stability check confirming the archive's output is still identical across consecutive calls.
+
 #### Feat: Host off-scene character introductions prefer `identity` over `description`
 
 The Host whisper that introduces characters who are mentioned in chat but not present (`systemKind: 'off-scene-characters'`) now uses each character's `identity` field as the body of its card, falling back to `description` only when `identity` is empty or whitespace. `manifesto` and `personality` remain excluded — `identity` is the public-facing vantage that fits a third-party introduction; `description` (acquaintance-facing behavior) is the next best match; the other two fields are either foundational truth or internal self-knowledge and don't belong in a Host-spoken card.
