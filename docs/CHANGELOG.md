@@ -4,6 +4,12 @@
 
 ### 4.6-dev
 
+#### Chore: Update npm dependencies across root, packages, and plugins
+
+Ran `npm update -S` on the root project, all `packages/*`, and all `plugins/dist/*`. Notable bumps: `better-sqlite3-multiple-ciphers` 12.9.0 → 12.10.0, `openai` 6.38.0 → 6.39.0, `@storybook/react` and `storybook` 10.4.0 → 10.4.1, plus `@tanstack/react-virtual`, `semver`, `ws`, and `yauzl` patch updates.
+
+Bumped versions: `@quilltap/plugin-utils` 2.2.10 → 2.2.11 and `@quilltap/theme-storybook` 1.0.36 → 1.0.37 (both published to npm), and a patch bump for all 14 distributed plugins in both `package.json` and `manifest.json`. Rebuilt plugin bundles with `npm run build:plugins`. `packages/quilltap` is versioned by `scripts/update_version.sh`.
+
 #### Chore: Remove dead clothing-record and physical-description components; tighten knip config
 
 Deleted 8 confirmed-unused component files knip flagged as unreferenced after the inline clothing-records and physical-descriptions surfaces were retired:

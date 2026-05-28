@@ -19611,7 +19611,7 @@ var safeJSON = (text2) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.38.0";
+var VERSION = "6.39.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -22884,6 +22884,43 @@ var Certificates = class extends APIResource {
   }
 };
 
+// ../../../node_modules/openai/resources/admin/organization/data-retention.mjs
+var DataRetention = class extends APIResource {
+  /**
+   * Retrieves organization data retention controls.
+   *
+   * @example
+   * ```ts
+   * const organizationDataRetention =
+   *   await client.admin.organization.dataRetention.retrieve();
+   * ```
+   */
+  retrieve(options) {
+    return this._client.get("/organization/data_retention", {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates organization data retention controls.
+   *
+   * @example
+   * ```ts
+   * const organizationDataRetention =
+   *   await client.admin.organization.dataRetention.update({
+   *     retention_type: 'zero_data_retention',
+   *   });
+   * ```
+   */
+  update(body, options) {
+    return this._client.post("/organization/data_retention", {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
 // ../../../node_modules/openai/resources/admin/organization/invites.mjs
 var Invites = class extends APIResource {
   /**
@@ -22981,6 +23018,22 @@ var Roles = class extends APIResource {
     });
   }
   /**
+   * Retrieves an organization role.
+   *
+   * @example
+   * ```ts
+   * const role = await client.admin.organization.roles.retrieve(
+   *   'role_id',
+   * );
+   * ```
+   */
+  retrieve(roleID, options) {
+    return this._client.get(path`/organization/roles/${roleID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
    * Updates an existing organization role.
    *
    * @example
@@ -23027,6 +23080,92 @@ var Roles = class extends APIResource {
    */
   delete(roleID, options) {
     return this._client.delete(path`/organization/roles/${roleID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
+// ../../../node_modules/openai/resources/admin/organization/spend-alerts.mjs
+var SpendAlerts = class extends APIResource {
+  /**
+   * Creates an organization spend alert.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendAlert =
+   *   await client.admin.organization.spendAlerts.create({
+   *     currency: 'USD',
+   *     interval: 'month',
+   *     notification_channel: {
+   *       recipients: ['string'],
+   *       type: 'email',
+   *     },
+   *     threshold_amount: 0,
+   *   });
+   * ```
+   */
+  create(body, options) {
+    return this._client.post("/organization/spend_alerts", {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates an organization spend alert.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendAlert =
+   *   await client.admin.organization.spendAlerts.update(
+   *     'alert_id',
+   *     {
+   *       currency: 'USD',
+   *       interval: 'month',
+   *       notification_channel: {
+   *         recipients: ['string'],
+   *         type: 'email',
+   *       },
+   *       threshold_amount: 0,
+   *     },
+   *   );
+   * ```
+   */
+  update(alertID, body, options) {
+    return this._client.post(path`/organization/spend_alerts/${alertID}`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Lists organization spend alerts.
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const organizationSpendAlert of client.admin.organization.spendAlerts.list()) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(query = {}, options) {
+    return this._client.getAPIList("/organization/spend_alerts", ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+  }
+  /**
+   * Deletes an organization spend alert.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendAlertDeleted =
+   *   await client.admin.organization.spendAlerts.delete(
+   *     'alert_id',
+   *   );
+   * ```
+   */
+  delete(alertID, options) {
+    return this._client.delete(path`/organization/spend_alerts/${alertID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -23144,6 +23283,24 @@ var Usage = class extends APIResource {
     });
   }
   /**
+   * Get file search calls usage details for the organization.
+   *
+   * @example
+   * ```ts
+   * const response =
+   *   await client.admin.organization.usage.fileSearchCalls({
+   *     start_time: 0,
+   *   });
+   * ```
+   */
+  fileSearchCalls(query, options) {
+    return this._client.get("/organization/usage/file_search_calls", {
+      query,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
    * Get images usage details for the organization.
    *
    * @example
@@ -23197,6 +23354,24 @@ var Usage = class extends APIResource {
       __security: { adminAPIKeyAuth: true }
     });
   }
+  /**
+   * Get web search calls usage details for the organization.
+   *
+   * @example
+   * ```ts
+   * const response =
+   *   await client.admin.organization.usage.webSearchCalls({
+   *     start_time: 0,
+   *   });
+   * ```
+   */
+  webSearchCalls(query, options) {
+    return this._client.get("/organization/usage/web_search_calls", {
+      query,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/groups/roles.mjs
@@ -23216,6 +23391,25 @@ var Roles2 = class extends APIResource {
   create(groupID, body, options) {
     return this._client.post(path`/organization/groups/${groupID}/roles`, {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves an organization role assigned to a group.
+   *
+   * @example
+   * ```ts
+   * const role =
+   *   await client.admin.organization.groups.roles.retrieve(
+   *     'role_id',
+   *     { group_id: 'group_id' },
+   *   );
+   * ```
+   */
+  retrieve(roleID, params, options) {
+    const { group_id } = params;
+    return this._client.get(path`/organization/groups/${group_id}/roles/${roleID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -23279,6 +23473,25 @@ var Users = class extends APIResource {
     });
   }
   /**
+   * Retrieves a user in a group.
+   *
+   * @example
+   * ```ts
+   * const user =
+   *   await client.admin.organization.groups.users.retrieve(
+   *     'user_id',
+   *     { group_id: 'group_id' },
+   *   );
+   * ```
+   */
+  retrieve(userID, params, options) {
+    const { group_id } = params;
+    return this._client.get(path`/organization/groups/${group_id}/users/${userID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
    * Lists the users assigned to a group.
    *
    * @example
@@ -23335,6 +23548,23 @@ var Groups = class extends APIResource {
   create(body, options) {
     return this._client.post("/organization/groups", {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves a group.
+   *
+   * @example
+   * ```ts
+   * const group =
+   *   await client.admin.organization.groups.retrieve(
+   *     'group_id',
+   *   );
+   * ```
+   */
+  retrieve(groupID, options) {
+    return this._client.get(path`/organization/groups/${groupID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -23513,6 +23743,142 @@ var Certificates2 = class extends APIResource {
   }
 };
 
+// ../../../node_modules/openai/resources/admin/organization/projects/data-retention.mjs
+var DataRetention2 = class extends APIResource {
+  /**
+   * Retrieves project data retention controls.
+   *
+   * @example
+   * ```ts
+   * const projectDataRetention =
+   *   await client.admin.organization.projects.dataRetention.retrieve(
+   *     'project_id',
+   *   );
+   * ```
+   */
+  retrieve(projectID, options) {
+    return this._client.get(path`/organization/projects/${projectID}/data_retention`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates project data retention controls.
+   *
+   * @example
+   * ```ts
+   * const projectDataRetention =
+   *   await client.admin.organization.projects.dataRetention.update(
+   *     'project_id',
+   *     { retention_type: 'organization_default' },
+   *   );
+   * ```
+   */
+  update(projectID, body, options) {
+    return this._client.post(path`/organization/projects/${projectID}/data_retention`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
+// ../../../node_modules/openai/resources/admin/organization/projects/hosted-tool-permissions.mjs
+var HostedToolPermissions = class extends APIResource {
+  /**
+   * Returns hosted tool permissions for a project.
+   *
+   * @example
+   * ```ts
+   * const projectHostedToolPermissions =
+   *   await client.admin.organization.projects.hostedToolPermissions.retrieve(
+   *     'project_id',
+   *   );
+   * ```
+   */
+  retrieve(projectID, options) {
+    return this._client.get(path`/organization/projects/${projectID}/hosted_tool_permissions`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates hosted tool permissions for a project.
+   *
+   * @example
+   * ```ts
+   * const projectHostedToolPermissions =
+   *   await client.admin.organization.projects.hostedToolPermissions.update(
+   *     'project_id',
+   *   );
+   * ```
+   */
+  update(projectID, body, options) {
+    return this._client.post(path`/organization/projects/${projectID}/hosted_tool_permissions`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
+// ../../../node_modules/openai/resources/admin/organization/projects/model-permissions.mjs
+var ModelPermissions = class extends APIResource {
+  /**
+   * Returns model permissions for a project.
+   *
+   * @example
+   * ```ts
+   * const projectModelPermissions =
+   *   await client.admin.organization.projects.modelPermissions.retrieve(
+   *     'project_id',
+   *   );
+   * ```
+   */
+  retrieve(projectID, options) {
+    return this._client.get(path`/organization/projects/${projectID}/model_permissions`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates model permissions for a project.
+   *
+   * @example
+   * ```ts
+   * const projectModelPermissions =
+   *   await client.admin.organization.projects.modelPermissions.update(
+   *     'project_id',
+   *     { mode: 'allow_list', model_ids: ['string'] },
+   *   );
+   * ```
+   */
+  update(projectID, body, options) {
+    return this._client.post(path`/organization/projects/${projectID}/model_permissions`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Deletes model permissions for a project.
+   *
+   * @example
+   * ```ts
+   * const projectModelPermissionsDeleted =
+   *   await client.admin.organization.projects.modelPermissions.delete(
+   *     'project_id',
+   *   );
+   * ```
+   */
+  delete(projectID, options) {
+    return this._client.delete(path`/organization/projects/${projectID}/model_permissions`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
 // ../../../node_modules/openai/resources/admin/organization/projects/rate-limits.mjs
 var RateLimits = class extends APIResource {
   /**
@@ -23570,6 +23936,25 @@ var Roles3 = class extends APIResource {
   create(projectID, body, options) {
     return this._client.post(path`/projects/${projectID}/roles`, {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves a project role.
+   *
+   * @example
+   * ```ts
+   * const role =
+   *   await client.admin.organization.projects.roles.retrieve(
+   *     'role_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  retrieve(roleID, params, options) {
+    const { project_id } = params;
+    return this._client.get(path`/projects/${project_id}/roles/${roleID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -23677,6 +24062,22 @@ var ServiceAccounts = class extends APIResource {
     });
   }
   /**
+   * Updates a service account in the project.
+   *
+   * @example
+   * ```ts
+   * const projectServiceAccount =
+   *   await client.admin.organization.projects.serviceAccounts.update(
+   *     'service_account_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  update(serviceAccountID, params, options) {
+    const { project_id, ...body } = params;
+    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, { body, ...options, __security: { adminAPIKeyAuth: true } });
+  }
+  /**
    * Returns a list of service accounts in the project.
    *
    * @example
@@ -23713,6 +24114,101 @@ var ServiceAccounts = class extends APIResource {
   }
 };
 
+// ../../../node_modules/openai/resources/admin/organization/projects/spend-alerts.mjs
+var SpendAlerts2 = class extends APIResource {
+  /**
+   * Creates a project spend alert.
+   *
+   * @example
+   * ```ts
+   * const projectSpendAlert =
+   *   await client.admin.organization.projects.spendAlerts.create(
+   *     'project_id',
+   *     {
+   *       currency: 'USD',
+   *       interval: 'month',
+   *       notification_channel: {
+   *         recipients: ['string'],
+   *         type: 'email',
+   *       },
+   *       threshold_amount: 0,
+   *     },
+   *   );
+   * ```
+   */
+  create(projectID, body, options) {
+    return this._client.post(path`/organization/projects/${projectID}/spend_alerts`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates a project spend alert.
+   *
+   * @example
+   * ```ts
+   * const projectSpendAlert =
+   *   await client.admin.organization.projects.spendAlerts.update(
+   *     'alert_id',
+   *     {
+   *       project_id: 'project_id',
+   *       currency: 'USD',
+   *       interval: 'month',
+   *       notification_channel: {
+   *         recipients: ['string'],
+   *         type: 'email',
+   *       },
+   *       threshold_amount: 0,
+   *     },
+   *   );
+   * ```
+   */
+  update(alertID, params, options) {
+    const { project_id, ...body } = params;
+    return this._client.post(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Lists project spend alerts.
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const projectSpendAlert of client.admin.organization.projects.spendAlerts.list(
+   *   'project_id',
+   * )) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(projectID, query = {}, options) {
+    return this._client.getAPIList(path`/organization/projects/${projectID}/spend_alerts`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+  }
+  /**
+   * Deletes a project spend alert.
+   *
+   * @example
+   * ```ts
+   * const projectSpendAlertDeleted =
+   *   await client.admin.organization.projects.spendAlerts.delete(
+   *     'alert_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  delete(alertID, params, options) {
+    const { project_id } = params;
+    return this._client.delete(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
 // ../../../node_modules/openai/resources/admin/organization/projects/groups/roles.mjs
 var Roles4 = class extends APIResource {
   /**
@@ -23731,6 +24227,25 @@ var Roles4 = class extends APIResource {
     const { project_id, ...body } = params;
     return this._client.post(path`/projects/${project_id}/groups/${groupID}/roles`, {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves a project role assigned to a group.
+   *
+   * @example
+   * ```ts
+   * const role =
+   *   await client.admin.organization.projects.groups.roles.retrieve(
+   *     'role_id',
+   *     { project_id: 'project_id', group_id: 'group_id' },
+   *   );
+   * ```
+   */
+  retrieve(roleID, params, options) {
+    const { project_id, group_id } = params;
+    return this._client.get(path`/projects/${project_id}/groups/${group_id}/roles/${roleID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -23800,6 +24315,26 @@ var Groups2 = class extends APIResource {
     });
   }
   /**
+   * Retrieves a project's group.
+   *
+   * @example
+   * ```ts
+   * const projectGroup =
+   *   await client.admin.organization.projects.groups.retrieve(
+   *     'group_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  retrieve(groupID, params, options) {
+    const { project_id, ...query } = params;
+    return this._client.get(path`/organization/projects/${project_id}/groups/${groupID}`, {
+      query,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
    * Lists the groups that have access to a project.
    *
    * @example
@@ -23855,6 +24390,25 @@ var Roles5 = class extends APIResource {
     const { project_id, ...body } = params;
     return this._client.post(path`/projects/${project_id}/users/${userID}/roles`, {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves a project role assigned to a user.
+   *
+   * @example
+   * ```ts
+   * const role =
+   *   await client.admin.organization.projects.users.roles.retrieve(
+   *     'role_id',
+   *     { project_id: 'project_id', user_id: 'user_id' },
+   *   );
+   * ```
+   */
+  retrieve(roleID, params, options) {
+    const { project_id, user_id } = params;
+    return this._client.get(path`/projects/${project_id}/users/${user_id}/roles/${roleID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -24012,8 +24566,12 @@ var Projects = class extends APIResource {
     this.serviceAccounts = new ServiceAccounts(this._client);
     this.apiKeys = new APIKeys2(this._client);
     this.rateLimits = new RateLimits(this._client);
+    this.modelPermissions = new ModelPermissions(this._client);
+    this.hostedToolPermissions = new HostedToolPermissions(this._client);
     this.groups = new Groups2(this._client);
     this.roles = new Roles3(this._client);
+    this.dataRetention = new DataRetention2(this._client);
+    this.spendAlerts = new SpendAlerts2(this._client);
     this.certificates = new Certificates2(this._client);
   }
   /**
@@ -24111,8 +24669,12 @@ Projects.Users = Users2;
 Projects.ServiceAccounts = ServiceAccounts;
 Projects.APIKeys = APIKeys2;
 Projects.RateLimits = RateLimits;
+Projects.ModelPermissions = ModelPermissions;
+Projects.HostedToolPermissions = HostedToolPermissions;
 Projects.Groups = Groups2;
 Projects.Roles = Roles3;
+Projects.DataRetention = DataRetention2;
+Projects.SpendAlerts = SpendAlerts2;
 Projects.Certificates = Certificates2;
 
 // ../../../node_modules/openai/resources/admin/organization/users/roles.mjs
@@ -24132,6 +24694,25 @@ var Roles6 = class extends APIResource {
   create(userID, body, options) {
     return this._client.post(path`/organization/users/${userID}/roles`, {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves an organization role assigned to a user.
+   *
+   * @example
+   * ```ts
+   * const role =
+   *   await client.admin.organization.users.roles.retrieve(
+   *     'role_id',
+   *     { user_id: 'user_id' },
+   *   );
+   * ```
+   */
+  retrieve(roleID, params, options) {
+    const { user_id } = params;
+    return this._client.get(path`/organization/users/${user_id}/roles/${roleID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -24258,6 +24839,8 @@ var Organization2 = class extends APIResource {
     this.users = new Users3(this._client);
     this.groups = new Groups(this._client);
     this.roles = new Roles(this._client);
+    this.dataRetention = new DataRetention(this._client);
+    this.spendAlerts = new SpendAlerts(this._client);
     this.certificates = new Certificates(this._client);
     this.projects = new Projects(this._client);
   }
@@ -24269,6 +24852,8 @@ Organization2.Invites = Invites;
 Organization2.Users = Users3;
 Organization2.Groups = Groups;
 Organization2.Roles = Roles;
+Organization2.DataRetention = DataRetention;
+Organization2.SpendAlerts = SpendAlerts;
 Organization2.Certificates = Certificates;
 Organization2.Projects = Projects;
 

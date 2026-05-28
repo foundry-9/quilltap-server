@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "4.6.0-dev.75",
+  "version": "4.6.0-dev.76",
   "description": "Self-hosted AI workspace for writers, worldbuilders, and roleplayers. Run with npx quilltap.",
   "author": {
     "name": "Charles Sebold",
@@ -37,11 +37,11 @@
   ],
   "dependencies": {
     "@napi-rs/canvas": "^0.1.100",
-    "better-sqlite3-multiple-ciphers": "^12.9.0",
+    "better-sqlite3-multiple-ciphers": "^12.10.0",
     "node-pty": "^1.1.0",
     "sharp": "^0.34.5",
     "tar": "^7.5.15",
-    "yauzl": "^3.3.0"
+    "yauzl": "^3.3.1"
   },
   "engines": {
     "node": ">=24.0.0"
