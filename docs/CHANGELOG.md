@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Refactor: Split character vault overlay into single-responsibility modules
+
+Broke up `lib/database/repositories/character-properties-overlay.ts` (1,944 lines) into a thin re-export barrel plus seven cohesive modules under `lib/database/repositories/vault-overlay/`: `schema.ts` (schemas, types, path constants, descriptor table, `MANAGED_FIELDS`), `parsers.ts` (pure parse/validate helpers), `vault-projection.ts` (generic folder projection), `vault-readers.ts` (per-field readers + `readVaultTextFile`), `read-overlay.ts` (`applyDocumentStoreOverlay`/`applyDocumentStoreOverlayOne`), `wardrobe-sync.ts` (wardrobe read overlay + write-back), and `managed-fields.ts` (`readCharacterVaultManagedFields`, `writeCharacterVaultManagedFields`, `applyDocumentStoreWriteOverlay`). The public surface imported through `character-properties-overlay` is unchanged. Handler logic is byte-identical to the original; the only behavior change is removal of a dead, never-read `routedFieldCount` counter and its empty `if` block in `applyDocumentStoreWriteOverlay`.
+
 #### Refactor: Split doc-edit tool handler into single-responsibility modules
 
 Broke up `lib/tools/handlers/doc-edit-handler.ts` (3,017 lines) into a thin dispatcher plus seven cohesive modules under `lib/tools/handlers/doc-edit/`: `shared.ts` (context type, logger, cross-cutting resolution/permission/reindex helpers), `text-handlers.ts`, `markdown-handlers.ts`, `file-management-handlers.ts`, `document-ui-handlers.ts`, `blob-handlers.ts`, and `photo-handlers.ts`. The public surface (`executeDocEditTool`, `formatDocEditResults`, `isDocEditTool`, `DOC_EDIT_TOOL_NAMES`, `DocEditToolContext`) is unchanged. Handler logic is byte-identical to the original; the only behavior change is removal of a dead empty `if` block in `buildReadResolutionContext`.
