@@ -4,6 +4,19 @@
 
 ### 4.6-dev
 
+#### Refactor: Standardize new settings and autonomous-room UI on qt semantic utility classes
+
+Converted newly added settings and autonomous-room UI components away from direct Tailwind color/form wrappers to qt semantic classes.
+
+- Added autonomous room run-state badge semantics (`qt-badge-autonomous-running|idle|paused|stopped|budget|error`) and matching theme tokens in `app/styles/qt-components/_content.css` and `_variables.css`.
+- Updated `components/tools/autonomous-rooms-card.tsx` to use semantic qt badge classes for run states and schedule chips (`qt-badge-auto`, `qt-badge-manual`).
+- Added reusable settings shell semantics (`qt-settings-shell`, `qt-settings-shell-tight`, `qt-settings-section-heading`, `qt-settings-field-group`, `qt-settings-toggle-row`).
+- Updated new settings components to use qt form semantics (`qt-checkbox`, `qt-select`) and the new settings shell classes:
+  - `components/settings/chat-settings/ComposerSpellcheckSettings.tsx`
+  - `components/settings/chat-settings/TextReplacementSettings.tsx`
+  - `components/settings/core-whisper/CoreWhisperSection.tsx`
+  - `components/settings/connection-profiles/ProviderOptionsPanel.tsx`
+
 #### Chore: Remove unnecessary debug logging added after 01601c5ecf5b064ac2049f16ed6f6ef321875889
 
 Removed low-value debug logging added in recent changes across chat/API/tooling paths, including text replacement routes and plugin, chat danger classification off-duty early return, text replacement repository CRUD debug logs, Core whisper skip-path debug logs, stream cache-key debug logs, spellcheck dictionary push debug logs, self-inventory section-resolution debug logs, simple-json parser success debug logs, and simple-json prompt build debug logs.

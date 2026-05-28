@@ -164,6 +164,12 @@
   .qt-badge-source-manual,
   .qt-badge-capability,
   .qt-badge-version,
+  .qt-badge-autonomous-running,
+  .qt-badge-autonomous-idle,
+  .qt-badge-autonomous-paused,
+  .qt-badge-autonomous-stopped,
+  .qt-badge-autonomous-budget,
+  .qt-badge-autonomous-error,
   .qt-badge-provider-openai,
   .qt-badge-provider-ollama,
   .qt-badge-provider-openrouter,
@@ -245,6 +251,45 @@
     background: var(--qt-status-info-bg);
     color: var(--qt-status-info-fg);
     border: 1px solid var(--qt-status-info-border);
+  }
+
+  /**
+   * Autonomous-room state badges
+   */
+  .qt-badge-autonomous-running {
+    background: var(--qt-badge-autonomous-running-bg);
+    color: var(--qt-badge-autonomous-running-fg);
+    border: 1px solid var(--qt-badge-autonomous-running-border);
+  }
+
+  .qt-badge-autonomous-idle {
+    background: var(--qt-badge-autonomous-idle-bg);
+    color: var(--qt-badge-autonomous-idle-fg);
+    border: 1px solid var(--qt-badge-autonomous-idle-border);
+  }
+
+  .qt-badge-autonomous-paused {
+    background: var(--qt-badge-autonomous-paused-bg);
+    color: var(--qt-badge-autonomous-paused-fg);
+    border: 1px solid var(--qt-badge-autonomous-paused-border);
+  }
+
+  .qt-badge-autonomous-stopped {
+    background: var(--qt-badge-autonomous-stopped-bg);
+    color: var(--qt-badge-autonomous-stopped-fg);
+    border: 1px solid var(--qt-badge-autonomous-stopped-border);
+  }
+
+  .qt-badge-autonomous-budget {
+    background: var(--qt-badge-autonomous-budget-bg);
+    color: var(--qt-badge-autonomous-budget-fg);
+    border: 1px solid var(--qt-badge-autonomous-budget-border);
+  }
+
+  .qt-badge-autonomous-error {
+    background: var(--qt-badge-autonomous-error-bg);
+    color: var(--qt-badge-autonomous-error-fg);
+    border: 1px solid var(--qt-badge-autonomous-error-border);
   }
 
   /* ==========================================================================
@@ -1087,6 +1132,42 @@
   .qt-text-section {
     @apply text-lg font-medium;
     color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  /* ==========================================================================
+     SETTINGS FORM SHELLS
+     Shared semantic wrappers for settings cards and toggle rows.
+     ========================================================================== */
+
+  .qt-settings-shell {
+    @apply p-4 border rounded;
+    border-color: var(--qt-card-border);
+    background: color-mix(in srgb, var(--color-card) 96%, transparent);
+  }
+
+  .qt-settings-shell-tight {
+    @apply p-3 border rounded;
+    border-color: var(--qt-card-border);
+    background: color-mix(in srgb, var(--color-card) 96%, transparent);
+  }
+
+  .qt-settings-section-heading {
+    @apply text-sm font-medium;
+    color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  .qt-settings-field-group {
+    @apply space-y-2;
+  }
+
+  .qt-settings-toggle-row {
+    @apply flex items-start gap-3 p-4 border rounded cursor-pointer;
+    border-color: var(--qt-card-border);
+    transition: background-color 150ms ease;
+  }
+
+  .qt-settings-toggle-row:hover {
+    background: var(--qt-card-hover-bg, var(--color-accent));
   }
 
   /* ==========================================================================

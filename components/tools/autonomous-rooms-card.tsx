@@ -39,15 +39,15 @@ const fetcher = async (url: string) => {
   return res.json()
 }
 
-function badgeColor(state: AutonomousRoom['runState']): string {
+function badgeClass(state: AutonomousRoom['runState']): string {
   switch (state) {
-    case 'running': return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
-    case 'idle': return 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
-    case 'paused': return 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
-    case 'stopped': return 'bg-slate-500/20 text-slate-700 dark:text-slate-300'
-    case 'budgetExhausted': return 'bg-violet-500/20 text-violet-700 dark:text-violet-300'
-    case 'error': return 'bg-rose-500/20 text-rose-700 dark:text-rose-300'
-    default: return 'bg-slate-500/20 text-slate-700 dark:text-slate-300'
+    case 'running': return 'qt-badge-autonomous-running'
+    case 'idle': return 'qt-badge-autonomous-idle'
+    case 'paused': return 'qt-badge-autonomous-paused'
+    case 'stopped': return 'qt-badge-autonomous-stopped'
+    case 'budgetExhausted': return 'qt-badge-autonomous-budget'
+    case 'error': return 'qt-badge-autonomous-error'
+    default: return 'qt-badge-autonomous-stopped'
   }
 }
 
@@ -131,16 +131,16 @@ export function AutonomousRoomsCard() {
                   >
                     {room.title || '(untitled autonomous room)'}
                   </a>
-                  <span className={`text-xs px-2 py-0.5 rounded ${badgeColor(state)}`}>
+                  <span className={`qt-badge text-xs ${badgeClass(state)}`}>
                     {state}
                   </span>
                   {room.scheduleCron && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-slate-500/10 qt-text-muted">
+                    <span className="qt-badge qt-badge-auto text-xs">
                       cron: {room.scheduleCron}
                     </span>
                   )}
                   {!room.scheduleCron && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-slate-500/10 qt-text-muted">
+                    <span className="qt-badge qt-badge-manual text-xs">
                       manual
                     </span>
                   )}

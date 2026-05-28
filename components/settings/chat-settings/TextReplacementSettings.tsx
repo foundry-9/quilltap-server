@@ -179,16 +179,16 @@ export function TextReplacementSettings({
   return (
     <div className="space-y-4">
       {/* Master toggle */}
-      <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer">
+      <label className="qt-settings-toggle-row">
         <input
           type="checkbox"
           checked={enabled}
           onChange={(e) => onMasterToggleChange(e.target.checked)}
           disabled={saving}
-          className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+          className="qt-checkbox mt-1"
         />
         <div className="flex-1">
-          <div className="font-medium text-foreground">Text replacement (autocorrect)</div>
+          <div className="qt-settings-section-heading">Text replacement (autocorrect)</div>
           <div className="qt-text-small mt-1">
             Replaces literal triggers with replacement text on word boundaries (space, tab,
             and the usual terminal punctuation) as you type in the Salon composer and the
@@ -202,10 +202,10 @@ export function TextReplacementSettings({
       {/* Add new rule */}
       <form
         onSubmit={handleAdd}
-        className="p-4 border qt-border-default rounded space-y-3"
+        className="qt-settings-shell space-y-3"
         aria-label="Add a text-replacement rule"
       >
-        <div className="font-medium text-foreground">Add a rule</div>
+        <div className="qt-settings-section-heading">Add a rule</div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr,1fr,auto] gap-2 items-end">
           <label className="flex flex-col gap-1">
             <span className="qt-text-small text-muted-foreground">Trigger</span>
@@ -245,7 +245,7 @@ export function TextReplacementSettings({
             checked={form.caseSensitive}
             onChange={(e) => setForm({ ...form, caseSensitive: e.target.checked })}
             disabled={busy}
-            className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+            className="qt-checkbox"
           />
           <span>Case-sensitive</span>
         </label>
@@ -253,9 +253,9 @@ export function TextReplacementSettings({
       </form>
 
       {/* Existing rules */}
-      <div className="border qt-border-default rounded">
+      <div className="qt-settings-shell p-0">
         <div className="p-4 border-b qt-border-default">
-          <div className="font-medium text-foreground">Rules</div>
+          <div className="qt-settings-section-heading">Rules</div>
           <div className="qt-text-small text-muted-foreground">
             {isLoading
               ? 'Loading…'
@@ -282,8 +282,8 @@ export function TextReplacementSettings({
       </div>
 
       {/* Try-it textarea */}
-      <div className="p-4 border qt-border-default rounded space-y-2">
-        <div className="font-medium text-foreground">Try it</div>
+      <div className="qt-settings-shell qt-settings-field-group">
+        <div className="qt-settings-section-heading">Try it</div>
         <div className="qt-text-small text-muted-foreground">
           Type here and add a trigger character (space, period, etc.) to see your rules
           fire. This box does not save anything.
@@ -367,7 +367,7 @@ function RuleRow({ rule, onPatch, onDelete, disabled }: RuleRowProps) {
           checked={rule.caseSensitive}
           onChange={(e) => onPatch({ caseSensitive: e.target.checked })}
           disabled={disabled}
-          className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+          className="qt-checkbox"
         />
         <span>Case</span>
       </label>
@@ -377,7 +377,7 @@ function RuleRow({ rule, onPatch, onDelete, disabled }: RuleRowProps) {
           checked={rule.enabled}
           onChange={(e) => onPatch({ enabled: e.target.checked })}
           disabled={disabled}
-          className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+          className="qt-checkbox"
         />
         <span>On</span>
       </label>

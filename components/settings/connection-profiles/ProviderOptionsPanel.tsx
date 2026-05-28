@@ -68,10 +68,10 @@ export function ProviderOptionsPanel({
       {schema.groups.map((group, groupIndex) => (
         <div
           key={groupIndex}
-          className="border qt-border-default rounded-lg p-4 qt-bg-muted/50"
+          className="qt-settings-shell"
         >
           {group.title && (
-            <h4 className="font-medium text-sm mb-3">{group.title}</h4>
+            <h4 className="qt-settings-section-heading mb-3">{group.title}</h4>
           )}
           <div className="space-y-3">
             {group.fields
@@ -155,7 +155,7 @@ function BooleanField({
         id={id}
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="w-4 h-4 rounded mt-0.5"
+        className="qt-checkbox mt-0.5"
       />
       <div className="flex flex-col gap-1">
         <label htmlFor={id} className="text-sm">
@@ -258,7 +258,7 @@ function MultiEnumField({
                     onChange(selected.filter((v) => v !== choice.value))
                   }
                 }}
-                className="w-3 h-3 rounded"
+                className="qt-checkbox"
               />
               <span className="qt-text-xs text-foreground truncate">
                 {choice.label}

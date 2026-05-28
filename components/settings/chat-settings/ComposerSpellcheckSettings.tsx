@@ -17,16 +17,16 @@ export function ComposerSpellcheckSettings({
 
   return (
     <div>
-      <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer">
+      <label className="qt-settings-toggle-row">
         <input
           type="checkbox"
           checked={enabled}
           onChange={(e) => onChange(e.target.checked)}
           disabled={saving}
-          className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+          className="qt-checkbox mt-1"
         />
         <div className="flex-1">
-          <div className="font-medium text-foreground">
+          <div className="qt-settings-section-heading">
             Spellcheck in the composer
           </div>
           <div className="qt-text-small mt-1">

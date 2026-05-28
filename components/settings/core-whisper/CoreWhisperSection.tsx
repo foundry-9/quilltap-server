@@ -72,16 +72,16 @@ export function CoreWhisperSection() {
 
         {/* Master switch */}
         <div>
-          <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer">
+          <label className="qt-settings-toggle-row">
             <input
               type="checkbox"
               checked={current.enabled !== false}
               onChange={(e) => applyPatch({ enabled: e.target.checked })}
               disabled={saving}
-              className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+              className="qt-checkbox mt-1"
             />
             <div className="flex-1">
-              <div className="font-medium text-foreground">Enable Aurora&apos;s Core whisper</div>
+              <div className="qt-settings-section-heading">Enable Aurora&apos;s Core whisper</div>
               <div className="qt-text-small mt-1">
                 The master switch. When off, no Core whispers fire anywhere &mdash; regardless of per-chat or per-character overrides.
               </div>
@@ -90,8 +90,8 @@ export function CoreWhisperSection() {
         </div>
 
         {/* Interval */}
-        <div className="space-y-2">
-          <label className="block font-medium text-foreground">
+        <div className="qt-settings-field-group">
+          <label className="block qt-settings-section-heading">
             Whisper Cadence
           </label>
           <p className="qt-text-small">
@@ -101,7 +101,7 @@ export function CoreWhisperSection() {
             value={current.interval ?? 12}
             onChange={(e) => applyPatch({ interval: parseInt(e.target.value, 10) })}
             disabled={saving}
-            className="w-full max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground focus:qt-border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="qt-select max-w-xs"
           >
             {INTERVAL_OPTIONS.map((n) => (
               <option key={n} value={n}>
@@ -112,8 +112,8 @@ export function CoreWhisperSection() {
         </div>
 
         {/* Silence threshold */}
-        <div className="space-y-2">
-          <label className="block font-medium text-foreground">
+        <div className="qt-settings-field-group">
+          <label className="block qt-settings-section-heading">
             Silence Threshold
           </label>
           <p className="qt-text-small">
@@ -123,7 +123,7 @@ export function CoreWhisperSection() {
             value={current.silenceThreshold ?? 3}
             onChange={(e) => applyPatch({ silenceThreshold: parseInt(e.target.value, 10) })}
             disabled={saving}
-            className="w-full max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground focus:qt-border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="qt-select max-w-xs"
           >
             {SILENCE_OPTIONS.map((n) => (
               <option key={n} value={n}>
@@ -134,8 +134,8 @@ export function CoreWhisperSection() {
         </div>
 
         {/* Packet token budget */}
-        <div className="space-y-2">
-          <label className="block font-medium text-foreground">
+        <div className="qt-settings-field-group">
+          <label className="block qt-settings-section-heading">
             Soft Packet Budget
           </label>
           <p className="qt-text-small">
@@ -145,7 +145,7 @@ export function CoreWhisperSection() {
             value={current.packetTokenBudget ?? 4096}
             onChange={(e) => applyPatch({ packetTokenBudget: parseInt(e.target.value, 10) })}
             disabled={saving}
-            className="w-full max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground focus:qt-border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="qt-select max-w-xs"
           >
             {BUDGET_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -157,16 +157,16 @@ export function CoreWhisperSection() {
 
         {/* Fire on context transition */}
         <div>
-          <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer">
+          <label className="qt-settings-toggle-row">
             <input
               type="checkbox"
               checked={current.fireOnContextTransition !== false}
               onChange={(e) => applyPatch({ fireOnContextTransition: e.target.checked })}
               disabled={saving}
-              className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+              className="qt-checkbox mt-1"
             />
             <div className="flex-1">
-              <div className="font-medium text-foreground">Offer the packet after major context transitions</div>
+              <div className="qt-settings-section-heading">Offer the packet after major context transitions</div>
               <div className="qt-text-small mt-1">
                 When the Librarian folds the recent record into a rolling summary, Aurora offers the next-to-speak character their <code className="qt-bg-muted px-1 rounded">Core/</code> packet on the way back in. After memory has been folded, identity is the proper grounding.
               </div>
@@ -176,7 +176,7 @@ export function CoreWhisperSection() {
 
         {/* Info box */}
         <div className="rounded-lg border qt-border-default qt-bg-muted/50 p-4 qt-text-small space-y-1">
-          <p className="font-medium text-foreground">A note on overrides</p>
+          <p className="qt-settings-section-heading">A note on overrides</p>
           <p>
             Per-chat and per-character overrides are available on their respective settings panels. Resolution precedence is <strong>chat &rarr; character &rarr; global</strong> &mdash; an explicit value on a chat wins over an explicit value on a character, which in turn wins over these global defaults.
           </p>
