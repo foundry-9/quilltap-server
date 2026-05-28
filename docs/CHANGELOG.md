@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Refactor: Split Quilltap import service into single-responsibility modules
+
+Broke up `lib/import/quilltap-import-service.ts` (2,100 lines) into a thin re-export barrel plus ten cohesive modules under `lib/import/quilltap-import/`: `types.ts` (shared types + public preview/options/result interfaces), `legacy-presets.ts` (fold pre-rework outfit presets into composites), `validation.ts` (`parseExportFile`/`validateExportFormat`), `import-profiles.ts` (connection/image/embedding profiles), `import-characters.ts` (characters + wardrobe + plugin data), `import-entities.ts` (tags/roleplay templates/projects/chats/memories), `import-document-stores.ts` (Scriptorium), `reconcile.ts` (post-import relationship reconciliation), `preview.ts` (`previewImport`), and `execute.ts` (the import orchestrator). The public surface imported through `quilltap-import-service` is unchanged (`parseExportFile`, `validateExportFormat`, `previewImport`, `executeImport`, and the `ImportPreviewEntity`/`ImportPreview`/`ImportOptions`/`ImportResult` types). Logic is byte-identical to the original — no behavior change.
+
 #### Refactor: Split restore service into single-responsibility modules
 
 Broke up `lib/backup/restore-service.ts` (2,124 lines) into a thin re-export barrel plus seven cohesive modules under `lib/backup/restore/`: `legacy-migrations.ts` (pure pre-rework backup-shape folding), `json-stream.ts` (disk-backed/streaming JSON readers), `archive.ts` (zip extract, parse, and extracted-dir readers), `delete-service.ts` (`deleteAllUserData`/`previewDeleteAllUserData` + replace-mode deletion), `uuid-remap.ts` (new-account UUID remapping), `preview.ts` (`previewRestore`), and `restore.ts` (the restore orchestrator). The public surface imported through `restore-service` is unchanged (`restore`, `previewRestore`, `parseBackupZip`, `getFileFromExtractedBackup`, `deleteAllUserData`, `previewDeleteAllUserData`, `DeleteSummary`). Logic is identical to the original; the only change is removal of a dead, never-used `ConversationChunk` type import.
