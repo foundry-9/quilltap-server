@@ -109,6 +109,10 @@ jest.mock('@/lib/chat/apply-chat-continuation', () => ({
   }),
 }))
 
+jest.mock('@/lib/services/chat-message/autonomous-room.service', () => ({
+  startAutonomousRoomManually: jest.fn().mockResolvedValue({ ok: true }),
+}))
+
 // ---------------------------------------------------------------------------
 // Imports under test must come after the mocks above.
 // ---------------------------------------------------------------------------
@@ -116,6 +120,7 @@ jest.mock('@/lib/chat/apply-chat-continuation', () => ({
 import { POST } from '@/app/api/v1/chats/route'
 import { getServerSession } from '@/lib/auth/session'
 import { getRepositories, getRepositoriesSafe } from '@/lib/repositories/factory'
+import { startAutonomousRoomManually } from '@/lib/services/chat-message/autonomous-room.service'
 import {
   createMockRepositoryContainer,
   setupAuthMocks,
@@ -203,6 +208,13 @@ function makeCreatedChat() {
     messageCount: 0,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+}
+
+function makeCreatedChatWithSchedule(scheduleCron: string | null) {
+  return {
+    ...makeCreatedChat(),
+    scheduleCron,
   }
 }
 
@@ -329,5 +341,48 @@ describe('POST /api/v1/chats — continuation into autonomous room', () => {
 
     expect(res.status).toBe(400)
     expect(json?.error).toMatch(/at least two LLM-controlled/i)
+  })
+
+  it('auto-starts ad-hoc autonomous rooms (no scheduleCron) after creation', async () => {
+    mockRepos.chats.create.mockResolvedValueOnce(makeCreatedChatWithSchedule(null) as any)
+    mockRepos.chats.findById.mockImplementationOnce(async (id: string) => {
+      if (id === SOURCE_CHAT_ID) return makeSourceChat() as any
+      return null
+    })
+
+    const body = {
+      title: 'Autonomous ad-hoc room',
+      chatType: 'autonomous',
+      participants: [
+        { type: 'CHARACTER', characterId: CHAR_A_ID, connectionProfileId: PROFILE_ID, controlledBy: 'llm' },
+        { type: 'CHARACTER', characterId: CHAR_B_ID, connectionProfileId: PROFILE_ID, controlledBy: 'llm' },
+      ],
+    }
+
+    const res = await POST(createMockRequest(body))
+    expect(res.status).toBe(201)
+    expect(startAutonomousRoomManually).toHaveBeenCalledWith(NEW_CHAT_ID, USER_ID)
+  })
+
+  it('does not auto-start scheduled autonomous rooms', async () => {
+    mockRepos.chats.create.mockResolvedValueOnce(makeCreatedChatWithSchedule('*/5 * * * *') as any)
+    mockRepos.chats.findById.mockImplementationOnce(async (id: string) => {
+      if (id === SOURCE_CHAT_ID) return makeSourceChat() as any
+      return null
+    })
+
+    const body = {
+      title: 'Autonomous scheduled room',
+      chatType: 'autonomous',
+      scheduleCron: '*/5 * * * *',
+      participants: [
+        { type: 'CHARACTER', characterId: CHAR_A_ID, connectionProfileId: PROFILE_ID, controlledBy: 'llm' },
+        { type: 'CHARACTER', characterId: CHAR_B_ID, connectionProfileId: PROFILE_ID, controlledBy: 'llm' },
+      ],
+    }
+
+    const res = await POST(createMockRequest(body))
+    expect(res.status).toBe(201)
+    expect(startAutonomousRoomManually).not.toHaveBeenCalled()
   })
 })

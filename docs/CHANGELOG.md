@@ -4,9 +4,18 @@
 
 ### 4.6-dev
 
+#### Test: Add regression coverage for recently fixed autonomous, self-inventory, doc-move, and gallery-link paths
+
+Added targeted unit/regression tests for changes that landed after `01601c5ecf5b064ac2049f16ed6f6ef321875889` and did not yet have direct assertions:
+
+- `__tests__/unit/app/api/v1/chats/route.continuation-autonomous.test.ts`: ad-hoc autonomous chat create now auto-starts; scheduled autonomous chat create does not auto-start.
+- `__tests__/unit/lib/tools/handlers/self-inventory-handler.test.ts` (new): `quilltap.version`, `quilltap.changelog`, and top-level `quilltap` section rendering/IO gating behavior.
+- `__tests__/unit/lib/tools/handlers/doc-edit-handler-chat-doc-sync.test.ts` (new): `doc_move_file` / `doc_move_folder` sync `chat_documents` pointers and keep move success when sync fails.
+- `__tests__/unit/lib/photos/character-gallery-service.test.ts` (new): `saveLinkToCharacterGallery` copies bytes from source link and writes to target character `photos/`; missing source link throws.
+
 #### Feat: Commonplace Book whispers now include per-memory metadata (importance, relevance, weight, keywords)
 
-Every memory line the Commonplace Book delivers to a character now carries a trailing italicised parenthetical with the metadata the ranker used to surface it. The format is `body text _(importance 0.98 · relevance 0.87 · weight 0.92 · keywords: a, b)_`. Each metric is included only when applicable to the section it appears in:
+Every memory line the Commonplace Book delivers to a character now carries a trailing italicized parenthetical with the metadata the ranker used to surface it. The format is `body text _(importance 0.98 · relevance 0.87 · weight 0.92 · keywords: a, b)_`. Each metric is included only when applicable to the section it appears in:
 
 - `## Relevant Memories` (`formatMemoriesForContext`): all four — importance, relevance (semantic-search score), effective weight, keywords.
 - `## Memories About Other Characters` (`formatInterCharacterMemoriesForContext`): importance, effective weight, keywords. No relevance, because these come from a direct DB query (`findByCharacterAboutCharacters`) rather than semantic search.
