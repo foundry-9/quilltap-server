@@ -309,6 +309,8 @@ import { addCoreWhisperFieldsMigration } from './add-core-whisper-fields';
 import { addAutonomousRunPausedAtMigration } from './add-autonomous-run-paused-at';
 // 4.6 private character rooms: runPausedAccumMs so wall-clock excludes paused time without shifting runStartedAt
 import { addAutonomousRunPausedAccumMigration } from './add-autonomous-run-paused-accum';
+// Drop the dead singular scenario column from characters (legacy of the scenarios[] array)
+import { dropCharacterScenarioColumnMigration } from './drop-character-scenario-column';
 
 /**
  * All available migrations.
@@ -613,6 +615,8 @@ export const migrations: Migration[] = [
   addAutonomousRunPausedAtMigration,
   // 4.6 private character rooms: runPausedAccumMs so wall-clock excludes paused time without shifting runStartedAt
   addAutonomousRunPausedAccumMigration,
+  // Drop the dead singular scenario column from characters (legacy of the scenarios[] array)
+  dropCharacterScenarioColumnMigration,
 ];
 
 export {

@@ -80,6 +80,7 @@ const PRETTY_LABELS: Record<string, string> = {
 
   // 4.6 character vault cutover
   'cutover-characters-to-vault-v1': "Settling every character into their vault for keeps",
+  'drop-character-scenario-column-v1': 'Sweeping out a disused scenario drawer',
 
   // Per-character fields
   'add-default-image-profile-field-v1': 'Adding default image profile to characters',

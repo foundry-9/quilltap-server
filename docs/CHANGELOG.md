@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Cleanup: Drop the dead singular `scenario` column from characters
+
+Added migration `drop-character-scenario-column-v1` to remove the singular `scenario TEXT` column from the `characters` table. It predated the `scenarios[]` array (which the 4.6 vault cutover moved into the per-character vault) and was never read or written by the repository row-mapping, the `Character` type, or its Zod schema — so the column was dead legacy that the cutover left behind because it was never part of the content-field set. No data loss: nothing referenced it. DDL.md already reflected the post-cutover schema without this column.
+
 #### Fix: Resuming a paused autonomous room continues the run instead of starting over
 
 Resuming a *paused* autonomous room now continues the same run rather than starting a fresh one. Previously, "Resume" was a literal alias for the manual-start path, so it minted a new run id, reset the turn/token counters to zero, and posted the "Autonomous room run begun…" banner — making the room look like it restarted even though the transcript was intact. Now a paused room flips straight back to `running` with its `currentRunId`, `runStartedAt`, and counters preserved and no start banner. The fix adds two `chats` columns: `runPausedAt` (migration `add-autonomous-run-paused-at-v1`), the start of the current paused interval, and `runPausedAccumMs` (migration `add-autonomous-run-paused-accum-v1`), the cumulative time spent paused. The wall-clock budget subtracts `runPausedAccumMs` from elapsed time so paused intervals don't count against it — crucially *without* moving `runStartedAt`, which also anchors the per-run token-usage window (an earlier attempt shifted `runStartedAt` and silently reset `runTokensConsumed` because the token window then excluded all pre-pause log entries). Genuinely idle/stopped/budgetExhausted rooms still start fresh. Both run-control surfaces are wired correctly: the toolbar badge already called `resume` for paused rooms, and the Scheduled Autonomous Rooms settings card now does too (it previously fired `start` despite its "Resume" label). Both new columns are included in the `.qtap` export schema.
