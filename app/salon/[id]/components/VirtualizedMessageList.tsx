@@ -8,7 +8,6 @@ import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template
 import type { Message, CharacterData, ChatSettings } from '../types'
 import type { SwipeState } from '../hooks/useChatData'
 import { MessageRow } from './MessageRow'
-import { PendingToolCalls } from './PendingToolCalls'
 import { EphemeralMessages as EphemeralMessagesComponent } from './EphemeralMessages'
 import { StreamingMessage } from './StreamingMessage'
 import type { PendingToolCall } from '../hooks/useSSEStreaming'
@@ -56,7 +55,7 @@ interface VirtualizedMessageListProps {
     switchSwipe: (groupId: string, direction: 'prev' | 'next', swipeStates: Record<string, SwipeState>, setSwipeStates: (value: any) => void) => void
     copyMessageContent: (content: string) => void
     resendMessage: (message: Message) => Promise<void>
-    canResendMessage: (messageId: string, index: number) => boolean
+    canResendMessage: (messageId: string) => boolean
   }
   turnManagement: {
     handleNudge: (participantId: string) => void | Promise<void>
@@ -174,7 +173,7 @@ export function VirtualizedMessageList({
             const message = messages[messageIndex]
             const isEditing = editingMessageId === message.id
             const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
-            const showResendButton = messageActions.canResendMessage(message.id, messageIndex)
+            const showResendButton = messageActions.canResendMessage(message.id)
 
             if (message.role === 'TOOL') {
               // Fall back to the most recent ASSISTANT message's participant
@@ -296,6 +295,7 @@ export function VirtualizedMessageList({
                   hasLLMLogs={messagesWithLogs.has(message.id)}
                   onViewLLMLogs={onViewLLMLogs}
                   onCourierTurnSettled={fetchChat}
+                  attachedToolMessages={message.attachedToolMessages}
                   participantNames={participantNames}
                   isOverheardWhisper={
                     !!(message.targetParticipantIds?.length) &&
@@ -310,16 +310,13 @@ export function VirtualizedMessageList({
           })}
         </div>
 
-        {/* Pending tool calls */}
-        <PendingToolCalls pendingToolCalls={pendingToolCalls} />
-
         {/* Ephemeral messages */}
         <EphemeralMessagesComponent
           messages={ephemeralMessages}
           onDismiss={turnManagement.handleDismissEphemeral}
         />
 
-        {/* Streaming message */}
+        {/* Streaming message — in-progress tool calls nest inside this bubble */}
         <StreamingMessage
           streaming={streaming}
           streamingContent={streamingContent}
@@ -329,6 +326,7 @@ export function VirtualizedMessageList({
           dialogueDetection={roleplayDialogueDetection}
           shouldShowAvatars={shouldShowAvatars()}
           isDangerousChat={isDangerousChat}
+          pendingToolCalls={pendingToolCalls}
         />
 
         <div ref={messagesEndRef} />

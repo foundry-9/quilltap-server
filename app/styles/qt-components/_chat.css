@@ -1876,6 +1876,15 @@
   }
 
   /**
+   * Container for tool calls nested inside a message bubble (assistant prose or
+   * the streaming bubble). Separates the tool blocks from the character's prose
+   * and from each other so they read as distinct paragraphs, not inline text.
+   */
+  .qt-chat-message-tools {
+    @apply mt-3 space-y-2;
+  }
+
+  /**
    * Desktop avatar container
    * Ensures avatar with name/title doesn't overflow into adjacent rows
    */

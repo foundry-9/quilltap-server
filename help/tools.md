@@ -101,6 +101,10 @@ Additional tools provided by installed plugins or extensions:
 6. The AI uses these results to form its response
 7. You see the AI's response incorporating the tool results
 
+**Where Tool Calls Appear:**
+
+When a character reaches for a tool mid-conversation, the resulting flourish is now tucked neatly beneath their own remarks — set apart as its own tidy paragraph within their message, rather than left to drift about the parlour as a separate card. You'll see the character's prose first and then, just below, a labeled panel for each tool they summoned, which you may unfold to inspect the request and the reply. Tools *you* set in motion — by way of the Run Tool dialog, or a result you attach to your own message — keep their own standalone card, since the honour of that errand is yours and not the character's. And while a character is still composing, any tool they invoke appears within the very bubble where their reply is taking shape.
+
 **Tool Availability:**
 
 - Some tools depend on your chat configuration (image generation requires an image profile)

@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Feature: Tool calls render inside the character's message in the Salon
+
+Character-initiated tool calls in Salon chats no longer render as standalone `role: 'TOOL'` bubbles in the general message flow. They are now folded into the assistant message that called them and rendered as separate blocks ("paragraphs") below the character's prose, inside the same bubble. This is a pure client-side rendering change — tool messages remain separate rows in the database; they are only grouped for display.
+
+A new pure helper `groupToolMessagesIntoAssistants` (`app/salon/[id]/group-tool-messages.ts`) attaches each character tool result (no `systemSender`, content `initiatedBy !== 'user'`) to the nearest preceding character-assistant entry via a transient `attachedToolMessages` field on the rendered `Message`, dropping it from the flat list. The page memoizes the grouped list (`renderMessages`) and feeds it to the virtualizer, `useAutoScroll`, and `VirtualizedMessageList`. `MessageRow` renders the attached tools via `ToolMessage` in a new `embedded` mode (no standalone row/avatar, compact header, wrapped in the pre-existing `.qt-chat-tool-embedded` class) inside a new `.qt-chat-message-tools` container. `ToolMessage` and `PendingToolCalls` both gained an `embedded` prop.
+
+User-initiated runs (Run Tool modal, composer-attached results, anything authored by Prospero) stay standalone, unchanged. During streaming, in-progress tool calls now nest inside the live streaming bubble (`StreamingMessage` renders `PendingToolCalls` embedded) instead of as a separate row. `useMessageActions.canResendMessage` now resolves its target message by id rather than by positional index, since the rendered list is whisper-filtered and tool-folded (also fixes a latent whisper index mismatch). Help (`help/tools.md`) updated.
+
 #### Fix: Confirming a wardrobe delete/reset closed the Wardrobe dialog
 
 Deleting a wardrobe item (or resetting the Outfit Builder) closed the entire Wardrobe dialog the moment you clicked Confirm. The confirmation prompt (`showConfirmation`) renders into `document.body`, outside the dialog's modal ref, so the `mousedown` on its Confirm button reached `BaseModal`'s click-outside listener and was read as a click outside the wardrobe. Routed all four confirmations in `wardrobe-control-dialog.tsx` through a `requestConfirmation` wrapper that sets a `confirming` flag, and suspended `closeOnClickOutside`/`closeOnEscape` while it is set — mirroring the existing `editorOpen` guard for the editor/import sub-modals.
