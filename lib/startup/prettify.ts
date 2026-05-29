@@ -163,6 +163,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-courier-delta-fields-v1': "Teaching the Courier to travel light",
   'add-commonplace-scene-cache-v1': "Marking the Commonplace Book's bookmarks",
   'add-core-whisper-fields-v1': "Fitting Aurora's workshop with a plumb line",
+  'add-core-whisper-settings-field-v1': "Hanging Aurora's plumb line from the rafters",
 
   // Embedding + vector
   'normalize-vector-storage-v1': 'Normalising vector storage to Float32 BLOBs',

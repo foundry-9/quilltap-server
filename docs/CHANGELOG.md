@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Fix: Saving chat settings failed with "no such column: coreWhisper"
+
+Any write to chat settings (e.g. changing Agent Mode max turns) returned a 500 with `no such column: coreWhisper`, surfacing in the UI as the console error "Failed to update agent mode max turns". The `ChatSettings` schema and repository expect a global-default `coreWhisper` JSON column on `chat_settings` (resolution precedence chat → character → global), but the original `add-core-whisper-fields-v1` migration only added the per-chat (`chats.coreWhisperEnabled`/`coreWhisperInterval`) and per-character (`characters.coreWhisperEnabled`) override columns — it never added the `chat_settings.coreWhisper` column, so the repository's auto-generated UPDATE referenced a column that didn't exist. Added migration `add-core-whisper-settings-field-v1` to add `chat_settings.coreWhisper TEXT` (default `{"enabled":true,"interval":12,"silenceThreshold":3,"packetTokenBudget":4096,"fireOnContextTransition":true}`). Editing the already-shipped migration wouldn't help instances where it had already run, hence a separate companion migration. DDL.md updated.
+
 #### Cleanup: Drop the dead singular `scenario` column from characters
 
 Added migration `drop-character-scenario-column-v1` to remove the singular `scenario TEXT` column from the `characters` table. It predated the `scenarios[]` array (which the 4.6 vault cutover moved into the per-character vault) and was never read or written by the repository row-mapping, the `Character` type, or its Zod schema — so the column was dead legacy that the cutover left behind because it was never part of the content-field set. No data loss: nothing referenced it. DDL.md already reflected the post-cutover schema without this column.
