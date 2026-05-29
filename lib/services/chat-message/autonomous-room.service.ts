@@ -84,6 +84,10 @@ export async function startAutonomousRoomManually(
     currentRunId: runId,
     runState: 'idle',
     runStateMessage: null,
+    // Fresh run — drop any pause state left over from a prior run so it can't
+    // bleed into this run's wall-clock accounting.
+    runPausedAt: null,
+    runPausedAccumMs: 0,
     scheduleLastRunAt: nowIso,
     ...(nextScheduledRunAt !== chat.scheduleNextRunAt
       ? { scheduleNextRunAt: nextScheduledRunAt }
@@ -121,6 +125,9 @@ export async function pauseAutonomousRoom(
   await repos.chats.update(chatId, {
     runState: 'paused',
     runStateMessage: 'manual:paused',
+    // Stamp when the pause took effect so a later resume can fold this
+    // interval into runPausedAccumMs and keep it out of the wall-clock budget.
+    runPausedAt: new Date().toISOString(),
   } as unknown as Partial<ChatMetadataBase>);
   logger.info('Autonomous-room: paused', { context: HANDLER, chatId });
   return { ok: true };
@@ -153,18 +160,87 @@ export async function stopAutonomousRoom(
 }
 
 /**
- * Resume a paused autonomous-room run by handing the lifecycle back to the
- * runner: clear the paused state to 'idle', generate a new runId, and
- * enqueue a fresh turn job. The handler's idle → running transition resets
- * the per-run counters (turns / tokens / startedAt).
+ * Resume an autonomous-room run.
+ *
+ * When the room is genuinely *paused* (and still owns a live run), this
+ * continues the SAME run rather than starting a new one: the run's counters
+ * (turns / tokens), runId, and runStartedAt are preserved, and no "run begun"
+ * announcement is posted. The paused interval is folded into runPausedAccumMs
+ * (which the wall-clock budget subtracts) rather than shifting runStartedAt —
+ * runStartedAt also anchors the token-accounting window, so moving it would
+ * drop pre-pause tokens from the count. The row is flipped straight back to
+ * `running`, so the turn handler skips both its not-active early-exit and its
+ * idle→running start block (which is what posts the banner and zeroes the
+ * counters) and goes directly to the next turn.
+ *
+ * For any other state (idle / stopped / budgetExhausted / error, or a paused
+ * row with no runId), there's nothing meaningful to continue, so we fall back
+ * to a fresh run via `startAutonomousRoomManually` — a brand-new runId with
+ * reset counters and the usual start announcement.
  */
 export async function resumeAutonomousRoom(
   chatId: string,
   userId: string,
 ): Promise<StartManualRunResult> {
-  // Same shape as manual start — both build a fresh run on top of any
-  // prior idle/paused/budgetExhausted state.
-  return startAutonomousRoomManually(chatId, userId);
+  const repos = getRepositories();
+
+  const chat = await repos.chats.findById(chatId);
+  if (!chat) {
+    return { ok: false, reason: 'chat_not_found', message: 'Chat not found.' };
+  }
+  if (chat.chatType !== 'autonomous') {
+    return { ok: false, reason: 'not_autonomous', message: 'This chat is not an autonomous room.' };
+  }
+  if (chat.runState === 'running') {
+    return {
+      ok: false,
+      reason: 'already_running',
+      message: 'An autonomous run is already in progress for this room.',
+    };
+  }
+
+  // Anything that isn't a live paused run starts fresh.
+  if (chat.runState !== 'paused' || !chat.currentRunId) {
+    return startAutonomousRoomManually(chatId, userId);
+  }
+
+  const now = Date.now();
+  const runId = chat.currentRunId;
+
+  // Exclude the paused interval from the wall-clock budget by accumulating it
+  // into runPausedAccumMs — NOT by shifting runStartedAt. runStartedAt is also
+  // the token-accounting window start (the turn handler sums llm_logs since
+  // that instant), so moving it forward would drop every pre-pause token from
+  // the count. The wall-clock check subtracts runPausedAccumMs instead.
+  let runPausedAccumMs = chat.runPausedAccumMs ?? 0;
+  if (chat.runPausedAt) {
+    const pausedForMs = now - Date.parse(chat.runPausedAt);
+    if (Number.isFinite(pausedForMs) && pausedForMs > 0) {
+      runPausedAccumMs += pausedForMs;
+    }
+  }
+
+  await repos.chats.update(chatId, {
+    runState: 'running',
+    runStateMessage: null,
+    runEndedAt: null,
+    runPausedAt: null,
+    runPausedAccumMs,
+    // currentRunId / runStartedAt / runTurnsConsumed / runTokensConsumed are
+    // deliberately left untouched — this continues the existing run.
+  } as unknown as Partial<ChatMetadataBase>);
+
+  const jobId = await enqueueAutonomousRoomTurn(userId, { chatId, runId });
+
+  logger.info('Autonomous-room: resumed (continuing run)', {
+    context: HANDLER,
+    chatId,
+    runId,
+    jobId,
+    runPausedAccumMs,
+  });
+
+  return { ok: true, runId, jobId };
 }
 
 /**
@@ -172,10 +248,21 @@ export async function resumeAutonomousRoom(
  * or restart. Any chat with `chatType = 'autonomous'` and `runState =
  * 'running'` had its turn-worker killed mid-execution; without this sweep
  * the row stays `running` forever and `startAutonomousRoomManually` refuses
- * to re-engage. We transition it back to `idle`, bump `currentRunId` so any
- * zombie AUTONOMOUS_ROOM_TURN job that gets re-claimed by the dispatcher's
- * orphan reset exits cleanly via the stale-run guard, and record the
- * reconcile event on the row.
+ * to re-engage.
+ *
+ * We transition it to `paused` (not `idle`) so the interrupted run is
+ * *resumable*: `resumeAutonomousRoom` will continue it in place, preserving
+ * the turn/token counters and transcript rather than starting over. We bump
+ * `currentRunId` so any zombie AUTONOMOUS_ROOM_TURN job re-claimed by the
+ * dispatcher's orphan reset exits cleanly via the stale-run guard, and stamp
+ * `runPausedAt` from the last message (the best proxy for when the run
+ * actually stopped conversing) so a later resume excludes the outage from the
+ * wall-clock budget. Counters and `runEndedAt` are deliberately left as the
+ * resumable state expects (counters preserved; not ended).
+ *
+ * Scheduled (cron) rooms are unaffected operationally: the scheduler tick
+ * treats `paused` as eligible, so the next cron slot still starts a fresh run
+ * if the household never resumes manually.
  *
  * Parent-process only. Idempotent — when nothing is stuck this is a single
  * findAll + filter with no writes.
@@ -195,12 +282,13 @@ export async function reconcileAutonomousRunsAtStartup(): Promise<{ reconciledCo
   const nowIso = new Date().toISOString();
   for (const chat of stuck) {
     await repos.chats.update(chat.id, {
-      runState: 'idle',
-      runStateMessage: 'restart:reconciled',
+      runState: 'paused',
+      runStateMessage: 'restart:interrupted',
       currentRunId: randomUUID(),
-      runEndedAt: nowIso,
+      runEndedAt: null,
+      runPausedAt: chat.lastMessageAt ?? chat.runStartedAt ?? nowIso,
     } as unknown as Partial<ChatMetadataBase>);
-    logger.info('Autonomous-room: reconciled stuck run at startup', {
+    logger.info('Autonomous-room: reconciled stuck run at startup (paused, resumable)', {
       context: HANDLER,
       chatId: chat.id,
       previousRunId: chat.currentRunId,

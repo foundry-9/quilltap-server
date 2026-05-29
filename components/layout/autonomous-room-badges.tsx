@@ -29,6 +29,7 @@ interface AutonomousRoom {
   runStateMessage: string | null
   runStartedAt: string | null
   runEndedAt: string | null
+  runPausedAccumMs: number
   runTurnsConsumed: number
   runTokensConsumed: number
   budgetMaxTurns: number | null
@@ -94,8 +95,9 @@ function timeRemainingMs(room: AutonomousRoom, nowMs: number): number {
       : room.runEndedAt
       ? Date.parse(room.runEndedAt)
       : nowMs
-  const elapsed = (Number.isNaN(end) ? nowMs : end) - start
-  return Math.max(0, max - elapsed)
+  // Exclude accumulated paused time so the countdown matches the budget check.
+  const elapsed = (Number.isNaN(end) ? nowMs : end) - start - (room.runPausedAccumMs ?? 0)
+  return Math.max(0, max - Math.max(0, elapsed))
 }
 
 type BudgetReadout =

@@ -415,6 +415,8 @@ CREATE TABLE "chats" (
   "runStateMessage" TEXT DEFAULT NULL,
   "runStartedAt" TEXT DEFAULT NULL,
   "runEndedAt" TEXT DEFAULT NULL,
+  "runPausedAt" TEXT DEFAULT NULL,         -- ISO time the current paused interval began; cleared on resume
+  "runPausedAccumMs" INTEGER DEFAULT 0,    -- cumulative ms spent paused; wall-clock budget = (now - runStartedAt) - runPausedAccumMs (keeps runStartedAt as the token-window anchor)
   "runTurnsConsumed" INTEGER DEFAULT NULL,
   "runTokensConsumed" INTEGER DEFAULT NULL,
   "runDestructiveToolsAllowed" INTEGER DEFAULT 0,

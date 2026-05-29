@@ -59,6 +59,7 @@ export const GET = createAuthenticatedHandler(
           currentRunId: cAny.currentRunId ?? null,
           runStartedAt: cAny.runStartedAt ?? null,
           runEndedAt: cAny.runEndedAt ?? null,
+          runPausedAccumMs: cAny.runPausedAccumMs ?? 0,
           runTurnsConsumed: cAny.runTurnsConsumed ?? 0,
           runTokensConsumed: cAny.runTokensConsumed ?? 0,
           scheduleCron: cAny.scheduleCron ?? null,

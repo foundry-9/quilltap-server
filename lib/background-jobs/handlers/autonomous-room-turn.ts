@@ -80,7 +80,9 @@ function checkBudget(
   },
 ): BudgetCheckResult {
   if (chat.budgetMaxWallClockMs != null && chat.runStartedAt) {
-    const elapsed = now - Date.parse(chat.runStartedAt);
+    // Exclude time spent paused: runStartedAt stays fixed (it anchors token
+    // accounting), so we subtract the accumulated paused duration here.
+    const elapsed = now - Date.parse(chat.runStartedAt) - (chat.runPausedAccumMs ?? 0);
     if (elapsed >= chat.budgetMaxWallClockMs) {
       return { exhausted: true, nextState: 'budgetExhausted', reason: 'wall_clock' };
     }
@@ -123,6 +125,7 @@ async function transitionRunState(
     runStateMessage: string | null;
     runEndedAt: string | null;
     runStartedAt: string | null;
+    runPausedAt: string | null;
     runTurnsConsumed: number;
     runTokensConsumed: number;
     scheduleNextRunAt: string | null;
@@ -336,6 +339,10 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     await transitionRunState(chatId, budget.nextState, {
       runEndedAt: nowIso,
       runStateMessage: `budget:${budget.reason}`,
+      // A daily-cap pause may be manually resumed before the cap rolls over;
+      // stamp runPausedAt so that resume can exclude the paused interval from
+      // the wall-clock budget the same way a manual pause does.
+      ...(budget.nextState === 'paused' ? { runPausedAt: nowIso } : {}),
       ...(nextRunIso ? { scheduleNextRunAt: nextRunIso } : {}),
     });
     const kind = budget.nextState === 'paused' ? 'autonomous-room-paused' : 'autonomous-room-end';

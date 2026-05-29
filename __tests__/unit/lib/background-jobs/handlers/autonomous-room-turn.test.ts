@@ -194,6 +194,30 @@ describe('handleAutonomousRoomTurn — counter bookkeeping', () => {
     expect(updatesWithTurns[0].runTurnsConsumed).toBe(8)
   })
 
+  it('does NOT post the run-start banner when continuing an already-running run (resume)', async () => {
+    // A resumed run is flipped to `running` by the service before the turn
+    // job lands, so the handler must skip the idle → running start block —
+    // no "autonomous-room-start" announcement, no counter reset.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', runTurnsConsumed: 5, runTokensConsumed: 1000 }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const startAnnouncements = state.messageAdds.filter(
+      (m) => (m as { systemKind?: string }).systemKind === 'autonomous-room-start',
+    )
+    expect(startAnnouncements).toHaveLength(0)
+    // No reset write either — counters only get the single post-turn update.
+    const resetWrites = state.chatUpdates.filter(
+      (u) => u.runTurnsConsumed === 0 && u.runTokensConsumed === 0,
+    )
+    expect(resetWrites).toHaveLength(0)
+  })
+
   it('does not increment when handleSendMessage throws (turn failed)', async () => {
     const { state, repos } = createBufferedRepos({
       chat: baseChat({ runState: 'running', runTurnsConsumed: 7 }),

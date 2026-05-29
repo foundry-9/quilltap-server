@@ -154,6 +154,7 @@ async function handleStatus(
     runStateMessage: c.runStateMessage ?? null,
     runStartedAt: c.runStartedAt ?? null,
     runEndedAt: c.runEndedAt ?? null,
+    runPausedAccumMs: c.runPausedAccumMs ?? 0,
     runTurnsConsumed: c.runTurnsConsumed ?? 0,
     runTokensConsumed: c.runTokensConsumed ?? 0,
     scheduleCron: c.scheduleCron ?? null,

@@ -547,6 +547,14 @@
           "type": ["string", "null"],
           "description": "ISO timestamp of the current/most-recent run end."
         },
+        "runPausedAt": {
+          "type": ["string", "null"],
+          "description": "ISO timestamp the current paused interval began; cleared on resume."
+        },
+        "runPausedAccumMs": {
+          "type": ["integer", "null"],
+          "description": "Cumulative milliseconds the current run has spent paused. The wall-clock budget subtracts this from elapsed time so paused intervals are excluded without disturbing runStartedAt."
+        },
         "runTurnsConsumed": {
           "type": ["integer", "null"],
           "description": "Turns consumed in the current/most-recent autonomous-room run."

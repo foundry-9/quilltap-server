@@ -119,6 +119,11 @@ export async function handleAutonomousRoomScheduleTick(job: BackgroundJob): Prom
       currentRunId: runId,
       runState: 'idle',
       runStateMessage: null,
+      // Fresh scheduled run — drop any pause state left from a prior
+      // (e.g. crash-reconciled) paused state so it can't bleed into this
+      // run's wall-clock accounting.
+      runPausedAt: null,
+      runPausedAccumMs: 0,
       scheduleLastRunAt: new Date(now).toISOString(),
       scheduleNextRunAt: nextNext ? nextNext.toISOString() : null,
     } as unknown as Partial<ChatMetadataBase>;

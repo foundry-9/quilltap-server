@@ -699,6 +699,10 @@ export const ChatMetadataSchema = z.object({
   runStartedAt: TimestampSchema.nullable().optional(),
   /** ISO timestamp of the current/most-recent run end. */
   runEndedAt: TimestampSchema.nullable().optional(),
+  /** ISO timestamp the current run was paused; cleared on resume. Marks the start of the current paused interval. */
+  runPausedAt: TimestampSchema.nullable().optional(),
+  /** Cumulative milliseconds the current run has spent paused, across all pause/resume cycles. The wall-clock budget subtracts this from elapsed time so paused intervals are excluded without disturbing runStartedAt (the token-accounting window start). */
+  runPausedAccumMs: z.number().int().nonnegative().nullable().optional(),
   /** Turns consumed in the current/most-recent run. */
   runTurnsConsumed: z.number().int().nonnegative().nullable().optional(),
   /** Tokens consumed in the current/most-recent run. */
@@ -929,6 +933,8 @@ export const ChatMetadataBaseSchema = z.object({
   runStateMessage: z.string().nullable().optional(),
   runStartedAt: TimestampSchema.nullable().optional(),
   runEndedAt: TimestampSchema.nullable().optional(),
+  runPausedAt: TimestampSchema.nullable().optional(),
+  runPausedAccumMs: z.number().int().nonnegative().nullable().optional(),
   runTurnsConsumed: z.number().int().nonnegative().nullable().optional(),
   runTokensConsumed: z.number().int().nonnegative().nullable().optional(),
   runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),

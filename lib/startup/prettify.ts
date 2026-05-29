@@ -130,6 +130,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-text-replacement-rules-table-v1': 'Building the autocorrect ledger',
   'add-text-replacements-enabled-field-v1': 'Wiring the autocorrect master switch',
   'add-autonomous-rooms-fields-v1': 'Preparing the autonomous salon quarters',
+  'add-autonomous-run-paused-at-v1': 'Noting when the salon paused for breath',
+  'add-autonomous-run-paused-accum-v1': 'Tallying the salon’s quiet interludes',
   'add-spoken-this-cycle-field-v1': 'Tallying who has held forth in this rotation',
   'add-auto-housekeeping-settings-field-v1': 'Adding auto-housekeeping settings to chats',
   'add-auto-lock-settings-field-v1': 'Adding auto-lock settings to chats',

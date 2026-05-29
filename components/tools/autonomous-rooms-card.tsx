@@ -17,6 +17,7 @@ interface AutonomousRoom {
   currentRunId: string | null
   runStartedAt: string | null
   runEndedAt: string | null
+  runPausedAccumMs: number
   runTurnsConsumed: number
   runTokensConsumed: number
   scheduleCron: string | null
@@ -63,8 +64,9 @@ function summarizeBudget(room: AutonomousRoom): string {
   if (room.budgetMaxTokens != null) parts.push(`${room.runTokensConsumed.toLocaleString()}/${room.budgetMaxTokens.toLocaleString()} tokens`)
   else parts.push(`${room.runTokensConsumed.toLocaleString()} tokens`)
   if (room.budgetMaxWallClockMs != null && room.runStartedAt) {
-    const elapsedMs = (room.runEndedAt ? Date.parse(room.runEndedAt) : Date.now()) - Date.parse(room.runStartedAt)
-    parts.push(`${Math.round(elapsedMs / 60000)}/${Math.round(room.budgetMaxWallClockMs / 60000)} min`)
+    // Exclude accumulated paused time so the readout matches the budget check.
+    const elapsedMs = (room.runEndedAt ? Date.parse(room.runEndedAt) : Date.now()) - Date.parse(room.runStartedAt) - (room.runPausedAccumMs ?? 0)
+    parts.push(`${Math.round(Math.max(0, elapsedMs) / 60000)}/${Math.round(room.budgetMaxWallClockMs / 60000)} min`)
   }
   return parts.join(' · ')
 }
@@ -163,7 +165,7 @@ export function AutonomousRoomsCard() {
               <div className="flex flex-col gap-1 shrink-0">
                 <button
                   className="qt-button-secondary text-xs px-2 py-1"
-                  onClick={() => action(room.id, isRunning ? 'pause' : 'start')}
+                  onClick={() => action(room.id, isRunning ? 'pause' : state === 'paused' ? 'resume' : 'start')}
                   disabled={busyChatId === room.id || (!isRunning && !canStart)}
                 >
                   {isRunning ? 'Pause' : (state === 'paused' || state === 'budgetExhausted' ? 'Resume' : 'Start')}

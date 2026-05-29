@@ -305,6 +305,10 @@ import { addAutonomousRoomsFieldsMigration } from './add-autonomous-rooms-fields
 import { addSpokenThisCycleFieldMigration } from './add-spoken-this-cycle-field';
 // Aurora Core whisper: per-chat + per-character override columns
 import { addCoreWhisperFieldsMigration } from './add-core-whisper-fields';
+// 4.6 private character rooms: runPausedAt for resume-excludes-paused-time wall-clock accounting
+import { addAutonomousRunPausedAtMigration } from './add-autonomous-run-paused-at';
+// 4.6 private character rooms: runPausedAccumMs so wall-clock excludes paused time without shifting runStartedAt
+import { addAutonomousRunPausedAccumMigration } from './add-autonomous-run-paused-accum';
 
 /**
  * All available migrations.
@@ -605,6 +609,10 @@ export const migrations: Migration[] = [
   addSpokenThisCycleFieldMigration,
   // Aurora Core whisper: per-chat + per-character override columns
   addCoreWhisperFieldsMigration,
+  // 4.6 private character rooms: runPausedAt for resume-excludes-paused-time wall-clock accounting
+  addAutonomousRunPausedAtMigration,
+  // 4.6 private character rooms: runPausedAccumMs so wall-clock excludes paused time without shifting runStartedAt
+  addAutonomousRunPausedAccumMigration,
 ];
 
 export {
@@ -888,5 +896,9 @@ export {
   addSpokenThisCycleFieldMigration,
   // Aurora Core whisper: per-chat + per-character override columns
   addCoreWhisperFieldsMigration,
+  // 4.6 private character rooms: runPausedAt for resume-excludes-paused-time wall-clock accounting
+  addAutonomousRunPausedAtMigration,
+  // 4.6 private character rooms: runPausedAccumMs so wall-clock excludes paused time without shifting runStartedAt
+  addAutonomousRunPausedAccumMigration,
 };
 
