@@ -143,6 +143,22 @@ function WardrobeControlDialogInner({
   const resetMenuRef = useRef<HTMLDivElement>(null)
   const fittingSeedKeyRef = useRef<string | null>(null)
 
+  // True while an imperative confirmation dialog is up. That dialog renders into
+  // document.body (outside this modal's ref), so a click on its buttons bubbles
+  // to BaseModal's click-outside listener and would otherwise be read as a click
+  // outside the wardrobe — closing it the instant you confirm a delete/reset.
+  // Routing every confirmation through `requestConfirmation` flips this flag so
+  // we can suspend click-outside/Escape closing while the dialog is open.
+  const [confirming, setConfirming] = useState(false)
+  const requestConfirmation = useCallback(async (message: string): Promise<boolean> => {
+    setConfirming(true)
+    try {
+      return await showConfirmation(message)
+    } finally {
+      setConfirming(false)
+    }
+  }, [])
+
   // -------- Staged Live-outfit edits --------
   //
   // Per-slot tweaks on the Live tab used to call the equip API one at a time,
@@ -301,7 +317,7 @@ function WardrobeControlDialogInner({
   const handleDelete = useCallback(
     async (item: WardrobeItem) => {
       if (!selectedCharacterId) return
-      if (!(await showConfirmation(`Delete "${item.title}"? This cannot be undone.`))) return
+      if (!(await requestConfirmation(`Delete "${item.title}"? This cannot be undone.`))) return
       const url = item.characterId
         ? `/api/v1/characters/${item.characterId}/wardrobe/${item.id}`
         : `/api/v1/wardrobe/${item.id}`
@@ -317,7 +333,7 @@ function WardrobeControlDialogInner({
         await outfit.refreshOutfit()
       }
     },
-    [selectedCharacterId, reloadItems, isInChat, outfit],
+    [selectedCharacterId, reloadItems, isInChat, outfit, requestConfirmation],
   )
 
   const handleDuplicate = useCallback(
@@ -472,37 +488,37 @@ function WardrobeControlDialogInner({
     const target = wornSlots ? cloneSlots(wornSlots) : { ...EMPTY_EQUIPPED_SLOTS }
     if (
       !equippedSlotsEqual(fittingSlots, target) &&
-      !(await showConfirmation(
+      !(await requestConfirmation(
         'Discard your composition and start from what’s currently worn?',
       ))
     ) {
       return
     }
     setFittingSlots(target)
-  }, [selectedCharacterId, outfit.outfitState, fittingSlots])
+  }, [selectedCharacterId, outfit.outfitState, fittingSlots, requestConfirmation])
 
   const fittingResetToDefaults = useCallback(async () => {
     const target = buildDefaultOutfit(items)
     if (
       !equippedSlotsEqual(fittingSlots, target) &&
-      !(await showConfirmation(
+      !(await requestConfirmation(
         'Discard your composition and start from this character’s default outfit?',
       ))
     ) {
       return
     }
     setFittingSlots(target)
-  }, [items, fittingSlots])
+  }, [items, fittingSlots, requestConfirmation])
 
   const fittingClearAll = useCallback(async () => {
     if (
       !equippedSlotsEqual(fittingSlots, EMPTY_EQUIPPED_SLOTS) &&
-      !(await showConfirmation('Empty every slot in the Outfit Builder?'))
+      !(await requestConfirmation('Empty every slot in the Outfit Builder?'))
     ) {
       return
     }
     setFittingSlots({ ...EMPTY_EQUIPPED_SLOTS })
-  }, [fittingSlots])
+  }, [fittingSlots, requestConfirmation])
 
   /**
    * Open the editor in `Outfit bundle` mode with `componentItemIds`
@@ -793,8 +809,8 @@ function WardrobeControlDialogInner({
         title="Wardrobe"
         maxWidth="4xl"
         showCloseButton
-        closeOnClickOutside={!editorOpen}
-        closeOnEscape={!editorOpen}
+        closeOnClickOutside={!editorOpen && !confirming}
+        closeOnEscape={!editorOpen && !confirming}
         footer={
           <div className="flex items-center justify-end gap-2 w-full">
             <button

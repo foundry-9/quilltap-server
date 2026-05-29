@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Fix: Confirming a wardrobe delete/reset closed the Wardrobe dialog
+
+Deleting a wardrobe item (or resetting the Outfit Builder) closed the entire Wardrobe dialog the moment you clicked Confirm. The confirmation prompt (`showConfirmation`) renders into `document.body`, outside the dialog's modal ref, so the `mousedown` on its Confirm button reached `BaseModal`'s click-outside listener and was read as a click outside the wardrobe. Routed all four confirmations in `wardrobe-control-dialog.tsx` through a `requestConfirmation` wrapper that sets a `confirming` flag, and suspended `closeOnClickOutside`/`closeOnEscape` while it is set — mirroring the existing `editorOpen` guard for the editor/import sub-modals.
+
 #### Feature: Composite wardrobe `replace` flag and vault-first wardrobe storage
 
 Composite wardrobe items gained an optional `replace` boolean (default `false`). When `false` (the default), equipping a composite is additive: its components layer onto whatever already occupies the slots it designates, clearing nothing. When `true`, equipping first clears every slot the composite designates (its `types`) and then places only its own components. Leaf (non-composite) items always replace their own slots and ignore the flag. A composite's `types` may now be a superset of its components' slot union, so a composite can designate slots beyond the garments it contains in order to clear them (e.g. a "Naked" composite holding only a wedding ring that designates all four slots and, with `replace: true`, strips everything but the ring). Added `replace` to the `.qtap` export schema (`WardrobeItem`).
