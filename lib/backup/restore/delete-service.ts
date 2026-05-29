@@ -126,7 +126,7 @@ export async function deleteUserData(userId: string): Promise<void> {
     ...llmLogs.map((log) => repos.llmLogs.delete(log.id)),
     ...(chatSettings ? [globalRepos.chatSettings.delete(chatSettings.id)] : []),
     ...folders.map((f) => globalRepos.folders.delete(f.id)),
-    ...wardrobeItems.map((w) => globalRepos.wardrobe.delete(w.id)),
+    ...wardrobeItems.map((w) => globalRepos.wardrobe.delete(w.id, w.characterId ?? null)),
   ]);
 
   // Delete files from storage

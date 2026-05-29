@@ -221,6 +221,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
         componentItemIds: orderedComponentIds(preset.slots),
         appropriateness: null,
         isDefault: false,
+        // Legacy presets were worn as a whole outfit, so preserve replace semantics.
+        replace: true,
         migratedFromClothingRecordId: null,
         archivedAt: null,
         createdAt: preset.createdAt,

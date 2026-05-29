@@ -66,6 +66,8 @@ export function legacyPresetToComposite(preset: LegacyOutfitPreset): WardrobeIte
     componentItemIds,
     appropriateness: null,
     isDefault: false,
+    // Legacy presets were worn as a whole outfit, so preserve replace semantics.
+    replace: true,
     migratedFromClothingRecordId: null,
     archivedAt: null,
     createdAt: preset.createdAt,

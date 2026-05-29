@@ -116,8 +116,17 @@ export async function handleGetOutfitSummary(
 
     const itemsById = new Map<string, WardrobeItem>();
     if (allItemIds.size > 0) {
-      const fetched = await repos.wardrobe.findByIds(Array.from(allItemIds));
-      for (const item of fetched) itemsById.set(item.id, item);
+      // No global wardrobe table post-cutover: seed shared archetypes (Quilltap
+      // General) so composite components that are shared items resolve, then
+      // layer each participant character's own vault wardrobe on top.
+      for (const arche of await repos.wardrobe.findArchetypes(true)) {
+        itemsById.set(arche.id, arche);
+      }
+      for (const characterId of Object.keys(equippedOutfit)) {
+        for (const item of await repos.wardrobe.findByCharacterId(characterId, true)) {
+          itemsById.set(item.id, item);
+        }
+      }
     }
 
     type SummaryEntry = { itemId: string; title: string };
@@ -207,8 +216,10 @@ export async function handleEquipSlot(
         return notFound('Wardrobe item');
       }
       updatedSlots = await equipItem(repos, chatId, characterId, item);
-      logger.info('[Chats v1] Wardrobe item equipped (replace)', {
+      const isComposite = (item.componentItemIds?.length ?? 0) > 0;
+      logger.info('[Chats v1] Wardrobe item equipped', {
         chatId, characterId, itemId: item.id, slotsAffected: item.types,
+        mode: isComposite && item.replace !== true ? 'additive' : 'replace',
         context: 'wardrobe',
       });
     } else if (mode === 'add_to_slot') {

@@ -255,7 +255,27 @@ Reads go through `applyDocumentStoreOverlay()` in
 `applyDocumentStoreWriteOverlay()`. The repository's `*Raw` helpers bypass
 the overlay (used by exports and the migration's populator).
 
-### wardrobe_items
+### wardrobe_items — LEGACY/DEPRECATED in 4.6 (vault-first cutover)
+
+As of 4.6 the wardrobe is **vault-first**: this table is no longer the
+write target and is slated for removal. Wardrobe items now live as
+`Wardrobe/*.md` frontmatter files:
+
+- **Character-owned items** live in each character's document vault under
+  `Wardrobe/*.md` (the vault linked via
+  `characters.characterDocumentMountPointId`).
+- **Shared archetypes** (formerly `wardrobe_items` rows with
+  `characterId = NULL`) live in the singleton **"Quilltap General"** mount
+  under a `Wardrobe/` folder. A one-time startup task
+  (`lib/startup/move-shared-wardrobe-to-general.ts`) relocates the existing
+  shared archetypes there and drops their DB rows — it runs as a startup task
+  rather than a migration because migrations execute before the mount-index
+  database is initialized and so can't write vault documents.
+
+Reads/writes flow through the vault overlay (`buildWardrobeItemFile` in
+`lib/mount-index/character-vault.ts`; `parseWardrobeItemFile` in
+`lib/database/repositories/vault-overlay/parsers.ts`). The schema below
+documents the historical table only.
 
 ```sql
 CREATE TABLE "wardrobe_items" (
@@ -278,6 +298,26 @@ CREATE INDEX "idx_wardrobe_items_character" ON "wardrobe_items"("characterId");
 ```
 
 `componentItemIds` is a JSON array of other wardrobe item ids. An empty array (or NULL, treated identically) means a leaf item; a populated array means a composite — equipping the item stores its own id but at read time `expandComposites` resolves the components transitively (cycle-tolerant, depth-capped). Cycles are rejected at save time by `WardrobeRepository`.
+
+#### Wardrobe/*.md frontmatter
+
+The vault-first wardrobe files carry their fields in YAML frontmatter, with
+the markdown body holding the item's description. Optional fields are
+emitted only when set; vault path lookups are case-insensitive.
+
+| Field | Type | Description |
+|---|---|---|
+| id | string (UUID) | Stable item id. Falls back to a deterministic UUID derived from the mount + path if absent. |
+| title | string | Display name. Falls back to a leading `# Heading` or the filename if absent. |
+| types | list | Coverage slots this item designates: any of `top`, `bottom`, `footwear`, `accessories`. For composites this **may be a superset** of the components' slot union (so a composite can designate slots beyond the garments it actually contains, in order to clear them). |
+| componentItems | list (composites only) | Component refs as slugs or UUIDs; resolved to canonical UUIDs in a second pass. Omitted for leaf items. |
+| appropriateness | string | Context tags ("casual", "formal", "intimate", etc.). |
+| default | bool | `true` when the item is part of the character's default outfit. Legacy `isDefault: true` is also honored on read. |
+| replace | bool | **Composites only**, emitted only when `true`. When `true`, equipping the composite first clears every slot it designates (`types`) and then places only its own components; when `false`/absent, equipping is **additive** — components layer onto whatever already occupies those slots without clearing. Leaf items always replace their own slots and ignore the flag. |
+| archived / archivedAt | bool / string (ISO 8601) | `archived: true` marks the item archived; `archivedAt` records when (falls back to the document's `updatedAt`). |
+| migratedFromClothingRecordId | string (UUID) | Provenance from the legacy clothingRecords migration. |
+| createdAt | string (ISO 8601) | Creation timestamp (falls back to the document's `createdAt`). |
+| updatedAt | string (ISO 8601) | Last-update timestamp (falls back to the document's `updatedAt`). |
 
 ### outfit_presets — REMOVED in 4.5
 

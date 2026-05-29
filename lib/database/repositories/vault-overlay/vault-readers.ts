@@ -234,9 +234,13 @@ export async function readCharacterVaultScenarios(
 export async function readCharacterVaultWardrobe(
   mountPointId: string,
   characterId?: string,
+  options?: { seedArchetypes?: boolean },
 ): Promise<CharacterVaultWardrobe | null> {
   const repos = getRepositories();
   const charId = characterId ?? mountPointId;
+  // The Quilltap General Wardrobe/ folder IS the archetype set, so reading it
+  // must NOT seed archetypes — that would recurse back through findArchetypes.
+  const seedArchetypes = options?.seedArchetypes ?? true;
 
   const itemDocs = await repos.docMountDocuments.findManyByMountPointsInFolder(
     [mountPointId],
@@ -279,7 +283,7 @@ export async function readCharacterVaultWardrobe(
     // archetypes don't live in the character's vault folder. Personal items
     // win slug collisions; archetypes are pure fallback.
     const hasComponentRefs = items.some((item) => item.componentItemIds.length > 0);
-    if (hasComponentRefs) {
+    if (hasComponentRefs && seedArchetypes) {
       const archetypes = await repos.wardrobe.findArchetypes(true);
       for (const arche of archetypes) {
         if (!itemById.has(arche.id)) {

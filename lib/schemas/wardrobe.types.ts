@@ -52,6 +52,15 @@ export const WardrobeItemSchema = z.object({
   appropriateness: z.string().nullable().optional(),
   /** Whether this item is part of the character's default outfit */
   isDefault: z.boolean().default(false),
+  /**
+   * Composite behaviour on equip. `false`/absent (the default) = additive:
+   * the composite's components layer onto whatever already occupies the slots
+   * it designates, clearing nothing. `true` = the composite clears every slot
+   * it designates (its `types`) and then places only its own components — used
+   * for full-outfit swaps and "clear everything" composites like Naked. Has no
+   * effect on leaf (non-composite) items, which always replace their slots.
+   */
+  replace: z.boolean().default(false),
   /** Provenance tracking for items migrated from legacy clothingRecords */
   migratedFromClothingRecordId: UUIDSchema.nullable().optional(),
   /** When the item was archived (null = active) */

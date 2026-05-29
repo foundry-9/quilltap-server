@@ -415,7 +415,7 @@ async function createInitialMessagesScenarioAndStaff(
         ] as string[]
       ).filter((id) => typeof id === 'string' && id.length > 0);
       const equippedItemsData = equippedItemIds.length > 0
-        ? await repos.wardrobe.findByIds(equippedItemIds)
+        ? await repos.wardrobe.findByIdsForCharacter(characterId, equippedItemIds)
         : [];
       const equippedItemsMap = new Map(equippedItemsData.map((item) => [item.id, item]));
 

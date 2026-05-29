@@ -932,6 +932,10 @@
           "type": "boolean",
           "description": "Whether this item is part of the character's default outfit"
         },
+        "replace": {
+          "type": "boolean",
+          "description": "Composite items only: if true, equipping clears the slots the composite designates before placing its components; if false/absent, equipping is additive (layers without clearing). Ignored for leaf items."
+        },
         "migratedFromClothingRecordId": {
           "oneOf": [
             { "$ref": "#/$defs/UUID" },

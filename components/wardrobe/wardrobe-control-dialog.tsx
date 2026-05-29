@@ -348,6 +348,7 @@ function WardrobeControlDialogInner({
             appropriateness: item.appropriateness ?? null,
             isDefault: item.isDefault,
             componentItemIds: item.componentItemIds,
+            replace: item.replace,
           }),
         },
       )

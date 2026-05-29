@@ -53,22 +53,39 @@ async function loadSlots(
 }
 
 /**
- * Equip an item: for each slot in `item.types`, replace that slot's array
- * with `[item.id]`. Existing items in the affected slots are dropped.
+ * Equip an item into the slots its `types` designate.
  *
- * Composite items are stored as their own ID — expansion to leaves happens
- * at read time via `expandComposites`.
+ * - **Leaf items** (no components) always *replace* each designated slot with
+ *   `[item.id]` — "wear these jeans" swaps out the current bottom.
+ * - **Composites** consult their `replace` flag:
+ *     - `replace: false` (the default) is *additive* — the composite id is
+ *       appended to each designated slot, layering its components onto whatever
+ *       is already there. Nothing is cleared.
+ *     - `replace: true` clears each designated slot and places only the
+ *       composite (e.g. a full-outfit swap, or "Naked" designating every slot).
+ *
+ * Composite items are stored as their own ID — expansion to leaves happens at
+ * read time via `expandComposites`.
  */
 export async function equipItem(
   repos: DisplacementRepos,
   chatId: string,
   characterId: string,
-  newItem: { id: string; types: WardrobeItemType[] },
+  newItem: { id: string; types: WardrobeItemType[]; componentItemIds?: string[]; replace?: boolean },
 ): Promise<EquippedSlots> {
   const slots = await loadSlots(repos, chatId, characterId);
 
+  const isComposite = (newItem.componentItemIds?.length ?? 0) > 0;
+  const additive = isComposite && newItem.replace !== true;
+
   for (const slotType of newItem.types) {
-    slots[slotType] = [newItem.id];
+    if (additive) {
+      if (!slots[slotType].includes(newItem.id)) {
+        slots[slotType] = [...slots[slotType], newItem.id];
+      }
+    } else {
+      slots[slotType] = [newItem.id];
+    }
   }
 
   const result = await repos.chats.setEquippedOutfit(chatId, characterId, slots);
@@ -132,8 +149,9 @@ export type DisplacementMode = 'equip' | 'add_to_slot' | 'remove_from_slot' | 'c
 
 export interface ComputeDisplacedOptions {
   mode: DisplacementMode;
-  /** Required for `equip` and `add_to_slot`. */
-  item?: { id: string; types: string[] };
+  /** Required for `equip` and `add_to_slot`. `componentItemIds`/`replace` drive
+   *  composite additive-vs-replace behaviour (see `equipItem`). */
+  item?: { id: string; types: string[]; componentItemIds?: string[]; replace?: boolean };
   /** Required for `add_to_slot`, `remove_from_slot`, `clear_slot`. */
   slot?: WardrobeItemType;
   /** Filter target for `remove_from_slot`; omit to clear the slot. */
@@ -148,8 +166,16 @@ export function computeDisplacedSlots(
 
   if (options.mode === 'equip') {
     if (!options.item) return slots;
+    const isComposite = (options.item.componentItemIds?.length ?? 0) > 0;
+    const additive = isComposite && options.item.replace !== true;
     for (const slotType of options.item.types as WardrobeItemType[]) {
-      slots[slotType] = [options.item.id];
+      if (additive) {
+        if (!slots[slotType].includes(options.item.id)) {
+          slots[slotType] = [...slots[slotType], options.item.id];
+        }
+      } else {
+        slots[slotType] = [options.item.id];
+      }
     }
     return slots;
   }

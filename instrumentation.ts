@@ -584,6 +584,15 @@ export async function register() {
               './lib/startup/refresh-vault-wardrobe'
             );
             await refreshVaultWardrobe();
+
+            // Wardrobe vault cutover for shared items: move the legacy
+            // `characterId = null` archetype rows into the Quilltap General
+            // mount's Wardrobe/ folder and drop them from the DB. Must run
+            // here (post mount-index init), not as a migration. Idempotent.
+            const { moveSharedWardrobeToGeneral } = await import(
+              './lib/startup/move-shared-wardrobe-to-general'
+            );
+            await moveSharedWardrobeToGeneral();
           })
           .catch((backfillError) => {
             logger.warn('Error during character vault backfill or physical-file migration', {

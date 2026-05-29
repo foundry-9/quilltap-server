@@ -186,6 +186,9 @@ export function buildWardrobeItemFile(
   if (item.isDefault) {
     data.default = true;
   }
+  if (item.replace) {
+    data.replace = true;
+  }
   if (item.archivedAt) {
     data.archived = true;
     data.archivedAt = item.archivedAt;

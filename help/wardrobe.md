@@ -96,6 +96,16 @@ To create one, add a wardrobe item as you ordinarily would, then in its details 
 
 Composites used to be called "outfit presets" and lived as a separate species. They have been folded into the wardrobe, sparing the curator one extra concept to mind. Existing presets are migrated to composite items automatically, with their identities preserved.
 
+#### Layer or Replace?
+
+By default, slipping into a composite is a *gentle* affair: its garments **layer** atop whatever the character already has on, and nothing presently worn so much as wrinkles. Don a "Nice Jewellery" set and the earrings, locket, and ring simply join the ensemble already in progress --- the day's frock stays exactly where it is.
+
+Should you prefer a clean sweep --- a complete change of costume, as it were --- tick **"Replace everything in its designated slots"** on the composite. Now equipping it first empties every slot the outfit *designates* and then places only its own pieces, leaving no stray accessory from the previous getup clinging on.
+
+Here is the subtle bit, and a rather useful one: a composite may be told to **designate** slots beyond the garments it actually contains. This lets an outfit clear ground it doesn't itself occupy. The classic example is a "Naked" composite that holds nothing but, say, a wedding ring, yet designates *all four* slots --- with Replace ticked, donning it strips the character to that single ring. Without the designation, those empty slots would be left untouched, and the poor soul would remain half-dressed in yesterday's tweeds.
+
+(This toggle is a composite's prerogative alone. A lone garment always simply takes its own slots; there is nothing for it to sweep.)
+
 ### Archiving and Deletion
 
 Items that have fallen out of favour need not be destroyed entirely. **Archiving** an item hides it from wardrobe lists and tool results while preserving it for posterity --- and it will remain equipped if currently worn, so mid-conversation wardrobe crises are averted. Should you wish to restore an archived item, simply unarchive it.

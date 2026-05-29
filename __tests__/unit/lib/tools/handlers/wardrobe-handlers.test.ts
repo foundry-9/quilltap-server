@@ -57,6 +57,7 @@ const makeWardrobeItem = (overrides: Record<string, unknown> = {}) => ({
   componentItemIds: [],
   appropriateness: 'formal evening',
   isDefault: false,
+  replace: false,
   archivedAt: null,
   migratedFromClothingRecordId: null,
   createdAt: now,
@@ -85,8 +86,16 @@ describe('wardrobe tool handlers', () => {
         // coverage_summary text still get a valid resolver path.
         findByCharacterId: jest.fn().mockResolvedValue([]),
         findById: jest.fn(),
-        // Fallback bulk lookup for items not in findByCharacterId.
+        // Fallback bulk lookup for items not in findByCharacterId. Post-cutover
+        // the production code calls findByIdsForCharacter; the alias below routes
+        // it through findByIds so existing per-test `findByIds.mockResolvedValue`
+        // setups keep working.
         findByIds: jest.fn().mockResolvedValue([]),
+        findByIdsForCharacter: jest.fn((_charId: string, ids: string[]) =>
+          repos.wardrobe.findByIds(ids)
+        ),
+        // Shared-archetype lookup (reads Quilltap General post-cutover).
+        findArchetypeById: jest.fn().mockResolvedValue(null),
         // Overlay-aware single-item lookup used by the equip primitives.
         findByIdForCharacter: jest.fn((_charId: string, id: string) =>
           repos.wardrobe.findById(id)
@@ -844,6 +853,7 @@ describe('wardrobe tool handlers', () => {
         componentItemIds: [],
         appropriateness: 'casual',
         isDefault: false,
+        replace: false,
       })
       // equipItem persists the new item in every slot it covers.
       expect(mockEquipItem).toHaveBeenCalledWith(repos, 'chat-1', 'char-1', newItem)
@@ -908,6 +918,7 @@ describe('wardrobe tool handlers', () => {
         componentItemIds: ['raincoat-1', 'jeans-1'],
         appropriateness: 'rainy weather',
         isDefault: false,
+        replace: false,
       })
       expect(result).toMatchObject({
         success: true,
@@ -968,10 +979,11 @@ describe('wardrobe tool handlers', () => {
       })
     })
 
-    it('overrides LLM-supplied types with the union derived from components', async () => {
-      // The LLM sends `types: ['accessories']`, which is wrong for the
-      // components. The handler should ignore that and use the union of the
-      // components' types instead.
+    it('widens the component union with caller-supplied types (slot designation)', async () => {
+      // The component union is the floor; any `types` the caller lists are
+      // ADDED to it, letting a composite designate slots its components don't
+      // fill (so a replace composite can clear them). Here components cover
+      // top+bottom and the caller designates accessories too.
       const raincoat = makeWardrobeItem({
         id: 'raincoat-1',
         title: 'Raincoat',
@@ -987,7 +999,7 @@ describe('wardrobe tool handlers', () => {
       const newComposite = makeWardrobeItem({
         id: 'rain-outfit',
         title: 'Rain Outfit',
-        types: ['top', 'bottom'],
+        types: ['top', 'bottom', 'accessories'],
         componentItemIds: ['raincoat-1', 'jeans-1'],
       })
 
@@ -1003,13 +1015,13 @@ describe('wardrobe tool handlers', () => {
         context
       )
 
-      // The persisted types reflect the component union, not the LLM input.
+      // Persisted types = union of components ∪ caller-designated slots, in
+      // canonical slot order.
       expect(repos.wardrobe.create).toHaveBeenCalledWith(
-        expect.objectContaining({ types: ['top', 'bottom'] })
+        expect.objectContaining({ types: ['top', 'bottom', 'accessories'] })
       )
       expect(result.success).toBe(true)
-      expect(result.resolved_types).toEqual(['top', 'bottom'])
-      expect(result.resolved_types).not.toContain('accessories')
+      expect(result.resolved_types).toEqual(['top', 'bottom', 'accessories'])
     })
 
     it('rejects a leaf create that supplies neither types nor components', async () => {

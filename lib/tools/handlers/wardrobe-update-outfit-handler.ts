@@ -2,8 +2,9 @@
  * Set Outfit Tool Handler (composite items only)
  *
  * Two modes:
- *   - `wear`   → `equipItem(composite)` — replaces each slot in the
- *                composite's `types` with `[composite.id]`.
+ *   - `wear`   → `equipItem(composite)` — additive by default (layers the
+ *                composite into each slot its `types` designate); a composite
+ *                flagged `replace: true` clears those slots first.
  *   - `remove` → for each slot in the composite's `types`,
  *                `removeFromSlot(slot, composite.id)`.
  *

@@ -36,6 +36,8 @@ export interface WardrobeItemSummary {
   isDefault: boolean
   /** IDs of component items if this item is a composite. */
   componentItemIds: string[]
+  /** Composite-only: clear the designated slots on equip instead of layering. */
+  replace?: boolean
 }
 
 /** Per-slot resolved item details for display (full array form). */
@@ -140,6 +142,7 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
             types: item.types,
             isDefault: item.isDefault,
             componentItemIds: Array.isArray(item.componentItemIds) ? item.componentItemIds : [],
+            replace: item.replace === true,
           })
         }
       } else {
@@ -157,6 +160,7 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
               types: item.types,
               isDefault: false,
               componentItemIds: Array.isArray(item.componentItemIds) ? item.componentItemIds : [],
+              replace: item.replace === true,
             })
           }
         }
@@ -307,7 +311,12 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
           if (!item) return slots
           return computeDisplacedSlots(slots, {
             mode: 'equip',
-            item: { id: item.id, types: item.types },
+            item: {
+              id: item.id,
+              types: item.types,
+              componentItemIds: item.componentItemIds,
+              replace: item.replace,
+            },
           })
         })
       } catch (err) {

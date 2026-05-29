@@ -12,7 +12,7 @@ interface WardrobeReposForSummary {
   };
   wardrobe: {
     findByCharacterId(characterId: string, includeArchived?: boolean): Promise<WardrobeItem[]>;
-    findByIds(ids: string[]): Promise<WardrobeItem[]>;
+    findByIdsForCharacter(characterId: string, ids: string[]): Promise<WardrobeItem[]>;
   };
 }
 

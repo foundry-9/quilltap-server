@@ -30,6 +30,7 @@ function makeItem(
     types,
     componentItemIds,
     isDefault: false,
+    replace: false,
     archivedAt: null,
     createdAt: NOW,
     updatedAt: NOW,
@@ -40,7 +41,9 @@ function makeRepos(items: WardrobeItem[]) {
   return {
     wardrobe: {
       findByCharacterId: jest.fn(async () => items),
-      findByIds: jest.fn(async (ids: string[]) => items.filter((i) => ids.includes(i.id))),
+      findByIdsForCharacter: jest.fn(async (_characterId: string, ids: string[]) =>
+        items.filter((i) => ids.includes(i.id)),
+      ),
     },
   } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
 }
@@ -124,12 +127,12 @@ describe('resolveEquippedOutfitForCharacter', () => {
     expect(resolved.outfitValues.bottom).toEqual(['Sundress'])
   })
 
-  it('falls back to findByIds for items missing from the character wardrobe', async () => {
+  it('falls back to findByIdsForCharacter for items missing from the character wardrobe', async () => {
     const archetype = makeItem('arch-id', 'Borrowed jacket', ['top'])
     const repos = {
       wardrobe: {
         findByCharacterId: jest.fn(async () => []),
-        findByIds: jest.fn(async (ids: string[]) =>
+        findByIdsForCharacter: jest.fn(async (_characterId: string, ids: string[]) =>
           ids.includes('arch-id') ? [archetype] : [],
         ),
       },

@@ -107,7 +107,7 @@ async function resolveComponentItems(
     if (!item) {
       // Try archetype lookup (characterId === null) for the id, since shared
       // items aren't in findByCharacterId.
-      const archetype = await repos.wardrobe.findById(id);
+      const archetype = await repos.wardrobe.findArchetypeById(id);
       if (archetype && archetype.characterId == null) {
         if (!seen.has(archetype.id)) {
           seen.add(archetype.id);
@@ -182,6 +182,7 @@ export async function executeWardrobeCreateItemTool(
       recipient,
       component_item_ids,
       component_titles,
+      replace,
     } = input;
 
     // Resolve the target character — defaults to the calling character
@@ -217,8 +218,9 @@ export async function executeWardrobeCreateItemTool(
 
     // Resolve components against the target character's wardrobe so a gifted
     // composite references items in the recipient's collection. If components
-    // are supplied, the new item is a composite; types is computed from the
-    // union and overrides any LLM-supplied `types`.
+    // are supplied, the new item is a composite; its coverage is the union of
+    // the components' slots, optionally widened by any `types` the caller lists
+    // (so a composite can designate slots none of its components fill).
     const components = await resolveComponentItems(
       targetCharacterId,
       component_item_ids,
@@ -228,20 +230,20 @@ export async function executeWardrobeCreateItemTool(
     const isComposite = components.length > 0;
     let resolvedTypes: WardrobeItemType[];
     if (isComposite) {
-      resolvedTypes = unionTypes(components);
-      if (resolvedTypes.length === 0) {
+      const union = unionTypes(components);
+      if (union.length === 0) {
         // Defensive: components should always cover at least one slot.
         throw new WardrobeCreateItemError(
           'Composite components do not cover any slots — this should not happen',
           'VALIDATION_ERROR',
         );
       }
-      if (types && types.length > 0) {
-        const provided = (types as WardrobeItemType[]).slice().sort().join(',');
-        const computed = resolvedTypes.slice().sort().join(',');
-        if (provided !== computed) {
-        }
-      }
+      // The component union is the floor; any caller-supplied types widen it.
+      const designated = new Set<WardrobeItemType>([
+        ...union,
+        ...((types as WardrobeItemType[]) ?? []),
+      ]);
+      resolvedTypes = WARDROBE_SLOT_TYPES.filter((s) => designated.has(s));
     } else {
       resolvedTypes = (types as WardrobeItemType[]) ?? [];
     }
@@ -259,6 +261,8 @@ export async function executeWardrobeCreateItemTool(
       componentItemIds,
       appropriateness: appropriateness || null,
       isDefault: false,
+      // Composite-only; ignored for leaf items at equip time. Defaults additive.
+      replace: isComposite ? replace ?? false : false,
     });
 
     let equipped = false;
@@ -266,9 +270,10 @@ export async function executeWardrobeCreateItemTool(
 
     if (equip_now) {
 
-      // For both leaf and composite items, `equipItem` replaces every slot in
-      // `newItem.types` with `[newItem.id]`. Composites are stored as their
-      // own id; expansion to leaf garments happens at read time.
+      // `equipItem` replaces the designated slots for leaf items and for
+      // composites flagged `replace: true`; composites default to additive
+      // (layering). Composites are stored as their own id; expansion to leaf
+      // garments happens at read time.
       await equipItem(repos, context.chatId, targetCharacterId, newItem);
 
       equipped = true;

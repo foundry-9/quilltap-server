@@ -131,6 +131,60 @@ describe('wardrobe outfit utilities', () => {
       })
     })
 
+    it('equip mode layers an additive composite onto existing slots (replace=false)', () => {
+      const next = computeDisplacedSlots(
+        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+        {
+          mode: 'equip',
+          item: { id: 'outfit-1', types: ['top', 'bottom'], componentItemIds: ['a', 'b'] },
+        },
+      )
+
+      expect(next).toEqual({
+        top: ['shirt-1', 'outfit-1'],
+        bottom: ['jeans-1', 'outfit-1'],
+        footwear: [],
+        accessories: [],
+      })
+    })
+
+    it('equip mode does not duplicate an additive composite already in a slot', () => {
+      const next = computeDisplacedSlots(
+        { top: ['outfit-1'], bottom: ['outfit-1'], footwear: [], accessories: [] },
+        {
+          mode: 'equip',
+          item: { id: 'outfit-1', types: ['top', 'bottom'], componentItemIds: ['a'] },
+        },
+      )
+
+      expect(next.top).toEqual(['outfit-1'])
+      expect(next.bottom).toEqual(['outfit-1'])
+    })
+
+    it('equip mode clears every designated slot for a replace composite (Naked)', () => {
+      const next = computeDisplacedSlots(
+        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: ['boots-1'], accessories: ['watch-1'] },
+        {
+          mode: 'equip',
+          item: {
+            id: 'naked-1',
+            types: ['top', 'bottom', 'footwear', 'accessories'],
+            componentItemIds: ['ring-1'],
+            replace: true,
+          },
+        },
+      )
+
+      // Every designated slot is cleared and holds only the composite id; the
+      // ring leaf is routed to accessories at read time, leaving the rest bare.
+      expect(next).toEqual({
+        top: ['naked-1'],
+        bottom: ['naked-1'],
+        footwear: ['naked-1'],
+        accessories: ['naked-1'],
+      })
+    })
+
     it('add_to_slot mode appends to the slot array without displacing siblings', () => {
       const next = computeDisplacedSlots(
         { top: ['t-shirt-1'], bottom: [], footwear: [], accessories: [] },

@@ -289,6 +289,8 @@ export function parseWardrobeItemFile(
   const isDefault =
     parsed.data?.default === true || parsed.data?.isDefault === true;
 
+  const replace = parsed.data?.replace === true;
+
   let archivedAt: string | null = null;
   const archivedAtRaw = parsed.data?.archivedAt;
   if (typeof archivedAtRaw === 'string' && archivedAtRaw.length > 0) {
@@ -332,6 +334,7 @@ export function parseWardrobeItemFile(
     types,
     appropriateness,
     isDefault,
+    replace,
     componentItemIds: componentItemIdsRaw,
     migratedFromClothingRecordId,
     archivedAt,

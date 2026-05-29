@@ -37,8 +37,12 @@ export const wardrobeCreateItemToolInputSchema = z
       .nonempty()
       .describe(
         'Coverage tags indicating what body area(s) this item covers. ' +
-        'Required for leaf items (no components). Optional and ignored for ' +
-        'composite items — the slot coverage is computed from the components.'
+        'Required for leaf items (no components). For composite items the ' +
+        'coverage is at least the union of the components\' slots; any slots ' +
+        'you list here are ADDED to that union, letting a composite designate ' +
+        'slots none of its components fill (e.g. a "Naked" composite that ' +
+        'designates every slot but only contains a ring — combined with ' +
+        'replace:true this clears the other slots).'
       )
       .optional(),
     appropriateness: z
@@ -77,6 +81,16 @@ export const wardrobeCreateItemToolInputSchema = z
         'Titles of existing wardrobe items that this new item bundles, used ' +
         'as a fallback when component_item_ids are not known. Resolved against ' +
         'the calling character\'s wardrobe (case-insensitive).'
+      )
+      .optional(),
+    replace: z
+      .boolean()
+      .describe(
+        'Composite items only. If false/omitted (the default), equipping this ' +
+        'composite is additive — its components layer onto whatever already ' +
+        'occupies the slots it designates. If true, equipping it first clears ' +
+        'every slot it designates, then places only its own components ' +
+        '(full-outfit swaps and "clear everything" composites).'
       )
       .optional(),
   })

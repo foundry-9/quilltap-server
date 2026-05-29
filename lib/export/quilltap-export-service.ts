@@ -217,10 +217,11 @@ export async function exportCharacters(
       const tagNames = await resolveTagNames(repos, character.tags);
 
       // Load wardrobe items for this character (skip archetypes — characterId=null).
-      // Raw variant so exports reflect canonical DB rows, not the overlay.
+      // Read through the overlay: post-cutover the character vault is the
+      // authoritative store, not the (now-unwritten) wardrobe_items table.
       let wardrobeItems: WardrobeItem[] = [];
       try {
-        wardrobeItems = await globalRepos.wardrobe.findByCharacterIdRaw(id);
+        wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id);
       } catch (error) {
         logger.warn('Failed to load wardrobe items for character export', {
           characterId: id,

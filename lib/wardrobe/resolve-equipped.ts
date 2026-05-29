@@ -9,8 +9,8 @@
  * This helper:
  *   1. Loads every wardrobe item belonging to the character (so the
  *      `itemsById` map can resolve composite components transitively).
- *   2. Falls back to `wardrobe.findByIds` for any equipped IDs not found in
- *      the character's own wardrobe (archetype items, etc.).
+ *   2. Falls back to `wardrobe.findByIdsForCharacter` for any equipped IDs not
+ *      found in the character's own wardrobe (archetype items, etc.).
  *   3. Expands each input slot's array via `expandComposites`, then routes
  *      each resulting leaf into every output slot the leaf's own `types`
  *      declares — dedup'd across input slots. That way an atomic dress with
@@ -32,7 +32,7 @@ import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 export interface ResolveEquippedRepos {
   wardrobe: {
     findByCharacterId(characterId: string, includeArchived?: boolean): Promise<WardrobeItem[]>;
-    findByIds(ids: string[]): Promise<WardrobeItem[]>;
+    findByIdsForCharacter(characterId: string, ids: string[]): Promise<WardrobeItem[]>;
   };
 }
 
@@ -107,7 +107,10 @@ export async function resolveEquippedOutfitForCharacter(
   const missing = equippedItemIds.filter((id) => !itemsById.has(id));
   if (missing.length > 0) {
     try {
-      const fallback = await repos.wardrobe.findByIds(missing);
+      // Resolve via the character scope so archetypes (Quilltap General) and
+      // the character's own vault items both surface — there's no global
+      // wardrobe table to hit post-cutover.
+      const fallback = await repos.wardrobe.findByIdsForCharacter(characterId, missing);
       for (const item of fallback) {
         itemsById.set(item.id, item);
       }
