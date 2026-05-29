@@ -20,7 +20,7 @@ import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
-import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums } from '../actions';
+import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleAccessibleStores } from '../actions';
 import {
   getPhotoLinkSummaryBySha256,
   type PhotoLinkSummary,
@@ -120,6 +120,14 @@ export async function handleGet(
   // Handle photo-albums action - resolve candidate save targets for an image
   if (action === 'photo-albums') {
     return handleGetPhotoAlbums(chatId, ctx);
+  }
+
+  // Handle accessible-stores action - document stores for the Open-Document
+  // picker's right-column accordions. `?all=true` is the picker's "look
+  // everywhere" mode (every enabled store, not just this chat's reach).
+  if (action === 'accessible-stores') {
+    const all = req.nextUrl.searchParams.get('all') === 'true';
+    return handleAccessibleStores(chatId, ctx, { all });
   }
 
   // Handle get-background action - returns story background URL for the chat

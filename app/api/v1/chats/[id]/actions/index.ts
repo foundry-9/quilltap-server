@@ -33,6 +33,7 @@ export { handleRenderConversation } from './render-conversation';
 export {
   handleActiveDocument,
   handleRecentDocuments,
+  handleAccessibleStores,
   handleOpenDocument,
   handleCloseDocument,
   handleReadDocument,
@@ -40,6 +41,7 @@ export {
   handleRenameDocument,
   handleDeleteDocument,
 } from './documents';
+export type { AccessibleStoreOption, AccessibleStoreKind, ProjectLibraryTarget } from './documents';
 export { handleInsertAnnouncement } from './announcement';
 export { handleAnnouncementPreview } from './announcement-preview';
 export { handleGetPhotoAlbums } from './photo-albums';

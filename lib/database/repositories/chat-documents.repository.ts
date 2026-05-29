@@ -104,6 +104,26 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
   }
 
   /**
+   * Find the most recently updated documents across ALL chats, newest first.
+   * Used by the Open-Document picker so recent files persist beyond the
+   * current chat. Callers over-fetch and then dedupe by file identity and
+   * re-rank current-chat-first before capping.
+   */
+  async findRecentAcrossChats(limit: number): Promise<ChatDocument[]> {
+    return this.safeQuery(
+      async () => {
+        const all = await this.findAll();
+        return all
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+          .slice(0, limit);
+      },
+      'Error finding recent documents across chats',
+      { limit },
+      []
+    );
+  }
+
+  /**
    * Open a document for a chat. If a document is already open,
    * the existing one is deactivated (kept for history).
    * If the requested document was previously opened, reactivates it.

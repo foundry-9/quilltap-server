@@ -40,6 +40,16 @@ export interface PathResolutionContext {
   characterIds?: string[];
   /** Mount point name or ID (required for document_store scope) */
   mountPoint?: string;
+  /**
+   * Operator UI override. When true, `document_store` resolution may reach ANY
+   * enabled mount point, not just the chat-accessible set — backing the
+   * "look everywhere" mode of the Document Mode picker/editor, and letting the
+   * operator reopen a recent document whose store isn't reachable from the
+   * current chat (e.g. a non-participant character's vault). Opt-in and set
+   * ONLY by the human operator's HTTP document actions; character tool handlers
+   * build their own context and never set it, so their sandbox is unchanged.
+   */
+  operatorOverride?: boolean;
 }
 
 export interface ResolvedPath {
@@ -206,6 +216,17 @@ async function collectAccessibleMountPointIds(
 ): Promise<string[]> {
   const repos = getRepositories();
   const ids = new Set<string>();
+
+  // Operator "look everywhere" override: every enabled store is reachable.
+  // Restricted to human-operator UI document actions (see PathResolutionContext).
+  if (context.operatorOverride) {
+    const enabled = await repos.docMountPoints.findEnabled();
+    for (const mp of enabled) ids.add(mp.id);
+    logger.debug('Path resolver: operator override — all enabled stores accessible', {
+      count: ids.size,
+    });
+    return Array.from(ids);
+  }
 
   if (context.projectId) {
     const projectLinks = await repos.projectDocMountLinks.findByProjectId(context.projectId);

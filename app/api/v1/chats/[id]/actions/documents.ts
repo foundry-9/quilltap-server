@@ -36,6 +36,10 @@ import {
   postLibrarianDeleteAnnouncement,
 } from '@/lib/services/librarian-notifications/writer';
 import { getErrorMessage } from '@/lib/error-utils';
+import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
+import { getGeneralMountPointId } from '@/lib/instance-settings';
+import { MAX_RECENT_DOCUMENTS } from '@/lib/chat-documents/constants';
+import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -123,6 +127,11 @@ async function resolveDocumentRequest(
     projectId: chatContext.projectId,
     characterIds: chatContext.characterIds,
     mountPoint: params.mountPoint,
+    // These are operator-driven Document Mode actions (open/read/write/rename/
+    // delete from the Salon UI), so the operator may reach any enabled store —
+    // including ones picked via the picker's "look everywhere" mode. Character
+    // doc tools use a separate code path and never get this override.
+    operatorOverride: true,
   });
 
   return {
@@ -233,27 +242,68 @@ function scheduleDocumentStoreRefresh(
 // ============================================================================
 
 /**
- * Get the active document for a chat
+ * Recent documents for the Open-Document picker.
+ *
+ * Starts with the current chat's documents, then folds in recently-opened
+ * documents from other chats (every opened doc persists as a chat_documents
+ * row, so this is durable across chats). The list is deduped by file identity
+ * — current-chat rows win the dedupe so a file touched in this chat keeps its
+ * "this chat first" placement — and capped at MAX_RECENT_DOCUMENTS.
  */
 export async function handleRecentDocuments(
   chatId: string,
   { repos }: AuthenticatedContext
 ): Promise<NextResponse> {
   try {
-    // Return all documents for the chat (active + inactive), sorted by most recent
-    const allDocs = await repos.chatDocuments.findByChatId(chatId);
-    const sorted = allDocs
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 10);
+    // This chat's own documents (always shown first, in full) plus a window of
+    // the most-recently-updated documents from every other chat. Fetching the
+    // current chat separately guarantees its docs lead even when other chats
+    // have churned past the global window.
+    const fetchLimit = Math.max(MAX_RECENT_DOCUMENTS * 5, 50);
+    const [thisChatDocs, globalRecent] = await Promise.all([
+      repos.chatDocuments.findByChatId(chatId),
+      repos.chatDocuments.findRecentAcrossChats(fetchLimit),
+    ]);
+
+    const byUpdatedDesc = (a: ChatDocument, b: ChatDocument) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    const thisChat = [...thisChatDocs].sort(byUpdatedDesc);
+    const otherChats = globalRecent.filter(doc => doc.chatId !== chatId); // already newest-first
+
+    // Dedupe over the concatenation (this-chat ahead of others) so a file opened
+    // in both this chat and elsewhere keeps its "this chat first" placement.
+    const seen = new Set<string>();
+    const ordered: ChatDocument[] = [];
+    for (const doc of [...thisChat, ...otherChats]) {
+      const key = `${doc.scope} ${doc.mountPoint ?? ''} ${doc.filePath}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ordered.push(doc);
+      if (ordered.length >= MAX_RECENT_DOCUMENTS) break;
+    }
+
+    const thisChatReturned = ordered.filter(doc => doc.chatId === chatId).length;
+    logger.debug('Resolved recent documents for picker', {
+      chatId,
+      thisChatTotal: thisChat.length,
+      otherChatsWindow: otherChats.length,
+      returned: ordered.length,
+      fromThisChat: thisChatReturned,
+      fromOtherChats: ordered.length - thisChatReturned,
+    });
 
     return successResponse({
-      documents: sorted.map(doc => ({
+      documents: ordered.map(doc => ({
         id: doc.id,
+        chatId: doc.chatId,
         filePath: doc.filePath,
         scope: doc.scope,
         mountPoint: doc.mountPoint,
         displayTitle: doc.displayTitle,
-        isActive: doc.isActive,
+        // "Continue editing" only makes sense for the doc active in THIS chat;
+        // an other-chat row is offered as a fresh "Reopen" here.
+        isActive: doc.isActive && doc.chatId === chatId,
+        fromCurrentChat: doc.chatId === chatId,
         updatedAt: doc.updatedAt,
       })),
     });
@@ -263,6 +313,208 @@ export async function handleRecentDocuments(
       error: error instanceof Error ? error.message : String(error),
     });
     return serverError('Failed to get recent documents');
+  }
+}
+
+/**
+ * Kind of an accessible store, used by the picker to bucket the right-column
+ * accordions. `character` → a participant's character vault; `document-store`
+ * → a document store linked to the chat's project.
+ */
+export type AccessibleStoreKind = 'character' | 'document-store';
+
+export interface AccessibleStoreOption {
+  /** Mount point UUID — used to list files (`/api/v1/mount-points/:id/files`). */
+  mountPointId: string;
+  /**
+   * The mount point's canonical name. This is what document opens resolve
+   * against (`resolveDocEditPath` matches `document_store` scope by name), so
+   * it must be the real mount name, not a display alias.
+   */
+  name: string;
+  /** Display label for the row — character name for vaults, store name otherwise. */
+  label: string;
+  kind: AccessibleStoreKind;
+  mountType: 'filesystem' | 'obsidian' | 'database';
+  storeType: 'documents' | 'character';
+  /** Present for `kind: 'character'`. */
+  characterId?: string;
+}
+
+/**
+ * The project's official document store, surfaced as the picker's left-column
+ * "Project library" button so it browses and opens the same mount the
+ * `project` scope resolves to. Null when the chat has no project or the project
+ * has no official mount (legacy on-disk project files — the button falls back
+ * to `project` scope there).
+ */
+export interface ProjectLibraryTarget {
+  mountPointId: string;
+  /** Canonical mount name — what `document_store` opens resolve against. */
+  name: string;
+  mountType: 'filesystem' | 'obsidian' | 'database';
+}
+
+/**
+ * Document stores reachable from this chat, for the Open-Document picker's
+ * right-column accordions. Mirrors `collectAccessibleMountPointIds`: every
+ * participant's character vault, each document store linked to the chat's
+ * project, plus the instance-wide "Quilltap General" mount (always accessible).
+ * The client buckets the result by storeType/mountType into Character Vaults /
+ * Database-backed / Filesystem-backed.
+ *
+ * Only the project's *official* mount is held back — that one is the dedicated
+ * left-column "Project library" button (returned separately as `projectLibrary`
+ * so the button can browse/open the real mount). Quilltap General is NOT held
+ * back: the left-column "General library" button still points at the legacy
+ * on-disk general store, so the Quilltap General *mount* would otherwise be
+ * unreachable.
+ *
+ * When `opts.all` is set (the picker's "look everywhere" mode) the chat-reach
+ * restriction is dropped and EVERY enabled store is returned — character vaults
+ * labelled by their owning character's name — still holding back only the
+ * project-official mount. The operator may open any of these because the
+ * operator document actions resolve with `operatorOverride`.
+ */
+export async function handleAccessibleStores(
+  chatId: string,
+  { repos }: AuthenticatedContext,
+  opts: { all?: boolean } = {}
+): Promise<NextResponse> {
+  try {
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      return notFound('Chat');
+    }
+
+    // The project's official mount is surfaced as the left-column "Project
+    // library" button, so keep it out of the accordions to avoid duplication.
+    // (Quilltap General is intentionally NOT excluded — see the doc comment.)
+    const seen = new Set<string>();
+    let projectLibrary: ProjectLibraryTarget | null = null;
+    if (chat.projectId) {
+      const project = await repos.projects.findById(chat.projectId);
+      if (project?.officialMountPointId) {
+        seen.add(project.officialMountPointId);
+        const officialMp = await repos.docMountPoints.findById(project.officialMountPointId);
+        if (officialMp?.enabled) {
+          projectLibrary = {
+            mountPointId: officialMp.id,
+            name: officialMp.name,
+            mountType: officialMp.mountType,
+          };
+        }
+      }
+    }
+
+    const stores: AccessibleStoreOption[] = [];
+
+    if (opts.all) {
+      // "Look everywhere": every enabled store, regardless of chat reach.
+      const [mounts, characters] = await Promise.all([
+        repos.docMountPoints.findEnabled(),
+        repos.characters.findAll(),
+      ]);
+      // Reverse-map character vaults to their owning character for labelling.
+      const vaultOwner = new Map<string, { id: string; name: string }>();
+      for (const c of characters) {
+        if (c.characterDocumentMountPointId) {
+          vaultOwner.set(c.characterDocumentMountPointId, { id: c.id, name: c.name });
+        }
+      }
+      for (const mp of mounts) {
+        if (seen.has(mp.id)) continue;
+        seen.add(mp.id);
+        const isCharacter = mp.storeType === 'character';
+        const owner = isCharacter ? vaultOwner.get(mp.id) : undefined;
+        stores.push({
+          mountPointId: mp.id,
+          name: mp.name,
+          label: owner?.name ?? mp.name,
+          kind: isCharacter ? 'character' : 'document-store',
+          mountType: mp.mountType,
+          storeType: mp.storeType,
+          ...(owner ? { characterId: owner.id } : {}),
+        });
+      }
+    } else {
+      // Default: only stores reachable from this chat.
+      // 1. Participant character vaults.
+      for (const participant of chat.participants) {
+        if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
+        if (participant.status === 'removed') continue;
+        const vault = await getCharacterVaultStore(participant.characterId);
+        if (!vault || seen.has(vault.mountPointId)) continue;
+        const mp = await repos.docMountPoints.findById(vault.mountPointId);
+        if (!mp) continue;
+        const character = await repos.characters.findById(participant.characterId);
+        stores.push({
+          mountPointId: mp.id,
+          name: mp.name,
+          label: character?.name ?? mp.name,
+          kind: 'character',
+          mountType: mp.mountType,
+          storeType: mp.storeType,
+          characterId: participant.characterId,
+        });
+        seen.add(mp.id);
+      }
+
+      // 2. Document stores linked to the chat's project.
+      if (chat.projectId) {
+        const links = await repos.projectDocMountLinks.findByProjectId(chat.projectId);
+        for (const link of links) {
+          if (seen.has(link.mountPointId)) continue;
+          const mp = await repos.docMountPoints.findById(link.mountPointId);
+          if (!mp) continue;
+          stores.push({
+            mountPointId: mp.id,
+            name: mp.name,
+            label: mp.name,
+            kind: 'document-store',
+            mountType: mp.mountType,
+            storeType: mp.storeType,
+          });
+          seen.add(mp.id);
+        }
+      }
+
+      // 3. Quilltap General — always accessible to every chat, so it always
+      // appears (under Database-backed, normally). Mirrors path-resolver.
+      const generalId = await getGeneralMountPointId();
+      if (generalId && !seen.has(generalId)) {
+        const mp = await repos.docMountPoints.findById(generalId);
+        if (mp?.enabled) {
+          stores.push({
+            mountPointId: mp.id,
+            name: mp.name,
+            label: mp.name,
+            kind: 'document-store',
+            mountType: mp.mountType,
+            storeType: mp.storeType,
+          });
+          seen.add(mp.id);
+        }
+      }
+    }
+
+    logger.debug('Resolved accessible document stores for picker', {
+      chatId,
+      mode: opts.all ? 'all' : 'chat',
+      total: stores.length,
+      hasProjectLibrary: projectLibrary !== null,
+      characterVaults: stores.filter(s => s.storeType === 'character').length,
+      databaseStores: stores.filter(s => s.storeType === 'documents' && s.mountType === 'database').length,
+      filesystemStores: stores.filter(s => s.storeType === 'documents' && s.mountType !== 'database').length,
+    });
+
+    return successResponse({ stores, projectLibrary });
+  } catch (error) {
+    logger.error('Failed to resolve accessible document stores', {
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serverError('Failed to resolve accessible document stores');
   }
 }
 
