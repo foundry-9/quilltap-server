@@ -10113,27 +10113,39 @@ var OllamaProvider = class {
 
 // embedding-provider.ts
 var logger2 = createPluginLogger("qtap-plugin-ollama");
+var NUM_CTX_CEILING = 16384;
+var NUM_CTX_FALLBACK = 8192;
+var numCtxCache = /* @__PURE__ */ new Map();
+var numCtxInflight = /* @__PURE__ */ new Map();
 var OllamaEmbeddingProvider = class {
   constructor(baseUrl) {
     this.baseUrl = baseUrl || "http://localhost:11434";
   }
   /**
-   * Generate an embedding for the given text
+   * Generate an embedding for the given text.
    *
    * Note: Ollama doesn't require an API key, but the interface requires it.
-   * The apiKey parameter is ignored for Ollama.
+   * The apiKey parameter is ignored for Ollama. The options parameter is
+   * accepted to match the EmbeddingProvider contract; `dimensions` has no
+   * effect on Ollama's embedding endpoint, and num_ctx is derived internally.
    *
    * @param text The text to embed
    * @param model The model to use (e.g., 'nomic-embed-text')
    * @param apiKey Ignored for Ollama (no API key required)
+   * @param options Ignored for Ollama (see note above)
    * @returns The embedding result
    */
-  async generateEmbedding(text, model, apiKey) {
+  async generateEmbedding(text, model, apiKey, options) {
+    void apiKey;
+    void options;
+    const numCtx = await this.resolveNumCtx(model);
     const requestPayload = {
       model,
-      prompt: text
+      input: text,
+      truncate: true,
+      options: { num_ctx: numCtx }
     };
-    const response = await fetch(`${this.baseUrl}/api/embeddings`, {
+    const response = await fetch(`${this.baseUrl}/api/embed`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -10141,12 +10153,65 @@ var OllamaEmbeddingProvider = class {
       },
       body: JSON.stringify(requestPayload)
     });
+    if (response.status === 404) {
+      logger2.warn("Ollama /api/embed not found (404); falling back to legacy /api/embeddings", {
+        context: "OllamaEmbeddingProvider.generateEmbedding",
+        model
+      });
+      return this.generateEmbeddingLegacy(text, model);
+    }
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const errorMessage = error.error || response.statusText;
       logger2.error("Ollama embedding failed", {
         context: "OllamaEmbeddingProvider.generateEmbedding",
         status: response.status,
+        model,
+        numCtx,
+        error: errorMessage
+      });
+      throw new Error(`Ollama embedding failed: ${errorMessage}`);
+    }
+    const data = await response.json();
+    const embedding = Array.isArray(data.embeddings) ? data.embeddings[0] : void 0;
+    if (!embedding) {
+      throw new Error("No embedding returned from Ollama");
+    }
+    logger2.debug("Ollama embedding generated", {
+      context: "OllamaEmbeddingProvider.generateEmbedding",
+      model,
+      numCtx,
+      textLength: text.length,
+      dimensions: embedding.length
+    });
+    return {
+      embedding,
+      model,
+      dimensions: embedding.length
+    };
+  }
+  /**
+   * Legacy embedding path for Ollama servers without /api/embed.
+   *
+   * The legacy endpoint does not reliably honour `truncate`, so we send the
+   * minimal payload and let Ollama use whatever context it loaded with.
+   */
+  async generateEmbeddingLegacy(text, model) {
+    const response = await fetch(`${this.baseUrl}/api/embeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": getQuilltapUserAgent()
+      },
+      body: JSON.stringify({ model, prompt: text })
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const errorMessage = error.error || response.statusText;
+      logger2.error("Ollama embedding failed (legacy endpoint)", {
+        context: "OllamaEmbeddingProvider.generateEmbeddingLegacy",
+        status: response.status,
+        model,
         error: errorMessage
       });
       throw new Error(`Ollama embedding failed: ${errorMessage}`);
@@ -10163,6 +10228,101 @@ var OllamaEmbeddingProvider = class {
     };
   }
   /**
+   * Resolve the context window to request for a model, derived from the model's
+   * own reported context length and capped at NUM_CTX_CEILING. Cached per
+   * `${baseUrl}::${model}` (successful derivations only), with concurrent
+   * lookups for the same key deduped.
+   */
+  async resolveNumCtx(model) {
+    const key = `${this.baseUrl}::${model}`;
+    const cached = numCtxCache.get(key);
+    if (cached !== void 0) {
+      logger2.debug("Ollama num_ctx cache hit", {
+        context: "OllamaEmbeddingProvider.resolveNumCtx",
+        model,
+        numCtx: cached
+      });
+      return cached;
+    }
+    let inflight = numCtxInflight.get(key);
+    if (!inflight) {
+      inflight = this.fetchModelNumCtx(model);
+      numCtxInflight.set(key, inflight);
+    }
+    try {
+      const { numCtx, derived } = await inflight;
+      if (derived) {
+        numCtxCache.set(key, numCtx);
+      }
+      return numCtx;
+    } finally {
+      numCtxInflight.delete(key);
+    }
+  }
+  /**
+   * Query /api/show for the model's metadata and pull out its context length.
+   * Returns `{ derived: false }` with the fallback when the call fails or the
+   * model reports no context length.
+   */
+  async fetchModelNumCtx(model) {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/show`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": getQuilltapUserAgent()
+        },
+        body: JSON.stringify({ model })
+      });
+      if (!response.ok) {
+        logger2.warn("Ollama /api/show failed; using fallback num_ctx", {
+          context: "OllamaEmbeddingProvider.fetchModelNumCtx",
+          model,
+          status: response.status,
+          fallback: NUM_CTX_FALLBACK
+        });
+        return { numCtx: NUM_CTX_FALLBACK, derived: false };
+      }
+      const data = await response.json();
+      const modelInfo = data && data.model_info || {};
+      let modelCtx;
+      for (const [k, v] of Object.entries(modelInfo)) {
+        if ((k.endsWith(".context_length") || k === "context_length") && typeof v === "number" && v > 0) {
+          modelCtx = v;
+          break;
+        }
+      }
+      if (!modelCtx) {
+        logger2.warn("Ollama /api/show returned no context_length; using fallback num_ctx", {
+          context: "OllamaEmbeddingProvider.fetchModelNumCtx",
+          model,
+          fallback: NUM_CTX_FALLBACK
+        });
+        return { numCtx: NUM_CTX_FALLBACK, derived: false };
+      }
+      const numCtx = Math.min(modelCtx, NUM_CTX_CEILING);
+      logger2.debug("Resolved Ollama num_ctx from model", {
+        context: "OllamaEmbeddingProvider.fetchModelNumCtx",
+        model,
+        modelContextLength: modelCtx,
+        numCtx,
+        ceiling: NUM_CTX_CEILING
+      });
+      return { numCtx, derived: true };
+    } catch (error) {
+      logger2.warn(
+        "Ollama /api/show threw; using fallback num_ctx",
+        {
+          context: "OllamaEmbeddingProvider.fetchModelNumCtx",
+          model,
+          fallback: NUM_CTX_FALLBACK
+        },
+        error instanceof Error ? error : void 0
+      );
+      return { numCtx: NUM_CTX_FALLBACK, derived: false };
+    }
+  }
+  /**
    * Generate embeddings for multiple texts in a batch
    *
    * Note: Ollama doesn't have a native batch API, so this processes texts sequentially.
@@ -10170,12 +10330,13 @@ var OllamaEmbeddingProvider = class {
    * @param texts Array of texts to embed
    * @param model The model to use
    * @param apiKey Ignored for Ollama
+   * @param options Ignored for Ollama (matches interface)
    * @returns Array of embedding results
    */
-  async generateBatchEmbeddings(texts, model, apiKey) {
+  async generateBatchEmbeddings(texts, model, apiKey, options) {
     const results = [];
     for (const text of texts) {
-      const result = await this.generateEmbedding(text, model, apiKey);
+      const result = await this.generateEmbedding(text, model, apiKey, options);
       results.push(result);
     }
     return results;

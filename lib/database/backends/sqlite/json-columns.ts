@@ -294,8 +294,8 @@ export function jsonArrayLength(column: string): string {
 // Implementations live in lib/embedding/float32-conversion.ts and are
 // re-exported here so existing SQLite-backend imports keep working.
 
-import { embeddingToBlob, blobToEmbedding } from '@/lib/embedding/float32-conversion';
-export { embeddingToBlob, blobToEmbedding };
+import { embeddingToBlob, blobToEmbedding, parseLegacyEmbeddingText } from '@/lib/embedding/float32-conversion';
+export { embeddingToBlob, blobToEmbedding, parseLegacyEmbeddingText };
 
 // ============================================================================
 // Type Conversion Helpers

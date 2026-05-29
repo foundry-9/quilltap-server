@@ -36,3 +36,33 @@ export const blobToEmbedding = blobToFloat32;
 
 /** Alias for {@link float32ToBlob} — SQLite-backend spelling. */
 export const embeddingToBlob = float32ToBlob;
+
+/**
+ * Recover an embedding that was persisted as legacy JSON text (before the
+ * Float32-BLOB storage format). Two historical shapes exist:
+ *
+ *   - a JSON array — `"[0.1, 0.2, ...]"`
+ *   - a JSON object produced by `JSON.stringify(someFloat32Array)`, which
+ *     serialises a typed array as an index-keyed object —
+ *     `'{"0":0.1,"1":0.2,...}'`
+ *
+ * Returns the dense `number[]` in index order, or `undefined` when the text is
+ * not a usable embedding (scalar, null, or unparseable). Integer-like object
+ * keys iterate in ascending numeric order, so `Object.values` is index-ordered.
+ * The caller's schema converts the returned `number[]` into a `Float32Array`.
+ */
+export function parseLegacyEmbeddingText(value: string): number[] | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+  if (Array.isArray(parsed)) {
+    return parsed as number[];
+  }
+  if (parsed && typeof parsed === 'object') {
+    return Object.values(parsed as Record<string, number>);
+  }
+  return undefined;
+}
