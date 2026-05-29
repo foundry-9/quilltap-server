@@ -43,6 +43,7 @@ import {
   type SwipeState,
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
+import { groupToolMessagesIntoAssistants } from './group-tool-messages'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import {
   ChatComposer,
@@ -246,6 +247,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     })
   }, [messages, showAllWhispers, userParticipantIdSet])
 
+  // Fold character-initiated tool results into the assistant message that
+  // called them, so they render inside the character's bubble rather than as
+  // standalone rows in the flow. User/Prospero-initiated runs stay standalone.
+  // This grouped list drives virtualization and rendering downstream.
+  const renderMessages = useMemo(
+    () => groupToolMessagesIntoAssistants(visibleMessages),
+    [visibleMessages],
+  )
+
   // --- Modal state hook ---
   const modals = useModalState()
 
@@ -422,12 +432,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // (including user-controlled characters that may not have equipped outfits yet)
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
-    return visibleMessages[index]?.id ?? index
-  }, [visibleMessages])
+    return renderMessages[index]?.id ?? index
+  }, [renderMessages])
 
   // eslint-disable-next-line react-hooks/incompatible-library -- @tanstack/react-virtual exposes hooks the React Compiler can't analyse; safe to opt out of compiler optimisation here
   const virtualizer = useVirtualizer({
-    count: visibleMessages.length,
+    count: renderMessages.length,
     getScrollElement: () => messagesContainerRef.current,
     estimateSize: () => 150,
     overscan: 5,
@@ -444,7 +454,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     containerRef: messagesContainerRef,
     endRef: messagesEndRef,
     virtualizer,
-    messageCount: visibleMessages.length,
+    messageCount: renderMessages.length,
     isStreaming: sseStreaming.streaming,
     isWaitingForResponse: sseStreaming.waitingForResponse,
     streamingContent: sseStreaming.streamingContent,
@@ -1168,7 +1178,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           chatContent={
             <>
         <VirtualizedMessageList
-          messages={visibleMessages}
+          messages={renderMessages}
           virtualizer={virtualizer}
           messagesContainerRef={messagesContainerRef}
           messagesEndRef={messagesEndRef}

@@ -1,6 +1,8 @@
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import MessageContent from '@/components/chat/MessageContent'
 import Avatar from '@/components/ui/Avatar'
+import { PendingToolCalls } from './PendingToolCalls'
+import type { PendingToolCall } from '../hooks/useSSEStreaming'
 import type { CharacterData } from '../types'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
@@ -16,6 +18,9 @@ interface StreamingMessageProps {
   shouldShowAvatars: boolean
   /** Whether the Concierge has flagged this chat as dangerous */
   isDangerousChat?: boolean
+  /** In-progress tool calls for the turn being streamed — nested inside this
+   *  bubble as a separate block rather than shown as a standalone row. */
+  pendingToolCalls?: PendingToolCall[]
 }
 
 export function StreamingMessage({
@@ -27,6 +32,7 @@ export function StreamingMessage({
   dialogueDetection,
   shouldShowAvatars,
   isDangerousChat = false,
+  pendingToolCalls = [],
 }: StreamingMessageProps) {
   if (!waitingForResponse && !streaming) return null
 
@@ -56,6 +62,8 @@ export function StreamingMessage({
             <QuillAnimation size="sm" className="inline-block ml-2 qt-text-secondary" />
           </div>
         )}
+        {/* In-progress tool calls, nested as a separate block in the bubble */}
+        <PendingToolCalls embedded pendingToolCalls={pendingToolCalls} />
       </div>
     </div>
   )

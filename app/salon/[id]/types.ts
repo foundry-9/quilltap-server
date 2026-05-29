@@ -71,6 +71,11 @@ export interface Message {
     sizeBytes: number
     downloadUrl: string
   }> | null
+  /** Transient, UI-only: character-initiated TOOL result rows folded into this
+   * assistant message for rendering (see group-tool-messages.ts). Never
+   * persisted — populated client-side so tool calls render inside the
+   * character's bubble instead of as standalone rows in the flow. */
+  attachedToolMessages?: Message[]
 }
 
 export interface CharacterData {

@@ -3,6 +3,7 @@
 import { memo } from 'react'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
+import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
 import { TokenBadge } from '@/components/chat/TokenBadge'
 import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
@@ -107,6 +108,9 @@ interface MessageRowProps {
   onToggleSystemMessageExpanded?: (messageId: string) => void
   /** Callback fired after a Courier placeholder is resolved or cancelled — triggers a chat refetch. */
   onCourierTurnSettled?: () => void
+  /** Character-initiated TOOL result rows folded into this assistant message
+   * (see group-tool-messages.ts). Rendered as embedded blocks below the prose. */
+  attachedToolMessages?: Message[]
 }
 
 function getImageAttachments(message: Message) {
@@ -166,6 +170,7 @@ function MessageRowInner({
   isSystemMessageCollapsed = false,
   onCourierTurnSettled,
   onToggleSystemMessageExpanded,
+  attachedToolMessages,
 }: MessageRowProps) {
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
 
@@ -407,6 +412,22 @@ function MessageRowInner({
                         </svg>
                       </div>
                     </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Character-initiated tool calls, nested as separate blocks
+                  below the prose (pulled out of the general message flow). */}
+              {attachedToolMessages && attachedToolMessages.length > 0 && (
+                <div className="qt-chat-message-tools">
+                  {attachedToolMessages.map((toolMessage) => (
+                    <ToolMessage
+                      key={toolMessage.id}
+                      embedded
+                      message={toolMessage}
+                      character={character}
+                      onImageClick={onImageClick}
+                    />
                   ))}
                 </div>
               )}
@@ -826,6 +847,15 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
 
   // System-message collapse state
   if (prev.isSystemMessageCollapsed !== next.isSystemMessageCollapsed) return false
+
+  // Attached (nested) tool messages — compare by length and id sequence
+  const prevTools = prev.attachedToolMessages || []
+  const nextTools = next.attachedToolMessages || []
+  if (prevTools.length !== nextTools.length) return false
+  for (let i = 0; i < prevTools.length; i++) {
+    if (prevTools[i].id !== nextTools[i].id) return false
+    if (prevTools[i].content !== nextTools[i].content) return false
+  }
 
   // Props are equal, skip re-render
   return true
