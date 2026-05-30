@@ -463,7 +463,8 @@ CREATE TABLE "chats" (
   "runVisibility" TEXT DEFAULT NULL,       -- 'owner_only' | 'household' | 'open'; NULL = inherit user default
   -- Aurora Core whisper per-chat overrides (NULL = inherit from character → global)
   "coreWhisperEnabled" INTEGER DEFAULT NULL,
-  "coreWhisperInterval" INTEGER DEFAULT NULL
+  "coreWhisperInterval" INTEGER DEFAULT NULL,
+  "showThinking" INTEGER DEFAULT NULL          -- added in 4.6 (add-thinking-display-fields-v1): per-chat thinking-visibility override (tri-state). NULL = inherit global chat_settings.thinkingDisplay.defaultVisible; 0 = hide; 1 = show. DISPLAY ONLY.
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");
@@ -629,7 +630,9 @@ CREATE TABLE "chat_messages" (
   "pendingExternalPrompt" TEXT DEFAULT NULL,
   "pendingExternalAttachments" TEXT DEFAULT NULL,
   "pendingExternalPromptFull" TEXT DEFAULT NULL,
-  "opaqueContent" TEXT DEFAULT NULL
+  "opaqueContent" TEXT DEFAULT NULL,
+  "reasoningContent" TEXT DEFAULT NULL,
+  "reasoningSegments" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");
@@ -672,6 +675,7 @@ CREATE TABLE "chat_settings" (
   "textReplacementsEnabled" INTEGER DEFAULT 1, -- added in 4.6 (add-text-replacements-enabled-field-v1): master switch for the Layer 1.5 text-replacement plugin; rule list lives in text_replacement_rules
   "autonomousRoomSettings" TEXT DEFAULT '{}', -- added in 4.6 (add-autonomous-rooms-fields-v1): user-level defaults for autonomous rooms { dailyTokenBudget, defaultFreshnessWindowMs, visibilityDefault, destructiveToolPolicy }
   "coreWhisper" TEXT DEFAULT '{"enabled":true,"interval":12,"silenceThreshold":3,"packetTokenBudget":4096,"fireOnContextTransition":true}', -- added in 4.6 (add-core-whisper-settings-field-v1): global defaults for Aurora's Core whisper { enabled, interval, silenceThreshold, packetTokenBudget, fireOnContextTransition }. Per-chat/per-character overrides live on chats.coreWhisper*/characters.coreWhisperEnabled. Resolution: chat → character → global.
+  "thinkingDisplay" TEXT DEFAULT '{"defaultVisible":true,"defaultCollapsed":true}', -- added in 4.6 (add-thinking-display-fields-v1): global defaults for showing reasoning models' thinking { defaultVisible, defaultCollapsed }. Per-chat override lives on chats.showThinking. DISPLAY ONLY.
   UNIQUE("userId")
 );
 
@@ -1456,7 +1460,8 @@ Cascade off `doc_mount_files` reaps the blob row (and its bytes) when the last l
 - All `TEXT DEFAULT '[]'` and `TEXT DEFAULT '{}'` columns store JSON. The application parses them with Zod schemas.
 - All IDs are UUIDs stored as TEXT.
 - All timestamps (`createdAt`, `updatedAt`) are ISO 8601 strings.
-- Columns added by migrations appear after the original `CREATE TABLE` columns (SQLite `ALTER TABLE ADD COLUMN` appends to the end).
+- Columns added by migrations appear after the original `CREATE TABLE` columns (SQLite `ALTER TABLE ADD COLUMN` appends to the end). `chat_messages.reasoningContent` / `reasoningSegments` were added by `add-chat-message-reasoning-columns-v1`.
+- `chat_messages.reasoningContent` (full chain-of-thought) and `reasoningSegments` (JSON array of `{ anchorOffset, content, seq }` positioning blocks) hold reasoning models' "thinking". They are **DISPLAY ONLY** — surfaced in the Salon but never re-fed to any model as history, summary, or memory. The only in-request reuse of reasoning is the in-turn tool round-trip, which uses an in-memory value, not these columns.
 - The `request` and `response` columns in `llm_logs` contain full JSON payloads of the LLM API calls; these can be large.
 
 ## Key source files

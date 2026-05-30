@@ -40,6 +40,14 @@ export const ChatMessageRowSchema = z.object({
   attachments: z.array(UUIDSchema).nullable().default([]),  // JSON array
   debugMemoryLogs: z.array(z.string()).nullable().optional(),  // JSON array
   thoughtSignature: z.string().nullable().optional(),
+  // Reasoning / chain-of-thought from thinking models. DISPLAY ONLY — never re-fed to any model.
+  reasoningContent: z.string().nullable().optional(),
+  // Positioned reasoning blocks (JSON array) for splicing thinking into the prose. DISPLAY ONLY.
+  reasoningSegments: z.array(z.object({
+    anchorOffset: z.number(),
+    content: z.string(),
+    seq: z.number(),
+  })).nullable().optional(),
   participantId: UUIDSchema.nullable().optional(),
   recoveryType: z.enum(['token_limit', 'token_limit_static', 'content_limit', 'content_limit_static']).nullable().optional(),
   // Server-side pre-rendered HTML for simple messages

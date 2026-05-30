@@ -12,6 +12,7 @@ import { MemoryCascadeSettings } from '@/components/settings/chat-settings/Memor
 import { ImageDescriptionSettings } from '@/components/settings/chat-settings/ImageDescriptionSettings'
 import { AutomationSettings } from '@/components/settings/chat-settings/AutomationSettings'
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
+import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/ThinkingDisplaySettings'
 import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
 import { AutonomousRoomSettingsComponent } from '@/components/settings/chat-settings/AutonomousRoomSettings'
 import { AutonomousRoomsCard } from '@/components/tools/autonomous-rooms-card'
@@ -41,6 +42,7 @@ export function ChatTabContent() {
     handleDangerousContentUpdate,
     handleCheapLLMUpdate,
     handleAutonomousRoomSettingsUpdate,
+    handleThinkingDisplayUpdate,
   } = useChatSettingsContext()
 
   if (loading) {
@@ -133,6 +135,14 @@ export function ChatTabContent() {
             saving={saving}
             onDefaultEnabledChange={handleAgentModeDefaultEnabledChange}
             onMaxTurnsChange={handleAgentModeMaxTurnsChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Thinking / Reasoning" description="Show reasoning models' chain-of-thought in chat (display only)" sectionId="thinking-display" forceOpen={activeSection === 'thinking-display'}>
+          <ThinkingDisplaySettings
+            settings={settings}
+            saving={saving}
+            onUpdate={handleThinkingDisplayUpdate}
           />
         </CollapsibleCard>
 

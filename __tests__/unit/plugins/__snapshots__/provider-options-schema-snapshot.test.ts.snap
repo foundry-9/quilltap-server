@@ -55,6 +55,29 @@ exports[`Provider options schemas Anthropic exposes an options schema 1`] = `
       "helpText": "Prompt caching can reduce costs by up to 90% for repeated context.",
       "title": "Anthropic Options",
     },
+    {
+      "fields": [
+        {
+          "default": false,
+          "key": "extendedThinking",
+          "label": "Enable Extended Thinking",
+          "type": "boolean",
+        },
+        {
+          "default": 4096,
+          "helpText": "Maximum tokens the model may spend thinking. Minimum 1024; defaults to 4096 when left blank.",
+          "key": "thinkingBudget",
+          "label": "Thinking Budget (tokens)",
+          "showIf": {
+            "equals": true,
+            "field": "extendedThinking",
+          },
+          "type": "number",
+        },
+      ],
+      "helpText": "Let the model reason before answering. The reasoning is shown in chat (display only) and never re-fed to the model. While thinking is on, temperature and top_p are left at their defaults (extended thinking requires this), and max_tokens is raised above the budget if needed (the API requires budget ≥ 1024 and < max_tokens).",
+      "title": "Extended Thinking",
+    },
   ],
 }
 `;

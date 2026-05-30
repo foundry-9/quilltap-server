@@ -10246,6 +10246,12 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
       const choice = response.choices[0];
       const msg = choice.message;
       const reasoningContent = msg.reasoning_content;
+      if (reasoningContent) {
+        this.logger.debug("DeepSeek sendMessage reasoning captured", {
+          context: "DeepSeekProvider.sendMessage",
+          reasoningLength: reasoningContent.length
+        });
+      }
       const toolCalls = (msg.tool_calls ?? []).filter(
         (tc) => tc.type === "function" || "function" in tc
       ).map((tc) => {
@@ -10339,6 +10345,11 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
         const deltaReasoning = delta?.reasoning_content;
         if (deltaReasoning) {
           reasoningContent += deltaReasoning;
+          this.logger.debug("DeepSeek streaming reasoning fragment received", {
+            context: "DeepSeekProvider.streamMessage",
+            reasoningLength: reasoningContent.length
+          });
+          yield { content: "", done: false, reasoningContent };
         }
         if (delta?.tool_calls) {
           for (const tcDelta of delta.tool_calls) {

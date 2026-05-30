@@ -90,6 +90,26 @@ describe('message formatter utilities', () => {
         name: 'Alicia_Keys',
       })
     })
+
+    // DISPLAY-ONLY GUARD: a character's stored reasoning ("thinking") must never
+    // be re-fed to any model via history. Even if a history message carries
+    // reasoningContent, the provider-shaped output must not include it.
+    it('never carries reasoningContent into the provider-shaped history', () => {
+      const withReasoning = [
+        { role: 'system' as const, content: 'Rules', reasoningContent: 'system should-not-appear' },
+        { role: 'user' as const, content: 'Hello', name: 'Alicia Keys', reasoningContent: 'user should-not-appear' },
+        { role: 'assistant' as const, content: 'Hi', name: 'Lyra', thoughtSignature: 'sig', reasoningContent: 'secret chain-of-thought' },
+      ] as unknown as Parameters<typeof formatMessagesForProvider>[0]
+
+      for (const provider of ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'DEEPSEEK'] as const) {
+        const formatted = formatMessagesForProvider(withReasoning, provider, 'Lyra')
+        for (const m of formatted) {
+          expect(m).not.toHaveProperty('reasoningContent')
+          expect(JSON.stringify(m)).not.toContain('should-not-appear')
+          expect(JSON.stringify(m)).not.toContain('secret chain-of-thought')
+        }
+      }
+    })
   })
 
   describe('buildMultiCharacterContextSection', () => {

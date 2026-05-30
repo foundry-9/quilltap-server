@@ -34,6 +34,8 @@ import {
   encodeStatusEvent,
   safeEnqueue,
   streamMessage,
+  applyReasoningChunk,
+  flushReasoningSegment,
   type StreamOptions,
 } from './streaming.service'
 import { saveAssistantMessage } from './message-finalizer.service'
@@ -93,7 +95,10 @@ export function makePreservePartialOnError(
         [],
         preGeneratedAssistantMessageId,
         streaming.effectiveProfile.provider,
-        streaming.effectiveProfile.modelName
+        streaming.effectiveProfile.modelName,
+        undefined,
+        streaming.reasoningContent,
+        streaming.reasoningSegments
       )
       logger.info('Preserved partial streamed response after upstream error', {
         chatId,
@@ -188,6 +193,8 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
       previousResponseId,
       stop,
     })) {
+      // Capture + live-forward reasoning ("thinking") on any chunk. DISPLAY ONLY.
+      applyReasoningChunk(streaming, chunk, controller, encoder)
       if (chunk.content) {
         if (!streaming.hasStartedStreaming) {
           safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -198,6 +205,8 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
           }))
           streaming.hasStartedStreaming = true
         }
+        // Prose resumed — close any pending reasoning run into a positioned segment.
+        flushReasoningSegment(streaming)
         streaming.fullResponse += chunk.content
         controller.enqueue(encodeContentChunk(encoder, chunk.content))
       }
@@ -210,9 +219,8 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
         if (chunk.thoughtSignature) {
           streaming.thoughtSignature = chunk.thoughtSignature
         }
-        if (chunk.reasoningContent) {
-          streaming.reasoningContent = chunk.reasoningContent
-        }
+        // Flush any trailing reasoning that arrived without subsequent prose.
+        flushReasoningSegment(streaming)
       }
     }
   } catch (streamingError) {
@@ -246,6 +254,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
           messageId: preGeneratedAssistantMessageId,
           chatId,
         })) {
+          applyReasoningChunk(streaming, chunk, controller, encoder)
           if (chunk.content) {
             if (!streaming.hasStartedStreaming) {
               safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -256,6 +265,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
               }))
               streaming.hasStartedStreaming = true
             }
+            flushReasoningSegment(streaming)
             streaming.fullResponse += chunk.content
             controller.enqueue(encodeContentChunk(encoder, chunk.content))
           }
@@ -268,9 +278,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
             if (chunk.thoughtSignature) {
               streaming.thoughtSignature = chunk.thoughtSignature
             }
-            if (chunk.reasoningContent) {
-              streaming.reasoningContent = chunk.reasoningContent
-            }
+            flushReasoningSegment(streaming)
           }
         }
 

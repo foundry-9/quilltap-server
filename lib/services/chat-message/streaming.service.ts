@@ -17,7 +17,7 @@ import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
-import type { StreamingResult } from './types'
+import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
 
 const logger = createServiceLogger('StreamingService')
 
@@ -481,6 +481,76 @@ export function encodeContentChunk(encoder: TextEncoder, content: string): Uint8
 }
 
 /**
+ * Encode a live reasoning ("thinking") chunk for the client. The payload is the
+ * CUMULATIVE reasoning text so far — the client replaces (not appends) its
+ * buffer with each value. DISPLAY ONLY: the client decides whether to render it
+ * based on the chat's thinking-visibility setting; it is never fed to a model.
+ */
+export function encodeReasoningChunk(encoder: TextEncoder, reasoning: string): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ reasoning })}\n\n`)
+}
+
+/**
+ * Hand out the next turn-monotonic sequence number, shared between reasoning
+ * segments and tool-call anchors so same-offset items keep their true emission
+ * order when the Salon interleaves them.
+ */
+export function nextTurnSeq(streaming: Pick<StreamingState, 'nextTurnSeq'>): number {
+  const seq = streaming.nextTurnSeq ?? 0
+  streaming.nextTurnSeq = seq + 1
+  return seq
+}
+
+/**
+ * Capture reasoning from a stream chunk and forward it live to the client.
+ *
+ * Providers emit `reasoningContent` CUMULATIVELY (the full thinking-so-far on
+ * each reasoning-bearing chunk), so we last-wins it onto the streaming state
+ * and push the cumulative value down to the client. DISPLAY ONLY — the captured
+ * value is never re-fed to a model except the in-turn tool round-trip, which
+ * reads `streaming.reasoningContent` directly (not over SSE).
+ */
+export function applyReasoningChunk(
+  streaming: Pick<StreamingState, 'reasoningContent'>,
+  chunk: { reasoningContent?: string },
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+): void {
+  if (!chunk.reasoningContent) return
+  if (chunk.reasoningContent === streaming.reasoningContent) return
+  streaming.reasoningContent = chunk.reasoningContent
+  safeEnqueue(controller, encodeReasoningChunk(encoder, chunk.reasoningContent))
+}
+
+/**
+ * Close the current reasoning run into a positioned {@link ReasoningSegment} if
+ * any reasoning has accumulated since the last flush. Call this at every
+ * reasoning→non-reasoning boundary: when prose resumes, immediately before a
+ * tool-call batch is anchored, and on the terminal chunk. Snapshots the prose
+ * offset (`streaming.fullResponse.length`) at the flush instant and stamps the
+ * shared turn sequence so interleaved thinking/tool/thinking renders in order.
+ *
+ * Cumulative reasoning means the un-flushed buffer is
+ * `reasoningContent.slice(reasoningFlushedLen)`. DISPLAY ONLY.
+ */
+export function flushReasoningSegment(streaming: StreamingState): void {
+  const full = streaming.reasoningContent ?? ''
+  const flushed = streaming.reasoningFlushedLen ?? 0
+  if (full.length <= flushed) return
+  const content = full.slice(flushed)
+  // Advance the cursor regardless so we never re-flush this span.
+  streaming.reasoningFlushedLen = full.length
+  if (content.trim().length === 0) return
+  if (!streaming.reasoningSegments) streaming.reasoningSegments = []
+  const segment: ReasoningSegment = {
+    anchorOffset: streaming.fullResponse.length,
+    content,
+    seq: nextTurnSeq(streaming),
+  }
+  streaming.reasoningSegments.push(segment)
+}
+
+/**
  * Encode the done event
  */
 export function encodeDoneEvent(
@@ -507,6 +577,11 @@ export function encodeDoneEvent(
      * not an actual streamed response. The Salon should skip its optimistic
      * assistant-message push and rely on the prior fetchChat() refresh. */
     pendingExternalTurn?: boolean
+    /** Full reasoning ("thinking") text for the turn — DISPLAY ONLY. Lets the
+     * client's optimistic assistant-message push carry thinking without a refetch. */
+    reasoningContent?: string | null
+    /** Positioned reasoning blocks — DISPLAY ONLY (see ReasoningSegment). */
+    reasoningSegments?: ReasoningSegment[] | null
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)
@@ -632,7 +707,8 @@ export function createStreamingResult(
   attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null,
   rawResponse: unknown,
   thoughtSignature?: string,
-  reasoningContent?: string
+  reasoningContent?: string,
+  reasoningSegments?: ReasoningSegment[]
 ): StreamingResult {
   return {
     fullResponse,
@@ -642,5 +718,6 @@ export function createStreamingResult(
     rawResponse,
     thoughtSignature,
     reasoningContent,
+    reasoningSegments,
   }
 }

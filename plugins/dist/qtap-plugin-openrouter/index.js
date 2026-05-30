@@ -29310,12 +29310,25 @@ var OpenRouterProvider = class {
       if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
       if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
     }
+    const sendReasoningEffort = profileParams?.reasoningEffort;
+    if (typeof sendReasoningEffort === "string" && sendReasoningEffort.length > 0) {
+      requestParams.reasoning = { effort: sendReasoningEffort, exclude: false };
+    } else {
+      requestParams.reasoning = { exclude: false };
+    }
     const response = await client.chat.send({
       chatRequest: requestParams
     });
     const choice = response.choices[0];
     const content = choice.message.content;
     const contentStr = typeof content === "string" ? content : "";
+    const sendReasoningContent = choice.message?.reasoning;
+    if (sendReasoningContent) {
+      logger.debug("OpenRouter sendMessage reasoning captured", {
+        context: "OpenRouterProvider.sendMessage",
+        reasoningLength: typeof sendReasoningContent === "string" ? sendReasoningContent.length : 0
+      });
+    }
     const usageAny = response.usage;
     const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount ? {
       cachedTokens: usageAny.cachedTokens,
@@ -29333,7 +29346,8 @@ var OpenRouterProvider = class {
       },
       raw: response,
       attachmentResults,
-      cacheUsage
+      cacheUsage,
+      ...sendReasoningContent && typeof sendReasoningContent === "string" ? { reasoningContent: sendReasoningContent } : {}
     };
   }
   async *streamMessage(params, apiKey) {
@@ -29412,6 +29426,12 @@ var OpenRouterProvider = class {
       if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
       if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
     }
+    const sdkReasoningEffort = profileParams?.reasoningEffort;
+    if (typeof sdkReasoningEffort === "string" && sdkReasoningEffort.length > 0) {
+      requestParams.reasoning = { effort: sdkReasoningEffort, exclude: false };
+    } else {
+      requestParams.reasoning = { exclude: false };
+    }
     const result = client.callModel(requestParams);
     for await (const textDelta of result.getTextStream()) {
       if (textDelta) {
@@ -29440,6 +29460,24 @@ var OpenRouterProvider = class {
       completionTokens: response.usage.outputTokens ?? 0,
       totalTokens: (response.usage.inputTokens ?? 0) + (response.usage.outputTokens ?? 0)
     } : void 0;
+    let sdkReasoning = "";
+    if (response.output && Array.isArray(response.output)) {
+      for (const item of response.output) {
+        if (item.type === "reasoning" && item.summary) {
+          for (const summaryPart of item.summary) {
+            if (summaryPart.type === "summary_text" && summaryPart.text) {
+              sdkReasoning += summaryPart.text;
+            }
+          }
+        }
+      }
+    }
+    if (sdkReasoning) {
+      logger.debug("OpenRouter SDK path reasoning captured from response", {
+        context: "OpenRouterProvider.streamMessage",
+        reasoningLength: sdkReasoning.length
+      });
+    }
     const responseUsage = response.usage;
     const cacheUsage = responseUsage?.cachedTokens || responseUsage?.cacheDiscount ? {
       cachedTokens: responseUsage.cachedTokens,
@@ -29472,7 +29510,8 @@ var OpenRouterProvider = class {
       usage,
       attachmentResults,
       rawResponse,
-      cacheUsage
+      cacheUsage,
+      ...sdkReasoning ? { reasoningContent: sdkReasoning } : {}
     };
   }
   /**
@@ -29528,6 +29567,12 @@ var OpenRouterProvider = class {
     if (profileParams?.fallbackModels?.length) {
       body.route = "fallback";
     }
+    const reasoningEffort = profileParams?.reasoningEffort;
+    if (typeof reasoningEffort === "string" && reasoningEffort.length > 0) {
+      body.reasoning = { effort: reasoningEffort, exclude: false };
+    } else {
+      body.reasoning = { exclude: false };
+    }
     try {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -29557,6 +29602,7 @@ var OpenRouterProvider = class {
       let buffer = "";
       let usage;
       let toolCalls = [];
+      let fetchReasoning = "";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -29575,6 +29621,15 @@ var OpenRouterProvider = class {
                 content: choice.delta.content,
                 done: false
               };
+            }
+            const deltaReasoning = choice?.delta?.reasoning;
+            if (deltaReasoning) {
+              fetchReasoning += deltaReasoning;
+              logger.debug("OpenRouter fetch-path streaming reasoning fragment received", {
+                context: "OpenRouterProvider.streamViaChatCompletions",
+                reasoningLength: fetchReasoning.length
+              });
+              yield { content: "", done: false, reasoningContent: fetchReasoning };
             }
             if (choice?.delta?.tool_calls) {
               for (const tc of choice.delta.tool_calls) {
@@ -29616,7 +29671,8 @@ var OpenRouterProvider = class {
         done: true,
         usage,
         attachmentResults,
-        rawResponse
+        rawResponse,
+        ...fetchReasoning ? { reasoningContent: fetchReasoning } : {}
       };
     } catch (error) {
       logger.error("Error in streamViaChatCompletions", {

@@ -12,7 +12,8 @@ import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
 import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-message-labels'
 import { CourierBubble } from './CourierBubble'
-import { buildInterspersedToolLayout } from '../intersperse-tool-messages'
+import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse-reasoning'
+import { ThinkingBlock } from './ThinkingBlock'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -112,6 +113,11 @@ interface MessageRowProps {
   /** Character-initiated TOOL result rows folded into this assistant message
    * (see group-tool-messages.ts). Rendered as embedded blocks below the prose. */
   attachedToolMessages?: Message[]
+  /** Resolved per-chat thinking visibility (chat.showThinking ?? global default).
+   * When false, reasoning blocks are omitted entirely. DISPLAY ONLY. */
+  showThinking?: boolean
+  /** Whether thinking blocks start collapsed (global default). */
+  thinkingCollapsedByDefault?: boolean
 }
 
 function getImageAttachments(message: Message) {
@@ -172,6 +178,8 @@ function MessageRowInner({
   onCourierTurnSettled,
   onToggleSystemMessageExpanded,
   attachedToolMessages,
+  showThinking = false,
+  thinkingCollapsedByDefault = true,
 }: MessageRowProps) {
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
 
@@ -194,13 +202,16 @@ function MessageRowInner({
   const showDangerBadges = hasDangerFlags && dangerousContentSettings?.showWarningBadges !== false
 
   // Character-initiated tool calls folded into this assistant message
-  // (group-tool-messages.ts) are spliced into the prose at the offsets they
-  // were invoked. Source view shows the raw body, so it skips interspersing and
-  // renders every folded call in the trailing block instead.
+  // (group-tool-messages.ts) and reasoning ("thinking") segments are spliced
+  // into the prose at the offsets they fired, merged into one stream ordered by
+  // (anchorOffset, seq). Source view shows the raw body, so it skips
+  // interspersing and renders every folded call in the trailing block instead.
+  // Reasoning is included only when the chat's thinking-visibility is on.
   const attachedTools = attachedToolMessages ?? []
   const isSourceView = viewSourceMessageIds.has(message.id)
-  const toolLayout = attachedTools.length > 0 && !isSourceView
-    ? buildInterspersedToolLayout(message.content, attachedTools)
+  const reasoningSegments = (showThinking && !isSourceView) ? resolveReasoningSegments(message) : []
+  const toolLayout = (attachedTools.length > 0 || reasoningSegments.length > 0) && !isSourceView
+    ? buildInterleavedLayout(message.content, attachedTools, reasoningSegments)
     : null
   const trailingTools = isSourceView ? attachedTools : (toolLayout?.trailingTools ?? [])
 
@@ -394,6 +405,14 @@ function MessageRowInner({
                         renderingPatterns={renderingPatterns}
                         dialogueDetection={dialogueDetection}
                         forceRender={forceRender}
+                      />
+                    ) : part.kind === 'reasoning' ? (
+                      <ThinkingBlock
+                        key={`reasoning-${idx}`}
+                        content={part.content}
+                        collapsedByDefault={thinkingCollapsedByDefault}
+                        renderingPatterns={renderingPatterns}
+                        dialogueDetection={dialogueDetection}
                       />
                     ) : (
                       <div
@@ -901,6 +920,12 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
     if (prevTools[i].id !== nextTools[i].id) return false
     if (prevTools[i].content !== nextTools[i].content) return false
   }
+
+  // Thinking ("reasoning") visibility + content
+  if (prev.showThinking !== next.showThinking) return false
+  if (prev.thinkingCollapsedByDefault !== next.thinkingCollapsedByDefault) return false
+  if (prev.message.reasoningContent !== next.message.reasoningContent) return false
+  if ((prev.message.reasoningSegments?.length ?? 0) !== (next.message.reasoningSegments?.length ?? 0)) return false
 
   // Props are equal, skip re-render
   return true

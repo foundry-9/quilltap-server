@@ -313,6 +313,10 @@ import { addAutonomousRunPausedAtMigration } from './add-autonomous-run-paused-a
 import { addAutonomousRunPausedAccumMigration } from './add-autonomous-run-paused-accum';
 // Drop the dead singular scenario column from characters (legacy of the scenarios[] array)
 import { dropCharacterScenarioColumnMigration } from './drop-character-scenario-column';
+// Thinking display: reasoningContent + reasoningSegments columns on chat_messages
+import { addChatMessageReasoningColumnsMigration } from './add-chat-message-reasoning-columns';
+// Thinking display: showThinking column on chats + thinkingDisplay column on chat_settings
+import { addThinkingDisplayFieldsMigration } from './add-thinking-display-fields';
 
 /**
  * All available migrations.
@@ -621,6 +625,10 @@ export const migrations: Migration[] = [
   addAutonomousRunPausedAccumMigration,
   // Drop the dead singular scenario column from characters (legacy of the scenarios[] array)
   dropCharacterScenarioColumnMigration,
+  // Thinking display: reasoningContent + reasoningSegments columns on chat_messages
+  addChatMessageReasoningColumnsMigration,
+  // Thinking display: showThinking (chats) + thinkingDisplay (chat_settings) columns
+  addThinkingDisplayFieldsMigration,
 ];
 
 export {
@@ -910,5 +918,9 @@ export {
   addAutonomousRunPausedAtMigration,
   // 4.6 private character rooms: runPausedAccumMs so wall-clock excludes paused time without shifting runStartedAt
   addAutonomousRunPausedAccumMigration,
+  // Thinking display: reasoningContent + reasoningSegments columns on chat_messages
+  addChatMessageReasoningColumnsMigration,
+  // Thinking display: showThinking (chats) + thinkingDisplay (chat_settings) columns
+  addThinkingDisplayFieldsMigration,
 };
 

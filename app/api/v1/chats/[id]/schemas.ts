@@ -20,6 +20,7 @@ export const updateChatSchema = z.object({
   allowCrossCharacterVaultReads: z.boolean().optional(),
   coreWhisperEnabled: z.boolean().nullish(),
   coreWhisperInterval: z.number().int().min(1).nullish(),
+  showThinking: z.boolean().nullish(), // Per-chat thinking visibility (tri-state). DISPLAY ONLY.
   // Layout state for the salon split panes
   documentMode: z.enum(['normal', 'split', 'focus']).optional(),
   dividerPosition: z.number().min(20).max(80).optional(),

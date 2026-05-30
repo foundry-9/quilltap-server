@@ -50441,12 +50441,14 @@ var GoogleProvider = class {
     if (this.isThinkingModel(params.model)) {
       if (!params.strictMaxTokens) {
         config2.thinkingConfig = {
-          thinkingBudget: 4096
+          thinkingBudget: 4096,
+          includeThoughts: true
         };
         config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
       } else {
         config2.thinkingConfig = {
-          thinkingBudget: 1024
+          thinkingBudget: 1024,
+          includeThoughts: true
         };
       }
     }
@@ -50460,6 +50462,24 @@ var GoogleProvider = class {
       const finishReason = response.candidates?.[0]?.finishReason ?? "STOP";
       const usage = response.usageMetadata;
       const thoughtSignature = this.extractThoughtSignature(response);
+      let sendReasoningContent = "";
+      try {
+        const parts = response?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(parts)) {
+          for (const part of parts) {
+            if (part.thought === true && part.text) {
+              sendReasoningContent += part.text;
+            }
+          }
+        }
+      } catch {
+      }
+      if (sendReasoningContent) {
+        logger.debug("Google sendMessage thinking captured", {
+          context: "GoogleProvider.sendMessage",
+          reasoningLength: sendReasoningContent.length
+        });
+      }
       const cachedTokens = usage?.cachedContentTokenCount;
       const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
       return {
@@ -50477,7 +50497,8 @@ var GoogleProvider = class {
         },
         attachmentResults,
         thoughtSignature,
-        ...cacheUsage ? { cacheUsage } : {}
+        ...cacheUsage ? { cacheUsage } : {},
+        ...sendReasoningContent ? { reasoningContent: sendReasoningContent } : {}
       };
     } catch (error) {
       logger.error("Error calling Google Gemini API", {
@@ -50538,12 +50559,14 @@ var GoogleProvider = class {
     if (this.isThinkingModel(params.model)) {
       if (!params.strictMaxTokens) {
         config2.thinkingConfig = {
-          thinkingBudget: 4096
+          thinkingBudget: 4096,
+          includeThoughts: true
         };
         config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
       } else {
         config2.thinkingConfig = {
-          thinkingBudget: 1024
+          thinkingBudget: 1024,
+          includeThoughts: true
         };
       }
     }
@@ -50556,13 +50579,23 @@ var GoogleProvider = class {
       let totalStreamedContent = "";
       const isThinking = this.isThinkingModel(params.model);
       let lastResponse = null;
+      let streamReasoning = "";
       for await (const chunk of response) {
         lastResponse = chunk;
         const candidates = chunk.candidates;
         if (candidates && candidates.length > 0) {
           const parts = candidates[0]?.content?.parts || [];
           for (const part of parts) {
-            if (part.thought === true || part.functionCall) {
+            if (part.functionCall) {
+              continue;
+            }
+            if (part.thought === true && part.text) {
+              streamReasoning += part.text;
+              logger.debug("Google streaming thinking fragment received", {
+                context: "GoogleProvider.streamMessage",
+                reasoningLength: streamReasoning.length
+              });
+              yield { content: "", done: false, reasoningContent: streamReasoning };
               continue;
             }
             if (part.text) {
@@ -50599,7 +50632,8 @@ var GoogleProvider = class {
         // cache-instrumentation diagnostics.
         rawProviderUsage: usage ? JSON.parse(JSON.stringify(usage)) : null,
         thoughtSignature,
-        ...cacheUsage ? { cacheUsage } : {}
+        ...cacheUsage ? { cacheUsage } : {},
+        ...streamReasoning ? { reasoningContent: streamReasoning } : {}
       };
     } catch (error) {
       logger.error("Error streaming from Google Gemini API", {

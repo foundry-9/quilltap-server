@@ -44,6 +44,13 @@ export interface ResponseStatus {
 /** Result of parsing a single SSE data line */
 interface SSEEvent {
   content?: string
+  /** Live cumulative reasoning ("thinking") text. DISPLAY ONLY — the client
+   *  replaces (not appends) its buffer with each value. */
+  reasoning?: string
+  /** Full reasoning text on the done event (for the optimistic assistant push). */
+  reasoningContent?: string | null
+  /** Positioned reasoning blocks on the done event. DISPLAY ONLY. */
+  reasoningSegments?: Array<{ anchorOffset: number; content: string; seq: number }> | null
   status?: ResponseStatus
   error?: string
   details?: string
@@ -140,6 +147,8 @@ export function useSSEStreaming({
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  // Live cumulative reasoning ("thinking") for the in-progress turn. DISPLAY ONLY.
+  const [streamingReasoning, setStreamingReasoning] = useState('')
   const [waitingForResponse, setWaitingForResponse] = useState(false)
   // In-progress tool calls for the turn being streamed, grouped into batches by
   // the point in the prose where each fired (see StreamingToolBatch). Replaces a
@@ -160,6 +169,9 @@ export function useSSEStreaming({
   // rate regardless of chunk cadence.
   const streamingContentBufferRef = useRef<string>('')
   const streamingContentRafRef = useRef<number | null>(null)
+  // Reasoning shares the same rAF-coalescing treatment as content.
+  const streamingReasoningBufferRef = useRef<string>('')
+  const streamingReasoningRafRef = useRef<number | null>(null)
 
   const flushStreamingContent = useCallback(() => {
     streamingContentRafRef.current = null
@@ -173,6 +185,19 @@ export function useSSEStreaming({
     }
   }, [flushStreamingContent])
 
+  const flushStreamingReasoning = useCallback(() => {
+    streamingReasoningRafRef.current = null
+    setStreamingReasoning(streamingReasoningBufferRef.current)
+  }, [])
+
+  // Reasoning arrives cumulatively, so we replace (not append) the buffer.
+  const scheduleStreamingReasoning = useCallback((reasoning: string) => {
+    streamingReasoningBufferRef.current = reasoning
+    if (streamingReasoningRafRef.current === null) {
+      streamingReasoningRafRef.current = requestAnimationFrame(flushStreamingReasoning)
+    }
+  }, [flushStreamingReasoning])
+
   const resetStreamingContent = useCallback(() => {
     if (streamingContentRafRef.current !== null) {
       cancelAnimationFrame(streamingContentRafRef.current)
@@ -180,6 +205,14 @@ export function useSSEStreaming({
     }
     streamingContentBufferRef.current = ''
     setStreamingContent('')
+    // Reasoning resets in lockstep with content so every turn-boundary cleanup
+    // (turnStart, done, errors, stop) clears the live thinking block too.
+    if (streamingReasoningRafRef.current !== null) {
+      cancelAnimationFrame(streamingReasoningRafRef.current)
+      streamingReasoningRafRef.current = null
+    }
+    streamingReasoningBufferRef.current = ''
+    setStreamingReasoning('')
   }, [])
 
   // Cancel any pending rAF on unmount to avoid setting state after teardown.
@@ -187,6 +220,9 @@ export function useSSEStreaming({
     return () => {
       if (streamingContentRafRef.current !== null) {
         cancelAnimationFrame(streamingContentRafRef.current)
+      }
+      if (streamingReasoningRafRef.current !== null) {
+        cancelAnimationFrame(streamingReasoningRafRef.current)
       }
     }
   }, [])
@@ -336,6 +372,13 @@ export function useSSEStreaming({
           scheduleStreamingContent(fullContent)
         }
 
+        // Handle live reasoning ("thinking") — cumulative, so replace the buffer.
+        // DISPLAY ONLY; the StreamingMessage renders it as a leading block when
+        // the chat's thinking-visibility is on.
+        if (typeof data.reasoning === 'string') {
+          scheduleStreamingReasoning(data.reasoning)
+        }
+
         // Handle errors
         if (data.error) {
           setResponseStatus(null)
@@ -416,7 +459,7 @@ export function useSSEStreaming({
     }
 
     return fullContent
-  }, [scheduleStreamingContent, resetStreamingContent, fetchChat])
+  }, [scheduleStreamingContent, scheduleStreamingReasoning, resetStreamingContent, fetchChat])
 
   // Handle common error extraction
   const extractErrorMessage = useCallback((err: unknown): string => {
@@ -586,6 +629,8 @@ export function useSSEStreaming({
             provider: data.provider || null,
             modelName: data.modelName || null,
             isSilentMessage: data.isSilentMessage || undefined,
+            reasoningContent: data.reasoningContent ?? null,
+            reasoningSegments: data.reasoningSegments ?? null,
           }
           setMessages((prev) => [...prev, assistantMessage])
           resetStreamingContent()
@@ -619,6 +664,8 @@ export function useSSEStreaming({
             provider: data.provider || null,
             modelName: data.modelName || null,
             isSilentMessage: data.isSilentMessage || undefined,
+            reasoningContent: data.reasoningContent ?? null,
+            reasoningSegments: data.reasoningSegments ?? null,
           }
           setMessages((prev) => [...prev, assistantMessage])
           resetStreamingContent()
@@ -757,6 +804,8 @@ export function useSSEStreaming({
               provider: data.provider || null,
               modelName: data.modelName || null,
               isSilentMessage: data.isSilentMessage || undefined,
+              reasoningContent: data.reasoningContent ?? null,
+              reasoningSegments: data.reasoningSegments ?? null,
             }
             setMessages(prev => [...prev, newMessage])
           }
@@ -780,6 +829,8 @@ export function useSSEStreaming({
             participantId: resolvedParticipantId,
             provider: data.provider || null,
             modelName: data.modelName || null,
+            reasoningContent: data.reasoningContent ?? null,
+            reasoningSegments: data.reasoningSegments ?? null,
           }
           setMessages(prev => [...prev, newMessage])
         },
@@ -853,6 +904,7 @@ export function useSSEStreaming({
     sending,
     streaming,
     streamingContent,
+    streamingReasoning,
     waitingForResponse,
     streamingToolBatches,
     toolExecutionStatus,

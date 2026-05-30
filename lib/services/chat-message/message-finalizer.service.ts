@@ -22,7 +22,7 @@ import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handl
 
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
-import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage } from './types'
+import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage, ReasoningSegment } from './types'
 import { saveToolMessages, type ToolWhisperContext } from './tool-execution.service'
 import { encodeDoneEvent } from './streaming.service'
 import {
@@ -80,7 +80,7 @@ export async function finalizeMessageResponse({
   compression,
   triggers,
 }: FinalizeMessageResponseOptions): Promise<ProcessMessageResult> {
-  const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature } = streaming
+  const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature, reasoningContent, reasoningSegments } = streaming
   const { existingMessages, content, builtContext, compressionEnabled, cheapLLMSelection, contextCompressionSettings, allProfiles } = compression
   const { dangerSettings, chatSettings, participantCharacters, resolvedIdentity, userCharacterId } = triggers
   const normalizedResponse = normalizeContentBlockFormat(fullResponse)
@@ -114,6 +114,36 @@ export async function finalizeMessageResponse({
     })
   }
 
+  // Re-base reasoning ("thinking") segment offsets into stored-content
+  // coordinates using the SAME transform as the tool anchors above — both were
+  // captured against the streamed `streaming.fullResponse`. If the body was
+  // rewritten (content-block extraction), the offsets no longer map: drop them
+  // to a single offset-0 block so the thinking still renders (just un-spliced).
+  // DISPLAY ONLY — this only affects where the block appears, never the model.
+  let rebasedReasoning: ReasoningSegment[] | null = null
+  if (reasoningSegments && reasoningSegments.length > 0) {
+    if (normalizeRewroteBody) {
+      // Collapse to one leading block: positions are invalid, content still good.
+      rebasedReasoning = [{
+        anchorOffset: 0,
+        content: reasoningSegments.map(s => s.content).join(''),
+        seq: reasoningSegments[0].seq,
+      }]
+    } else {
+      rebasedReasoning = reasoningSegments.map(s => ({
+        ...s,
+        anchorOffset: Math.max(0, Math.min(cleanedResponse.length, s.anchorOffset - leadingStripDelta)),
+      }))
+    }
+    logger.debug('Re-based reasoning segments into stored-content coordinates', {
+      chatId,
+      characterName: character.name,
+      segments: rebasedReasoning.length,
+      collapsed: normalizeRewroteBody,
+      leadingStripDelta,
+    })
+  }
+
   const whisperContext: ToolWhisperContext = {
     userParticipantId,
     allowCrossCharacterVaultReads: chat.allowCrossCharacterVaultReads === true,
@@ -133,7 +163,9 @@ export async function finalizeMessageResponse({
     preGeneratedAssistantMessageId,
     effectiveProfile.provider,
     effectiveProfile.modelName,
-    whisperContext
+    whisperContext,
+    reasoningContent,
+    rebasedReasoning
   )
 
   // Async pre-compression exists to make the *next human message* feel fast.
@@ -257,6 +289,9 @@ export async function finalizeMessageResponse({
     provider: effectiveProfile.provider,
     modelName: effectiveProfile.modelName,
     isSilentMessage: characterParticipant.status === 'silent' || undefined,
+    // Reasoning ("thinking") for the optimistic client push — DISPLAY ONLY.
+    reasoningContent: reasoningContent || null,
+    reasoningSegments: rebasedReasoning,
   }))
 
   // Cost estimation + token tracking are intentionally fire-and-forget so a
@@ -363,7 +398,11 @@ export async function saveAssistantMessage(
   preGeneratedMessageId?: string,
   provider?: string,
   modelName?: string,
-  whisperContext?: ToolWhisperContext
+  whisperContext?: ToolWhisperContext,
+  // Reasoning ("thinking") for DISPLAY ONLY — persisted so the Salon can show
+  // it; never re-fed to any model. See ReasoningSegment.
+  reasoningContent?: string | null,
+  reasoningSegments?: ReasoningSegment[] | null
 ): Promise<string> {
   const assistantMessageId = preGeneratedMessageId || crypto.randomUUID()
   const assistantAttachments = generatedImagePaths.map(img => img.id)
@@ -380,6 +419,8 @@ export async function saveAssistantMessage(
     rawResponse: (rawResponse as Record<string, unknown>) || null,
     attachments: assistantAttachments,
     thoughtSignature: thoughtSignature || null,
+    reasoningContent: reasoningContent || null,
+    reasoningSegments: reasoningSegments && reasoningSegments.length > 0 ? reasoningSegments : null,
     participantId: characterParticipant.id,
     provider: provider || null,
     modelName: modelName || null,

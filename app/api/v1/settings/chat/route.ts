@@ -42,6 +42,7 @@ async function updateChatSettings(
   composerSpellcheck?: boolean,
   textReplacementsEnabled?: boolean,
   autonomousRoomSettings?: unknown,
+  thinkingDisplay?: unknown,
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -216,6 +217,23 @@ async function updateChatSettings(
     }
     updateData.autonomousRoomSettings = autonomousRoomSettings
   }
+  if (typeof thinkingDisplay !== 'undefined') {
+    // Thinking / reasoning display defaults. Lightweight shape check; the Zod
+    // schema on chat_settings governs the persisted shape. DISPLAY ONLY.
+    if (thinkingDisplay !== null && typeof thinkingDisplay !== 'object') {
+      throw new Error('Invalid thinkingDisplay value (must be an object)')
+    }
+    if (thinkingDisplay && typeof thinkingDisplay === 'object') {
+      const s = thinkingDisplay as Record<string, unknown>
+      if (typeof s.defaultVisible !== 'undefined' && typeof s.defaultVisible !== 'boolean') {
+        throw new Error('Invalid thinkingDisplay.defaultVisible (must be boolean)')
+      }
+      if (typeof s.defaultCollapsed !== 'undefined' && typeof s.defaultCollapsed !== 'boolean') {
+        throw new Error('Invalid thinkingDisplay.defaultCollapsed (must be boolean)')
+      }
+    }
+    updateData.thinkingDisplay = thinkingDisplay
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -281,6 +299,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       composerSpellcheck,
       textReplacementsEnabled,
       autonomousRoomSettings,
+      thinkingDisplay,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -308,6 +327,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       composerSpellcheck,
       textReplacementsEnabled,
       autonomousRoomSettings,
+      thinkingDisplay,
     )
 
     return successResponse(chatSettings)

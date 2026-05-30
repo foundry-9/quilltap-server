@@ -157,11 +157,39 @@ export interface ToolMessage {
    * (e.g. agent-mode `submit_final_response` overwrites the whole response).
    */
   anchorOffset?: number
+  /**
+   * Turn-monotonic sequence number, shared with reasoning segments, that
+   * disambiguates ordering when a tool call and a reasoning block land at the
+   * same `anchorOffset` (e.g. Anthropic interleaved thinking: thinking → tool →
+   * thinking, all before the first prose). The renderer sorts anchored items by
+   * `(anchorOffset, seq)` so they appear in true emission order. Undefined on
+   * legacy rows, in which case the renderer falls back to array order.
+   */
+  seq?: number
   metadata?: {
     provider?: string
     model?: string
     expandedPrompt?: string
   }
+}
+
+/**
+ * One captured reasoning / chain-of-thought block, positioned in the assistant
+ * turn's prose the same way tool calls are (see `ToolMessage.anchorOffset`).
+ * `content` is the raw reasoning text for this block; `anchorOffset` is the
+ * length of the accumulated prose emitted before the block fired; `seq` is the
+ * turn-monotonic counter shared with tool anchors for stable interleaving.
+ *
+ * IMPORTANT: reasoning segments are DISPLAY-ONLY. They are persisted solely so
+ * the Salon can show the model's thinking; they are never re-fed to any model
+ * as history, summary, or memory. The only place reasoning re-enters a provider
+ * request is the in-turn tool round-trip, which uses the in-memory flat
+ * `reasoningContent`, never these stored segments.
+ */
+export interface ReasoningSegment {
+  anchorOffset: number
+  content: string
+  seq: number
 }
 
 /**
@@ -203,6 +231,12 @@ export interface StreamingResult {
    * next request.
    */
   reasoningContent?: string
+  /**
+   * Positioned reasoning blocks for DISPLAY ONLY (see {@link ReasoningSegment}).
+   * Persisted on the assistant message so the Salon can splice thinking into
+   * the prose; never re-fed to any model.
+   */
+  reasoningSegments?: ReasoningSegment[]
 }
 
 /**
@@ -263,6 +297,23 @@ export interface StreamingState {
   thoughtSignature?: string
   /** Reasoning / chain-of-thought content (DeepSeek thinking mode, etc.). */
   reasoningContent?: string
+  /**
+   * Positioned reasoning blocks accumulated during the turn, for DISPLAY ONLY
+   * (see {@link ReasoningSegment}). Built by the streaming helper as reasoning
+   * runs close at prose-resume / tool-call / done boundaries.
+   */
+  reasoningSegments?: ReasoningSegment[]
+  /**
+   * How many characters of the cumulative `reasoningContent` have already been
+   * flushed into a `reasoningSegments` entry. The un-flushed buffer for the next
+   * segment is `reasoningContent.slice(reasoningFlushedLen)`.
+   */
+  reasoningFlushedLen?: number
+  /**
+   * Turn-monotonic counter handed out to both reasoning segments and tool
+   * anchors so same-offset items keep their true emission order.
+   */
+  nextTurnSeq?: number
   hasStartedStreaming: boolean
 }
 
@@ -325,6 +376,12 @@ export interface ChainCompleteEvent {
  */
 export interface StreamChunkData {
   content?: string
+  /**
+   * Cumulative reasoning / chain-of-thought text so far this turn (DISPLAY
+   * ONLY). Sent live so the Salon can show the model thinking before/while it
+   * answers. The client replaces (not appends) its buffer with each value.
+   */
+  reasoning?: string
   done?: boolean
   messageId?: string | null
   usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null

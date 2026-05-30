@@ -338,11 +338,18 @@ export class OpenAIProvider implements TextProvider {
         // Per-profile reasoning effort applies in the normal (non-strict) path.
         // Strict mode is reserved for background tasks and forces 'low' below.
         const reasoningEffort = params.profileParameters?.reasoningEffort;
+        // When reasoningSummary is enabled, request the summary surface so we can
+        // capture chain-of-thought (raw o-series reasoning is encrypted).
+        const includeSummary = params.profileParameters?.reasoningSummary === true;
         if (
           typeof reasoningEffort === 'string' &&
           ['minimal', 'low', 'medium', 'high'].includes(reasoningEffort)
         ) {
-          requestParams.reasoning = { effort: reasoningEffort };
+          requestParams.reasoning = includeSummary
+            ? { effort: reasoningEffort, summary: 'auto' }
+            : { effort: reasoningEffort };
+        } else if (includeSummary) {
+          requestParams.reasoning = { summary: 'auto' };
         }
       } else {
         // Strict mode: use low reasoning effort so the model doesn't burn
@@ -405,6 +412,29 @@ export class OpenAIProvider implements TextProvider {
     const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
       ? { cacheReadInputTokens: cachedTokens, cachedTokens }
       : undefined
+
+    // Extract reasoning summary from the response output (reasoning items with summary text).
+    // Raw o-series reasoning is encrypted; the summary is the only capturable surface.
+    let reasoningContent = '';
+    for (const item of response.output) {
+      if ((item as any).type === 'reasoning') {
+        const summaryArr = (item as any).summary;
+        if (Array.isArray(summaryArr)) {
+          for (const part of summaryArr) {
+            if (part.type === 'summary_text' && part.text) {
+              reasoningContent += part.text;
+            }
+          }
+        }
+      }
+    }
+    if (reasoningContent) {
+      logger.debug('OpenAI sendMessage reasoning summary captured', {
+        context: 'OpenAIProvider.buildLLMResponse',
+        reasoningLength: reasoningContent.length,
+      });
+    }
+
     return {
       content: response.output_text,
       finishReason: this.getFinishReason(response),
@@ -416,6 +446,7 @@ export class OpenAIProvider implements TextProvider {
       raw: this.buildRawResponse(response),
       attachmentResults,
       ...(cacheUsage ? { cacheUsage } : {}),
+      ...(reasoningContent ? { reasoningContent } : {}),
     };
   }
 
@@ -522,6 +553,7 @@ export class OpenAIProvider implements TextProvider {
     }
 
     let finalResponse: ResponsesResponse | null = null;
+    let streamReasoning = '';
 
     for await (const event of stream) {
       if (event.type === 'response.output_text.delta') {
@@ -529,6 +561,14 @@ export class OpenAIProvider implements TextProvider {
           content: event.delta,
           done: false,
         };
+      } else if (event.type === 'response.reasoning_summary_text.delta') {
+        // Cumulative: append delta to accumulator and emit the full string
+        streamReasoning += (event as any).delta;
+        logger.debug('OpenAI streaming reasoning summary fragment received', {
+          context: 'OpenAIProvider.streamMessage',
+          reasoningLength: streamReasoning.length,
+        });
+        yield { content: '', done: false, reasoningContent: streamReasoning };
       } else if (event.type === 'response.completed') {
         finalResponse = event.response;
       }
@@ -554,6 +594,7 @@ export class OpenAIProvider implements TextProvider {
         rawResponse: raw,
         rawProviderUsage: (finalResponse.usage ?? null) as Record<string, unknown> | null,
         ...(cacheUsage ? { cacheUsage } : {}),
+        ...(streamReasoning ? { reasoningContent: streamReasoning } : {}),
       };
     } else {
       logger.warn('Stream ended without response.completed event', {

@@ -15826,6 +15826,9 @@ var AnthropicProvider = class {
     const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false;
     const cacheStrategy = profileParams?.cacheStrategy || "system_and_long_context";
     const cacheTTL = profileParams?.cacheTTL;
+    const rawThinkingBudget = profileParams?.thinkingBudget;
+    const thinkingBudget = typeof rawThinkingBudget === "number" && rawThinkingBudget >= 1024 ? rawThinkingBudget : profileParams?.extendedThinking === true ? 4096 : 0;
+    const thinkingEnabled = thinkingBudget > 0;
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
@@ -15833,11 +15836,16 @@ var AnthropicProvider = class {
     if (cachingEnabled) {
       this.applyMidHistoryBreakpoint(messages, cacheTTL);
     }
+    const baseMaxTokens = params.maxTokens ?? 4096;
+    const effectiveMaxTokens = thinkingEnabled ? Math.max(baseMaxTokens, thinkingBudget + 1024) : baseMaxTokens;
     const requestParams = {
       model: params.model,
       messages,
-      max_tokens: params.maxTokens ?? 4096
+      max_tokens: effectiveMaxTokens
     };
+    if (thinkingEnabled) {
+      requestParams.thinking = { type: "enabled", budget_tokens: thinkingBudget };
+    }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
         requestParams.system = systemMessages.map((m, i) => {
@@ -15859,12 +15867,14 @@ var AnthropicProvider = class {
         }));
       }
     }
-    if (params.temperature !== void 0) {
-      requestParams.temperature = params.temperature;
-    } else if (params.topP !== void 0) {
-      requestParams.top_p = params.topP;
-    } else {
-      requestParams.temperature = 1;
+    if (!thinkingEnabled) {
+      if (params.temperature !== void 0) {
+        requestParams.temperature = params.temperature;
+      } else if (params.topP !== void 0) {
+        requestParams.top_p = params.topP;
+      } else {
+        requestParams.temperature = 1;
+      }
     }
     const tools = params.tools ? [...params.tools] : [];
     if (tools.length > 0) {
@@ -15890,16 +15900,21 @@ var AnthropicProvider = class {
       }
     }
     const response = await client.messages.create(requestParams);
-    const content = response.content[0];
+    const textContent = response.content.filter((block) => block.type === "text").map((block) => block.text).join("");
+    const thinkingContent = response.content.filter((block) => block.type === "thinking").map((block) => block.thinking).join("");
+    if (thinkingContent) {
+      logger.debug("Anthropic sendMessage thinking captured", {
+        context: "AnthropicProvider.sendMessage",
+        reasoningLength: thinkingContent.length
+      });
+    }
     const rawUsage = response.usage;
     const cacheUsage = rawUsage.cache_creation_input_tokens !== void 0 || rawUsage.cache_read_input_tokens !== void 0 ? {
       cacheCreationInputTokens: rawUsage.cache_creation_input_tokens,
       cacheReadInputTokens: rawUsage.cache_read_input_tokens
     } : void 0;
-    if (cacheUsage) {
-    }
     return {
-      content: content.type === "text" ? content.text : "",
+      content: textContent,
       finishReason: response.stop_reason ?? "stop",
       usage: {
         promptTokens: response.usage.input_tokens,
@@ -15908,7 +15923,8 @@ var AnthropicProvider = class {
       },
       raw: response,
       attachmentResults,
-      cacheUsage
+      cacheUsage,
+      ...thinkingContent ? { reasoningContent: thinkingContent } : {}
     };
   }
   async *streamMessage(params, apiKey) {
@@ -15921,6 +15937,9 @@ var AnthropicProvider = class {
     const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false;
     const cacheStrategy = profileParams?.cacheStrategy || "system_and_long_context";
     const cacheTTL = profileParams?.cacheTTL;
+    const streamRawThinkingBudget = profileParams?.thinkingBudget;
+    const streamThinkingBudget = typeof streamRawThinkingBudget === "number" && streamRawThinkingBudget >= 1024 ? streamRawThinkingBudget : profileParams?.extendedThinking === true ? 4096 : 0;
+    const streamThinkingEnabled = streamThinkingBudget > 0;
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
@@ -15928,12 +15947,17 @@ var AnthropicProvider = class {
     if (cachingEnabled) {
       this.applyMidHistoryBreakpoint(messages, cacheTTL);
     }
+    const streamBaseMaxTokens = params.maxTokens ?? 4096;
+    const streamEffectiveMaxTokens = streamThinkingEnabled ? Math.max(streamBaseMaxTokens, streamThinkingBudget + 1024) : streamBaseMaxTokens;
     const requestParams = {
       model: params.model,
       messages,
-      max_tokens: params.maxTokens ?? 4096,
+      max_tokens: streamEffectiveMaxTokens,
       stream: true
     };
+    if (streamThinkingEnabled) {
+      requestParams.thinking = { type: "enabled", budget_tokens: streamThinkingBudget };
+    }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
         requestParams.system = systemMessages.map((m, i) => {
@@ -15955,12 +15979,14 @@ var AnthropicProvider = class {
         }));
       }
     }
-    if (params.temperature !== void 0) {
-      requestParams.temperature = params.temperature;
-    } else if (params.topP !== void 0) {
-      requestParams.top_p = params.topP;
-    } else {
-      requestParams.temperature = 1;
+    if (!streamThinkingEnabled) {
+      if (params.temperature !== void 0) {
+        requestParams.temperature = params.temperature;
+      } else if (params.topP !== void 0) {
+        requestParams.top_p = params.topP;
+      } else {
+        requestParams.temperature = 1;
+      }
     }
     const tools = params.tools ? [...params.tools] : [];
     if (tools.length > 0) {
@@ -15995,12 +16021,15 @@ var AnthropicProvider = class {
     let cacheCreationInputTokens;
     let cacheReadInputTokens;
     let rawProviderUsage = null;
+    let streamReasoning = "";
     const contentBlocks = [];
     for await (const event of stream) {
       if (event.type === "content_block_start") {
         const block = event.content_block;
         if (block.type === "text") {
           contentBlocks[event.index] = { type: "text", text: block.text || "" };
+        } else if (block.type === "thinking") {
+          contentBlocks[event.index] = { type: "thinking", thinking: "", signature: "" };
         } else if (block.type === "tool_use") {
           contentBlocks[event.index] = {
             type: "tool_use",
@@ -16023,6 +16052,20 @@ var AnthropicProvider = class {
             content: delta.text,
             done: false
           };
+        } else if (delta?.type === "thinking_delta" && delta?.thinking) {
+          if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === "thinking") {
+            contentBlocks[blockIndex].thinking = (contentBlocks[blockIndex].thinking || "") + delta.thinking;
+          }
+          streamReasoning += delta.thinking;
+          logger.debug("Anthropic streaming thinking fragment received", {
+            context: "AnthropicProvider.streamMessage",
+            reasoningLength: streamReasoning.length
+          });
+          yield { content: "", done: false, reasoningContent: streamReasoning };
+        } else if (delta?.type === "signature_delta" && delta?.signature) {
+          if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === "thinking") {
+            contentBlocks[blockIndex].signature = (contentBlocks[blockIndex].signature || "") + delta.signature;
+          }
         } else if (delta?.type === "input_json_delta" && delta?.partial_json) {
           if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === "tool_use") {
             contentBlocks[blockIndex].partialJson = (contentBlocks[blockIndex].partialJson || "") + delta.partial_json;
@@ -16071,11 +16114,20 @@ var AnthropicProvider = class {
           cacheReadInputTokens
         } : void 0;
         const toolUseCount = contentBlocks.filter((b) => b.type === "tool_use").length;
+        const fullMessageContent = contentBlocks.length > 0 ? contentBlocks.map((b) => {
+          if (b.type === "thinking") {
+            return { type: "thinking", thinking: b.thinking || "", signature: b.signature || "" };
+          }
+          if (b.type === "tool_use") {
+            return { type: "tool_use", id: b.id, name: b.name, input: b.input };
+          }
+          return { type: "text", text: b.text || "" };
+        }) : [{ type: "text", text: fullContent }];
         const fullMessage = {
           id: messageId,
           type: "message",
           role: "assistant",
-          content: contentBlocks.length > 0 ? contentBlocks : [{ type: "text", text: fullContent }],
+          content: fullMessageContent,
           model,
           stop_reason: stopReason,
           usage: {
@@ -16094,7 +16146,8 @@ var AnthropicProvider = class {
           attachmentResults,
           rawResponse: fullMessage,
           rawProviderUsage,
-          cacheUsage
+          cacheUsage,
+          ...streamReasoning ? { reasoningContent: streamReasoning } : {}
         };
       }
     }
@@ -16554,6 +16607,26 @@ var optionsSchema = {
             { value: "1h", label: "1 hour (2x write cost)" }
           ],
           showIf: { field: "enableCacheBreakpoints", equals: true }
+        }
+      ]
+    },
+    {
+      title: "Extended Thinking",
+      helpText: "Let the model reason before answering. The reasoning is shown in chat (display only) and never re-fed to the model. While thinking is on, temperature and top_p are left at their defaults (extended thinking requires this), and max_tokens is raised above the budget if needed (the API requires budget \u2265 1024 and < max_tokens).",
+      fields: [
+        {
+          key: "extendedThinking",
+          label: "Enable Extended Thinking",
+          type: "boolean",
+          default: false
+        },
+        {
+          key: "thinkingBudget",
+          label: "Thinking Budget (tokens)",
+          helpText: "Maximum tokens the model may spend thinking. Minimum 1024; defaults to 4096 when left blank.",
+          type: "number",
+          default: 4096,
+          showIf: { field: "extendedThinking", equals: true }
         }
       ]
     }

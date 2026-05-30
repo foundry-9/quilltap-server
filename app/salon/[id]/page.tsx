@@ -1227,6 +1227,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           participantNames={participantNames}
           userParticipantIdSet={userParticipantIdSet}
           isDangerousChat={chat?.isDangerousChat === true}
+          showThinking={chat?.showThinking ?? chatSettings?.thinkingDisplay?.defaultVisible ?? true}
+          thinkingCollapsedByDefault={chatSettings?.thinkingDisplay?.defaultCollapsed ?? true}
+          streamingReasoning={sseStreaming.streamingReasoning}
         />
 
         {/* Speaker Selector - shown when controlling multiple characters */}
@@ -1573,6 +1576,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onSetCoreWhisperEnabled={chatControls.handleSetCoreWhisperEnabled}
           coreWhisperInterval={chatControls.coreWhisperInterval}
           onSetCoreWhisperInterval={chatControls.handleSetCoreWhisperInterval}
+          showThinking={chatControls.showThinking}
+          onSetShowThinking={chatControls.handleSetShowThinking}
           // Organize section
           onRenameClick={modals.openRename}
           onStateClick={modals.openStateEditor}

@@ -34,6 +34,7 @@ import {
   encodeStatusEvent,
   safeEnqueue,
   streamMessage,
+  applyReasoningChunk,
   type StreamOptions,
 } from './streaming.service'
 import { processToolCalls } from './tool-execution.service'
@@ -398,6 +399,12 @@ async function streamContinuation(args: StreamContinuationArgs): Promise<void> {
     chatId,
     stop: strategy.stopSequences,
   })) {
+    // Capture + live-forward reasoning. This pseudo-tool path doesn't grow
+    // streaming.fullResponse live (chunks accumulate in rawResponses and the
+    // prose is reassembled at the end), so we can't anchor positioned reasoning
+    // segments reliably here — the flat reasoningContent renders as a single
+    // leading thinking block instead. DISPLAY ONLY.
+    applyReasoningChunk(streaming, chunk, controller, encoder)
     if (chunk.content) {
       rawResponses[idx] += chunk.content
       controller.enqueue(encodeContentChunk(encoder, chunk.content))
@@ -409,9 +416,6 @@ async function streamContinuation(args: StreamContinuationArgs): Promise<void> {
       streaming.rawResponse = chunk.rawResponse
       if (chunk.thoughtSignature) {
         streaming.thoughtSignature = chunk.thoughtSignature
-      }
-      if (chunk.reasoningContent) {
-        streaming.reasoningContent = chunk.reasoningContent
       }
     }
   }

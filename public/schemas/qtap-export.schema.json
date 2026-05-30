@@ -396,6 +396,10 @@
           "minimum": 1,
           "description": "Per-chat override of the global coreWhisper.interval setting (assistant turns between periodic whispers). Null = inherit."
         },
+        "showThinking": {
+          "type": ["boolean", "null"],
+          "description": "Per-chat override for showing reasoning models' thinking (tri-state). Null = inherit global chat.thinkingDisplay.defaultVisible; true = show; false = hide. DISPLAY ONLY."
+        },
         "_tagNames": {
           "type": "array",
           "items": { "type": "string" },
@@ -620,6 +624,20 @@
         "systemSender": { "type": ["string", "null"], "enum": ["lantern", "aurora", "librarian", "concierge", "prospero", "host", "commonplaceBook", "ariel", null], "description": "Personified feature ('the Staff') that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close)." },
         "systemKind": { "type": ["string", "null"], "description": "Sub-classification of a Staff-authored message — used by the Salon UI to label collapsed system-message bars (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender." },
         "opaqueContent": { "type": ["string", "null"], "description": "Neutral, persona-free rewrite of `content` for Staff-authored messages. Swapped into every character's LLM context when the chat has any non-user-character participant with systemTransparency !== true (the user character does not count). NULL on participant-authored messages and on legacy Staff messages from before the dual-body migration (swap falls through to `content`)." },
+        "reasoningContent": { "type": ["string", "null"], "description": "Reasoning models' full chain-of-thought ('thinking') for this turn. DISPLAY ONLY — surfaced in the Salon but never re-fed to any model as history, summary, or memory." },
+        "reasoningSegments": {
+          "type": ["array", "null"],
+          "description": "Positioned reasoning blocks (DISPLAY ONLY) used to splice thinking into the prose at the point it fired, the same way tool calls are anchored.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "anchorOffset": { "type": "number", "description": "Character offset into the message prose at which this reasoning block fired." },
+              "content": { "type": "string", "description": "Raw reasoning text for this block." },
+              "seq": { "type": "number", "description": "Turn-monotonic sequence shared with tool anchors so same-offset items render in true emission order." }
+            },
+            "required": ["anchorOffset", "content", "seq"]
+          }
+        },
         "hostEvent": {
           "type": ["object", "null"],
           "description": "Structured payload on Host announcements (systemSender = 'host'). Two shapes share this field: (a) presence transitions — { participantId, toStatus } — for add / remove / status-change; (b) off-scene character introductions — { introducedCharacterIds } — stamped by the off-scene Host announcer so the context builder can detect already-introduced characters. All fields optional; one or the other is set per announcement.",

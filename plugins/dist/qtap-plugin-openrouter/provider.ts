@@ -51,6 +51,7 @@ interface OpenRouterProfileParams {
   temperature?: number;
   maxTokens?: number;
   topP?: number;
+  reasoningEffort?: string;
 }
 
 /**
@@ -236,6 +237,14 @@ export class OpenRouterProvider implements TextProvider {
       if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
     }
 
+    // Enable reasoning output for models that support it in the non-streaming path.
+    const sendReasoningEffort = profileParams?.reasoningEffort;
+    if (typeof sendReasoningEffort === 'string' && sendReasoningEffort.length > 0) {
+      requestParams.reasoning = { effort: sendReasoningEffort, exclude: false };
+    } else {
+      requestParams.reasoning = { exclude: false };
+    }
+
     const response = await client.chat.send({
       chatRequest: requestParams,
     });
@@ -243,6 +252,15 @@ export class OpenRouterProvider implements TextProvider {
     const choice = response.choices[0];
     const content = choice.message.content;
     const contentStr = typeof content === 'string' ? content : '';
+
+    // Extract reasoning from the message if available
+    const sendReasoningContent = (choice.message as any)?.reasoning;
+    if (sendReasoningContent) {
+      logger.debug('OpenRouter sendMessage reasoning captured', {
+        context: 'OpenRouterProvider.sendMessage',
+        reasoningLength: typeof sendReasoningContent === 'string' ? sendReasoningContent.length : 0,
+      });
+    }
 
     // Extract cache usage if available
     const usageAny = response.usage as any;
@@ -265,6 +283,7 @@ export class OpenRouterProvider implements TextProvider {
       raw: response,
       attachmentResults,
       cacheUsage,
+      ...(sendReasoningContent && typeof sendReasoningContent === 'string' ? { reasoningContent: sendReasoningContent } : {}),
     };
   }
 
@@ -377,6 +396,14 @@ export class OpenRouterProvider implements TextProvider {
       if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
     }
 
+    // Enable reasoning output for models that support it.
+    const sdkReasoningEffort = profileParams?.reasoningEffort;
+    if (typeof sdkReasoningEffort === 'string' && sdkReasoningEffort.length > 0) {
+      requestParams.reasoning = { effort: sdkReasoningEffort, exclude: false };
+    } else {
+      requestParams.reasoning = { exclude: false };
+    }
+
     // Use callModel() which returns ModelResult with streaming capabilities
     // SDK v0.4.0 provides getTextStream() for cleaner text delta streaming
     const result = client.callModel(requestParams);
@@ -416,6 +443,26 @@ export class OpenRouterProvider implements TextProvider {
       completionTokens: response.usage.outputTokens ?? 0,
       totalTokens: (response.usage.inputTokens ?? 0) + (response.usage.outputTokens ?? 0),
     } : undefined;
+
+    // Extract reasoning from the response output (reasoning items contain summary text)
+    let sdkReasoning = '';
+    if (response.output && Array.isArray(response.output)) {
+      for (const item of response.output) {
+        if ((item as any).type === 'reasoning' && (item as any).summary) {
+          for (const summaryPart of (item as any).summary) {
+            if (summaryPart.type === 'summary_text' && summaryPart.text) {
+              sdkReasoning += summaryPart.text;
+            }
+          }
+        }
+      }
+    }
+    if (sdkReasoning) {
+      logger.debug('OpenRouter SDK path reasoning captured from response', {
+        context: 'OpenRouterProvider.streamMessage',
+        reasoningLength: sdkReasoning.length,
+      });
+    }
 
     // Extract cache usage if available
     const responseUsage = response.usage as any;
@@ -461,6 +508,7 @@ export class OpenRouterProvider implements TextProvider {
       attachmentResults,
       rawResponse,
       cacheUsage,
+      ...(sdkReasoning ? { reasoningContent: sdkReasoning } : {}),
     };
   }
 
@@ -534,6 +582,15 @@ export class OpenRouterProvider implements TextProvider {
       body.route = 'fallback';
     }
 
+    // Enable reasoning output for models that support it. `exclude: false`
+    // tells OpenRouter not to suppress reasoning from the response.
+    const reasoningEffort = profileParams?.reasoningEffort;
+    if (typeof reasoningEffort === 'string' && reasoningEffort.length > 0) {
+      body.reasoning = { effort: reasoningEffort, exclude: false };
+    } else {
+      body.reasoning = { exclude: false };
+    }
+
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -566,6 +623,7 @@ export class OpenRouterProvider implements TextProvider {
       let buffer = '';
       let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined;
       let toolCalls: any[] = [];
+      let fetchReasoning = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -589,6 +647,17 @@ export class OpenRouterProvider implements TextProvider {
                 content: choice.delta.content,
                 done: false,
               };
+            }
+
+            // OpenRouter's reasoning field on the delta (mirrors OpenAI Chat Completions)
+            const deltaReasoning = choice?.delta?.reasoning;
+            if (deltaReasoning) {
+              fetchReasoning += deltaReasoning;
+              logger.debug('OpenRouter fetch-path streaming reasoning fragment received', {
+                context: 'OpenRouterProvider.streamViaChatCompletions',
+                reasoningLength: fetchReasoning.length,
+              });
+              yield { content: '', done: false, reasoningContent: fetchReasoning };
             }
 
             // Accumulate tool calls
@@ -639,6 +708,7 @@ export class OpenRouterProvider implements TextProvider {
         usage,
         attachmentResults,
         rawResponse,
+        ...(fetchReasoning ? { reasoningContent: fetchReasoning } : {}),
       };
 
     } catch (error) {

@@ -130,6 +130,26 @@ const optionsSchema: ProviderOptionsSchema = {
         },
       ],
     },
+    {
+      title: 'Extended Thinking',
+      helpText: "Let the model reason before answering. The reasoning is shown in chat (display only) and never re-fed to the model. While thinking is on, temperature and top_p are left at their defaults (extended thinking requires this), and max_tokens is raised above the budget if needed (the API requires budget ≥ 1024 and < max_tokens).",
+      fields: [
+        {
+          key: 'extendedThinking',
+          label: 'Enable Extended Thinking',
+          type: 'boolean',
+          default: false,
+        },
+        {
+          key: 'thinkingBudget',
+          label: 'Thinking Budget (tokens)',
+          helpText: 'Maximum tokens the model may spend thinking. Minimum 1024; defaults to 4096 when left blank.',
+          type: 'number',
+          default: 4096,
+          showIf: { field: 'extendedThinking', equals: true },
+        },
+      ],
+    },
   ],
 };
 

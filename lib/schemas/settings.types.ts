@@ -315,6 +315,25 @@ export const CoreWhisperSettingsSchema = z.object({
 export type CoreWhisperSettings = z.infer<typeof CoreWhisperSettingsSchema>;
 
 // ============================================================================
+// THINKING / REASONING DISPLAY SETTINGS
+// ============================================================================
+
+/**
+ * Global defaults for displaying reasoning models' chain-of-thought ("thinking")
+ * in the Salon. Per-chat overrides live on the `chats` table as the tri-state
+ * `showThinking` (NULL = inherit `defaultVisible`). DISPLAY ONLY — these settings
+ * never affect whether reasoning is captured or stored, only whether it is shown.
+ */
+export const ThinkingDisplaySettingsSchema = z.object({
+  /** Whether new chats show captured thinking by default. Default: true. */
+  defaultVisible: z.boolean().default(true),
+  /** Whether the thinking block starts collapsed when shown. Default: true. */
+  defaultCollapsed: z.boolean().default(true),
+});
+
+export type ThinkingDisplaySettings = z.infer<typeof ThinkingDisplaySettingsSchema>;
+
+// ============================================================================
 // STORY BACKGROUNDS SETTINGS
 // ============================================================================
 
@@ -437,6 +456,11 @@ export const ChatSettingsSchema = z.object({
     silenceThreshold: 3,
     packetTokenBudget: 4096,
     fireOnContextTransition: true,
+  }),
+  /** Thinking / reasoning display — global defaults for showing thinking models' chain-of-thought in the Salon. */
+  thinkingDisplay: ThinkingDisplaySettingsSchema.default({
+    defaultVisible: true,
+    defaultCollapsed: true,
   }),
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings: StoryBackgroundsSettingsSchema.default({

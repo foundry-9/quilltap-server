@@ -42,11 +42,15 @@ interface AnthropicMessage {
   content: string | AnthropicContentBlock[]
 }
 
-// Anthropic profile parameters for cache control
+// Anthropic profile parameters for cache control and extended thinking
 interface AnthropicProfileParams {
   enableCacheBreakpoints?: boolean
   cacheStrategy?: 'system_only' | 'system_and_long_context'
   cacheTTL?: '5m' | '1h'
+  // Extended thinking: number of budget tokens (min 1024). When set, enables thinking mode.
+  thinkingBudget?: number
+  // Alternative flag: enables thinking with a default 4096-token budget.
+  extendedThinking?: boolean
 }
 
 // Per-character caching is handled here via content-hashed `cache_control`
@@ -324,11 +328,19 @@ export class AnthropicProvider implements TextProvider {
     // into ordered text blocks below.
     const systemMessages = params.messages.filter(m => m.role === 'system' && typeof m.content === 'string' && m.content.length > 0)
 
-    // Extract profile parameters for cache control
+    // Extract profile parameters for cache control and extended thinking
     const profileParams = params.profileParameters as AnthropicProfileParams | undefined
     const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false
     const cacheStrategy = profileParams?.cacheStrategy || 'system_and_long_context'
     const cacheTTL = profileParams?.cacheTTL
+
+    // Determine thinking budget: prefer explicit thinkingBudget, fall back to
+    // extendedThinking flag with a 4096-token default.
+    const rawThinkingBudget = profileParams?.thinkingBudget
+    const thinkingBudget = typeof rawThinkingBudget === 'number' && rawThinkingBudget >= 1024
+      ? rawThinkingBudget
+      : (profileParams?.extendedThinking === true ? 4096 : 0)
+    const thinkingEnabled = thinkingBudget > 0
 
     // Format messages with optional cache control
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
@@ -342,10 +354,21 @@ export class AnthropicProvider implements TextProvider {
       this.applyMidHistoryBreakpoint(messages, cacheTTL)
     }
 
+    // When thinking is enabled, max_tokens must exceed the budget.
+    const baseMaxTokens = params.maxTokens ?? 4096
+    const effectiveMaxTokens = thinkingEnabled
+      ? Math.max(baseMaxTokens, thinkingBudget + 1024)
+      : baseMaxTokens
+
     const requestParams: any = {
       model: params.model,
       messages,
-      max_tokens: params.maxTokens ?? 4096,
+      max_tokens: effectiveMaxTokens,
+    }
+
+    // Enable extended thinking if requested.
+    if (thinkingEnabled) {
+      requestParams.thinking = { type: 'enabled', budget_tokens: thinkingBudget }
     }
 
     // Handle system messages with optional cache control.
@@ -383,14 +406,16 @@ export class AnthropicProvider implements TextProvider {
       }
     }
 
-    // Anthropic API requires either temperature OR top_p, not both
-    if (params.temperature !== undefined) {
-      requestParams.temperature = params.temperature
-    } else if (params.topP !== undefined) {
-      requestParams.top_p = params.topP
-    } else {
-      // Default to temperature if neither is specified
-      requestParams.temperature = 1.0
+    // Anthropic API requires either temperature OR top_p, not both.
+    // Extended thinking forbids temperature and top_p — omit them entirely.
+    if (!thinkingEnabled) {
+      if (params.temperature !== undefined) {
+        requestParams.temperature = params.temperature
+      } else if (params.topP !== undefined) {
+        requestParams.top_p = params.topP
+      } else {
+        requestParams.temperature = 1.0
+      }
     }
 
     // Build tools array with optional cache control on last tool
@@ -428,7 +453,25 @@ export class AnthropicProvider implements TextProvider {
 
     const response = await client.messages.create(requestParams)
 
-    const content = response.content[0]
+    // Extract text by concatenating all text blocks (skip thinking/redacted_thinking/tool_use).
+    // When thinking is enabled, content[0] may be a thinking block — indexing [0] would return ''.
+    const textContent = response.content
+      .filter((block: any) => block.type === 'text')
+      .map((block: any) => block.text as string)
+      .join('')
+
+    // Collect thinking block text for reasoningContent
+    const thinkingContent = response.content
+      .filter((block: any) => block.type === 'thinking')
+      .map((block: any) => block.thinking as string)
+      .join('')
+
+    if (thinkingContent) {
+      logger.debug('Anthropic sendMessage thinking captured', {
+        context: 'AnthropicProvider.sendMessage',
+        reasoningLength: thinkingContent.length,
+      })
+    }
 
     // Extract cache usage if available (when prompt caching is enabled)
     const rawUsage = response.usage as any
@@ -439,12 +482,8 @@ export class AnthropicProvider implements TextProvider {
         }
       : undefined
 
-    if (cacheUsage) {
-
-    }
-
     return {
-      content: content.type === 'text' ? content.text : '',
+      content: textContent,
       finishReason: response.stop_reason ?? 'stop',
       usage: {
         promptTokens: response.usage.input_tokens,
@@ -454,6 +493,7 @@ export class AnthropicProvider implements TextProvider {
       raw: response,
       attachmentResults,
       cacheUsage,
+      ...(thinkingContent ? { reasoningContent: thinkingContent } : {}),
     }
   }
 
@@ -469,11 +509,18 @@ export class AnthropicProvider implements TextProvider {
     // silently dropped.
     const systemMessages = params.messages.filter(m => m.role === 'system' && typeof m.content === 'string' && m.content.length > 0)
 
-    // Extract profile parameters for cache control
+    // Extract profile parameters for cache control and extended thinking
     const profileParams = params.profileParameters as AnthropicProfileParams | undefined
     const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false
     const cacheStrategy = profileParams?.cacheStrategy || 'system_and_long_context'
     const cacheTTL = profileParams?.cacheTTL
+
+    // Determine thinking budget (mirrors sendMessage logic)
+    const streamRawThinkingBudget = profileParams?.thinkingBudget
+    const streamThinkingBudget = typeof streamRawThinkingBudget === 'number' && streamRawThinkingBudget >= 1024
+      ? streamRawThinkingBudget
+      : (profileParams?.extendedThinking === true ? 4096 : 0)
+    const streamThinkingEnabled = streamThinkingBudget > 0
 
     // Format messages with optional cache control
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
@@ -485,11 +532,22 @@ export class AnthropicProvider implements TextProvider {
       this.applyMidHistoryBreakpoint(messages, cacheTTL)
     }
 
+    // When thinking is enabled, max_tokens must exceed the budget.
+    const streamBaseMaxTokens = params.maxTokens ?? 4096
+    const streamEffectiveMaxTokens = streamThinkingEnabled
+      ? Math.max(streamBaseMaxTokens, streamThinkingBudget + 1024)
+      : streamBaseMaxTokens
+
     const requestParams: any = {
       model: params.model,
       messages,
-      max_tokens: params.maxTokens ?? 4096,
+      max_tokens: streamEffectiveMaxTokens,
       stream: true,
+    }
+
+    // Enable extended thinking if requested.
+    if (streamThinkingEnabled) {
+      requestParams.thinking = { type: 'enabled', budget_tokens: streamThinkingBudget }
     }
 
     // Handle system messages with optional cache control. Mirrors the
@@ -517,14 +575,15 @@ export class AnthropicProvider implements TextProvider {
       }
     }
 
-    // Anthropic API requires either temperature OR top_p, not both
-    if (params.temperature !== undefined) {
-      requestParams.temperature = params.temperature
-    } else if (params.topP !== undefined) {
-      requestParams.top_p = params.topP
-    } else {
-      // Default to temperature if neither is specified
-      requestParams.temperature = 1.0
+    // Extended thinking forbids temperature and top_p — omit them when enabled.
+    if (!streamThinkingEnabled) {
+      if (params.temperature !== undefined) {
+        requestParams.temperature = params.temperature
+      } else if (params.topP !== undefined) {
+        requestParams.top_p = params.topP
+      } else {
+        requestParams.temperature = 1.0
+      }
     }
 
     // Build tools array with optional cache control on last tool
@@ -570,11 +629,15 @@ export class AnthropicProvider implements TextProvider {
     let cacheCreationInputTokens: number | undefined
     let cacheReadInputTokens: number | undefined
     let rawProviderUsage: Record<string, unknown> | null = null
+    // Accumulated reasoning from thinking blocks (cumulative)
+    let streamReasoning = ''
 
-    // Track all content blocks (text and tool_use) for proper tool call detection
+    // Track all content blocks (text, tool_use, and thinking) for proper detection
     const contentBlocks: Array<{
-      type: 'text' | 'tool_use'
+      type: 'text' | 'tool_use' | 'thinking'
       text?: string
+      thinking?: string
+      signature?: string
       id?: string
       name?: string
       input?: Record<string, unknown>
@@ -587,6 +650,9 @@ export class AnthropicProvider implements TextProvider {
         const block = event.content_block
         if (block.type === 'text') {
           contentBlocks[event.index] = { type: 'text', text: block.text || '' }
+        } else if (block.type === 'thinking') {
+          // ThinkingBlock: has thinking + signature fields
+          contentBlocks[event.index] = { type: 'thinking', thinking: '', signature: '' }
         } else if (block.type === 'tool_use') {
 
           contentBlocks[event.index] = {
@@ -614,6 +680,22 @@ export class AnthropicProvider implements TextProvider {
           yield {
             content: delta.text,
             done: false,
+          }
+        } else if (delta?.type === 'thinking_delta' && delta?.thinking) {
+          // Accumulate thinking text (cumulative semantics: emit full string each time)
+          if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === 'thinking') {
+            contentBlocks[blockIndex].thinking = (contentBlocks[blockIndex].thinking || '') + delta.thinking
+          }
+          streamReasoning += delta.thinking
+          logger.debug('Anthropic streaming thinking fragment received', {
+            context: 'AnthropicProvider.streamMessage',
+            reasoningLength: streamReasoning.length,
+          })
+          yield { content: '', done: false, reasoningContent: streamReasoning }
+        } else if (delta?.type === 'signature_delta' && delta?.signature) {
+          // Accumulate the signature for the current thinking block (needed for tool round-trips)
+          if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === 'thinking') {
+            contentBlocks[blockIndex].signature = (contentBlocks[blockIndex].signature || '') + delta.signature
           }
         } else if (delta?.type === 'input_json_delta' && delta?.partial_json) {
           // Accumulate partial JSON for tool_use blocks
@@ -688,13 +770,26 @@ export class AnthropicProvider implements TextProvider {
         // Count tool_use blocks for logging
         const toolUseCount = contentBlocks.filter(b => b.type === 'tool_use').length
 
-        // Build the full message object for tool call detection
-        // Use the tracked content blocks which include both text and tool_use
+        // Build the full message object for tool call detection.
+        // Include thinking blocks with their signatures so multi-turn tool rounds
+        // can echo the thinking content back as required by Anthropic's API.
+        const fullMessageContent = contentBlocks.length > 0
+          ? contentBlocks.map(b => {
+              if (b.type === 'thinking') {
+                return { type: 'thinking' as const, thinking: b.thinking || '', signature: b.signature || '' }
+              }
+              if (b.type === 'tool_use') {
+                return { type: 'tool_use' as const, id: b.id, name: b.name, input: b.input }
+              }
+              return { type: 'text' as const, text: b.text || '' }
+            })
+          : [{ type: 'text' as const, text: fullContent }]
+
         const fullMessage = {
           id: messageId,
           type: 'message' as const,
           role: 'assistant' as const,
-          content: contentBlocks.length > 0 ? contentBlocks : [{ type: 'text' as const, text: fullContent }],
+          content: fullMessageContent,
           model: model,
           stop_reason: stopReason,
           usage: {
@@ -715,6 +810,7 @@ export class AnthropicProvider implements TextProvider {
           rawResponse: fullMessage,
           rawProviderUsage,
           cacheUsage,
+          ...(streamReasoning ? { reasoningContent: streamReasoning } : {}),
         }
       }
     }

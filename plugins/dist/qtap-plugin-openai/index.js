@@ -10080,8 +10080,11 @@ var OpenAIProvider = class {
           requestParams.max_output_tokens = minTokensForReasoning;
         }
         const reasoningEffort = params.profileParameters?.reasoningEffort;
+        const includeSummary = params.profileParameters?.reasoningSummary === true;
         if (typeof reasoningEffort === "string" && ["minimal", "low", "medium", "high"].includes(reasoningEffort)) {
-          requestParams.reasoning = { effort: reasoningEffort };
+          requestParams.reasoning = includeSummary ? { effort: reasoningEffort, summary: "auto" } : { effort: reasoningEffort };
+        } else if (includeSummary) {
+          requestParams.reasoning = { summary: "auto" };
         }
       } else {
         requestParams.reasoning = { effort: "low" };
@@ -10126,6 +10129,25 @@ var OpenAIProvider = class {
   buildLLMResponse(response, attachmentResults) {
     const cachedTokens = response.usage?.input_tokens_details?.cached_tokens;
     const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
+    let reasoningContent = "";
+    for (const item of response.output) {
+      if (item.type === "reasoning") {
+        const summaryArr = item.summary;
+        if (Array.isArray(summaryArr)) {
+          for (const part of summaryArr) {
+            if (part.type === "summary_text" && part.text) {
+              reasoningContent += part.text;
+            }
+          }
+        }
+      }
+    }
+    if (reasoningContent) {
+      logger.debug("OpenAI sendMessage reasoning summary captured", {
+        context: "OpenAIProvider.buildLLMResponse",
+        reasoningLength: reasoningContent.length
+      });
+    }
     return {
       content: response.output_text,
       finishReason: this.getFinishReason(response),
@@ -10136,7 +10158,8 @@ var OpenAIProvider = class {
       },
       raw: this.buildRawResponse(response),
       attachmentResults,
-      ...cacheUsage ? { cacheUsage } : {}
+      ...cacheUsage ? { cacheUsage } : {},
+      ...reasoningContent ? { reasoningContent } : {}
     };
   }
   async sendMessage(params, apiKey) {
@@ -10221,12 +10244,20 @@ var OpenAIProvider = class {
       stream = await client.responses.create(requestParams);
     }
     let finalResponse = null;
+    let streamReasoning = "";
     for await (const event of stream) {
       if (event.type === "response.output_text.delta") {
         yield {
           content: event.delta,
           done: false
         };
+      } else if (event.type === "response.reasoning_summary_text.delta") {
+        streamReasoning += event.delta;
+        logger.debug("OpenAI streaming reasoning summary fragment received", {
+          context: "OpenAIProvider.streamMessage",
+          reasoningLength: streamReasoning.length
+        });
+        yield { content: "", done: false, reasoningContent: streamReasoning };
       } else if (event.type === "response.completed") {
         finalResponse = event.response;
       }
@@ -10246,7 +10277,8 @@ var OpenAIProvider = class {
         attachmentResults,
         rawResponse: raw,
         rawProviderUsage: finalResponse.usage ?? null,
-        ...cacheUsage ? { cacheUsage } : {}
+        ...cacheUsage ? { cacheUsage } : {},
+        ...streamReasoning ? { reasoningContent: streamReasoning } : {}
       };
     } else {
       logger.warn("Stream ended without response.completed event", {

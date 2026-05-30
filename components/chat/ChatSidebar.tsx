@@ -115,6 +115,9 @@ export interface ChatSidebarProps {
   onSetCoreWhisperEnabled?: (value: boolean | null) => void
   coreWhisperInterval?: number | null
   onSetCoreWhisperInterval?: (value: number | null) => void
+  // Thinking visibility — per-chat override (tri-state). null = inherit global. DISPLAY ONLY.
+  showThinking?: boolean | null
+  onSetShowThinking?: (value: boolean | null) => void
 
   // --- Organize section ---
   onRenameClick?: () => void
@@ -290,7 +293,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
           />
         </CollapsibleCard>
 
-        {(props.isMultiChar || props.onSetCoreWhisperEnabled || props.onSetCoreWhisperInterval) && (
+        {(props.isMultiChar || props.onSetCoreWhisperEnabled || props.onSetCoreWhisperInterval || props.onSetShowThinking) && (
           <CollapsibleCard
             title="Visibility"
             {...openController('visibility')}
@@ -304,6 +307,8 @@ export function ChatSidebar(props: ChatSidebarProps) {
               onSetCoreWhisperEnabled={props.onSetCoreWhisperEnabled}
               coreWhisperInterval={props.coreWhisperInterval}
               onSetCoreWhisperInterval={props.onSetCoreWhisperInterval}
+              showThinking={props.showThinking}
+              onSetShowThinking={props.onSetShowThinking}
             />
           </CollapsibleCard>
         )}
@@ -1038,6 +1043,8 @@ interface VisibilitySectionProps {
   onSetCoreWhisperEnabled?: (value: boolean | null) => void
   coreWhisperInterval?: number | null
   onSetCoreWhisperInterval?: (value: number | null) => void
+  showThinking?: boolean | null
+  onSetShowThinking?: (value: boolean | null) => void
 }
 
 const CORE_WHISPER_INTERVAL_OPTIONS = [
@@ -1063,6 +1070,8 @@ function VisibilitySection({
   onSetCoreWhisperEnabled,
   coreWhisperInterval,
   onSetCoreWhisperInterval,
+  showThinking,
+  onSetShowThinking,
 }: VisibilitySectionProps) {
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-visibility flex flex-col gap-3">
@@ -1153,6 +1162,27 @@ function VisibilitySection({
               </select>
             </div>
           )}
+        </div>
+      )}
+
+      {onSetShowThinking && (
+        <div className="flex flex-col gap-2 pt-2 border-t qt-border-default">
+          <div className="flex items-center justify-between gap-2">
+            <span className="qt-text-secondary text-xs">Thinking</span>
+            <select
+              value={showThinking === true ? 'on' : showThinking === false ? 'off' : 'inherit'}
+              onChange={(e) => {
+                const v = e.target.value
+                onSetShowThinking(v === 'on' ? true : v === 'off' ? false : null)
+              }}
+              className="qt-bg-card border qt-border-default rounded text-xs px-2 py-1"
+              title="Show reasoning models' chain-of-thought in this chat. Inherit defers to the global default. Display-only — never sent to any model."
+            >
+              <option value="inherit">Inherit</option>
+              <option value="on">Show</option>
+              <option value="off">Hide</option>
+            </select>
+          </div>
         </div>
       )}
     </div>

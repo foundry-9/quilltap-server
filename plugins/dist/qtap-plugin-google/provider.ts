@@ -539,12 +539,14 @@ export class GoogleProvider implements TextProvider {
       if (!params.strictMaxTokens) {
         config.thinkingConfig = {
           thinkingBudget: 4096,
+          includeThoughts: true,
         };
         config.maxOutputTokens = Math.max(config.maxOutputTokens, 8192);
       } else {
         // Strict mode: minimal thinking budget for background tasks
         config.thinkingConfig = {
           thinkingBudget: 1024,
+          includeThoughts: true,
         };
       }
     }
@@ -563,6 +565,27 @@ export class GoogleProvider implements TextProvider {
 
       // Extract thought signature for Gemini 3 thinking models
       const thoughtSignature = this.extractThoughtSignature(response);
+
+      // Extract reasoning from thought parts (parts where thought === true)
+      let sendReasoningContent = '';
+      try {
+        const parts = response?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(parts)) {
+          for (const part of parts) {
+            if (part.thought === true && part.text) {
+              sendReasoningContent += part.text;
+            }
+          }
+        }
+      } catch {
+        // Ignore extraction errors
+      }
+      if (sendReasoningContent) {
+        logger.debug('Google sendMessage thinking captured', {
+          context: 'GoogleProvider.sendMessage',
+          reasoningLength: sendReasoningContent.length,
+        });
+      }
 
       const cachedTokens = usage?.cachedContentTokenCount
       const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
@@ -585,6 +608,7 @@ export class GoogleProvider implements TextProvider {
         attachmentResults,
         thoughtSignature,
         ...(cacheUsage ? { cacheUsage } : {}),
+        ...(sendReasoningContent ? { reasoningContent: sendReasoningContent } : {}),
       };
     } catch (error) {
       logger.error('Error calling Google Gemini API', {
@@ -664,12 +688,14 @@ export class GoogleProvider implements TextProvider {
       if (!params.strictMaxTokens) {
         config.thinkingConfig = {
           thinkingBudget: 4096,
+          includeThoughts: true,
         };
         config.maxOutputTokens = Math.max(config.maxOutputTokens, 8192);
       } else {
         // Strict mode: minimal thinking budget for background tasks
         config.thinkingConfig = {
           thinkingBudget: 1024,
+          includeThoughts: true,
         };
       }
     }
@@ -684,17 +710,28 @@ export class GoogleProvider implements TextProvider {
       let totalStreamedContent = '';
       const isThinking = this.isThinkingModel(params.model);
       let lastResponse: any = null;
+      let streamReasoning = '';
 
       for await (const chunk of response) {
         lastResponse = chunk;
 
-        // Extract text from chunk, skipping thought parts
+        // Extract text from chunk, routing thought parts to reasoning accumulator
         const candidates = chunk.candidates;
         if (candidates && candidates.length > 0) {
           const parts = candidates[0]?.content?.parts || [];
           for (const part of parts) {
-            // Skip thought parts and function calls
-            if (part.thought === true || part.functionCall) {
+            // Skip function calls
+            if (part.functionCall) {
+              continue;
+            }
+            // Capture thought parts as reasoning (do NOT add to content)
+            if (part.thought === true && part.text) {
+              streamReasoning += part.text;
+              logger.debug('Google streaming thinking fragment received', {
+                context: 'GoogleProvider.streamMessage',
+                reasoningLength: streamReasoning.length,
+              });
+              yield { content: '', done: false, reasoningContent: streamReasoning };
               continue;
             }
             if (part.text) {
@@ -741,6 +778,7 @@ export class GoogleProvider implements TextProvider {
         rawProviderUsage: usage ? JSON.parse(JSON.stringify(usage)) as Record<string, unknown> : null,
         thoughtSignature,
         ...(cacheUsage ? { cacheUsage } : {}),
+        ...(streamReasoning ? { reasoningContent: streamReasoning } : {}),
       };
     } catch (error) {
       logger.error('Error streaming from Google Gemini API', {

@@ -94,8 +94,27 @@ export interface ChatSettings {
   autonomousRoomSettings?: AutonomousRoomSettings
   /** Aurora's Core whisper — global defaults */
   coreWhisper?: CoreWhisperSettings
+  /** Thinking / reasoning display — global defaults. DISPLAY ONLY. */
+  thinkingDisplay?: ThinkingDisplaySettings
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * Thinking / reasoning display — global defaults for showing reasoning models'
+ * chain-of-thought in the Salon. Per-chat override (`showThinking`, tri-state)
+ * lives on the chat row. DISPLAY ONLY.
+ */
+export interface ThinkingDisplaySettings {
+  /** Whether new chats show captured thinking by default. */
+  defaultVisible?: boolean
+  /** Whether the thinking block starts collapsed when shown. */
+  defaultCollapsed?: boolean
+}
+
+export const DEFAULT_THINKING_DISPLAY_SETTINGS: ThinkingDisplaySettings = {
+  defaultVisible: true,
+  defaultCollapsed: true,
 }
 
 /**

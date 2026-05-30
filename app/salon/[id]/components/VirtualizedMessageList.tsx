@@ -97,6 +97,12 @@ interface VirtualizedMessageListProps {
   userParticipantIdSet?: Set<string>
   /** Whether the Concierge has flagged this chat as dangerous */
   isDangerousChat?: boolean
+  /** Resolved per-chat thinking visibility (chat.showThinking ?? global default). DISPLAY ONLY. */
+  showThinking?: boolean
+  /** Whether thinking blocks start collapsed (global default). */
+  thinkingCollapsedByDefault?: boolean
+  /** Live cumulative reasoning ("thinking") for the in-progress streaming message. DISPLAY ONLY. */
+  streamingReasoning?: string
 }
 
 export function VirtualizedMessageList({
@@ -145,6 +151,9 @@ export function VirtualizedMessageList({
   participantNames,
   userParticipantIdSet,
   isDangerousChat = false,
+  showThinking = false,
+  thinkingCollapsedByDefault = true,
+  streamingReasoning = '',
 }: VirtualizedMessageListProps) {
   // Resolve per-message character from participantData, falling back to first character
   const getCharacterForMessage = (message: Message): CharacterData | undefined => {
@@ -296,6 +305,8 @@ export function VirtualizedMessageList({
                   onViewLLMLogs={onViewLLMLogs}
                   onCourierTurnSettled={fetchChat}
                   attachedToolMessages={message.attachedToolMessages}
+                  showThinking={showThinking}
+                  thinkingCollapsedByDefault={thinkingCollapsedByDefault}
                   participantNames={participantNames}
                   isOverheardWhisper={
                     !!(message.targetParticipantIds?.length) &&
@@ -327,6 +338,8 @@ export function VirtualizedMessageList({
           shouldShowAvatars={shouldShowAvatars()}
           isDangerousChat={isDangerousChat}
           streamingToolBatches={streamingToolBatches}
+          streamingReasoning={showThinking ? streamingReasoning : ''}
+          thinkingCollapsedByDefault={thinkingCollapsedByDefault}
         />
 
         <div ref={messagesEndRef} />

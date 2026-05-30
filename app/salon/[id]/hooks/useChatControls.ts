@@ -61,6 +61,8 @@ export function useChatControls({
   const [allowCrossCharacterVaultReads, setAllowCrossCharacterVaultReads] = useState(false)
   const [coreWhisperEnabled, setCoreWhisperEnabled] = useState<boolean | null>(null)
   const [coreWhisperInterval, setCoreWhisperInterval] = useState<number | null>(null)
+  // Per-chat thinking visibility override (tri-state: null = inherit global). DISPLAY ONLY.
+  const [showThinking, setShowThinking] = useState<boolean | null>(null)
 
   // Refs
   const userStoppedStreamRef = useRef<boolean>(false)
@@ -116,6 +118,13 @@ export function useChatControls({
       setCoreWhisperInterval(chat.coreWhisperInterval ?? null)
     }
   }, [chat?.coreWhisperInterval])
+  // Initialize showThinking from chat data (tri-state: null = inherit global)
+  useEffect(() => {
+    if (chat?.showThinking !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      setShowThinking(chat.showThinking ?? null)
+    }
+  }, [chat?.showThinking])
 
   // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
   useEffect(() => {
@@ -243,6 +252,30 @@ export function useChatControls({
       showErrorToast('Could not update Core whisper cadence')
     }
   }, [chatId, coreWhisperInterval])
+
+  // Per-chat thinking-visibility override. Tri-state: null = inherit global,
+  // true/false = explicit. DISPLAY ONLY — only governs whether captured
+  // reasoning is shown, never whether it is stored or fed to a model.
+  const handleSetShowThinking = useCallback(async (value: boolean | null) => {
+    const previous = showThinking
+    setShowThinking(value)
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { showThinking: value } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist showThinking', response.status)
+        setShowThinking(previous)
+        showErrorToast('Could not update Thinking visibility')
+      }
+    } catch (error) {
+      console.error('[Chat] Error persisting showThinking', error)
+      setShowThinking(previous)
+      showErrorToast('Could not update Thinking visibility')
+    }
+  }, [chatId, showThinking])
 
   // Toggle document editing mode and persist to database
   const handleToggleDocumentEditingMode = useCallback(async () => {
@@ -558,6 +591,8 @@ export function useChatControls({
     coreWhisperInterval,
     handleSetCoreWhisperEnabled,
     handleSetCoreWhisperInterval,
+    showThinking,
+    handleSetShowThinking,
     connectionProfiles,
     userStoppedStreamRef,
     setPauseState,

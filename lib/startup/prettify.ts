@@ -103,6 +103,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-chat-tool-settings-fields-v1': 'Adding tool settings to chats',
   'add-chat-image-profile-field-v1': 'Moving the image profile onto each chat',
   'add-chat-message-missing-columns-v1': 'Filling in missing chat-message columns',
+  'add-chat-message-reasoning-columns-v1': "Setting aside room for each thinker's reasoning",
+  'add-thinking-display-fields-v1': 'Wiring up the thinking-visibility switches',
   'add-chat-scenario-text-field-v1': 'Recording scenario text on each chat',
   'add-chat-type-field-v1': 'Adding chat type field',
   'add-chat-danger-classification-fields-v1': "Adding the Concierge's classification fields",

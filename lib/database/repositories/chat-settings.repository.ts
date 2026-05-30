@@ -245,6 +245,10 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               packetTokenBudget: 4096,
               fireOnContextTransition: true,
             },
+            thinkingDisplay: {
+              defaultVisible: true,
+              defaultCollapsed: true,
+            },
             defaultRoleplayTemplateId,
             ...data,
           };

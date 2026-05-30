@@ -279,6 +279,15 @@
   --qt-chat-silent-border: #7a9e8e;
   --qt-chat-silent-label-fg: #5d7e6e;
 
+  /* Chat: Thinking / reasoning blocks — a thinking model's chain-of-thought,
+     shown dimmed, italic, and right-justified. DISPLAY ONLY. Defaults dim the
+     assistant foreground and lean on a faint muted backdrop; themes may
+     override, and untouched themes fall back to these via the silent tokens. */
+  --qt-chat-thinking-fg: color-mix(in srgb, var(--qt-chat-assistant-fg) 55%, transparent);
+  --qt-chat-thinking-bg: color-mix(in srgb, var(--qt-chat-silent-bg) 40%, transparent);
+  --qt-chat-thinking-border: color-mix(in srgb, var(--qt-chat-silent-border) 60%, transparent);
+  --qt-chat-thinking-label-fg: var(--qt-chat-silent-label-fg);
+
   /* Chat: Wardrobe action notices — warm amber/gold for dressing room actions */
   --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #c4a24e 40%);
   --qt-chat-wardrobe-fg: var(--qt-chat-assistant-fg);
@@ -786,6 +795,12 @@
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #4a7a6a 35%);
   --qt-chat-silent-border: #4a7a6a;
   --qt-chat-silent-label-fg: #8ab8a4;
+
+  /* Chat: Thinking / reasoning blocks — dark mode */
+  --qt-chat-thinking-fg: color-mix(in srgb, var(--qt-chat-assistant-fg) 60%, transparent);
+  --qt-chat-thinking-bg: color-mix(in srgb, var(--qt-chat-silent-bg) 40%, transparent);
+  --qt-chat-thinking-border: color-mix(in srgb, var(--qt-chat-silent-border) 60%, transparent);
+  --qt-chat-thinking-label-fg: var(--qt-chat-silent-label-fg);
 
   /* Chat: Wardrobe action notices — dark mode */
   --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #8a6d1b 40%);

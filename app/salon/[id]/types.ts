@@ -76,6 +76,15 @@ export interface Message {
    * persisted — populated client-side so tool calls render inside the
    * character's bubble instead of as standalone rows in the flow. */
   attachedToolMessages?: Message[]
+  /** Reasoning models' full chain-of-thought ("thinking"), DISPLAY ONLY. Shown
+   * collapsibly in the bubble when the chat's thinking-visibility is on; never
+   * fed to any model. */
+  reasoningContent?: string | null
+  /** Positioned reasoning blocks (DISPLAY ONLY) for splicing thinking into the
+   * prose at the point it fired, mirroring tool-call anchors. Each carries an
+   * `anchorOffset`, `content`, and a `seq` shared with tool anchors so
+   * same-offset items render in true emission order. */
+  reasoningSegments?: Array<{ anchorOffset: number; content: string; seq: number }> | null
 }
 
 export interface CharacterData {
@@ -196,6 +205,8 @@ export interface Chat {
   coreWhisperEnabled?: boolean | null
   /** Per-chat override for Aurora's Core whisper cadence (assistant turns between offerings). null = inherit. */
   coreWhisperInterval?: number | null
+  /** Per-chat override for showing reasoning models' thinking (null = inherit global `thinkingDisplay.defaultVisible`; true = show; false = hide). DISPLAY ONLY. */
+  showThinking?: boolean | null
   /** Image profile ID for generating images in this chat (shared by all participants) */
   imageProfileId?: string | null
   /** Whether to auto-generate character avatars when outfits change */
@@ -257,6 +268,8 @@ export interface ChatSettings {
   llmLoggingSettings?: { enabled?: boolean; verboseMode?: boolean; retentionDays?: number }
   storyBackgroundsSettings?: StoryBackgroundsSettings
   dangerousContentSettings?: DangerousContentSettings
+  /** Global defaults for showing reasoning models' thinking. DISPLAY ONLY. */
+  thinkingDisplay?: { defaultVisible: boolean; defaultCollapsed: boolean }
   createdAt: string
   updatedAt: string
 }

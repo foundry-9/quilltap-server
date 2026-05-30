@@ -100,6 +100,72 @@
   }
 
   /**
+   * Thinking / reasoning block — a thinking model's chain-of-thought, spliced
+   * into the prose at the point it fired. DISPLAY ONLY. Visually signals
+   * "temporary reasoning, not the final answer": right-justified, dimmed,
+   * italic, collapsible. Theme-aware via the qt-chat-thinking-* tokens (which
+   * fall back to the silent-message tokens, so untouched themes still render).
+   */
+  /* The block is OFFSET to the right (a flex container pushes it over and caps
+     its width) rather than right-justified — body text reads left-to-right. */
+  .qt-chat-thinking {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0.4rem 0;
+  }
+
+  .qt-chat-thinking-details {
+    max-width: 85%;
+  }
+
+  .qt-chat-thinking-summary {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    cursor: pointer;
+    list-style: none;
+    font-style: italic;
+    font-variant: small-caps;
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    color: var(--qt-chat-thinking-label-fg);
+    user-select: none;
+  }
+
+  .qt-chat-thinking-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .qt-chat-thinking-summary::marker {
+    content: '';
+  }
+
+  .qt-chat-thinking-chevron {
+    width: 0.85rem;
+    height: 0.85rem;
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+
+  .qt-chat-thinking-body {
+    margin-top: 0.3rem;
+    padding: 0.4rem 0.65rem;
+    border-right: 2px solid var(--qt-chat-thinking-border);
+    background: var(--qt-chat-thinking-bg);
+    border-radius: 0.25rem;
+    color: var(--qt-chat-thinking-fg);
+    font-style: italic;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    /* The block hugs the right (see .qt-chat-thinking / -details), but the body
+       text reads left-to-right — right-aligning rendered Markdown (lists, code,
+       headings) reads as broken. */
+    text-align: left;
+    word-break: break-word;
+  }
+
+  /**
    * Wardrobe action notice — inline summary of outfit changes (equip, unequip, gift).
    * Distinguished from whispers (dashed purple) and silent (dotted teal) by a double
    * border and warm amber/gold tones, evoking a dressing room bulletin.

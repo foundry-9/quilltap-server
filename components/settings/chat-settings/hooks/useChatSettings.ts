@@ -27,6 +27,8 @@ import {
   DangerousContentSettings,
   DEFAULT_DANGEROUS_CONTENT_SETTINGS,
   AutonomousRoomSettings,
+  ThinkingDisplaySettings,
+  DEFAULT_THINKING_DISPLAY_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -60,6 +62,7 @@ interface UseChatSettingsReturn {
   handleDangerousContentUpdate: (updates: Partial<DangerousContentSettings>) => Promise<void>
   handleTimezoneChange: (timezone: string | null) => Promise<void>
   handleAutonomousRoomSettingsUpdate: (updates: Partial<AutonomousRoomSettings>) => Promise<void>
+  handleThinkingDisplayUpdate: (updates: Partial<ThinkingDisplaySettings>) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -602,6 +605,44 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Update thinking / reasoning display global defaults. DISPLAY ONLY — never
+   * affects whether reasoning is captured or stored, only whether it is shown.
+   */
+  const handleThinkingDisplayUpdate = useCallback(
+    async (updates: Partial<ThinkingDisplaySettings>) => {
+      if (!settings) return
+
+      const merged: ThinkingDisplaySettings = {
+        ...DEFAULT_THINKING_DISPLAY_SETTINGS,
+        ...(settings.thinkingDisplay ?? {}),
+        ...updates,
+      }
+
+      try {
+        setSaving(true)
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ thinkingDisplay: merged }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update thinking-display settings')
+        }
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update thinking-display settings', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
    * Update agent mode default enabled setting
    */
   const handleAgentModeDefaultEnabledChange = useCallback(
@@ -860,5 +901,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleDangerousContentUpdate,
     handleTimezoneChange,
     handleAutonomousRoomSettingsUpdate,
+    handleThinkingDisplayUpdate,
   }
 }

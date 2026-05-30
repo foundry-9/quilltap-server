@@ -370,6 +370,10 @@ export async function handleGet(
             pendingExternalPrompt: event.pendingExternalPrompt || null,
             pendingExternalPromptFull: event.pendingExternalPromptFull || null,
             pendingExternalAttachments: event.pendingExternalAttachments || null,
+            // Reasoning ("thinking") for DISPLAY ONLY — surfaced so the Salon can
+            // render the collapsible thinking block on reload. Never re-fed to a model.
+            reasoningContent: event.reasoningContent || null,
+            reasoningSegments: event.reasoningSegments || null,
           };
         })
     ).then((results) => results.filter(Boolean));

@@ -89,6 +89,19 @@ export type AutonomousRunVisibility = z.infer<typeof AutonomousRunVisibilityEnum
 // MESSAGE EVENTS
 // ============================================================================
 
+/**
+ * One positioned reasoning / chain-of-thought block on an assistant message.
+ * DISPLAY ONLY — see `reasoningSegments` on the message schema. Mirrors how
+ * tool calls carry an `anchorOffset`; `seq` is shared with tool anchors so
+ * same-offset items render in true emission order.
+ */
+export const ReasoningSegmentSchema = z.object({
+  anchorOffset: z.number(),
+  content: z.string(),
+  seq: z.number(),
+});
+export type ReasoningSegment = z.infer<typeof ReasoningSegmentSchema>;
+
 export const MessageEventSchema = z.object({
   type: z.literal('message'),
   id: UUIDSchema,
@@ -109,6 +122,20 @@ export const MessageEventSchema = z.object({
   // Google Gemini thought signature for thinking models (e.g., gemini-3-pro)
   // Must be preserved and passed back for multi-turn conversations with function calling
   thoughtSignature: z.string().nullable().optional(),
+  /**
+   * Reasoning / chain-of-thought text from thinking models, captured for
+   * DISPLAY ONLY. The full concatenated reasoning for the turn. Never re-fed to
+   * any model as history/summary/memory — the only in-request reuse is the
+   * in-turn tool round-trip, which uses an in-memory value, not this column.
+   */
+  reasoningContent: z.string().nullable().optional(),
+  /**
+   * Positioned reasoning blocks (DISPLAY ONLY) used by the Salon to splice
+   * thinking into the prose at the point it fired, the same way tool calls are
+   * anchored. `anchorOffset` is the prose offset; `seq` is the turn-monotonic
+   * counter shared with tool anchors for stable same-offset ordering.
+   */
+  reasoningSegments: ReasoningSegmentSchema.array().nullable().optional(),
   // Multi-character chat: which participant sent this message
   participantId: UUIDSchema.nullable().optional(),
   // Recovery type: indicates this message was generated as an error recovery response
@@ -727,6 +754,15 @@ export const ChatMetadataSchema = z.object({
    */
   coreWhisperInterval: z.number().int().min(1).nullable().optional(),
 
+  /**
+   * Per-chat override for showing reasoning models' thinking in the Salon.
+   * Tri-state: NULL = inherit the global `chat.thinkingDisplay.defaultVisible`
+   * default; true = always show; false = always hide. DISPLAY ONLY — this only
+   * affects whether captured reasoning is rendered, never whether it is stored
+   * or fed to any model.
+   */
+  showThinking: z.boolean().nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -944,6 +980,9 @@ export const ChatMetadataBaseSchema = z.object({
   coreWhisperEnabled: z.boolean().nullable().optional(),
   /** Aurora Core whisper — per-chat override of the global `coreWhisper.interval` setting (assistant turns between periodic whispers). NULL = inherit. */
   coreWhisperInterval: z.number().int().min(1).nullable().optional(),
+
+  /** Per-chat override for showing reasoning models' thinking. NULL = inherit global `chat.thinkingDisplay.defaultVisible`; true = show; false = hide. DISPLAY ONLY. */
+  showThinking: z.boolean().nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

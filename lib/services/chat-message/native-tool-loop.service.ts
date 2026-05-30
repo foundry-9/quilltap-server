@@ -38,6 +38,9 @@ import {
   encodeStatusEvent,
   safeEnqueue,
   streamMessage,
+  applyReasoningChunk,
+  flushReasoningSegment,
+  nextTurnSeq,
   type StreamOptions,
 } from './streaming.service'
 import { detectToolCallsInResponse, processToolCalls } from './tool-execution.service'
@@ -151,7 +154,12 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
           encoder,
           { characterName: character.name, characterId: character.id },
         )
-        for (const tm of siblingResults.toolMessages) tm.anchorOffset = batchAnchor
+        // Close any pending reasoning run before this tool batch, then stamp
+        // both the prose anchor and the shared turn sequence so the Salon
+        // interleaves thinking/tool/thinking in true emission order.
+        flushReasoningSegment(streaming)
+        const siblingSeq = nextTurnSeq(streaming)
+        for (const tm of siblingResults.toolMessages) { tm.anchorOffset = batchAnchor; tm.seq = siblingSeq }
         toolMessages.push(...siblingResults.toolMessages)
         generatedImagePaths.push(...siblingResults.generatedImagePaths)
         realWorkIterations++
@@ -194,6 +202,10 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
         // Drop them — the tool blocks fall back to bottom-of-bubble rendering.
         if (agentFinalResponse !== currentResponse) {
           for (const tm of toolMessages) tm.anchorOffset = undefined
+          // The structured answer replaces the prose wholesale, so reasoning
+          // offsets no longer map. Drop the positioned segments; the flat
+          // reasoningContent still renders as a single leading thinking block.
+          streaming.reasoningSegments = undefined
         }
         streaming.fullResponse = agentFinalResponse
       }
@@ -240,7 +252,9 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
       // preservation gate.
       realWorkIterations++
     }
-    for (const tm of results.toolMessages) tm.anchorOffset = batchAnchor
+    flushReasoningSegment(streaming)
+    const batchSeq = nextTurnSeq(streaming)
+    for (const tm of results.toolMessages) { tm.anchorOffset = batchAnchor; tm.seq = batchSeq }
     toolMessages.push(...results.toolMessages)
     generatedImagePaths.push(...results.generatedImagePaths)
 
@@ -309,6 +323,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
         chatId,
         characterId: character.id,
       })) {
+        applyReasoningChunk(streaming, chunk, controller, encoder)
         if (chunk.content) {
           if (!emittedStreamingStatus) {
             emittedStreamingStatus = true
@@ -319,6 +334,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
               characterId: character.id,
             }))
           }
+          flushReasoningSegment(streaming)
           currentResponse += chunk.content
           streaming.fullResponse += chunk.content
           controller.enqueue(encodeContentChunk(encoder, chunk.content))
@@ -333,9 +349,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
           if (chunk.thoughtSignature) {
             streaming.thoughtSignature = chunk.thoughtSignature
           }
-          if (chunk.reasoningContent) {
-            streaming.reasoningContent = chunk.reasoningContent
-          }
+          flushReasoningSegment(streaming)
         }
       }
     } catch (toolLoopStreamError) {
@@ -389,7 +403,9 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
           messageId: preGeneratedAssistantMessageId,
           chatId,
         })) {
+          applyReasoningChunk(streaming, chunk, controller, encoder)
           if (chunk.content) {
+            flushReasoningSegment(streaming)
             streaming.fullResponse += chunk.content
             controller.enqueue(encodeContentChunk(encoder, chunk.content))
           }
@@ -402,9 +418,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
             if (chunk.thoughtSignature) {
               streaming.thoughtSignature = chunk.thoughtSignature
             }
-            if (chunk.reasoningContent) {
-              streaming.reasoningContent = chunk.reasoningContent
-            }
+            flushReasoningSegment(streaming)
 
             // If the force-final call still contains submit_final_response,
             // promote its `response` arg over whatever streamed.
@@ -417,6 +431,9 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
                   // Structured answer replaces the streamed prose — captured
                   // offsets no longer map. Drop them (bottom-of-bubble fallback).
                   for (const tm of toolMessages) tm.anchorOffset = undefined
+                  // Reasoning offsets are invalid too — drop the segments; the
+                  // flat reasoningContent still renders as a leading block.
+                  streaming.reasoningSegments = undefined
                   streaming.fullResponse = args.response
                 }
               }

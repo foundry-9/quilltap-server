@@ -3,6 +3,7 @@ import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import MessageContent from '@/components/chat/MessageContent'
 import Avatar from '@/components/ui/Avatar'
 import { PendingToolCalls } from './PendingToolCalls'
+import { ThinkingBlock } from './ThinkingBlock'
 import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 import type { CharacterData } from '../types'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
@@ -23,6 +24,13 @@ interface StreamingMessageProps {
    *  offset where each fired so they nest at the point of invocation rather than
    *  in one block at the bottom of the bubble. */
   streamingToolBatches?: StreamingToolBatch[]
+  /** Live cumulative reasoning ("thinking") for the in-progress turn. Empty when
+   *  the chat's thinking-visibility is off. DISPLAY ONLY — rendered as a single
+   *  leading block (live reasoning generally precedes the answer). */
+  streamingReasoning?: string
+  /** Whether the (post-stream) thinking block starts collapsed. The live block
+   *  is always shown open while streaming. */
+  thinkingCollapsedByDefault?: boolean
 }
 
 type StreamingPart =
@@ -62,6 +70,8 @@ export function StreamingMessage({
   shouldShowAvatars,
   isDangerousChat = false,
   streamingToolBatches = [],
+  streamingReasoning = '',
+  thinkingCollapsedByDefault = true,
 }: StreamingMessageProps) {
   if (!waitingForResponse && !streaming) return null
 
@@ -91,6 +101,15 @@ export function StreamingMessage({
           </div>
         ) : (
           <div className="flex-1 min-w-0 px-4 py-3 rounded-lg qt-bg-card border qt-border-default text-foreground">
+            {streamingReasoning.trim().length > 0 && (
+              <ThinkingBlock
+                content={streamingReasoning}
+                streaming
+                collapsedByDefault={thinkingCollapsedByDefault}
+                renderingPatterns={renderingPatterns}
+                dialogueDetection={dialogueDetection}
+              />
+            )}
             {parts.map((part, idx) => {
               if (part.kind === 'text') {
                 // Skip empty interior segments, but always render the trailing
