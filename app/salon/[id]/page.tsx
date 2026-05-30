@@ -1218,7 +1218,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           fetchChat={fetchChat}
           messagesWithLogs={llmLogs.messagesWithLogs}
           onViewLLMLogs={llmLogs.handleViewLLMLogs}
-          pendingToolCalls={sseStreaming.pendingToolCalls}
+          streamingToolBatches={sseStreaming.streamingToolBatches}
           ephemeralMessages={ephemeralMessages}
           getRespondingCharacter={getRespondingCharacter}
           shouldShowAvatars={shouldShowAvatars}

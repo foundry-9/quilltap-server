@@ -146,6 +146,17 @@ export interface ToolMessage {
   arguments?: Record<string, unknown>
   /** Provider-assigned call ID for native tool result formatting */
   callId?: string
+  /**
+   * Character offset into the assistant turn's prose at which this tool call
+   * fired — i.e. the length of the accumulated response text emitted before
+   * the model paused to call the tool. Lets the Salon UI splice the tool block
+   * back into the prose at the point it was invoked instead of dumping every
+   * call at the bottom of the bubble. Captured in the tool loops against the
+   * running `streaming.fullResponse`, then re-based into final stored-content
+   * coordinates by the finalizer. Undefined when the position can't be tracked
+   * (e.g. agent-mode `submit_final_response` overwrites the whole response).
+   */
+  anchorOffset?: number
   metadata?: {
     provider?: string
     model?: string

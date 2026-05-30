@@ -16,6 +16,17 @@ export interface PendingToolCall {
   arguments?: Record<string, unknown>
 }
 
+/**
+ * A batch of in-progress tool calls plus the offset into the streamed response
+ * text at which they were invoked. Lets the streaming bubble splice each batch
+ * back into the live prose at the point the model paused to call it — the live
+ * analogue of the persisted `anchorOffset` carried on saved tool messages.
+ */
+export interface StreamingToolBatch {
+  offset: number
+  calls: PendingToolCall[]
+}
+
 export interface ToolExecutionStatus {
   tool: string
   status: 'pending' | 'success' | 'error'
@@ -130,11 +141,16 @@ export function useSSEStreaming({
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [waitingForResponse, setWaitingForResponse] = useState(false)
-  const [pendingToolCalls, setPendingToolCalls] = useState<PendingToolCall[]>([])
+  // In-progress tool calls for the turn being streamed, grouped into batches by
+  // the point in the prose where each fired (see StreamingToolBatch). Replaces a
+  // single flat list so the streaming bubble can interleave them with the text.
+  const [streamingToolBatches, setStreamingToolBatches] = useState<StreamingToolBatch[]>([])
   const [toolExecutionStatus, setToolExecutionStatus] = useState<ToolExecutionStatus | null>(null)
   const [responseStatus, setResponseStatus] = useState<ResponseStatus | null>(null)
 
   const abortControllerRef = useRef<AbortController | null>(null)
+  // Monotonic batch counter so tool-call React keys stay unique across batches.
+  const toolBatchSeqRef = useRef(0)
 
   // rAF-coalesced streaming content updates. SSE chunks can arrive faster
   // than React can render them — in long multi-character chains that burst
@@ -182,6 +198,78 @@ export function useSSEStreaming({
     }, 150)
   }, [inputRef])
 
+  // Push a freshly-detected tool batch, tagged with the prose offset where it
+  // fired, and surface image-generation status. Shared by the send and continue
+  // streaming paths so both interleave tool calls into the live bubble.
+  const trackToolsDetected = useCallback((data: SSEEvent, offset: number) => {
+    const toolNames = (data.toolNames || []) as string[]
+    const toolArgs = (data.toolArguments || []) as Record<string, unknown>[]
+    const seq = toolBatchSeqRef.current++
+    const calls: PendingToolCall[] = toolNames.map((name, idx) => ({
+      id: `tool-${seq}-${idx}`,
+      name,
+      status: 'pending' as const,
+      arguments: toolArgs[idx],
+    }))
+    setStreamingToolBatches(prev => [...prev, { offset, calls }])
+    if (toolNames.includes('generate_image')) {
+      setToolExecutionStatus({
+        tool: 'generate_image',
+        status: 'pending',
+        message: `Generating image...`,
+      })
+    }
+  }, [])
+
+  // Mark a tool result on the most recent batch (results stream immediately
+  // after their detection) and run per-tool side effects (navigation, image
+  // toasts, page callback).
+  const trackToolResult = useCallback((data: SSEEvent) => {
+    const { index, name, success, result } = data.toolResult!
+
+    setStreamingToolBatches(prev => {
+      if (prev.length === 0) return prev
+      const lastIdx = prev.length - 1
+      const last = prev[lastIdx]
+      const calls = last.calls.map((tc, idx) =>
+        (index !== undefined && idx === index) || (index === undefined && tc.name === name)
+          ? { ...tc, status: success ? ('success' as const) : ('error' as const), result }
+          : tc
+      )
+      const next = prev.slice()
+      next[lastIdx] = { ...last, calls }
+      return next
+    })
+
+    // Handle help_navigate: navigate the current window to the target URL
+    if (name === 'help_navigate' && success && result?.navigationUrl) {
+      window.location.href = result.navigationUrl
+    }
+
+    if (name === 'generate_image') {
+      if (success) {
+        const imageCount = result?.images?.length || 1
+        setToolExecutionStatus({
+          tool: name,
+          status: 'success',
+          message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
+        })
+        showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
+      } else {
+        setToolExecutionStatus({
+          tool: name,
+          status: 'error',
+          message: result?.error || 'Failed to generate image',
+        })
+        showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
+      }
+    }
+
+    // Notify the page about tool results (for Document Mode, etc.)
+    onToolResultCallback?.(name, success, result)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
+  }, [])
+
   /**
    * Shared SSE stream reader. Processes lines from a ReadableStreamDefaultReader.
    * Returns the accumulated full content string.
@@ -192,7 +280,9 @@ export function useSSEStreaming({
     reader: ReadableStreamDefaultReader<Uint8Array>,
     opts: {
       participantId: string | null
-      onToolsDetected?: (data: SSEEvent) => void
+      /** `offset` is the length of the response text streamed so far — where
+       *  this batch of tool calls was invoked in the prose. */
+      onToolsDetected?: (data: SSEEvent, offset: number) => void
       onToolResult?: (data: SSEEvent) => void
       onDone: (fullContent: string, data: SSEEvent) => void | Promise<void>
       /** Called for intermediate done events during a chain (not the final one) */
@@ -255,9 +345,10 @@ export function useSSEStreaming({
           throw new Error(errorMsg)
         }
 
-        // Handle tool detection
+        // Handle tool detection. `fullContent` is the prose streamed so far —
+        // the offset at which this batch was invoked.
         if (data.toolsDetected && opts.onToolsDetected) {
-          opts.onToolsDetected(data)
+          opts.onToolsDetected(data, fullContent.length)
         }
 
         // Handle tool results
@@ -379,6 +470,7 @@ export function useSSEStreaming({
     setWaitingForResponse(true)
     setStreaming(false)
     resetStreamingContent()
+    setStreamingToolBatches([])
     const firstCharParticipant = getFirstCharacterParticipant()
     // Track the current responding participant across chained turns (mutable for closures)
     let currentParticipantId = firstCharParticipant?.id || null
@@ -454,59 +546,8 @@ export function useSSEStreaming({
 
       await readSSEStream(reader, {
         participantId: firstCharParticipant?.id || null,
-        onToolsDetected: (data) => {
-          const toolNames = data.toolNames as string[]
-          const toolArgs = (data.toolArguments || []) as Record<string, unknown>[]
-          setPendingToolCalls(toolNames.map((name, idx) => ({
-            id: `tool-${idx}`,
-            name,
-            status: 'pending' as const,
-            arguments: toolArgs[idx],
-          })))
-          if (toolNames.includes('generate_image')) {
-            setToolExecutionStatus({
-              tool: 'generate_image',
-              status: 'pending',
-              message: `Generating image...`,
-            })
-          }
-        },
-        onToolResult: (data) => {
-          const { index, name, success, result } = data.toolResult!
-
-          setPendingToolCalls(prev => prev.map((tc, idx) =>
-            (index !== undefined && idx === index) || (index === undefined && tc.name === name)
-              ? { ...tc, status: success ? 'success' : 'error', result }
-              : tc
-          ))
-
-          // Handle help_navigate: navigate the current window to the target URL
-          if (name === 'help_navigate' && success && result?.navigationUrl) {
-            window.location.href = result.navigationUrl
-          }
-
-          if (name === 'generate_image') {
-            if (success) {
-              const imageCount = result?.images?.length || 1
-              setToolExecutionStatus({
-                tool: name,
-                status: 'success',
-                message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
-              })
-              showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
-            } else {
-              setToolExecutionStatus({
-                tool: name,
-                status: 'error',
-                message: result?.error || 'Failed to generate image',
-              })
-              showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
-            }
-          }
-
-          // Notify the page about tool results (for Document Mode, etc.)
-          onToolResultCallback?.(name, success, result)
-        },
+        onToolsDetected: trackToolsDetected,
+        onToolResult: trackToolResult,
         onDone: async (fullContent, data) => {
           if (data.emptyResponse) {
             showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
@@ -548,6 +589,10 @@ export function useSSEStreaming({
           }
           setMessages((prev) => [...prev, assistantMessage])
           resetStreamingContent()
+          // Live tool batches are spent — the refetched message carries the
+          // persisted, interspersed copy. Clearing now also avoids a stale
+          // flash on the next turn's bubble.
+          setStreamingToolBatches([])
           setStreaming(false)
           setWaitingForResponse(false)
           setRespondingParticipantId(null)
@@ -556,7 +601,6 @@ export function useSSEStreaming({
           notifyQueueChange()
           setTimeout(() => {
             setToolExecutionStatus(null)
-            setPendingToolCalls([])
           }, 3000)
         },
         onIntermediateDone: async (fullContent, data) => {
@@ -584,6 +628,7 @@ export function useSSEStreaming({
           currentParticipantId = event.participantId
           setRespondingParticipantId(event.participantId)
           resetStreamingContent()
+          setStreamingToolBatches([])
           setWaitingForResponse(true)
           setStreaming(false)
         },
@@ -637,7 +682,7 @@ export function useSSEStreaming({
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, trackToolsDetected, trackToolResult])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
@@ -665,6 +710,7 @@ export function useSSEStreaming({
     setWaitingForResponse(true)
     setStreaming(false)
     resetStreamingContent()
+    setStreamingToolBatches([])
     // Track the current responding participant across chained turns (mutable for closures)
     let currentParticipantId = participantId
     setRespondingParticipantId(participantId)
@@ -693,6 +739,8 @@ export function useSSEStreaming({
 
       await readSSEStream(reader, {
         participantId,
+        onToolsDetected: trackToolsDetected,
+        onToolResult: trackToolResult,
         onDone: (fullContent, data) => {
           setResponseStatus(null)
 
@@ -739,6 +787,7 @@ export function useSSEStreaming({
           currentParticipantId = event.participantId
           setRespondingParticipantId(event.participantId)
           resetStreamingContent()
+          setStreamingToolBatches([])
           setWaitingForResponse(true)
           setStreaming(false)
         },
@@ -778,7 +827,7 @@ export function useSSEStreaming({
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent])
+  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, trackToolsDetected, trackToolResult])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {
@@ -789,7 +838,7 @@ export function useSSEStreaming({
     setWaitingForResponse(false)
     setSending(false)
     setRespondingParticipantId(null)
-    setPendingToolCalls([])
+    setStreamingToolBatches([])
     setToolExecutionStatus(null)
     if (isMultiChar) {
       setPauseState(true)
@@ -805,7 +854,7 @@ export function useSSEStreaming({
     streaming,
     streamingContent,
     waitingForResponse,
-    pendingToolCalls,
+    streamingToolBatches,
     toolExecutionStatus,
     responseStatus,
     abortControllerRef,

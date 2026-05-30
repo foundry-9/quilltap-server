@@ -12,6 +12,7 @@ import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
 import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-message-labels'
 import { CourierBubble } from './CourierBubble'
+import { buildInterspersedToolLayout } from '../intersperse-tool-messages'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -192,6 +193,17 @@ function MessageRowInner({
     : 'SHOW'
   const showDangerBadges = hasDangerFlags && dangerousContentSettings?.showWarningBadges !== false
 
+  // Character-initiated tool calls folded into this assistant message
+  // (group-tool-messages.ts) are spliced into the prose at the offsets they
+  // were invoked. Source view shows the raw body, so it skips interspersing and
+  // renders every folded call in the trailing block instead.
+  const attachedTools = attachedToolMessages ?? []
+  const isSourceView = viewSourceMessageIds.has(message.id)
+  const toolLayout = attachedTools.length > 0 && !isSourceView
+    ? buildInterspersedToolLayout(message.content, attachedTools)
+    : null
+  const trailingTools = isSourceView ? attachedTools : (toolLayout?.trailingTools ?? [])
+
   // The Courier: pending placeholder for a manual / clipboard turn. Render
   // a special bubble with the Markdown blob, copy button, attachment links,
   // and a paste-back textarea. Skip the normal action bar, edit, source-view,
@@ -364,10 +376,42 @@ function MessageRowInner({
                 </div>
               )}
               <DangerContentWrapper displayMode={dangerDisplayMode}>
-                {viewSourceMessageIds.has(message.id) ? (
+                {isSourceView ? (
                   <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
                     {message.content}
                   </div>
+                ) : toolLayout ? (
+                  /* Character-initiated tool calls spliced into the prose at the
+                     point they were invoked. Each prose run renders on its own
+                     (no server-pre-rendered HTML) so per-run Markdown stays
+                     well-formed. Calls with no usable anchor fall through to the
+                     trailing block below. */
+                  toolLayout.parts.map((part, idx) =>
+                    part.kind === 'text' ? (
+                      <LazyMessageContent
+                        key={`seg-${idx}`}
+                        content={part.text}
+                        renderingPatterns={renderingPatterns}
+                        dialogueDetection={dialogueDetection}
+                        forceRender={forceRender}
+                      />
+                    ) : (
+                      <div
+                        key={`tools-${idx}`}
+                        className={`qt-chat-message-tools${toolLayout.parts[idx + 1]?.kind === 'text' ? ' qt-chat-message-tools-before-prose' : ''}`}
+                      >
+                        {part.messages.map((toolMessage) => (
+                          <ToolMessage
+                            key={toolMessage.id}
+                            embedded
+                            message={toolMessage}
+                            character={character}
+                            onImageClick={onImageClick}
+                          />
+                        ))}
+                      </div>
+                    )
+                  )
                 ) : (
                   <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} />
                 )}
@@ -416,11 +460,12 @@ function MessageRowInner({
                 </div>
               )}
 
-              {/* Character-initiated tool calls, nested as separate blocks
-                  below the prose (pulled out of the general message flow). */}
-              {attachedToolMessages && attachedToolMessages.length > 0 && (
+              {/* Tool calls without a usable prose anchor (legacy rows, dropped
+                  offsets) — and, in source view, every folded call — render as
+                  separate blocks below the prose, the pre-interspersing layout. */}
+              {trailingTools.length > 0 && (
                 <div className="qt-chat-message-tools">
-                  {attachedToolMessages.map((toolMessage) => (
+                  {trailingTools.map((toolMessage) => (
                     <ToolMessage
                       key={toolMessage.id}
                       embedded

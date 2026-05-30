@@ -1885,6 +1885,15 @@
   }
 
   /**
+   * Applied to a nested tool block when the character's prose resumes beneath
+   * it, opening a clear paragraph break between the tool flourish and the words
+   * that follow. Omitted when the turn ended on the tool call (nothing below).
+   */
+  .qt-chat-message-tools-before-prose {
+    @apply mb-5;
+  }
+
+  /**
    * Desktop avatar container
    * Ensures avatar with name/title doesn't overflow into adjacent rows
    */

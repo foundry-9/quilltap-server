@@ -4,6 +4,17 @@
 
 ### 4.6-dev
 
+#### Feature: Tool calls are spliced into the character's prose where they fired
+
+Building on the earlier change that folds character-initiated tool calls into the assistant bubble, each tool block now renders at the exact point in the prose where the character paused to call it, instead of all stacking at the bottom of the bubble. Multiple calls in one batch stack in order at that point. Because each prose run was a separate model response, rendering them as independent Markdown also fixes run-together artifacts at the boundaries (e.g. a closing `*` from one action and the opening `*` of the next colliding into `**`).
+
+The position is captured server-side and persisted, so it survives reload — and the live streaming bubble interleaves calls the same way as they arrive.
+
+- Each tool message now carries an `anchorOffset` inside its existing JSON `content` (no database or export-schema migration): the number of characters of the turn's prose emitted before the call. The native function-calling loop (`native-tool-loop.service.ts`) captures it from the running `streaming.fullResponse`; the text/simple-json loop (`text-tool-loop.service.ts`) resolves it from the assembled, stripped segments in a single final pass (`assembleStrippedWithOffsets`). Auto-detected RNG rolls in a response anchor to the dice notation that triggered them.
+- The finalizer (`message-finalizer.service.ts`) re-bases captured offsets from streamed-response coordinates into final stored-content coordinates (accounting for the leading character-name-prefix strip), and drops them when the body can't be mapped (content-block extraction, or agent-mode `submit_final_response` overwriting the whole response) so those fall back to bottom-of-bubble rendering.
+- New pure helper `buildInterspersedToolLayout` (`app/salon/[id]/intersperse-tool-messages.ts`) splits the assistant prose at the anchors and interleaves the tool blocks; `MessageRow` renders the result. Calls with no usable anchor (legacy rows, dropped offsets) and source view still render in the trailing block.
+- Streaming: `useSSEStreaming` now tracks in-progress calls as offset-tagged batches (`StreamingToolBatch`) instead of one flat list, and `StreamingMessage` interleaves them into the live prose. Tool tracking was also extended to the continue/nudge streaming path, which previously showed no pending calls.
+
 #### Fix: Legacy JSON-text embeddings (index-keyed object shape) deserialize and self-heal
 
 Some rows persisted embeddings as legacy JSON *text* before the Float32-BLOB format — and a subset were written via `JSON.stringify(Float32Array)`, which serializes a typed array as an index-keyed object (`{"0":..,"1":..}`) rather than an array. On read, the SQLite backend's blob-column hydration `JSON.parse`d these into a plain object that no embedding schema accepts (`Float32Array | number[] | Buffer`), so the row failed validation with "expected Float32Array, received object". In practice this broke `syncHelpDocs` during a reindex: the find-by-path read threw, the sync treated the (existing) doc as missing and tried to INSERT it, and the resulting `UNIQUE constraint failed: help_docs.path` failed the whole `EMBEDDING_REINDEX_ALL` job — rolling back every buffered write, including the conversation-chunk embed jobs the reindex had just enqueued. (Observed on a Friday instance with 41 of 86 `help_docs` rows in the legacy text shape; all confirmed 1024-dim — correct values, only mis-stored.)

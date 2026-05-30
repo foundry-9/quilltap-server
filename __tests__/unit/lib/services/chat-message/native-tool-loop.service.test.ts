@@ -157,6 +157,9 @@ describe('native-tool-loop.service', () => {
     expect(mockProcessToolCalls).toHaveBeenCalledTimes(1)
     expect(opts.toolMessages).toHaveLength(1)
     expect(opts.toolMessages[0]?.callId).toBe('tc-1')
+    // Anchored to the prose length at the moment the tool fired (the primary
+    // response 'I should open it. ', before the continuation appended).
+    expect(opts.toolMessages[0]?.anchorOffset).toBe('I should open it. '.length)
     expect(opts.streaming.fullResponse).toBe('I should open it. after-tool-response')
     expect(opts.streaming.usage).toEqual({ promptTokens: 9 })
     expect(opts.streaming.rawResponse).toEqual({ id: 'raw-2' })

@@ -163,6 +163,10 @@ export async function runTextToolPass(opts: RunTextToolPassOptions): Promise<voi
   // JSON-stringified signatures of executed tool-call batches; same shape as
   // `help-chat/orchestrator.service.ts:428`.
   const toolCallHistory: string[] = []
+  // Per executed batch: the tool messages it produced and the `rawResponses`
+  // index of the segment whose markers triggered it. Resolved into prose
+  // offsets in a single pass at final assembly.
+  const pendingAnchors: Array<{ toolMessages: ToolMessage[]; segmentIndex: number }> = []
   let iterations = 0
 
   while (iterations < MAX_TEXT_TOOL_ITERATIONS) {
@@ -259,6 +263,11 @@ export async function runTextToolPass(opts: RunTextToolPassOptions): Promise<voi
       encoder,
       { characterName: character.name, characterId: character.id },
     )
+    // Remember which assembled segment this batch's prose ends at — `latest` is
+    // the segment that emitted the markers, and its continuation isn't pushed
+    // until below. The actual offset is resolved once at final assembly so
+    // strip() still runs exactly once per response, not once per batch.
+    pendingAnchors.push({ toolMessages: results.toolMessages, segmentIndex: rawResponses.length - 1 })
     toolMessages.push(...results.toolMessages)
     generatedImagePaths.push(...results.generatedImagePaths)
 
@@ -316,7 +325,16 @@ export async function runTextToolPass(opts: RunTextToolPassOptions): Promise<voi
     })
   }
 
-  streaming.fullResponse = assembleStripped(strategy, rawResponses)
+  const assembled = assembleStrippedWithOffsets(strategy, rawResponses)
+  streaming.fullResponse = assembled.text
+  // Stamp each batch's tool messages with the prose offset where its emitting
+  // segment ends — the boundary at which the block splices back into the bubble.
+  for (const { toolMessages: batchToolMessages, segmentIndex } of pendingAnchors) {
+    const anchor = assembled.segmentEndOffsets[segmentIndex]
+    if (typeof anchor === 'number') {
+      for (const tm of batchToolMessages) tm.anchorOffset = anchor
+    }
+  }
 }
 
 interface StreamContinuationArgs {
@@ -400,8 +418,32 @@ async function streamContinuation(args: StreamContinuationArgs): Promise<void> {
 }
 
 function assembleStripped(strategy: TextToolStrategy, rawResponses: string[]): string {
-  return rawResponses
-    .map(r => strategy.strip(r))
-    .filter(r => r.trim().length > 0)
-    .join('\n\n')
+  return assembleStrippedWithOffsets(strategy, rawResponses).text
+}
+
+/**
+ * Strip every raw response once, join the non-empty results with `\n\n`, and
+ * record — for each original `rawResponses` index — the character offset at
+ * which that segment ends in the joined string. Empty (filtered) segments take
+ * the end offset of the last kept segment before them. Calling `strategy.strip`
+ * exactly once per response keeps the costed strip count stable and lets the
+ * tool loop resolve every batch's prose anchor from a single assembly pass.
+ */
+function assembleStrippedWithOffsets(
+  strategy: TextToolStrategy,
+  rawResponses: string[],
+): { text: string; segmentEndOffsets: number[] } {
+  const segmentEndOffsets: number[] = []
+  const kept: string[] = []
+  let runningLen = 0
+  for (let i = 0; i < rawResponses.length; i++) {
+    const stripped = strategy.strip(rawResponses[i])
+    if (stripped.trim().length > 0) {
+      if (kept.length > 0) runningLen += 2 // the '\n\n' separator before this segment
+      runningLen += stripped.length
+      kept.push(stripped)
+    }
+    segmentEndOffsets[i] = runningLen
+  }
+  return { text: kept.join('\n\n'), segmentEndOffsets }
 }

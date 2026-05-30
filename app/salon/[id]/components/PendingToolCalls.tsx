@@ -15,6 +15,9 @@ interface PendingToolCallsProps {
   /** When true, render just the collapsible block (no standalone row/avatar)
    *  so it can nest as a separate paragraph inside the streaming bubble. */
   embedded?: boolean
+  /** Embedded only: add a paragraph break beneath the block because the live
+   *  prose resumes under it. Omitted when the turn ends on the tool call. */
+  beforeProse?: boolean
 }
 
 const DISPLAY_NAMES: Record<string, string> = {
@@ -23,7 +26,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   'search_web': 'Web Search',
 }
 
-export function PendingToolCalls({ pendingToolCalls, embedded = false }: PendingToolCallsProps) {
+export function PendingToolCalls({ pendingToolCalls, embedded = false, beforeProse = false }: PendingToolCallsProps) {
   if (pendingToolCalls.length === 0) {
     return null
   }
@@ -78,7 +81,7 @@ export function PendingToolCalls({ pendingToolCalls, embedded = false }: Pending
   // Embedded: render just the collapsible block as a separate paragraph inside
   // the streaming bubble (the character's avatar already heads that row).
   if (embedded) {
-    return <div className="qt-chat-message-tools">{details}</div>
+    return <div className={`qt-chat-message-tools${beforeProse ? ' qt-chat-message-tools-before-prose' : ''}`}>{details}</div>
   }
 
   // Standalone: full-width assistant row with the tool emoji as the avatar.

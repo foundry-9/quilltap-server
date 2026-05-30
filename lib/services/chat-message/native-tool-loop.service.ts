@@ -115,6 +115,13 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
     const toolCalls = detectToolCallsInResponse(currentRawResponse, streaming.effectiveProfile.provider)
     if (toolCalls.length === 0) break
 
+    // Prose offset where the model paused to call this batch's tools: the length
+    // of everything streamed so far. The continuation re-stream below appends to
+    // `streaming.fullResponse`, so capturing here pins the call to the boundary
+    // between the prose that preceded it and the prose that follows. Stamped onto
+    // each resulting tool message so the Salon UI can splice the block back in.
+    const batchAnchor = streaming.fullResponse.length
+
     const submitFinalCall = agentMode.enabled
       ? toolCalls.find(tc => tc.name === 'submit_final_response')
       : undefined
@@ -144,6 +151,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
           encoder,
           { characterName: character.name, characterId: character.id },
         )
+        for (const tm of siblingResults.toolMessages) tm.anchorOffset = batchAnchor
         toolMessages.push(...siblingResults.toolMessages)
         generatedImagePaths.push(...siblingResults.generatedImagePaths)
         realWorkIterations++
@@ -181,6 +189,12 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
           summary: args.summary,
           confidence: args.confidence,
         })
+        // The structured final answer replaces the streamed prose wholesale, so
+        // every captured prose offset now points into text that no longer exists.
+        // Drop them — the tool blocks fall back to bottom-of-bubble rendering.
+        if (agentFinalResponse !== currentResponse) {
+          for (const tm of toolMessages) tm.anchorOffset = undefined
+        }
         streaming.fullResponse = agentFinalResponse
       }
       break
@@ -226,6 +240,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
       // preservation gate.
       realWorkIterations++
     }
+    for (const tm of results.toolMessages) tm.anchorOffset = batchAnchor
     toolMessages.push(...results.toolMessages)
     generatedImagePaths.push(...results.generatedImagePaths)
 
@@ -399,6 +414,9 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
               if (submitCall) {
                 const args = submitCall.arguments as { response?: string }
                 if (args.response) {
+                  // Structured answer replaces the streamed prose — captured
+                  // offsets no longer map. Drop them (bottom-of-bubble fallback).
+                  for (const tm of toolMessages) tm.anchorOffset = undefined
                   streaming.fullResponse = args.response
                 }
               }

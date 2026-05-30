@@ -86,6 +86,34 @@ export async function finalizeMessageResponse({
   const normalizedResponse = normalizeContentBlockFormat(fullResponse)
   const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
 
+  // Re-base captured tool-call prose anchors from streamed-response coordinates
+  // into final stored-content coordinates. The only position-shifting transform
+  // is stripCharacterNamePrefix, which only ever removes a leading prefix
+  // (cleanedResponse is a suffix of normalizedResponse), so a single delta
+  // covers every offset. If normalizeContentBlockFormat rewrote the body (rare
+  // content-block extraction), offsets no longer map — drop them and the tool
+  // blocks fall back to bottom-of-bubble rendering.
+  const normalizeRewroteBody = normalizedResponse !== fullResponse
+  const leadingStripDelta = normalizedResponse.length - cleanedResponse.length
+  let rebasedAnchorCount = 0
+  for (const tm of toolMessages) {
+    if (typeof tm.anchorOffset !== 'number') continue
+    if (normalizeRewroteBody) {
+      tm.anchorOffset = undefined
+      continue
+    }
+    tm.anchorOffset = Math.max(0, Math.min(cleanedResponse.length, tm.anchorOffset - leadingStripDelta))
+    rebasedAnchorCount++
+  }
+  if (rebasedAnchorCount > 0) {
+    logger.debug('Re-based tool-call prose anchors into stored-content coordinates', {
+      chatId,
+      characterName: character.name,
+      anchored: rebasedAnchorCount,
+      leadingStripDelta,
+    })
+  }
+
   const whisperContext: ToolWhisperContext = {
     userParticipantId,
     allowCrossCharacterVaultReads: chat.allowCrossCharacterVaultReads === true,
@@ -162,10 +190,21 @@ export async function finalizeMessageResponse({
         patterns: rngPatternsInResponse.map(p => ({ type: p.type, rolls: p.rolls, matchText: p.matchText })),
       })
 
+      // Walk the response left-to-right so repeated dice notations anchor to
+      // successive occurrences rather than all snapping to the first.
+      let rngAnchorSearchFrom = 0
       for (const pattern of rngPatternsInResponse) {
         const rngContext = { userId, chatId }
         const result = await executeRngTool({ type: pattern.type, rolls: pattern.rolls }, rngContext)
         const formattedResult = formatRngResults(result)
+
+        // Place the result block right after the dice notation that triggered it.
+        const matchIdx = cleanedResponse.indexOf(pattern.matchText, rngAnchorSearchFrom)
+        let rngAnchor: number | undefined
+        if (matchIdx >= 0) {
+          rngAnchor = matchIdx + pattern.matchText.length
+          rngAnchorSearchFrom = rngAnchor
+        }
 
         const toolMessageId = crypto.randomUUID()
         const toolMessage = {
@@ -179,6 +218,7 @@ export async function finalizeMessageResponse({
             result: formattedResult,
             prompt: pattern.matchText,
             arguments: { type: pattern.type, rolls: pattern.rolls },
+            ...(typeof rngAnchor === 'number' ? { anchorOffset: rngAnchor } : {}),
           }),
           createdAt: new Date().toISOString(),
           attachments: [],

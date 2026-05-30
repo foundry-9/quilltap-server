@@ -10,7 +10,7 @@ import type { SwipeState } from '../hooks/useChatData'
 import { MessageRow } from './MessageRow'
 import { EphemeralMessages as EphemeralMessagesComponent } from './EphemeralMessages'
 import { StreamingMessage } from './StreamingMessage'
-import type { PendingToolCall } from '../hooks/useSSEStreaming'
+import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
 
 interface VirtualizedMessageListProps {
@@ -77,8 +77,8 @@ interface VirtualizedMessageListProps {
   // LLM logs
   messagesWithLogs: Set<string>
   onViewLLMLogs: (messageId: string) => void
-  // Pending tool calls
-  pendingToolCalls: PendingToolCall[]
+  // In-progress tool calls, batched by prose offset, for the streaming bubble
+  streamingToolBatches: StreamingToolBatch[]
   // Ephemeral messages
   ephemeralMessages: EphemeralMessageData[]
   // Streaming message display
@@ -136,7 +136,7 @@ export function VirtualizedMessageList({
   fetchChat,
   messagesWithLogs,
   onViewLLMLogs,
-  pendingToolCalls,
+  streamingToolBatches,
   ephemeralMessages,
   getRespondingCharacter,
   shouldShowAvatars,
@@ -326,7 +326,7 @@ export function VirtualizedMessageList({
           dialogueDetection={roleplayDialogueDetection}
           shouldShowAvatars={shouldShowAvatars()}
           isDangerousChat={isDangerousChat}
-          pendingToolCalls={pendingToolCalls}
+          streamingToolBatches={streamingToolBatches}
         />
 
         <div ref={messagesEndRef} />
