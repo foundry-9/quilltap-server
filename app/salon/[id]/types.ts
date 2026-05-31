@@ -270,6 +270,8 @@ export interface ChatSettings {
   dangerousContentSettings?: DangerousContentSettings
   /** Global defaults for showing reasoning models' thinking. DISPLAY ONLY. */
   thinkingDisplay?: { defaultVisible: boolean; defaultCollapsed: boolean }
+  /** Whether the Salon auto-scrolls to the newest message when a response completes (only when already near the bottom). DISPLAY ONLY. */
+  autoScrollOnResponseComplete?: boolean
   createdAt: string
   updatedAt: string
 }

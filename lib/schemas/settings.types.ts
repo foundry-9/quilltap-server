@@ -444,6 +444,8 @@ export const ChatSettingsSchema = z.object({
   composerSpellcheck: z.boolean().default(true),
   /** Master switch for user-defined word-boundary text replacements in the Salon composer and Document Mode rich editor (default: true). Rule list lives in the text_replacement_rules table. */
   textReplacementsEnabled: z.boolean().default(true),
+  /** Whether the Salon scrolls to the newest message when an assistant reply finishes streaming or a new message arrives. Only scrolls when the reader is already near the bottom. Default off so long replies don't yank the reader away from where they're reading. */
+  autoScrollOnResponseComplete: z.boolean().default(false),
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings: AgentModeSettingsSchema.default({
     maxTurns: 10,

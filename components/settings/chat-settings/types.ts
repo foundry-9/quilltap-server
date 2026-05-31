@@ -82,6 +82,8 @@ export interface ChatSettings {
   composerSpellcheck?: boolean
   /** Master switch for user-defined word-boundary text replacements in the composer and Document Mode editor */
   textReplacementsEnabled?: boolean
+  /** Whether the Salon auto-scrolls to the newest message when a response completes (only when already near the bottom) */
+  autoScrollOnResponseComplete?: boolean
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings?: AgentModeSettings
   /** Story backgrounds settings for AI-generated chat backgrounds */

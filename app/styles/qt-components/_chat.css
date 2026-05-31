@@ -1972,6 +1972,40 @@
   }
 
   /**
+   * Messages viewport — a non-scrolling positioning context wrapping the
+   * scrollable .qt-chat-messages, so the floating jump-to-bottom button can be
+   * anchored to the visible area instead of scrolling away with the content.
+   */
+  .qt-chat-messages-viewport {
+    @apply relative flex flex-col flex-1 min-h-0;
+  }
+
+  /**
+   * Floating "jump to latest" button — shown only when the reader has scrolled
+   * up away from the newest message.
+   */
+  .qt-chat-scroll-to-bottom {
+    @apply absolute flex items-center justify-center;
+    bottom: 1rem;
+    right: 1.25rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    background: var(--qt-chat-assistant-bg);
+    color: var(--qt-chat-assistant-fg);
+    border: 1px solid var(--qt-chat-assistant-border);
+    box-shadow: var(--qt-chat-message-shadow, 0 2px 8px rgba(0, 0, 0, 0.25));
+    cursor: pointer;
+    z-index: 20;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .qt-chat-scroll-to-bottom:hover {
+    transform: translateY(-1px);
+    opacity: 0.95;
+  }
+
+  /**
    * Chat message row container
    * Uses isolation: isolate to create stacking context and prevent
    * avatars/content from overlapping between adjacent rows

@@ -68,6 +68,31 @@ When running inside the desktop application, Quilltap also discreetly feeds the 
 - The squiggles distract you in flow
 - You are writing in a language Chromium does not recognise (you may also configure additional languages in the desktop app's developer console — a refinement we will dress up in a proper picker in a later issue)
 
+### Auto-Scroll
+
+A question of etiquette: when a character at last lays down the pen at the close of a long reply, should the page hurry you down to the final flourish, or leave you precisely where you were reading? This toggle decides.
+
+Left unchecked — and the factory leaves it so — the Salon is a patient host. As a reply streams in and a new message takes its place in the conversation, the page holds its station; a windy three-page soliloquy can no longer spirit your place off the bottom of the screen mid-sentence. Whenever you have wandered up the page to revisit earlier remarks, a discreet **jump to latest** button presents itself in the lower corner, ready to whisk you back down at a single tap.
+
+Switch it on, and the Salon resumes the eager old manners: each time a reply concludes (or a fresh message arrives), it glides to the newest line — but only when you were already loitering near the bottom. Should you have scrolled up to read, it has the courtesy to stay put regardless.
+
+Two courtesies are constant in either mode: dispatching a message of your own settles you at the foot of the conversation, and first opening a chat deposits you at its end.
+
+**Setting Options:**
+
+- **Chase each reply to its end** — A single toggle. On: the Salon scrolls to the newest message when a reply completes, provided you were near the bottom. Off (default): the page stays where you left it, and a *jump to latest* button appears when you're scrolled up.
+
+**How to configure:**
+
+1. Open the **Auto-Scroll** card on the Chat tab in Settings
+2. Tick or untick the box
+3. The change applies at once to open chats; no reload required
+
+**When useful:**
+
+- You read replies as they stream and resent being yanked to the bottom the instant they finished — leave it off
+- You prefer the conversation to always present its freshest line without lifting a finger — switch it on
+
 ### Text Replacement
 
 A scribe's tireless apprentice for the rich-text surfaces: when you type a registered trigger word and then strike a word-boundary character (a space, a comma, a full stop, what have you), Quilltap quietly swaps the trigger for its appointed replacement. `teh` becomes `the`; `Aris` blossoms into `Aristarchus the Wise`; `omw` rises into `on my way`. The transformation is wrought as a single editorial gesture, so one tap of Cmd/Ctrl+Z restores the literal letters you typed (a second tap then walks back the typing itself, in the customary manner).

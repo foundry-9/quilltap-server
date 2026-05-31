@@ -317,6 +317,8 @@ import { dropCharacterScenarioColumnMigration } from './drop-character-scenario-
 import { addChatMessageReasoningColumnsMigration } from './add-chat-message-reasoning-columns';
 // Thinking display: showThinking column on chats + thinkingDisplay column on chat_settings
 import { addThinkingDisplayFieldsMigration } from './add-thinking-display-fields';
+// Add autoScrollOnResponseComplete column to chat_settings (Salon auto-scroll toggle)
+import { addAutoScrollOnResponseCompleteFieldMigration } from './add-auto-scroll-on-response-complete-field';
 
 /**
  * All available migrations.
@@ -629,6 +631,8 @@ export const migrations: Migration[] = [
   addChatMessageReasoningColumnsMigration,
   // Thinking display: showThinking (chats) + thinkingDisplay (chat_settings) columns
   addThinkingDisplayFieldsMigration,
+  // Salon auto-scroll: autoScrollOnResponseComplete column on chat_settings
+  addAutoScrollOnResponseCompleteFieldMigration,
 ];
 
 export {
@@ -922,5 +926,7 @@ export {
   addChatMessageReasoningColumnsMigration,
   // Thinking display: showThinking (chats) + thinkingDisplay (chat_settings) columns
   addThinkingDisplayFieldsMigration,
+  // Salon auto-scroll: autoScrollOnResponseComplete column on chat_settings
+  addAutoScrollOnResponseCompleteFieldMigration,
 };
 

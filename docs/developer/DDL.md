@@ -676,6 +676,7 @@ CREATE TABLE "chat_settings" (
   "autonomousRoomSettings" TEXT DEFAULT '{}', -- added in 4.6 (add-autonomous-rooms-fields-v1): user-level defaults for autonomous rooms { dailyTokenBudget, defaultFreshnessWindowMs, visibilityDefault, destructiveToolPolicy }
   "coreWhisper" TEXT DEFAULT '{"enabled":true,"interval":12,"silenceThreshold":3,"packetTokenBudget":4096,"fireOnContextTransition":true}', -- added in 4.6 (add-core-whisper-settings-field-v1): global defaults for Aurora's Core whisper { enabled, interval, silenceThreshold, packetTokenBudget, fireOnContextTransition }. Per-chat/per-character overrides live on chats.coreWhisper*/characters.coreWhisperEnabled. Resolution: chat → character → global.
   "thinkingDisplay" TEXT DEFAULT '{"defaultVisible":true,"defaultCollapsed":true}', -- added in 4.6 (add-thinking-display-fields-v1): global defaults for showing reasoning models' thinking { defaultVisible, defaultCollapsed }. Per-chat override lives on chats.showThinking. DISPLAY ONLY.
+  "autoScrollOnResponseComplete" INTEGER DEFAULT 0, -- added in 4.6 (add-auto-scroll-on-response-complete-field-v1): when 1, the Salon scrolls to the newest message as a reply finishes / a new message arrives (only when already near the bottom). Default 0 so long replies don't yank the reader away. DISPLAY ONLY.
   UNIQUE("userId")
 );
 

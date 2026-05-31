@@ -43,6 +43,7 @@ async function updateChatSettings(
   textReplacementsEnabled?: boolean,
   autonomousRoomSettings?: unknown,
   thinkingDisplay?: unknown,
+  autoScrollOnResponseComplete?: boolean,
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -185,6 +186,13 @@ async function updateChatSettings(
     }
     updateData.textReplacementsEnabled = textReplacementsEnabled
   }
+  if (typeof autoScrollOnResponseComplete !== 'undefined') {
+    if (typeof autoScrollOnResponseComplete !== 'boolean') {
+      throw new Error('Invalid autoScrollOnResponseComplete value (must be boolean)')
+    }
+    updateData.autoScrollOnResponseComplete = autoScrollOnResponseComplete
+    logger.debug('[Settings v1] autoScrollOnResponseComplete updated', { userId, autoScrollOnResponseComplete })
+  }
   if (typeof autonomousRoomSettings !== 'undefined') {
     // 4.6 Private Character Rooms — shape validation kept lightweight here;
     // the Zod schema on chat_settings ultimately governs the persisted shape.
@@ -300,6 +308,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       textReplacementsEnabled,
       autonomousRoomSettings,
       thinkingDisplay,
+      autoScrollOnResponseComplete,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -328,6 +337,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       textReplacementsEnabled,
       autonomousRoomSettings,
       thinkingDisplay,
+      autoScrollOnResponseComplete,
     )
 
     return successResponse(chatSettings)

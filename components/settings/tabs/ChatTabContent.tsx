@@ -5,6 +5,7 @@ import { useChatSettingsContext } from '@/components/settings/chat-settings/Chat
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { CompositionModeDefaultSettings } from '@/components/settings/chat-settings/CompositionModeDefaultSettings'
 import { ComposerSpellcheckSettings } from '@/components/settings/chat-settings/ComposerSpellcheckSettings'
+import { AutoScrollSettings } from '@/components/settings/chat-settings/AutoScrollSettings'
 import { TextReplacementSettings } from '@/components/settings/chat-settings/TextReplacementSettings'
 import { TokenDisplaySettingsComponent } from '@/components/settings/chat-settings/TokenDisplaySettings'
 import { ContextCompressionSettingsComponent } from '@/components/settings/chat-settings/ContextCompressionSettings'
@@ -31,6 +32,7 @@ export function ChatTabContent() {
     handleTokenDisplayChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
+    handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,
     handleContextCompressionUpdate,
     handleMemoryCascadeUpdate,
@@ -75,6 +77,14 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onChange={handleComposerSpellcheckChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Auto-Scroll" description="Whether the Salon follows new messages to the bottom" sectionId="auto-scroll" forceOpen={activeSection === 'auto-scroll'}>
+          <AutoScrollSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleAutoScrollOnResponseCompleteChange}
           />
         </CollapsibleCard>
 

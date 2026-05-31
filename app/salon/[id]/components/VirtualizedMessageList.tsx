@@ -109,6 +109,10 @@ interface VirtualizedMessageListProps {
   thinkingCollapsedByDefault?: boolean
   /** Live cumulative reasoning ("thinking") for the in-progress streaming message. DISPLAY ONLY. */
   streamingReasoning?: string
+  /** Whether to show the floating jump-to-bottom button (reader has scrolled up). */
+  showScrollToBottom?: boolean
+  /** Click handler for the jump-to-bottom button. */
+  onScrollToBottom?: () => void
 }
 
 export function VirtualizedMessageList({
@@ -161,6 +165,8 @@ export function VirtualizedMessageList({
   showThinking = false,
   thinkingCollapsedByDefault = true,
   streamingReasoning = '',
+  showScrollToBottom = false,
+  onScrollToBottom,
 }: VirtualizedMessageListProps) {
   // Resolve per-message character from participantData, falling back to first character
   const getCharacterForMessage = (message: Message): CharacterData | undefined => {
@@ -174,6 +180,7 @@ export function VirtualizedMessageList({
   }
 
   return (
+    <div className="qt-chat-messages-viewport">
     <div className="qt-chat-messages" ref={messagesContainerRef}>
       <div className="qt-chat-messages-list">
         {/* Virtualized messages rendering */}
@@ -378,6 +385,31 @@ export function VirtualizedMessageList({
 
         <div ref={messagesEndRef} />
       </div>
+    </div>
+
+      {showScrollToBottom && (
+        <button
+          type="button"
+          className="qt-chat-scroll-to-bottom"
+          onClick={onScrollToBottom}
+          aria-label="Jump to latest message"
+          title="Jump to latest message"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      )}
     </div>
   )
 }

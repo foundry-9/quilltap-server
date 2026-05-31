@@ -461,6 +461,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     scrollOnStreamComplete,
     isAutoScrollEnabled,
     isSettled,
+    isAtBottom,
+    scrollToBottom,
   } = useAutoScroll({
     containerRef: messagesContainerRef,
     endRef: messagesEndRef,
@@ -471,6 +473,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     isWaitingForResponse: sseStreaming.waitingForResponse,
     streamingContent: sseStreaming.streamingContent,
     isLoading: loading,
+    autoScrollOnComplete: chatSettings?.autoScrollOnResponseComplete ?? false,
   })
 
   // --- Message actions hook ---
@@ -1243,6 +1246,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           showThinking={chat?.showThinking ?? chatSettings?.thinkingDisplay?.defaultVisible ?? true}
           thinkingCollapsedByDefault={chatSettings?.thinkingDisplay?.defaultCollapsed ?? true}
           streamingReasoning={sseStreaming.streamingReasoning}
+          showScrollToBottom={isSettled && !isAtBottom}
+          onScrollToBottom={scrollToBottom}
         />
 
         {/* Speaker Selector - shown when controlling multiple characters */}
