@@ -44,6 +44,7 @@ import {
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
 import { groupToolMessagesIntoAssistants } from './group-tool-messages'
+import { buildRenderItems } from './announcement-render-items'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import {
   ChatComposer,
@@ -256,6 +257,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     [visibleMessages],
   )
 
+  // Layer render-items on top of renderMessages: runs of consecutive collapsed
+  // announcements coalesce into one flex-wrapping chip row, so they pack
+  // horizontally instead of each taking a full-width virtualized row. Depends on
+  // expandedSystemMessageIds because expanding one announcement breaks it out of
+  // its group. This is what the virtualizer indexes over.
+  const renderItems = useMemo(
+    () => buildRenderItems(renderMessages, expandedSystemMessageIds),
+    [renderMessages, expandedSystemMessageIds],
+  )
+
   // --- Modal state hook ---
   const modals = useModalState()
 
@@ -432,12 +443,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // (including user-controlled characters that may not have equipped outfits yet)
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
-    return renderMessages[index]?.id ?? index
-  }, [renderMessages])
+    return renderItems[index]?.id ?? index
+  }, [renderItems])
 
   // eslint-disable-next-line react-hooks/incompatible-library -- @tanstack/react-virtual exposes hooks the React Compiler can't analyse; safe to opt out of compiler optimisation here
   const virtualizer = useVirtualizer({
-    count: renderMessages.length,
+    count: renderItems.length,
     getScrollElement: () => messagesContainerRef.current,
     estimateSize: () => 150,
     overscan: 5,
@@ -455,6 +466,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     endRef: messagesEndRef,
     virtualizer,
     messageCount: renderMessages.length,
+    itemCount: renderItems.length,
     isStreaming: sseStreaming.streaming,
     isWaitingForResponse: sseStreaming.waitingForResponse,
     streamingContent: sseStreaming.streamingContent,
@@ -1179,6 +1191,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             <>
         <VirtualizedMessageList
           messages={renderMessages}
+          renderItems={renderItems}
           virtualizer={virtualizer}
           messagesContainerRef={messagesContainerRef}
           messagesEndRef={messagesEndRef}

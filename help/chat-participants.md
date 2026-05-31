@@ -235,6 +235,18 @@ The Host also issues a one-time advisory whisper when a chat has no user-control
 
 When you reassign a participant to a different connection profile from the sidebar — swapping the LLM that drives a particular character — Prospero, master of the agentic and tool-using systems, steps forward and announces the change so the rest of the room is in on the news. The note records the participant's name, the new profile, and the one it replaced. Like the Host's announcements, Prospero's messages are filtered out of the conversation handed to characters whose **System Transparency** is off; you always see them.
 
+### How Staff Announcements Appear
+
+All of the Staff — the Host, Prospero, the Lantern, Aurora, the Librarian, the Concierge, the Commonplace Book, and Ariel — make their remarks not as full-throated bubbles but as slim, foldable **chips** set into the flow of conversation. When several arrive in quick succession (the opening flurry of a chat, say, or a busy spell of document tidying), they pack themselves cheek by jowl across a row, flowing left to right and wrapping to the next line as needed, so that a whole parade of notices occupies but a sliver of vertical space.
+
+Each chip wears a small coloured dot before the speaker's name, a quiet signal of how much it ought to command your attention:
+
+- A **red dot** marks the consequential — files saved, renamed, or struck from the catalogue; characters arriving, taking their leave, or changing their bearing between active, silent, and absent; the Concierge's warnings about delicate content.
+- An **amber dot** marks the noteworthy — a fresh backdrop from the Lantern, a refreshed portrait or change of attire from Aurora, a terminal opened or closed by Ariel, a character's driving LLM swapped by Prospero.
+- A **hollow grey dot** marks the merely ambient — Prospero's periodic notes on the project and its papers, the Host's calls of the hour, the Commonplace Book's quiet recollections.
+
+Click any chip to unfold it into its full announcement; click it again — or the chevron at its end — to fold it back into the row. Unfolding one chip in the middle of a packed run simply lifts that single notice out for a closer look, leaving its neighbours snug in their row.
+
 ### Adding Characters
 
 1. Click **Add Character** at the bottom of the sidebar

@@ -7,14 +7,20 @@ import type { TurnState } from '@/lib/chat/turn-manager'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 import type { Message, CharacterData, ChatSettings } from '../types'
 import type { SwipeState } from '../hooks/useChatData'
+import type { RenderItem } from '../announcement-render-items'
 import { MessageRow } from './MessageRow'
+import { AnnouncementGroup } from './AnnouncementChip'
 import { EphemeralMessages as EphemeralMessagesComponent } from './EphemeralMessages'
 import { StreamingMessage } from './StreamingMessage'
 import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
 
 interface VirtualizedMessageListProps {
+  /** Flat (post-tool-grouping) message list. Still needed for the TOOL-row
+   *  backward participant-walk and the near-end forceRender heuristic. */
   messages: Message[]
+  /** Render-items the virtualizer indexes over: messages + packed announcement groups. */
+  renderItems: RenderItem[]
   virtualizer: Virtualizer<HTMLDivElement, Element>
   messagesContainerRef: React.RefObject<HTMLDivElement | null>
   messagesEndRef: React.RefObject<HTMLDivElement | null>
@@ -107,6 +113,7 @@ interface VirtualizedMessageListProps {
 
 export function VirtualizedMessageList({
   messages,
+  renderItems,
   virtualizer,
   messagesContainerRef,
   messagesEndRef,
@@ -178,8 +185,35 @@ export function VirtualizedMessageList({
           }}
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
-            const messageIndex = virtualRow.index
-            const message = messages[messageIndex]
+            const item = renderItems[virtualRow.index]
+            if (!item) return null
+
+            // Packed run of consecutive collapsed announcements — one virtual row
+            // of flex-wrapping chips.
+            if (item.kind === 'announcement-group') {
+              return (
+                <div
+                  key={item.id}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <AnnouncementGroup
+                    members={item.members}
+                    onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
+                  />
+                </div>
+              )
+            }
+
+            const message = item.message
+            const messageIndex = item.messageIndex
             const isEditing = editingMessageId === message.id
             const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
             const showResendButton = messageActions.canResendMessage(message.id)

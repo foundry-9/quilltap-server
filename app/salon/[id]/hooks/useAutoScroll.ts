@@ -10,8 +10,15 @@ interface UseAutoScrollOptions {
   endRef: React.RefObject<HTMLDivElement | null>
   /** TanStack virtualizer instance */
   virtualizer: Virtualizer<HTMLDivElement, Element>
-  /** Current message count */
+  /** Current message count (flat renderMessages length) — drives new-message detection. */
   messageCount: number
+  /**
+   * Current render-item count (renderItems length). May differ from messageCount
+   * because consecutive collapsed announcements coalesce into one render-item.
+   * Used only as the valid upper bound for virtualizer.scrollToIndex, since the
+   * virtualizer indexes over render-items, not raw messages.
+   */
+  itemCount: number
   /** Whether a message is currently streaming */
   isStreaming: boolean
   /** Whether we're waiting for the first response chunk */
@@ -53,6 +60,7 @@ export function useAutoScroll({
   endRef,
   virtualizer,
   messageCount,
+  itemCount,
   isStreaming,
   isWaitingForResponse,
   streamingContent,
@@ -107,8 +115,8 @@ export function useAutoScroll({
     // Strategy 1: Tell virtualizer to scroll to last message
     // Note: Always use 'auto' for virtualizer because smooth scrolling is not fully
     // supported with dynamic-sized items (causes console warnings from tanstack-virtual)
-    if (messageCount > 0) {
-      virtualizer.scrollToIndex(messageCount - 1, { align: 'end', behavior: 'auto' })
+    if (itemCount > 0) {
+      virtualizer.scrollToIndex(itemCount - 1, { align: 'end', behavior: 'auto' })
     }
 
     // Strategy 2: Direct container scroll to max position (after brief delay for virtualizer)
@@ -139,7 +147,7 @@ export function useAutoScroll({
         }
       }
     }, 300)
-  }, [messageCount, virtualizer, endRef, containerRef])
+  }, [itemCount, virtualizer, endRef, containerRef])
 
   /**
    * Handle scroll events to track user intent

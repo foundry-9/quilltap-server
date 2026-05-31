@@ -270,6 +270,84 @@
   }
 
   /**
+   * Packed announcement chips. A run of consecutive *collapsed* Staff-authored
+   * messages renders as one flex-wrapping row of content-width chips instead of
+   * a full-width bar each, so they take far less vertical space.
+   */
+  .qt-chat-announcement-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    width: 95%;
+    max-width: var(--qt-chat-message-row-max-width);
+    margin: 1.5rem auto 0; /* matches the 1.5rem top margin of message rows above/below */
+    align-items: flex-start;
+  }
+
+  /**
+   * A single collapsed announcement, sized to its content (never full width).
+   * Reuses the -sender / -kind / -time / -chevron element classes from the
+   * system bar; only the -kind sizing differs (see override below).
+   */
+  .qt-chat-announcement-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0.25rem 0.625rem;
+    background: var(--qt-chat-system-bar-bg);
+    color: var(--qt-chat-system-bar-fg);
+    border: 1px solid var(--qt-chat-system-bar-border);
+    border-radius: var(--radius-sm, 0.25rem);
+    font-size: 0.75rem;
+    line-height: 1.2;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 120ms ease;
+  }
+
+  .qt-chat-announcement-chip:hover,
+  .qt-chat-announcement-chip:focus-visible {
+    background: var(--qt-chat-system-bar-hover-bg);
+    outline: none;
+  }
+
+  /* Inside a chip the kind must not greedily fill the row (that is what made the
+     full-width bar stretch); cap it so long kinds don't dominate a packed row. */
+  .qt-chat-announcement-chip .qt-chat-system-bar-kind {
+    flex: 0 1 auto;
+    max-width: 22ch;
+  }
+
+  /**
+   * Importance dot before the sender name. Filled for high/medium, hollow for
+   * low, so the eye lands on what matters (file changes, arrivals/departures)
+   * and skims past the low-noise chatter (time calls, periodic context).
+   */
+  .qt-chat-announcement-dot {
+    flex-shrink: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+  }
+
+  .qt-chat-announcement-dot-high {
+    background: var(--qt-chat-announcement-dot-high);
+  }
+
+  .qt-chat-announcement-dot-medium {
+    background: var(--qt-chat-announcement-dot-medium);
+  }
+
+  .qt-chat-announcement-dot-low {
+    background: transparent;
+    border-color: var(--qt-chat-announcement-dot-low);
+  }
+
+  /**
    * The Courier — manual / clipboard transport placeholder bubble.
    * Stands in for an assistant message that is awaiting a pasted reply
    * from an external LLM. Wider than a normal message, with a stacked

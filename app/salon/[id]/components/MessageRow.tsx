@@ -11,6 +11,7 @@ import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
 import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-message-labels'
+import { AnnouncementChip, AnnouncementBarContents } from './AnnouncementChip'
 import { CourierBubble } from './CourierBubble'
 import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse-reasoning'
 import { ThinkingBlock } from './ThinkingBlock'
@@ -258,35 +259,13 @@ function MessageRowInner({
   }
 
   if (isSystemMessageCollapsed && message.systemSender && onToggleSystemMessageExpanded) {
-    const senderName = getSystemSenderDisplayName(message.systemSender)
-    const kindLabel = getSystemKindDisplayLabel(message)
+    // Defensive fallback: collapsed announcements normally render packed into an
+    // AnnouncementGroup (see VirtualizedMessageList) and don't reach MessageRow.
+    // The chip itself owns the id/data-message-id scroll anchor, so the wrapper
+    // omits them to avoid a duplicate id.
     return (
-      <div
-        id={`message-${message.id}`}
-        data-message-id={message.id}
-        key={message.id}
-        className={messageRowClasses.join(' ')}
-      >
-        <button
-          type="button"
-          onClick={() => onToggleSystemMessageExpanded(message.id)}
-          className="qt-chat-system-bar"
-          aria-expanded={false}
-          aria-label={`Expand ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
-        >
-          <span className="qt-chat-system-bar-sender">{senderName}</span>
-          {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
-          <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
-          <svg
-            className="qt-chat-system-bar-chevron"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+      <div key={message.id} className={messageRowClasses.join(' ')}>
+        <AnnouncementChip message={message} onToggleExpanded={onToggleSystemMessageExpanded} />
       </div>
     )
   }
@@ -325,18 +304,7 @@ function MessageRowInner({
               aria-expanded={true}
               aria-label={`Collapse ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
             >
-              <span className="qt-chat-system-bar-sender">{senderName}</span>
-              {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
-              <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
-              <svg
-                className="qt-chat-system-bar-chevron qt-chat-system-bar-chevron-down"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              <AnnouncementBarContents message={message} expanded />
             </button>
           )
         })()}
