@@ -50123,13 +50123,31 @@ var GoogleProvider = class {
     }
     const thinkingModels = [
       "gemini-2.5-pro",
-      // 2.5 Pro has thinking capabilities
-      "gemini-2.5-flash-preview-05-20",
-      // Thinking preview
-      "gemini-2.5-flash-thinking"
-      // Potential future model
+      "gemini-2.5-flash",
+      // Rolling aliases that currently resolve to Gemini 3 (thinking) models.
+      // Without these, `gemini-pro-latest` / `gemini-flash-latest` slip through
+      // the substring checks above, so thinking is never requested.
+      "gemini-pro-latest",
+      "gemini-flash-latest",
+      "gemini-flash-lite-latest"
     ];
     return thinkingModels.some((m2) => lowerName.includes(m2.toLowerCase()));
+  }
+  /**
+   * Whether a model belongs to the Gemini 3 family, which configures thinking
+   * via `thinkingLevel` (string) rather than the legacy `thinkingBudget`
+   * (numeric token ceiling). Sending `thinkingBudget` to a Gemini 3 model is
+   * accepted for backward-compat but treats the value as a ceiling, so the
+   * model can (and does, on simple turns) spend zero thinking tokens and return
+   * no thought summary. The rolling `-latest` aliases currently resolve to
+   * Gemini 3 (e.g. `gemini-pro-latest` → `gemini-3.1-pro-preview`).
+   */
+  isGemini3Model(modelName) {
+    const lowerName = modelName.toLowerCase();
+    if (lowerName.includes("gemini-3")) {
+      return true;
+    }
+    return lowerName.includes("gemini-pro-latest") || lowerName.includes("gemini-flash-latest") || lowerName.includes("gemini-flash-lite-latest");
   }
   /**
    * Check if a model supports function calling (tools)
@@ -50439,17 +50457,12 @@ var GoogleProvider = class {
       config2.stopSequences = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
     if (this.isThinkingModel(params.model)) {
+      const isG3 = this.isGemini3Model(params.model);
       if (!params.strictMaxTokens) {
-        config2.thinkingConfig = {
-          thinkingBudget: 4096,
-          includeThoughts: true
-        };
+        config2.thinkingConfig = isG3 ? { thinkingLevel: "high", includeThoughts: true } : { thinkingBudget: 4096, includeThoughts: true };
         config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
       } else {
-        config2.thinkingConfig = {
-          thinkingBudget: 1024,
-          includeThoughts: true
-        };
+        config2.thinkingConfig = isG3 ? { thinkingLevel: "low", includeThoughts: true } : { thinkingBudget: 1024, includeThoughts: true };
       }
     }
     try {
@@ -50557,17 +50570,12 @@ var GoogleProvider = class {
       config2.stopSequences = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
     if (this.isThinkingModel(params.model)) {
+      const isG3 = this.isGemini3Model(params.model);
       if (!params.strictMaxTokens) {
-        config2.thinkingConfig = {
-          thinkingBudget: 4096,
-          includeThoughts: true
-        };
+        config2.thinkingConfig = isG3 ? { thinkingLevel: "high", includeThoughts: true } : { thinkingBudget: 4096, includeThoughts: true };
         config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
       } else {
-        config2.thinkingConfig = {
-          thinkingBudget: 1024,
-          includeThoughts: true
-        };
+        config2.thinkingConfig = isG3 ? { thinkingLevel: "low", includeThoughts: true } : { thinkingBudget: 1024, includeThoughts: true };
       }
     }
     try {
@@ -50580,16 +50588,22 @@ var GoogleProvider = class {
       const isThinking = this.isThinkingModel(params.model);
       let lastResponse = null;
       let streamReasoning = "";
+      let partsSeen = 0;
+      let thoughtPartsWithText = 0;
+      let thoughtPartsNoText = 0;
+      let textParts = 0;
       for await (const chunk of response) {
         lastResponse = chunk;
         const candidates = chunk.candidates;
         if (candidates && candidates.length > 0) {
           const parts = candidates[0]?.content?.parts || [];
           for (const part of parts) {
+            partsSeen++;
             if (part.functionCall) {
               continue;
             }
             if (part.thought === true && part.text) {
+              thoughtPartsWithText++;
               streamReasoning += part.text;
               logger.debug("Google streaming thinking fragment received", {
                 context: "GoogleProvider.streamMessage",
@@ -50598,7 +50612,12 @@ var GoogleProvider = class {
               yield { content: "", done: false, reasoningContent: streamReasoning };
               continue;
             }
+            if (part.thought === true) {
+              thoughtPartsNoText++;
+              continue;
+            }
             if (part.text) {
+              textParts++;
               totalStreamedContent += part.text;
               yield {
                 content: part.text,
@@ -50610,6 +50629,19 @@ var GoogleProvider = class {
       }
       const usage = lastResponse?.usageMetadata;
       const thoughtSignature = this.extractThoughtSignature(lastResponse);
+      if (isThinking) {
+        logger.debug("Google streaming thinking summary", {
+          context: "GoogleProvider.streamMessage",
+          model: params.model,
+          isGemini3: this.isGemini3Model(params.model),
+          partsSeen,
+          thoughtPartsWithText,
+          thoughtPartsNoText,
+          textParts,
+          reasoningLength: streamReasoning.length,
+          thoughtsTokenCount: usage?.thoughtsTokenCount ?? 0
+        });
+      }
       let finalContent = "";
       if (isThinking && !totalStreamedContent && lastResponse) {
         finalContent = this.extractTextFromResponse(lastResponse, params.model);

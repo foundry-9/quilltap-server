@@ -35,6 +35,8 @@ Note well: these settings govern only the *showing*. The reasoning is captured a
 
 It depends entirely on the engine and how it is configured. DeepSeek's thinking mode, Anthropic's extended thinking, Google's Gemini thinking models, the reasoning summaries from OpenAI's and Grok's reasoning engines, and reasoning routed through OpenRouter can all surface their working. Some require a nudge in the connection profile — a thinking budget, say, or a request for a reasoning summary — before they will part with it. Engines that keep no separate counsel (or are not asked to share it) simply show nothing, and no fold appears.
 
+A particular word on Google's latest: the **Gemini 3** family (including the rolling `gemini-pro-latest` alias) thinks diligently behind the curtain, but at present declines to pass its summarized musings down a *streaming* line — a quirk of Google's own making, not ours. And so, for the moment, a Gemini 3 model may reason at length yet show you nothing. Should you wish to actually *see* Gemini deliberate, point the connection profile at a **Gemini 2.5** model and pose it something worth chewing on. The day Google mends its streaming, the elder model's thoughts will appear here unbidden — no further fiddling required.
+
 ## In-Chat Navigation
 
 ```

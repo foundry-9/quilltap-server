@@ -122,13 +122,40 @@ export class GoogleProvider implements TextProvider {
       return true;
     }
 
-    // Specific 2.5 models with thinking capabilities
+    // 2.5-series thinking models. Substring matches, so 'gemini-2.5-flash'
+    // also covers '-flash-lite', '-flash-preview-*', and '-flash-thinking'.
     const thinkingModels = [
-      'gemini-2.5-pro', // 2.5 Pro has thinking capabilities
-      'gemini-2.5-flash-preview-05-20', // Thinking preview
-      'gemini-2.5-flash-thinking', // Potential future model
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+      // Rolling aliases that currently resolve to Gemini 3 (thinking) models.
+      // Without these, `gemini-pro-latest` / `gemini-flash-latest` slip through
+      // the substring checks above, so thinking is never requested.
+      'gemini-pro-latest',
+      'gemini-flash-latest',
+      'gemini-flash-lite-latest',
     ];
     return thinkingModels.some(m => lowerName.includes(m.toLowerCase()));
+  }
+
+  /**
+   * Whether a model belongs to the Gemini 3 family, which configures thinking
+   * via `thinkingLevel` (string) rather than the legacy `thinkingBudget`
+   * (numeric token ceiling). Sending `thinkingBudget` to a Gemini 3 model is
+   * accepted for backward-compat but treats the value as a ceiling, so the
+   * model can (and does, on simple turns) spend zero thinking tokens and return
+   * no thought summary. The rolling `-latest` aliases currently resolve to
+   * Gemini 3 (e.g. `gemini-pro-latest` → `gemini-3.1-pro-preview`).
+   */
+  private isGemini3Model(modelName: string): boolean {
+    const lowerName = modelName.toLowerCase();
+    if (lowerName.includes('gemini-3')) {
+      return true;
+    }
+    return (
+      lowerName.includes('gemini-pro-latest') ||
+      lowerName.includes('gemini-flash-latest') ||
+      lowerName.includes('gemini-flash-lite-latest')
+    );
   }
 
   /**
@@ -533,21 +560,22 @@ export class GoogleProvider implements TextProvider {
       config.stopSequences = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
 
-    // Configure thinking for thinking models
-    // Gemini 3 (gemini-pro-latest) needs explicit thinking budget to ensure output
+    // Configure thinking for thinking models. Gemini 3 configures thinking via
+    // `thinkingLevel`; the legacy numeric `thinkingBudget` is only a ceiling on
+    // Gemini 3, so the model can spend zero thinking tokens and return no
+    // summary. Gemini 2.5 still uses `thinkingBudget`.
     if (this.isThinkingModel(params.model)) {
+      const isG3 = this.isGemini3Model(params.model);
       if (!params.strictMaxTokens) {
-        config.thinkingConfig = {
-          thinkingBudget: 4096,
-          includeThoughts: true,
-        };
+        config.thinkingConfig = isG3
+          ? { thinkingLevel: 'high', includeThoughts: true }
+          : { thinkingBudget: 4096, includeThoughts: true };
         config.maxOutputTokens = Math.max(config.maxOutputTokens, 8192);
       } else {
-        // Strict mode: minimal thinking budget for background tasks
-        config.thinkingConfig = {
-          thinkingBudget: 1024,
-          includeThoughts: true,
-        };
+        // Strict mode: minimal thinking for background tasks.
+        config.thinkingConfig = isG3
+          ? { thinkingLevel: 'low', includeThoughts: true }
+          : { thinkingBudget: 1024, includeThoughts: true };
       }
     }
 
@@ -683,20 +711,19 @@ export class GoogleProvider implements TextProvider {
       config.stopSequences = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
 
-    // Configure thinking for thinking models (same as sendMessage)
+    // Configure thinking for thinking models (same as sendMessage).
     if (this.isThinkingModel(params.model)) {
+      const isG3 = this.isGemini3Model(params.model);
       if (!params.strictMaxTokens) {
-        config.thinkingConfig = {
-          thinkingBudget: 4096,
-          includeThoughts: true,
-        };
+        config.thinkingConfig = isG3
+          ? { thinkingLevel: 'high', includeThoughts: true }
+          : { thinkingBudget: 4096, includeThoughts: true };
         config.maxOutputTokens = Math.max(config.maxOutputTokens, 8192);
       } else {
-        // Strict mode: minimal thinking budget for background tasks
-        config.thinkingConfig = {
-          thinkingBudget: 1024,
-          includeThoughts: true,
-        };
+        // Strict mode: minimal thinking for background tasks.
+        config.thinkingConfig = isG3
+          ? { thinkingLevel: 'low', includeThoughts: true }
+          : { thinkingBudget: 1024, includeThoughts: true };
       }
     }
 
@@ -711,6 +738,12 @@ export class GoogleProvider implements TextProvider {
       const isThinking = this.isThinkingModel(params.model);
       let lastResponse: any = null;
       let streamReasoning = '';
+      // Diagnostics: distinguish "model never thought" from "model thought but
+      // returned no summary text" (signature-only) when reasoning fails to show.
+      let partsSeen = 0;
+      let thoughtPartsWithText = 0;
+      let thoughtPartsNoText = 0;
+      let textParts = 0;
 
       for await (const chunk of response) {
         lastResponse = chunk;
@@ -720,12 +753,14 @@ export class GoogleProvider implements TextProvider {
         if (candidates && candidates.length > 0) {
           const parts = candidates[0]?.content?.parts || [];
           for (const part of parts) {
+            partsSeen++;
             // Skip function calls
             if (part.functionCall) {
               continue;
             }
             // Capture thought parts as reasoning (do NOT add to content)
             if (part.thought === true && part.text) {
+              thoughtPartsWithText++;
               streamReasoning += part.text;
               logger.debug('Google streaming thinking fragment received', {
                 context: 'GoogleProvider.streamMessage',
@@ -734,7 +769,13 @@ export class GoogleProvider implements TextProvider {
               yield { content: '', done: false, reasoningContent: streamReasoning };
               continue;
             }
+            if (part.thought === true) {
+              // Thought part carrying only a signature (no summary text).
+              thoughtPartsNoText++;
+              continue;
+            }
             if (part.text) {
+              textParts++;
               totalStreamedContent += part.text;
               yield {
                 content: part.text,
@@ -748,6 +789,26 @@ export class GoogleProvider implements TextProvider {
       // Extract usage and thought signature from last chunk
       const usage = lastResponse?.usageMetadata;
       const thoughtSignature = this.extractThoughtSignature(lastResponse);
+
+      // Diagnostic: with thinking models, surface why reasoning may not appear —
+      // thoughtsTokenCount > 0 with zero text parts means the model thought but
+      // returned no summary; all-zero means it never engaged thinking.
+      if (isThinking) {
+        // Note: Gemini 3/3.1 currently does NOT stream thought-summary parts even
+        // with includeThoughts:true (known Google API limitation), so
+        // reasoningLength can be 0 while thoughtsTokenCount is > 0.
+        logger.debug('Google streaming thinking summary', {
+          context: 'GoogleProvider.streamMessage',
+          model: params.model,
+          isGemini3: this.isGemini3Model(params.model),
+          partsSeen,
+          thoughtPartsWithText,
+          thoughtPartsNoText,
+          textParts,
+          reasoningLength: streamReasoning.length,
+          thoughtsTokenCount: usage?.thoughtsTokenCount ?? 0,
+        });
+      }
 
       // For thinking models, if we didn't get any content during streaming,
       // extract the full text from the final response

@@ -213,6 +213,28 @@ export class GrokProvider implements TextProvider {
   }
 
   /**
+   * Extract a reasoning summary from the response output. Reasoning items carry
+   * a `summary` array of `summary_text` parts when a summary was requested and
+   * the model produced one. DISPLAY ONLY — never re-fed to the model.
+   */
+  private extractReasoningFromResponse(response: ResponsesResponse): string {
+    let reasoning = '';
+    for (const item of response.output) {
+      if ((item as { type?: string }).type === 'reasoning') {
+        const summaryArr = (item as { summary?: unknown }).summary;
+        if (Array.isArray(summaryArr)) {
+          for (const part of summaryArr) {
+            if (part?.type === 'summary_text' && typeof part.text === 'string') {
+              reasoning += part.text;
+            }
+          }
+        }
+      }
+    }
+    return reasoning;
+  }
+
+  /**
    * Build raw response object compatible with Chat Completions format.
    * This ensures the tool call parser, Inspector, and chat log storage
    * all continue to work without changes.
@@ -309,6 +331,13 @@ export class GrokProvider implements TextProvider {
       requestParams.prompt_cache_key = params.cacheKey;
     }
 
+    // Opt-in reasoning summary. Only the reasoning Grok models return one, and
+    // only when the summary surface is requested. Captured for DISPLAY ONLY —
+    // never re-fed to the model. xAI may still return nothing.
+    if (params.profileParameters?.reasoningSummary === true) {
+      requestParams.reasoning = { summary: 'auto' };
+    }
+
     // Build tools - server-side (web search) + client-side (function calling)
     const tools: ResponsesTool[] = [];
 
@@ -342,6 +371,13 @@ export class GrokProvider implements TextProvider {
     const text = this.extractTextFromResponse(response);
     const finishReason = this.getFinishReason(response);
     const raw = this.buildRawResponse(response);
+    const reasoningContent = this.extractReasoningFromResponse(response);
+    if (reasoningContent) {
+      logger.debug('Grok sendMessage reasoning summary captured', {
+        context: 'GrokProvider.sendMessage',
+        reasoningLength: reasoningContent.length,
+      });
+    }
     const cachedTokens = response.usage?.input_tokens_details?.cached_tokens
     const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
       ? { cacheReadInputTokens: cachedTokens, cachedTokens }
@@ -358,6 +394,7 @@ export class GrokProvider implements TextProvider {
       raw,
       attachmentResults,
       ...(cacheUsage ? { cacheUsage } : {}),
+      ...(reasoningContent ? { reasoningContent } : {}),
     };
   }
 
@@ -391,6 +428,11 @@ export class GrokProvider implements TextProvider {
       requestParams.prompt_cache_key = params.cacheKey;
     }
 
+    // Opt-in reasoning summary (display only; never re-fed to the model).
+    if (params.profileParameters?.reasoningSummary === true) {
+      requestParams.reasoning = { summary: 'auto' };
+    }
+
     const tools: ResponsesTool[] = [];
 
     if (params.webSearchEnabled) {
@@ -411,6 +453,7 @@ export class GrokProvider implements TextProvider {
     const stream = await client.responses.create(requestParams);
 
     let finalResponse: ResponsesResponse | null = null;
+    let streamReasoning = '';
 
     for await (const event of stream as AsyncIterable<ResponsesStreamEvent>) {
       if (event.type === 'response.output_text.delta') {
@@ -418,6 +461,15 @@ export class GrokProvider implements TextProvider {
           content: event.delta,
           done: false,
         };
+      } else if (event.type === 'response.reasoning_summary_text.delta') {
+        // Cumulative: append the delta and emit the full accumulated string.
+        // DISPLAY ONLY — never re-fed to the model.
+        streamReasoning += (event as { delta?: string }).delta ?? '';
+        logger.debug('Grok streaming reasoning summary fragment received', {
+          context: 'GrokProvider.streamMessage',
+          reasoningLength: streamReasoning.length,
+        });
+        yield { content: '', done: false, reasoningContent: streamReasoning };
       } else if (event.type === 'response.completed') {
         finalResponse = event.response;
       }
@@ -443,6 +495,7 @@ export class GrokProvider implements TextProvider {
         rawResponse: raw,
         rawProviderUsage: (finalResponse.usage ?? null) as Record<string, unknown> | null,
         ...(cacheUsage ? { cacheUsage } : {}),
+        ...(streamReasoning ? { reasoningContent: streamReasoning } : {}),
       };
     } else {
       logger.warn('Stream ended without response.completed event', {

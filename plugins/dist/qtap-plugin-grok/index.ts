@@ -10,7 +10,7 @@
  * - Web search integration (Live Search API)
  */
 
-import type { TextProviderPlugin, ImageProviderConstraints } from './types';
+import type { TextProviderPlugin, ImageProviderConstraints, ProviderOptionsSchema } from './types';
 import { GrokProvider } from './provider';
 import { GrokImageProvider } from './image-provider';
 import {
@@ -100,6 +100,28 @@ const cheapModels = {
 };
 
 /**
+ * Connection-profile options schema rendered by the Quilltap host.
+ * Keys map 1:1 to the `profileParameters` blob the provider reads at call time.
+ */
+const optionsSchema: ProviderOptionsSchema = {
+  groups: [
+    {
+      title: 'Reasoning',
+      helpText:
+        "Request a reasoning summary so the model's thinking can be shown in chat (display only; never re-fed to the model). Only the reasoning Grok models (e.g. grok-4, grok-4-fast-reasoning, grok-3-mini) produce one. xAI does not always expose a summary — if nothing appears, the model simply did not return one.",
+      fields: [
+        {
+          key: 'reasoningSummary',
+          label: 'Show Reasoning Summary',
+          type: 'boolean',
+          default: false,
+        },
+      ],
+    },
+  ],
+};
+
+/**
  * The Grok Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
@@ -125,6 +147,11 @@ export const plugin: TextProviderPlugin = {
   toolFormat: 'openai', // Grok uses OpenAI-compatible format
   cheapModels,
   defaultContextWindow: 131072,
+
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
 
   /**
    * Factory method to create a Grok LLM provider instance

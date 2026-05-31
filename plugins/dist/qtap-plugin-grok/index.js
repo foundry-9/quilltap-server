@@ -9990,6 +9990,27 @@ ${textContent}`
     return text;
   }
   /**
+   * Extract a reasoning summary from the response output. Reasoning items carry
+   * a `summary` array of `summary_text` parts when a summary was requested and
+   * the model produced one. DISPLAY ONLY — never re-fed to the model.
+   */
+  extractReasoningFromResponse(response) {
+    let reasoning = "";
+    for (const item of response.output) {
+      if (item.type === "reasoning") {
+        const summaryArr = item.summary;
+        if (Array.isArray(summaryArr)) {
+          for (const part of summaryArr) {
+            if (part?.type === "summary_text" && typeof part.text === "string") {
+              reasoning += part.text;
+            }
+          }
+        }
+      }
+    }
+    return reasoning;
+  }
+  /**
    * Build raw response object compatible with Chat Completions format.
    * This ensures the tool call parser, Inspector, and chat log storage
    * all continue to work without changes.
@@ -10069,6 +10090,9 @@ ${textContent}`
     if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
       requestParams.prompt_cache_key = params.cacheKey;
     }
+    if (params.profileParameters?.reasoningSummary === true) {
+      requestParams.reasoning = { summary: "auto" };
+    }
     const tools = [];
     if (params.webSearchEnabled) {
       tools.push({ type: "web_search" });
@@ -10094,6 +10118,13 @@ ${textContent}`
     const text = this.extractTextFromResponse(response);
     const finishReason = this.getFinishReason(response);
     const raw = this.buildRawResponse(response);
+    const reasoningContent = this.extractReasoningFromResponse(response);
+    if (reasoningContent) {
+      logger.debug("Grok sendMessage reasoning summary captured", {
+        context: "GrokProvider.sendMessage",
+        reasoningLength: reasoningContent.length
+      });
+    }
     const cachedTokens = response.usage?.input_tokens_details?.cached_tokens;
     const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
     return {
@@ -10106,7 +10137,8 @@ ${textContent}`
       },
       raw,
       attachmentResults,
-      ...cacheUsage ? { cacheUsage } : {}
+      ...cacheUsage ? { cacheUsage } : {},
+      ...reasoningContent ? { reasoningContent } : {}
     };
   }
   async *streamMessage(params, apiKey) {
@@ -10134,6 +10166,9 @@ ${textContent}`
     if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
       requestParams.prompt_cache_key = params.cacheKey;
     }
+    if (params.profileParameters?.reasoningSummary === true) {
+      requestParams.reasoning = { summary: "auto" };
+    }
     const tools = [];
     if (params.webSearchEnabled) {
       tools.push({ type: "web_search" });
@@ -10149,12 +10184,20 @@ ${textContent}`
     }
     const stream = await client.responses.create(requestParams);
     let finalResponse = null;
+    let streamReasoning = "";
     for await (const event of stream) {
       if (event.type === "response.output_text.delta") {
         yield {
           content: event.delta,
           done: false
         };
+      } else if (event.type === "response.reasoning_summary_text.delta") {
+        streamReasoning += event.delta ?? "";
+        logger.debug("Grok streaming reasoning summary fragment received", {
+          context: "GrokProvider.streamMessage",
+          reasoningLength: streamReasoning.length
+        });
+        yield { content: "", done: false, reasoningContent: streamReasoning };
       } else if (event.type === "response.completed") {
         finalResponse = event.response;
       }
@@ -10174,7 +10217,8 @@ ${textContent}`
         attachmentResults,
         rawResponse: raw,
         rawProviderUsage: finalResponse.usage ?? null,
-        ...cacheUsage ? { cacheUsage } : {}
+        ...cacheUsage ? { cacheUsage } : {},
+        ...streamReasoning ? { reasoningContent: streamReasoning } : {}
       };
     } else {
       logger.warn("Stream ended without response.completed event", {
@@ -10664,6 +10708,22 @@ var cheapModels = {
   defaultModel: "grok-3-mini",
   recommendedModels: ["grok-3-mini", "grok-4-1-fast"]
 };
+var optionsSchema = {
+  groups: [
+    {
+      title: "Reasoning",
+      helpText: "Request a reasoning summary so the model's thinking can be shown in chat (display only; never re-fed to the model). Only the reasoning Grok models (e.g. grok-4, grok-4-fast-reasoning, grok-3-mini) produce one. xAI does not always expose a summary \u2014 if nothing appears, the model simply did not return one.",
+      fields: [
+        {
+          key: "reasoningSummary",
+          label: "Show Reasoning Summary",
+          type: "boolean",
+          default: false
+        }
+      ]
+    }
+  ]
+};
 var plugin = {
   metadata,
   icon: {
@@ -10682,6 +10742,10 @@ var plugin = {
   // Grok uses OpenAI-compatible format
   cheapModels,
   defaultContextWindow: 131072,
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
   /**
    * Factory method to create a Grok LLM provider instance
    */
