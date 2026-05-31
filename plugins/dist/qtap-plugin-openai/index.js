@@ -11046,6 +11046,18 @@ var optionsSchema = {
           ]
         }
       ]
+    },
+    {
+      title: "Reasoning",
+      helpText: "Request a reasoning summary so the model's thinking can be shown in chat (display only; never re-fed to the model). Only the reasoning OpenAI models (GPT-5, o-series) produce one. OpenAI does not always expose a summary \u2014 if nothing appears, the model simply did not return one.",
+      fields: [
+        {
+          key: "reasoningSummary",
+          label: "Show Reasoning Summary",
+          type: "boolean",
+          default: false
+        }
+      ]
     }
   ]
 };

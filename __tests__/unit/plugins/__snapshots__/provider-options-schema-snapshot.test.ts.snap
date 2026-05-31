@@ -198,6 +198,18 @@ exports[`Provider options schemas OpenAI exposes an options schema 1`] = `
       ],
       "title": "OpenAI Options",
     },
+    {
+      "fields": [
+        {
+          "default": false,
+          "key": "reasoningSummary",
+          "label": "Show Reasoning Summary",
+          "type": "boolean",
+        },
+      ],
+      "helpText": "Request a reasoning summary so the model's thinking can be shown in chat (display only; never re-fed to the model). Only the reasoning OpenAI models (GPT-5, o-series) produce one. OpenAI does not always expose a summary — if nothing appears, the model simply did not return one.",
+      "title": "Reasoning",
+    },
   ],
 }
 `;
