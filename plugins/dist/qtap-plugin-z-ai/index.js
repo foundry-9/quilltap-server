@@ -10037,7 +10037,7 @@ var ZAIProvider = class {
       }
       if (msg.role === "assistant") {
         if (msg.toolCalls && msg.toolCalls.length > 0) {
-          out.push({
+          const assistantMessage = {
             role: "assistant",
             content: msg.content || null,
             tool_calls: msg.toolCalls.map((tc) => ({
@@ -10048,7 +10048,11 @@ var ZAIProvider = class {
                 arguments: tc.function.arguments
               }
             }))
-          });
+          };
+          if (msg.reasoningContent) {
+            assistantMessage.reasoning_content = msg.reasoningContent;
+          }
+          out.push(assistantMessage);
         } else {
           out.push({
             role: "assistant",
@@ -10080,9 +10084,13 @@ var ZAIProvider = class {
     if (!profile || typeof profile !== "object") return;
     for (const key of Z_AI_PROFILE_PARAM_ALLOWLIST) {
       const value = profile[key];
-      if (value !== void 0) {
-        body[key] = value;
+      if (value === void 0) continue;
+      if (typeof value === "string" && value === "") continue;
+      if (key === "thinking" && typeof value === "string") {
+        body[key] = { type: value };
+        continue;
       }
+      body[key] = value;
     }
   }
   /**
@@ -10147,6 +10155,13 @@ var ZAIProvider = class {
     );
     const choice = response.choices[0];
     const msg = choice.message;
+    const reasoningContent = msg.reasoning_content;
+    if (reasoningContent) {
+      logger.debug("Z.AI sendMessage reasoning captured", {
+        context: "ZAIProvider.sendMessage",
+        reasoningLength: reasoningContent.length
+      });
+    }
     const toolCalls = (msg.tool_calls ?? []).filter(
       (tc) => tc.type === "function" || "function" in tc
     ).map((tc) => {
@@ -10174,6 +10189,7 @@ var ZAIProvider = class {
       raw: response,
       toolCalls: toolCalls.length > 0 ? toolCalls : void 0,
       attachmentResults,
+      ...reasoningContent ? { reasoningContent } : {},
       ...cacheUsage ? { cacheUsage } : {}
     };
   }
@@ -10226,6 +10242,7 @@ var ZAIProvider = class {
     const toolCallAccumulator = /* @__PURE__ */ new Map();
     let finishReason = null;
     let usage = null;
+    let reasoningContent = "";
     for await (const chunk of stream) {
       const choice = chunk.choices[0];
       if (!choice) {
@@ -10235,6 +10252,15 @@ var ZAIProvider = class {
       const delta = choice.delta;
       if (delta?.content) {
         yield { content: delta.content, done: false };
+      }
+      const deltaReasoning = delta?.reasoning_content;
+      if (deltaReasoning) {
+        reasoningContent += deltaReasoning;
+        logger.debug("Z.AI streaming reasoning fragment received", {
+          context: "ZAIProvider.streamMessage",
+          reasoningLength: reasoningContent.length
+        });
+        yield { content: "", done: false, reasoningContent };
       }
       if (delta?.tool_calls) {
         for (const tcDelta of delta.tool_calls) {
@@ -10265,7 +10291,8 @@ var ZAIProvider = class {
           message: {
             role: "assistant",
             content: "",
-            tool_calls: toolCalls.length > 0 ? toolCalls : void 0
+            tool_calls: toolCalls.length > 0 ? toolCalls : void 0,
+            ...reasoningContent ? { reasoning_content: reasoningContent } : {}
           },
           finish_reason: finishReason
         }
@@ -10286,6 +10313,7 @@ var ZAIProvider = class {
       attachmentResults,
       rawResponse,
       rawProviderUsage: usage ?? null,
+      ...reasoningContent ? { reasoningContent } : {},
       ...cacheUsage ? { cacheUsage } : {}
     };
   }
@@ -10763,6 +10791,27 @@ var cheapModels = {
   defaultModel: "glm-4.5-flash",
   recommendedModels: ["glm-4.5-flash", "glm-4.5-air"]
 };
+var optionsSchema = {
+  groups: [
+    {
+      title: "Z.AI Options",
+      helpText: "Thinking mode enables the GLM reasoning models' extended chain-of-thought, shown in the Salon (display only; never re-fed to the model). Only the hybrid-reasoning GLM models (glm-4.5/4.6 family, glm-5.x) produce it; with thinking off, nothing appears.",
+      fields: [
+        {
+          key: "thinking",
+          label: "Thinking Mode",
+          type: "enum",
+          default: "",
+          enumValues: [
+            { value: "", label: "(model default)" },
+            { value: "enabled", label: "Enabled" },
+            { value: "disabled", label: "Disabled" }
+          ]
+        }
+      ]
+    }
+  ]
+};
 var plugin = {
   metadata,
   icon: {
@@ -10780,6 +10829,10 @@ var plugin = {
   toolFormat: "openai",
   cheapModels,
   defaultContextWindow: 131072,
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
   createProvider: (_baseUrl) => {
     return new ZAIProvider();
   },

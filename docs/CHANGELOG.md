@@ -4,6 +4,16 @@
 
 ### 4.6-dev
 
+#### Feature: Capture Z.AI (GLM) reasoning in the Salon thinking block
+
+The Z.AI provider now captures GLM chain-of-thought, bringing it in line with the other reasoning providers. GLM hybrid-reasoning models (glm-4.5/4.6 family, glm-5.x) emit reasoning as `reasoning_content` — the same field DeepSeek uses, in `delta.reasoning_content` (streaming) and `message.reasoning_content` (non-streaming). Per Z.AI's docs, thinking is enabled by default (`thinking: { type: 'enabled' | 'disabled' }`, default `enabled`), so GLM was returning reasoning all along — the plugin just dropped it on the floor before it reached the Salon.
+
+- **Provider** (`plugins/dist/qtap-plugin-z-ai` → 1.1.8): `streamMessage` accumulates `delta.reasoning_content` and emits it cumulatively on `StreamChunk.reasoningContent` (no plugin-types change); `sendMessage` reads `message.reasoning_content` into `LLMResponse.reasoningContent`. Both debug-log each capture. The streamed `rawResponse` carries `reasoning_content` back through.
+- **Wire shape**: `applyProfileParameters` now normalizes the flat `thinking` string from the profile editor (`"enabled"`/`"disabled"`) into Z.AI's `{ type: ... }` wire shape, and skips empty-string ("model default") values. The param was already allow-listed but was forwarded verbatim, so a UI toggle would have sent the wrong shape.
+- **Tool round-trip**: `formatMessages` echoes the model's own current-turn `reasoning_content` back on assistant-with-tool-calls turns (mirrors DeepSeek's requirement; harmless when thinking is off).
+- **UI**: the plugin exports a `getProviderOptionsSchema()` adding a **Thinking Mode** enum (model default / Enabled / Disabled) to the Z.AI connection-profile editor. The default leaves Z.AI's enabled-by-default behavior intact (thinking shows on its own once captured); selecting *Disabled* turns reasoning off at the source.
+- Display remains governed by the existing per-chat and global thinking-visibility controls, and reasoning stays display-only (never re-fed to a model except the in-turn tool echo above). Help: `connection-profiles.md` gains a Z.AI section; `thinking-display.md` lists GLM among the supporting engines.
+
 #### Feature: Show thinking models' reasoning ("chain-of-thought") in the Salon
 
 Reasoning models that emit a separate chain-of-thought (DeepSeek thinking mode, Anthropic extended thinking, Gemini 2.5/3 thinking, OpenAI/Grok reasoning summaries, and anything routed through OpenRouter) now have that thinking captured, persisted, and displayed inline in the assistant bubble — streamed live as the model works, then re-readable after reload. The block is offset to the right, dimmed, italic, and collapsible, visually distinct from the final prose, and its body renders through the shared Markdown renderer.

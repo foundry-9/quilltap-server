@@ -144,7 +144,11 @@ export class ZAIProvider implements TextProvider {
 
       if (msg.role === 'assistant') {
         if (msg.toolCalls && msg.toolCalls.length > 0) {
-          out.push({
+          // GLM thinking-mode parity with DeepSeek: when an assistant turn
+          // carries tool calls, echo the model's own current-turn
+          // `reasoning_content` back so the continuation call keeps a coherent
+          // chain. Harmless when thinking is off (field is simply absent).
+          const assistantMessage: Record<string, unknown> = {
             role: 'assistant',
             content: msg.content || null,
             tool_calls: msg.toolCalls.map((tc) => ({
@@ -155,7 +159,11 @@ export class ZAIProvider implements TextProvider {
                 arguments: tc.function.arguments,
               },
             })),
-          });
+          };
+          if (msg.reasoningContent) {
+            assistantMessage.reasoning_content = msg.reasoningContent;
+          }
+          out.push(assistantMessage as ChatMessage);
         } else {
           out.push({
             role: 'assistant',
@@ -192,9 +200,19 @@ export class ZAIProvider implements TextProvider {
     if (!profile || typeof profile !== 'object') return;
     for (const key of Z_AI_PROFILE_PARAM_ALLOWLIST) {
       const value = (profile as Record<string, unknown>)[key];
-      if (value !== undefined) {
-        body[key] = value;
+      if (value === undefined) continue;
+      // Empty string from the schema-driven profile editor means "omit the
+      // parameter and use the model default." Skip those.
+      if (typeof value === 'string' && value === '') continue;
+      // The schema-driven editor stores `thinking` as a flat string
+      // ("enabled" / "disabled"); Z.AI's wire shape is `{ type: ... }`
+      // (https://docs.z.ai/guides/llm/glm-4.6). Pre-existing profiles that
+      // already stored the object form continue to work unchanged.
+      if (key === 'thinking' && typeof value === 'string') {
+        body[key] = { type: value };
+        continue;
       }
+      body[key] = value;
     }
   }
 
@@ -271,6 +289,14 @@ export class ZAIProvider implements TextProvider {
     const choice = response.choices[0];
     const msg = choice.message;
 
+    const reasoningContent = (msg as { reasoning_content?: string }).reasoning_content;
+    if (reasoningContent) {
+      logger.debug('Z.AI sendMessage reasoning captured', {
+        context: 'ZAIProvider.sendMessage',
+        reasoningLength: reasoningContent.length,
+      });
+    }
+
     const toolCalls = (msg.tool_calls ?? [])
       .filter((tc): tc is OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall =>
         (tc as { type?: string }).type === 'function' || 'function' in tc
@@ -306,6 +332,7 @@ export class ZAIProvider implements TextProvider {
       raw: response,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       attachmentResults,
+      ...(reasoningContent ? { reasoningContent } : {}),
       ...(cacheUsage ? { cacheUsage } : {}),
     };
   }
@@ -372,6 +399,10 @@ export class ZAIProvider implements TextProvider {
     >();
     let finishReason: string | null = null;
     let usage: OpenAI.Completions.CompletionUsage | null = null;
+    // GLM reasoning streams as `delta.reasoning_content` (same field name as
+    // DeepSeek) when `thinking: { type: 'enabled' }` is set. Accumulate it and
+    // emit cumulatively; the host pipeline treats it as DISPLAY-ONLY.
+    let reasoningContent = '';
 
     for await (const chunk of stream) {
       const choice = chunk.choices[0];
@@ -383,6 +414,16 @@ export class ZAIProvider implements TextProvider {
 
       if (delta?.content) {
         yield { content: delta.content, done: false };
+      }
+
+      const deltaReasoning = (delta as { reasoning_content?: string } | undefined)?.reasoning_content;
+      if (deltaReasoning) {
+        reasoningContent += deltaReasoning;
+        logger.debug('Z.AI streaming reasoning fragment received', {
+          context: 'ZAIProvider.streamMessage',
+          reasoningLength: reasoningContent.length,
+        });
+        yield { content: '', done: false, reasoningContent };
       }
 
       if (delta?.tool_calls) {
@@ -418,6 +459,7 @@ export class ZAIProvider implements TextProvider {
             role: 'assistant',
             content: '',
             tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+            ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
           },
           finish_reason: finishReason,
         },
@@ -443,6 +485,7 @@ export class ZAIProvider implements TextProvider {
       attachmentResults,
       rawResponse,
       rawProviderUsage: (usage ?? null) as Record<string, unknown> | null,
+      ...(reasoningContent ? { reasoningContent } : {}),
       ...(cacheUsage ? { cacheUsage } : {}),
     };
   }

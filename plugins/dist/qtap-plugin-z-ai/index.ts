@@ -10,7 +10,7 @@
  * - Image generation using CogView-4 and GLM-Image
  */
 
-import type { TextProviderPlugin, ImageProviderConstraints } from './types';
+import type { TextProviderPlugin, ImageProviderConstraints, ProviderOptionsSchema } from './types';
 import { ZAIProvider } from './provider';
 import { ZAIImageProvider } from './image-provider';
 import { STATIC_MODELS, STATIC_CHAT_MODEL_IDS } from './models';
@@ -91,6 +91,38 @@ const cheapModels = {
   recommendedModels: ['glm-4.5-flash', 'glm-4.5-air'],
 };
 
+/**
+ * Connection-profile options rendered by the host's profile editor.
+ *
+ * `thinking` is stored as a flat string in `parameters`; the provider
+ * normalizes it to Z.AI's wire shape (`{ type: 'enabled' | 'disabled' }`)
+ * at request time in `applyProfileParameters`. GLM models stream their
+ * chain-of-thought as `reasoning_content` ONLY when thinking is enabled —
+ * with no toggle the Salon's thinking block stays empty.
+ */
+const optionsSchema: ProviderOptionsSchema = {
+  groups: [
+    {
+      title: 'Z.AI Options',
+      helpText:
+        "Thinking mode enables the GLM reasoning models' extended chain-of-thought, shown in the Salon (display only; never re-fed to the model). Only the hybrid-reasoning GLM models (glm-4.5/4.6 family, glm-5.x) produce it; with thinking off, nothing appears.",
+      fields: [
+        {
+          key: 'thinking',
+          label: 'Thinking Mode',
+          type: 'enum',
+          default: '',
+          enumValues: [
+            { value: '', label: '(model default)' },
+            { value: 'enabled', label: 'Enabled' },
+            { value: 'disabled', label: 'Disabled' },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 export const plugin: TextProviderPlugin = {
   metadata,
 
@@ -113,6 +145,11 @@ export const plugin: TextProviderPlugin = {
   toolFormat: 'openai',
   cheapModels,
   defaultContextWindow: 131072,
+
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
 
   createProvider: (_baseUrl?: string) => {
     return new ZAIProvider();

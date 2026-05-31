@@ -219,6 +219,11 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - **Thinking Mode** — toggles DeepSeek's extended reasoning. *Enabled* lets the model deliberate before answering, at the cost of latency; *Disabled* forces a direct reply. While thinking is enabled DeepSeek ignores `temperature`, `top_p`, and the frequency/presence penalties, so Quilltap quietly omits them from the wire to keep the logs tidy.
 - **Reasoning Effort** — DeepSeek's reasoning scale, *High* or *Max*. Only effective with thinking enabled; the lower OpenAI-style values (minimal / low / medium) fold up to *High* on DeepSeek's side.
 
+### Z.AI (GLM)
+
+- The GLM family — `glm-4.6`, the `glm-4.5` series, the vision-capable `glm-4.6v`/`glm-4.5v` models, and the newer `glm-5.x` line — with native function calling, web search, and CogView image generation
+- **Thinking Mode** — the GLM hybrid-reasoning models deliberate by default, so their chain-of-thought streams into the Salon's thinking fold (display only — it is never fed back to any model) with no prompting at all. Set this to *Disabled* should you want a plain reply and no fold; *Enabled* keeps the working on; and *(model default)* defers to Z.AI, which at present means enabled. With thinking off, the fold simply never appears, however hard the model may be working behind the curtain.
+
 ### Google (Gemini)
 
 - Multiple model sizes (Flash, Pro)
