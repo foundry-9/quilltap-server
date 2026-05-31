@@ -12,7 +12,7 @@
  * mini avatars that still surfaces the turn order at a glance.
  */
 
-import { useMemo, useState, useCallback, useEffect } from 'react'
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import useSWR from 'swr'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { Avatar } from '@/components/ui/Avatar'
@@ -23,6 +23,16 @@ import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-man
 import type { TurnOrderEntry, TurnOrderStatus } from '@/lib/chat/turn-manager'
 
 const STORAGE_KEY = 'quilltap.chat-sidebar.collapsed'
+const WIDTH_STORAGE_KEY = 'quilltap.chat-sidebar.width'
+
+/** Expanded-sidebar width bounds (px). Default mirrors --qt-chat-sidebar-width: 18rem. */
+const DEFAULT_WIDTH = 288
+const MIN_WIDTH = 240
+const MAX_WIDTH = 560
+/** Keep at least this much room for the chat pane when dragging. */
+const MIN_CHAT_WIDTH = 360
+/** Keyboard nudge step (px). */
+const WIDTH_KEY_STEP = 16
 
 type SectionId = 'participants' | 'chat' | 'visibility' | 'organize' | 'edit' | null
 
@@ -51,6 +61,23 @@ function getInitialCollapsedState(): boolean {
   if (typeof window === 'undefined') return true
   const stored = localStorage.getItem(STORAGE_KEY)
   return stored !== null ? stored === 'true' : true
+}
+
+/** Upper bound for the sidebar width given the current viewport (leaves room for chat). */
+function maxWidthForViewport(): number {
+  if (typeof window === 'undefined') return MAX_WIDTH
+  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, window.innerWidth - MIN_CHAT_WIDTH))
+}
+
+function clampWidth(value: number): number {
+  return Math.round(Math.max(MIN_WIDTH, Math.min(maxWidthForViewport(), value)))
+}
+
+function getInitialWidth(): number {
+  if (typeof window === 'undefined') return DEFAULT_WIDTH
+  const stored = localStorage.getItem(WIDTH_STORAGE_KEY)
+  const parsed = stored !== null ? parseInt(stored, 10) : NaN
+  return Number.isFinite(parsed) ? clampWidth(parsed) : DEFAULT_WIDTH
 }
 
 export interface ChatSidebarProps {
@@ -153,6 +180,62 @@ export function ChatSidebar(props: ChatSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState)
   const [openSection, setOpenSection] = useState<SectionId>('participants')
 
+  // Resizable width (px), persisted to localStorage. Applies to the expanded
+  // panel only; the collapsed strip keeps its own fixed width.
+  const [width, setWidth] = useState(getInitialWidth)
+  const [isResizing, setIsResizing] = useState(false)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+
+  const persistWidth = useCallback((next: number) => {
+    localStorage.setItem(WIDTH_STORAGE_KEY, String(next))
+  }, [])
+
+  // Drag-to-resize from the inner (left) edge. Mirrors SplitLayout.handleMouseDown:
+  // capture the panel's right edge, then track the cursor against it. Dragging
+  // left (toward the chat) widens the sidebar.
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const rightEdge = sidebarRef.current?.getBoundingClientRect().right ?? null
+    if (rightEdge === null) return
+
+    setIsResizing(true)
+    let latest = width
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      latest = clampWidth(rightEdge - moveEvent.clientX)
+      setWidth(latest)
+    }
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setIsResizing(false)
+      persistWidth(latest)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [width, persistWidth])
+
+  const handleResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    let next: number | null = null
+    switch (event.key) {
+      case 'ArrowLeft': next = width + WIDTH_KEY_STEP; break   // widen
+      case 'ArrowRight': next = width - WIDTH_KEY_STEP; break  // narrow
+      case 'Home': next = MIN_WIDTH; break
+      case 'End': next = maxWidthForViewport(); break
+      default: return
+    }
+    event.preventDefault()
+    const clamped = clampWidth(next)
+    setWidth(clamped)
+    persistWidth(clamped)
+  }, [width, persistWidth])
+
   const toggleCollapsed = useCallback(() => {
     setIsCollapsed(prev => {
       const newValue = !prev
@@ -236,7 +319,30 @@ export function ChatSidebar(props: ChatSidebarProps) {
   })
 
   return (
-    <div className={['qt-chat-sidebar', ...baseClasses].join(' ')}>
+    <div
+      ref={sidebarRef}
+      className={['qt-chat-sidebar', ...baseClasses].join(' ')}
+      style={{ width }}
+    >
+      <div
+        className={`qt-chat-sidebar-resizer ${isResizing ? 'qt-chat-sidebar-resizer-active' : ''}`}
+        onMouseDown={handleResizeMouseDown}
+        onKeyDown={handleResizeKeyDown}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize chat sidebar"
+        aria-valuenow={width}
+        aria-valuemin={MIN_WIDTH}
+        aria-valuemax={MAX_WIDTH}
+        tabIndex={0}
+        title="Drag to resize"
+      >
+        <div className="qt-chat-sidebar-resizer-grip">
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
       <div className="qt-chat-sidebar-header">
         <div className="flex items-center justify-between">
           <h3 className="qt-chat-sidebar-heading">Chat</h3>

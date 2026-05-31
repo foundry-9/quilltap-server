@@ -4,6 +4,13 @@
 
 ### 4.6-dev
 
+#### Feature: Resizable Salon chat sidebar + tighter sidebar spacing
+
+The right-hand Chat sidebar in the Salon can now be resized and its internal boxing was tightened.
+
+- **Drag-to-resize.** A resize handle on the inner (left) edge of the expanded sidebar lets you drag it wider or narrower; the chat pane reflows to match. Width is clamped to 240–560px and additionally capped so the chat keeps at least 360px. Keyboard accessible (`role="separator"`, focusable): Left/Right nudge by 16px, Home/End jump to min/max. Width persists to `localStorage` under `quilltap.chat-sidebar.width` and is restored on reload. Implemented in `components/chat/ChatSidebar.tsx` (mirrors the `SplitLayout` drag pattern; persists to localStorage like the existing collapsed-state code). The collapsed strip is unaffected.
+- **Tighter spacing.** Reduced the nested padding that made participant cards feel cramped. Scoped to `.qt-chat-sidebar` so the shared `CollapsibleCard` used elsewhere (settings pages) is untouched: `--qt-card-padding` overridden to `0.5rem` (was `1.25rem`) for accordion header/body inside the sidebar, `.qt-chat-sidebar-list` padding `1rem`→`0.375rem`, divider margin scoped to `mx-2`, and the Add Character footer padding trimmed. New `.qt-chat-sidebar-resizer*` classes (visuals modeled on `qt-doc-divider`) in `app/styles/qt-components/_chat.css`.
+
 #### Change: Stop auto-scrolling the Salon on response completion; add a jump-to-bottom button; fix scroll jitter
 
 Two Salon scrolling complaints addressed, plus a structural rendering fix.

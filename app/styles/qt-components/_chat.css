@@ -2247,10 +2247,77 @@
    * Chat sidebar (participants)
    */
   .qt-chat-sidebar {
+    position: relative;
     width: var(--qt-chat-sidebar-width);
     border-left: 1px solid var(--qt-chat-sidebar-border);
     background: var(--qt-chat-sidebar-bg);
+    /* Tighten the boxing of accordion cards inside the sidebar only —
+       scoped override of the global card padding (default 1.25rem). */
+    --qt-card-padding: 0.5rem;
     @apply overflow-hidden flex flex-col;
+  }
+
+  /**
+   * Drag handle on the inner (left) edge of the expanded sidebar.
+   * Transparent until hovered/active so it doesn't read as a second border.
+   * Visuals mirror .qt-doc-divider / .qt-doc-divider-grip.
+   */
+  .qt-chat-sidebar-resizer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 10px;
+    transform: translateX(-50%);
+    z-index: 20;
+    cursor: col-resize;
+    user-select: none;
+    touch-action: none;
+    @apply flex items-center justify-center;
+  }
+
+  .qt-chat-sidebar-resizer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background: transparent;
+    transition: background 0.15s ease;
+  }
+
+  .qt-chat-sidebar-resizer:hover::before,
+  .qt-chat-sidebar-resizer:focus-visible::before,
+  .qt-chat-sidebar-resizer-active::before {
+    background: var(--qt-primary);
+  }
+
+  .qt-chat-sidebar-resizer:focus-visible {
+    outline: none;
+  }
+
+  .qt-chat-sidebar-resizer-grip {
+    @apply flex flex-col gap-1;
+    position: relative;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .qt-chat-sidebar-resizer:hover .qt-chat-sidebar-resizer-grip,
+  .qt-chat-sidebar-resizer:focus-visible .qt-chat-sidebar-resizer-grip,
+  .qt-chat-sidebar-resizer-active .qt-chat-sidebar-resizer-grip {
+    opacity: 1;
+  }
+
+  .qt-chat-sidebar-resizer-grip span {
+    display: block;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--qt-text-muted);
   }
 
   .qt-chat-sidebar-header {
@@ -2300,13 +2367,19 @@
 
   .qt-chat-sidebar-list {
     @apply flex-1 overflow-y-auto;
-    padding: 1rem;
-    @apply space-y-3;
+    padding: 0.375rem;
+    @apply space-y-2;
+  }
+
+  /* Match the tightened card body padding (scoped to the sidebar) so the
+     header/body divider doesn't sit further in than the content. */
+  .qt-chat-sidebar .qt-collapsible-card-divider {
+    @apply mx-2;
   }
 
   .qt-chat-sidebar-add {
     border-top: 1px solid var(--qt-chat-sidebar-header-border);
-    padding: 1rem;
+    padding: 0.5rem 0 0;
   }
 
   .qt-chat-sidebar-debug {

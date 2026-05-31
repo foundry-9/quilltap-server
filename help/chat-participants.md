@@ -39,6 +39,18 @@ To collapse and save space:
 2. Sidebar minimizes to a thin strip with mini avatars (always the Participants view, in miniature)
 3. Click expand or any avatar to open the cabinet again
 
+### Resizing the Sidebar
+
+Should the cabinet feel too narrow for your cast — or too greedy with the page — you may take it by the handle and let it out a notch:
+
+1. Hover the **inner edge** of the expanded sidebar (the seam where it meets the conversation). A slim grip of three dots reveals itself and the cursor turns to the resize arrows.
+2. **Drag toward the chat** to widen the cabinet, or **back toward the wall** to slim it. The conversation reflows to make room as you go.
+3. Release wherever it suits you. The width is held within sensible bounds so neither the cabinet nor the conversation is ever crushed to a sliver.
+
+Prefer the keyboard? Give the grip focus (Tab to it) and use **← / →** to nudge the width, or **Home / End** to leap to the narrowest and widest settings.
+
+Your chosen width is **remembered across reloads** (saved in your browser), so the cabinet opens to the size you left it. The slim collapsed strip keeps its own fixed, modest footprint regardless.
+
 ### Moving Between Drawers
 
 Each drawer is a clickable header within the expanded sidebar. Click the header to open the drawer; click it again, or open any other drawer, to close it. Which drawer is open is **session-only** — every reload returns you to Participants, by design.
@@ -469,6 +481,7 @@ The sidebar adapts to screen size:
 Your sidebar state is remembered with measured discretion:
 
 - **Collapsed/expanded preference** — saved across reloads (the mini-avatar strip remembers it has retired into its cubby)
+- **Sidebar width** — the size you drag it to is saved in your browser and restored on the next visit
 - **Which drawer was open** — session-only; every reload returns to Participants
 - **Talkativeness settings** persist per chat
 - **Queue clears** when processed
