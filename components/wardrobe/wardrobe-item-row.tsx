@@ -216,7 +216,7 @@ export function WardrobeItemRow({
               type="button"
               onClick={() => onEquip(item)}
               className="qt-button-ghost qt-button-sm"
-              title="Replaces every slot this item covers"
+              title="Puts it on across every slot it covers — layers or replaces per the item's setting"
             >
               {equipLabel}
             </button>

@@ -1420,7 +1420,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeChangeItem: paramet
   "additionalProperties": false,
   "properties": {
     "item_id": {
-      "description": "The ID of the wardrobe item. Required for "equip" and "add_to_slot". Optional for "remove_from_slot" (omit to clear the slot). Ignored by "clear_slot". The item must be a leaf (no components); composites are rejected — use wardrobe_set_outfit for those.",
+      "description": "The ID of the wardrobe item. Required for "wear", "replace", and "add_to_slot". Optional for "remove_from_slot" (omit to clear the slot). Ignored by "clear_slot". The item must be a leaf (no components); composites are rejected — use wardrobe_set_outfit for those.",
       "type": "string",
     },
     "item_title": {
@@ -1428,9 +1428,10 @@ exports[`tool definitions: derived OpenAI parameters wardrobeChangeItem: paramet
       "type": "string",
     },
     "mode": {
-      "description": ""equip" (replace slots covered by the item), "add_to_slot" (layer in a slot), "remove_from_slot" (take off one item), "clear_slot" (empty the slot entirely).",
+      "description": ""wear" (put it on honoring the item's replace flag — layers if the flag is off, replaces the slots if on), "replace" (clear the slots it covers, then put it on — a forced swap), "add_to_slot" (layer into one slot), "remove_from_slot" (take off one item), "clear_slot" (empty the slot entirely).",
       "enum": [
-        "equip",
+        "wear",
+        "replace",
         "add_to_slot",
         "remove_from_slot",
         "clear_slot",
@@ -1438,7 +1439,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeChangeItem: paramet
       "type": "string",
     },
     "slot": {
-      "description": "Required for "add_to_slot", "remove_from_slot", and "clear_slot". Optional for "equip" — slots are inferred from the item.",
+      "description": "Required for "add_to_slot", "remove_from_slot", and "clear_slot". Optional for "wear"/"replace" — slots are inferred from the item.",
       "enum": [
         "top",
         "bottom",
@@ -1483,7 +1484,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreateItem: paramet
     },
     "equip_now": {
       "default": false,
-      "description": "If true, equip the item immediately after creation. Defaults to false. For composites this places the composite (as a single id) into every slot it covers.",
+      "description": "If true, wear the item immediately after creation. Defaults to false. Wearing honors the new item's replace flag: off (the default) layers it over what is already worn, on replaces those slots. For composites this places the composite (as a single id) into every slot it covers. The response reports the resulting effect (layered vs replaced).",
       "type": "boolean",
     },
     "recipient": {
@@ -1562,9 +1563,10 @@ exports[`tool definitions: derived OpenAI parameters wardrobeUpdateOutfit: param
       "type": "string",
     },
     "mode": {
-      "description": ""wear" — put the composite outfit on, replacing what was in those slots. "remove" — take the composite outfit off; layered items stay.",
+      "description": ""wear" — put the composite outfit on, honoring its replace flag (additive bundles layer over what is worn; replace bundles clear those slots first). "replace" — clear every slot the bundle covers, then put it on (a forced swap). "remove" — take the composite outfit off; layered items stay.",
       "enum": [
         "wear",
+        "replace",
         "remove",
       ],
       "type": "string",

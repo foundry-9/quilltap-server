@@ -23,6 +23,7 @@ import type {
 import { EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
 import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
+import { wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
 import type { EquippedBundle } from '@/lib/wardrobe/group-equipped'
 import {
   breakApartBundleInSlots,
@@ -138,6 +139,11 @@ function CharacterOutfitSection({
     [allWardrobeItems],
   )
 
+  const itemsById = useMemo(
+    () => new Map(wardrobeItems.map((i) => [i.id, i])),
+    [wardrobeItems],
+  )
+
   // Track whether we've already seeded the manual slots from defaults — once
   // seeded, subsequent edits stay user-driven.
   const seededRef = useRef(false)
@@ -170,14 +176,20 @@ function CharacterOutfitSection({
     [character.id, selection.slots, onChange],
   )
 
+  // Wearing an item from the per-slot picker fills *every* slot it covers,
+  // honoring its `replace` flag (layer when off, replace when on) — the same
+  // rule the live chat uses. Picking a dress (top+bottom) or an outfit bundle
+  // no longer lands in just the one slot the picker was opened from.
   const handleAddToSlot = useCallback(
     (slot: WardrobeItemType, itemId: string) => {
       const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
-      if ((currentSlots[slot] ?? []).includes(itemId)) return
-      const next = { ...currentSlots, [slot]: [...(currentSlots[slot] ?? []), itemId] }
+      const item = itemsById.get(itemId)
+      const next = item
+        ? wearItemIntoSlots(currentSlots, item)
+        : { ...currentSlots, [slot]: [...(currentSlots[slot] ?? []), itemId] }
       onChange({ characterId: character.id, mode: 'manual', slots: next })
     },
-    [character.id, selection.slots, onChange],
+    [character.id, selection.slots, itemsById, onChange],
   )
 
   const handleRemoveFromSlot = useCallback(
@@ -199,11 +211,6 @@ function CharacterOutfitSection({
       onChange({ characterId: character.id, mode: 'manual', slots: next })
     },
     [character.id, selection.slots, onChange],
-  )
-
-  const itemsById = useMemo(
-    () => new Map(wardrobeItems.map((i) => [i.id, i])),
-    [wardrobeItems],
   )
 
   const handleTakeOffBundle = useCallback(

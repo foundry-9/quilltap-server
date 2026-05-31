@@ -55,8 +55,11 @@ export const wardrobeCreateItemToolInputSchema = z
       .boolean()
       .default(false)
       .describe(
-        'If true, equip the item immediately after creation. Defaults to false. ' +
-        'For composites this places the composite (as a single id) into every slot it covers.'
+        'If true, wear the item immediately after creation. Defaults to false. ' +
+        "Wearing honors the new item's replace flag: off (the default) layers it " +
+        'over what is already worn, on replaces those slots. For composites this ' +
+        'places the composite (as a single id) into every slot it covers. The ' +
+        'response reports the resulting effect (layered vs replaced).'
       )
       .optional(),
     recipient: z
@@ -117,6 +120,14 @@ export interface WardrobeCreateItemToolOutput {
   item_id: string;
   title: string;
   equipped: boolean;
+  /**
+   * When `equipped`, what wearing the item did: `layered` (added on top, others
+   * kept) or `replaced` (slots cleared and set to this item) — per its `replace`
+   * flag.
+   */
+  effect?: 'layered' | 'replaced';
+  /** One-sentence, plain-language description of `effect` for the model. */
+  effect_summary?: string;
   /** True if the created item is a composite (has components). */
   is_composite?: boolean;
   /** The item types resolved by the handler — for composites, the computed union. */

@@ -2195,14 +2195,23 @@ Get full equipped outfit state for all characters in this chat.
 
 #### `POST /api/v1/chats/[id]?action=equip`
 
-Equip or unequip a wardrobe item in a slot. Set `itemId` to `null` to unequip.
+Mutate a character's equipped outfit. Dispatches on `mode`:
 
-**Request Body**:
+- `wear` — wear `itemId` across every slot it covers, honoring the item's `replace` flag (layer when off, replace when on).
+- `replace` — force-swap: clear every slot `itemId` covers, then wear it (ignores the flag).
+- `add_to_slot` — append `itemId` to a single `slot` (layering).
+- `remove_from_slot` — remove `itemId` from `slot` (omit `itemId` to clear the slot).
+- `clear_slot` — empty `slot`.
+- `set_all` — replace the whole equipped state atomically with a `slots` object.
+
+`equip` is accepted as a deprecated alias for `wear`.
+
+**Request Body** (wear / replace):
 
 ```json
 {
   "characterId": "char-uuid",
-  "slot": "top",
+  "mode": "wear",
   "itemId": "item-uuid"
 }
 ```

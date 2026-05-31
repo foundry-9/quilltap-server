@@ -154,9 +154,10 @@ With filters: [[WARDROBE type_filter="top" /]]`)
   if (options.wardrobeChangeItem) {
     toolDocs.push(`
 ### Change Wardrobe Item (single garment)
-Equip, layer, or remove a SINGLE garment in your outfit. For composite outfits (bundles of items), use SET_OUTFIT instead.
-To equip (replaces what's in the slots it covers): [[CHANGE_ITEM mode="equip" id="item-uuid" /]]
-By name: [[CHANGE_ITEM mode="equip" title="Charcoal Sweater" /]]
+Wear, layer, or remove a SINGLE garment in your outfit. For composite outfits (bundles of items), use SET_OUTFIT instead.
+To wear (honors the item's replace flag — layers it on unless the item is set to replace): [[CHANGE_ITEM mode="wear" id="item-uuid" /]]
+By name: [[CHANGE_ITEM mode="wear" title="Charcoal Sweater" /]]
+To swap it on, taking off what's there first: [[CHANGE_ITEM mode="replace" id="item-uuid" /]]
 To layer over what's already worn: [[CHANGE_ITEM mode="add_to_slot" slot="top" id="item-uuid" /]]
 To take off one specific item: [[CHANGE_ITEM mode="remove_from_slot" slot="top" id="item-uuid" /]]
 To clear a slot entirely: [[CHANGE_ITEM mode="clear_slot" slot="top" /]]`)
@@ -166,8 +167,9 @@ To clear a slot entirely: [[CHANGE_ITEM mode="clear_slot" slot="top" /]]`)
     toolDocs.push(`
 ### Set Outfit (composite outfits)
 Put on or take off a composite outfit — a wardrobe item that bundles multiple pieces (e.g. "Rain Outfit" = coat + jeans + boots).
-To wear: [[SET_OUTFIT mode="wear" id="item-uuid" /]]
+To wear (honors the bundle's replace flag — additive bundles layer on): [[SET_OUTFIT mode="wear" id="item-uuid" /]]
 By name: [[SET_OUTFIT mode="wear" title="Rain Outfit" /]]
+To swap it on, clearing those slots first: [[SET_OUTFIT mode="replace" id="item-uuid" /]]
 To remove: [[SET_OUTFIT mode="remove" id="item-uuid" /]]
 For single garments, use CHANGE_ITEM instead.`)
   }

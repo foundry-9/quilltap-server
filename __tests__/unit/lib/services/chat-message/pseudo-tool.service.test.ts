@@ -74,7 +74,7 @@ describe('pseudo-tool.service', () => {
     })
 
     expect(instructions).toContain('[[WARDROBE /]]')
-    expect(instructions).toContain('[[CHANGE_ITEM mode="equip"')
+    expect(instructions).toContain('[[CHANGE_ITEM mode="wear"')
     expect(instructions).toContain('[[SET_OUTFIT mode="wear"')
     expect(instructions).toContain('[[CREATE_WARDROBE_ITEM title="Red Scarf"')
     expect(instructions).not.toContain('[[SEARCH_WEB]]')

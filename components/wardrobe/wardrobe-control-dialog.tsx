@@ -37,6 +37,7 @@ import {
   takeOffBundleFromSlots,
 } from '@/lib/wardrobe/bundle-mutations'
 import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
+import { wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
 import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
 import { WardrobeItemEditor } from './wardrobe-item-editor'
@@ -405,14 +406,13 @@ function WardrobeControlDialogInner({
     [selectedCharacterId, outfit.outfitState],
   )
 
+  // The "Wear" button honors the item's `replace` flag (layer when off,
+  // replace when on) across every slot it covers — the same rule as the live
+  // equip path. To force a swap, clear the slot first.
   const handleEquipItem = useCallback(
     (item: WardrobeItem) => {
       if (!isInChat) return
-      updateLiveStaged((prev) => {
-        const next = cloneSlots(prev)
-        for (const slot of item.types) next[slot] = [item.id]
-        return next
-      })
+      updateLiveStaged((prev) => wearItemIntoSlots(prev, item))
     },
     [isInChat, updateLiveStaged],
   )
@@ -429,15 +429,20 @@ function WardrobeControlDialogInner({
     [isInChat, updateLiveStaged],
   )
 
+  // Picking an item from a slot row wears it (fills every slot it covers,
+  // layering or replacing per the item's flag) rather than dropping it into
+  // the one row the picker was opened from.
   const handleSlotAdd = useCallback(
     (slot: WardrobeItemType, itemId: string) => {
       if (!isInChat) return
       const item = itemsById.get(itemId)
-      if (item && !item.types.includes(slot)) return
-      updateLiveStaged((prev) => {
-        if (prev[slot].includes(itemId)) return prev
-        return { ...prev, [slot]: [...prev[slot], itemId] }
-      })
+      updateLiveStaged((prev) =>
+        item
+          ? wearItemIntoSlots(prev, item)
+          : prev[slot].includes(itemId)
+            ? prev
+            : { ...prev, [slot]: [...prev[slot], itemId] },
+      )
     },
     [isInChat, itemsById, updateLiveStaged],
   )
@@ -465,11 +470,8 @@ function WardrobeControlDialogInner({
     (slot: WardrobeItemType, itemId: string) => {
       const item = itemsById.get(itemId)
       if (!item) return
-      if (!item.types.includes(slot)) return
-      setFittingSlots((prev) => {
-        if (prev[slot].includes(itemId)) return prev
-        return { ...prev, [slot]: [...prev[slot], itemId] }
-      })
+      // Wear it across every slot it covers, honoring the `replace` flag.
+      setFittingSlots((prev) => wearItemIntoSlots(prev, item))
     },
     [itemsById],
   )
@@ -666,13 +668,9 @@ function WardrobeControlDialogInner({
   const rowEquip = useCallback(
     (item: WardrobeItem) => {
       if (useFittingActions) {
-        // Replace each slot the item covers with [item.id], matching the
-        // semantics of `equipItem` for the live state.
-        setFittingSlots((prev) => {
-          const next = cloneSlots(prev)
-          for (const slot of item.types) next[slot] = [item.id]
-          return next
-        })
+        // Honor the item's `replace` flag across every slot it covers,
+        // matching `wearItemIntoSlots` / the live equip path.
+        setFittingSlots((prev) => wearItemIntoSlots(prev, item))
         return
       }
       handleEquipItem(item)

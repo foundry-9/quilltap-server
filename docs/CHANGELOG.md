@@ -4,6 +4,16 @@
 
 ### 4.6-dev
 
+#### Change: Unify "wear an item" around the `replace` flag
+
+Wearing a wardrobe item now follows one rule everywhere: for each slot the item covers, the item's `replace` flag decides what happens — `replace: false` (the default for single garments and additive bundles) layers the item in, keeping what's already there; `replace: true` clears those slots and sets just this item. The flag is now the single source of truth across the dressing dialogues, the wardrobe dialog, and the LLM tools. No schema or data migration — `replace` already existed.
+
+- **Fix (dressing dialogues):** in the New Chat "Compose outfit" composer and the wardrobe dialog's Live/Builder composers, picking an item from a slot's `+` picker now fills *every* slot the item covers instead of only the row you opened. A dress lands in top and bottom; an outfit bundle lands in everything it covers. (`components/wardrobe/outfit-selector.tsx`, `wardrobe-control-dialog.tsx`, `equipped-slot-row.tsx`, `wardrobe-item-row.tsx`)
+- **Shared logic** (`lib/wardrobe/outfit-displacement.ts`): new pure `wearItemIntoSlots` (flag-driven) and `replaceItemIntoSlots` (force-swap) helpers; `equipItem` drops its old leaf-always-replaces special case and delegates to `wearItemIntoSlots`; new `replaceItem` DB primitive. `computeDisplacedSlots` modes renamed `equip` → `wear` and gained `replace`.
+- **API** (`POST /api/v1/chats/[id]?action=equip`): mode enum is now `wear | replace | add_to_slot | remove_from_slot | clear_slot | set_all`. `equip` is accepted as a deprecated alias for `wear`. `lib/hooks/use-outfit.ts` exposes a `replaceItem` callback alongside `equipItem`.
+- **LLM tools:** `wardrobe_change_item` modes are now `wear` (honors the flag) / `replace` (force-swap) / `add_to_slot` / `remove_from_slot` / `clear_slot` (the old `equip` is still accepted and routes to `wear`). `wardrobe_set_outfit` gains a `replace` mode and its `wear` description now reflects flag-driven behavior. All three wardrobe tools (`change_item`, `set_outfit`, `create_item` with `equip_now`) now return an `effect` (`layered` / `replaced` / `removed` / `cleared`) and a plain-language `effect_summary` so the model knows exactly what happened per slot. Tool descriptions explain that the item's `replace` flag drives the default behavior.
+- **Note:** because single garments are stored `replace: false`, wearing one now *layers* it. To swap a garment, use `replace` (LLM tools / API) or clear the slot first (dressing UI).
+
 #### Feature: Capture Z.AI (GLM) reasoning in the Salon thinking block
 
 The Z.AI provider now captures GLM chain-of-thought, bringing it in line with the other reasoning providers. GLM hybrid-reasoning models (glm-4.5/4.6 family, glm-5.x) emit reasoning as `reasoning_content` — the same field DeepSeek uses, in `delta.reasoning_content` (streaming) and `message.reasoning_content` (non-streaming). Per Z.AI's docs, thinking is enabled by default (`thinking: { type: 'enabled' | 'disabled' }`, default `enabled`), so GLM was returning reasoning all along — the plugin just dropped it on the floor before it reached the Salon.

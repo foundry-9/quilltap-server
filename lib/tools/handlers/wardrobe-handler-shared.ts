@@ -20,6 +20,45 @@ export function emptyEquippedState(): EquippedSlots {
   return { ...EMPTY_EQUIPPED_SLOTS };
 }
 
+/**
+ * What a wardrobe mutation did to the slots it touched, reported back to the
+ * LLM so it knows whether existing items survived.
+ *
+ *   - `layered`  — the item was added on top; whatever was already in those
+ *                  slots stayed (the item's `replace` flag is off).
+ *   - `replaced` — those slots were cleared and set to just this item.
+ *   - `removed`  — a named item was taken off; any other layers stayed.
+ *   - `cleared`  — the slot(s) were emptied entirely.
+ */
+export type WardrobeEffect = 'layered' | 'replaced' | 'removed' | 'cleared';
+
+/**
+ * One-sentence, model-facing description of what a wardrobe mutation just did.
+ * Phrased identically across the wardrobe tools so the LLM gets a consistent
+ * read on layer-vs-replace.
+ */
+export function describeWardrobeEffect(
+  effect: WardrobeEffect,
+  slots: readonly string[],
+  itemTitle?: string | null,
+): string {
+  const slotList = slots.length > 0 ? slots.join(', ') : 'the slot';
+  const those = slots.length > 1 ? 'those slots' : 'that slot';
+  const title = itemTitle ? `"${itemTitle}"` : 'the item';
+  switch (effect) {
+    case 'layered':
+      return `Layered ${title} into ${slotList}. The item's replace flag is off, so whatever was already in ${those} was kept.`;
+    case 'replaced':
+      return `Replaced ${slotList} with ${title} — anything previously in ${those} was cleared.`;
+    case 'removed':
+      return itemTitle
+        ? `Took ${title} off ${slotList}; any other layers there stayed.`
+        : `Cleared ${slotList}.`;
+    case 'cleared':
+      return `Cleared ${slotList} entirely.`;
+  }
+}
+
 export async function loadCurrentWardrobeState(
   repos: WardrobeReposForSummary,
   chatId: string,

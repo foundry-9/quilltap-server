@@ -289,8 +289,9 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
   )
 
   /**
-   * Equip an item (replace mode): for each slot the item covers, the slot's
-   * array becomes `[itemId]`. The single-call gesture for "put this on".
+   * Wear an item: for each slot the item covers, honor its `replace` flag —
+   * layer it in (append) when false, replace the slot when true. The single-
+   * call gesture for "put this on".
    */
   const equipItemAction = useCallback(
     async (characterId: string, itemId: string): Promise<ResolvedSlotItems | null> => {
@@ -299,10 +300,10 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
         const res = await fetch(`/api/v1/chats/${chatId}?action=equip`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ characterId, mode: 'equip', itemId }),
+          body: JSON.stringify({ characterId, mode: 'wear', itemId }),
         })
         if (!res.ok) {
-          console.error('[useOutfit] Failed to equip item', { characterId, itemId, status: res.status })
+          console.error('[useOutfit] Failed to wear item', { characterId, itemId, status: res.status })
           return null
         }
 
@@ -310,7 +311,7 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
           const item = items.find(i => i.id === itemId)
           if (!item) return slots
           return computeDisplacedSlots(slots, {
-            mode: 'equip',
+            mode: 'wear',
             item: {
               id: item.id,
               types: item.types,
@@ -320,7 +321,42 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
           })
         })
       } catch (err) {
-        console.error('[useOutfit] Error equipping item', { characterId, itemId, error: err })
+        console.error('[useOutfit] Error wearing item', { characterId, itemId, error: err })
+        return null
+      }
+    },
+    [chatId, applyOptimistic],
+  )
+
+  /**
+   * Force-swap an item: clear each slot it covers, then set it to that item —
+   * regardless of the `replace` flag. The "clear the slot, then put this on"
+   * gesture.
+   */
+  const replaceItemAction = useCallback(
+    async (characterId: string, itemId: string): Promise<ResolvedSlotItems | null> => {
+      if (!chatId) return null
+      try {
+        const res = await fetch(`/api/v1/chats/${chatId}?action=equip`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ characterId, mode: 'replace', itemId }),
+        })
+        if (!res.ok) {
+          console.error('[useOutfit] Failed to replace item', { characterId, itemId, status: res.status })
+          return null
+        }
+
+        return applyOptimistic(characterId, (slots, items) => {
+          const item = items.find(i => i.id === itemId)
+          if (!item) return slots
+          return computeDisplacedSlots(slots, {
+            mode: 'replace',
+            item: { id: item.id, types: item.types },
+          })
+        })
+      } catch (err) {
+        console.error('[useOutfit] Error replacing item', { characterId, itemId, error: err })
         return null
       }
     },
@@ -433,8 +469,10 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
     refreshOutfit,
     invalidateWardrobe,
     fetchWardrobeForCharacter,
-    /** Replace the slots covered by an item with that item alone. */
+    /** Wear an item across every slot it covers, honoring its `replace` flag. */
     equipItem: equipItemAction,
+    /** Force-swap an item: clear the slots it covers, then set it to that item. */
+    replaceItem: replaceItemAction,
     /** Append an item to a slot's array (layering). */
     addToSlot: addToSlotAction,
     /** Remove a specific item from a slot, or clear the slot when itemId is null. */

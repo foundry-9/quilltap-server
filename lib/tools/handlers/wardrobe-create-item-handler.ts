@@ -24,6 +24,7 @@ import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrob
 import { equipItem } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import { unionTypes } from '@/lib/wardrobe/composite-types';
+import { describeWardrobeEffect } from './wardrobe-handler-shared';
 
 export interface WardrobeCreateItemToolContext {
   userId: string;
@@ -266,17 +267,19 @@ export async function executeWardrobeCreateItemTool(
     });
 
     let equipped = false;
+    let effect: 'layered' | 'replaced' | undefined;
     let currentState: EquippedSlots | undefined;
 
     if (equip_now) {
 
-      // `equipItem` replaces the designated slots for leaf items and for
-      // composites flagged `replace: true`; composites default to additive
-      // (layering). Composites are stored as their own id; expansion to leaf
-      // garments happens at read time.
+      // `equipItem` honors the item's `replace` flag: layers it in when off
+      // (the default for both leaf garments and additive composites), replaces
+      // the covered slots when on. Composites are stored as their own id;
+      // expansion to leaf garments happens at read time.
       await equipItem(repos, context.chatId, targetCharacterId, newItem);
 
       equipped = true;
+      effect = newItem.replace ? 'replaced' : 'layered';
 
       const chat = await repos.chats.findById(context.chatId);
       if (chat) {
@@ -304,6 +307,7 @@ export async function executeWardrobeCreateItemTool(
       isComposite,
       componentCount: componentItemIds.length,
       equipped,
+      effect,
     });
 
     return {
@@ -311,6 +315,12 @@ export async function executeWardrobeCreateItemTool(
       item_id: newItem.id,
       title: newItem.title,
       equipped,
+      ...(effect
+        ? {
+            effect,
+            effect_summary: describeWardrobeEffect(effect, resolvedTypes, newItem.title),
+          }
+        : {}),
       is_composite: isComposite,
       resolved_types: resolvedTypes,
       ...(componentItemIds.length > 0 ? { resolved_component_item_ids: componentItemIds } : {}),
