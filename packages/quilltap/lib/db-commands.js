@@ -10,6 +10,8 @@ const {
   UUID_RE,
   ambiguous,
   resolveCharacter,
+  resolveCharactersByAlias,
+  readVaultAliases,
   resolveChat,
   resolveProject,
 } = require('./db-helpers');
@@ -318,21 +320,56 @@ function cmdFind(args, ctx) {
 }
 
 function findCharacters(query, { json, limit, ctx }) {
+  // Aliases live in each character's vault `properties.json` post-4.6, not on
+  // the `characters` row, so name matching comes from the main DB and alias
+  // matching/display comes from the mount-index DB.
   const db = ctx.openMain();
+  let mounts = null;
   try {
+    mounts = ctx.openMounts();
+  } catch {
+    mounts = null; // mount-index DB absent — name-only matching, no aliases
+  }
+  try {
+    const SELECT_COLS =
+      'SELECT id, name, npc, isFavorite, controlledBy, characterDocumentMountPointId AS mp FROM characters';
     let rows;
     if (!query) {
-      rows = db.prepare('SELECT id, name, npc, isFavorite, controlledBy FROM characters ORDER BY name LIMIT ?').all(limit);
+      rows = db.prepare(`${SELECT_COLS} ORDER BY name LIMIT ?`).all(limit);
     } else if (UUID_RE.test(query)) {
-      rows = db.prepare('SELECT id, name, npc, isFavorite, controlledBy, aliases FROM characters WHERE id = ?').all(query);
+      rows = db.prepare(`${SELECT_COLS} WHERE id = ?`).all(query);
     } else {
-      rows = db.prepare(
-        'SELECT id, name, npc, isFavorite, controlledBy, aliases FROM characters WHERE LOWER(name) LIKE LOWER(?) OR LOWER(aliases) LIKE LOWER(?) ORDER BY name LIMIT ?'
-      ).all(`%${query}%`, `%${query}%`, limit);
+      const byName = db
+        .prepare(`${SELECT_COLS} WHERE LOWER(name) LIKE LOWER(?) ORDER BY name`)
+        .all(`%${query}%`);
+      const seen = new Set(byName.map((r) => r.id));
+      rows = [...byName];
+      // Fold in alias matches from the vault, then re-fetch their rows so the
+      // output columns stay uniform.
+      for (const m of resolveCharactersByAlias(db, mounts, query)) {
+        if (seen.has(m.id)) continue;
+        seen.add(m.id);
+        const r = db.prepare(`${SELECT_COLS} WHERE id = ?`).get(m.id);
+        if (r) rows.push(r);
+      }
+      rows = rows.slice(0, limit);
     }
-    if (json) return printJson(rows);
-    printTable(rows);
+
+    // Attach vault-sourced aliases for display and drop the internal mount id.
+    const enriched = rows.map(({ mp, ...rest }) => ({
+      ...rest,
+      aliases: readVaultAliases(mounts, mp),
+    }));
+
+    if (json) return printJson(enriched);
+    printTable(
+      enriched.map((r) => ({
+        ...r,
+        aliases: r.aliases.length ? r.aliases.join(', ') : '',
+      })),
+    );
   } finally {
+    if (mounts) { try { mounts.close(); } catch {} }
     db.close();
   }
 }
@@ -388,7 +425,7 @@ function cmdChats(args, ctx) {
   try {
     let rows;
     if (flags.character) {
-      const c = resolveCharacter(db, String(flags.character));
+      const c = resolveCharacter(db, String(flags.character), ctx.openMounts);
       rows = db.prepare(
         "SELECT id, title, chatType, messageCount, lastMessageAt, projectId " +
         "FROM chats WHERE participants LIKE ? ORDER BY lastMessageAt DESC LIMIT ?"
@@ -488,7 +525,7 @@ function cmdLogs(args, ctx) {
     } else if (flags.character) {
       const main = ctx.openMain();
       let c;
-      try { c = resolveCharacter(main, String(flags.character)); } finally { main.close(); }
+      try { c = resolveCharacter(main, String(flags.character), ctx.openMounts); } finally { main.close(); }
       rows = logsDb.prepare(
         'SELECT id, createdAt, type, provider, modelName, chatId, messageId, durationMs FROM llm_logs WHERE characterId = ? ORDER BY createdAt DESC LIMIT ?'
       ).all(c.id, limit);
@@ -605,11 +642,11 @@ function cmdMemories(args, ctx) {
 
   const db = ctx.openMain();
   try {
-    const holder = resolveCharacter(db, String(flags.character));
+    const holder = resolveCharacter(db, String(flags.character), ctx.openMounts);
     const conditions = ['characterId = ?'];
     const params = [holder.id];
     if (flags.about) {
-      const a = resolveCharacter(db, String(flags.about));
+      const a = resolveCharacter(db, String(flags.about), ctx.openMounts);
       conditions.push('aboutCharacterId = ?');
       params.push(a.id);
     }
@@ -645,18 +682,25 @@ function cmdMemories(args, ctx) {
 
 // ---------- verb: characters ----------
 
-// Vault files that the character-properties overlay manages today. Must stay
-// in sync with `CHARACTER_VAULT_DESCRIPTORS` in
-// lib/database/repositories/character-properties-overlay.ts. When the 4.6
-// vault-cutover migration lands, every character is expected to have all of
-// these present.
-const EXPECTED_VAULT_SINGLE_FILES = [
+// Single-file vault documents the character-properties overlay manages. Must
+// stay in sync with `CHARACTER_VAULT_DESCRIPTORS` in
+// lib/database/repositories/vault-overlay/. Post-4.6-cutover the vault is the
+// only home for these fields.
+//
+// REQUIRED files are written unconditionally by `writeCharacterVaultManagedFields`
+// (empty string when the field is blank), so a healthy character always has all
+// of them. The physical-* pair is OPTIONAL: the writer skips both when the
+// character has no physicalDescription. It writes them as a pair, so having
+// exactly one of the two is an inconsistency worth flagging.
+const REQUIRED_VAULT_SINGLE_FILES = [
   'properties.json',
   'identity.md',
   'description.md',
   'manifesto.md',
   'personality.md',
   'example-dialogues.md',
+];
+const PHYSICAL_VAULT_FILES = [
   'physical-description.md',
   'physical-prompts.json',
 ];
@@ -695,8 +739,10 @@ function inspectCharacterVault(row, mounts) {
     mountPointId: row.characterDocumentMountPointId || null,
     vault: 'missing',
     presentSingleFiles: 0,
-    expectedSingleFiles: EXPECTED_VAULT_SINGLE_FILES.length,
+    expectedSingleFiles: REQUIRED_VAULT_SINGLE_FILES.length,
     missingSingleFiles: [],
+    physicalFilesPresent: 0,   // 0, 1, or 2 of the optional physical-* pair
+    physicalInconsistent: false,
     promptsVault: 0,
     promptsDb: 0,
     scenariosVault: 0,
@@ -729,13 +775,18 @@ function inspectCharacterVault(row, mounts) {
     byPath.set(link.relativePath.toLowerCase(), link);
   }
 
-  for (const p of EXPECTED_VAULT_SINGLE_FILES) {
+  for (const p of REQUIRED_VAULT_SINGLE_FILES) {
     if (byPath.has(p)) {
       status.presentSingleFiles++;
     } else {
       status.missingSingleFiles.push(p);
     }
   }
+
+  // Physical-* files are optional (a character may legitimately have no
+  // physical description). Both-or-neither is healthy; exactly one is not.
+  status.physicalFilesPresent = PHYSICAL_VAULT_FILES.filter((p) => byPath.has(p)).length;
+  status.physicalInconsistent = status.physicalFilesPresent === 1;
 
   for (const [p] of byPath) {
     if (p.startsWith('prompts/') && p.endsWith('.md')) status.promptsVault++;
@@ -835,10 +886,17 @@ function inspectCharacterVault(row, mounts) {
     }
   }
 
-  if (status.missingSingleFiles.length === EXPECTED_VAULT_SINGLE_FILES.length) {
+  const anyContent = status.presentSingleFiles > 0
+    || status.physicalFilesPresent > 0
+    || status.promptsVault > 0
+    || status.scenariosVault > 0
+    || status.wardrobeVault > 0;
+  if (!anyContent) {
     status.issue = 'vault empty';
   } else if (status.missingSingleFiles.length > 0) {
-    status.issue = `${status.missingSingleFiles.length} files missing`;
+    status.issue = `${status.missingSingleFiles.length} required files missing`;
+  } else if (status.physicalInconsistent) {
+    status.issue = 'physical files incomplete (1 of 2)';
   } else if (status.diverged.length > 0) {
     status.issue = `diverged (${status.diverged.length})`;
   } else if (!preCutover) {
@@ -886,7 +944,7 @@ function cmdCharacters(args, ctx) {
     let sql = `SELECT ${cols.join(', ')} FROM characters`;
     const params = [];
     if (idQuery) {
-      const c = resolveCharacter(main, idQuery);
+      const c = resolveCharacter(main, idQuery, ctx.openMounts);
       sql += ' WHERE id = ?';
       params.push(c.id);
     } else {
@@ -920,22 +978,31 @@ function cmdCharacters(args, ctx) {
     }
 
     const summary = summarizeCharacterStatuses(all);
-    const headline = `Scanned ${all.length} character${all.length === 1 ? '' : 's'}: ` +
+    let headline = `Scanned ${all.length} character${all.length === 1 ? '' : 's'}: ` +
       `${summary.ok} ok, ${summary.diverged} diverged, ${summary.missingFiles} with missing files, ` +
-      `${summary.noVault} with no vault, ${summary.empty} empty.`;
+      `${summary.noVault} with no vault, ${summary.empty} empty`;
+    if (summary.physIncomplete > 0) headline += `, ${summary.physIncomplete} with incomplete physical files`;
+    headline += '.';
     console.log(headline);
     console.log('');
-    printTable(filtered.map(s => ({
-      id: s.id.slice(0, 8),
-      name: truncate(s.name, 28),
-      flag: s.flag == null ? '-' : s.flag,
-      vault: s.vault,
-      files: s.vault === 'missing' ? '-' : `${s.presentSingleFiles}/${s.expectedSingleFiles}`,
-      prompts: s.vault === 'missing' ? '-' : `${s.promptsVault}/${s.promptsDb}`,
-      scenarios: s.vault === 'missing' ? '-' : `${s.scenariosVault}/${s.scenariosDb}`,
-      wardrobe: s.vault === 'missing' ? '-' : s.wardrobeVault,
-      status: truncate(s.issue, 60),
-    })));
+    // The readPropertiesFromDocumentStore flag and the DB side of the
+    // prompts/scenarios counts only exist before the 4.6 cutover. Post-cutover
+    // (the normal case now) the vault is canonical, so drop the dead `flag`
+    // column and show vault-only counts instead of misleading `vault/db`.
+    const anyPreCutover = all.some(s => s.preCutover);
+    printTable(filtered.map(s => {
+      const missing = s.vault === 'missing';
+      const row = { id: s.id.slice(0, 8), name: truncate(s.name, 28) };
+      if (anyPreCutover) row.flag = s.flag == null ? '-' : s.flag;
+      row.vault = s.vault;
+      row.files = missing ? '-' : `${s.presentSingleFiles}/${s.expectedSingleFiles}`;
+      row.phys = missing ? '-' : `${s.physicalFilesPresent}/2`;
+      row.prompts = missing ? '-' : (anyPreCutover ? `${s.promptsVault}/${s.promptsDb}` : String(s.promptsVault));
+      row.scenarios = missing ? '-' : (anyPreCutover ? `${s.scenariosVault}/${s.scenariosDb}` : String(s.scenariosVault));
+      row.wardrobe = missing ? '-' : s.wardrobeVault;
+      row.status = truncate(s.issue, 60);
+      return row;
+    }));
 
     if (filtered.length > 0 && filtered.some(s => s.diverged.length > 0)) {
       console.log('');
@@ -948,16 +1015,17 @@ function cmdCharacters(args, ctx) {
 }
 
 function summarizeCharacterStatuses(all) {
-  let ok = 0, diverged = 0, missingFiles = 0, noVault = 0, empty = 0;
+  let ok = 0, diverged = 0, missingFiles = 0, noVault = 0, empty = 0, physIncomplete = 0;
   for (const s of all) {
     if (!s.issue) continue;
     if (s.issue.startsWith('ok')) ok++;
     else if (s.issue === 'no vault') noVault++;
     else if (s.issue === 'vault empty') empty++;
     else if (s.issue.endsWith(' files missing')) missingFiles++;
+    else if (s.issue.startsWith('physical files incomplete')) physIncomplete++;
     else if (s.issue.startsWith('diverged')) diverged++;
   }
-  return { ok, diverged, missingFiles, noVault, empty };
+  return { ok, diverged, missingFiles, noVault, empty, physIncomplete };
 }
 
 // ---------- verb: optimize ----------

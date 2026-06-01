@@ -5,6 +5,7 @@ const {
   printDefaultInstanceHint,
   loadDbKey,
   openMainDb,
+  openMountIndexDb,
   UUID_RE,
   resolveCharacter,
   resolveChat,
@@ -179,7 +180,10 @@ async function openDb(flags) {
   const { dataDir, passphrase } = resolved;
   const pepper = await loadDbKey(dataDir, passphrase);
   const db = openMainDb(dataDir, pepper, { readonly: true });
-  return { db, dataDir };
+  // Lazy opener for the mount-index DB so `resolveCharacter` can match
+  // vault-stored aliases (4.6 cutover moved them out of the `characters` row).
+  const openMounts = () => openMountIndexDb(dataDir, pepper, { readonly: true });
+  return { db, dataDir, openMounts };
 }
 
 // ---------- filter / sort builders ----------
@@ -188,13 +192,13 @@ async function openDb(flags) {
 // `{ where: 'WHERE m.x = ? AND ...', params: [...], meta: { characterId, ... } }`.
 // `meta` exposes resolved IDs so callers can decide e.g. whether to show a
 // per-row holder column.
-function buildWhereClause(db, flags) {
+function buildWhereClause(db, flags, openMounts = null) {
   const clauses = [];
   const params = [];
   const meta = { characterId: null, aboutId: null, chatId: null, projectId: null, allCharacters: true };
 
   if (flags.character && flags.character !== 'all') {
-    const c = resolveCharacter(db, flags.character);
+    const c = resolveCharacter(db, flags.character, openMounts);
     clauses.push('m.characterId = ?');
     params.push(c.id);
     meta.characterId = c.id;
@@ -207,7 +211,7 @@ function buildWhereClause(db, flags) {
     } else if (flags.about === 'none') {
       clauses.push('m.aboutCharacterId IS NULL');
     } else {
-      const a = resolveCharacter(db, flags.about);
+      const a = resolveCharacter(db, flags.about, openMounts);
       clauses.push('m.aboutCharacterId = ?');
       params.push(a.id);
       meta.aboutId = a.id;
@@ -395,9 +399,9 @@ function renderJson(obj) {
 // ---------- ls ----------
 
 async function cmdLs(flags) {
-  const { db } = await openDb(flags);
+  const { db, openMounts } = await openDb(flags);
   try {
-    const { where, params, meta } = buildWhereClause(db, flags);
+    const { where, params, meta } = buildWhereClause(db, flags, openMounts);
     const { order, impField } = buildOrderBy(flags.sort, flags.reverse);
     const limit = flags.limit > 0 ? flags.limit : 50;
     const sql = `${SELECT_BASE} ${where} ORDER BY ${order} LIMIT ?`;
@@ -512,9 +516,9 @@ async function cmdFind(flags, positional) {
   if (!['summary', 'content', 'both'].includes(inWhere)) {
     throw new Error(`--in must be one of: summary, content, both (got '${inWhere}')`);
   }
-  const { db } = await openDb(flags);
+  const { db, openMounts } = await openDb(flags);
   try {
-    const { where, params, meta } = buildWhereClause(db, flags);
+    const { where, params, meta } = buildWhereClause(db, flags, openMounts);
     const like = `%${pattern}%`;
 
     const matchClauses = [];
@@ -584,9 +588,9 @@ async function cmdSemanticGrep(flags, query) {
   // Resolve character locally so the server gets a stable UUID.
   let characterId;
   {
-    const { db } = await openDb(flags);
+    const { db, openMounts } = await openDb(flags);
     try {
-      const resolved = resolveCharacter(db, flags.character);
+      const resolved = resolveCharacter(db, flags.character, openMounts);
       characterId = resolved.id;
     } finally {
       db.close();
@@ -675,9 +679,9 @@ async function cmdGrep(flags, positional) {
   if (flags.semantic) {
     return cmdSemanticGrep(flags, pattern);
   }
-  const { db } = await openDb(flags);
+  const { db, openMounts } = await openDb(flags);
   try {
-    const { where, params } = buildWhereClause(db, flags);
+    const { where, params } = buildWhereClause(db, flags, openMounts);
     // Always restrict to rows whose content can match — quick pre-filter so we
     // don't read all 32k rows into JS just to drop most of them.
     const likeNeedle = flags.ignoreCase ? `%${pattern.toLowerCase()}%` : `%${pattern}%`;
@@ -1044,11 +1048,11 @@ function graphToJson(node) {
 // ---------- status ----------
 
 async function cmdStatus(flags) {
-  const { db } = await openDb(flags);
+  const { db, openMounts } = await openDb(flags);
   try {
     let holderRows;
     if (flags.character && flags.character !== 'all') {
-      const c = resolveCharacter(db, flags.character);
+      const c = resolveCharacter(db, flags.character, openMounts);
       holderRows = [{ id: c.id, name: c.name }];
     } else {
       holderRows = db.prepare(`
@@ -1180,12 +1184,12 @@ function renderStatusBlock(holder, stats) {
 // ---------- validate ----------
 
 async function cmdValidate(flags) {
-  const { db } = await openDb(flags);
+  const { db, openMounts } = await openDb(flags);
   try {
     let holderIds = null;
     let holderRows;
     if (flags.character && flags.character !== 'all') {
-      const c = resolveCharacter(db, flags.character);
+      const c = resolveCharacter(db, flags.character, openMounts);
       holderRows = [{ id: c.id, name: c.name }];
       holderIds = [c.id];
     } else {
