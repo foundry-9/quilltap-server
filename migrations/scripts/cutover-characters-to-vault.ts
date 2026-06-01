@@ -171,15 +171,18 @@ async function ensureBackupsExist(ctx: { context: string }): Promise<void> {
 
 const MIGRATION_ID = 'cutover-characters-to-vault-v1';
 
-const EXPECTED_VAULT_SINGLE_FILES = [
+// Files `writeCharacterVaultManagedFields` writes unconditionally (empty string
+// when the field is blank), so a successfully-populated vault always has all of
+// them. The physical-* pair is intentionally NOT here: the writer skips both
+// when the character has no physicalDescription, so requiring them would wrongly
+// block every character who simply has no physical description.
+const REQUIRED_VAULT_SINGLE_FILES = [
   'properties.json',
   'identity.md',
   'description.md',
   'manifesto.md',
   'personality.md',
   'example-dialogues.md',
-  'physical-description.md',
-  'physical-prompts.json',
 ] as const;
 
 /**
@@ -212,7 +215,7 @@ interface VaultFileSet {
 
 async function listVaultPaths(mountPointId: string): Promise<VaultFileSet> {
   if (!fs.existsSync(getMountIndexDatabasePath())) {
-    return { byPathLower: new Map(), missing: Array.from(EXPECTED_VAULT_SINGLE_FILES) };
+    return { byPathLower: new Map(), missing: Array.from(REQUIRED_VAULT_SINGLE_FILES) };
   }
   const repos = getRepositories();
   const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
@@ -220,7 +223,7 @@ async function listVaultPaths(mountPointId: string): Promise<VaultFileSet> {
   for (const link of links) {
     byPathLower.set(link.relativePath.toLowerCase(), link.fileId);
   }
-  const missing = EXPECTED_VAULT_SINGLE_FILES.filter(p => !byPathLower.has(p));
+  const missing = REQUIRED_VAULT_SINGLE_FILES.filter(p => !byPathLower.has(p));
   return { byPathLower, missing: [...missing] };
 }
 
@@ -270,6 +273,85 @@ interface CharacterOutcome {
   blockedReason?: string;
 }
 
+/** A pre-cutover character row mapped into Character shape, plus the original
+ *  physicalDescriptions array length so the caller can record truncation. */
+interface LegacyCharacter {
+  character: Character;
+  originalPhysicalCount: number;
+}
+
+function safeJsonParse<T>(raw: unknown, fallback: T): T {
+  if (typeof raw !== 'string' || raw === '') return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Map one raw pre-cutover `characters` row into Character shape for the vault
+ * writer.
+ *
+ * This MUST read straight off the row rather than going through
+ * `repos.characters.findAllRaw()`: that path validates every row against the
+ * *post-cutover* Character schema and silently drops the ones that don't match
+ * (which, by definition, every legacy row does), so it returns `[]` on a
+ * populated table — the exact bug that let an earlier build drop the legacy
+ * columns while believing there were no characters.
+ *
+ * Reshapes the legacy `physicalDescriptions` array into the singular
+ * `physicalDescription` (index 0 wins) and warns — one line per character — when
+ * extra entries are discarded.
+ */
+export function mapLegacyCharacterRow(
+  row: Record<string, unknown>,
+  ctx: { context: string },
+): LegacyCharacter {
+  const physArr = safeJsonParse<unknown[]>(row.physicalDescriptions, []);
+  const originalPhysicalCount = Array.isArray(physArr) ? physArr.length : 0;
+  if (originalPhysicalCount > 1) {
+    logger.warn(
+      'Character has multiple physicalDescriptions; preserving index 0 only (extra entries discarded by the cutover)',
+      {
+        ...ctx,
+        characterId: row.id,
+        characterName: row.name,
+        originalCount: originalPhysicalCount,
+      },
+    );
+  }
+
+  const pronounsRaw = row.pronouns;
+  const character = {
+    ...row,
+    aliases: safeJsonParse(row.aliases, [] as unknown[]),
+    scenarios: safeJsonParse(row.scenarios, [] as unknown[]),
+    systemPrompts: safeJsonParse(row.systemPrompts, [] as unknown[]),
+    pronouns:
+      typeof pronounsRaw === 'string' && pronounsRaw.trim().startsWith('{')
+        ? safeJsonParse(pronounsRaw, pronounsRaw)
+        : pronounsRaw,
+    physicalDescription: originalPhysicalCount > 0 ? physArr[0] : null,
+  } as unknown as Character;
+
+  return { character, originalPhysicalCount };
+}
+
+/**
+ * Read every character via direct SQL (no schema validation) and map each row.
+ * Mapping is total — every row in the table produces a LegacyCharacter — so the
+ * caller can compare `length` against `SELECT COUNT(*)` and abort if they ever
+ * disagree.
+ */
+function loadLegacyCharacterRows(
+  db: DatabaseType,
+  ctx: { context: string },
+): LegacyCharacter[] {
+  const rows = db.prepare('SELECT * FROM characters').all() as Record<string, unknown>[];
+  return rows.map((row) => mapLegacyCharacterRow(row, ctx));
+}
+
 export const cutoverCharactersToVaultMigration: Migration = {
   id: MIGRATION_ID,
   description:
@@ -299,17 +381,43 @@ export const cutoverCharactersToVaultMigration: Migration = {
       logger.info('Ensuring physical backups exist before per-character work', ctx);
       await ensureBackupsExist(ctx);
 
-      const repos = getRepositories();
-      const allCharacters = await repos.characters.findAllRaw();
+      const db = getSQLiteDatabase();
+      const rawCount = (db.prepare('SELECT COUNT(*) AS n FROM characters').get() as { n: number }).n;
+      const legacy = loadLegacyCharacterRows(db, ctx);
       logger.info('Loaded raw character rows for cutover', {
         ...ctx,
-        count: allCharacters.length,
+        count: legacy.length,
+        rawCount,
       });
 
-      for (let i = 0; i < allCharacters.length; i++) {
-        const character = allCharacters[i];
-        reportProgress(i + 1, allCharacters.length, 'characters');
-        outcomes.push(await processOneCharacter(character));
+      // Hard guard against the silent-no-op bug: never drop the legacy columns
+      // unless we actually read every character row. A read that returns fewer
+      // rows than the table holds (the old `findAllRaw` schema-validation
+      // filtering returned `[]` on a populated table) would otherwise let the
+      // cutover drop columns on characters it never migrated — unrecoverable on
+      // instances whose content still lives only in those columns.
+      if (legacy.length !== rawCount) {
+        const message =
+          `Refusing to drop columns — read ${legacy.length} of ${rawCount} character row(s). ` +
+          `Aborting before destructive work to avoid dropping un-migrated character data.`;
+        logger.error(message, ctx);
+        return {
+          id: MIGRATION_ID,
+          success: false,
+          itemsAffected: 0,
+          message,
+          error: 'character read count mismatch',
+          durationMs: Date.now() - startTime,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      for (let i = 0; i < legacy.length; i++) {
+        const { character, originalPhysicalCount } = legacy[i];
+        reportProgress(i + 1, legacy.length, 'characters');
+        const outcome = await processOneCharacter(character);
+        if (originalPhysicalCount > 1) outcome.physicalArrayTruncatedFrom = originalPhysicalCount;
+        outcomes.push(outcome);
       }
 
       const blocked = outcomes.filter(o => o.action === 'blocked');
@@ -330,8 +438,8 @@ export const cutoverCharactersToVaultMigration: Migration = {
         };
       }
 
-      // Schema mutations: one transaction, drop in order.
-      const db = getSQLiteDatabase();
+      // Schema mutations: one transaction, drop in order. (Reuses `db` opened
+      // above for the raw character read.)
       const existingCols = new Set(getSQLiteTableColumns('characters').map(c => c.name));
       const dropping = COLUMNS_TO_DROP.filter(c => existingCols.has(c));
       logger.info('Dropping legacy content columns from characters', {
@@ -351,7 +459,7 @@ export const cutoverCharactersToVaultMigration: Migration = {
       return {
         id: MIGRATION_ID,
         success: true,
-        itemsAffected: allCharacters.length,
+        itemsAffected: legacy.length,
         message: summary,
         durationMs: Date.now() - startTime,
         timestamp: new Date().toISOString(),

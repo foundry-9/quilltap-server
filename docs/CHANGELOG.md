@@ -4,6 +4,17 @@
 
 ### 4.6-dev
 
+#### Fix: cutover-characters-to-vault migration silently skipped every character
+
+The `cutover-characters-to-vault-v1` migration read characters through `repos.characters.findAllRaw()`, which validates each row against the *post-cutover* `Character` schema and silently drops rows that don't match. Every pre-cutover row fails that validation, so `findAllRaw()` returned `[]` on a populated table — the migration concluded "0 characters," skipped all per-character vault population, and dropped the 16 legacy content columns anyway. On instances whose vaults were already populated (e.g. via the startup backfill) this caused no data loss, but on an instance whose content still lived only in the DB columns it would be unrecoverable. The migration also never emitted the documented per-character warning when a `physicalDescriptions` array had more than one entry (the `physicalArrayTruncatedFrom` counter was declared but never assigned), and its post-populate re-verify treated the optional `physical-*` files as required, which would have wrongly blocked any character with no physical description.
+
+- **`migrations/scripts/cutover-characters-to-vault.ts`** — reads characters via direct SQL (`SELECT * FROM characters`) and maps each row in a new `mapLegacyCharacterRow` (no schema validation, so no rows are dropped). The mapper reshapes the legacy `physicalDescriptions` array into the singular `physicalDescription` (index 0 preserved) and logs one warning per character when extra entries are discarded, and safely parses the legacy JSON columns the vault writer reads (`aliases`, `scenarios`, `systemPrompts`, object-shaped `pronouns`).
+- **Hard abort guard** — if `SELECT COUNT(*)` is greater than the number of rows actually read, the migration logs an error and returns `success: false` *without* dropping any columns, so a future read regression can never silently discard un-migrated data.
+- **Re-verify fix** — the post-populate completeness check now requires only the six always-written files (`properties.json`, `identity.md`, `description.md`, `manifesto.md`, `personality.md`, `example-dialogues.md`); the `physical-*` pair is optional (the writer skips it when there's no physical description), matching `db characters status`.
+- Added `__tests__/unit/lib/database/migration/cutover-characters-to-vault.test.ts` covering the index-0 reshape, the single-warning-per-multi-entry behavior, empty/malformed handling, JSON-column parsing, and pronouns object-vs-string handling.
+
+Note: this migration already ran on existing dev instances (which suffered no data loss because their vaults were pre-populated); the fix applies to any instance that has not yet run the 4.6 cutover.
+
 #### Fix: CLI character resolution broken by the 4.6 vault cutover
 
 The `cutover-characters-to-vault-v1` migration dropped the `aliases` and `pronouns` columns (and the `readPropertiesFromDocumentStore` flag) from the `characters` table — those fields now live only in each character's vault `properties.json`. But the `quilltap` CLI still `SELECT`ed `aliases` from the row, so every command that resolved a character by name/alias threw `no such column: aliases`. This broke `db find character <query>`, `db chats --character`, `db logs --character`, `db memories --character/--about`, `db characters status --id`, and the entire `memories ls/find/grep/show/status/validate --character/--about` surface.
