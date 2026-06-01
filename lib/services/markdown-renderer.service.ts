@@ -16,6 +16,7 @@
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import remarkRehype from 'remark-rehype';
 import rehypeStringify from 'rehype-stringify';
 import rehypeHighlight from 'rehype-highlight';
@@ -286,6 +287,11 @@ function createMarkdownProcessor() {
   return unified()
     .use(remarkParse)
     .use(remarkGfm)
+    // remark-breaks renders single newlines as hard <br> breaks, matching the
+    // client-side MessageContent.tsx pipeline. In chat an author who hits Enter
+    // means a line break, so soft breaks are preserved rather than collapsed to
+    // a space (CommonMark's default). Must stay in sync with the client list.
+    .use(remarkBreaks)
     .use(remarkRehype)
     .use(rehypeHighlight, {
       // Don't auto-detect language for unlabeled code blocks - causes incorrect

@@ -124,6 +124,16 @@ See [Chat Sidebar](chat-participants.md) for the full tour.
 
 **Tip:** Use **Shift+Enter** for line breaks without sending.
 
+**A word on line breaks.** The Salon honours your line breaks exactly as you strike them. A **single** press of Return begins your next words upon a fresh line, snug beneath the last — none of that classical-Markdown habit of sweeping the two together into one flowing line. A **double** press of Return (leaving a blank line betwixt) opens a wholly new paragraph. This courtesy extends to blockquotes, so that a passage entered thus —
+
+```
+> Line one
+> Line two
+> Line three
+```
+
+— arrives as three orderly lines, and not as one breathless run-on sentence.
+
 ### Viewing History
 
 Scroll up to see earlier messages in the conversation. Long chats may have:

@@ -4,6 +4,12 @@
 
 ### 4.6-dev
 
+#### Change: Preserve single line breaks in chat markdown
+
+Chat markdown now renders a single newline as an actual line break instead of collapsing it into a space.
+
+- **`remark-breaks` added to both render paths.** A single newline (one Return) now becomes a hard `<br>`; blank lines still separate paragraphs. This matches chat-app convention (Slack/Discord/GitHub comments) and fixes the long-standing annoyance where a multi-line blockquote like `> Line one` / `> Line two` / `> Line three` rendered as one run-on line. Wired into the client renderer (`components/chat/MessageContent.tsx`, `remarkPlugins={[remarkGfm, remarkBreaks]}`) and the server pre-render service (`lib/services/markdown-renderer.service.ts`, in the cached `unified()` pipeline) so the two stay visually consistent. The server `renderedHtml` fast path is recomputed on every chat load, so existing messages pick up the new rendering with no migration. Trade-off: pasted hard-wrapped prose now shows a break per wrapped line — acceptable for a chat surface.
+
 #### Feature: Resizable Salon chat sidebar + tighter sidebar spacing
 
 The right-hand Chat sidebar in the Salon can now be resized and its internal boxing was tightened.
