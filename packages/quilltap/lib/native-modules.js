@@ -21,6 +21,48 @@ function resolveModuleDir(moduleName) {
   }
 }
 
+// node-pty needs a `spawn-helper` executable beside the pty.node it loads, or
+// pty.spawn() fails with `posix_spawnp failed`. An ABI rebuild lands a fresh
+// build/Release/pty.node (which node-pty's loader prefers over prebuilds/) but
+// emits only the addon, not node-pty's separate spawn-helper target; tar/extract
+// can also drop the exec bit on the shipped prebuilds/*/spawn-helper. spawn-helper
+// is a plain executable (no Node linkage) so the prebuilt copy is ABI-independent
+// and safe to reuse. Best-effort; never throws.
+function reconcileNodePtySpawnHelper() {
+  if (process.platform === 'win32') return; // conpty has no spawn-helper
+  const fs = require('fs');
+  try {
+    const nodePtyDir = resolveModuleDir('node-pty');
+    if (!nodePtyDir) return;
+    const prebuildsDir = path.join(nodePtyDir, 'prebuilds');
+    const prebuiltHelper = path.join(prebuildsDir, `${process.platform}-${process.arch}`, 'spawn-helper');
+
+    if (fs.existsSync(prebuildsDir)) {
+      for (const entry of fs.readdirSync(prebuildsDir)) {
+        const helper = path.join(prebuildsDir, entry, 'spawn-helper');
+        if (fs.existsSync(helper)) {
+          try { fs.chmodSync(helper, 0o755); } catch { /* best-effort */ }
+        }
+      }
+    }
+
+    for (const buildType of ['Release', 'Debug']) {
+      const buildDir = path.join(nodePtyDir, 'build', buildType);
+      const builtAddon = path.join(buildDir, 'pty.node');
+      const builtHelper = path.join(buildDir, 'spawn-helper');
+      if (fs.existsSync(builtHelper)) {
+        try { fs.chmodSync(builtHelper, 0o755); } catch { /* best-effort */ }
+      } else if (fs.existsSync(builtAddon) && fs.existsSync(prebuiltHelper)) {
+        fs.copyFileSync(prebuiltHelper, builtHelper);
+        fs.chmodSync(builtHelper, 0o755);
+        console.log(`  node-pty: backfilled build/${buildType}/spawn-helper from prebuilds`);
+      }
+    }
+  } catch {
+    // best-effort — node-pty terminals are optional; never block the CLI
+  }
+}
+
 // Check if native modules are compiled for the current Node.js version.
 // This handles the case where npx caches the package but the user upgrades
 // Node.js — the cached native modules will have a stale NODE_MODULE_VERSION.
@@ -73,7 +115,10 @@ function ensureNativeModules() {
     }
   }
 
-  if (needsRebuild.length === 0) return true;
+  if (needsRebuild.length === 0) {
+    reconcileNodePtySpawnHelper();
+    return true;
+  }
 
   console.log(`  Rebuilding native modules for Node.js ${process.version}...`);
 
@@ -84,6 +129,7 @@ function ensureNativeModules() {
     });
     console.log('  Done.');
     console.log('');
+    reconcileNodePtySpawnHelper();
     return true;
   } catch (err) {
     console.error('');
@@ -94,7 +140,7 @@ function ensureNativeModules() {
   }
 }
 
-module.exports = { resolveModuleDir, ensureNativeModules, PACKAGE_DIR };
+module.exports = { resolveModuleDir, ensureNativeModules, reconcileNodePtySpawnHelper, PACKAGE_DIR };
 
 // Allow this file to be invoked directly as a postinstall script:
 //   node lib/native-modules.js

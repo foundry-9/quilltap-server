@@ -4,6 +4,12 @@
 
 ### 4.6-dev
 
+#### Fix: Salon terminals under the Electron shell (`posix_spawnp failed`)
+
+Spawning an Ariel terminal under the Electron shell (built-in Node server) failed with `posix_spawnp failed`. node-pty needs a `spawn-helper` executable beside the `pty.node` it loads. The launcher rebuilds node-pty for the runtime's Node ABI, which lands a fresh `build/Release/pty.node` (node-pty's loader prefers `build/Release` over `prebuilds/`) but emits only the addon, not node-pty's separate `spawn-helper` build target; the helper then resolves to a nonexistent `build/Release/spawn-helper`. Separately, tar/extract can strip the exec bit off the shipped `prebuilds/*/spawn-helper`. Neither path runs `fix-node-pty-permissions.js`, since the Electron shell launches `standalone/server.js` directly and bypasses `bin/quilltap.js`.
+
+- **Runtime reconciliation.** Added a best-effort `ensureSpawnHelper()` to `scripts/standalone-server-bootstrap.js` (runs for the Electron shell, Docker, and CI standalone) and mirrored it as `reconcileNodePtySpawnHelper()` in `packages/quilltap/lib/native-modules.js` (called from `ensureNativeModules()` for the npx path). On non-Windows it chmods every `prebuilds/*/spawn-helper` back to `0755`, and when `build/Release|Debug/pty.node` exists without a sibling `spawn-helper`, copies the matching `prebuilds/<platform>-<arch>/spawn-helper` in (`spawn-helper` is a plain executable with no Node linkage, so the prebuilt copy is ABI-independent). Synchronous and wrapped so it never blocks startup.
+
 #### Change: Preserve single line breaks in chat markdown
 
 Chat markdown now renders a single newline as an actual line break instead of collapsing it into a space.
