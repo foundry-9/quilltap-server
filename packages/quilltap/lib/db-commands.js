@@ -696,9 +696,17 @@ const REQUIRED_VAULT_SINGLE_FILES = [
   'properties.json',
   'identity.md',
   'description.md',
-  'manifesto.md',
   'personality.md',
   'example-dialogues.md',
+];
+// manifesto is nullable/optional. The full-projection writer writes an empty
+// manifesto.md when the field is blank, but the patch-level write overlay only
+// writes it when a patch carries a `manifesto` key — so a perfectly valid
+// character can simply lack the file. On read, absent == empty == null, so we
+// report manifesto's presence but never count its absence as "missing" or let
+// it block. (Treated like the physical-* pair: optional, surfaced, not required.)
+const OPTIONAL_VAULT_SINGLE_FILES = [
+  'manifesto.md',
 ];
 const PHYSICAL_VAULT_FILES = [
   'physical-description.md',
@@ -741,6 +749,7 @@ function inspectCharacterVault(row, mounts) {
     presentSingleFiles: 0,
     expectedSingleFiles: REQUIRED_VAULT_SINGLE_FILES.length,
     missingSingleFiles: [],
+    manifestoPresent: false,   // optional single file: present or not, both valid
     physicalFilesPresent: 0,   // 0, 1, or 2 of the optional physical-* pair
     physicalInconsistent: false,
     promptsVault: 0,
@@ -782,6 +791,9 @@ function inspectCharacterVault(row, mounts) {
       status.missingSingleFiles.push(p);
     }
   }
+
+  // Manifesto is optional: report presence, never require it.
+  status.manifestoPresent = OPTIONAL_VAULT_SINGLE_FILES.every((p) => byPath.has(p));
 
   // Physical-* files are optional (a character may legitimately have no
   // physical description). Both-or-neither is healthy; exactly one is not.
@@ -887,6 +899,7 @@ function inspectCharacterVault(row, mounts) {
   }
 
   const anyContent = status.presentSingleFiles > 0
+    || status.manifestoPresent
     || status.physicalFilesPresent > 0
     || status.promptsVault > 0
     || status.scenariosVault > 0
@@ -996,6 +1009,7 @@ function cmdCharacters(args, ctx) {
       if (anyPreCutover) row.flag = s.flag == null ? '-' : s.flag;
       row.vault = s.vault;
       row.files = missing ? '-' : `${s.presentSingleFiles}/${s.expectedSingleFiles}`;
+      row.manifesto = missing ? '-' : (s.manifestoPresent ? 'yes' : 'no');
       row.phys = missing ? '-' : `${s.physicalFilesPresent}/2`;
       row.prompts = missing ? '-' : (anyPreCutover ? `${s.promptsVault}/${s.promptsDb}` : String(s.promptsVault));
       row.scenarios = missing ? '-' : (anyPreCutover ? `${s.scenariosVault}/${s.scenariosDb}` : String(s.scenariosVault));
