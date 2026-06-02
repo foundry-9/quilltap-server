@@ -4,6 +4,12 @@
 
 ### 4.6-dev
 
+#### Fix: standalone build omitted the `yaml` dependency, breaking the in-chat terminal
+
+The standalone server bundle is compiled by esbuild with `--packages=external`, which leaves `require('yaml')` external — so `yaml` must exist in the traced `node_modules`. Next's output-file tracer only follows the app's import graph, not the custom server bundle's, so `yaml` (reached only through the terminal WebSocket handler's chain: `server.ts`/`ws.ts` → pty-manager → repositories factory → doc-edit markdown parser) was never copied into the standalone output. At runtime the first terminal connection threw `Cannot find module 'yaml'` inside the WS module's esbuild `__esm` once-init wrapper, which flags the module as initialized even when its body throws, leaving its logger `undefined`. Every subsequent connection then failed with the misleading `Cannot read properties of undefined (reading 'info')`, and the browser's ~2-second reconnect loop repeatedly stole focus from the chat input.
+
+- **`next.config.js`** — added `./node_modules/yaml/**/*` to `outputFileTracingIncludes` so standalone and Docker builds ship `yaml`. Any future dependency reached only through the custom server's import graph (not the Next app's) must likewise be listed here.
+
 #### Fix: vault blob sha256 now matches stored bytes
 
 `doc_mount_blobs.sha256` and `doc_mount_files.sha256` could record the hash of the *input* bytes rather than the bytes actually stored. The two photo-save services (`save-image-to-album`, `user-gallery-service`) passed a pre-transcode sha into `linkBlobContent` while the `data` buffer was already the post-transcode WebP. The fix is applied at the write chokepoint:
