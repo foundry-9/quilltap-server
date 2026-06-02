@@ -21,6 +21,7 @@
 
 import { extname } from 'node:path';
 import { logger } from '@/lib/logger';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { getRepositories } from '@/lib/repositories/factory';
 import { SINGLE_USER_ID } from '@/lib/auth/single-user';
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
@@ -200,15 +201,12 @@ export async function saveImageToAlbum(
     throw new SaveImageToAlbumError('MOUNT_NOT_FOUND', `Mount point not found: ${mountPointId}`);
   }
 
-  const collision = await findExistingPhotosLinkBySha(mountPointId, fileEntry.sha256);
-  if (collision) {
-    throw new SaveImageToAlbumError(
-      'ALREADY_SAVED',
-      `Image already saved to ${mountPoint.name} on ${collision.createdAt} as ${collision.relativePath}`,
-      { existingRelativePath: collision.relativePath, existingCreatedAt: collision.createdAt }
-    );
-  }
-
+  // Read the bytes first, then dedup on the hash of those actual bytes. The
+  // FileEntry's sha256 is an upload-time *input* hash (computed before the
+  // storage bridge's transcode); it can diverge from the stored bytes, so
+  // keying the re-save guard off it would let duplicates slip through and
+  // record a hash that won't match what we store. Hash the real bytes once
+  // and reuse that value for both the guard and the link write.
   let buffer: Buffer;
   try {
     buffer = await readImageBuffer(fileEntry.id);
@@ -218,6 +216,16 @@ export async function saveImageToAlbum(
   }
   if (!buffer || buffer.length === 0) {
     throw new SaveImageToAlbumError('EMPTY_BYTES', `Image ${fileId} has empty bytes`);
+  }
+  const sha256 = sha256OfBuffer(buffer);
+
+  const collision = await findExistingPhotosLinkBySha(mountPointId, sha256);
+  if (collision) {
+    throw new SaveImageToAlbumError(
+      'ALREADY_SAVED',
+      `Image already saved to ${mountPoint.name} on ${collision.createdAt} as ${collision.relativePath}`,
+      { existingRelativePath: collision.relativePath, existingCreatedAt: collision.createdAt }
+    );
   }
 
   let parsedSceneState = null;
@@ -273,7 +281,7 @@ export async function saveImageToAlbum(
     originalFileName: fileEntry.originalFilename,
     originalMimeType: fileEntry.mimeType,
     storedMimeType: fileEntry.mimeType,
-    sha256: fileEntry.sha256,
+    sha256,
     data: buffer,
     description: caption ?? '',
     extractedText: markdown,
@@ -300,7 +308,7 @@ export async function saveImageToAlbum(
 
   logger.info('[saveImageToAlbum] saved', {
     fileEntryId: fileEntry.id,
-    sha256: fileEntry.sha256,
+    sha256,
     linkId: link.id,
     mountPointId,
     mountPointName: mountPoint.name,
@@ -315,6 +323,6 @@ export async function saveImageToAlbum(
     linkId: link.id,
     keptAt,
     fileId: fileEntry.id,
-    sha256: fileEntry.sha256,
+    sha256,
   };
 }

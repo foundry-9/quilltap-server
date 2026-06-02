@@ -1340,7 +1340,9 @@ A `doc_mount_files` row is the **content identity** for a set of bytes — one r
 
 `fileType` is one of `'pdf'`, `'docx'`, `'markdown'`, `'txt'`, `'json'`, `'jsonl'`, or `'blob'`. `'blob'` is the catch-all for arbitrary binaries with no extracted text representation (images, audio, archives, etc.) — their bytes live in `doc_mount_blobs`. `source` is `'filesystem'` when the bytes live on disk (one link per file enforced at the repo layer) or `'database'` when they live in `doc_mount_documents` / `doc_mount_blobs` (any number of links allowed — hard-linkable).
 
-Writers call `findOrCreateByContent(sha256, ...)` rather than `create` directly: if a content row with the matching sha already exists, its UUID is reused so any existing links continue to resolve correctly. The `sha256` INDEX is not UNIQUE because pre-refactor databases may carry duplicate sha rows from the days when every (mountPoint, relativePath) was its own file row; the migration deliberately leaves them in place rather than collapsing.
+Writers call `findOrCreateByContent(sha256, ...)` rather than `create` directly: if a content row with the matching sha already exists, its UUID is reused so any existing links continue to resolve correctly. The `sha256` INDEX is not UNIQUE because pre-refactor databases may carry duplicate sha rows from the days when every (mountPoint, relativePath) was its own file row; the migration deliberately leaves them in place rather than collapsing. `findBySha256` returns the first match.
+
+**Invariant (enforced at write time):** `sha256` equals the SHA-256 of the stored bytes. New content rows are minted by `linkBlobContent` in `doc-mount-file-links.repository`, which recomputes the sha from the actual bytes rather than trusting the caller. Any caller-supplied sha that diverges from the actual bytes hash triggers a warning log; the recomputed value wins. The `repair-mount-blob-sha256-from-bytes-v1` migration corrects pre-existing drifted rows. Note: `files.sha256` in the *main* DB is the input-bytes hash and is intentionally different — it is load-bearing for upload dedup and is not rewritten here.
 
 ### doc_mount_file_links
 
@@ -1451,6 +1453,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_blobs_fileId"
 Binary assets for **any** mount point type. Content-addressable: one blob row per `doc_mount_files` row (UNIQUE on `fileId`). Per-link metadata (relativePath, originalFileName, originalMimeType, description, extractedText) lives on `doc_mount_file_links` so a hard-linked image can carry different descriptions or extraction results in two different mounts without disturbing the bytes themselves. Bitmap images are transcoded to WebP on upload using `sharp`; already-WebP uploads, SVG, and other MIME types are stored as-is. `storedMimeType` is what `data` actually contains.
 
 Cascade off `doc_mount_files` reaps the blob row (and its bytes) when the last link goes away. The extraction lifecycle (`extractedText`, `extractedTextSha256`, `extractionStatus`, `extractionError`) is no longer on this table — it moved to `doc_mount_file_links` so each consumer can override.
+
+**Invariant (enforced at write time):** `doc_mount_blobs.sha256` equals the SHA-256 of the `data` bytes stored in that row, recomputed by `linkBlobContent` in `doc-mount-file-links.repository` at write time. Callers supply a sha as a hint (used for the pre-write dedup check against `doc_mount_files.sha256`), but the value written to `doc_mount_blobs.sha256` is always the result of hashing the actual bytes. A mismatch between the caller's hint and the recomputed value is logged as a warning. The `repair-mount-blob-sha256-from-bytes-v1` migration corrects pre-existing drifted rows.
 
 ---
 

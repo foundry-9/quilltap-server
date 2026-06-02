@@ -4,6 +4,15 @@
 
 ### 4.6-dev
 
+#### Fix: vault blob sha256 now matches stored bytes
+
+`doc_mount_blobs.sha256` and `doc_mount_files.sha256` could record the hash of the *input* bytes rather than the bytes actually stored. The two photo-save services (`save-image-to-album`, `user-gallery-service`) passed a pre-transcode sha into `linkBlobContent` while the `data` buffer was already the post-transcode WebP. The fix is applied at the write chokepoint:
+
+- **`linkBlobContent` / `upsertByFileId`** (`doc-mount-file-links.repository`, `doc-mount-blobs.repository`) now recompute sha256 from the `data` bytes (`sha256OfBuffer`) instead of trusting the caller. A mismatch between the caller-supplied sha and the recomputed value is logged as a warning; the caller-supplied sha is now advisory only.
+- **`save-image-to-album` / `user-gallery-service`** now recompute sha from the actual (post-transcode) bytes and use that hash for both the duplicate-save guard and the stored value, matching the existing behavior in `character-gallery-service`. Both services also surface the stored-bytes sha in their return value.
+- **Migration `repair-mount-blob-sha256-from-bytes-v1`** recomputes each existing vault blob's sha256 from its bytes and corrects affected `doc_mount_blobs` and `doc_mount_files` rows.
+- `files.sha256` in the main DB remains the input-bytes hash by design (load-bearing for upload dedup).
+
 #### Fix: `db characters status` wrongly flagged manifesto-less characters as incomplete
 
 `manifesto.md` was listed among the required vault single-files, so any character without a manifesto reported `5/6` and "1 required files missing" even though it was a valid, complete character. Manifesto is nullable/optional: the full-projection writer (`writeCharacterVaultManagedFields`) writes an empty `manifesto.md` when the field is blank, but the patch-level write overlay (`applyDocumentStoreWriteOverlay`) only writes it when an update patch carries a `manifesto` key — so a character created or edited without ever touching its manifesto never gets the file. On read, absent == empty == null, so these characters read identically to one with a blank manifesto. The "always written" property holds for the full-projection writer (which the cutover migration uses, so its required-files re-verify is correct in that context) but not for the patch-level overlay — and `db characters status` inspects vaults written by either path, so it can't assume manifesto is present.

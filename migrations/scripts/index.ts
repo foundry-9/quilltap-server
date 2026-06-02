@@ -289,6 +289,8 @@ import { repairDanglingRelatedMemoryEdgesV1Migration } from './repair-dangling-r
 import { addPseudoToolModeFieldMigration } from './add-pseudo-tool-mode-field';
 // Reconcile files.mimeType/size with the mount blob (bridges transcode bitmaps to WebP; the FileEntry must reflect what is on disk)
 import { repairFilesMimeAndSizeFromMountBlobMigration } from './repair-files-mime-and-size-from-mount-blob';
+// Recompute doc_mount_blobs.sha256 from stored bytes; upload paths recorded input-bytes hash instead of stored-bytes hash
+import { repairMountBlobSha256FromBytesMigration } from './repair-mount-blob-sha256-from-bytes';
 // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
 import { addChatConciergeOverrideMigration } from './add-chat-concierge-override';
 // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
@@ -603,6 +605,8 @@ export const migrations: Migration[] = [
   addPseudoToolModeFieldMigration,
   // Reconcile files.mimeType/size with the mount blob (post-transcode metadata was dropped on the floor)
   repairFilesMimeAndSizeFromMountBlobMigration,
+  // Recompute doc_mount_blobs.sha256 from stored bytes; correct paired doc_mount_files.sha256
+  repairMountBlobSha256FromBytesMigration,
   // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
   addChatConciergeOverrideMigration,
   // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
@@ -902,6 +906,8 @@ export {
   addPseudoToolModeFieldMigration,
   // Reconcile files.mimeType/size with the mount blob
   repairFilesMimeAndSizeFromMountBlobMigration,
+  // Recompute doc_mount_blobs.sha256 from stored bytes; correct paired doc_mount_files.sha256
+  repairMountBlobSha256FromBytesMigration,
   // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
   addChatConciergeOverrideMigration,
   // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)

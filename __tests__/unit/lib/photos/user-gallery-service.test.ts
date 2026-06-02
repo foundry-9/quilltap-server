@@ -52,6 +52,7 @@ import {
 import { getUserUploadsStore } from '@/lib/file-storage/user-uploads-bridge';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getPhotoLinkSummaryBySha256 } from '@/lib/photos/photo-link-summary';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 
 const mockGetStore = getUserUploadsStore as jest.MockedFunction<typeof getUserUploadsStore>;
 const mockDownload = fileStorageManager.downloadFile as jest.MockedFunction<typeof fileStorageManager.downloadFile>;
@@ -80,6 +81,11 @@ function buildRepos() {
 }
 
 const SHA = 'a'.repeat(64);
+// The bytes the storage manager returns. Their real hash deliberately differs
+// from baseFile.sha256 (the upload-time input hash) — the save path must dedup
+// and record the *bytes* hash, not the FileEntry's input hash.
+const BYTES = Buffer.from('imagebytes');
+const BYTES_SHA = sha256OfBuffer(BYTES);
 
 const baseFile = {
   id: 'file-1',
@@ -131,6 +137,7 @@ describe('saveToUserGallery', () => {
   it('refuses a second save of the same image into the gallery', async () => {
     const repos = buildRepos();
     repos.files.findById.mockResolvedValue(baseFile);
+    mockDownload.mockResolvedValue(BYTES);
     mockLinkSummary.mockResolvedValue({
       count: 1,
       linkers: [{
@@ -151,15 +158,20 @@ describe('saveToUserGallery', () => {
     await expect(
       saveToUserGallery({ fileId: 'file-1', userId: 'user-1', repos: repos as any })
     ).rejects.toThrow('already saved');
+
+    // The re-save guard must key off the hash of the actual bytes, not the
+    // FileEntry's upload-time input hash (which can diverge across a transcode).
+    expect(mockLinkSummary).toHaveBeenCalledWith(BYTES_SHA, expect.anything());
+    expect(mockLinkSummary).not.toHaveBeenCalledWith(SHA, expect.anything());
   });
 
   it('saves a new image — links blob, chunks the markdown, returns metadata', async () => {
     const repos = buildRepos();
     repos.files.findById.mockResolvedValue(baseFile);
     mockLinkSummary.mockResolvedValue({ count: 0, linkers: [] });
-    mockDownload.mockResolvedValue(Buffer.from('imagebytes'));
+    mockDownload.mockResolvedValue(BYTES);
     repos.docMountFileLinks.linkBlobContent.mockResolvedValue({
-      link: { id: 'new-link', mountPointId: 'mp-uploads', relativePath: 'photos/x.png', sha256: SHA },
+      link: { id: 'new-link', mountPointId: 'mp-uploads', relativePath: 'photos/x.png', sha256: BYTES_SHA },
       file: { id: 'new-file' },
       blobId: 'new-blob',
     });
@@ -173,17 +185,19 @@ describe('saveToUserGallery', () => {
       repos: repos as any,
     });
 
+    // sha256 reported and linked is the hash of the stored bytes, not the
+    // FileEntry's upload-time input hash.
     expect(result).toMatchObject({
       linkId: 'new-link',
       mountPointId: 'mp-uploads',
       mountPointName: 'Quilltap Uploads',
       fileId: 'file-1',
-      sha256: SHA,
+      sha256: BYTES_SHA,
     });
     expect(repos.docMountFileLinks.linkBlobContent).toHaveBeenCalledWith(
       expect.objectContaining({
         mountPointId: 'mp-uploads',
-        sha256: SHA,
+        sha256: BYTES_SHA,
         description: 'sunday morning',
         extractionStatus: 'converted',
       })

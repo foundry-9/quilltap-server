@@ -21,6 +21,7 @@
 
 import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { DocMountBlobMetadata, DocMountBlobMetadataSchema } from '@/lib/schemas/mount-index.types';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 
@@ -59,6 +60,7 @@ const TABLE = 'doc_mount_blobs';
 
 export interface UpsertBlobInput {
   fileId: string;
+  /** Advisory only — upsertByFileId recomputes sha256 from `data`. */
   sha256: string;
   storedMimeType: string;
   data: Buffer;
@@ -225,6 +227,25 @@ export class DocMountBlobsRepository {
     const sizeBytes = input.data.length;
     const db = this.db();
 
+    // Recompute the content hash from the actual bytes — the store owns its
+    // own hashes; the caller's sha256 is advisory. Keeps the invariant
+    // sha256 == sha256(stored bytes) (see linkBlobContent for the same rule).
+    const computed = sha256OfBuffer(input.data);
+    logger.debug('upsertByFileId: computed content hash', {
+      fileId: input.fileId,
+      passedSha: input.sha256,
+      computedSha: computed,
+      sizeBytes,
+    });
+    if (input.sha256 !== computed) {
+      logger.warn('upsertByFileId: caller sha256 disagrees with stored bytes; using computed', {
+        fileId: input.fileId,
+        passedSha: input.sha256,
+        computedSha: computed,
+        sizeBytes,
+      });
+    }
+
     const existing = db.prepare(
       `SELECT id FROM "${TABLE}" WHERE fileId = ?`
     ).get(input.fileId) as { id: string } | undefined;
@@ -234,7 +255,7 @@ export class DocMountBlobsRepository {
         `UPDATE "${TABLE}" SET
            sha256 = ?, sizeBytes = ?, storedMimeType = ?, data = ?, updatedAt = ?
          WHERE id = ?`
-      ).run(input.sha256, sizeBytes, input.storedMimeType, input.data, now, existing.id);
+      ).run(computed, sizeBytes, input.storedMimeType, input.data, now, existing.id);
       const updated = await this.findById(existing.id);
       if (!updated) {
         throw new Error(`Blob disappeared after update: ${existing.id}`);
@@ -248,7 +269,7 @@ export class DocMountBlobsRepository {
          id, fileId, sha256, sizeBytes, storedMimeType, data, createdAt, updatedAt
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
-      id, input.fileId, input.sha256, sizeBytes,
+      id, input.fileId, computed, sizeBytes,
       input.storedMimeType, input.data, now, now
     );
     const created = await this.findById(id);
