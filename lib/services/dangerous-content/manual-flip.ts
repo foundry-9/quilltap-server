@@ -19,22 +19,19 @@ import type { ChatMetadata } from '@/lib/schemas/types';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { postConciergeManualAnnouncement } from '@/lib/services/concierge-notifications/writer';
+import { getConciergeState, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
 
 const logger = createServiceLogger('ConciergeManualFlip');
 
-export type ConciergeUIState = 'safe' | 'flagged' | 'off';
+/** @deprecated alias kept for callers; the canonical type is `ConciergeState`. */
+export type ConciergeUIState = ConciergeState;
 
 /**
- * Compute the current UI tri-state from the stored fields. Off-duty wins over
- * any other state — the operator's explicit opt-out always wins.
+ * Compute the current UI tri-state from the stored fields. Thin alias over the
+ * canonical {@link getConciergeState} so the derivation lives in exactly one
+ * place; this writer module is allowed to also read the raw fields below.
  */
-export function currentConciergeState(
-  chat: Pick<ChatMetadata, 'conciergeOverride' | 'isDangerousChat'>,
-): ConciergeUIState {
-  if (chat.conciergeOverride === 'OFF') return 'off';
-  if (chat.isDangerousChat === true) return 'flagged';
-  return 'safe';
-}
+export const currentConciergeState = getConciergeState;
 
 export interface ApplyConciergeFlipResult {
   /** The state requested by the caller, after normalization. */

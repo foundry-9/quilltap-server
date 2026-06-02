@@ -5,6 +5,7 @@
 import {
   isConciergeOffDuty,
   isChatActiveDangerous,
+  getConciergeState,
 } from '@/lib/services/dangerous-content/chat-override'
 
 describe('isConciergeOffDuty', () => {
@@ -50,5 +51,38 @@ describe('isChatActiveDangerous', () => {
 
   it('returns false when Off-duty with isDangerousChat=false', () => {
     expect(isChatActiveDangerous({ isDangerousChat: false, conciergeOverride: 'OFF' })).toBe(false)
+  })
+})
+
+describe('getConciergeState', () => {
+  it("returns 'safe' for null/undefined chat", () => {
+    expect(getConciergeState(null)).toBe('safe')
+    expect(getConciergeState(undefined)).toBe('safe')
+  })
+
+  it("returns 'safe' when not classified dangerous and on-duty", () => {
+    expect(getConciergeState({ isDangerousChat: false, conciergeOverride: null })).toBe('safe')
+    expect(getConciergeState({ conciergeOverride: null })).toBe('safe')
+  })
+
+  it("returns 'flagged' when classified dangerous and on-duty", () => {
+    expect(getConciergeState({ isDangerousChat: true, conciergeOverride: null })).toBe('flagged')
+  })
+
+  it("returns 'off' when Off-duty, regardless of the preserved label", () => {
+    expect(getConciergeState({ isDangerousChat: true, conciergeOverride: 'OFF' })).toBe('off')
+    expect(getConciergeState({ isDangerousChat: false, conciergeOverride: 'OFF' })).toBe('off')
+  })
+
+  it('stays consistent with isChatActiveDangerous', () => {
+    const cases = [
+      { isDangerousChat: true, conciergeOverride: null },
+      { isDangerousChat: true, conciergeOverride: 'OFF' as const },
+      { isDangerousChat: false, conciergeOverride: null },
+      { isDangerousChat: false, conciergeOverride: 'OFF' as const },
+    ]
+    for (const c of cases) {
+      expect(isChatActiveDangerous(c)).toBe(getConciergeState(c) === 'flagged')
+    }
   })
 })

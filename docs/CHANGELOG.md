@@ -4,6 +4,19 @@
 
 ### 4.6-dev
 
+#### Refactor: one canonical derivation for a chat's Concierge danger status
+
+A chat's danger status lives in two fields — `isDangerousChat` (the classification label) and `conciergeOverride` (`'OFF'` = operator flipped the Concierge off-duty). These must always be read together: off-duty preserves the label but suppresses every Concierge effect. Several call sites read `isDangerousChat` alone, so the off-duty override could be silently dropped. Consolidated the derivation into a single primitive and fixed the readers that bypassed it.
+
+- **`lib/services/dangerous-content/chat-override.ts`** — added `ConciergeState` (`'safe' | 'flagged' | 'off'`, matching the manual-flip wire contract) and `getConciergeState(chat)` as THE canonical derivation. `isChatActiveDangerous(chat)` is now `getConciergeState(chat) === 'flagged'`. Two named questions: `isChatActiveDangerous` (should the Concierge act?) and `getConciergeState` (what state to display/manage?).
+- **`lib/services/dangerous-content/manual-flip.ts`** — `currentConciergeState` is now a thin alias of `getConciergeState`; removed the duplicated tri-state logic. `ConciergeUIState` kept as a deprecated alias of `ConciergeState`.
+- **`components/chat/ChatSidebar.tsx`** — removed the third copy of the tri-state logic (`deriveConciergeState`) and imported the canonical helpers. The Concierge control still uses the raw field pair; `ParticipantCard` danger styling now uses `isChatActiveDangerous`, so an off-duty chat no longer shows the danger ring on participant cards.
+- **`app/salon/[id]/page.tsx`** — message-avatar danger styling now uses `isChatActiveDangerous(chat)` instead of the raw flag, so it agrees with the header (which already showed Off-duty vs Flagged) within the same view.
+- **Bug fix — `app/api/v1/chats/[id]/actions/memories.ts`** — the streaming dry-run memory extraction resolved danger settings without the chat and read the raw flag, so an off-duty flagged chat still rerouted memory extraction to the uncensored provider. Now passes the chat to `resolveDangerousContentSettings` and derives the flag via `isChatActiveDangerous`, matching the background extraction handler.
+- **Hardening — `lib/services/chat-message/pre-compute.service.ts`** — the uncensored keyword-extraction reroute now gates on `isChatActiveDangerous(chat)` rather than the raw flag (previously only safe because the upstream-resolved settings collapsed to OFF).
+- **`__tests__/unit/lib/services/dangerous-content/chat-override.test.ts`** — added `getConciergeState` coverage and a consistency check against `isChatActiveDangerous`.
+- List-view card badges (`ChatCard`, `RecentChatItem`) still show the danger marker on off-duty chats by design — those surface the preserved *label*, not the live action state.
+
 #### Tests: regression coverage for the WebP-mimetype, Staff-whisper-prefill, and danger-classification fixes
 
 Added unit tests for three fixes that previously shipped without dedicated coverage, plus one small refactor to make the whisper fix testable.

@@ -19,6 +19,7 @@ import { enqueueMemoryExtractionBatch, ensureProcessorRunning } from '@/lib/back
 import { processTurnForMemory } from '@/lib/memory/memory-processor';
 import { buildTurnTranscript } from '@/lib/services/chat-message/turn-transcript';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type {
@@ -245,8 +246,12 @@ export async function handleExtractMemoriesDryRun(
   }
 
   const availableProfiles = await repos.connections.findByUserId(user.id);
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
-  const isDangerousChat = chat.isDangerousChat === true;
+  // Pass the chat so an Off-duty override collapses dangerSettings to OFF, and
+  // derive the dangerous flag through the canonical accessor — otherwise an
+  // off-duty flagged chat would still reroute memory extraction to the
+  // uncensored provider, ignoring the operator's opt-out.
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
+  const isDangerousChat = isChatActiveDangerous(chat);
   const memoryExtractionLimits = await getMemoryExtractionLimits();
 
   logger.info('[Chats v1] Streaming dry-run memory extraction', {

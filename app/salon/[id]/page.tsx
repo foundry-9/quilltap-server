@@ -15,6 +15,7 @@ import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 import {
   type TurnState,
   type TurnSelectionResult,
@@ -1242,7 +1243,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           getMessageAvatar={getMessageAvatar}
           participantNames={participantNames}
           userParticipantIdSet={userParticipantIdSet}
-          isDangerousChat={chat?.isDangerousChat === true}
+          isDangerousChat={isChatActiveDangerous(chat)}
           showThinking={chat?.showThinking ?? chatSettings?.thinkingDisplay?.defaultVisible ?? true}
           thinkingCollapsedByDefault={chatSettings?.thinkingDisplay?.defaultCollapsed ?? true}
           streamingReasoning={sseStreaming.streamingReasoning}

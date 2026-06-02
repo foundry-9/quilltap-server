@@ -18,6 +18,7 @@ import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } f
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { getConciergeState, isChatActiveDangerous, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
 import type { TurnOrderEntry, TurnOrderStatus } from '@/lib/chat/turn-manager'
@@ -722,7 +723,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
               onWhisper={activeParticipantCount >= 3 ? p.onWhisper : undefined}
               chatId={p.chatId}
               onRegenerateAvatar={p.onRegenerateAvatar}
-              isDangerousChat={p.isDangerousChat}
+              isDangerousChat={isChatActiveDangerous({ isDangerousChat: p.isDangerousChat, conciergeOverride: p.conciergeOverride })}
             />
           )
         })}
@@ -767,17 +768,6 @@ interface ChatSectionProps {
   storyBackgroundsEnabled?: boolean
   onRegenerateBackgroundClick?: () => void
   sectionOpen: boolean
-}
-
-type ConciergeUIState = 'safe' | 'flagged' | 'off'
-
-function deriveConciergeState(
-  isDangerousChat: boolean | undefined,
-  conciergeOverride: 'OFF' | null | undefined,
-): ConciergeUIState {
-  if (conciergeOverride === 'OFF') return 'off'
-  if (isDangerousChat) return 'flagged'
-  return 'safe'
 }
 
 function ChatSection({
@@ -909,7 +899,7 @@ function ChatSection({
     }
   }
 
-  const handleConciergeStateChange = async (next: ConciergeUIState) => {
+  const handleConciergeStateChange = async (next: ConciergeState) => {
     try {
       setConciergeSaving(true)
       const res = await fetch(`/api/v1/chats/${chatId}`, {
@@ -962,7 +952,7 @@ function ChatSection({
     ? 'inherit'
     : alertCharactersOfLanternImages ? 'enabled' : 'disabled'
 
-  const conciergeState = deriveConciergeState(isDangerousChat, conciergeOverride)
+  const conciergeState = getConciergeState({ isDangerousChat, conciergeOverride })
   const conciergeHelperText =
     conciergeState === 'off'
       ? "Off-duty gives the Concierge the afternoon off. Censored providers may refuse the conversation, and image prompts go out unaltered — the risk is yours."
@@ -977,7 +967,7 @@ function ChatSection({
         <span className="block mb-1">The Concierge</span>
         <select
           value={conciergeState}
-          onChange={(e) => handleConciergeStateChange(e.target.value as ConciergeUIState)}
+          onChange={(e) => handleConciergeStateChange(e.target.value as ConciergeState)}
           disabled={conciergeSaving}
           className="qt-select text-sm"
         >
