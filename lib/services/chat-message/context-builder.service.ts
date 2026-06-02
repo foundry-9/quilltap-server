@@ -349,6 +349,61 @@ export function buildConversationMessages(
 }
 
 /**
+ * Whisper-role normalization. Staff messages (`systemSender` set) are
+ * stored as `role: ASSISTANT` because that's how the Salon UI groups them
+ * — but for the LLM they are external annotations to the character, not
+ * the character's own speech. Two reasons to re-role them as USER here:
+ *
+ *   1. Conceptual: the Librarian filing a document, the Host noting the
+ *      time, Prospero summarising a project — these are inputs *to* the
+ *      character, not utterances *from* it.
+ *   2. Practical: Anthropic Sonnet 4.6 rejects requests whose final
+ *      message is `role: assistant` with "This model does not support
+ *      assistant message prefill. The conversation must end with a user
+ *      message." Any chat where a character's response failed and then
+ *      synthetic whispers accumulated (Lantern image generation,
+ *      memory recap, host event, etc.) ends with assistant-role whispers
+ *      at the tail and 400s on the next turn.
+ *
+ * Exception: whispers that carry attachments stay as `role: ASSISTANT`.
+ * `collectLanternImageFileIdsForCharacter` discriminates Lantern-published
+ * images structurally as "assistant + attachments" — re-roling those
+ * would break the image walker. The whispers we actually need to flip
+ * (host, prospero, librarian-no-attach, commonplace) have no attachments,
+ * so this carve-out is naturally safe for the prefill-error fix.
+ *
+ * The opaque-anywhere body swap rides on the same map: where systemSender
+ * is set and isOpaqueAnywhere is on, the persona-free `opaqueContent`
+ * body replaces `content`. The systemSender field is cleared because no
+ * downstream consumer in the LLM-bound path reads it (the field never
+ * reaches the wire).
+ *
+ * Non-whisper messages (`systemSender` null/undefined) pass through
+ * untouched. Exported for unit testing.
+ */
+export function normalizeWhisperRoles<
+  T extends {
+    role?: string
+    content?: string
+    opaqueContent?: string | null
+    attachments?: string[] | null
+    systemSender?: string | null
+  }
+>(messages: T[], isOpaqueAnywhere: boolean): T[] {
+  return messages.map(m => {
+    if (!m.systemSender) return m
+    const hasAttachments = Array.isArray(m.attachments) && m.attachments.length > 0
+    const body = isOpaqueAnywhere ? (m.opaqueContent ?? m.content) : m.content
+    return {
+      ...m,
+      systemSender: null,
+      role: hasAttachments ? (m.role ?? 'ASSISTANT') : 'USER',
+      content: body,
+    }
+  })
+}
+
+/**
  * Build the full message context for the LLM
  */
 export async function buildMessageContext(
@@ -439,45 +494,10 @@ export async function buildMessageContext(
     isOpaqueAnywhere = character.systemTransparency !== true
   }
 
-  // Whisper-role normalization. Staff messages (`systemSender` set) are
-  // stored as `role: ASSISTANT` because that's how the Salon UI groups them
-  // — but for the LLM they are external annotations to the character, not
-  // the character's own speech. Two reasons to re-role them as USER here:
-  //
-  //   1. Conceptual: the Librarian filing a document, the Host noting the
-  //      time, Prospero summarising a project — these are inputs *to* the
-  //      character, not utterances *from* it.
-  //   2. Practical: Anthropic Sonnet 4.6 rejects requests whose final
-  //      message is `role: assistant` with "This model does not support
-  //      assistant message prefill. The conversation must end with a user
-  //      message." Any chat where a character's response failed and then
-  //      synthetic whispers accumulated (Lantern image generation,
-  //      memory recap, host event, etc.) ends with assistant-role whispers
-  //      at the tail and 400s on the next turn.
-  //
-  // Exception: whispers that carry attachments stay as `role: ASSISTANT`.
-  // `collectLanternImageFileIdsForCharacter` discriminates Lantern-published
-  // images structurally as "assistant + attachments" — re-roling those
-  // would break the image walker. The whispers we actually need to flip
-  // (host, prospero, librarian-no-attach, commonplace) have no attachments,
-  // so this carve-out is naturally safe for the prefill-error fix.
-  //
-  // The opaque-anywhere body swap rides on the same map: where systemSender
-  // is set and isOpaqueAnywhere is on, the persona-free `opaqueContent`
-  // body replaces `content`. The systemSender field is cleared because no
-  // downstream consumer in the LLM-bound path reads it (the field never
-  // reaches the wire).
-  const filteredExistingMessages = messagesAfterWhisperFilter.map(m => {
-    if (!m.systemSender) return m
-    const hasAttachments = Array.isArray(m.attachments) && m.attachments.length > 0
-    const body = isOpaqueAnywhere ? (m.opaqueContent ?? m.content) : m.content
-    return {
-      ...m,
-      systemSender: null,
-      role: hasAttachments ? (m.role ?? 'ASSISTANT') : 'USER',
-      content: body,
-    }
-  })
+  // Whisper-role normalization (re-role Staff whispers to USER, preserve
+  // attachment-bearing whispers as ASSISTANT, apply opaque body swap). See
+  // `normalizeWhisperRoles` for the full rationale.
+  const filteredExistingMessages = normalizeWhisperRoles(messagesAfterWhisperFilter, isOpaqueAnywhere)
 
   // Build conversation messages
   const { conversationMessages, messagesWithParticipants } = buildConversationMessages(

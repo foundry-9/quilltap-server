@@ -299,6 +299,53 @@ describe('handleChatDangerClassification', () => {
     expect(repositories.chats.update).toHaveBeenCalled();
   });
 
+  it('excludes SYSTEM, TOOL, and Staff (systemSender) content from the no-summary fallback', async () => {
+    repositories.chats.findById.mockResolvedValue({
+      ...baseChatMetadata,
+      contextSummary: null,
+    });
+
+    // A benign conversation, but with a persona prompt (SYSTEM), a tool result
+    // (TOOL), and Staff announcements (systemSender) that mention sensitive
+    // material. None of those should reach the classifier — only the
+    // user/character speech should.
+    repositories.chats.getMessages.mockResolvedValue([
+      { type: 'message', role: 'SYSTEM', content: 'PERSONA: an assassin who builds explosives and poisons' },
+      { type: 'message', role: 'user', content: 'What a lovely afternoon for tea' },
+      { type: 'message', role: 'assistant', content: 'Indeed, shall I pour?' },
+      { type: 'message', role: 'TOOL', content: 'TOOL_RESULT: weapon schematics and detonator wiring' },
+      { type: 'message', role: 'assistant', content: 'The Concierge has flagged dangerous bomb-making content', systemSender: 'concierge' },
+      { type: 'message', role: 'assistant', content: 'The Host notes a new participant joined', systemSender: 'host' },
+    ]);
+
+    mockClassifyContent.mockResolvedValue({
+      isDangerous: false,
+      score: 0.05,
+      categories: [],
+      usage: { promptTokens: 40, completionTokens: 10, totalTokens: 50 },
+    });
+
+    await handleChatDangerClassification(buildJob());
+
+    expect(mockClassifyContent).toHaveBeenCalledTimes(1);
+    const classificationInput = (mockClassifyContent.mock.calls[0] as unknown[])[0] as string;
+
+    // Benign user/character speech is present.
+    expect(classificationInput).toContain('USER: What a lovely afternoon for tea');
+    expect(classificationInput).toContain('ASSISTANT: Indeed, shall I pour?');
+
+    // The three excluded payloads must NOT leak into the classifier input —
+    // this is the core of AC-3 (classification reflects conversation, not the
+    // persona prompt / tool output / Staff chatter).
+    expect(classificationInput).not.toContain('explosives and poisons');
+    expect(classificationInput).not.toContain('weapon schematics');
+    expect(classificationInput).not.toContain('bomb-making');
+    expect(classificationInput).not.toContain('new participant joined');
+
+    // And the chat is not flagged on the strength of the benign conversation.
+    expect(repositories.chats.update).toHaveBeenCalled();
+  });
+
   it('skips if no context summary AND no messages', async () => {
     repositories.chats.findById.mockResolvedValue({
       ...baseChatMetadata,

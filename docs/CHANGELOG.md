@@ -4,6 +4,15 @@
 
 ### 4.6-dev
 
+#### Tests: regression coverage for the WebP-mimetype, Staff-whisper-prefill, and danger-classification fixes
+
+Added unit tests for three fixes that previously shipped without dedicated coverage, plus one small refactor to make the whisper fix testable.
+
+- **Extracted `normalizeWhisperRoles`** from `buildMessageContext` (`lib/services/chat-message/context-builder.service.ts`) into an exported pure function — same behavior (re-role `systemSender` whispers to `USER`, keep attachment-bearing whispers as `ASSISTANT`, opaque-body swap, clear `systemSender`), now callable in isolation. `buildMessageContext` calls it.
+- **`__tests__/unit/lib/services/chat-message/context-builder.service.test.ts`** — new `normalizeWhisperRoles` block: attachment-less whispers flip to `USER`, a tail of consecutive whispers ends as `user` (no assistant prefill), Lantern whispers with attachments stay `ASSISTANT` and remain discoverable by `collectLanternImageFileIdsForCharacter`, plus the opaque/non-opaque body-swap variants.
+- **`__tests__/unit/background-jobs/chat-danger-classification.test.ts`** — extended the no-summary fallback test to assert `SYSTEM` persona prompts, `TOOL` output, and `systemSender != null` Staff messages are excluded from the classifier input while benign user/character turns reach it.
+- **`__tests__/unit/lib/database/migration/repair-files-mime-and-size-from-mount-blob.test.ts`** — new suite for the repair migration over a real in-memory main DB plus a real temp-file mount-index DB: drifted `mimeType`/`size` rewritten to the blob's values with `sha256` left untouched, already-correct rows skipped, orphaned and malformed `mount-blob:` keys left alone, idempotency, mixed batch, and `shouldRun` / no-op paths. The mocked `better-sqlite3` constructor hands the migration the seeded handle (single connection) and swallows pragmas, so `openMountIndexDb`'s `PRAGMA key` (jest.setup.ts sets `ENCRYPTION_MASTER_PEPPER`) doesn't poison the unencrypted seed handle.
+
 #### Fix: standalone build omitted the `yaml` dependency, breaking the in-chat terminal
 
 The standalone server bundle is compiled by esbuild with `--packages=external`, which leaves `require('yaml')` external — so `yaml` must exist in the traced `node_modules`. Next's output-file tracer only follows the app's import graph, not the custom server bundle's, so `yaml` (reached only through the terminal WebSocket handler's chain: `server.ts`/`ws.ts` → pty-manager → repositories factory → doc-edit markdown parser) was never copied into the standalone output. At runtime the first terminal connection threw `Cannot find module 'yaml'` inside the WS module's esbuild `__esm` once-init wrapper, which flags the module as initialized even when its body throws, leaving its logger `undefined`. Every subsequent connection then failed with the misleading `Cannot read properties of undefined (reading 'info')`, and the browser's ~2-second reconnect loop repeatedly stole focus from the chat input.
