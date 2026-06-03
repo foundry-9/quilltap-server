@@ -4,6 +4,13 @@
 
 ### 4.6-dev
 
+#### Tests: regression coverage for the coreWhisper chat_settings column and the plugin logger debug stub
+
+Added unit tests for two fixes that shipped without dedicated coverage.
+
+- `__tests__/unit/lib/database/migration/add-core-whisper-settings-field.test.ts` — covers the `add-core-whisper-settings-field-v1` migration that fixed the "no such column: coreWhisper" 500 on every chat-settings write: metadata, `shouldRun()` (only fires on SQLite when `chat_settings` exists and lacks the column; no-op once present), and `run()` (issues the `ALTER TABLE ... ADD COLUMN "coreWhisper"`, writes the expected default-JSON shape, is idempotent when the column already exists, and reports failure when the ALTER throws).
+- `__tests__/unit/lib/plugins/plugin-logger-bridge.test.ts` — guards the bridge's `debug()` against regressing back to the empty stub that silently dropped every plugin debug log. Asserts all four levels forward to the core logger with the `plugin`/`module` context attached, that `error` passes the `Error` through, and that `child()` loggers accumulate context.
+
 #### Fix: autonomous room creation redirected to the wrong settings tab
 
 The Autonomous Rooms settings card moved from the System tab to the Chat tab, but the post-creation redirect in `components/new-chat/hooks/useNewChat.ts` still pointed at `/settings?tab=system&section=autonomous-rooms`, where the section no longer renders. Now redirects to `/settings?tab=chat&section=autonomous-rooms`, landing on the correct tab with the card auto-expanded.
