@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Dev tooling: Concierge tri-state acceptance test script
+
+Added `scripts/concierge-tristate-test.sh`, a CLI harness for the CT-1 (sidebar tri-state control) and CT-2 (off-duty stability) acceptance checks of the per-chat Concierge danger status. State changes are driven through `PUT /api/v1/chats/[id]` (the sidebar's `applyConciergeFlip` path) and assertions are read-only `quilltap db --json` queries, so it never writes to the encrypted DB directly. For each transition it verifies the `(conciergeOverride, isDangerousChat)` pair, the derived header pill, and the synthetic Concierge announcement — covering all four announcement kinds and both flag-preservation cases. CT-2's scan-skip is checked via `--arm`/`--recheck` across a real ~10-min scan tick; the classification handler's off-duty bail-at-entry is covered by running the existing jest guard suites. Flags: `--dry-run`, `--arm`, `--recheck`, `--no-jest`, `--keep`, `--instance`, `--base-url`, `--chat`.
+
 #### Refactor: one canonical derivation for a chat's Concierge danger status
 
 A chat's danger status lives in two fields — `isDangerousChat` (the classification label) and `conciergeOverride` (`'OFF'` = operator flipped the Concierge off-duty). These must always be read together: off-duty preserves the label but suppresses every Concierge effect. Several call sites read `isDangerousChat` alone, so the off-duty override could be silently dropped. Consolidated the derivation into a single primitive and fixed the readers that bypassed it.
