@@ -648,7 +648,7 @@ export function useNewChat({
       const data = await res.json()
       if (isAutonomous) {
         showSuccessToast('Autonomous room created!')
-        router.push('/settings?tab=system&section=autonomous-rooms')
+        router.push('/settings?tab=chat&section=autonomous-rooms')
       } else {
         showSuccessToast(continuationFromChatId ? 'Conversation continued in a new chat!' : 'Chat created!')
         router.push(`/salon/${data.chat.id}`)

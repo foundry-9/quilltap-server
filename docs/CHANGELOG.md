@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Fix: autonomous room creation redirected to the wrong settings tab
+
+The Autonomous Rooms settings card moved from the System tab to the Chat tab, but the post-creation redirect in `components/new-chat/hooks/useNewChat.ts` still pointed at `/settings?tab=system&section=autonomous-rooms`, where the section no longer renders. Now redirects to `/settings?tab=chat&section=autonomous-rooms`, landing on the correct tab with the card auto-expanded.
+
 #### Terminal Mode: per-session shell bootstrap (data dir, CLI alias, completions, prompt)
 
 Every Ariel terminal is now spawned with a shell bootstrap so the in-terminal `quilltap` CLI targets the right instance and matches the server version.
