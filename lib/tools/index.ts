@@ -383,13 +383,13 @@ export { docCreateFolderToolDefinition as docCreateFolderTool, validateDocCreate
 export { docDeleteFolderToolDefinition as docDeleteFolderTool, validateDocDeleteFolderInput, type DocDeleteFolderInput, type DocDeleteFolderOutput } from './doc-delete-folder-tool';
 
 // Document Folder Management Tool (Scriptorium Phase 4.0 Deliverable 3 - Phase B)
-export { docMoveFolderToolDefinition as docMoveFolderTool, validateDocMoveFolderInput, type DocMoveFolderInput, type DocMoveFolderOutput } from './doc-move-folder-tool';
+export { docMoveFolderToolDefinition, validateDocMoveFolderInput, type DocMoveFolderInput, type DocMoveFolderOutput } from './doc-move-folder-tool';
 
 // Document Blob Tools (database-backed stores + universal blob layer)
-export { docWriteBlobToolDefinition as docWriteBlobTool, validateDocWriteBlobInput, type DocWriteBlobInput, type DocWriteBlobOutput } from './doc-write-blob-tool';
-export { docReadBlobToolDefinition as docReadBlobTool, validateDocReadBlobInput, type DocReadBlobInput, type DocReadBlobOutput } from './doc-read-blob-tool';
-export { docListBlobsToolDefinition as docListBlobsTool, validateDocListBlobsInput, type DocListBlobsInput, type DocListBlobsOutput, type DocBlobSummary } from './doc-list-blobs-tool';
-export { docDeleteBlobToolDefinition as docDeleteBlobTool, validateDocDeleteBlobInput, type DocDeleteBlobInput, type DocDeleteBlobOutput } from './doc-delete-blob-tool';
+export { docWriteBlobToolDefinition, validateDocWriteBlobInput, type DocWriteBlobInput, type DocWriteBlobOutput } from './doc-write-blob-tool';
+export { docReadBlobToolDefinition, validateDocReadBlobInput, type DocReadBlobInput, type DocReadBlobOutput } from './doc-read-blob-tool';
+export { docListBlobsToolDefinition, validateDocListBlobsInput, type DocListBlobsInput, type DocListBlobsOutput, type DocBlobSummary } from './doc-list-blobs-tool';
+export { docDeleteBlobToolDefinition, validateDocDeleteBlobInput, type DocDeleteBlobInput, type DocDeleteBlobOutput } from './doc-delete-blob-tool';
 
 // Photo Album Tools (character vault photos/ folder)
 export { keepImageToolDefinition as keepImageTool, keepImageToolDefinition, validateKeepImageInput, type KeepImageInput, type KeepImageOutput } from './keep-image-tool';

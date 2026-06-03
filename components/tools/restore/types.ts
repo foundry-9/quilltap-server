@@ -34,13 +34,3 @@ export interface RestoreState {
   uploading: boolean
 }
 
-export interface RestoreActions {
-  handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
-  handleNext: () => Promise<void>
-  handleBack: () => void
-  fetchPreview: () => Promise<void>
-  handleStartRestore: () => Promise<void>
-  handleClose: () => void
-  handleCloseAfterRestore: () => void
-  resetDialog: () => void
-}

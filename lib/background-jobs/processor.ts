@@ -81,6 +81,3 @@ export function setMemoryExtractionConcurrencyOverride(_value: number): void {
   }
 }
 
-export function getMemoryExtractionConcurrencyOverride(): number {
-  return 4;
-}

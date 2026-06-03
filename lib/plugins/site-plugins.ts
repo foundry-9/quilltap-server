@@ -6,20 +6,6 @@
  * SITE_PLUGINS_ENABLED and SITE_PLUGINS_DISABLED environment variables.
  */
 
-import { logger } from '@/lib/logger';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-/**
- * Plugin enablement configuration
- */
-export interface SitePluginsConfig {
-  enabled: string[] | 'all';
-  disabled: string[];
-}
-
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -107,14 +93,3 @@ export function isSitePluginEnabled(pluginName: string): boolean {
   return isInEnabledList;
 }
 
-/**
- * Gets the complete site plugins configuration
- * @returns Configuration object with enabled and disabled lists
- */
-export function getSitePluginsConfig(): SitePluginsConfig {
-  const config: SitePluginsConfig = {
-    enabled: getSitePluginsEnabled(),
-    disabled: getSitePluginsDisabled(),
-  };
-  return config;
-}

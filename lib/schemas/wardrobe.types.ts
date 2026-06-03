@@ -17,8 +17,6 @@ import {
   UUIDSchema,
   TimestampSchema,
 } from './common.types';
-import { describeOutfit } from '@/lib/wardrobe/outfit-description';
-
 // ============================================================================
 // WARDROBE ITEM TYPES
 // ============================================================================
@@ -120,19 +118,3 @@ export const EMPTY_EQUIPPED_SLOTS: EquippedSlots = {
   accessories: [],
 };
 
-/**
- * Build a human-readable coverage summary from equipped slots and the
- * per-slot wardrobe items occupying them. Callers must expand composites
- * to leaves before passing them in.
- */
-export function buildCoverageSummary(
-  _slots: EquippedSlots,
-  items: Record<keyof EquippedSlots, WardrobeItem[]>,
-): string {
-  return describeOutfit({
-    top: items.top.map((i) => i.title),
-    bottom: items.bottom.map((i) => i.title),
-    footwear: items.footwear.map((i) => i.title),
-    accessories: items.accessories.map((i) => i.title),
-  });
-}

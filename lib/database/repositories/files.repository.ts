@@ -439,5 +439,3 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
 
 }
 
-// Export singleton instance
-export const filesRepository = new FilesRepository();

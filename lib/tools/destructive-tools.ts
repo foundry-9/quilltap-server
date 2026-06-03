@@ -27,11 +27,3 @@ export const DESTRUCTIVE_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
   'doc_delete_folder',
 ]);
 
-/**
- * Returns true if `toolName` is in the curated destructive-tools allowlist.
- * Equivalent to `DESTRUCTIVE_TOOL_NAMES.has(toolName)`, exported as a function
- * for ergonomics at call sites that prefer the predicate form.
- */
-export function isDestructiveTool(toolName: string): boolean {
-  return DESTRUCTIVE_TOOL_NAMES.has(toolName);
-}

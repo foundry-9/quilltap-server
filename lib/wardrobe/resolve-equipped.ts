@@ -173,20 +173,3 @@ export async function resolveEquippedOutfitForCharacter(
   return { outfitValues, leafItemsBySlot, itemsById };
 }
 
-/**
- * Convenience: resolve equipped slots into a `WardrobeItem[]` flat list,
- * preserving slot iteration order (top → bottom → footwear → accessories)
- * and deduplicating by id. Useful for callers that only need the items.
- */
-export function flattenLeafItems(resolved: ResolvedEquippedOutfit): WardrobeItem[] {
-  const seen = new Set<string>();
-  const out: WardrobeItem[] = [];
-  for (const slot of SLOT_KEYS as readonly SlotKey[]) {
-    for (const item of resolved.leafItemsBySlot[slot]) {
-      if (seen.has(item.id)) continue;
-      seen.add(item.id);
-      out.push(item);
-    }
-  }
-  return out;
-}

@@ -379,18 +379,6 @@ export function getLLMLogsDbKeyPath(): string {
 }
 
 /**
- * Get the mount index database key file path
- *
- * Separate .dbkey file for the mount index database, using the same pepper
- * but stored independently for operational isolation.
- *
- * @returns Mount index database key file path (<base>/data/quilltap-mount-index.dbkey)
- */
-export function getMountIndexDbKeyPath(): string {
-  return path.join(getDataDir(), 'quilltap-mount-index.dbkey');
-}
-
-/**
  * Get the physical database backups directory path
  *
  * Physical backups are stored alongside the database file under data/backups/.

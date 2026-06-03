@@ -185,31 +185,6 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
 }
 
 /**
- * Delete a file - removes bytes from storage and metadata from repository
- */
-async function deleteFile(fileId: string): Promise<boolean> {
-  const repos = getRepositories();
-  const entry = await repos.files.findById(fileId);
-
-  if (!entry) {
-    return false;
-  }
-
-  // Delete the file bytes from storage
-  if (entry.storageKey) {
-    try {
-      await fileStorageManager.deleteFile(entry);
-    } catch (error) {
-      logger.error('Failed to delete file from storage', { fileId, storageKey: entry.storageKey }, error instanceof Error ? error : undefined);
-    }
-  }
-
-  // Delete metadata from repository
-  const deleted = await repos.files.delete(fileId);
-  return deleted;
-}
-
-/**
  * Read a file as buffer from storage
  */
 async function readFile(fileId: string): Promise<Buffer> {
@@ -372,13 +347,6 @@ export async function ingestImageBuffer(params: {
     description: params.description,
     ...dimensions,
   });
-}
-
-/**
- * Delete an image file from the server
- */
-export async function deleteImageById(fileId: string): Promise<void> {
-  await deleteFile(fileId);
 }
 
 /**

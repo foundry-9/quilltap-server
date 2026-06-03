@@ -272,18 +272,3 @@ export function humanize(rawLabel: string): string {
       : word
   ).join(' ');
 }
-
-/**
- * Test helper — returns true if `rawLabel` has a curated pretty entry.
- * Used by the unit tests for the prettify table to verify coverage.
- */
-export function hasPrettyEntry(rawLabel: string): boolean {
-  return Object.prototype.hasOwnProperty.call(PRETTY_LABELS, rawLabel);
-}
-
-/**
- * Test helper — list of all curated keys, for coverage tests.
- */
-export function curatedKeys(): string[] {
-  return Object.keys(PRETTY_LABELS);
-}

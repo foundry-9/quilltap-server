@@ -856,33 +856,3 @@ export async function deleteFile(input: {
 // ============================================================================
 // Public helpers used by the write / delete / mkdir endpoints
 // ============================================================================
-
-export async function pathExistsInMount(
-  mountPointId: string,
-  relativePath: string
-): Promise<boolean> {
-  const mp = await loadMount(mountPointId);
-  const rel = normaliseRelativePath(relativePath);
-  return destExists(mp, rel);
-}
-
-export async function readSha256(
-  mountPointId: string,
-  relativePath: string
-): Promise<string | null> {
-  const mp = await loadMount(mountPointId);
-  const rel = normaliseRelativePath(relativePath);
-  if (isFilesystemMount(mp)) {
-    const abs = resolveFsAbsolute(mp, rel);
-    try {
-      const bytes = await fs.readFile(abs);
-      return sha256OfBuffer(bytes);
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
-      throw err;
-    }
-  }
-  const repos = getRepositories();
-  const link = await repos.docMountFileLinks.findByMountPointAndPath(mp.id, rel);
-  return link ? link.sha256 : null;
-}

@@ -14,10 +14,6 @@ import { createContext, useCallback, useContext, useMemo } from 'react'
 
 /** Default sidebar width in pixels */
 export const DEFAULT_SIDEBAR_WIDTH = 256
-/** Minimum sidebar width in pixels */
-export const MIN_SIDEBAR_WIDTH = 256
-/** Maximum sidebar width in pixels */
-export const MAX_SIDEBAR_WIDTH = 512
 
 interface SidebarContextValue {
   /** Whether the sidebar is collapsed (always true) */
@@ -78,10 +74,3 @@ export function useSidebar() {
   return ctx
 }
 
-/**
- * Optional hook that returns null if used outside provider context.
- * Useful for components that may be rendered before provider is mounted.
- */
-export function useSidebarOptional() {
-  return useContext(SidebarContext)
-}

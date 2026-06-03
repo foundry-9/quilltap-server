@@ -116,22 +116,6 @@ function nullIfEmpty(value: string | null | undefined): string | null {
 }
 
 /**
- * Batched variant for routes that enrich many characters at once
- * (`GET /api/v1/characters`, the chat-handler GET that paints a roster).
- * Avoids the N-query fan-out of calling `resolveCharacterAvatar` once per
- * character.
- *
- * Order of returned entries matches the input. Missing ids resolve to
- * `null` in their slot.
- */
-export async function resolveCharacterAvatars(
-  ids: Array<string | null | undefined>,
-  repos: RepositoryContainer
-): Promise<Array<ResolvedCharacterAvatar | null>> {
-  return Promise.all(ids.map((id) => resolveCharacterAvatar(id, repos)));
-}
-
-/**
  * Read the raw bytes a character-avatar id points at — vault link or
  * legacy file. Used by the SillyTavern PNG export and any other path
  * that needs the bytes themselves rather than just a URL.

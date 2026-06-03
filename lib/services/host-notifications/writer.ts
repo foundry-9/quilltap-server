@@ -556,24 +556,6 @@ export async function postHostUserCharacterAnnouncement(
   );
 }
 
-export interface HostRosterAnnouncement {
-  chatId: string;
-  respondingCharacterName: string;
-  others: OtherParticipantInfo[];
-}
-
-export async function postHostRosterAnnouncement(
-  params: HostRosterAnnouncement,
-): Promise<MessageEvent | null> {
-  return postHostMessageWithTargets(
-    params.chatId,
-    buildMultiCharacterRosterContent(params.respondingCharacterName, params.others),
-    buildMultiCharacterRosterOpaqueContent(params.respondingCharacterName, params.others),
-    'roster',
-    null,
-  );
-}
-
 export interface HostSilentModeAnnouncement {
   chatId: string;
   characterName: string;

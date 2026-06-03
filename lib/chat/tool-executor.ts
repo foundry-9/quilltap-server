@@ -188,22 +188,6 @@ export interface ToolExecutionContext {
 }
 
 /**
- * Execute a tool call (legacy signature for backwards compatibility)
- */
-export async function executeToolCall(
-  toolCall: ToolCallRequest,
-  chatId: string,
-  userId: string,
-  imageProfileId?: string
-): Promise<ToolResult> {
-  return executeToolCallWithContext(toolCall, {
-    chatId,
-    userId,
-    imageProfileId,
-  });
-}
-
-/**
  * Execute a tool call with full context
  */
 // Built-in tool names that are handled directly by this module

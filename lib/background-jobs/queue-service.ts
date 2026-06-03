@@ -292,17 +292,6 @@ export interface AutonomousRoomTurnPayload {
 }
 
 /**
- * Payload for the autonomous-room scheduler tick (singleton; the parent-
- * process timer enqueues one of these per minute). The handler scans
- * `chats` for autonomous rooms due to run per their cron + freshness window
- * and enqueues `AUTONOMOUS_ROOM_TURN` jobs for the ones it picks up.
- */
-export interface AutonomousRoomScheduleTickPayload {
-  // No fields — the tick handler reads global chat state.
-  // Empty object kept for shape clarity.
-}
-
-/**
  * Result of enqueueing a scene state tracking job
  */
 export interface SceneStateTrackingEnqueueResult {

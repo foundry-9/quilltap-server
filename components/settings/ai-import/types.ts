@@ -102,10 +102,3 @@ export const CORE_STEPS: AIImportStepName[] = [
   'validation',
 ];
 
-/** Steps shown only when applicable */
-export const OPTIONAL_STEPS: AIImportStepName[] = [
-  'analyzing',
-  'memories',
-  'chats',
-  'repair',
-];

@@ -17,14 +17,6 @@ export interface ErrorResponse {
 }
 
 /**
- * Standard success response shape with optional message
- */
-export interface SuccessResponse<T = unknown> {
-  data?: T;
-  message?: string;
-}
-
-/**
  * Create an error response with standard formatting
  *
  * @param message - Error message
@@ -198,18 +190,6 @@ export function serverError(
   message: string = 'Internal server error'
 ): NextResponse<ErrorResponse> {
   return errorResponse(message, 500);
-}
-
-/**
- * Create a service unavailable response (503)
- *
- * @param message - Optional custom message (default: 'Service unavailable')
- * @returns NextResponse with 503 status
- */
-export function serviceUnavailable(
-  message: string = 'Service unavailable'
-): NextResponse<ErrorResponse> {
-  return errorResponse(message, 503);
 }
 
 /**

@@ -111,15 +111,6 @@ function stripAsteriskEscapes(markdown: string): string {
   return markdown.replace(/\\\*/g, '*')
 }
 
-/**
- * Ref-based handle for synchronous markdown access from the parent.
- * Used by LexicalComposerWrapper to implement ComposerEditorHandle.
- */
-export interface MarkdownBridgeRef {
-  getMarkdown: () => string
-  setMarkdown: (text: string) => void
-}
-
 export function MarkdownBridgePlugin({
   input,
   setInput,

@@ -257,30 +257,6 @@ export function jsonArrayObjectMatchAny(
 }
 
 /**
- * Generate SQL for inserting a value into a JSON array
- * @param column The column name containing a JSON array
- * @param value The value to insert
- */
-export function jsonArrayPush(column: string): string {
-  return `CASE
-    WHEN "${column}" IS NULL THEN json_array(?)
-    ELSE json_insert("${column}", '$[#]', json(?))
-  END`;
-}
-
-/**
- * Generate SQL for removing a value from a JSON array
- * @param column The column name containing a JSON array
- * @param value The value to remove
- */
-export function jsonArrayPull(column: string): { sql: string } {
-  // This is more complex - we need to rebuild the array without the value
-  return {
-    sql: `(SELECT json_group_array(value) FROM json_each("${column}") WHERE value != ?)`,
-  };
-}
-
-/**
  * Generate SQL for getting the length of a JSON array
  * @param column The column name containing a JSON array
  */
@@ -367,46 +343,3 @@ export function detectJsonColumns(sampleDocument: Record<string, unknown>): stri
   return jsonColumns;
 }
 
-// ============================================================================
-// Query Building Helpers
-// ============================================================================
-
-/**
- * Build a WHERE clause condition for a JSON field
- */
-export function buildJsonCondition(
-  column: string,
-  path: string,
-  operator: string,
-  value: unknown
-): { sql: string; params: unknown[] } {
-  const extracted = jsonExtract(column, path);
-
-  switch (operator) {
-    case '$eq':
-      return { sql: `${extracted} = ?`, params: [value] };
-    case '$ne':
-      return { sql: `${extracted} != ?`, params: [value] };
-    case '$gt':
-      return { sql: `${extracted} > ?`, params: [value] };
-    case '$gte':
-      return { sql: `${extracted} >= ?`, params: [value] };
-    case '$lt':
-      return { sql: `${extracted} < ?`, params: [value] };
-    case '$lte':
-      return { sql: `${extracted} <= ?`, params: [value] };
-    case '$in':
-      if (!Array.isArray(value) || value.length === 0) {
-        return { sql: '0', params: [] };
-      }
-      const placeholders = value.map(() => '?').join(', ');
-      return { sql: `${extracted} IN (${placeholders})`, params: value };
-    case '$exists':
-      return {
-        sql: value ? `${extracted} IS NOT NULL` : `${extracted} IS NULL`,
-        params: [],
-      };
-    default:
-      return { sql: `${extracted} = ?`, params: [value] };
-  }
-}

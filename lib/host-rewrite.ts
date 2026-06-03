@@ -232,11 +232,3 @@ export function rewriteLocalhostUrl(url: string): string {
 
   return rewritten;
 }
-
-/**
- * Reset the cached gateway host (for testing).
- * @internal
- */
-export function _resetGatewayCache(): void {
-  cachedGatewayHost = undefined;
-}

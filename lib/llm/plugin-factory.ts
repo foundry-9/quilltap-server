@@ -148,14 +148,3 @@ export function createEmbeddingProvider(
   }
 }
 
-/**
- * Get all available embedding providers
- *
- * @returns Array of all available embedding provider names
- */
-export function getAllAvailableEmbeddingProviders(): string[] {
-  const providers = providerRegistry
-    .getProvidersByCapability('embeddings')
-    .map(plugin => plugin.metadata.providerName);
-  return providers;
-}

@@ -161,85 +161,6 @@ function buildDelimiterPattern(
   }
 }
 
-// ============================================================================
-// FORMAT INSERTION UTILITIES
-// ============================================================================
-
-/** Format config with prefix/suffix for insertion */
-interface InsertableFormat {
-  prefix: string
-  suffix: string
-  lineStart?: boolean
-}
-
-/**
- * Insert formatting around selected text or at cursor position
- *
- * Handles both inline formats (bold, italic) and line-start formats (headers, lists).
- * For inline formats, wraps selected text or inserts empty markers.
- * For line-start formats, ensures the prefix is at the beginning of the line.
- *
- * Note: This function directly manipulates textarea.value because the ChatComposer
- * uses an uncontrolled textarea (defaultValue) for performance. It then syncs
- * the parent state via setInput.
- *
- * @param textarea - The textarea element
- * @param _currentValue - DEPRECATED: We read from textarea.value directly
- * @param config - Format configuration (Markdown, AnnotationButton, or InsertableFormat)
- * @param setInput - Function to update the parent state
- */
-export function insertFormat(
-  textarea: HTMLTextAreaElement,
-  _currentValue: string,
-  config: MarkdownFormatConfig | AnnotationButton | InsertableFormat,
-  setInput: (value: string) => void
-): void {
-  // Read from textarea.value directly (uncontrolled component)
-  const currentValue = textarea.value
-  const start = textarea.selectionStart
-  const end = textarea.selectionEnd
-  const selectedText = currentValue.substring(start, end)
-
-  let newValue: string
-  let newCursorPos: number
-
-  // Check if this is a line-start format (headers, lists)
-  const isLineStart = 'lineStart' in config && config.lineStart
-
-  if (isLineStart) {
-    // For line-start formats, ensure we're at the start of a line
-    const lineStart = currentValue.lastIndexOf('\n', start - 1) + 1
-    const before = currentValue.substring(0, lineStart)
-    const lineContent = selectedText || ''
-    const after = currentValue.substring(end)
-
-    newValue = before + config.prefix + lineContent + config.suffix + after
-    newCursorPos = lineStart + config.prefix.length + lineContent.length
-  } else {
-    // For inline formats, wrap selected text or insert empty markers
-    const before = currentValue.substring(0, start)
-    const after = currentValue.substring(end)
-    const wrapped = config.prefix + selectedText + config.suffix
-
-    newValue = before + wrapped + after
-    // If text was selected, place cursor after wrapped text
-    // If no text selected, place cursor between prefix and suffix
-    newCursorPos = selectedText
-      ? start + wrapped.length
-      : start + config.prefix.length
-  }
-
-  // Directly update the textarea DOM value (uncontrolled component)
-  textarea.value = newValue
-
-  // Sync parent state
-  setInput(newValue)
-
-  // Focus and set cursor position immediately
-  textarea.focus()
-  textarea.setSelectionRange(newCursorPos, newCursorPos)
-}
-
 /**
  * Generate a tooltip for a template delimiter
  *
@@ -252,11 +173,3 @@ export function getDelimiterTooltip(delimiter: TemplateDelimiter): string {
   return `${delimiter.name} (${prefix}...${suffixText})`
 }
 
-/**
- * Generate a tooltip for a legacy annotation button
- * @deprecated Use getDelimiterTooltip instead
- */
-export function getAnnotationTooltip(button: AnnotationButton): string {
-  const suffixText = button.suffix || 'EOL'
-  return `${button.label} (${button.prefix}...${suffixText})`
-}

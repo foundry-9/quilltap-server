@@ -51,9 +51,3 @@ export interface ImageDetailModalProps {
 
 // EntityType is now only 'character' - personas have been migrated to characters with controlledBy: 'user'
 export type EntityType = 'character'
-
-export interface TagActionParams {
-  imageId: string
-  entityType: 'CHARACTER'
-  entityId: string
-}

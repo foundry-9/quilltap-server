@@ -9,8 +9,6 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { foldChatSummary, ChatMessage, generateTitleFromSummary, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
-import { countMessagesTokens } from '@/lib/tokens/token-counter'
-import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent } from '@/lib/schemas/types'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
@@ -206,55 +204,6 @@ export interface SummaryGenerationResult {
     completionTokens: number
     totalTokens: number
   }
-}
-
-/**
- * Check if a chat needs a context summary
- * Based on message count and estimated token usage
- */
-export async function chatNeedsSummary(
-  chatId: string,
-  provider: Provider,
-  modelName: string
-): Promise<{ needsSummary: boolean; reason?: string }> {
-  const repos = getRepositories()
-
-  // Get chat metadata
-  const chat = await repos.chats.findById(chatId)
-  if (!chat) {
-    return { needsSummary: false, reason: 'Chat not found' }
-  }
-
-  // If already has a summary, check if it needs updating
-  if (chat.contextSummary) {
-    // Get message count since last summary
-    // For now, we regenerate if message count exceeds threshold
-    if (chat.messageCount < 100) {
-      return { needsSummary: false, reason: 'Existing summary is recent enough' }
-    }
-  }
-
-  // Get messages to estimate token count
-  const messages = await repos.chats.getMessages(chatId)
-  const conversationMessages = messages
-    .filter(msg => msg.type === 'message')
-    .filter(msg => {
-      const role = (msg as { role: string }).role
-      return role === 'USER' || role === 'ASSISTANT'
-    })
-    .map(msg => ({ role: (msg as { role: string }).role, content: (msg as { content: string }).content }))
-
-  const estimatedTokens = countMessagesTokens(conversationMessages, provider)
-  const contextLimit = getModelContextLimit(provider, modelName)
-
-  if (shouldSummarizeConversation(conversationMessages.length, estimatedTokens, contextLimit)) {
-    return {
-      needsSummary: true,
-      reason: `Conversation has ${conversationMessages.length} messages using ~${estimatedTokens} tokens (${Math.round((estimatedTokens / contextLimit) * 100)}% of context)`,
-    }
-  }
-
-  return { needsSummary: false }
 }
 
 interface FoldedTurn {
@@ -618,24 +567,6 @@ export async function invalidateContextSummaryIfMessageCovered(
   } catch (error) {
     logger.error('[Context Summary] Invalidation hook failed', { chatId },
       error instanceof Error ? error : new Error(String(error)))
-    return false
-  }
-}
-
-/**
- * Clear the context summary for a chat
- */
-export async function clearContextSummary(chatId: string): Promise<boolean> {
-  const repos = getRepositories()
-
-  try {
-    await repos.chats.update(chatId, {
-      contextSummary: null,
-      updatedAt: new Date().toISOString(),
-    })
-    return true
-  } catch (error) {
-    logger.error('Failed to clear context summary:', {}, error instanceof Error ? error : new Error(String(error)))
     return false
   }
 }

@@ -4,6 +4,16 @@
 
 ### 4.6-dev
 
+#### Chore: dead-code sweep (knip)
+
+Removed dead exports and unused local types surfaced by knip. knip reported no unused files and no unused dependencies; the work was in the `Unused exports` / `Unused exported types` lists. A reference-count pass narrowed 1991 flagged symbols to 164 with zero references anywhere (including `packages/`, `plugins/`, tests, configs, dynamic imports) and zero in-file use; each was investigated individually before removal.
+
+- Deleted ~100 dead functions, constants, and unused type/interface declarations across 56 files — net 1,627 deletions / 6 insertions. Largest removals: `getCheapLLMProviderWithPricing` (`lib/llm/cheap-llm.ts`), seven unused query helpers in `lib/services/llm-logging.service.ts`, `findSimilarMemories`/`findSimilarMemoriesWithEmbedding` (`lib/memory/memory-service.ts`), the `lib/files/folder-utils.ts` tree helpers, and `lib/database/backends/sqlite/json-columns.ts` array helpers. Also removed now-orphaned private helper interfaces left behind by those functions.
+- Intentional surface was kept after investigation: lifecycle `stop*`/`is*Running` functions whose `start*` counterparts are wired in `instrumentation.ts`; plugin SDK contract types and registry accessors (moderation/provider registries); theme Ed25519 crypto and validation API; single-user/auth helpers; and all Zod schema / `z.infer` data-model surface and `*ToolInputSchema` exports.
+- `components/providers/chat-context.tsx` was briefly removed then restored — its `ChatProvider` is unused by name but its sibling `useChatContext` is consumed by `app/salon/[id]/page.tsx`.
+- Verified with `npx tsc --noEmit`, the full `npm run test:unit` suite, and `eslint` on the changed files; re-ran knip to confirm the reductions (exports 1237→1170, types 754→727) with no new unused files.
+- Updated `docs/developer/DEAD-CODE-REPORT.md` with the full per-file accounting.
+
 #### Tests: regression coverage for the coreWhisper chat_settings column and the plugin logger debug stub
 
 Added unit tests for two fixes that shipped without dedicated coverage.
