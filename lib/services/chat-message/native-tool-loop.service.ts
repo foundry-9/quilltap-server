@@ -45,6 +45,7 @@ import {
 } from './streaming.service'
 import { detectToolCallsInResponse, processToolCalls } from './tool-execution.service'
 import { buildForceFinalMessage, generateIterationSummary, type ResolvedAgentMode } from './agent-mode-resolver.service'
+import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
 
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character } from '@/lib/schemas/types'
@@ -80,6 +81,27 @@ export interface RunNativeToolLoopOptions {
 
 const GHOST_WRAP_REJECTION_MESSAGE =
   "Rejected: submit_final_response was called on the first iteration without any accompanying task work or conversational prose this turn. The previous turn already concluded — do not re-wrap completed work. Respond to the user's current message directly, in character, as natural prose. You may use memory or other tools first if helpful, but only call submit_final_response after completing fresh agentic work that warrants a structured summary."
+
+/**
+ * Provider finish-reason strings that mean "the output was cut off because it
+ * hit the token ceiling." Compared case-insensitively so Google's `MAX_TOKENS`,
+ * Anthropic's `max_tokens`, and OpenAI/OpenAI-compatible `length` all match.
+ */
+function isTruncatedFinishReason(reason: string | null): boolean {
+  if (!reason) return false
+  const r = reason.toLowerCase()
+  return r === 'max_tokens' || r === 'length' || r === 'model_length'
+}
+
+/**
+ * The tool result returned for a tool call that was cut off mid-arguments by
+ * the output-token limit. The arguments JSON is incomplete (often missing
+ * required fields like `path`), so the call is rejected rather than executed
+ * against half-parsed input. The message tells the model how to recover.
+ */
+function buildToolTruncationMessage(toolName: string): string {
+  return `Rejected: this ${toolName} call was cut off because the response reached the output token limit before the tool arguments finished generating. The arguments are incomplete, so the call was NOT executed. Retry with a smaller call — for file writes, write less content at once or use doc_str_replace for a targeted edit instead of rewriting the whole file — or ask the user to raise the output token limit (max_tokens) on this connection profile.`
+}
 
 /**
  * Run the bounded native-tool loop, including agent-mode `submit_final_response`
@@ -125,6 +147,13 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
     // each resulting tool message so the Salon UI can splice the block back in.
     const batchAnchor = streaming.fullResponse.length
 
+    // Truncation guard: if the response hit the output-token ceiling, the tool
+    // call it emitted was cut off mid-arguments and cannot be trusted —
+    // executing a half-parsed call crashes path resolution (undefined `path`)
+    // or silently writes truncated content. Reject the whole batch below and
+    // re-prompt the model to make a smaller call.
+    const truncated = isTruncatedFinishReason(extractFinishReason(currentRawResponse))
+
     const submitFinalCall = agentMode.enabled
       ? toolCalls.find(tc => tc.name === 'submit_final_response')
       : undefined
@@ -141,7 +170,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
       toolCalls.length === 1 &&
       !(currentResponse && currentResponse.trim().length > 0)
 
-    if (submitFinalCall && !isGhostWrapUp) {
+    if (submitFinalCall && !isGhostWrapUp && !truncated) {
       // Process sibling tool calls *first* so they don't get silently dropped.
       // The old logic broke on submit_final_response before any other tool in
       // the same response could run — meaning `[edit_file, submit_final_response]`
@@ -229,7 +258,28 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
     }
 
     let results: ToolProcessingResult
-    if (isGhostWrapUp && submitFinalCall) {
+    if (truncated) {
+      // The model ran out of output tokens before finishing its tool
+      // arguments. Don't execute the half-parsed call(s); return a recoverable
+      // failure per call (each tool_use needs a matching tool_result for
+      // providers that pair them by callId) explaining the cut-off, then
+      // re-stream so the model can retry smaller.
+      logger.warn('Tool call(s) truncated by output-token limit — not executing', {
+        chatId,
+        toolNames: toolCalls.map(tc => tc.name),
+        iterations: toolIterations,
+      })
+      results = {
+        toolMessages: toolCalls.map(tc => ({
+          toolName: tc.name,
+          success: false,
+          content: buildToolTruncationMessage(tc.name),
+          callId: tc.callId,
+          arguments: tc.arguments,
+        })),
+        generatedImagePaths: [],
+      }
+    } else if (isGhostWrapUp && submitFinalCall) {
       logger.info('[AgentMode] Rejecting iteration-0 submit_final_response with no prior work this turn', {
         chatId,
         rejectedResponseLength: (submitFinalCall.arguments as { response?: string }).response?.length,

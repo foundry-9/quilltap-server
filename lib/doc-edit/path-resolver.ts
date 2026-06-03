@@ -158,6 +158,20 @@ export async function resolveDocEditPath(
   context: PathResolutionContext
 ): Promise<ResolvedPath> {
 
+  // Guard against a missing/malformed path before anything tries to .split()
+  // it. A tool call truncated at the model's output-token limit can arrive
+  // with `path` undefined (the arguments JSON was cut off mid-stream); without
+  // this guard the very next line crashed with an opaque
+  // "Cannot read properties of undefined (reading 'split')" that the model
+  // could not act on. Surface a clean, recoverable error instead.
+  if (typeof relativePath !== 'string') {
+    logger.warn(`Missing or non-string path in ${scope} scope`, { received: typeof relativePath });
+    throw new PathResolutionError(
+      `A file path is required, but none was provided (the tool call may have been cut off before its arguments finished generating).`,
+      'INVALID_PATH'
+    );
+  }
+
   // Security check: reject traversal attempts
   if (hasTraversalSegments(relativePath)) {
     logger.warn(`Traversal attempt detected in ${scope} scope: ${relativePath}`);

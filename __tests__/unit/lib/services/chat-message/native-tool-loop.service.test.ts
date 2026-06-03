@@ -413,6 +413,78 @@ describe('native-tool-loop.service', () => {
     expect(mockRepoChatsUpdate).not.toHaveBeenCalled()
   })
 
+  it('truncation guard: a tool call cut off at the output-token limit is NOT executed and gets a recoverable failure message', async () => {
+    // Friday's bug: a doc_write_file whose huge `content` blew past the output
+    // token ceiling, so the streamed arguments JSON was cut off before `path`
+    // was emitted. The parsed arguments are missing `path`; executing them
+    // crashed path resolution with "Cannot read properties of undefined
+    // (reading 'split')". Now the loop detects stop_reason=max_tokens and
+    // rejects the call instead of running it.
+    mockDetectToolCalls
+      .mockReturnValueOnce([{ name: 'doc_write_file', arguments: { content: 'a giant partial blob…' }, callId: 'tc-1' }])
+      .mockReturnValueOnce([])
+
+    nextStreamMessageScripts = [[
+      { content: 'let me try a smaller write' },
+      { done: true, usage: null, cacheUsage: null, rawResponse: { stop_reason: 'end_turn' } },
+    ]]
+    nextStreamMessageBehaviours = ['happy']
+
+    const opts = makeBaseOpts({
+      streaming: makeStreaming({ fullResponse: '', rawResponse: { stop_reason: 'max_tokens' } }),
+    })
+    await runNativeToolLoop(opts as any)
+
+    // The truncated call is never handed to the executor.
+    expect(mockProcessToolCalls).not.toHaveBeenCalled()
+    // A failure tool message is synthesized so the tool_use has a matching
+    // tool_result (providers pair them by callId) and the model learns why.
+    expect(opts.toolMessages).toHaveLength(1)
+    expect(opts.toolMessages[0]?.toolName).toBe('doc_write_file')
+    expect(opts.toolMessages[0]?.success).toBe(false)
+    expect(opts.toolMessages[0]?.callId).toBe('tc-1')
+    expect(opts.toolMessages[0]?.content).toContain('cut off')
+    expect(opts.toolMessages[0]?.content).toContain('output token limit')
+
+    // The loop re-prompts so the model can retry smaller.
+    expect(streamMessageCalls).toHaveLength(1)
+    const sent = streamMessageCalls[0]!
+    const messages = sent.messages as Array<{ role: string; content?: string; toolCallId?: string }>
+    expect(messages[messages.length - 1]).toMatchObject({ role: 'tool', toolCallId: 'tc-1' })
+    expect(opts.streaming.fullResponse).toBe('let me try a smaller write')
+  })
+
+  it('truncation guard: a truncated submit_final_response does NOT terminate the agent loop or overwrite the response', async () => {
+    // Without the !truncated gate, a submit_final_response cut off mid-arguments
+    // would still set streaming.fullResponse to its partial `response` arg and
+    // end the turn. It must be rejected like any other truncated call.
+    mockDetectToolCalls
+      .mockReturnValueOnce([{ name: 'submit_final_response', arguments: { response: 'SHOULD-NOT-USE' }, callId: 'tc-f' }])
+      .mockReturnValueOnce([])
+
+    nextStreamMessageScripts = [[
+      { content: 'recovered-prose' },
+      { done: true, usage: null, cacheUsage: null, rawResponse: { stop_reason: 'end_turn' } },
+    ]]
+    nextStreamMessageBehaviours = ['happy']
+
+    const opts = makeBaseOpts({
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
+      // Non-empty prose so this isn't classified as a ghost-wrap; we want to
+      // prove the *truncation* gate (not the ghost-wrap gate) does the work.
+      streaming: makeStreaming({ fullResponse: 'I will finish now. ', rawResponse: { stop_reason: 'max_tokens' } }),
+    })
+    await runNativeToolLoop(opts as any)
+
+    expect(mockProcessToolCalls).not.toHaveBeenCalled()
+    expect(opts.streaming.fullResponse).toBe('I will finish now. recovered-prose')
+    expect(opts.streaming.fullResponse).not.toContain('SHOULD-NOT-USE')
+    expect(opts.toolMessages).toHaveLength(1)
+    expect(opts.toolMessages[0]?.toolName).toBe('submit_final_response')
+    expect(opts.toolMessages[0]?.success).toBe(false)
+    expect(opts.toolMessages[0]?.content).toContain('cut off')
+  })
+
   it('on follow-up stream error: preservePartialOnError is called and the error re-throws', async () => {
     mockDetectToolCalls.mockReturnValueOnce([{ name: 'doc_open_file', arguments: {}, callId: 'tc-1' }])
     mockProcessToolCalls.mockResolvedValueOnce({

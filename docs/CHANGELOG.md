@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Fix: doc_write_file crashed (and silently looped) on tool calls truncated at the output-token limit
+
+A character trying to rewrite a large file in one `doc_write_file` call could hit the model's output-token ceiling mid-arguments, so the streamed tool-call JSON was cut off before `path` was emitted. The parsed arguments arrived with `path` undefined, and `resolveDocEditPath` crashed in `hasTraversalSegments` with an opaque "Cannot read properties of undefined (reading 'split')". The model saw only that cryptic error and retried the identical doomed call until the turn's tool-iteration cap. Two layered fixes:
+
+- **`lib/doc-edit/path-resolver.ts`** — `resolveDocEditPath` now guards against a non-string `relativePath` up front, throwing a clean `PathResolutionError('INVALID_PATH')` ("A file path is required, but none was provided…") instead of letting the `undefined.split()` TypeError escape. This is the single chokepoint for every path-bearing doc tool (read/write/str_replace/insert/move/copy/delete/frontmatter/heading/open), so all of them are now protected. Empty/root paths used by list/grep are unaffected (those don't route through here with a path).
+- **`lib/services/chat-message/native-tool-loop.service.ts`** — the native tool loop now detects a truncated finish reason (`extractFinishReason` → `max_tokens` / `length` / `MAX_TOKENS`) and, when the model emitted tool calls, declines to execute the half-parsed call(s). It returns a recoverable per-call failure ("this call was cut off because the response reached the output token limit… retry with a smaller call — write less content at once or use doc_str_replace… or raise max_tokens") and re-prompts, so the model gets the real reason and can recover. A truncated `submit_final_response` no longer terminates the agent loop or overwrites the response with its partial `response` arg.
+- **Tests** — `__tests__/unit/lib/doc-edit/path-resolver.test.ts` covers the undefined/null/non-string path guard; `__tests__/unit/lib/services/chat-message/native-tool-loop.service.test.ts` covers the truncated-tool-call rejection and the truncated-`submit_final_response` gate.
+
 #### Chore: dead-code sweep (knip)
 
 Removed dead exports and unused local types surfaced by knip. knip reported no unused files and no unused dependencies; the work was in the `Unused exports` / `Unused exported types` lists. A reference-count pass narrowed 1991 flagged symbols to 164 with zero references anywhere (including `packages/`, `plugins/`, tests, configs, dynamic imports) and zero in-file use; each was investigated individually before removal.
