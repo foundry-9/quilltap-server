@@ -4,6 +4,17 @@
 
 ### 4.6-dev
 
+#### Terminal Mode: per-session shell bootstrap (data dir, CLI alias, completions, prompt)
+
+Every Ariel terminal is now spawned with a shell bootstrap so the in-terminal `quilltap` CLI targets the right instance and matches the server version.
+
+- **`QUILLTAP_DATA_DIR` (all shells/platforms)** — set in `pty-manager.spawn()` to `getBaseDataDir()` (the instance root; `/app/quilltap` under Docker), authoritatively after any caller-provided env. For bash and zsh it is *also re-exported inside the shell init, after the user's rc is sourced*, so a `QUILLTAP_DATA_DIR` exported by the user's shell config (common for general CLI use) cannot clobber the server's instance. Flag-free `quilltap` commands in the terminal now address the running server's instance via the CLI's `QUILLTAP_DATA_DIR` resolution tier.
+- **`quilltap` alias (bash + zsh)** — when an on-PATH `quilltap` differs from the server version (or is absent), the shell aliases `quilltap` to `node <repo>/packages/quilltap/bin/quilltap.js`. The repo script path is resolved from `process.cwd()` and omitted when absent (standalone/prod), so no alias is emitted there. The version check runs inside the shell init (it has the real PATH); the server only injects its version + the script path.
+- **bash completions (#3) + cwd prompt (#4)** — bash sessions source the `quilltap` bash completions and set `PS1='\[\e[1;34m\]\w\[\e[0m\] \$ '` (colored working directory before `$`).
+- **New `lib/terminal/shell-init.ts`** — pure builders (`buildBashInitScript`, `buildZshInitFiles`, `shellSingleQuote`) plus `prepareShellInit`, which writes a per-session bash `--rcfile` or a zsh `ZDOTDIR` (`.zshenv`/`.zshrc` that source the user's originals and restore `ZDOTDIR`) under `<logsDir>/terminals/`. bash gets `--rcfile` argv; zsh gets `ZDOTDIR`/`QT_ORIG_ZDOTDIR` env overrides; other shells get only the env var. Artifacts are removed by a `cleanupInit` closure on session exit (and on spawn failure). Bootstrap failures degrade to a plain shell.
+- **`lib/terminal/types.ts`** — `PtySession.cleanupInit`. **`lib/terminal/pty-manager.ts`** — wires the args/env/cleanup and adds debug logs.
+- **Tests** — `lib/terminal/__tests__/shell-init.test.ts` covers the builders and `prepareShellInit` wiring.
+
 #### Dev tooling: Concierge tri-state acceptance test script
 
 Added `scripts/concierge-tristate-test.sh`, a CLI harness for the CT-1 (sidebar tri-state control) and CT-2 (off-duty stability) acceptance checks of the per-chat Concierge danger status. State changes are driven through `PUT /api/v1/chats/[id]` (the sidebar's `applyConciergeFlip` path) and assertions are read-only `quilltap db --json` queries, so it never writes to the encrypted DB directly. For each transition it verifies the `(conciergeOverride, isDangerousChat)` pair, the derived header pill, and the synthetic Concierge announcement — covering all four announcement kinds and both flag-preservation cases. CT-2's scan-skip is checked via `--arm`/`--recheck` across a real ~10-min scan tick; the classification handler's off-duty bail-at-entry is covered by running the existing jest guard suites. Flags: `--dry-run`, `--arm`, `--recheck`, `--no-jest`, `--keep`, `--instance`, `--base-url`, `--chat`.
