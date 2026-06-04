@@ -4,6 +4,15 @@
 
 ### 4.6-dev
 
+#### Docs: fix factual drift in README and API reference
+
+Release-prep accuracy pass over the user- and developer-facing docs. No code changes.
+
+- `README.md`: corrected the plugin extension-point count from "seven" to "eight" (the table lists eight). Removed the dead `File LLM Access` link (`docs/developer/FILE_LLM_ACCESS.md` no longer exists). Fixed the `Memory Management` link to point at `docs/developer/features/complete/memory_management.md`.
+- `docs/developer/API.md`: removed two documented-but-nonexistent character sub-resource sections — `Character Clothing Records` (migrated to Wardrobe; see `migratedFromClothingRecordId`) and `Character Descriptions` (now the `physicalDescription` field, not a CRUD endpoint set) — plus the orphaned table-of-contents entry. Corrected four read-only chat actions documented as `POST` to `GET` (`get-avatars`, `get-state`, `outfit`, `get-background`), matching `app/api/v1/chats/[id]/handlers/get.ts`.
+- `.claude/commands/update-documentation.md`: fixed the documentation tracker's `memory_management.md` entry to point at the `complete/` path, matching the README link correction above.
+- `docs/developer/DEVELOPMENT.md`: added a pre-release checklist item to verify the Quilltap CLI's documentation, shell completions, and tooling are up-to-date.
+
 #### Refactor: split the large characters API route files into SRP-compliant handlers/
 
 Two oversized route files under `app/api/v1/characters/` were broken up into per-verb handler modules. No behavior change — the same endpoints, actions, schemas, and responses; only the file layout moved.

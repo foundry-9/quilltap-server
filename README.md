@@ -274,7 +274,7 @@ Themes are distributed as `.qtap-theme` bundles — declarative archives contain
 
 ## For Developers
 
-Quilltap was built to be extended. The plugin system supports seven extension points, all delivered as npm packages:
+Quilltap was built to be extended. The plugin system supports eight extension points, all delivered as npm packages:
 
 | Plugin Type | What It Does |
 | ----------- | ------------ |
@@ -340,9 +340,8 @@ See the [Development Guide](docs/developer/DEVELOPMENT.md) for local setup, test
 - [Deployment Guide](docs/DEPLOYMENT.md) — Production setup with SSL and reverse proxies
 - [API Reference](docs/developer/API.md) — REST endpoints
 - [Image Generation](docs/developer/IMAGE_GENERATION.md) — Provider configuration
-- [File LLM Access](docs/developer/FILE_LLM_ACCESS.md) — How AI reads your files
 - [Database Architecture](docs/developer/DATABASE_ABSTRACTION.md) — SQLite backend and protection
-- [Memory Management](docs/developer/features/memory_management.md) — How the Commonplace Book actually works end-to-end
+- [Memory Management](docs/developer/features/complete/memory_management.md) — How the Commonplace Book actually works end-to-end
 - [Prompt Architecture](docs/developer/PROMPT_ARCHITECTURE.md) — How system prompts are assembled
 - [Changelog](docs/CHANGELOG.md) — Release history
 - [Roadmap](docs/developer/features/ROADMAP.md) — What's coming
