@@ -120,6 +120,23 @@
   /* --qt-input-placeholder: var(--color-muted-foreground); */
   /* --qt-input-focus-ring: var(--color-ring); */
   /* --qt-input-transition: colors 150ms cubic-bezier(0.4, 0, 0.2, 1); */
+  /* Select chevron — a full url() data URI; swap the whole glyph to restyle it. */
+  /* --qt-select-arrow: url("data:image/svg+xml,..."); */
+
+  /* ======================================================================
+     CHECKBOX & RADIO VARIABLES
+     accent-color recolors the native fill/check; size/border/radius apply
+     to appearance:none controls.
+     ====================================================================== */
+  /* --qt-checkbox-size: 1rem; */
+  /* --qt-checkbox-radius: var(--radius-sm); */
+  /* --qt-checkbox-border: var(--color-border); */
+  /* --qt-checkbox-accent: var(--color-primary); */
+  /* --qt-checkbox-focus-ring: var(--color-ring); */
+  /* --qt-radio-size: 1rem; */
+  /* --qt-radio-border: var(--color-border); */
+  /* --qt-radio-accent: var(--color-primary); */
+  /* --qt-radio-focus-ring: var(--color-ring); */
 
   /* ======================================================================
      NAVBAR VARIABLES

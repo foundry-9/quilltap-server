@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Chore: sync qt-checkbox/qt-radio/select-arrow tokens into theme-storybook and create-quilltap-theme
+
+Completed the package follow-up deferred from the tokenization refactor below. The new `--qt-checkbox-*`, `--qt-radio-*`, and `--qt-select-arrow` tokens (plus the migrated form-control classes) now also ship in the two published theme-author packages. `@quilltap/theme-storybook` 1.0.37 → 1.0.38 (`src/css/qt-components.css`) and `create-quilltap-theme` 2.0.9 → 2.0.10 (`templates/bundle/styles.css.template` and the `THEME_PLUGIN_DEVELOPMENT.md` token reference), both published to npm. No root dependency bump: the app dropped its `@quilltap/theme-storybook` dependency in 4.4.0 (it's consumed only by external theme projects), and `create-quilltap-theme` is a standalone CLI.
+
 #### Refactor: tokenize qt-checkbox/qt-radio/select-arrow and finish the form-control migration
 
 Closed the gaps found in the previous qt-* audit so the component layer is fully theme-overridable.
@@ -13,7 +17,7 @@ Closed the gaps found in the previous qt-* audit so the component layer is fully
 - **`qt-button-success` normalized.** It hand-rolled its own base (`rounded-lg px-4 py-2 font-semibold`); folded it into the shared button base selector so it honors `--qt-button-radius`/padding/font and gains the standard focus-visible ring and disabled handling like every other variant. Success buttons now match the metrics of primary/secondary buttons.
 - **More controls migrated to `qt-*`:** Cancel buttons in `app/aurora/[id]/edit/page.tsx`, `ExternalPromptDialog.tsx`, `NewChatModal.tsx`, and `app/salon/new/page.tsx` → `qt-button qt-button-secondary`; the pronouns/coreWhisper select and scenario-title input in `CharacterBasicInfo.tsx` → `qt-select`/`qt-input`; the cron/freshness/spend-cap inputs and four visibility radios in `NewChatForm.tsx` → `qt-input`/`qt-radio`; three inline selects in `ChatSidebar.tsx` → `qt-select qt-select-sm`.
 - Theme-author token reference in `docs/developer/THEME_PLUGIN_DEVELOPMENT.md` updated with the new input/checkbox/radio/select-arrow tokens.
-- **Deferred:** the matching copies in `packages/theme-storybook` and `packages/create-quilltap-theme` are not yet updated (they require an npm publish round) — follow-up.
+- **Resolved:** the matching copies in `packages/theme-storybook` and `packages/create-quilltap-theme` were updated and published (see the sync entry above).
 
 #### Refactor: standardize hand-rolled form controls and buttons on qt-* component classes
 
