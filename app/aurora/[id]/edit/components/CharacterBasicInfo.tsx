@@ -42,7 +42,7 @@ function AliasInput({ onAdd }: { onAdd: (alias: string) => void }) {
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={handleKeyDown}
-      className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      className="qt-input"
       placeholder="Type an alias and press Enter"
     />
   )
@@ -183,7 +183,7 @@ export function CharacterBasicInfo({
           value={formData.name}
           onChange={onChange}
           required
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="qt-input"
         />
       </div>
 
@@ -240,7 +240,7 @@ export function CharacterBasicInfo({
               onPronounsChange({ ...selected.value })
             }
           }}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          className="qt-select"
         >
           {PRONOUN_PRESETS.map((preset) => (
             <option key={preset.label} value={preset.label}>
@@ -257,7 +257,7 @@ export function CharacterBasicInfo({
                 value={formData.pronouns.subject}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, subject: e.target.value })}
                 placeholder="e.g., they"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                className="qt-input"
               />
             </div>
             <div>
@@ -267,7 +267,7 @@ export function CharacterBasicInfo({
                 value={formData.pronouns.object}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, object: e.target.value })}
                 placeholder="e.g., them"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                className="qt-input"
               />
             </div>
             <div>
@@ -277,7 +277,7 @@ export function CharacterBasicInfo({
                 value={formData.pronouns.possessive}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, possessive: e.target.value })}
                 placeholder="e.g., their"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                className="qt-input"
               />
             </div>
           </div>
@@ -295,7 +295,7 @@ export function CharacterBasicInfo({
           name="title"
           value={formData.title}
           onChange={onChange}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          className="qt-input"
           placeholder="Your private label for this character — e.g., the protagonist, the rival, the love interest. Not how strangers refer to them."
         />
       </div>

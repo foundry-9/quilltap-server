@@ -376,7 +376,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-primary-foreground shadow transition hover:qt-bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="qt-button qt-button-primary qt-button-lg flex-1"
           >
             {saving ? 'Saving...' : 'Save Character'}
           </button>

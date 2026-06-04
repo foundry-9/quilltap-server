@@ -354,7 +354,7 @@ export function NewChatForm({
               value={singleLlm.connectionProfileId}
               onChange={(e) => handleSingleProfileChange(e.target.value)}
               disabled={creating}
-              className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-select"
             >
               <option value="">Select a profile</option>
               {profiles.map((profile) => (
@@ -377,7 +377,7 @@ export function NewChatForm({
               value={singleLlm.selectedSystemPromptId || ''}
               onChange={(e) => handleSingleSystemPromptChange(e.target.value || null)}
               disabled={creating}
-              className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-select"
             >
               <option value="">Use Default</option>
               {singleLlm.character.systemPrompts!.map((prompt) => (
@@ -402,7 +402,7 @@ export function NewChatForm({
                 setState((prev) => ({ ...prev, selectedUserCharacterId: e.target.value }))
               }
               disabled={creating}
-              className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-select"
             >
               <option value="">Chat as yourself</option>
               {userControlledCharacters.map((char) => (
@@ -442,7 +442,7 @@ export function NewChatForm({
               value={dropdownValue}
               onChange={(e) => handleScenarioSelectChange(e.target.value)}
               disabled={creating}
-              className="mb-2 w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-select mb-2"
             >
               <option value={CUSTOM_SCENARIO_VALUE}>Custom...</option>
               {hasProjectScenarios && (
@@ -748,7 +748,7 @@ function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: Autonom
               onChange={(e) => setNumber('budgetMaxTurns', e.target.value)}
               disabled={disabled}
               placeholder="(none)"
-              className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-input"
             />
           </div>
           <div>
@@ -761,7 +761,7 @@ function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: Autonom
               onChange={(e) => setNumber('budgetMaxTokens', e.target.value)}
               disabled={disabled}
               placeholder="(none)"
-              className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-input"
             />
           </div>
           <div>
@@ -774,7 +774,7 @@ function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: Autonom
               onChange={(e) => setNumber('budgetMaxWallClockMinutes', e.target.value)}
               disabled={disabled}
               placeholder="(none)"
-              className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-input"
             />
           </div>
           <div className="col-span-2 md:col-span-3">

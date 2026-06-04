@@ -32,7 +32,7 @@ export function ThinkingDisplaySettings({ settings, saving, onUpdate }: Thinking
             checked={defaultVisible}
             onChange={(e) => onUpdate({ defaultVisible: e.target.checked })}
             disabled={saving}
-            className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+            className="qt-checkbox mt-1"
           />
           <div className="flex-1">
             <div className="font-medium">Show thinking by default</div>
@@ -49,7 +49,7 @@ export function ThinkingDisplaySettings({ settings, saving, onUpdate }: Thinking
             checked={defaultCollapsed}
             onChange={(e) => onUpdate({ defaultCollapsed: e.target.checked })}
             disabled={saving || !defaultVisible}
-            className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+            className="qt-checkbox mt-1"
           />
           <div className="flex-1">
             <div className="font-medium">Start collapsed</div>

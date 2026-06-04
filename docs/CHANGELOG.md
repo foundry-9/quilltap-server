@@ -4,6 +4,15 @@
 
 ### 4.6-dev
 
+#### Refactor: standardize hand-rolled form controls and buttons on qt-* component classes
+
+Audited the UI components changed since 4.5.1 against the `qt-*` theme utility class standard and converted controls that hand-assembled their look from raw utilities (including theme-aware shadcn tokens like `bg-card`/`text-foreground`) to the existing `qt-*` component classes, so the per-component theme tokens (`--qt-input-*`, `--qt-button-*`, `--qt-checkbox`, …) now reach them. No hard-coded Tailwind palette colors were found anywhere in the changed set; this is a component-class consistency pass with no behavior change.
+
+- Form controls → `qt-input` / `qt-select` / `qt-checkbox`: `app/aurora/[id]/edit/components/CharacterBasicInfo.tsx` (text inputs, pronouns select), `components/new-chat/NewChatForm.tsx` (4 selects, 3 budget inputs), `app/aurora/[id]/view/components/ExternalPromptDialog.tsx` (`selectClasses` const), `components/settings/connection-profiles/ProfileModal.tsx` (10 checkboxes), `components/settings/chat-settings/ThinkingDisplaySettings.tsx` (2 checkboxes).
+- Buttons → `qt-button-*`: `app/aurora/[id]/edit/page.tsx` (Save), `ExternalPromptDialog.tsx` (Generate), `app/salon/new/page.tsx` and `components/new-chat/NewChatModal.tsx` (Start), `components/images/image-detail/ImageMetadata.tsx` (Set Avatar), `ProfileModal.tsx` (Fetch Models, now matching its sibling Test Message button).
+- Consistency: `components/chat/ImageModal.tsx` and `components/chat/ChatGalleryImageViewModal.tsx` delete buttons use `hover:qt-bg-destructive` instead of the bare `hover:bg-destructive` token.
+- Left as-is intentionally: non-full-width inline selects (`components/chat/ChatSidebar.tsx`, the coreWhisper select in `CharacterBasicInfo.tsx`) where `qt-select`'s forced `w-full` would change layout, and custom-shaped affordances (round overlay/icon buttons, the translucent badge pill, the larger `h-5 w-5` transparency toggle) that no `qt-*` component variant matches.
+
 #### Fix: doc_write_file crashed (and silently looped) on tool calls truncated at the output-token limit
 
 A character trying to rewrite a large file in one `doc_write_file` call could hit the model's output-token ceiling mid-arguments, so the streamed tool-call JSON was cut off before `path` was emitted. The parsed arguments arrived with `path` undefined, and `resolveDocEditPath` crashed in `hasTraversalSegments` with an opaque "Cannot read properties of undefined (reading 'split')". The model saw only that cryptic error and retried the identical doomed call until the turn's tool-iteration cap. Two layered fixes:

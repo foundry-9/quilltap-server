@@ -85,7 +85,7 @@ export function ImageMetadata({
                           onSetAsAvatar('character', character.id)
                         }}
                         disabled={isSettingAvatar}
-                        className="px-2 py-1 bg-success hover:qt-bg-success/90 qt-text-success-foreground rounded text-xs font-medium transition-colors disabled:opacity-50"
+                        className="qt-button-success qt-button-sm"
                         title="Set as avatar"
                       >
                         {isSettingAvatar ? '...' : 'Set Avatar'}

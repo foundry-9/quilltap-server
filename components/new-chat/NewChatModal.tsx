@@ -231,7 +231,7 @@ export function NewChatModal({
             type="button"
             onClick={handleStart}
             disabled={!canSubmit}
-            className="inline-flex items-center rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-success-foreground shadow transition hover:qt-bg-success/90 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+            className="qt-button-success"
           >
             {creating
               ? (isContinuation ? 'Continuing...' : 'Creating...')

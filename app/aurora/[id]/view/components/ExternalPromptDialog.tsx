@@ -128,7 +128,7 @@ export function ExternalPromptDialog({
   const estimatedChars = maxTokens * 4
   const canGenerate = connectionProfileId && systemPromptId && !generating
 
-  const selectClasses = 'w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring'
+  const selectClasses = 'qt-select'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
@@ -252,7 +252,7 @@ export function ExternalPromptDialog({
           <button
             onClick={handleGenerate}
             disabled={!canGenerate}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90 disabled:opacity-50"
+            className="qt-button qt-button-primary"
           >
             {generating ? (
               <span className="inline-flex items-center gap-2">

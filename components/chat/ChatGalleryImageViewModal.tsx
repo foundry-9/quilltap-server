@@ -338,7 +338,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             handleDeleteClick()
           }}
-          className="p-2 qt-bg-destructive/80 hover:bg-destructive rounded-full qt-text-overlay transition-colors cursor-pointer"
+          className="p-2 qt-bg-destructive/80 hover:qt-bg-destructive rounded-full qt-text-overlay transition-colors cursor-pointer"
           title="Delete image permanently"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

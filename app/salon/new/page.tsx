@@ -170,7 +170,7 @@ export default function NewChatPage() {
             type="button"
             onClick={() => void handleCreateChat()}
             disabled={!canSubmit}
-            className="rounded-lg bg-success px-6 py-2 font-semibold qt-text-success-foreground transition hover:qt-bg-success/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="qt-button-success"
           >
             {creating
               ? 'Creating...'

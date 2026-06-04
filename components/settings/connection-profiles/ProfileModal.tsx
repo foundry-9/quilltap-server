@@ -362,7 +362,7 @@ export function ProfileModal({
                       id="courierIsDefaultModal"
                       checked={form.formData.isDefault}
                       onChange={(e) => form.setField('isDefault', e.target.checked)}
-                      className="w-4 h-4 rounded"
+                      className="qt-checkbox"
                     />
                     <label htmlFor="courierIsDefaultModal" className="text-sm">
                       Set as default profile
@@ -374,7 +374,7 @@ export function ProfileModal({
                       id="courierIsCheapModal"
                       checked={form.formData.isCheap}
                       onChange={(e) => form.setField('isCheap', e.target.checked)}
-                      className="w-4 h-4 rounded"
+                      className="qt-checkbox"
                     />
                     <label htmlFor="courierIsCheapModal" className="text-sm">
                       Mark as cheap LLM (memory extraction, danger classification, etc.)
@@ -386,7 +386,7 @@ export function ProfileModal({
                       id="courierDeltaModeModal"
                       checked={form.formData.courierDeltaMode}
                       onChange={(e) => form.setField('courierDeltaMode', e.target.checked)}
-                      className="w-4 h-4 rounded mt-0.5"
+                      className="qt-checkbox mt-0.5"
                     />
                     <label htmlFor="courierDeltaModeModal" className="text-sm">
                       <span className="block">Delta mode after first turn</span>
@@ -483,7 +483,7 @@ export function ProfileModal({
                     if (reqs.requiresApiKey && !isConnected) return true
                     return false
                   })()}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:qt-bg-primary/90 disabled:qt-bg-muted disabled:qt-text-secondary disabled:cursor-not-allowed"
+                  className="qt-button-primary disabled:qt-bg-muted disabled:qt-text-secondary disabled:cursor-not-allowed"
                 >
                   {operations.fetchModelsLoading ? 'Fetching...' : 'Fetch Models'}
                 </button>
@@ -673,7 +673,7 @@ export function ProfileModal({
                   id="isDefault"
                   checked={form.formData.isDefault}
                   onChange={(e) => form.setField('isDefault', e.target.checked)}
-                  className="w-4 h-4 rounded"
+                  className="qt-checkbox"
                 />
                 <label htmlFor="isDefault" className="text-sm">
                   Set as default profile
@@ -685,7 +685,7 @@ export function ProfileModal({
                   id="isCheap"
                   checked={form.formData.isCheap}
                   onChange={(e) => form.setField('isCheap', e.target.checked)}
-                  className="w-4 h-4 rounded"
+                  className="qt-checkbox"
                 />
                 <label htmlFor="isCheap" className="text-sm">
                   Mark as cheap LLM (for cost-effective tasks)
@@ -697,7 +697,7 @@ export function ProfileModal({
                   id="isDangerousCompatible"
                   checked={form.formData.isDangerousCompatible}
                   onChange={(e) => form.setField('isDangerousCompatible', e.target.checked)}
-                  className="w-4 h-4 rounded"
+                  className="qt-checkbox"
                 />
                 <label htmlFor="isDangerousCompatible" className="text-sm">
                   Uncensored-compatible (suitable for dangerous/sensitive content routing)
@@ -709,7 +709,7 @@ export function ProfileModal({
                   id="allowToolUse"
                   checked={form.formData.allowToolUse}
                   onChange={(e) => form.setField('allowToolUse', e.target.checked)}
-                  className="w-4 h-4 rounded"
+                  className="qt-checkbox"
                 />
                 <label htmlFor="allowToolUse" className="text-sm">
                   Allow tool use (overrides chat and project tool settings when disabled)
@@ -748,7 +748,7 @@ export function ProfileModal({
                   id="supportsImageUpload"
                   checked={form.formData.supportsImageUpload}
                   onChange={(e) => form.setField('supportsImageUpload', e.target.checked)}
-                  className="w-4 h-4 rounded"
+                  className="qt-checkbox"
                 />
                 <label htmlFor="supportsImageUpload" className="text-sm">
                   Supports image attachments (vision input)
@@ -760,7 +760,7 @@ export function ProfileModal({
                   id="allowWebSearch"
                   checked={form.formData.allowWebSearch}
                   onChange={(e) => form.setField('allowWebSearch', e.target.checked)}
-                  className="w-4 h-4 rounded"
+                  className="qt-checkbox"
                 />
                 <label htmlFor="allowWebSearch" className="text-sm">
                   Allow web search tool
@@ -773,7 +773,7 @@ export function ProfileModal({
                     id="useNativeWebSearch"
                     checked={form.formData.useNativeWebSearch}
                     onChange={(e) => form.setField('useNativeWebSearch', e.target.checked)}
-                    className="w-4 h-4 rounded"
+                    className="qt-checkbox"
                   />
                   <label htmlFor="useNativeWebSearch" className="text-sm">
                     Use provider native web search
