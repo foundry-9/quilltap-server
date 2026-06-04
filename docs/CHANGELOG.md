@@ -4,6 +4,10 @@
 
 ### 4.6-dev
 
+#### Fix: character editor Identity edits were silently dropped
+
+Editing a character's Identity in the Aurora editor appeared to save (the request returned success) but never wrote `identity.md` in the character vault. The PUT validation schema in `app/api/v1/characters/[id]/route.ts` (`updateCharacterSchema`) was missing the `identity` field, so Zod stripped it from the request body before the update reached the vault-write overlay. Added `identity` to the schema (`z.string().nullable().optional()`, matching the canonical `Character` type). The other managed content fields (title, description, manifesto, personality, etc.) were already present and unaffected.
+
 #### Theme: announcement medium-dot tracks theme warning; brand select-arrow for Art Deco and Great Estate
 
 Aesthetic follow-up to the new Salon surfaces added since 4.5.0. Two small fixes so the new UI stays on-palette across the bundled themes.

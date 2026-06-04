@@ -48,6 +48,7 @@ import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
 const updateCharacterSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   title: z.string().optional(),
+  identity: z.string().nullable().optional(),
   description: z.string().optional(),
   manifesto: z.string().nullable().optional(),
   personality: z.string().optional(),
