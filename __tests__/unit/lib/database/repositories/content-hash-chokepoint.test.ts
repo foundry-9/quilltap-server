@@ -1,4 +1,6 @@
 /**
+ * @jest-environment node
+ *
  * Chokepoint invariant: the content-addressed mount store is authoritative
  * about its own hashes. `linkBlobContent` and `upsertByFileId` recompute
  * sha256 from the actual bytes, ignore a wrong caller-supplied sha (warning

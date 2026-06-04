@@ -1,4 +1,6 @@
 /**
+ * @jest-environment node
+ *
  * Round-trip integration test for `quilltap db backup`.
  *
  * Creates a tiny encrypted SQLite database, runs cmdBackup against it, and

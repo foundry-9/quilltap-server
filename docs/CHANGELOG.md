@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Fix: flaky jest-worker SIGSEGV in the full unit suite (native SQLCipher under jsdom)
+
+The eight unit suites that load the real `better-sqlite3`/SQLCipher binding (the `packages/quilltap` CLI suites and the `lib/database/migration/repair-*` suites) inherited the global `jsdom` test environment. Native Buffers returned by the binding live in jsdom's separate realm; across a full parallel run a worker keeps the addon loaded while jsdom realms are torn down per test file, so GC or finalizers touching a freed-realm Buffer could segfault the worker — intermittently, and only on the full parallel run.
+
+- Added a `/** @jest-environment node */` docblock to each of the eight real-binding suites so their native Buffers never cross a jsdom realm boundary (also faster, since these suites don't need a DOM).
+- Added `workerIdleMemoryLimit: '512MB'` to `jest.config.ts` so workers recycle over the ~350-file run instead of accumulating memory that accelerates GC.
+- Rule going forward: any unit suite that loads the real DB binding must include the `@jest-environment node` docblock; suites that use the mocked driver do not.
+
 #### Chore: update npm dependencies across root, packages, and plugins
 
 Ran `npm update -S` on the root project, all packages, and all distributed plugins; bumped and rebuilt the affected packages and plugins.

@@ -1,4 +1,6 @@
 /**
+ * @jest-environment node
+ *
  * Unit tests for the repair-files-mime-and-size-from-mount-blob-v1 migration.
  *
  * Unlike the sha256 repair (which lives entirely in the mount-index DB), this

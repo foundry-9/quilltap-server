@@ -1,4 +1,6 @@
 /**
+ * @jest-environment node
+ *
  * Unit tests for the repair-dangling-related-memory-edges-v1 migration.
  *
  * Uses a real in-memory SQLite DB so the batch loop, JSON parsing, and

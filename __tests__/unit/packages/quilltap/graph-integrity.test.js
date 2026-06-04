@@ -1,4 +1,6 @@
 /**
+ * @jest-environment node
+ *
  * Unit tests for the shared graph-integrity scanner used by
  * `quilltap memories status` and `quilltap memories validate`.
  *

@@ -1,4 +1,6 @@
 /**
+ * @jest-environment node
+ *
  * Unit tests for the repair-mount-blob-sha256-from-bytes-v1 migration.
  *
  * Uses a real in-memory SQLite DB (routed via a temp file path) so the keyset

@@ -1,4 +1,6 @@
 /**
+ * @jest-environment node
+ *
  * Unit tests for `quilltap memories` pure helpers.
  *
  * These tests exercise the in-process JavaScript: argument parsing, sort/order

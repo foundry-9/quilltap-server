@@ -1,4 +1,6 @@
 /**
+ * @jest-environment node
+ *
  * Unit tests for `quilltap` CLI character resolution after the 4.6 vault
  * cutover, which dropped the `aliases` (and `pronouns`) columns from the
  * `characters` table. `resolveCharacter` must no longer SELECT those columns
