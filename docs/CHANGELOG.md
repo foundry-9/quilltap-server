@@ -4,6 +4,15 @@
 
 ### 4.6-dev
 
+#### Chore: update npm dependencies across root, packages, and plugins
+
+Ran `npm update -S` on the root project, all packages, and all distributed plugins; bumped and rebuilt the affected packages and plugins.
+
+- Root/app dependency bumps: `next` and `eslint-config-next` 16.2.6 → 16.2.7, `react`/`react-dom` 19.2.6 → 19.2.7, `@types/react` 19.2.15 → 19.2.16, `openai` 6.39.0 → 6.42.0, `@openrouter/sdk` 0.12.35 → 0.12.79, `@tanstack/react-virtual` 3.13.26 → 3.14.2, `tar` 7.5.15 → 7.5.16, `yauzl` 3.3.1 → 3.3.2, plus `@vitest/mocker` and `tsx`.
+- Published packages: `@quilltap/plugin-utils` 2.2.11 → 2.2.12 (openai range), `@quilltap/theme-storybook` 1.0.38 → 1.0.39 (storybook/@storybook/react 10.4.1 → 10.4.2, react/@types/react). Both pushed to npm; the app and all plugins now reference `@quilltap/plugin-utils` ^2.2.12.
+- Plugins rebuilt with patch bumps (package.json + manifest.json): anthropic 1.0.41, curl 1.0.17, deepseek 1.0.8, default-system-prompts 1.1.9, google 1.1.35, grok 1.0.38, mcp 1.1.28, ollama 1.0.29, openai-compatible 1.0.30, openai 1.0.47, openrouter 1.0.43, search-serper 1.0.12, z-ai 1.1.9. `qtap-plugin-builtin-embeddings` had no dependency changes and was left untouched.
+- `create-quilltap-theme` and `plugin-types` had transitive lockfile-only updates with no manifest dependency change, so their versions were not bumped.
+
 #### Chore: sync qt-checkbox/qt-radio/select-arrow tokens into theme-storybook and create-quilltap-theme
 
 Completed the package follow-up deferred from the tokenization refactor below. The new `--qt-checkbox-*`, `--qt-radio-*`, and `--qt-select-arrow` tokens (plus the migrated form-control classes) now also ship in the two published theme-author packages. `@quilltap/theme-storybook` 1.0.37 → 1.0.38 (`src/css/qt-components.css`) and `create-quilltap-theme` 2.0.9 → 2.0.10 (`templates/bundle/styles.css.template` and the `THEME_PLUGIN_DEVELOPMENT.md` token reference), both published to npm. No root dependency bump: the app dropped its `@quilltap/theme-storybook` dependency in 4.4.0 (it's consumed only by external theme projects), and `create-quilltap-theme` is a standalone CLI.

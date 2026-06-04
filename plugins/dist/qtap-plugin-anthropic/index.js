@@ -6055,7 +6055,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.39.0";
+var VERSION2 = "6.42.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser2 = () => {
@@ -15226,7 +15226,10 @@ var OpenAI = class {
       if (isTimeout) {
         throw new APIConnectionTimeoutError2();
       }
-      throw new APIConnectionError2({ cause: response });
+      throw new APIConnectionError2({
+        message: getConnectionErrorMessage(response),
+        cause: response
+      });
     }
     const specialHeaders = [...response.headers.entries()].filter(([name]) => name === "x-request-id").map(([name, value]) => ", " + name + ": " + JSON.stringify(value)).join("");
     const responseInfo = `[${requestLogID}${retryLogStr}${specialHeaders}] ${req.method} ${url} ${response.ok ? "succeeded" : "failed"} with status ${response.status} in ${headersTime - startTime}ms`;
@@ -15507,6 +15510,23 @@ OpenAI.Evals = Evals;
 OpenAI.Containers = Containers;
 OpenAI.Skills = Skills2;
 OpenAI.Videos = Videos;
+function getConnectionErrorMessage(error) {
+  if (isUndiciDispatcherVersionMismatchError(error)) {
+    return `Connection error. This may be caused by passing an undici dispatcher, such as ProxyAgent, that is incompatible with the fetch implementation. If you are using undici's ProxyAgent, pass the fetch implementation from the same undici package: import { fetch, ProxyAgent } from 'undici'; new OpenAI({ fetch, fetchOptions: { dispatcher: new ProxyAgent(...) } });`;
+  }
+  return void 0;
+}
+function isUndiciDispatcherVersionMismatchError(error) {
+  let current = error;
+  for (let i = 0; i < 8 && current && typeof current === "object"; i++) {
+    const err = current;
+    if (err.code === "UND_ERR_INVALID_ARG" && typeof err.message === "string" && err.message.includes("invalid onRequestStart method")) {
+      return true;
+    }
+    current = err.cause;
+  }
+  return false;
+}
 
 // node_modules/@quilltap/plugin-utils/dist/index.mjs
 var import_fs = require("fs");
