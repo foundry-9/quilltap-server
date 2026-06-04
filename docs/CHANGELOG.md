@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Theme: announcement medium-dot tracks theme warning; brand select-arrow for Art Deco and Great Estate
+
+Aesthetic follow-up to the new Salon surfaces added since 4.5.0. Two small fixes so the new UI stays on-palette across the bundled themes.
+
+- **Announcement importance dots — medium dot now follows the theme.** `--qt-chat-announcement-dot-medium` in `app/styles/qt-components/_variables.css` (light + dark) was a hardcoded amber (`#d08a1e` / `#e3a94a`), unlike its siblings (high = `--color-destructive`, low = `--color-muted-foreground`). It now resolves to `var(--color-warning, …)` with the old amber kept as a fallback, so a cool-palette theme no longer shows a fixed warm dot. All five bundled themes define a `warning` color, so the dot tracks each theme's warning hue.
+- **Brand select-arrow for Art Deco and Great Estate.** The `<select>` chevron used the neutral slate default `--qt-select-arrow`. Both gold-accented themes now override it with a brand-gold glyph — deep gold on the light (cream) inputs, brighter gold on the dark inputs — mirroring each theme's gold tokens (Art Deco `#C19015` / `#F4BE34`; Great Estate `#AD851F` / `#EAB93E`). Data URIs can't reference CSS vars, so the stroke hex is inlined with a comment naming the source token. The other three bundled themes keep the neutral default. Bumped `art-deco` 1.0.8 → 1.0.9 and `great-estate` 1.0.3 → 1.0.4.
+- No new tokens were introduced (both `--qt-select-arrow` and `--qt-chat-announcement-dot-*` already exist and are already documented in the theme-author packages), so no stylebook / `theme-storybook` / `create-quilltap-theme` sync was required.
+
 #### Chore: remove noisy debug logs from bundled provider plugins
 
 - Removed high-volume debug-only traces added to bundled provider plugins for Anthropic, DeepSeek, Google, Grok, OpenAI, OpenRouter, Z.AI, and Ollama. The removed logs were reasoning/thinking fragment capture and embedding/context-cache diagnostics that were not needed for normal operations.

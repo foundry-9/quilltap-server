@@ -322,9 +322,12 @@
   --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, var(--color-muted) 45%);
   --qt-chat-system-bar-sender-fg: var(--color-foreground);
 
-  /* Chat: Announcement importance dots — high (red), medium (amber), low (hollow grey) */
+  /* Chat: Announcement importance dots — high (red), medium (amber), low (hollow grey).
+     All three track theme tokens so the dots stay on-palette: high follows the theme
+     destructive, medium the theme warning, low the muted foreground. The hardcoded
+     amber/red remain as fallbacks for any theme that omits the token. */
   --qt-chat-announcement-dot-high: var(--color-destructive, #b4452e);
-  --qt-chat-announcement-dot-medium: #d08a1e;
+  --qt-chat-announcement-dot-medium: var(--color-warning, #d08a1e);
   --qt-chat-announcement-dot-low: var(--color-muted-foreground);
 
   --qt-chat-composer-bg: var(--color-background);
@@ -840,9 +843,11 @@
   --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--color-muted) 40%);
   --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 45%, var(--color-muted) 55%);
 
-  /* Chat: Announcement importance dots — brighter on dark for contrast */
+  /* Chat: Announcement importance dots — brighter on dark for contrast. Medium tracks
+     the theme warning (themes ship brightened dark-mode warning values); the amber stays
+     as a fallback. High keeps a fixed bright red so it reads on dark surfaces. */
   --qt-chat-announcement-dot-high: #e06a52;
-  --qt-chat-announcement-dot-medium: #e3a94a;
+  --qt-chat-announcement-dot-medium: var(--color-warning, #e3a94a);
   --qt-chat-announcement-dot-low: var(--color-muted-foreground);
 
   /* Response status — brighter indicators */
