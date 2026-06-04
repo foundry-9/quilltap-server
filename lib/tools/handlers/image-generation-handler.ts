@@ -3,8 +3,8 @@
  * Handles execution of image generation tool calls from LLMs
  */
 
-import { createHash } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
   getLanternBackgroundsStore,
   writeLanternBackgroundToMountStore,
@@ -125,7 +125,7 @@ async function saveGeneratedImage(
     const finalMimeType = converted.mimeType;
     const originalFilename = converted.filename;
 
-    const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+    const sha256 = sha256OfBuffer(buffer);
 
     // Build linkedTo array
     const linkedTo = chatId ? [chatId] : [];

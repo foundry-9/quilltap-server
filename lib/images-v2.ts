@@ -3,7 +3,6 @@
  * Version 2: Uses repository pattern for metadata storage and file storage manager for file storage
  */
 
-import { createHash } from 'node:crypto';
 import { extname } from 'node:path';
 import fetch from 'node-fetch';
 import { getRepositories } from './repositories/factory';
@@ -11,6 +10,7 @@ import { fileStorageManager } from './file-storage/manager';
 import { writeUserUploadToMountStore } from './file-storage/user-uploads-bridge';
 import type { FileEntry, FileSource, FileCategory } from './schemas/types';
 import { logger } from './logger';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { getInheritedTags, mergeTags } from './files/tag-inheritance';
 import { convertToWebP } from './files/webp-conversion';
 
@@ -113,7 +113,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
     }
   }
 
-  const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+  const sha256 = sha256OfBuffer(buffer);
 
   // Check for duplicate by hash
   const existingFiles = await repos.files.findBySha256(sha256);
@@ -367,5 +367,5 @@ export async function readImageBuffer(fileId: string): Promise<Buffer> {
  * Calculate SHA256 hash of buffer
  */
 export function calculateSha256(buffer: Buffer): string {
-  return createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+  return sha256OfBuffer(buffer);
 }

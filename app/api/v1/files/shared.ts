@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { z } from 'zod';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import { getFilePath } from '@/lib/api/middleware/file-path';
@@ -118,9 +119,7 @@ export async function saveFileEntry(options: SaveFileEntryOptions): Promise<{
   statusCode: number;
 }> {
   const sanitizedFilename = sanitizeFilename(options.filename);
-  const sha256 = createHash('sha256')
-    .update(new Uint8Array(options.contentBuffer))
-    .digest('hex');
+  const sha256 = sha256OfBuffer(options.contentBuffer);
 
   const overwrite = await findAndPrepareOverwrite(options.ctx.repos, {
     userId: options.ctx.user.id,

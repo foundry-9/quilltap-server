@@ -4,6 +4,11 @@
 
 ### 4.6-dev
 
+#### Tests + refactor: consolidate image SHA-256 hashing; add vault/sha256 regression coverage
+
+- Added regression tests covering recent character-vault and image work: `doc_mount_points` schema-drift repair (`alignDocMountPointsSchema`), manifesto nullability at the `CharacterSchema` and vault write/read-overlay layers, image SHA-256 dedup in `images-v2` (`createFile`), and the SHA-256 recorded by the character-avatar and story-background generation handlers (must hash the post-WebP-conversion bytes, not the raw provider bytes).
+- Consolidated the hand-duplicated `createHash('sha256').update(...).digest('hex')` image/file-byte hashing onto the shared `sha256OfBuffer` helper (`lib/utils/sha256.ts`, widened to accept `Buffer | Uint8Array`) across both image-generation handlers, `images-v2`, the images/files/wardrobe-preview routes, `chat-files-v2`, the image-generation tool handler, the filesystem scanner, and the character gallery service. Digests are byte-identical, so no stored data changes. String, truncated, and security-domain hashes were intentionally left untouched.
+
 #### Perf: typing in the Salon composer no longer re-renders the whole page
 
 Typing in the Lexical chat composer froze the Salon tab (browser "page unresponsive" prompts), worst while typing. The composer's markdown was lifted into top-level page state on every keystroke (16ms debounce), so each keystroke re-rendered the entire `app/salon/[id]/page.tsx` tree — `SplitLayout`, `VirtualizedMessageList`, and the Lexical plugin tree (none memoized). In dev this tripped the unresponsive-tab watchdog.

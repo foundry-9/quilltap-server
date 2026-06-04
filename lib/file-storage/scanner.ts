@@ -8,8 +8,8 @@
  */
 
 import { readdir, stat } from 'fs/promises';
-import { createHash } from 'crypto';
 import { readFile } from 'fs/promises';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { join, extname } from 'path';
 import { createLogger } from '@/lib/logging/create-logger';
 
@@ -208,5 +208,5 @@ export async function scanDirectory(
  */
 export async function computeSha256(absolutePath: string): Promise<string> {
   const content = await readFile(absolutePath);
-  return createHash('sha256').update(new Uint8Array(content)).digest('hex');
+  return sha256OfBuffer(content);
 }

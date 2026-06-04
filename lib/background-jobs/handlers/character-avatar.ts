@@ -9,7 +9,6 @@
  * character avatars instead of landscape backgrounds.
  */
 
-import { createHash } from 'node:crypto';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -23,6 +22,7 @@ import { getErrorMessage } from '@/lib/error-utils';
 import type { CharacterAvatarGenerationPayload } from '../queue-service';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { convertToWebP } from '@/lib/files/webp-conversion';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
@@ -391,7 +391,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   const mimeType = converted.mimeType;
   const originalFilename = converted.filename;
 
-  const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+  const sha256 = sha256OfBuffer(buffer);
   const fileId = crypto.randomUUID();
 
   const category: FileCategory = 'IMAGE';

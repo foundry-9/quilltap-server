@@ -19,7 +19,7 @@ import {
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { z } from 'zod';
 import { successResponse, badRequest, serverError } from '@/lib/api/responses';
-import { createHash } from 'crypto';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { classifyContent as classifyDangerousContent } from '@/lib/services/dangerous-content/gatekeeper.service';
@@ -310,7 +310,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       const imageMimeType = converted.mimeType;
 
       // Generate unique filename and hash
-      const sha256 = createHash('sha256').update(new Uint8Array(imageBuffer)).digest('hex');
+      const sha256 = sha256OfBuffer(imageBuffer);
       const shortHash = sha256.substring(0, 8);
       const filename = `generated_${Date.now()}_${index}_${shortHash}.webp`;
 

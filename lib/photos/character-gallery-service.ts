@@ -26,7 +26,7 @@ import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import { resolveUniqueRelativePath } from '@/lib/file-storage/bridge-path-helpers';
 import type { getRepositories } from '@/lib/database/repositories';
-import { createHash } from 'crypto';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
   buildKeptImageMarkdown,
   buildSlugAndFilename,
@@ -121,7 +121,7 @@ export async function saveToCharacterGallery(
     throw new Error(`Unsupported MIME type for character gallery: ${mimeType}`);
   }
 
-  const sha256 = createHash('sha256').update(data).digest('hex');
+  const sha256 = sha256OfBuffer(data);
 
   // Re-upload guard: refuse a second copy of the same bytes in this
   // character's photos/ folder.

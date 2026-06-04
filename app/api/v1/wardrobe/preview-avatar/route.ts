@@ -14,7 +14,6 @@
  * Response: { fileId, url, mimeType, prompt }
  */
 
-import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
@@ -27,6 +26,7 @@ import {
   writeCharacterAvatarToVault,
 } from '@/lib/file-storage/character-vault-bridge';
 import { convertToWebP } from '@/lib/files/webp-conversion';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { EquippedSlotsSchema } from '@/lib/schemas/wardrobe.types';
 
@@ -129,7 +129,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   const mimeType = converted.mimeType;
   const originalFilename = converted.filename;
 
-  const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+  const sha256 = sha256OfBuffer(buffer);
   const fileId = crypto.randomUUID();
 
   const category: FileCategory = 'IMAGE';

@@ -5,7 +5,6 @@
  * atmospheric landscape images based on chat context and characters.
  */
 
-import { createHash } from 'node:crypto';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -37,6 +36,7 @@ import {
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { convertToWebP } from '@/lib/files/webp-conversion';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
@@ -779,7 +779,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const mimeType = converted.mimeType;
   const originalFilename = converted.filename;
 
-  const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+  const sha256 = sha256OfBuffer(buffer);
   const fileId = crypto.randomUUID();
 
   // Build linkedTo array with chat and character IDs

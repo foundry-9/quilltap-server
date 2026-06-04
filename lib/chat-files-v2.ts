@@ -3,8 +3,8 @@
  * Version 2: Uses repository pattern for metadata storage and centralized file storage manager
  */
 
-import { createHash } from 'node:crypto';
 import { extname } from 'node:path';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
 import { fileStorageManager } from './file-storage/manager';
@@ -132,7 +132,7 @@ export async function uploadChatFile(
 
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
-  const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+  const sha256 = sha256OfBuffer(buffer);
 
   // Detect text content and infer better MIME type if needed
   const textDetection = detectTextContent(buffer, file.name, file.type);
