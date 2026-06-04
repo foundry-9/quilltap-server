@@ -46,6 +46,7 @@ import type {
 } from '@/lib/schemas/types';
 import type { WardrobeItem, EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
+import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type {
   DocMountPoint,
   DocMountFolder,
@@ -254,6 +255,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const docMountDocuments = await readJsonArrayFileOptional<DocMountDocument>(rootPath, 'data/doc-mount-documents.json', []);
     const docMountBlobs = await readJsonArrayFileOptional<DocMountBlobMetadata>(rootPath, 'data/doc-mount-blobs.json', []);
     const projectDocMountLinks = await readJsonArrayFileOptional<ProjectDocMountLink>(rootPath, 'data/project-doc-mount-links.json', []);
+    const textReplacementRules = await readJsonArrayFileOptional<TextReplacementRule>(rootPath, 'data/text-replacement-rules.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
@@ -297,6 +299,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       docMountDocuments,
       docMountBlobs,
       projectDocMountLinks,
+      textReplacementRules,
     };
 
     return { data, extractDir, rootFolder };

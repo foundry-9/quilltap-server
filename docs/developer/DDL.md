@@ -706,6 +706,8 @@ CREATE INDEX "idx_text_replacement_rules_sortOrder" ON "text_replacement_rules" 
 
 Match priority is *not* keyed off `sortOrder`. The renderer compiles enabled rows into two maps — `caseSensitive` and `caseInsensitive` (keyed on `fromText.toLowerCase()`) — and looks them up in that order. A `(fromText, caseSensitive)` collision is rejected at the API with 409.
 
+Participates in **backup/restore** (since 4.6) as `data/text-replacement-rules.json` — an optional array, so it did not bump `backupFormat`. Replace-mode restore truncates the table via `clearFormat3Entities()`; merge-mode restore inserts each row and skips `(fromText, caseSensitive)` collisions. Excluded from `.qtap` export/import on purpose: it is global config with no `userId`, the same class as `chat_settings`/`instance_settings`.
+
 ### connection_profiles
 
 ```sql

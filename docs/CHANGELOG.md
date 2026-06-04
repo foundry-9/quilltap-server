@@ -4,6 +4,11 @@
 
 ### 4.6-dev
 
+#### Feature: back up text replacement rules; remove dead legacy export code
+
+- Backup/restore now includes the global text replacement rules. Previously only the master switch (`chat_settings.textReplacementsEnabled`) was backed up, so restoring a backup re-enabled the feature with zero rules. Rules are written to `data/text-replacement-rules.json` (no `backupFormat` bump — the array is optional, and old backups without the file still restore via the `|| []` guard). Replace-mode restore truncates the table first; merge-mode restore skips rows that collide on the unique `(fromText, caseSensitive)` constraint. Rule IDs are global with no foreign keys, so new-account remap passes them through unchanged. Restore preview and the manifest now report a `textReplacementRules` count.
+- Deleted the dead in-memory export path from `lib/export/quilltap-export-service.ts` (`createExport`, the nine `exportXxx` entity builders, `generateExportFilename`, and the now-orphaned `sanitizeProfile`/`resolveApiKeyLabel`/`resolveTagNames`/`getChatMessages`/`createManifest` helpers). The live `.qtap` export has run through the NDJSON writer (`lib/export/ndjson-writer.ts`) for some time; only `previewExport` from the old service is still used (by the export-preview route). Added a round-trip regression test that exports a chat with a conversation annotation and a chat document through `createNdjsonStream` and asserts both survive reassembly — the deleted `exportChats` builder used to drop them. The legacy nested-JSON import path and `qtap-export.schema.json` are unchanged.
+
 #### Fix: flaky jest-worker SIGSEGV in the full unit suite (native SQLCipher under jsdom)
 
 The eight unit suites that load the real `better-sqlite3`/SQLCipher binding (the `packages/quilltap` CLI suites and the `lib/database/migration/repair-*` suites) inherited the global `jsdom` test environment. Native Buffers returned by the binding live in jsdom's separate realm; across a full parallel run a worker keeps the addon loaded while jsdom realms are torn down per test file, so GC or finalizers touching a freed-realm Buffer could segfault the worker — intermittently, and only on the full parallel run.

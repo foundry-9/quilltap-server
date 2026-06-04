@@ -37,7 +37,7 @@ const APP_VERSION = packageJson.version;
 const BLOB_CHUNK_BYTES = 3 * 1024 * 1024;
 
 // ============================================================================
-// HELPERS (mirror of quilltap-export-service.ts — kept in sync on purpose)
+// HELPERS (profile sanitization + tag/API-key label resolution for export)
 // ============================================================================
 
 async function resolveTagNames(

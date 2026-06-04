@@ -24,6 +24,11 @@ const moduleLogger = logger.child({ module: 'backup:restore-service' });
  * deletes are expensive at scale (especially vector_entries and
  * doc_mount_chunks). Each statement is independently guarded — if a table
  * doesn't exist on a very old database, the rest still run.
+ *
+ * Also clears `text_replacement_rules`: it's a global table (no userId), so
+ * the per-row, userId-scoped deletion in `deleteUserData` never touches it.
+ * Truncating it here lets a replace-mode restore re-insert the backup's rules
+ * without colliding on the unique `(fromText, caseSensitive)` constraint.
  */
 async function clearFormat3Entities(): Promise<void> {
   const mainTables = [
@@ -33,6 +38,7 @@ async function clearFormat3Entities(): Promise<void> {
     'embedding_status',
     'vector_entries',
     'vector_indices',
+    'text_replacement_rules',
   ];
   for (const table of mainTables) {
     try {

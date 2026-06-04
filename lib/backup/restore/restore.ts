@@ -19,6 +19,7 @@ import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
 import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { rawQuery } from '@/lib/database/manager';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
+import { TextReplacementRuleConflictError } from '@/lib/database/repositories';
 import type { RestoreOptions, RestoreSummary } from '../types';
 import { UuidRemapper } from '../uuid-remapper';
 import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
@@ -629,7 +630,34 @@ export async function restore(
       }
     }
 
-    // 22n. Instance settings — applied last because the mount-point keys
+    // 22n. Text replacement rules (global; no userId, no FKs). Insert each row
+    // through the repository so its unique-conflict guard applies. Replace mode
+    // truncates the table first (delete-service), so conflicts here only arise
+    // in merge mode against pre-existing rules — swallow those and keep going,
+    // matching the tolerance of the other restore loops.
+    let textReplacementRulesRestored = 0;
+    for (const rule of data.textReplacementRules || []) {
+      try {
+        const { id, createdAt, updatedAt, ...ruleData } = rule;
+        await globalRepos.textReplacementRules.create(ruleData, { id: rule.id });
+        textReplacementRulesRestored++;
+      } catch (error) {
+        if (error instanceof TextReplacementRuleConflictError) {
+          moduleLogger.debug('Skipping duplicate text replacement rule on restore', {
+            fromText: rule.fromText,
+            caseSensitive: rule.caseSensitive,
+          });
+          continue;
+        }
+        warnings.push(`Failed to restore text replacement rule: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore text replacement rule', { ruleId: rule.id, error });
+      }
+    }
+    if (textReplacementRulesRestored > 0) {
+      moduleLogger.debug('Restored text replacement rules', { count: textReplacementRulesRestored });
+    }
+
+    // 22o. Instance settings — applied last because the mount-point keys
     // reference doc_mount_points that we just restored above. Upsert by key
     // so a fresh instance's auto-provisioned defaults get overwritten by the
     // backup's values.
@@ -773,6 +801,7 @@ export async function restore(
       docMountDocuments: docMountDocumentsRestored,
       docMountBlobs: docMountBlobsRestored,
       projectDocMountLinks: projectDocMountLinksRestored,
+      textReplacementRules: textReplacementRulesRestored,
       warnings,
     };
 

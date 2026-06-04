@@ -423,5 +423,8 @@ export function remapBackupData(
     docMountDocuments: remappedDocMountDocuments,
     docMountBlobs: remappedDocMountBlobs,
     projectDocMountLinks: remappedProjectDocMountLinks,
+    // Text replacement rules: global config, no userId, no FKs to remapped
+    // entities, and nothing references rule IDs — pass through unchanged.
+    textReplacementRules: data.textReplacementRules || [],
   };
 }
