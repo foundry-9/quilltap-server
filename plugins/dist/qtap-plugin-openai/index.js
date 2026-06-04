@@ -10162,12 +10162,6 @@ var OpenAIProvider = class {
         }
       }
     }
-    if (reasoningContent) {
-      logger.debug("OpenAI sendMessage reasoning summary captured", {
-        context: "OpenAIProvider.buildLLMResponse",
-        reasoningLength: reasoningContent.length
-      });
-    }
     return {
       content: response.output_text,
       finishReason: this.getFinishReason(response),
@@ -10273,10 +10267,6 @@ var OpenAIProvider = class {
         };
       } else if (event.type === "response.reasoning_summary_text.delta") {
         streamReasoning += event.delta;
-        logger.debug("OpenAI streaming reasoning summary fragment received", {
-          context: "OpenAIProvider.streamMessage",
-          reasoningLength: streamReasoning.length
-        });
         yield { content: "", done: false, reasoningContent: streamReasoning };
       } else if (event.type === "response.completed") {
         finalResponse = event.response;

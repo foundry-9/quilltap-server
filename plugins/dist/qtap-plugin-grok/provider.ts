@@ -372,12 +372,6 @@ export class GrokProvider implements TextProvider {
     const finishReason = this.getFinishReason(response);
     const raw = this.buildRawResponse(response);
     const reasoningContent = this.extractReasoningFromResponse(response);
-    if (reasoningContent) {
-      logger.debug('Grok sendMessage reasoning summary captured', {
-        context: 'GrokProvider.sendMessage',
-        reasoningLength: reasoningContent.length,
-      });
-    }
     const cachedTokens = response.usage?.input_tokens_details?.cached_tokens
     const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
       ? { cacheReadInputTokens: cachedTokens, cachedTokens }
@@ -465,10 +459,6 @@ export class GrokProvider implements TextProvider {
         // Cumulative: append the delta and emit the full accumulated string.
         // DISPLAY ONLY — never re-fed to the model.
         streamReasoning += (event as { delta?: string }).delta ?? '';
-        logger.debug('Grok streaming reasoning summary fragment received', {
-          context: 'GrokProvider.streamMessage',
-          reasoningLength: streamReasoning.length,
-        });
         yield { content: '', done: false, reasoningContent: streamReasoning };
       } else if (event.type === 'response.completed') {
         finalResponse = event.response;

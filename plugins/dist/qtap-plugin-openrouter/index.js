@@ -33995,12 +33995,6 @@ var OpenRouterProvider = class {
     const content = choice.message.content;
     const contentStr = typeof content === "string" ? content : "";
     const sendReasoningContent = choice.message?.reasoning;
-    if (sendReasoningContent) {
-      logger.debug("OpenRouter sendMessage reasoning captured", {
-        context: "OpenRouterProvider.sendMessage",
-        reasoningLength: typeof sendReasoningContent === "string" ? sendReasoningContent.length : 0
-      });
-    }
     const usageAny = response.usage;
     const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount ? {
       cachedTokens: usageAny.cachedTokens,
@@ -34143,12 +34137,6 @@ var OpenRouterProvider = class {
           }
         }
       }
-    }
-    if (sdkReasoning) {
-      logger.debug("OpenRouter SDK path reasoning captured from response", {
-        context: "OpenRouterProvider.streamMessage",
-        reasoningLength: sdkReasoning.length
-      });
     }
     const responseUsage = response.usage;
     const cacheUsage = responseUsage?.cachedTokens || responseUsage?.cacheDiscount ? {
@@ -34297,10 +34285,6 @@ var OpenRouterProvider = class {
             const deltaReasoning = choice?.delta?.reasoning;
             if (deltaReasoning) {
               fetchReasoning += deltaReasoning;
-              logger.debug("OpenRouter fetch-path streaming reasoning fragment received", {
-                context: "OpenRouterProvider.streamViaChatCompletions",
-                reasoningLength: fetchReasoning.length
-              });
               yield { content: "", done: false, reasoningContent: fetchReasoning };
             }
             if (choice?.delta?.tool_calls) {

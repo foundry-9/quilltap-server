@@ -4,6 +4,11 @@
 
 ### 4.6-dev
 
+#### Chore: remove noisy debug logs from bundled provider plugins
+
+- Removed high-volume debug-only traces added to bundled provider plugins for Anthropic, DeepSeek, Google, Grok, OpenAI, OpenRouter, Z.AI, and Ollama. The removed logs were reasoning/thinking fragment capture and embedding/context-cache diagnostics that were not needed for normal operations.
+- Rebuilt plugin distribution artifacts so each plugin's generated `index.js` matches the updated provider TypeScript sources.
+
 #### Feature: back up text replacement rules; remove dead legacy export code
 
 - Backup/restore now includes the global text replacement rules. Previously only the master switch (`chat_settings.textReplacementsEnabled`) was backed up, so restoring a backup re-enabled the feature with zero rules. Rules are written to `data/text-replacement-rules.json` (no `backupFormat` bump — the array is optional, and old backups without the file still restore via the `|| []` guard). Replace-mode restore truncates the table first; merge-mode restore skips rows that collide on the unique `(fromText, caseSensitive)` constraint. Rule IDs are global with no foreign keys, so new-account remap passes them through unchanged. Restore preview and the manifest now report a `textReplacementRules` count.

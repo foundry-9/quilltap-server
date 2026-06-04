@@ -10176,12 +10176,6 @@ var ZAIProvider = class {
     const choice = response.choices[0];
     const msg = choice.message;
     const reasoningContent = msg.reasoning_content;
-    if (reasoningContent) {
-      logger.debug("Z.AI sendMessage reasoning captured", {
-        context: "ZAIProvider.sendMessage",
-        reasoningLength: reasoningContent.length
-      });
-    }
     const toolCalls = (msg.tool_calls ?? []).filter(
       (tc) => tc.type === "function" || "function" in tc
     ).map((tc) => {
@@ -10276,10 +10270,6 @@ var ZAIProvider = class {
       const deltaReasoning = delta?.reasoning_content;
       if (deltaReasoning) {
         reasoningContent += deltaReasoning;
-        logger.debug("Z.AI streaming reasoning fragment received", {
-          context: "ZAIProvider.streamMessage",
-          reasoningLength: reasoningContent.length
-        });
         yield { content: "", done: false, reasoningContent };
       }
       if (delta?.tool_calls) {

@@ -608,12 +608,6 @@ export class GoogleProvider implements TextProvider {
       } catch {
         // Ignore extraction errors
       }
-      if (sendReasoningContent) {
-        logger.debug('Google sendMessage thinking captured', {
-          context: 'GoogleProvider.sendMessage',
-          reasoningLength: sendReasoningContent.length,
-        });
-      }
 
       const cachedTokens = usage?.cachedContentTokenCount
       const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
@@ -762,10 +756,6 @@ export class GoogleProvider implements TextProvider {
             if (part.thought === true && part.text) {
               thoughtPartsWithText++;
               streamReasoning += part.text;
-              logger.debug('Google streaming thinking fragment received', {
-                context: 'GoogleProvider.streamMessage',
-                reasoningLength: streamReasoning.length,
-              });
               yield { content: '', done: false, reasoningContent: streamReasoning };
               continue;
             }
@@ -790,25 +780,6 @@ export class GoogleProvider implements TextProvider {
       const usage = lastResponse?.usageMetadata;
       const thoughtSignature = this.extractThoughtSignature(lastResponse);
 
-      // Diagnostic: with thinking models, surface why reasoning may not appear —
-      // thoughtsTokenCount > 0 with zero text parts means the model thought but
-      // returned no summary; all-zero means it never engaged thinking.
-      if (isThinking) {
-        // Note: Gemini 3/3.1 currently does NOT stream thought-summary parts even
-        // with includeThoughts:true (known Google API limitation), so
-        // reasoningLength can be 0 while thoughtsTokenCount is > 0.
-        logger.debug('Google streaming thinking summary', {
-          context: 'GoogleProvider.streamMessage',
-          model: params.model,
-          isGemini3: this.isGemini3Model(params.model),
-          partsSeen,
-          thoughtPartsWithText,
-          thoughtPartsNoText,
-          textParts,
-          reasoningLength: streamReasoning.length,
-          thoughtsTokenCount: usage?.thoughtsTokenCount ?? 0,
-        });
-      }
 
       // For thinking models, if we didn't get any content during streaming,
       // extract the full text from the final response

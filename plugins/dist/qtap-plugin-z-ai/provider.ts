@@ -290,12 +290,6 @@ export class ZAIProvider implements TextProvider {
     const msg = choice.message;
 
     const reasoningContent = (msg as { reasoning_content?: string }).reasoning_content;
-    if (reasoningContent) {
-      logger.debug('Z.AI sendMessage reasoning captured', {
-        context: 'ZAIProvider.sendMessage',
-        reasoningLength: reasoningContent.length,
-      });
-    }
 
     const toolCalls = (msg.tool_calls ?? [])
       .filter((tc): tc is OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall =>
@@ -419,10 +413,6 @@ export class ZAIProvider implements TextProvider {
       const deltaReasoning = (delta as { reasoning_content?: string } | undefined)?.reasoning_content;
       if (deltaReasoning) {
         reasoningContent += deltaReasoning;
-        logger.debug('Z.AI streaming reasoning fragment received', {
-          context: 'ZAIProvider.streamMessage',
-          reasoningLength: reasoningContent.length,
-        });
         yield { content: '', done: false, reasoningContent };
       }
 

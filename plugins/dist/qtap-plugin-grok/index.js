@@ -10139,12 +10139,6 @@ ${textContent}`
     const finishReason = this.getFinishReason(response);
     const raw = this.buildRawResponse(response);
     const reasoningContent = this.extractReasoningFromResponse(response);
-    if (reasoningContent) {
-      logger.debug("Grok sendMessage reasoning summary captured", {
-        context: "GrokProvider.sendMessage",
-        reasoningLength: reasoningContent.length
-      });
-    }
     const cachedTokens = response.usage?.input_tokens_details?.cached_tokens;
     const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
     return {
@@ -10213,10 +10207,6 @@ ${textContent}`
         };
       } else if (event.type === "response.reasoning_summary_text.delta") {
         streamReasoning += event.delta ?? "";
-        logger.debug("Grok streaming reasoning summary fragment received", {
-          context: "GrokProvider.streamMessage",
-          reasoningLength: streamReasoning.length
-        });
         yield { content: "", done: false, reasoningContent: streamReasoning };
       } else if (event.type === "response.completed") {
         finalResponse = event.response;

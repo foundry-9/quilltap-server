@@ -466,12 +466,6 @@ export class AnthropicProvider implements TextProvider {
       .map((block: any) => block.thinking as string)
       .join('')
 
-    if (thinkingContent) {
-      logger.debug('Anthropic sendMessage thinking captured', {
-        context: 'AnthropicProvider.sendMessage',
-        reasoningLength: thinkingContent.length,
-      })
-    }
 
     // Extract cache usage if available (when prompt caching is enabled)
     const rawUsage = response.usage as any
@@ -687,10 +681,6 @@ export class AnthropicProvider implements TextProvider {
             contentBlocks[blockIndex].thinking = (contentBlocks[blockIndex].thinking || '') + delta.thinking
           }
           streamReasoning += delta.thinking
-          logger.debug('Anthropic streaming thinking fragment received', {
-            context: 'AnthropicProvider.streamMessage',
-            reasoningLength: streamReasoning.length,
-          })
           yield { content: '', done: false, reasoningContent: streamReasoning }
         } else if (delta?.type === 'signature_delta' && delta?.signature) {
           // Accumulate the signature for the current thinking block (needed for tool round-trips)

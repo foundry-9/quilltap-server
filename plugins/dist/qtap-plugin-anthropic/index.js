@@ -15922,12 +15922,6 @@ var AnthropicProvider = class {
     const response = await client.messages.create(requestParams);
     const textContent = response.content.filter((block) => block.type === "text").map((block) => block.text).join("");
     const thinkingContent = response.content.filter((block) => block.type === "thinking").map((block) => block.thinking).join("");
-    if (thinkingContent) {
-      logger.debug("Anthropic sendMessage thinking captured", {
-        context: "AnthropicProvider.sendMessage",
-        reasoningLength: thinkingContent.length
-      });
-    }
     const rawUsage = response.usage;
     const cacheUsage = rawUsage.cache_creation_input_tokens !== void 0 || rawUsage.cache_read_input_tokens !== void 0 ? {
       cacheCreationInputTokens: rawUsage.cache_creation_input_tokens,
@@ -16077,10 +16071,6 @@ var AnthropicProvider = class {
             contentBlocks[blockIndex].thinking = (contentBlocks[blockIndex].thinking || "") + delta.thinking;
           }
           streamReasoning += delta.thinking;
-          logger.debug("Anthropic streaming thinking fragment received", {
-            context: "AnthropicProvider.streamMessage",
-            reasoningLength: streamReasoning.length
-          });
           yield { content: "", done: false, reasoningContent: streamReasoning };
         } else if (delta?.type === "signature_delta" && delta?.signature) {
           if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === "thinking") {

@@ -121,13 +121,6 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
       throw new Error('No embedding returned from Ollama');
     }
 
-    logger.debug('Ollama embedding generated', {
-      context: 'OllamaEmbeddingProvider.generateEmbedding',
-      model,
-      numCtx,
-      textLength: text.length,
-      dimensions: embedding.length,
-    });
 
     return {
       embedding,
@@ -189,11 +182,6 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
 
     const cached = numCtxCache.get(key);
     if (cached !== undefined) {
-      logger.debug('Ollama num_ctx cache hit', {
-        context: 'OllamaEmbeddingProvider.resolveNumCtx',
-        model,
-        numCtx: cached,
-      });
       return cached;
     }
 
@@ -265,13 +253,6 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
       }
 
       const numCtx = Math.min(modelCtx, NUM_CTX_CEILING);
-      logger.debug('Resolved Ollama num_ctx from model', {
-        context: 'OllamaEmbeddingProvider.fetchModelNumCtx',
-        model,
-        modelContextLength: modelCtx,
-        numCtx,
-        ceiling: NUM_CTX_CEILING,
-      });
       return { numCtx, derived: true };
     } catch (error) {
       logger.warn(

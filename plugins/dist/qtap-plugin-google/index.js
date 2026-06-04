@@ -50507,12 +50507,6 @@ var GoogleProvider = class {
         }
       } catch {
       }
-      if (sendReasoningContent) {
-        logger.debug("Google sendMessage thinking captured", {
-          context: "GoogleProvider.sendMessage",
-          reasoningLength: sendReasoningContent.length
-        });
-      }
       const cachedTokens = usage?.cachedContentTokenCount;
       const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
       return {
@@ -50625,10 +50619,6 @@ var GoogleProvider = class {
             if (part.thought === true && part.text) {
               thoughtPartsWithText++;
               streamReasoning += part.text;
-              logger.debug("Google streaming thinking fragment received", {
-                context: "GoogleProvider.streamMessage",
-                reasoningLength: streamReasoning.length
-              });
               yield { content: "", done: false, reasoningContent: streamReasoning };
               continue;
             }
@@ -50649,19 +50639,6 @@ var GoogleProvider = class {
       }
       const usage = lastResponse?.usageMetadata;
       const thoughtSignature = this.extractThoughtSignature(lastResponse);
-      if (isThinking) {
-        logger.debug("Google streaming thinking summary", {
-          context: "GoogleProvider.streamMessage",
-          model: params.model,
-          isGemini3: this.isGemini3Model(params.model),
-          partsSeen,
-          thoughtPartsWithText,
-          thoughtPartsNoText,
-          textParts,
-          reasoningLength: streamReasoning.length,
-          thoughtsTokenCount: usage?.thoughtsTokenCount ?? 0
-        });
-      }
       let finalContent = "";
       if (isThinking && !totalStreamedContent && lastResponse) {
         finalContent = this.extractTextFromResponse(lastResponse, params.model);

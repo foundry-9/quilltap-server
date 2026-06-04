@@ -10197,13 +10197,6 @@ var OllamaEmbeddingProvider = class {
     if (!embedding) {
       throw new Error("No embedding returned from Ollama");
     }
-    logger2.debug("Ollama embedding generated", {
-      context: "OllamaEmbeddingProvider.generateEmbedding",
-      model,
-      numCtx,
-      textLength: text.length,
-      dimensions: embedding.length
-    });
     return {
       embedding,
       model,
@@ -10257,11 +10250,6 @@ var OllamaEmbeddingProvider = class {
     const key = `${this.baseUrl}::${model}`;
     const cached = numCtxCache.get(key);
     if (cached !== void 0) {
-      logger2.debug("Ollama num_ctx cache hit", {
-        context: "OllamaEmbeddingProvider.resolveNumCtx",
-        model,
-        numCtx: cached
-      });
       return cached;
     }
     let inflight = numCtxInflight.get(key);
@@ -10321,13 +10309,6 @@ var OllamaEmbeddingProvider = class {
         return { numCtx: NUM_CTX_FALLBACK, derived: false };
       }
       const numCtx = Math.min(modelCtx, NUM_CTX_CEILING);
-      logger2.debug("Resolved Ollama num_ctx from model", {
-        context: "OllamaEmbeddingProvider.fetchModelNumCtx",
-        model,
-        modelContextLength: modelCtx,
-        numCtx,
-        ceiling: NUM_CTX_CEILING
-      });
       return { numCtx, derived: true };
     } catch (error) {
       logger2.warn(

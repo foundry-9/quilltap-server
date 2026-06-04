@@ -255,12 +255,6 @@ export class OpenRouterProvider implements TextProvider {
 
     // Extract reasoning from the message if available
     const sendReasoningContent = (choice.message as any)?.reasoning;
-    if (sendReasoningContent) {
-      logger.debug('OpenRouter sendMessage reasoning captured', {
-        context: 'OpenRouterProvider.sendMessage',
-        reasoningLength: typeof sendReasoningContent === 'string' ? sendReasoningContent.length : 0,
-      });
-    }
 
     // Extract cache usage if available
     const usageAny = response.usage as any;
@@ -457,12 +451,6 @@ export class OpenRouterProvider implements TextProvider {
         }
       }
     }
-    if (sdkReasoning) {
-      logger.debug('OpenRouter SDK path reasoning captured from response', {
-        context: 'OpenRouterProvider.streamMessage',
-        reasoningLength: sdkReasoning.length,
-      });
-    }
 
     // Extract cache usage if available
     const responseUsage = response.usage as any;
@@ -653,10 +641,6 @@ export class OpenRouterProvider implements TextProvider {
             const deltaReasoning = choice?.delta?.reasoning;
             if (deltaReasoning) {
               fetchReasoning += deltaReasoning;
-              logger.debug('OpenRouter fetch-path streaming reasoning fragment received', {
-                context: 'OpenRouterProvider.streamViaChatCompletions',
-                reasoningLength: fetchReasoning.length,
-              });
               yield { content: '', done: false, reasoningContent: fetchReasoning };
             }
 

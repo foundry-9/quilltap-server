@@ -428,12 +428,6 @@ export class OpenAIProvider implements TextProvider {
         }
       }
     }
-    if (reasoningContent) {
-      logger.debug('OpenAI sendMessage reasoning summary captured', {
-        context: 'OpenAIProvider.buildLLMResponse',
-        reasoningLength: reasoningContent.length,
-      });
-    }
 
     return {
       content: response.output_text,
@@ -564,10 +558,6 @@ export class OpenAIProvider implements TextProvider {
       } else if (event.type === 'response.reasoning_summary_text.delta') {
         // Cumulative: append delta to accumulator and emit the full string
         streamReasoning += (event as any).delta;
-        logger.debug('OpenAI streaming reasoning summary fragment received', {
-          context: 'OpenAIProvider.streamMessage',
-          reasoningLength: streamReasoning.length,
-        });
         yield { content: '', done: false, reasoningContent: streamReasoning };
       } else if (event.type === 'response.completed') {
         finalResponse = event.response;
