@@ -1229,7 +1229,7 @@ function VisibilitySection({
                   const v = e.target.value
                   onSetCoreWhisperEnabled(v === 'on' ? true : v === 'off' ? false : null)
                 }}
-                className="qt-bg-card border qt-border-default rounded text-xs px-2 py-1"
+                className="qt-select qt-select-sm"
                 title="When does Aurora offer this chat's characters their own Core/ packet? Inherit defers to per-character and global settings."
               >
                 <option value="inherit">Inherit</option>
@@ -1247,7 +1247,7 @@ function VisibilitySection({
                   const raw = e.target.value
                   onSetCoreWhisperInterval(raw === '' ? null : parseInt(raw, 10))
                 }}
-                className="qt-bg-card border qt-border-default rounded text-xs px-2 py-1"
+                className="qt-select qt-select-sm"
                 title="Assistant turns between periodic Core whispers in this chat. Inherit defers to the global default."
               >
                 {CORE_WHISPER_INTERVAL_OPTIONS.map((opt) => (
@@ -1271,7 +1271,7 @@ function VisibilitySection({
                 const v = e.target.value
                 onSetShowThinking(v === 'on' ? true : v === 'off' ? false : null)
               }}
-              className="qt-bg-card border qt-border-default rounded text-xs px-2 py-1"
+              className="qt-select qt-select-sm"
               title="Show reasoning models' chain-of-thought in this chat. Inherit defers to the global default. Display-only — never sent to any model."
             >
               <option value="inherit">Inherit</option>

@@ -691,7 +691,7 @@ function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: Autonom
           onChange={(e) => onChange({ scheduleCron: e.target.value })}
           disabled={disabled}
           placeholder="0 4 * * *"
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
+          className="qt-input font-mono"
         />
         <p className="mt-1 qt-text-xs qt-text-muted">
           Five-field cron in instance-local time (minute hour dom month dow). Leave blank to run only when started manually.
@@ -728,7 +728,7 @@ function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: Autonom
           onChange={(e) => setNumber('scheduleFreshnessHours', e.target.value)}
           disabled={disabled}
           placeholder={freshnessPlaceholder}
-          className="w-32 rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="qt-input w-32"
         />
         <p className="mt-1 qt-text-xs qt-text-muted">
           How long after a missed scheduled slot the scheduler should still consider catching up. Blank = your default.
@@ -787,7 +787,7 @@ function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: Autonom
               onChange={(e) => setNumber('budgetEstimatedSpendCapUSD', e.target.value)}
               disabled={disabled}
               placeholder="(none)"
-              className="w-40 rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-input w-40"
             />
           </div>
         </div>
@@ -806,7 +806,7 @@ function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: Autonom
               checked={value.runVisibility == null}
               onChange={() => onChange({ runVisibility: null })}
               disabled={disabled}
-              className="mt-1"
+              className="qt-radio mt-1"
             />
             <span className="qt-text-small">
               Inherit your default <span className="qt-text-muted">(currently: {visibilityDefaultLabel(settingsHint?.visibilityDefault)})</span>
@@ -819,7 +819,7 @@ function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: Autonom
               checked={value.runVisibility === 'owner_only'}
               onChange={() => onChange({ runVisibility: 'owner_only' })}
               disabled={disabled}
-              className="mt-1"
+              className="qt-radio mt-1"
             />
             <span className="qt-text-small">Owner only — hidden from the main Salon list</span>
           </label>
@@ -830,7 +830,7 @@ function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: Autonom
               checked={value.runVisibility === 'household'}
               onChange={() => onChange({ runVisibility: 'household' })}
               disabled={disabled}
-              className="mt-1"
+              className="qt-radio mt-1"
             />
             <span className="qt-text-small">Household — visible per chat-sharing rules</span>
           </label>
@@ -841,7 +841,7 @@ function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: Autonom
               checked={value.runVisibility === 'open'}
               onChange={() => onChange({ runVisibility: 'open' })}
               disabled={disabled}
-              className="mt-1"
+              className="qt-radio mt-1"
             />
             <span className="qt-text-small">Open — always visible in the Salon list</span>
           </label>

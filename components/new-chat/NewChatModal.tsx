@@ -223,7 +223,7 @@ export function NewChatModal({
           <button
             type="button"
             onClick={handleCancel}
-            className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium qt-text-secondary qt-shadow-sm transition hover:qt-bg-muted cursor-pointer"
+            className="qt-button qt-button-secondary"
           >
             Cancel
           </button>

@@ -245,7 +245,7 @@ export function ExternalPromptDialog({
           <button
             onClick={onCancel}
             disabled={generating}
-            className="rounded-lg border qt-border-default qt-bg-card px-4 py-2 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted disabled:opacity-50"
+            className="qt-button qt-button-secondary"
           >
             Cancel
           </button>

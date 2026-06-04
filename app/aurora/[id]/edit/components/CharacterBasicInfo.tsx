@@ -162,7 +162,7 @@ export function CharacterBasicInfo({
               const v = e.target.value
               onCoreWhisperEnabledChange(v === 'on' ? true : v === 'off' ? false : null)
             }}
-            className="rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="qt-select"
           >
             <option value="inherit">Inherit (default)</option>
             <option value="on">Always offered</option>
@@ -439,7 +439,7 @@ export function CharacterBasicInfo({
                       onScenariosChange(updated)
                     }}
                     placeholder="Scenario title"
-                    className="flex-1 rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                    className="qt-input flex-1 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                   <button
                     type="button"

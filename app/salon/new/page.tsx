@@ -162,7 +162,7 @@ export default function NewChatPage() {
         <div className="mt-6 flex justify-end gap-3">
           <Link
             href={project ? `/prospero/${project.id}` : '/salon'}
-            className="rounded-lg border qt-border-default qt-bg-card px-6 py-2 font-medium qt-text-small transition hover:qt-bg-muted"
+            className="qt-button qt-button-secondary"
           >
             Cancel
           </Link>

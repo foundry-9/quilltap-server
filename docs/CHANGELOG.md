@@ -4,6 +4,17 @@
 
 ### 4.6-dev
 
+#### Refactor: tokenize qt-checkbox/qt-radio/select-arrow and finish the form-control migration
+
+Closed the gaps found in the previous qt-* audit so the component layer is fully theme-overridable.
+
+- **Checkboxes & radios are now token-driven.** `qt-checkbox`/`qt-radio` previously leaned on raw Tailwind (`text-primary`, `border-border`), which gave themes no hook and didn't actually recolor a native control's fill. Added `--qt-checkbox-{size,radius,border,accent,focus-ring}` and `--qt-radio-{size,border,accent,focus-ring}` to `_variables.css` and wired the classes in `_interactive.css` to use them — `accent-color` now follows the theme primary, and the focus ring matches inputs/buttons (`--color-ring`) instead of the odd-one-out primary ring.
+- **Select arrow is theme-aware.** The `<select>` chevron was a hardcoded gray SVG (`%236b7280`) that ignored the theme and stayed dark on dark surfaces. Introduced `--qt-select-arrow` (a full `url()` data URI) with a lighter dark-mode default; `qt-select` now references the token so themes can swap the glyph wholesale.
+- **`qt-button-success` normalized.** It hand-rolled its own base (`rounded-lg px-4 py-2 font-semibold`); folded it into the shared button base selector so it honors `--qt-button-radius`/padding/font and gains the standard focus-visible ring and disabled handling like every other variant. Success buttons now match the metrics of primary/secondary buttons.
+- **More controls migrated to `qt-*`:** Cancel buttons in `app/aurora/[id]/edit/page.tsx`, `ExternalPromptDialog.tsx`, `NewChatModal.tsx`, and `app/salon/new/page.tsx` → `qt-button qt-button-secondary`; the pronouns/coreWhisper select and scenario-title input in `CharacterBasicInfo.tsx` → `qt-select`/`qt-input`; the cron/freshness/spend-cap inputs and four visibility radios in `NewChatForm.tsx` → `qt-input`/`qt-radio`; three inline selects in `ChatSidebar.tsx` → `qt-select qt-select-sm`.
+- Theme-author token reference in `docs/developer/THEME_PLUGIN_DEVELOPMENT.md` updated with the new input/checkbox/radio/select-arrow tokens.
+- **Deferred:** the matching copies in `packages/theme-storybook` and `packages/create-quilltap-theme` are not yet updated (they require an npm publish round) — follow-up.
+
 #### Refactor: standardize hand-rolled form controls and buttons on qt-* component classes
 
 Audited the UI components changed since 4.5.1 against the `qt-*` theme utility class standard and converted controls that hand-assembled their look from raw utilities (including theme-aware shadcn tokens like `bg-card`/`text-foreground`) to the existing `qt-*` component classes, so the per-component theme tokens (`--qt-input-*`, `--qt-button-*`, `--qt-checkbox`, …) now reach them. No hard-coded Tailwind palette colors were found anywhere in the changed set; this is a component-class consistency pass with no behavior change.

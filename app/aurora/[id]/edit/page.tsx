@@ -383,7 +383,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           <button
             type="button"
             onClick={handleCancel}
-            className="rounded-lg border qt-border-default qt-bg-card px-6 py-3 text-base font-medium qt-text-secondary shadow transition hover:qt-bg-muted"
+            className="qt-button qt-button-secondary qt-button-lg"
           >
             Cancel
           </button>

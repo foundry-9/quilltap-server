@@ -148,6 +148,27 @@
   --qt-input-focus-ring: var(--color-ring);
   --qt-input-transition: colors 150ms cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* Select dropdown arrow — a full data URI so themes can swap the whole glyph.
+     Default stroke is a neutral slate that reads on light surfaces; the dark
+     baseline below lifts it. Themes override --qt-select-arrow wholesale. */
+  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+
+  /* ==========================================================================
+     CHECKBOX & RADIO VARIABLES
+     accent-color is the real theming hook for native controls (the fill/check);
+     the border/size/radius tokens take effect for appearance:none themes.
+     ========================================================================== */
+  --qt-checkbox-size: 1rem;
+  --qt-checkbox-radius: var(--radius-sm);
+  --qt-checkbox-border: var(--color-border);
+  --qt-checkbox-accent: var(--color-primary);
+  --qt-checkbox-focus-ring: var(--color-ring);
+
+  --qt-radio-size: 1rem;
+  --qt-radio-border: var(--color-border);
+  --qt-radio-accent: var(--color-primary);
+  --qt-radio-focus-ring: var(--color-ring);
+
   /* ==========================================================================
      NAVBAR VARIABLES
      ========================================================================== */
@@ -696,6 +717,9 @@
    Black shadows + faint light edge glow for card definition.
    ============================================================================ */
 [data-theme].dark {
+  /* Select arrow — lighter slate so the glyph reads on dark surfaces */
+  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+
   /* Card shadows — true black for depth, faint white edge for definition */
   --qt-card-shadow: 0 1px 3px hsl(225 12% 0% / 0.25), 0 0 1px hsl(225 12% 100% / 0.04);
   --qt-card-shadow-hover: 0 4px 12px hsl(225 12% 0% / 0.35), 0 0 1px hsl(225 12% 100% / 0.06);
