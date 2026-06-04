@@ -1,0 +1,292 @@
+/**
+ * Characters API v1 - GET Handler
+ *
+ * GET /api/v1/characters/[id] - Get a specific character
+ * GET /api/v1/characters/[id]?action=export - Export character (JSON or PNG)
+ * GET /api/v1/characters/[id]?action=chats - List recent chats with this character
+ * GET /api/v1/characters/[id]?action=cascade-preview - Get cascade delete preview
+ * GET /api/v1/characters/[id]?action=default-partner - Get default partner
+ * GET /api/v1/characters/[id]?action=get-tags - Get character tags
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { checkOwnership, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { getCascadeDeletePreview } from '@/lib/cascade-delete';
+import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
+import { readCharacterAvatarBuffer } from '@/lib/photos/resolve-character-avatar';
+import { logger } from '@/lib/logger';
+import { notFound, serverError } from '@/lib/api/responses';
+import type { AuthenticatedContext } from '@/lib/api/middleware';
+
+const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags'] as const;
+type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
+
+export async function handleGet(
+  req: NextRequest,
+  ctx: AuthenticatedContext,
+  id: string
+): Promise<NextResponse> {
+  const { user, repos } = ctx;
+  const action = getActionParam(req);
+
+  // First verify ownership for all actions
+  const character = await repos.characters.findById(id);
+  if (!checkOwnership(character, user.id)) {
+    return notFound('Character');
+  }
+
+  if (!action || !isValidAction(action, CHARACTER_GET_ACTIONS)) {
+    try {
+      const defaultImage = await enrichWithDefaultImage(character.defaultImageId, repos);
+      const chats = await repos.chats.findByCharacterId(id);
+
+      const enrichedCharacter = {
+        ...character,
+        defaultImage,
+        _count: {
+          chats: chats.length,
+        },
+      };
+
+      return NextResponse.json({ character: enrichedCharacter });
+    } catch (error) {
+      logger.error('[Characters v1] Error fetching character', { characterId: id }, error instanceof Error ? error : undefined);
+      return serverError('Failed to fetch character');
+    }
+  }
+
+  const actionHandlers: Record<CharacterGetAction, () => Promise<NextResponse>> = {
+    export: async () => {
+      try {
+        const { searchParams } = req.nextUrl;
+        const format = searchParams.get('format') || 'json';
+
+        if (format === 'png') {
+          let avatarBuffer: Buffer | undefined;
+          if (character.defaultImageId) {
+            const bytes = await readCharacterAvatarBuffer(character.defaultImageId, repos);
+            if (bytes) {
+              avatarBuffer = bytes;
+            } else {
+              logger.warn('[Characters v1] Could not read avatar for PNG export, using placeholder', {
+                characterId: id,
+                imageId: character.defaultImageId,
+              });
+            }
+          }
+
+          const pngBuffer = await createSTCharacterPNG(character, avatarBuffer);
+
+          return new NextResponse(new Uint8Array(pngBuffer), {
+            headers: {
+              'Content-Type': 'image/png',
+              'Content-Disposition': `attachment; filename="${character.name}.png"`,
+            },
+          });
+        }
+
+        const stCharacter = exportSTCharacter(character);
+        return new NextResponse(JSON.stringify(stCharacter, null, 2), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Disposition': `attachment; filename="${character.name}.json"`,
+          },
+        });
+      } catch (error) {
+        logger.error('[Characters v1] Error exporting character', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to export character');
+      }
+    },
+
+    chats: async () => {
+      try {
+        const { searchParams } = req.nextUrl;
+        const search = searchParams.get('search')?.toLowerCase() || '';
+        const limit = parseInt(searchParams.get('limit') || '10', 10);
+        const offset = parseInt(searchParams.get('offset') || '0', 10);
+
+        const allChats = await repos.chats.findByCharacterId(id);
+        const userChats = allChats.filter((chat) => chat.userId === user.id);
+
+        const chatsWithMessages = await Promise.all(
+          userChats.map(async (chat) => {
+            const allMessages = await repos.chats.getMessages(chat.id);
+            const messageTimestamps = allMessages
+              .filter((msg) => msg.type === 'message')
+              .map((msg) => new Date(msg.createdAt).getTime());
+            const lastMessageAt = messageTimestamps.length > 0
+              ? new Date(Math.max(...messageTimestamps)).toISOString()
+              : chat.updatedAt;
+            return { chat, messages: allMessages, lastMessageAt };
+          })
+        );
+
+        chatsWithMessages.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+
+        let filteredChats = chatsWithMessages;
+        if (search) {
+          filteredChats = chatsWithMessages.filter(({ chat, messages }) => {
+            if (chat.title?.toLowerCase().includes(search)) {
+              return true;
+            }
+            return messages.some(msg => msg.type === 'message' && msg.content.toLowerCase().includes(search));
+          });
+        }
+
+        const paginatedChats = filteredChats.slice(offset, offset + limit);
+
+        const projectIds = new Set<string>();
+        for (const { chat } of paginatedChats) {
+          if (chat.projectId) {
+            projectIds.add(chat.projectId);
+          }
+        }
+
+        const projectMap = new Map<string, { id: string; name: string }>();
+        for (const projectId of projectIds) {
+          const project = await repos.projects.findById(projectId);
+          if (project) {
+            projectMap.set(projectId, { id: project.id, name: project.name });
+          }
+        }
+
+        const enrichedChats = await Promise.all(
+          paginatedChats.map(async ({ chat, messages, lastMessageAt }) => {
+            const tagData = await Promise.all(
+              (chat.tags || []).map(async (tagId) => {
+                const tag = await repos.tags.findById(tagId);
+                return tag ? { tag: { id: tag.id, name: tag.name } } : null;
+              })
+            );
+
+            const messageCount = messages.filter((msg) => msg.type === 'message' && msg.role !== 'SYSTEM' && msg.role !== 'TOOL').length;
+            const memoryCount = await repos.memories.countByChatId(chat.id);
+
+            // Scriptorium status: check rendered markdown and embedded chunks
+            const hasRenderedMarkdown = !!chat.renderedMarkdown;
+            let embeddedChunkCount = 0;
+            let totalChunkCount = 0;
+            if (hasRenderedMarkdown) {
+              const chunks = await repos.conversationChunks.findByChatId(chat.id);
+              totalChunkCount = chunks.length;
+              embeddedChunkCount = chunks.filter(c => c.embedding !== null && c.embedding !== undefined).length;
+            }
+
+            const recentMessages = messages
+              .filter((msg) => msg.type === 'message')
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              .slice(0, 3)
+              .map((msg) => ({
+                id: msg.id,
+                role: msg.role,
+                content: msg.content,
+                createdAt: msg.createdAt,
+              }));
+
+            const project = chat.projectId ? projectMap.get(chat.projectId) || null : null;
+
+            let storyBackground = null;
+            if (chat.storyBackgroundImageId) {
+              const bgFile = await repos.files.findById(chat.storyBackgroundImageId);
+              if (bgFile) {
+                storyBackground = {
+                  id: bgFile.id,
+                  filepath: getFilePath(bgFile),
+                };
+              }
+            }
+
+            return {
+              id: chat.id,
+              title: chat.title,
+              createdAt: chat.createdAt,
+              updatedAt: chat.updatedAt,
+              lastMessageAt,
+              character: {
+                id: character.id,
+                name: character.name,
+              },
+              project,
+              storyBackground,
+              messages: recentMessages,
+              tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
+              isDangerousChat: chat.isDangerousChat === true,
+              _count: {
+                messages: messageCount,
+                memories: memoryCount,
+              },
+              scriptoriumStatus: hasRenderedMarkdown
+                ? (embeddedChunkCount >= totalChunkCount && totalChunkCount > 0 ? 'embedded' : 'rendered')
+                : 'none',
+            };
+          })
+        );
+
+        return NextResponse.json({ chats: enrichedChats, total: filteredChats.length });
+      } catch (error) {
+        logger.error('[Characters v1] Error fetching character chats', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to fetch chats');
+      }
+    },
+
+    'cascade-preview': async () => {
+      try {
+        const preview = await getCascadeDeletePreview(id);
+
+        if (!preview) {
+          return serverError('Failed to generate preview');
+        }
+
+        return NextResponse.json({
+          characterId: preview.characterId,
+          characterName: preview.characterName,
+          exclusiveChats: preview.exclusiveChats.map(c => ({
+            id: c.chat.id,
+            title: c.chat.title,
+            messageCount: c.messageCount,
+            lastMessageAt: c.chat.lastMessageAt,
+          })),
+          exclusiveCharacterImageCount: preview.exclusiveCharacterImages.length,
+          exclusiveChatImageCount: preview.exclusiveChatImages.length,
+          totalExclusiveImageCount:
+            preview.exclusiveCharacterImages.length + preview.exclusiveChatImages.length,
+          memoryCount: preview.memoryCount,
+        });
+      } catch (error) {
+        logger.error('[Characters v1] Error generating cascade delete preview', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to generate preview');
+      }
+    },
+
+    'default-partner': async () => {
+      try {
+        return NextResponse.json({
+          partnerId: character.defaultPartnerId || null,
+        });
+      } catch (error) {
+        logger.error('[Characters v1] Error fetching default partner', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to fetch default partner');
+      }
+    },
+
+    'get-tags': async () => {
+      try {
+        const tagDetails = await Promise.all(
+          (character.tags || []).map(async (tagId) => {
+            const tag = await repos.tags.findById(tagId);
+            return tag ? { id: tag.id, name: tag.name, visualStyle: tag.visualStyle } : null;
+          })
+        );
+
+        const validTags = tagDetails.filter(Boolean);
+        return NextResponse.json({ tags: validTags });
+      } catch (error) {
+        logger.error('[Characters v1] Error fetching character tags', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to fetch character tags');
+      }
+    },
+  };
+
+  return actionHandlers[action]();
+}

@@ -4,6 +4,13 @@
 
 ### 4.6-dev
 
+#### Refactor: split the large characters API route files into SRP-compliant handlers/
+
+Two oversized route files under `app/api/v1/characters/` were broken up into per-verb handler modules. No behavior change — the same endpoints, actions, schemas, and responses; only the file layout moved.
+
+- `app/api/v1/characters/[id]/route.ts` (777 lines) is now a thin delegator that wires `GET`/`PUT`/`DELETE`/`POST` to `./handlers/{get,put,delete,post}.ts` (with a `handlers/index.ts` barrel). All GET/POST action dispatch (export, chats, cascade-preview, default-partner, get-tags, favorite, avatar, add-tag, remove-tag, toggle-controlled-by, set-default-partner, optimize-stream, generate-external-prompt, refresh-archive) moved into the handler modules unchanged.
+- `app/api/v1/characters/route.ts` (662 lines) is likewise thinned to delegate `GET`/`POST` to `./handlers/{get,post}.ts`. The collection POST actions (ai-wizard, ai-wizard-stream, import, quick-create, reset-builtins) and the create/import schemas moved with them.
+
 #### Tests + refactor: consolidate image SHA-256 hashing; add vault/sha256 regression coverage
 
 - Added regression tests covering recent character-vault and image work: `doc_mount_points` schema-drift repair (`alignDocMountPointsSchema`), manifesto nullability at the `CharacterSchema` and vault write/read-overlay layers, image SHA-256 dedup in `images-v2` (`createFile`), and the SHA-256 recorded by the character-avatar and story-background generation handlers (must hash the post-WebP-conversion bytes, not the raw provider bytes).
