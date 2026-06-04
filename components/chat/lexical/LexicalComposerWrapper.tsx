@@ -35,7 +35,8 @@ import { TableNode, TableCellNode, TableRowNode } from '@lexical/table'
 
 import { composerTheme } from './theme'
 import type { ComposerEditorHandle } from './types'
-import { MarkdownBridgePlugin, useMarkdownBridge, COMPOSER_TRANSFORMERS } from './plugins/MarkdownBridgePlugin'
+import { useMarkdownBridge, COMPOSER_TRANSFORMERS } from './plugins/MarkdownBridgePlugin'
+import { ComposerSyncPlugin } from './plugins/ComposerSyncPlugin'
 import KeyboardPlugin from './plugins/KeyboardPlugin'
 import { ImagePastePlugin } from './plugins/ImagePastePlugin'
 import {
@@ -46,10 +47,16 @@ import { FormattingCommandPlugin } from './plugins/FormattingCommandPlugin'
 import { TextReplacementPlugin } from './plugins/TextReplacementPlugin'
 
 interface LexicalComposerWrapperProps {
-  /** Current markdown string from parent state */
+  /**
+   * External markdown value. Updated only by external events (draft restore,
+   * resend, post-send clear) — NOT on keystrokes. The editor owns the live
+   * text; read it via the handle's `getMarkdown()` for sending.
+   */
   input: string
-  /** Callback to update parent state with new markdown */
-  setInput: (value: string) => void
+  /** Debounced report of whether the editor holds non-blank text. */
+  onContentChange: (hasContent: boolean) => void
+  /** Debounced full-markdown emit for draft persistence (no parent re-render). */
+  onPersistDraft?: (markdown: string) => void
   /** Callback to submit the message */
   onSubmit: () => void
   /** Callback when an image is pasted */
@@ -60,8 +67,11 @@ interface LexicalComposerWrapperProps {
   disabled: boolean
   /** Placeholder text */
   placeholder: string
-  /** Initial markdown for draft restoration */
-  initialMarkdown?: string
+  /**
+   * When true (source/raw-markdown mode), the hidden editor is not driven from
+   * `input`; the composer re-syncs it on toggle-out via the editor handle.
+   */
+  suspendSync?: boolean
 }
 
 /**
@@ -74,13 +84,14 @@ const ComposerPlugins = forwardRef<
 >(function ComposerPlugins(
   {
     input,
-    setInput,
+    onContentChange,
+    onPersistDraft,
     onSubmit,
     onImagePaste,
     documentEditingMode,
     disabled,
     placeholder,
-    initialMarkdown,
+    suspendSync,
   },
   ref,
 ) {
@@ -125,10 +136,11 @@ const ComposerPlugins = forwardRef<
       <ListPlugin />
       <CheckListPlugin />
       <MarkdownShortcutPlugin transformers={COMPOSER_TRANSFORMERS} />
-      <MarkdownBridgePlugin
-        input={input}
-        setInput={setInput}
-        initialMarkdown={initialMarkdown}
+      <ComposerSyncPlugin
+        value={input}
+        onContentChange={onContentChange}
+        onPersistDraft={onPersistDraft}
+        suspendSync={suspendSync}
       />
       <KeyboardPlugin
         documentEditingMode={documentEditingMode}
@@ -152,7 +164,7 @@ export const LexicalComposerWrapper = forwardRef<
   ComposerEditorHandle,
   LexicalComposerWrapperProps
 >(function LexicalComposerWrapper(props, ref) {
-  const { disabled, initialMarkdown, input } = props
+  const { disabled } = props
 
   const initialConfig = useMemo(
     () => ({

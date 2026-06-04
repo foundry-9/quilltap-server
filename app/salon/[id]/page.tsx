@@ -91,7 +91,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   )
 
   // --- UI state that stays in page ---
-  const [input, setInput] = useState('')
+  // `input` is the EXTERNAL composer value (draft restore / resend / post-send
+  // clear / source-mode textarea), NOT a per-keystroke mirror — the Lexical
+  // editor owns the live text. `hasComposerContent` is the lightweight Send-
+  // button signal. Decoupling these is what stops every keystroke from
+  // re-rendering the whole Salon page. See setInput / handleComposerContentChange.
+  const [input, setInputState] = useState('')
+  const [hasComposerContent, setHasComposerContent] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [viewSourceMessageIds, setViewSourceMessageIds] = useState<Set<string>>(new Set())
@@ -129,6 +135,24 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
   const wasGeneratingRef = useRef(false)
   const streamingRef = useRef(false)
+
+  // --- Composer input decoupling ---
+  // `setInput` is the external/seed writer (draft restore, resend, source-mode,
+  // clear); it updates the content-presence flag too. It is NOT called on every
+  // keystroke — the editor reports presence via handleComposerContentChange.
+  const setInput = useCallback((value: string) => {
+    setInputState(value)
+    setHasComposerContent(!!value.trim())
+  }, [])
+  const handleComposerContentChange = useCallback((has: boolean) => {
+    setHasComposerContent(has)
+  }, [])
+  // Passed to sendMessage so its internal setInput('') also clears the editor —
+  // an already-empty → empty value transition can't drive the controlled sync.
+  const clearComposerInput = useCallback((value: string) => {
+    setInput(value)
+    if (value === '') inputRef.current?.setMarkdown('')
+  }, [setInput])
 
   // --- Whisper support ---
   const participantNames = useMemo(() => {
@@ -338,7 +362,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   })
 
   // --- Draft persistence hook ---
-  useDraftPersistence({ chatId: id, input, setInput })
+  const { persistDraft } = useDraftPersistence({ chatId: id, setInput })
   const clearDraft = useCallback(() => {
     try {
       localStorage.removeItem(`quilltap-draft-${id}`)
@@ -1294,6 +1318,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           id={id}
           input={input}
           setInput={setInput}
+          hasContent={hasComposerContent}
+          onContentChange={handleComposerContentChange}
+          onPersistDraft={persistDraft}
           attachedFiles={attachedFiles}
           onRemoveAttachedFile={removeAttachedFile}
           pendingToolResults={pendingToolResults}
@@ -1318,8 +1345,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           isDocumentModeActive={documentModeHook.documentMode !== 'normal'}
           onSubmit={(e) => sseStreaming.sendMessage(
             e,
-            input,
-            setInput,
+            // Read the live text straight from the editor handle — page `input`
+            // intentionally lags while typing (that's the decoupling).
+            inputRef.current?.getMarkdown() ?? input,
+            clearComposerInput,
             attachedFiles,
             pendingToolResults,
             setPendingToolResults,

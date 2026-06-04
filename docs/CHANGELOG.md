@@ -4,6 +4,14 @@
 
 ### 4.6-dev
 
+#### Perf: typing in the Salon composer no longer re-renders the whole page
+
+Typing in the Lexical chat composer froze the Salon tab (browser "page unresponsive" prompts), worst while typing. The composer's markdown was lifted into top-level page state on every keystroke (16ms debounce), so each keystroke re-rendered the entire `app/salon/[id]/page.tsx` tree — `SplitLayout`, `VirtualizedMessageList`, and the Lexical plugin tree (none memoized). In dev this tripped the unresponsive-tab watchdog.
+
+- Added `components/chat/lexical/plugins/ComposerSyncPlugin.tsx` for the chat composer. The editor owns the live text; the plugin reports only a debounced content-presence boolean (drives the Send button) and a debounced draft-markdown string (persisted via refs, no `setState`). Typing no longer triggers a page re-render. The shared `MarkdownBridgePlugin` is unchanged and still used by the Scriptorium document editor and the standalone markdown editor, where per-keystroke `setInput` is intended.
+- The editor is now *controlled* for external writes only (draft restore, resend-into-composer, post-send clear) via the new plugin's loop-free `value → editor` sync. This also fixes two latent bugs: resend (`useMessageActions`) and draft restore (`useDraftPersistence`) set page state but never populated the Lexical editor — they do now.
+- Send reads the live markdown straight from the editor handle (`getMarkdown()`) at submit time, so button-click and Enter both send the freshest text even though page `input` intentionally lags. `useDraftPersistence` no longer takes `input`; it restores on mount and exposes an imperative `persistDraft`.
+
 #### Fix: character editor Identity edits were silently dropped
 
 Editing a character's Identity in the Aurora editor appeared to save (the request returned success) but never wrote `identity.md` in the character vault. The PUT validation schema in `app/api/v1/characters/[id]/route.ts` (`updateCharacterSchema`) was missing the `identity` field, so Zod stripped it from the request body before the update reached the vault-write overlay. Added `identity` to the schema (`z.string().nullable().optional()`, matching the canonical `Character` type). The other managed content fields (title, description, manifesto, personality, etc.) were already present and unaffected.

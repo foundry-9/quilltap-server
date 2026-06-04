@@ -14,8 +14,19 @@ const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase
 
 interface ChatComposerProps {
   id: string
+  /**
+   * External markdown value (draft restore / resend / post-send clear and the
+   * source-mode textarea). NOT updated on every keystroke — the Lexical editor
+   * owns the live text. Use the editor handle (`inputRef`) to read it for send.
+   */
   input: string
   setInput: (value: string) => void
+  /** Whether the composer currently holds non-blank content (drives Send). */
+  hasContent: boolean
+  /** Debounced editor content-presence reporter (wired to the page). */
+  onContentChange: (hasContent: boolean) => void
+  /** Debounced full-markdown emit for draft persistence. */
+  onPersistDraft?: (markdown: string) => void
   attachedFiles: AttachedFile[]
   onRemoveAttachedFile: (fileId: string) => void
   /** Pending tool results to display in composer */
@@ -79,6 +90,9 @@ export function ChatComposer({
   id,
   input,
   setInput,
+  hasContent,
+  onContentChange,
+  onPersistDraft,
   attachedFiles,
   onRemoveAttachedFile,
   pendingToolResults,
@@ -139,23 +153,22 @@ export function ChatComposer({
     onAttachFileClick?.()
   }
 
-  // Submit handler: reads markdown from Lexical and dispatches form submit
+  // Submit handler: the editor owns the live text, so we just dispatch the
+  // form submit — the page's onSubmit reads markdown straight from the editor
+  // handle (`getMarkdown()`), which is why we no longer round-trip through
+  // setInput here (that was the per-keystroke re-render source).
   const handleEditorSubmit = useCallback(() => {
     const markdown = editorRef.current?.getMarkdown() ?? ''
     if (markdown.trim() || attachedFiles.length > 0 || pendingToolResults.length > 0) {
-      setInput(markdown)
-      // Use a microtask to ensure setInput has propagated
-      setTimeout(() => {
-        const form = document.querySelector<HTMLFormElement>(`#composer-form-${id}`)
-        if (form) {
-          form.dispatchEvent(new Event('submit', { bubbles: true }))
-          setTimeout(() => {
-            editorRef.current?.focus({ preventScroll: true })
-          }, 10)
-        }
-      }, 0)
+      const form = document.querySelector<HTMLFormElement>(`#composer-form-${id}`)
+      if (form) {
+        form.dispatchEvent(new Event('submit', { bubbles: true }))
+        setTimeout(() => {
+          editorRef.current?.focus({ preventScroll: true })
+        }, 10)
+      }
     }
-  }, [id, attachedFiles.length, pendingToolResults.length, setInput])
+  }, [id, attachedFiles.length, pendingToolResults.length])
 
   // Capture the Lexical editor instance when the wrapper mounts
   const composerRefCallback = useCallback(
@@ -307,8 +320,12 @@ export function ChatComposer({
             setInput={setInput}
             onToggleSource={() => {
               if (showSource) {
-                // Switching back to rich text — sync source edits into Lexical
+                // Leaving source mode — push textarea edits into Lexical.
                 editorRef.current?.setMarkdown(input)
+              } else {
+                // Entering source mode — seed the textarea from the editor's
+                // live content (page `input` lags while typing in rich mode).
+                setInput(editorRef.current?.getMarkdown() ?? '')
               }
               setShowSource(!showSource)
             }}
@@ -412,7 +429,9 @@ export function ChatComposer({
             <LexicalComposerWrapper
               ref={composerRefCallback}
               input={input}
-              setInput={setInput}
+              onContentChange={onContentChange}
+              onPersistDraft={onPersistDraft}
+              suspendSync={showSource}
               onSubmit={handleEditorSubmit}
               onImagePaste={onImagePaste}
               documentEditingMode={documentEditingMode}
@@ -441,7 +460,7 @@ export function ChatComposer({
             /* Send button - disabled while generating when stop is in sidebar */
             <button
               type="submit"
-              disabled={sending || (streaming || waitingForResponse) || (!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
+              disabled={sending || (streaming || waitingForResponse) || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
               className="qt-chat-composer-send"
               title={!hasActiveCharacters ? "Add a character to start chatting" : (streaming || waitingForResponse) ? "Generating..." : "Send message"}
             >
