@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 4.6-dev
+### 4.6.0
 
 #### CLI: universal flags now work before the subcommand, and `migrations` accepts `-i`
 
