@@ -295,6 +295,12 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
           ...data,
           id: candidateId,
           characterId: data.characterId ?? null,
+          // Apply the schema defaults for array/flag fields here at the
+          // construction chokepoint so callers that hand us a partial item
+          // (e.g. AI import, which omits these) never let an undefined reach the
+          // vault writer's `componentItemIds.length` check.
+          componentItemIds: data.componentItemIds ?? [],
+          replace: data.replace ?? false,
           createdAt: options?.createdAt ?? now,
           updatedAt: options?.updatedAt ?? now,
         };

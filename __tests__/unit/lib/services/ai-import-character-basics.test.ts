@@ -65,7 +65,10 @@ describe('assembleQtapExport', () => {
     expect(character.personality).toBe(baseStepResults.character_basics!.personality)
   })
 
-  it('writes identity as null when the LLM omits it', () => {
+  it('omits identity entirely when the LLM omits it', () => {
+    // The qtap export schema types identity as a (non-nullable) string, so
+    // emitting an explicit null trips schema validation and the LLM repair loop.
+    // Absent optional text fields must be omitted, not null.
     const stepResultsWithoutIdentity: AIImportStepResults = {
       character_basics: {
         name: 'Nameless',
@@ -73,6 +76,7 @@ describe('assembleQtapExport', () => {
     }
     const result = assembleQtapExport(stepResultsWithoutIdentity, false, false, '4.4-dev')
     const character = (result.data.characters as Array<Record<string, unknown>>)[0]
-    expect(character.identity).toBeNull()
+    expect('identity' in character).toBe(false)
+    expect(character.identity).toBeUndefined()
   })
 })
