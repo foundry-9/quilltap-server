@@ -4,6 +4,21 @@
 
 ### 4.6.1
 
+#### Cache-read (prompt-cache hit) tokens no longer count against autonomous-room budgets
+
+Prompt-cache hits are now excluded from the normalized token usage every provider plugin reports. Cached input therefore no longer counts toward an autonomous room's per-run token cap (`budgetMaxTokens`), the daily user-token cap (`dailyTokenBudget`), or the per-chat token/cost aggregates.
+
+The reconciliation lives in the provider plugins, not the app. Each provider reports usage differently — Anthropic reports `input_tokens` separately from `cache_read_input_tokens`, while the OpenAI family folds `cached_tokens` into the prompt-token count — so each plugin subtracts cache reads at the source according to its own convention. The app's budget code is unchanged: it already sums `usage.totalTokens`, which now excludes cache reads everywhere.
+
+- `qtap-plugin-anthropic` (1.0.43): already excluded cache reads from `promptTokens`/`totalTokens` (input_tokens is reported separately from cache reads); only a clarifying comment was added so the convention isn't "fixed" away later.
+- `qtap-plugin-openai` (1.0.49), `qtap-plugin-grok` (1.0.40), `qtap-plugin-z-ai` (1.1.11): subtract `input_tokens_details.cached_tokens` / `prompt_tokens_details.cached_tokens` from prompt and total.
+- `qtap-plugin-google` (1.1.37): subtract `cachedContentTokenCount` from prompt and total.
+- `qtap-plugin-deepseek` (1.0.10): subtract `prompt_cache_hit_tokens` from prompt and total.
+- `qtap-plugin-openrouter` (1.0.45): subtract cache-read tokens across all three usage paths (non-streaming, Responses streaming, and chat-completions streaming — the last previously surfaced no cache data at all and now does).
+- `cacheUsage` (the cache-read / cache-creation token counts) and `rawProviderUsage` are reported unchanged for display and diagnostics; only `usage.promptTokens` / `usage.totalTokens` changed.
+- Caveat: the cost estimator has no cache-discount tier, so for the OpenAI-family providers the estimated cost and per-chat token totals now omit cache-read tokens entirely, rather than charging them at the full input rate as before.
+- Docs: schema doc-comments in `lib/schemas/chat.types.ts` (`budgetMaxTokens`, `runTokensConsumed`) and `lib/schemas/settings.types.ts` (`dailyTokenBudget`); user help in `help/autonomous-rooms.md`.
+
 #### Fix: autonomous rooms could freeze mid-run, and per-run token budgets over-counted
 
 Two related bugs in autonomous rooms. A scheduled room would stop advancing and sit in `running` forever, and its per-run token budget was being charged for spend that wasn't part of the run.

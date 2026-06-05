@@ -462,6 +462,11 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   // turn behind because this turn's rows are buffered in the job child until
   // it flushes; Math.max keeps the counter monotonic so a transient
   // read-zero can't un-exhaust the run.
+  //
+  // Cache-read (prompt-cache hit) tokens are already excluded from this sum:
+  // the provider plugins subtract them from `usage.totalTokens` at the source
+  // (each provider's convention differs), so cached input never counts against
+  // the budget. See the per-plugin usage normalization in plugins/dist/*.
   const runUsage = await repos.llmLogs.getTotalTokenUsageForRun(runId);
   const newTokensConsumed = Math.max(runUsage.totalTokens, post.runTokensConsumed ?? 0);
 

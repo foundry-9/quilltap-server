@@ -19,10 +19,10 @@ An autonomous room is **not** a free-running improvisation. Every run is bounded
 A run ends gracefully on the first of the following budgets to be reached:
 
 - **Turns.** A hard cap on the number of character responses in a single run.
-- **Tokens (per run).** A hard cap on the cumulative input + output tokens spent across all turns of a single run — the characters' own deliberations and any tools they take up mid-turn. The Estate's quiet background staff (the memoirist who keeps the Commonplace Book, the scene-watcher, the Concierge at the door) keep their own ledgers, and their expenditures are not charged against this purse.
+- **Tokens (per run).** A hard cap on the cumulative input + output tokens spent across all turns of a single run — the characters' own deliberations and any tools they take up mid-turn. The Estate's quiet background staff (the memoirist who keeps the Commonplace Book, the scene-watcher, the Concierge at the door) keep their own ledgers, and their expenditures are not charged against this purse. And where a provider extends the courtesy of a prompt cache, the portion of each prompt it serves back from that cache — having cost a pittance, or nothing at all — is struck from the tally before it reaches this ledger; only freshly-read input and newly-written output are counted against the cap.
 - **Wall-clock duration.** A maximum elapsed time, in minutes, after which the run is brought to a polite stop.
 - **Estimated spend (USD, optional).** A convenience cap evaluated against the running cost of the LLM calls.
-- **Daily user-token budget.** A house-level cap that applies across every autonomous room belonging to a single account, evaluated against the instance's local-time midnight. When this cap is reached, every active room pauses; they resume of their own accord after the next midnight.
+- **Daily user-token budget.** A house-level cap that applies across every autonomous room belonging to a single account, evaluated against the instance's local-time midnight. When this cap is reached, every active room pauses; they resume of their own accord after the next midnight. The same courtesy applies here: cached prompt tokens are struck from this tally as well.
 
 Reaching a per-run cap ends that particular run cleanly with `budgetExhausted` status. Reaching the daily user cap pauses the room (`paused` status); the scheduler will resume it the next day. The household may, of course, intervene at any time with **Pause**, **Resume**, or **Stop** controls.
 

@@ -249,9 +249,12 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
         content: msg.content ?? '',
         finishReason: choice.finish_reason,
         usage: {
-          promptTokens: response.usage?.prompt_tokens ?? 0,
+          // Exclude cache-read tokens from prompt/total so cached input is not
+          // charged against budgets or cost; cacheUsage still reports them for
+          // display. (DeepSeek's prompt_tokens = cache_hit + cache_miss.)
+          promptTokens: Math.max(0, (response.usage?.prompt_tokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? 0)),
           completionTokens: response.usage?.completion_tokens ?? 0,
-          totalTokens: response.usage?.total_tokens ?? 0,
+          totalTokens: Math.max(0, (response.usage?.total_tokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? 0)),
         },
         raw: response,
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
@@ -388,9 +391,10 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
         content: '',
         done: true,
         usage: {
-          promptTokens: usage?.prompt_tokens ?? 0,
+          // Cache-read tokens excluded from prompt/total (see sendMessage).
+          promptTokens: Math.max(0, (usage?.prompt_tokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? 0)),
           completionTokens: usage?.completion_tokens ?? 0,
-          totalTokens: usage?.total_tokens ?? 0,
+          totalTokens: Math.max(0, (usage?.total_tokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? 0)),
         },
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         attachmentResults,

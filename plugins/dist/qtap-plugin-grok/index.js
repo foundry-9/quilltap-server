@@ -10145,9 +10145,12 @@ ${textContent}`
       content: text,
       finishReason,
       usage: {
-        promptTokens: response.usage?.input_tokens ?? 0,
+        // Exclude cache-read tokens from prompt/total so cached input is not
+        // charged against budgets or cost; cacheUsage still reports them for
+        // display. (Grok folds cached_tokens into input_tokens.)
+        promptTokens: Math.max(0, (response.usage?.input_tokens ?? 0) - (cachedTokens ?? 0)),
         completionTokens: response.usage?.output_tokens ?? 0,
-        totalTokens: response.usage?.total_tokens ?? 0
+        totalTokens: Math.max(0, (response.usage?.total_tokens ?? 0) - (cachedTokens ?? 0))
       },
       raw,
       attachmentResults,
@@ -10220,9 +10223,10 @@ ${textContent}`
         content: "",
         done: true,
         usage: {
-          promptTokens: finalResponse.usage?.input_tokens ?? 0,
+          // Cache-read tokens excluded from prompt/total (see sendMessage).
+          promptTokens: Math.max(0, (finalResponse.usage?.input_tokens ?? 0) - (cachedTokens ?? 0)),
           completionTokens: finalResponse.usage?.output_tokens ?? 0,
-          totalTokens: finalResponse.usage?.total_tokens ?? 0
+          totalTokens: Math.max(0, (finalResponse.usage?.total_tokens ?? 0) - (cachedTokens ?? 0))
         },
         attachmentResults,
         rawResponse: raw,

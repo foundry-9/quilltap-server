@@ -700,7 +700,11 @@ export const ChatMetadataSchema = z.object({
 
   /** Hard cap on character turns per run. NULL = unlimited (use other caps). */
   budgetMaxTurns: z.number().int().positive().nullable().optional(),
-  /** Cap on cumulative `promptTokens + completionTokens` per run. */
+  /**
+   * Cap on cumulative `promptTokens + completionTokens` per run. Cache-read
+   * (prompt-cache hit) tokens are excluded by the provider plugins before they
+   * reach token accounting, so cached input never counts toward this cap.
+   */
   budgetMaxTokens: z.number().int().positive().nullable().optional(),
   /** Cap on wall-clock duration per run, in milliseconds. */
   budgetMaxWallClockMs: z.number().int().positive().nullable().optional(),
@@ -732,7 +736,7 @@ export const ChatMetadataSchema = z.object({
   runPausedAccumMs: z.number().int().nonnegative().nullable().optional(),
   /** Turns consumed in the current/most-recent run. */
   runTurnsConsumed: z.number().int().nonnegative().nullable().optional(),
-  /** Tokens consumed in the current/most-recent run. */
+  /** Tokens consumed in the current/most-recent run (cache-read tokens excluded — see `budgetMaxTokens`). */
   runTokensConsumed: z.number().int().nonnegative().nullable().optional(),
 
   /** 1 = owner pre-authorized destructive tools (DESTRUCTIVE_TOOL_NAMES); 0 = disabled. */
