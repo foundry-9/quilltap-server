@@ -572,10 +572,19 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * variant, the current turn's own log row is still buffered when the handler
    * reads this, so the sum converges one turn behind — acceptable for a budget
    * gate that only needs to trip within a turn of crossing the cap.
+   *
+   * Cache-read (prompt-cache hit) tokens are excluded from `usage.totalTokens`
+   * by the provider plugins at the source, so by default this sum counts only
+   * the billable cache-miss input + output tokens. Pass
+   * `{ includeCacheHits: true }` to add those stripped cache reads back from
+   * each row's `cacheUsage.cacheReadInputTokens` — the "count every token"
+   * budget mode (per-room `budgetExcludeCacheHits = 0`).
    */
   async getTotalTokenUsageForRun(
     autonomousRunId: string,
+    options: { includeCacheHits?: boolean } = {},
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
+    const { includeCacheHits = false } = options;
     return this.safeQuery(
       async () => {
         // `$exists: true` only — see getTotalTokenUsageForChatSince for why
@@ -598,11 +607,18 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
             totalCompletionTokens += log.usage.completionTokens || 0;
             totalTokens += log.usage.totalTokens || 0;
           }
+          // Add the cache-read tokens the provider plugins stripped from
+          // `usage` back into the prompt/total when counting every token.
+          if (includeCacheHits && log.cacheUsage?.cacheReadInputTokens) {
+            const cacheReads = log.cacheUsage.cacheReadInputTokens;
+            totalPromptTokens += cacheReads;
+            totalTokens += cacheReads;
+          }
         }
         return { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens, totalTokens };
       },
       'Error getting total token usage for autonomous run',
-      { autonomousRunId },
+      { autonomousRunId, includeCacheHits },
       { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
     );
   }

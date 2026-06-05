@@ -572,6 +572,11 @@
           "enum": [0, 1],
           "description": "1 = destructive tools pre-authorized for this autonomous room; 0 = disabled."
         },
+        "budgetExcludeCacheHits": {
+          "type": "integer",
+          "enum": [0, 1],
+          "description": "Autonomous-room per-run token-budget counting mode. 1 (default) = exclude prompt-cache hit tokens from the budget, counting only billable cache-miss input + output; 0 = count every token, including cache reads (added back from cacheUsage at accounting time)."
+        },
         "runVisibility": {
           "enum": ["owner_only", "household", "open", null],
           "description": "Per-room visibility override for autonomous rooms; NULL = inherit user default."

@@ -322,6 +322,8 @@ import { addChatMessageReasoningColumnsMigration } from './add-chat-message-reas
 import { addThinkingDisplayFieldsMigration } from './add-thinking-display-fields';
 // Add autoScrollOnResponseComplete column to chat_settings (Salon auto-scroll toggle)
 import { addAutoScrollOnResponseCompleteFieldMigration } from './add-auto-scroll-on-response-complete-field';
+// 4.6 private character rooms: budgetExcludeCacheHits column on chats (optional all-tokens budget mode)
+import { addAutonomousBudgetCacheModeMigration } from './add-autonomous-budget-cache-mode';
 
 /**
  * All available migrations.
@@ -640,6 +642,8 @@ export const migrations: Migration[] = [
   addThinkingDisplayFieldsMigration,
   // Salon auto-scroll: autoScrollOnResponseComplete column on chat_settings
   addAutoScrollOnResponseCompleteFieldMigration,
+  // 4.6 private character rooms: budgetExcludeCacheHits column on chats (optional all-tokens budget mode)
+  addAutonomousBudgetCacheModeMigration,
 ];
 
 export {
@@ -939,5 +943,7 @@ export {
   addThinkingDisplayFieldsMigration,
   // Salon auto-scroll: autoScrollOnResponseComplete column on chat_settings
   addAutoScrollOnResponseCompleteFieldMigration,
+  // 4.6 private character rooms: budgetExcludeCacheHits column on chats (optional all-tokens budget mode)
+  addAutonomousBudgetCacheModeMigration,
 };
 

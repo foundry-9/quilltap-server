@@ -121,6 +121,13 @@ export interface NewChatAutonomousState {
   /** Null = inherit user-default visibility from chat_settings. */
   runVisibility: 'owner_only' | 'household' | 'open' | null
   runDestructiveToolsAllowed: boolean
+  /**
+   * true (default) = the per-run token budget counts only billable cache-miss
+   * input + output tokens (prompt-cache hits excluded); false = count every
+   * token, including cache reads, the way budgets behaved before cache-read
+   * normalization.
+   */
+  budgetExcludeCacheHits: boolean
 }
 
 export interface NewChatFormState {

@@ -443,7 +443,7 @@ CREATE TABLE "chats" (
   -- 4.6 Private Character Rooms: budget caps, schedule, run lifecycle, and visibility
   -- (populated only when chatType = 'autonomous'; NULL on other chats)
   "budgetMaxTurns" INTEGER DEFAULT NULL,
-  "budgetMaxTokens" INTEGER DEFAULT NULL,
+  "budgetMaxTokens" INTEGER DEFAULT NULL,   -- per-run token cap; counts cache-miss + output by default (see budgetExcludeCacheHits)
   "budgetMaxWallClockMs" INTEGER DEFAULT NULL,
   "budgetEstimatedSpendCapUSD" REAL DEFAULT NULL,
   "scheduleCron" TEXT DEFAULT NULL,
@@ -460,6 +460,7 @@ CREATE TABLE "chats" (
   "runTurnsConsumed" INTEGER DEFAULT NULL,
   "runTokensConsumed" INTEGER DEFAULT NULL,
   "runDestructiveToolsAllowed" INTEGER DEFAULT 0,
+  "budgetExcludeCacheHits" INTEGER DEFAULT 1, -- 1 = budget counts only billable cache-miss + output tokens; 0 = count every token incl. prompt-cache hits (added back from cacheUsage)
   "runVisibility" TEXT DEFAULT NULL,       -- 'owner_only' | 'household' | 'open'; NULL = inherit user default
   -- Aurora Core whisper per-chat overrides (NULL = inherit from character → global)
   "coreWhisperEnabled" INTEGER DEFAULT NULL,

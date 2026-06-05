@@ -794,6 +794,23 @@ function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: Autonom
         <p className="mt-1 qt-text-xs qt-text-muted">
           The first cap to hit ends the run. Leave any blank to skip that cap.
         </p>
+        <label className="flex items-start gap-2 cursor-pointer mt-3">
+          <input
+            type="checkbox"
+            checked={value.budgetExcludeCacheHits}
+            onChange={(e) => onChange({ budgetExcludeCacheHits: e.target.checked })}
+            disabled={disabled}
+            className="qt-checkbox mt-1"
+          />
+          <span>
+            <span className="qt-text-small font-medium text-foreground">Count only the dear tokens</span>
+            <span className="block qt-text-xs qt-text-muted mt-1">
+              When ticked, the token cap tallies only the costly cache-miss input and the
+              completion — the tokens you truly pay full freight for. Untick it to count
+              every token against the cap, prompt-cache hits and all, as the ledger once did.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div>

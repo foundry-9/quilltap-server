@@ -741,6 +741,17 @@ export const ChatMetadataSchema = z.object({
 
   /** 1 = owner pre-authorized destructive tools (DESTRUCTIVE_TOOL_NAMES); 0 = disabled. */
   runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),
+  /**
+   * Per-run token-budget counting mode. 1 (default) = exclude prompt-cache
+   * hit (cache-read) tokens from `budgetMaxTokens` / `runTokensConsumed`, so
+   * only the billable cache-miss input + output tokens count (the expensive
+   * ones). 0 = count every token, including cache reads, the way budgets
+   * behaved before cache-read normalization; the cache-read tokens that the
+   * provider plugins strip from `usage.totalTokens` are added back from
+   * `cacheUsage.cacheReadInputTokens` at accounting time. Only meaningful on
+   * autonomous chats.
+   */
+  budgetExcludeCacheHits: z.number().int().min(0).max(1).default(1),
   /** Per-room override of user-default visibility; NULL = inherit user default. */
   runVisibility: AutonomousRunVisibilityEnum.nullable().optional(),
 
@@ -978,6 +989,7 @@ export const ChatMetadataBaseSchema = z.object({
   runTurnsConsumed: z.number().int().nonnegative().nullable().optional(),
   runTokensConsumed: z.number().int().nonnegative().nullable().optional(),
   runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),
+  budgetExcludeCacheHits: z.number().int().min(0).max(1).default(1),
   runVisibility: AutonomousRunVisibilityEnum.nullable().optional(),
 
   /** Aurora Core whisper — per-chat override of the global `coreWhisper.enabled` setting. NULL = inherit. */

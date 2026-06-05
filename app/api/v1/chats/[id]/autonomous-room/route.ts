@@ -165,6 +165,7 @@ async function handleStatus(
     budgetMaxTokens: c.budgetMaxTokens ?? null,
     budgetMaxWallClockMs: c.budgetMaxWallClockMs ?? null,
     budgetEstimatedSpendCapUSD: c.budgetEstimatedSpendCapUSD ?? null,
+    budgetExcludeCacheHits: c.budgetExcludeCacheHits ?? 1,
     runDestructiveToolsAllowed: c.runDestructiveToolsAllowed ?? 0,
     runVisibility: c.runVisibility ?? null,
   });

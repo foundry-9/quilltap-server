@@ -463,11 +463,16 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   // it flushes; Math.max keeps the counter monotonic so a transient
   // read-zero can't un-exhaust the run.
   //
-  // Cache-read (prompt-cache hit) tokens are already excluded from this sum:
+  // Cache-read (prompt-cache hit) tokens are excluded from this sum by default:
   // the provider plugins subtract them from `usage.totalTokens` at the source
   // (each provider's convention differs), so cached input never counts against
   // the budget. See the per-plugin usage normalization in plugins/dist/*.
-  const runUsage = await repos.llmLogs.getTotalTokenUsageForRun(runId);
+  //
+  // A room can opt into counting every token (the pre-normalization behavior)
+  // by setting `budgetExcludeCacheHits = 0` at creation; in that mode the
+  // repository adds the stripped cache reads back from `cacheUsage`.
+  const includeCacheHits = (chat.budgetExcludeCacheHits ?? 1) === 0;
+  const runUsage = await repos.llmLogs.getTotalTokenUsageForRun(runId, { includeCacheHits });
   const newTokensConsumed = Math.max(runUsage.totalTokens, post.runTokensConsumed ?? 0);
 
   // Turn accounting: increment off the local `chat` snapshot (already

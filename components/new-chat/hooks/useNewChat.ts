@@ -102,6 +102,7 @@ const INITIAL_STATE: NewChatFormState = {
     budgetEstimatedSpendCapUSD: null,
     runVisibility: null,
     runDestructiveToolsAllowed: false,
+    budgetExcludeCacheHits: true,
   },
 }
 
@@ -632,6 +633,10 @@ export function useNewChat({
         if (auto.runDestructiveToolsAllowed) {
           requestBody.runDestructiveToolsAllowed = true
         }
+        // Always send the budget counting mode; the API treats an omitted value
+        // as "exclude cache hits", and only an explicit `false` opts into
+        // counting every token.
+        requestBody.budgetExcludeCacheHits = auto.budgetExcludeCacheHits
       }
 
       const res = await fetch('/api/v1/chats', {
