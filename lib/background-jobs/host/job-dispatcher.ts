@@ -191,6 +191,7 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
     // Best-effort cleanup of staged files left behind by the failed handler.
     cleanupStagingDirs(msg.writes, msg.jobId);
     await repos.backgroundJobs.markFailed(msg.jobId, errorMessage);
+    await reconcileFailedAutonomousTurnIfNeeded(job, errorMessage);
     pumpClaim().catch(err => log.error('Post-fail claim error', { error: getErrorMessage(err) }));
     return;
   }
@@ -208,9 +209,43 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
     });
     cleanupStagingDirs(msg.writes, msg.jobId);
     await repos.backgroundJobs.markFailed(msg.jobId, errorMessage);
+    await reconcileFailedAutonomousTurnIfNeeded(job, errorMessage);
   }
 
   pumpClaim().catch(e => log.error('Post-complete claim error', { error: getErrorMessage(e) }));
+}
+
+/**
+ * On terminal failure of an AUTONOMOUS_ROOM_TURN job, nudge its room out of a
+ * silent `running` wedge. When a turn's buffered write-batch is rejected at
+ * apply time (a tool write hits a constraint), the whole batch rolls back —
+ * including the run-state transition the handler tried to write — and the
+ * single-attempt job is marked DEAD, leaving the chat `running` with no turn
+ * in flight. The autonomous-room service flips it to a resumable `paused`.
+ *
+ * Dynamic import keeps the autonomous-room service (and the queue-service it
+ * pulls in) out of the dispatcher's static import graph, avoiding a cycle.
+ * Best-effort and self-contained — never throws back into result handling.
+ */
+async function reconcileFailedAutonomousTurnIfNeeded(
+  job: BackgroundJob | undefined,
+  failureReason: string,
+): Promise<void> {
+  if (job?.type !== 'AUTONOMOUS_ROOM_TURN') return;
+  try {
+    const { reconcileFailedAutonomousTurn } = await import(
+      '@/lib/services/chat-message/autonomous-room.service'
+    );
+    await reconcileFailedAutonomousTurn(
+      job.payload as unknown as { chatId?: string; runId?: string } | undefined,
+      failureReason,
+    );
+  } catch (err) {
+    log.error('Autonomous-room failure reconcile failed', {
+      jobId: job.id,
+      error: getErrorMessage(err),
+    });
+  }
 }
 
 // Serialize apply calls. With concurrency=4, multiple jobs finish around

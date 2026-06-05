@@ -2,6 +2,21 @@
 
 ## Recent Changes
 
+### 4.6.1
+
+#### Fix: autonomous rooms could freeze mid-run, and per-run token budgets over-counted
+
+Two related bugs in autonomous rooms. A scheduled room would stop advancing and sit in `running` forever, and its per-run token budget was being charged for spend that wasn't part of the run.
+
+Root causes:
+1. **Poison write wedged the room.** Each autonomous turn runs in the forked job child, which buffers all of its writes — the assistant message, the turn/token counters, and the run-state transition — into one batch the parent applies atomically. When a character created a document-store folder that already existed within the same turn, the duplicate `docMountFolders.create` hit a unique constraint at apply time and rolled back the *entire* batch, including the run-state transition. The single-attempt job was marked DEAD and the chat stayed `running` with no turn in flight. `ensureFolderPath` was already written to be idempotent, but its existence-check and conflict-catch are both defeated in the child: reads use a readonly connection (no read-your-writes) and the real INSERT (and its conflict) is deferred to the parent.
+2. **Per-run token budget counted the wrong tokens.** The post-turn budget check summed *all* `llm_logs` for the chat since the run started (a timestamp window), which folded in overlapping activity and fire-and-forget housekeeping (memory extraction, scene-state tracking, danger classification, title/summary generation) on top of the run's own turns. A long-running chat could blow past its per-run token cap after a single turn.
+
+Fixes:
+- `lib/mount-index/folder-paths.ts` + `lib/background-jobs/child/child-repositories-proxy.ts`: `ensureFolderPath` now consults a per-job memo (carried on the job scope) so a folder ensured earlier in the same job is never buffered for creation twice. Removes the poison write.
+- `lib/services/chat-message/autonomous-room.service.ts` + `lib/background-jobs/host/job-dispatcher.ts`: when an `AUTONOMOUS_ROOM_TURN` job fails terminally, the dispatcher now reconciles the room to a resumable `paused` state (mirroring the startup reconcile) with the cause recorded in `runStateMessage`, instead of leaving it silently `running`.
+- New `autonomousRunId` column + index on `llm_logs` (migration `add-llm-logs-autonomous-run-id-column-v1`). Every LLM call made within a turn is tagged with the run id via an `AsyncLocalStorage` context (`lib/background-jobs/autonomous-run-context.ts`); the turn handler now sums per-run spend by run id (`getTotalTokenUsageForRun`) instead of by timestamp window. This isolates the run's own turn spend (turns + agent-mode sub-calls) and excludes background housekeeping.
+
 ### 4.6.0
 
 #### CLI: universal flags now work before the subcommand, and `migrations` accepts `-i`

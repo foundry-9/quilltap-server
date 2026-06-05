@@ -15,6 +15,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { randomUUID } from 'crypto';
 import * as posixPath from 'path/posix';
+import { getJobFolderEnsureCache } from '@/lib/background-jobs/child/job-folder-cache';
 
 /**
  * Resolve a file path to its parent folder ID.
@@ -118,12 +119,30 @@ export async function ensureFolderPath(
   const repos = await getRepositories();
   const segments = normalized.split('/').filter(s => s.length > 0);
 
+  // In a forked job child, repository writes are buffered and reads use a
+  // readonly connection (no read-your-writes). Without this per-job memo, a
+  // second ensureFolderPath for a path already ensured earlier in the SAME
+  // job would miss the buffered create on the lookup below and buffer a
+  // duplicate docMountFolders.create — a unique-constraint poison write that
+  // atomically rolls back the whole job at apply time. The memo holds the id
+  // we already ensured this job so the duplicate is never created. It is null
+  // outside a job scope (the parent path), where read-your-writes suffices.
+  const folderCache = getJobFolderEnsureCache();
+
   let currentParentId: string | null = null;
   let currentPath = '';
 
   for (const segment of segments) {
     // Build the path for this segment
     currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+    const cacheKey = `${mountPointId}:${currentPath}`;
+
+    // Already ensured (found or created) this folder earlier in the same job?
+    const memoized = folderCache?.get(cacheKey);
+    if (memoized) {
+      currentParentId = memoized;
+      continue;
+    }
 
     // Try to find the existing folder
     let folder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, currentPath);
@@ -155,6 +174,7 @@ export async function ensureFolderPath(
       }
     }
 
+    folderCache?.set(cacheKey, folder.id);
     currentParentId = folder.id;
   }
 

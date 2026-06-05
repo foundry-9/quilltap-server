@@ -39,6 +39,7 @@ import { Cron } from 'croner';
 import { randomUUID } from 'node:crypto';
 import type { AutonomousRoomTurnPayload } from '../queue-service';
 import { enqueueAutonomousRoomTurn } from '../queue-service';
+import { runWithAutonomousRunId } from '../autonomous-run-context';
 
 const HANDLER = 'background-jobs.autonomous-room-turn';
 
@@ -391,21 +392,28 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   // 6 / 7. Invoke the ordinary message pipeline with the autonomous-room flags.
   let turnSucceeded = false;
   try {
-    const stream = await handleSendMessage(repos, chatId, userId, {
-      continueMode: true,
-      respondingParticipantId,
-      neverPauseForUser: true,
-      suppressAutomaticImages: true,
-      // One job = one character turn. The forked job child buffers writes
-      // in AsyncLocalStorage until the job ends; without singleTurn the
-      // turn-chain loops up to depth-20 on a single job and every iteration
-      // of `shouldChainNext` re-reads the same pre-job message history,
-      // re-picking the same speaker (Friday → Friday → Friday → …) and
-      // bypassing this handler's per-turn budget check. We re-enqueue at
-      // the end of this function instead.
-      singleTurn: true,
+    // Wrap the whole turn (generation + stream drain) in the autonomous-run
+    // context so every llm_logs row written during it — the turn itself plus
+    // any agent-mode tool sub-calls — is tagged with this run's id for
+    // per-run budget accounting. Streaming generation and its persistence can
+    // happen as the stream is drained, so drainStream stays inside the scope.
+    await runWithAutonomousRunId(runId, async () => {
+      const stream = await handleSendMessage(repos, chatId, userId, {
+        continueMode: true,
+        respondingParticipantId,
+        neverPauseForUser: true,
+        suppressAutomaticImages: true,
+        // One job = one character turn. The forked job child buffers writes
+        // in AsyncLocalStorage until the job ends; without singleTurn the
+        // turn-chain loops up to depth-20 on a single job and every iteration
+        // of `shouldChainNext` re-reads the same pre-job message history,
+        // re-picking the same speaker (Friday → Friday → Friday → …) and
+        // bypassing this handler's per-turn budget check. We re-enqueue at
+        // the end of this function instead.
+        singleTurn: true,
+      });
+      await drainStream(stream);
     });
-    await drainStream(stream);
     turnSucceeded = true;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -445,19 +453,17 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     return;
   }
 
-  // Token accounting: sum llm_logs for this chat since the run started.
-  // The llm_logs sum runs one turn behind because this turn's log entry is
-  // also buffered, but converges on the next turn once writes flush. A
-  // future refinement (sub-task C) is to tag each llm_logs row with the
-  // autonomous `runId` and sum by that instead of the timestamp window.
-  // `chat.runStartedAt` is preferred over `post.runStartedAt` for the same
-  // read-your-writes reason as the turn counter below.
-  const runWindowStart = chat.runStartedAt ?? post.runStartedAt ?? null;
-  let newTokensConsumed = post.runTokensConsumed ?? 0;
-  if (runWindowStart) {
-    const usage = await repos.llmLogs.getTotalTokenUsageForChatSince(chatId, runWindowStart);
-    newTokensConsumed = usage.totalTokens;
-  }
+  // Token accounting: sum the llm_logs rows tagged with this run's id (done
+  // via the autonomous-run AsyncLocalStorage wrapped around the turn above).
+  // This isolates the run's own turn spend — conversational turns plus their
+  // agent-mode sub-calls — and excludes overlapping chat activity and
+  // fire-and-forget auxiliary jobs (memory/scene/danger/title/summary), which
+  // the old timestamp-window sum wrongly folded in. The sum still runs one
+  // turn behind because this turn's rows are buffered in the job child until
+  // it flushes; Math.max keeps the counter monotonic so a transient
+  // read-zero can't un-exhaust the run.
+  const runUsage = await repos.llmLogs.getTotalTokenUsageForRun(runId);
+  const newTokensConsumed = Math.max(runUsage.totalTokens, post.runTokensConsumed ?? 0);
 
   // Turn accounting: increment off the local `chat` snapshot (already
   // mutated to 0 on the idle→running transition when applicable), not the

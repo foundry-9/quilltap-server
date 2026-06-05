@@ -73,6 +73,7 @@ const createBufferedRepos = (initial: {
         findByUserId: jest.fn(async () => null),
       },
       llmLogs: {
+        getTotalTokenUsageForRun: jest.fn(async () => ({ totalTokens: 0 })),
         getTotalTokenUsageForChatSince: jest.fn(async () => ({ totalTokens: 0 })),
         getTotalTokenUsageSince: jest.fn(async () => ({ totalTokens: 0 })),
       },

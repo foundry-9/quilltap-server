@@ -1247,6 +1247,7 @@ CREATE TABLE "llm_logs" (
   "rawProviderUsage" TEXT,
   "requestHashes" TEXT,
   "durationMs" INTEGER,
+  "autonomousRunId" TEXT,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
@@ -1255,7 +1256,10 @@ CREATE INDEX "idx_llm_logs_chatId" ON "llm_logs" ("chatId");
 CREATE INDEX "idx_llm_logs_createdAt" ON "llm_logs" ("createdAt" DESC);
 CREATE INDEX "idx_llm_logs_type" ON "llm_logs" ("type");
 CREATE INDEX "idx_llm_logs_userId" ON "llm_logs" ("userId");
+CREATE INDEX "idx_llm_logs_autonomousRunId" ON "llm_logs" ("autonomousRunId");
 ```
+
+`autonomousRunId` is stamped on every LLM call made within an autonomous-room turn (the turn plus its agent-mode tool sub-calls), via an `AsyncLocalStorage` context the turn handler establishes. It is `NULL` for all non-autonomous calls. The autonomous-room turn handler sums `usage.totalTokens` for a run by this column to enforce the per-run token budget — superseding the older timestamp-window sum, which double-counted overlapping chat activity and background housekeeping. Added by migration `add-llm-logs-autonomous-run-id-column-v1`.
 
 ### SQLite statistics tables (auto-managed)
 

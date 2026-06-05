@@ -303,3 +303,70 @@ export async function reconcileAutonomousRunsAtStartup(): Promise<{ reconciledCo
   });
   return { reconciledCount: stuck.length };
 }
+
+/**
+ * Recover an autonomous room whose turn job failed *terminally*.
+ *
+ * An AUTONOMOUS_ROOM_TURN job runs in the forked child and buffers all of its
+ * writes — the assistant message, the turn/token counters, and the run-state
+ * transition — into one batch that the parent applies atomically. If any write
+ * in that batch is rejected at apply time (e.g. a tool's `docMountFolders`
+ * insert hits a unique constraint), the WHOLE batch rolls back, including the
+ * handler's own run-state write, and the single-attempt job is marked DEAD.
+ * Left alone the chat stays `runState: 'running'` with no turn in flight — a
+ * silent wedge that {@link startAutonomousRoomManually} refuses to re-engage.
+ *
+ * The dispatcher calls this on terminal failure of a turn job. We mirror the
+ * startup reconcile: transition to `paused` (resumable in place, and the
+ * scheduler treats paused as eligible for the next cron slot), bump
+ * `currentRunId` so any zombie/retry turn job exits via the stale-run guard,
+ * preserve the counters, and record the cause in `runStateMessage` so the room
+ * status surfaces *why* it stopped instead of freezing mid-run.
+ *
+ * Parent-process only (the sole DB writer), so this write applies immediately
+ * and is not part of the failed batch. Fully guarded — a failure here must
+ * never throw back into the dispatcher's result handling.
+ */
+export async function reconcileFailedAutonomousTurn(
+  payload: { chatId?: string; runId?: string } | null | undefined,
+  failureReason: string,
+): Promise<void> {
+  try {
+    const chatId = payload?.chatId;
+    const runId = payload?.runId;
+    if (!chatId || !runId) return;
+
+    const repos = getRepositories();
+    const chat = await repos.chats.findById(chatId);
+    if (!chat || chat.chatType !== 'autonomous') return;
+
+    // Only act on the live run, and only while it still looks active. A newer
+    // run (currentRunId moved on) or an already-terminal state means something
+    // else has already taken over; leave it alone.
+    if (chat.currentRunId !== runId) return;
+    if (chat.runState !== 'running' && chat.runState !== 'idle') return;
+
+    const nowIso = new Date().toISOString();
+    await repos.chats.update(chatId, {
+      runState: 'paused',
+      runStateMessage: `turn_failed:${failureReason}`.slice(0, 500),
+      currentRunId: randomUUID(),
+      runEndedAt: null,
+      runPausedAt: chat.lastMessageAt ?? chat.runStartedAt ?? nowIso,
+    } as unknown as Partial<ChatMetadataBase>);
+
+    logger.warn('Autonomous-room: turn job failed terminally; run paused (resumable)', {
+      context: HANDLER,
+      chatId,
+      previousRunId: runId,
+      failureReason,
+      runTurnsConsumed: chat.runTurnsConsumed,
+      runTokensConsumed: chat.runTokensConsumed,
+    });
+  } catch (err) {
+    logger.error('Autonomous-room: reconcile-after-failure threw', {
+      context: HANDLER,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}

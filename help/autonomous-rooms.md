@@ -19,7 +19,7 @@ An autonomous room is **not** a free-running improvisation. Every run is bounded
 A run ends gracefully on the first of the following budgets to be reached:
 
 - **Turns.** A hard cap on the number of character responses in a single run.
-- **Tokens (per run).** A hard cap on the cumulative input + output tokens spent across all turns of a single run.
+- **Tokens (per run).** A hard cap on the cumulative input + output tokens spent across all turns of a single run — the characters' own deliberations and any tools they take up mid-turn. The Estate's quiet background staff (the memoirist who keeps the Commonplace Book, the scene-watcher, the Concierge at the door) keep their own ledgers, and their expenditures are not charged against this purse.
 - **Wall-clock duration.** A maximum elapsed time, in minutes, after which the run is brought to a polite stop.
 - **Estimated spend (USD, optional).** A convenience cap evaluated against the running cost of the LLM calls.
 - **Daily user-token budget.** A house-level cap that applies across every autonomous room belonging to a single account, evaluated against the instance's local-time midnight. When this cap is reached, every active room pauses; they resume of their own accord after the next midnight.
@@ -29,6 +29,8 @@ Reaching a per-run cap ends that particular run cleanly with `budgetExhausted` s
 A small but consequential distinction between **Resume** and **Start**, lest the household be startled. **Resume** picks a *paused* room up precisely where it set itself down: the very same run carries on, its turn and token tallies continue climbing from where they paused, and no fresh "the run has begun" fanfare is sounded — the conversation simply resumes mid-breath. The minutes spent paused are not charged against any wall-clock budget; only the time actually spent conversing counts. **Start**, by contrast, opens a *brand-new* run with its tallies reset to nought, and is what one reaches for with a room that is idle, stopped, or has exhausted its budget. (A room whose budget is spent cannot meaningfully continue, so resuming it would only begin anew in any case.)
 
 Should the Estate suffer an abrupt outage — the power cut, the server felled mid-sentence — a run caught in motion is not lost. On the next startup the room is set gently to *paused*, its tallies and transcript intact, awaiting your **Resume** to carry on as though nothing had happened; the dark interval of the outage is not charged against any time budget. (A scheduled room left thus paused will still keep its next appointment on the clock, beginning afresh then if you have not resumed it in the meantime.)
+
+And should a single turn prove impossible to commit to the ledger — some rare disagreement between a character's handiwork and the Estate's filing system — that turn is struck out whole rather than left half-written, and the room is set gently to *paused*, the cause noted in its status, awaiting your **Resume** rather than freezing mid-sentence. (As with an outage, a scheduled room so paused still keeps its next appointment, beginning afresh then if you have not resumed it.)
 
 ## Scheduling — cron, plain and proper
 
