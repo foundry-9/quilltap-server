@@ -4,6 +4,14 @@
 
 ### 4.6.1
 
+#### Background-job writes are now isolated per database, and concurrent doc-store folder creates reconcile instead of failing
+
+Completes the deferred hardening from the autonomous-room poison-write fix below. A background job buffers all of its repository writes into one batch the parent applies, but those writes can target three separate SQLite databases (the main DB, the dedicated mount-index/doc-store DB, and the llm-logs DB). The applier used to wrap the whole batch in a single transaction on the *main* connection, so a doc-store write failure rolled back unrelated main-DB chat/run-state writes while any doc-store rows already written leaked (they auto-committed outside that transaction).
+
+- **Per-database partitioned apply.** The parent now splits each batch by target database and commits each partition in its own transaction on its own connection (`lib/background-jobs/host/write-partition.ts` + the rewritten applier in `job-dispatcher.ts`). A failure in one database can no longer roll back or leak into another.
+- **Ordering and failure policy by job type.** Idempotent handlers apply secondary partitions (mount-index, llm-logs) before main so a secondary failure prevents the main commit (e.g. a mount-chunk embedding write that fails won't let the chunk be marked embedded), and any partition failure fails the job so the existing retry path re-runs it. Autonomous-room turns are not idempotent, so their main-DB chat/run-state partition commits first and authoritatively; secondary doc-store writes are then applied best-effort, and a genuine doc-store failure is rolled back, logged, and dropped rather than discarding the committed turn.
+- **Cross-job concurrent folder create.** When two jobs concurrently create the same doc-store folder path, the second create now hits the `(mountPointId, parentId, name)` unique index at apply time. The applier catches that, resolves to the already-committed folder, and remaps the discarded buffered folder id across the rest of that batch's writes (file links, child folders) so they point at the surviving row. Applies are serialized, so this lookup is race-free. The earlier fix only de-duplicated folder creates *within* a single job.
+
 #### Cache-read (prompt-cache hit) tokens no longer count against autonomous-room budgets
 
 Prompt-cache hits are now excluded from the normalized token usage every provider plugin reports. Cached input therefore no longer counts toward an autonomous room's per-run token cap (`budgetMaxTokens`), the daily user-token cap (`dailyTokenBudget`), or the per-chat token/cost aggregates.

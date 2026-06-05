@@ -47,7 +47,7 @@ Child → parent:
 2. Parent posts `{ type: 'job', ... }` to the child.
 3. Child runs the handler. The handler imports `getRepositories()`, which returns a proxy in the child runtime: read methods hit the readonly DB directly; write methods append `{ method, args }` to a per-job buffer in `AsyncLocalStorage` and return a synthetic result synchronously.
 4. Child posts `{ type: 'job-result', ok, writes }` when the handler resolves.
-5. Parent applies the entire batch in a single `db.transaction(() => writes.forEach(applyWrite))`, then marks the job COMPLETED. If the transaction throws, parent marks FAILED with the error and lets the existing retry policy in `lib/database/repositories/background-jobs.repository.ts` handle requeueing.
+5. Parent applies the batch, **partitioned by target database** (see [Per-database partitioned apply](#per-database-partitioned-apply) below), then marks the job COMPLETED. If a partition the job depends on throws, the parent marks FAILED with the error and lets the existing retry policy in `lib/database/repositories/background-jobs.repository.ts` handle requeueing.
 
 ## Concurrency
 
@@ -60,6 +60,25 @@ A single global cap of 4 in-flight jobs of any type, enforced in the dispatcher.
 Writes are batched at job end. The proxy resolves write calls immediately with **client-generated IDs** (string UUIDs via `crypto.randomUUID()`, matching the existing schema convention — every Quilltap table uses string UUIDs). Subsequent reads inside the same handler cannot see those uncommitted rows. If a handler genuinely needs read-your-writes within a single job, the handler must be restructured to compute everything from in-memory state before flushing.
 
 The proxy logs a runtime warning when a read method hits a key recently appended to the pending-writes buffer. This is a cheap diagnostic for read-your-writes regressions.
+
+## Per-database partitioned apply
+
+A single batch can contain writes to three *separate* SQLite databases: the main DB (`quilltap.db`), the dedicated mount-index/doc-store DB, and the llm-logs DB. An autonomous-room turn, for example, buffers its assistant message + run-state (main DB) alongside any `doc_*` tool side-effects (mount-index DB) in one batch. Each database is a distinct `better-sqlite3` connection (`getRawDatabase()`, `getRawMountIndexDatabase()`, `getRawLLMLogsDatabase()`).
+
+The applier (`lib/background-jobs/host/job-dispatcher.ts`, with pure partition logic in `write-partition.ts`) splits the batch by target database — keyed off the repo prefix of each `repoKey.method`; `__finalizeFile` rides with the main partition — and commits **each partition in its own hand-driven `BEGIN IMMEDIATE … COMMIT` on its own connection**. A failure in one database can therefore neither roll back nor leak into another. (Before this, the whole batch ran inside one transaction on the *main* connection while mount-index/llm-logs writes auto-committed statement-by-statement inside that loop, so a doc-store failure rolled back unrelated chat state *and* leaked partial doc-store rows.)
+
+Ordering and failure policy depend on whether the job's main-DB writes are **primary** (`MAIN_PRIMARY_JOB_TYPES` — currently just `AUTONOMOUS_ROOM_TURN`):
+
+- **Idempotent handlers** (everything else): secondary partitions (mount-index, llm-logs) apply *before* main, so a secondary failure prevents the main commit — e.g. an `embeddingStatus.markAsEmbedded` (main) is never committed if the `docMountChunks.updateEmbedding` (mount-index) it pairs with failed. Any partition failure throws → job FAILED → the existing retry path re-runs the (idempotent) handler.
+- **Main-primary handlers** (autonomous turns are not idempotent — retrying duplicates the chat turn): the main partition commits *first and authoritatively*. A main failure aborts before any secondary write runs (no leak) and surfaces to the caller (job FAILED → the room reconciles to `paused`). Once main commits, secondary partitions are applied **best-effort**: a genuine doc-store failure is rolled back, logged, and dropped, leaving the committed chat turn intact. (Decision recorded 2026-06-05.)
+
+The whole multi-partition apply is serialized across jobs (an `applyChain` promise), which is also what makes the folder reconcile below race-free.
+
+### Cross-job concurrent folder reconcile
+
+`docMountFolders` rows carry a `(mountPointId, COALESCE(parentId,''), name)` unique index. Two jobs running concurrently in the child both read the readonly DB, neither sees the other's buffered create, and both buffer a `docMountFolders.create` for the same path. The per-job folder memo (`job-folder-cache.ts`) only de-duplicates *within* one job; the second job's create still collides at apply time.
+
+The mount-index partition handles this: a `docMountFolders.create` that hits the unique index is caught (`isUniqueConstraintError`), resolved to the already-committed row via `findByMountPointAndPath`, and the discarded buffered folder id is recorded in a per-partition remap. Subsequent writes in the same batch (child folders' `parentId`, file links' `folderId`) are rewritten through that remap so they point at the surviving row. Because applies are serialized, the conflicting row is fully committed and visible on the connection before this job's transaction begins, and SQLite's default ABORT conflict resolution rolls back only the offending statement (the transaction stays usable).
 
 ## Deferred-file-write pattern
 
