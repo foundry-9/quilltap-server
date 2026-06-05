@@ -115,6 +115,7 @@ quilltap db logs --tail 20                  # Recent LLM logs
 quilltap db message <id>                    # Full content of one message
 quilltap db log <id> [--field request|response|both]
 quilltap db memories --character Friday [--about Amy] [--source AUTO]
+quilltap db characters status               # Per-character vault readiness (--id, --diverged, --blocked)
 ```
 
 ### Maintenance and Snapshots
@@ -157,6 +158,7 @@ In the REPL, `.cols <table>` and `.find <text>` mirror the subcommand helpers.
 quilltap docs list                              # All mounts
 quilltap docs show <mount>                      # One mount, with counts
 quilltap docs ls <mount> [path] [--links]       # POSIX-flavoured listing (alias: dir)
+quilltap docs tree <mount> [path]               # ASCII tree of a folder hierarchy (--depth, --max-nodes)
 quilltap docs read [--rendered] <mount> <path>  # File contents → stdout
 quilltap docs export <mount> <outputDir>        # Mount → directory
 quilltap docs find <pattern>                    # Substring match on file names (--mount, --ext, --type, --limit)
@@ -286,7 +288,7 @@ Dynamic completions shell out to `quilltap`'s own subcommands. If the active ins
 
 ## Requirements
 
-- Node.js 18 or later
+- Node.js 24 or later
 
 ## Other Ways to Run Quilltap
 

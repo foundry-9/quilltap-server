@@ -26,7 +26,7 @@ function parseFlags(args) {
     const a = args[i];
     switch (a) {
       case '-d': case '--data-dir': flags.dataDir = args[++i]; break;
-      case '--instance': flags.instance = args[++i]; break;
+      case '-i': case '--instance': flags.instance = args[++i]; break;
       case '--passphrase': flags.passphrase = args[++i]; break;
       case '--json': flags.json = true; break;
       case '-h': case '--help': flags.help = true; break;
@@ -118,7 +118,7 @@ Commands:
 
 Options:
   -d, --data-dir <path>     Use a specific data directory
-  --instance <name>         Use a named instance
+  -i, --instance <name>     Use a named instance
   --passphrase <pass>       Provide passphrase (prompts if needed)
   --json                    Output as JSON
   -h, --help                Show this help message

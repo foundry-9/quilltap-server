@@ -4,6 +4,21 @@
 
 ### 4.6-dev
 
+#### CLI: universal flags now work before the subcommand, and `migrations` accepts `-i`
+
+The universal flags (`-i`/`--instance`, `-d`/`--data-dir`, `--passphrase`, `-p`/`--port`) can now appear *before* the subcommand, not just after it — e.g. `quilltap --instance Friday db schema characters` works the same as `quilltap db --instance Friday schema characters`. Previously the top-level router keyed on the exact position of the subcommand (`process.argv[2]`), so any leading global flag made it fall through to the server launcher and fail with "Unknown argument: db".
+
+- `packages/quilltap/bin/quilltap.js`: the router now locates the subcommand by walking the args and skipping value-taking global flag/value pairs (so an instance literally named after a subcommand is not mistaken for one), then hands the remaining args — leading flags included — to the subcommand. Each subcommand already parses these flags position-independently, so they behave identically before or after the verb. No subcommand present still routes to the server launcher unchanged.
+- `packages/quilltap/lib/migrations-commands.js`: added the `-i` alias for `--instance`, matching every other subcommand. (`memories` intentionally keeps `-i` as `grep --ignore-case`; its long `--instance` works everywhere.)
+
+#### Docs: sync Quilltap CLI shell completions and README with shipped verbs
+
+Follow-through on the new pre-release checklist item (verify CLI docs/completions/tooling). Two verbs added in 4.6 — `db characters status` and `docs tree` — were already correct in the CLI's own `--help` output but had never been propagated to the static shell-completion templates or the package README. The drift was confined to the hand-maintained surfaces; the CLI itself was current. There is no automated completion-drift test, so nothing caught it.
+
+- `packages/quilltap/lib/completion/{bash,zsh,fish}.template`: added the `db characters` verb plus its `--id` / `--diverged` / `--blocked` flags, and the `docs tree` verb. Corrected the `docs --sort` value list to the actual accepted values (`name time size links`); it had listed stale, non-existent values (`name path size modified created`).
+- `packages/quilltap/README.md`: documented `db characters status` in the Database Tool subcommands and `docs tree` in the Document Stores read section. Corrected the stated Node.js requirement from "18 or later" to "24 or later" to match `package.json` `engines` (`>=24.0.0`).
+- `CLAUDE.md`: added `db characters status` and `docs tree` to the CLI quick-reference bullets.
+
 #### Docs: fix factual drift in README and API reference
 
 Release-prep accuracy pass over the user- and developer-facing docs. No code changes.

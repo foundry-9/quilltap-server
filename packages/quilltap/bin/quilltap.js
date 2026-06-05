@@ -116,6 +116,8 @@ Examples:
   quilltap -d /mnt/data/quilltap        # Custom data directory
   quilltap -o                           # Start and open browser
   quilltap --update                     # Re-download app files
+  quilltap --instance Friday db schema  # Universal flags (-i/--instance, -d/--data-dir,
+                                        #   --passphrase) work before or after a subcommand
 
 More info: https://quilltap.ai
 `);
@@ -1047,51 +1049,81 @@ async function dbCommand(args) {
   }
 }
 
-// Route to subcommand or main
-if (process.argv[2] === 'db') {
-  dbCommand(process.argv.slice(3));
-} else if (process.argv[2] === 'themes') {
+// Route to subcommand or main.
+//
+// Universal flags (-i/--instance, -d/--data-dir, --passphrase, -p/--port) may
+// appear *before* the subcommand, e.g. `quilltap --instance Friday db schema`.
+// We locate the subcommand by walking the args and skipping those
+// value-taking flags (so an instance literally named "db" is not mistaken for
+// the subcommand), then hand every other arg — including the leading flags —
+// to the subcommand. Each subcommand parses these flags position-independently,
+// so they behave the same before or after the verb.
+const SUBCOMMANDS = new Set([
+  'db', 'themes', 'docs', 'memories', 'instances', 'memory-diff', 'completion', 'logs', 'migrations',
+]);
+// Global flags that consume the following token as their value.
+const GLOBAL_VALUE_FLAGS = new Set(['-p', '--port', '-d', '--data-dir', '-i', '--instance', '--passphrase']);
+
+function locateSubcommand(argv) {
+  for (let k = 0; k < argv.length; k++) {
+    const a = argv[k];
+    if (GLOBAL_VALUE_FLAGS.has(a)) { k++; continue; } // skip the flag's value
+    if (a.startsWith('-')) continue;                  // boolean / unknown flag
+    return SUBCOMMANDS.has(a) ? k : -1;               // first bare token decides
+  }
+  return -1;
+}
+
+const cliArgs = process.argv.slice(2);
+const subIdx = locateSubcommand(cliArgs);
+const subName = subIdx >= 0 ? cliArgs[subIdx] : '';
+// Everything except the subcommand token itself (leading global flags kept).
+const subArgs = subIdx >= 0 ? [...cliArgs.slice(0, subIdx), ...cliArgs.slice(subIdx + 1)] : [];
+
+if (subName === 'db') {
+  dbCommand(subArgs);
+} else if (subName === 'themes') {
   const { themesCommand } = require('../lib/theme-commands');
-  themesCommand(process.argv.slice(3));
-} else if (process.argv[2] === 'docs') {
+  themesCommand(subArgs);
+} else if (subName === 'docs') {
   const { docsCommand } = require('../lib/docs-commands');
-  docsCommand(process.argv.slice(3));
-} else if (process.argv[2] === 'memories') {
+  docsCommand(subArgs);
+} else if (subName === 'memories') {
   const { memoriesCommand } = require('../lib/memories-commands');
-  memoriesCommand(process.argv.slice(3)).catch(err => {
+  memoriesCommand(subArgs).catch(err => {
     if (!err.silent) {
       console.error(`Error: ${err.message}`);
     }
     const code = err.exitCode != null ? err.exitCode : (err.ambiguous ? 2 : 1);
     process.exit(code);
   });
-} else if (process.argv[2] === 'instances') {
+} else if (subName === 'instances') {
   const { instancesCommand } = require('../lib/instances-commands');
-  instancesCommand(process.argv.slice(3)).catch(err => {
+  instancesCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });
-} else if (process.argv[2] === 'memory-diff') {
+} else if (subName === 'memory-diff') {
   const { memoryDiffCommand } = require('../lib/memory-diff-command');
-  memoryDiffCommand(process.argv.slice(3)).catch(err => {
+  memoryDiffCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });
-} else if (process.argv[2] === 'completion') {
+} else if (subName === 'completion') {
   const { completionCommand } = require('../lib/completion-commands');
-  completionCommand(process.argv.slice(3)).catch(err => {
+  completionCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });
-} else if (process.argv[2] === 'logs') {
+} else if (subName === 'logs') {
   const { logsCommand } = require('../lib/logs-commands');
-  logsCommand(process.argv.slice(3)).catch(err => {
+  logsCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });
-} else if (process.argv[2] === 'migrations') {
+} else if (subName === 'migrations') {
   const { migrationsCommand } = require('../lib/migrations-commands');
-  migrationsCommand(process.argv.slice(3)).catch(err => {
+  migrationsCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });
