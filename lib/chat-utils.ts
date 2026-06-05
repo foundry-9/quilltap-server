@@ -41,7 +41,9 @@ export interface SalonChatShape {
   project: { id: string; name: string; color: string | null } | null
   storyBackground: { id: string; filepath: string } | null
   isDangerousChat?: boolean
-  _count: { messages: number }
+  chatType?: 'salon' | 'help' | 'autonomous'
+  scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
+  _count: { messages: number; memories?: number }
 }
 
 export function transformSalonChatToCardData(chat: SalonChatShape): ChatCardData {
@@ -61,12 +63,15 @@ export function transformSalonChatToCardData(chat: SalonChatShape): ChatCardData
     id: chat.id,
     title: chat.title,
     messageCount: chat._count.messages,
+    memoryCount: chat._count.memories ?? 0,
     participants: characters,
     tags: chat.tags,
     updatedAt: chat.updatedAt,
     project: chat.project,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     isDangerousChat: chat.isDangerousChat === true,
+    isAutonomous: chat.chatType === 'autonomous',
+    scriptoriumStatus: chat.scriptoriumStatus ?? 'none',
   }
 }
 

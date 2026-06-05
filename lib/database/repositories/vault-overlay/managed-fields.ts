@@ -1,0 +1,471 @@
+/**
+ * Descriptor-driven managed-field read/write for character vaults:
+ *
+ *   - readCharacterVaultManagedFields  — consolidated "give me everything the
+ *                                         vault has for this character" reader
+ *   - writeCharacterVaultManagedFields — full-character projection (every file)
+ *   - applyDocumentStoreWriteOverlay    — patch-level write routing
+ *
+ * @module database/repositories/vault-overlay/managed-fields
+ */
+
+import { logger } from '@/lib/logger';
+import { getRepositories } from '@/lib/repositories/factory';
+import type {
+  Character,
+  PhysicalDescription,
+} from '@/lib/schemas/types';
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
+import {
+  buildSystemPromptFile,
+  buildScenarioFile,
+  sanitizeFileName,
+  renderPhysicalPromptsJson,
+  ensureCharacterVault,
+} from '@/lib/mount-index/character-vault';
+
+import {
+  CHARACTER_VAULT_DESCRIPTORS,
+  MANAGED_FIELDS,
+  CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_IDENTITY_MD_PATH,
+  CHARACTER_DESCRIPTION_MD_PATH,
+  CHARACTER_MANIFESTO_MD_PATH,
+  CHARACTER_PERSONALITY_MD_PATH,
+  CHARACTER_EXAMPLE_DIALOGUES_MD_PATH,
+  CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
+  CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
+  CHARACTER_PROMPTS_FOLDER,
+  CHARACTER_SCENARIOS_FOLDER,
+  type CharacterVaultProperties,
+} from './schema';
+import { hasLinkedVault, stableUuidFromString } from './parsers';
+import {
+  readVaultTextFile,
+  readCharacterVaultProperties,
+  readCharacterVaultPhysicalPrompts,
+  readCharacterVaultSystemPrompts,
+  readCharacterVaultScenarios,
+} from './vault-readers';
+import { projectArrayIntoVaultFolder } from './vault-projection';
+import { projectVaultWardrobe } from './wardrobe-sync';
+
+// ============================================================================
+// CONSOLIDATED VAULT READERS
+//
+// Single descriptor-driven entry point that the sync-back action and any
+// future "give me everything the vault has for this character" caller can use
+// instead of stitching together the nine standalone readCharacterVault*
+// helpers above.
+// ============================================================================
+
+/**
+ * Snapshot of all vault-managed fields for a character, in Character-row
+ * shape. Fields whose vault file is missing/malformed are omitted (not set to
+ * null), so callers can spread this object into a patch without clobbering
+ * unrelated DB-only fields.
+ *
+ * `physicalDescription` is set when any physical-* vault file is present —
+ * the singular record is built from the existing one (if any) plus the
+ * vault's full text / prompt variants, or synthesized from scratch when the
+ * character had no prior physical record.
+ */
+export interface VaultManagedFieldsSnapshot extends Partial<Character> {}
+
+export async function readCharacterVaultManagedFields(
+  mountPointId: string,
+  characterId: string,
+  existingPhysicalDescription: PhysicalDescription | null = null,
+): Promise<VaultManagedFieldsSnapshot> {
+  const snapshot: VaultManagedFieldsSnapshot = {};
+
+  for (const descriptor of CHARACTER_VAULT_DESCRIPTORS) {
+    switch (descriptor.kind) {
+      case 'properties-json': {
+        const props = await readCharacterVaultProperties(mountPointId, characterId);
+        if (props) {
+          snapshot.pronouns = props.pronouns;
+          snapshot.aliases = props.aliases;
+          snapshot.title = props.title;
+          snapshot.firstMessage = props.firstMessage;
+          snapshot.talkativeness = props.talkativeness;
+        }
+        break;
+      }
+      case 'markdown': {
+        const md = await readVaultTextFile(mountPointId, descriptor.vaultPath, characterId);
+        if (md !== null) {
+          // Empty file → null so nullable fields keep their unset semantics.
+          (snapshot as Record<string, unknown>)[descriptor.field] = md === '' ? null : md;
+        }
+        break;
+      }
+      case 'physical-md':
+      case 'physical-json': {
+        // Handled together below to keep both files patched onto the same
+        // physicalDescription copy. We process physical-md first; the
+        // physical-json branch is a no-op the second time around.
+        if (descriptor.kind === 'physical-md') {
+          const physDescMd = await readVaultTextFile(
+            mountPointId,
+            CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
+            characterId,
+          );
+          const physPromptsJson = await readCharacterVaultPhysicalPrompts(
+            mountPointId,
+            characterId,
+          );
+          if (physDescMd === null && physPromptsJson === null) break;
+          const nowIso = new Date().toISOString();
+          const patched: PhysicalDescription = existingPhysicalDescription
+            ? { ...existingPhysicalDescription }
+            : {
+                id: stableUuidFromString(`physical:${mountPointId}`),
+                name: 'default',
+                usageContext: null,
+                shortPrompt: null,
+                mediumPrompt: null,
+                longPrompt: null,
+                completePrompt: null,
+                fullDescription: null,
+                createdAt: nowIso,
+                updatedAt: nowIso,
+              };
+          if (physDescMd !== null) {
+            patched.fullDescription = physDescMd === '' ? null : physDescMd;
+          }
+          if (physPromptsJson !== null) {
+            patched.shortPrompt = physPromptsJson.short;
+            patched.mediumPrompt = physPromptsJson.medium;
+            patched.longPrompt = physPromptsJson.long;
+            patched.completePrompt = physPromptsJson.complete;
+          }
+          patched.updatedAt = nowIso;
+          snapshot.physicalDescription = patched;
+        }
+        break;
+      }
+      case 'prompts-dir': {
+        const prompts = await readCharacterVaultSystemPrompts(mountPointId, characterId);
+        if (prompts.length > 0) {
+          snapshot.systemPrompts = prompts;
+        }
+        break;
+      }
+      case 'scenarios-dir': {
+        const scenarios = await readCharacterVaultScenarios(mountPointId, characterId);
+        if (scenarios.length > 0) {
+          snapshot.scenarios = scenarios;
+        }
+        break;
+      }
+    }
+  }
+
+  return snapshot;
+}
+
+// ============================================================================
+// FULL-CHARACTER VAULT WRITER
+//
+// Counterpart to readCharacterVaultManagedFields: given a raw (non-overlaid)
+// character plus its wardrobe/outfit-preset rows, project every vault-managed
+// field out to the vault's files. Used by the sync-properties-to-vault action
+// to push the DB row's state into the vault wholesale.
+//
+// This intentionally writes every managed file (not just a patch), so after a
+// successful call the vault is a faithful snapshot of the DB. Prompts/ and
+// Scenarios/ folders are reprojected — files that don't correspond to a DB
+// entry are deleted so the vault listing matches the DB arrays exactly.
+// ============================================================================
+
+export interface VaultManagedFieldsWriteInput {
+  character: Character;
+  wardrobeItems: readonly WardrobeItem[];
+}
+
+export interface VaultManagedFieldsWriteResult {
+  /** Number of single-file writes performed (not counting Prompts/ or Scenarios/ folder contents). */
+  singleFileWriteCount: number;
+  systemPromptsWritten: number;
+  scenariosWritten: number;
+  wardrobeItemsWritten: number;
+  /** True when the character has no physicalDescription and the physical-* files were skipped. */
+  physicalSkippedNoPrimary: boolean;
+}
+
+export async function writeCharacterVaultManagedFields(
+  mountPointId: string,
+  { character, wardrobeItems }: VaultManagedFieldsWriteInput,
+): Promise<VaultManagedFieldsWriteResult> {
+  const result: VaultManagedFieldsWriteResult = {
+    singleFileWriteCount: 0,
+    systemPromptsWritten: 0,
+    scenariosWritten: 0,
+    wardrobeItemsWritten: 0,
+    physicalSkippedNoPrimary: false,
+  };
+
+  await writeDatabaseDocument(
+    mountPointId,
+    CHARACTER_PROPERTIES_JSON_PATH,
+    JSON.stringify(
+      {
+        pronouns: character.pronouns ?? null,
+        aliases: character.aliases ?? [],
+        title: character.title ?? null,
+        firstMessage: character.firstMessage ?? null,
+        talkativeness: character.talkativeness ?? 0.5,
+      },
+      null,
+      2,
+    ),
+  );
+  result.singleFileWriteCount++;
+
+  await writeDatabaseDocument(mountPointId, CHARACTER_IDENTITY_MD_PATH, character.identity ?? '');
+  result.singleFileWriteCount++;
+
+  await writeDatabaseDocument(mountPointId, CHARACTER_DESCRIPTION_MD_PATH, character.description ?? '');
+  result.singleFileWriteCount++;
+
+  await writeDatabaseDocument(mountPointId, CHARACTER_MANIFESTO_MD_PATH, character.manifesto ?? '');
+  result.singleFileWriteCount++;
+
+  await writeDatabaseDocument(mountPointId, CHARACTER_PERSONALITY_MD_PATH, character.personality ?? '');
+  result.singleFileWriteCount++;
+
+  await writeDatabaseDocument(
+    mountPointId,
+    CHARACTER_EXAMPLE_DIALOGUES_MD_PATH,
+    character.exampleDialogues ?? '',
+  );
+  result.singleFileWriteCount++;
+
+  const primaryPhysical = character.physicalDescription ?? null;
+  if (primaryPhysical) {
+    await writeDatabaseDocument(
+      mountPointId,
+      CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
+      primaryPhysical.fullDescription ?? '',
+    );
+    result.singleFileWriteCount++;
+    await writeDatabaseDocument(
+      mountPointId,
+      CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
+      renderPhysicalPromptsJson(primaryPhysical),
+    );
+    result.singleFileWriteCount++;
+  } else {
+    result.physicalSkippedNoPrimary = true;
+  }
+
+  await projectArrayIntoVaultFolder(
+    mountPointId,
+    CHARACTER_PROMPTS_FOLDER,
+    character.systemPrompts ?? [],
+    (p) => ({
+      fileName: `${sanitizeFileName(p.name)}.md`,
+      content: buildSystemPromptFile(p),
+    }),
+    character.id,
+  );
+  result.systemPromptsWritten = character.systemPrompts?.length ?? 0;
+
+  await projectArrayIntoVaultFolder(
+    mountPointId,
+    CHARACTER_SCENARIOS_FOLDER,
+    character.scenarios ?? [],
+    (s) => ({
+      fileName: `${sanitizeFileName(s.title)}.md`,
+      content: buildScenarioFile(s),
+    }),
+    character.id,
+  );
+  result.scenariosWritten = character.scenarios?.length ?? 0;
+
+  await projectVaultWardrobe(mountPointId, character.id, wardrobeItems);
+  result.wardrobeItemsWritten = wardrobeItems.length;
+
+  return result;
+}
+
+// ============================================================================
+// WRITE OVERLAY
+//
+// Symmetric counterpart to applyDocumentStoreOverlay: when an update() patch
+// includes managed fields and the character is in vault mode, route those
+// fields to vault files instead of the DB row. Returns the unmanaged
+// remainder so the caller can still do its DB write for the rest.
+//
+// "Vault is source of truth" semantics: managed fields written here do NOT
+// also update the DB column. The DB row stays at the value it held when
+// overlay was toggled on. Toggling overlay off restores those frozen DB
+// values; the user can run sync-properties-from-vault first to copy recent
+// vault edits into the DB before flipping the switch.
+// ============================================================================
+
+/**
+ * Decide whether a Character-row update needs to be routed to the vault, and
+ * if so, write the managed fields and strip them from the DB-bound patch.
+ *
+ * Returns the portion of `patch` that should go to the DB (unmanaged fields
+ * always; managed fields only when the character is not in vault mode).
+ *
+ * Throws if a vault write fails — the caller should NOT then proceed with the
+ * DB write, so that callers can't end up with a partial commit where DB and
+ * vault disagree on which fields are "current."
+ */
+export async function applyDocumentStoreWriteOverlay(
+  characterId: string,
+  patch: Partial<Character>,
+): Promise<Partial<Character>> {
+  const repos = getRepositories();
+  let character = await repos.characters.findByIdRaw(characterId);
+  if (!character) {
+    // Caller will hit the same not-found in _update; let it surface there.
+    return patch;
+  }
+
+  if (!hasLinkedVault(character)) {
+    const wouldRouteManagedField = Array.from(MANAGED_FIELDS).some((f) => (f as string) in patch);
+    if (!wouldRouteManagedField) {
+      // No managed fields in the patch — nothing to route. Let the unmanaged
+      // bits flow to the DB row unchanged.
+      return patch;
+    }
+
+    // The post-4.6 cutover dropped the DB columns for managed fields, so a
+    // character without a vault would silently lose them on the way through
+    // `_update`. Every character is supposed to have a vault — the startup
+    // backfill provisions one for any that don't — so reaching this branch is
+    // a bug elsewhere. Provision a vault now so the write doesn't get
+    // dropped, but log loudly so the upstream issue surfaces.
+    logger.error(
+      'applyDocumentStoreWriteOverlay: character has no linked vault but the patch carries managed fields; provisioning on the fly',
+      {
+        characterId,
+        managedFieldsInPatch: Array.from(MANAGED_FIELDS).filter((f) => (f as string) in patch),
+      },
+    );
+    await ensureCharacterVault(character);
+    // Reload — ensureCharacterVault sets characterDocumentMountPointId.
+    character = await repos.characters.findByIdRaw(characterId);
+    if (!character || !hasLinkedVault(character)) {
+      throw new Error(
+        `applyDocumentStoreWriteOverlay: failed to provision vault for ${characterId}`,
+      );
+    }
+  }
+
+  const mountPointId = character.characterDocumentMountPointId as string;
+  const dbPatch: Partial<Character> = { ...patch };
+
+  for (const descriptor of CHARACTER_VAULT_DESCRIPTORS) {
+    switch (descriptor.kind) {
+      case 'markdown': {
+        if (!(descriptor.field in patch)) break;
+        const value = patch[descriptor.field] as string | null | undefined;
+        await writeDatabaseDocument(mountPointId, descriptor.vaultPath, value ?? '');
+        delete dbPatch[descriptor.field];
+        break;
+      }
+      case 'properties-json': {
+        const propsKeys = ['pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness'] as const;
+        const touched = propsKeys.filter((k) => k in patch);
+        if (touched.length === 0) break;
+        // Read-modify-write so a partial patch doesn't blow away unspecified
+        // fields in the same JSON file.
+        const current = (await readCharacterVaultProperties(mountPointId, characterId)) ?? {
+          pronouns: character.pronouns ?? null,
+          aliases: character.aliases ?? [],
+          title: character.title ?? null,
+          firstMessage: character.firstMessage ?? null,
+          talkativeness: character.talkativeness ?? 0.5,
+        };
+        const next: CharacterVaultProperties = {
+          pronouns: 'pronouns' in patch ? (patch.pronouns ?? null) : current.pronouns,
+          aliases: 'aliases' in patch ? (patch.aliases ?? []) : current.aliases,
+          title: 'title' in patch ? (patch.title ?? null) : current.title,
+          firstMessage:
+            'firstMessage' in patch ? (patch.firstMessage ?? null) : current.firstMessage,
+          talkativeness:
+            'talkativeness' in patch ? (patch.talkativeness ?? 0.5) : current.talkativeness,
+        };
+        await writeDatabaseDocument(
+          mountPointId,
+          descriptor.vaultPath,
+          JSON.stringify(next, null, 2),
+        );
+        for (const k of touched) delete dbPatch[k];
+        break;
+      }
+      case 'physical-md':
+      case 'physical-json': {
+        // Only routed once, on the physical-md descriptor pass; physical-json
+        // is handled in the same write because both target physicalDescription.
+        if (descriptor.kind !== 'physical-md') break;
+        if (!('physicalDescription' in patch)) break;
+        const incoming = patch.physicalDescription ?? null;
+        if (!incoming) {
+          // Clearing physicalDescription is a DB-side concern; leave vault file alone.
+          break;
+        }
+        await writeDatabaseDocument(
+          mountPointId,
+          CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
+          incoming.fullDescription ?? '',
+        );
+        await writeDatabaseDocument(
+          mountPointId,
+          CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
+          renderPhysicalPromptsJson(incoming),
+        );
+        // Vault owns the physicalDescription post-cutover; nothing flows back to
+        // the (now nonexistent) DB column.
+        delete dbPatch.physicalDescription;
+        break;
+      }
+      case 'prompts-dir': {
+        if (!('systemPrompts' in patch)) break;
+        const incoming = patch.systemPrompts ?? [];
+        await projectArrayIntoVaultFolder(
+          mountPointId,
+          descriptor.vaultFolder,
+          incoming,
+          (p) => ({
+            fileName: `${sanitizeFileName(p.name)}.md`,
+            content: buildSystemPromptFile(p),
+          }),
+          characterId,
+        );
+        // Mirror the vault projection into the DB column so the two stay in
+        // sync. The overlay reads from the vault while the toggle is on, but
+        // keeping the DB current means flipping the toggle off later doesn't
+        // resurrect prompts the user had cleared.
+        dbPatch.systemPrompts = incoming;
+        break;
+      }
+      case 'scenarios-dir': {
+        if (!('scenarios' in patch)) break;
+        const incoming = patch.scenarios ?? [];
+        await projectArrayIntoVaultFolder(
+          mountPointId,
+          descriptor.vaultFolder,
+          incoming,
+          (s) => ({
+            fileName: `${sanitizeFileName(s.title)}.md`,
+            content: buildScenarioFile(s),
+          }),
+          characterId,
+        );
+        // Mirror the vault projection into the DB column (see prompts-dir).
+        dbPatch.scenarios = incoming;
+        break;
+      }
+    }
+  }
+
+  return dbPatch;
+}

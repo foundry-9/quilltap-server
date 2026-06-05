@@ -108,12 +108,99 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
   return 'announcement'
 }
 
-export function getSystemKindDisplayLabel(message: Pick<Message, 'systemSender' | 'systemKind' | 'content'>): string {
-  const explicit = message.systemKind
-  if (explicit) {
-    return KIND_DISPLAY_OVERRIDES[explicit] ?? explicit.replace(/-/g, ' ')
-  }
+/**
+ * Resolve a Staff message to its raw (un-prettified) kind: the explicit
+ * `systemKind` column when present, otherwise the best-effort inference from
+ * the persona-voiced content. Shared by the display-label path and the
+ * importance-tier lookup so the chip's label and its dot never key off
+ * different kinds.
+ */
+function resolveRawKind(message: Pick<Message, 'systemSender' | 'systemKind' | 'content'>): string {
+  if (message.systemKind) return message.systemKind
   if (!message.systemSender) return ''
-  const inferred = inferKindFromContent(message.systemSender, message.content || '')
-  return KIND_DISPLAY_OVERRIDES[inferred] ?? inferred.replace(/-/g, ' ')
+  return inferKindFromContent(message.systemSender, message.content || '')
+}
+
+export function getSystemKindDisplayLabel(message: Pick<Message, 'systemSender' | 'systemKind' | 'content'>): string {
+  const raw = resolveRawKind(message)
+  if (!raw) return ''
+  return KIND_DISPLAY_OVERRIDES[raw] ?? raw.replace(/-/g, ' ')
+}
+
+export type AnnouncementImportance = 'high' | 'medium' | 'low'
+
+/**
+ * Single source of truth for announcement importance tiers. Keyed by
+ * `systemSender`, then by raw kind (as resolved by {@link resolveRawKind}).
+ * `'*'` is a per-sender fallback; a sender absent from the table, or a kind
+ * with no entry and no `'*'`, falls through to {@link DEFAULT_IMPORTANCE}.
+ *
+ * Tiers drive the coloured dot before the sender name in the Salon: red (high),
+ * amber (medium), hollow grey (low).
+ */
+const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<string, AnnouncementImportance>> = {
+  // File changes are high-signal; opening/perusing is incidental.
+  librarian: {
+    saved: 'high',
+    deleted: 'high',
+    renamed: 'high',
+    'folder-created': 'high',
+    'folder-deleted': 'high',
+    attached: 'high',
+    summary: 'medium',
+    opened: 'low',
+    '*': 'medium',
+  },
+  // Who is in the room (and their status) matters; the clock does not.
+  host: {
+    add: 'high',
+    remove: 'high',
+    'status-change': 'high',
+    'user-character': 'high',
+    scenario: 'medium',
+    roster: 'medium',
+    timestamp: 'low',
+    'join-scenario': 'low',
+    'silent-mode-enter': 'low',
+    'silent-mode-exit': 'low',
+    '*': 'medium',
+  },
+  concierge: { danger: 'high', '*': 'high' },
+  lantern: { background: 'medium', 'character-image': 'medium', image: 'medium', '*': 'medium' },
+  aurora: { avatar: 'medium', 'outfit-change': 'medium', 'opening-outfit': 'medium', wardrobe: 'medium', '*': 'medium' },
+  ariel: { 'session-opened': 'medium', 'session-closed': 'medium', terminal: 'medium', '*': 'medium' },
+  prospero: {
+    'connection-profile-change': 'medium',
+    'project-context': 'low',
+    'general-context': 'low',
+    'project-and-general-context': 'low',
+    announcement: 'low',
+    '*': 'low',
+    // TODO: "mentioned characters not in the chat" is a *medium* example with no
+    // current systemKind. Add its kind here when a writer emits it.
+  },
+  commonplaceBook: {
+    'memory-recap': 'low',
+    'relevant-memories': 'low',
+    'inter-character-memories': 'low',
+    consolidated: 'low',
+    '*': 'low',
+  },
+}
+
+const DEFAULT_IMPORTANCE: AnnouncementImportance = 'medium'
+
+/**
+ * Map a Staff-authored message to its importance tier for the Salon's coloured
+ * announcement dots. Keys off {@link resolveRawKind} so it stays in lockstep
+ * with the displayed kind label.
+ */
+export function getAnnouncementImportance(
+  message: Pick<Message, 'systemSender' | 'systemKind' | 'content'>,
+): AnnouncementImportance {
+  if (!message.systemSender) return DEFAULT_IMPORTANCE
+  const senderTable = IMPORTANCE_TABLE[message.systemSender]
+  if (!senderTable) return DEFAULT_IMPORTANCE
+  const kind = resolveRawKind(message)
+  return senderTable[kind] ?? senderTable['*'] ?? DEFAULT_IMPORTANCE
 }

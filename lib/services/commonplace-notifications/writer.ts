@@ -125,27 +125,6 @@ export function buildCommonplaceLLMContext(parts: CommonplaceParts): string {
   return sections.join('\n\n').trim();
 }
 
-/**
- * @deprecated Kept temporarily during the Phase B revision. Prefer
- * `buildCommonplacePersonaWhisper` for UI persistence and
- * `buildCommonplaceLLMContext` for the LLM call.
- */
-export function voiceCommonplaceContent(
-  kind: 'memory-recap' | 'relevant-memories' | 'inter-character-memories',
-  body: string,
-): string {
-  const trimmed = body.trim();
-  if (trimmed.length === 0) return '';
-  switch (kind) {
-    case 'memory-recap':
-      return buildCommonplacePersonaWhisper({ recap: trimmed });
-    case 'relevant-memories':
-      return buildCommonplacePersonaWhisper({ relevant: trimmed });
-    case 'inter-character-memories':
-      return buildCommonplacePersonaWhisper({ interChar: trimmed });
-  }
-}
-
 interface PostParams {
   chatId: string;
   /** Participant ID of the character this whisper is targeted at, if any. Null/undefined = public. */

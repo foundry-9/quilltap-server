@@ -77,6 +77,7 @@ const {
   invalidateCompressionCache,
   clearCompressionCache,
   getCompressionCacheStats,
+  withPersistLock,
 } = require('@/lib/services/chat-message/compression-cache.service') as {
   triggerAsyncCompression: (options: AsyncCompressionOptions) => void
   getCachedCompression: (chatId: string, messageCount: number, participantId?: string, currentSystemPromptHash?: string) => Promise<CachedCompressionResponse | undefined>
@@ -92,6 +93,7 @@ const {
       ageMs: number
     }>
   }
+  withPersistLock: <T>(chatId: string, fn: () => Promise<T>) => Promise<T>
 }
 
 // Test fixtures
@@ -517,6 +519,114 @@ describe('Compression Cache Service', () => {
       expect(stats.entries[0].hasResult).toBe(true)
       expect(stats.entries[0].hasPromise).toBe(false)
       expect(stats.entries[0].ageMs).toBeGreaterThanOrEqual(0)
+    })
+  })
+
+  describe('withPersistLock', () => {
+    /**
+     * Regression test: two concurrent finalizers (e.g. Amy and Ariadne) used to
+     * race on `chat.compressionCache`. Each read the same snapshot, merged in
+     * their own participantId key, and wrote the whole field back. Whichever
+     * write landed second silently erased the other participant's entry.
+     *
+     * The simulated chat row below is the load-modify-save target; without
+     * `withPersistLock` the test's "AmyEntry" or "AriadneEntry" key would be
+     * missing after both run concurrently.
+     */
+    it('serializes load-modify-save on the same chatId so concurrent writes preserve all keys', async () => {
+      // Simulated database row holding the compressionCache JSON object.
+      const chatRow: { compressionCache: Record<string, string> } = { compressionCache: {} }
+
+      // Each "transaction" reads the current cache, splices in its own entry,
+      // and writes it back, with awaits in between to simulate I/O latency
+      // and force the would-be race to materialize when unserialized.
+      const writeEntry = async (participantId: string, value: string) => {
+        const snapshot = { ...chatRow.compressionCache }
+        await new Promise(resolve => setTimeout(resolve, 5))
+        snapshot[participantId] = value
+        await new Promise(resolve => setTimeout(resolve, 5))
+        chatRow.compressionCache = snapshot
+      }
+
+      await Promise.all([
+        withPersistLock('chat-race', () => writeEntry('amy', 'AmyEntry')),
+        withPersistLock('chat-race', () => writeEntry('ariadne', 'AriadneEntry')),
+      ])
+
+      expect(chatRow.compressionCache).toEqual({
+        amy: 'AmyEntry',
+        ariadne: 'AriadneEntry',
+      })
+    })
+
+    it('demonstrates the race exists when the lock is not used (sanity check for above)', async () => {
+      // This test exists to confirm the simulated load-modify-save actually
+      // races without the lock — if it didn't, the serialization test above
+      // would pass trivially and prove nothing.
+      const chatRow: { compressionCache: Record<string, string> } = { compressionCache: {} }
+
+      const writeEntry = async (participantId: string, value: string) => {
+        const snapshot = { ...chatRow.compressionCache }
+        await new Promise(resolve => setTimeout(resolve, 5))
+        snapshot[participantId] = value
+        await new Promise(resolve => setTimeout(resolve, 5))
+        chatRow.compressionCache = snapshot
+      }
+
+      // Same two writes, but with NO lock — one will clobber the other.
+      await Promise.all([
+        writeEntry('amy', 'AmyEntry'),
+        writeEntry('ariadne', 'AriadneEntry'),
+      ])
+
+      const keys = Object.keys(chatRow.compressionCache)
+      // Exactly one key survives — proves the race exists.
+      expect(keys.length).toBe(1)
+    })
+
+    it('allows different chatIds to run concurrently (does not over-serialize)', async () => {
+      // Two locks on different chatIds should overlap in time. We measure
+      // wall-clock duration; if the lock incorrectly serialized across chatIds
+      // we'd see ~2x the per-op latency.
+      const start = Date.now()
+      await Promise.all([
+        withPersistLock('chat-A', () => new Promise(resolve => setTimeout(resolve, 30))),
+        withPersistLock('chat-B', () => new Promise(resolve => setTimeout(resolve, 30))),
+      ])
+      const elapsed = Date.now() - start
+      // Sequential would be ~60ms; concurrent ~30ms. Allow generous slack for
+      // CI jitter but still well under the sequential floor.
+      expect(elapsed).toBeLessThan(55)
+    })
+
+    it('continues processing the queue after a failing operation', async () => {
+      // A throwing operation must not jam later writes on the same chatId —
+      // the lock helper uses .then(fn, fn) so the next operation runs whether
+      // the previous one resolved or rejected.
+      let followingRan = false
+
+      const failing = withPersistLock('chat-error', async () => {
+        throw new Error('boom')
+      })
+
+      const following = withPersistLock('chat-error', async () => {
+        followingRan = true
+      })
+
+      // The failing op rejects; capture it so Promise.all doesn't short-circuit.
+      const failingOutcome = await failing.then(
+        () => 'resolved',
+        (err: Error) => `rejected:${err.message}`
+      )
+      await following
+
+      expect(failingOutcome).toBe('rejected:boom')
+      expect(followingRan).toBe(true)
+    })
+
+    it('returns the value resolved by the wrapped function', async () => {
+      const value = await withPersistLock('chat-return', async () => 42)
+      expect(value).toBe(42)
     })
   })
 })

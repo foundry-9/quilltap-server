@@ -4,17 +4,28 @@ import { useEffect, useRef, useCallback } from 'react'
 
 interface UseDraftPersistenceParams {
   chatId: string
-  input: string
+  /**
+   * External setter for the composer value. Used once on mount to restore a
+   * saved draft (which the composer's ComposerSyncPlugin then pushes into the
+   * editor). NOT called on every keystroke.
+   */
   setInput: (value: string) => void
 }
 
-export function useDraftPersistence({ chatId, input, setInput }: UseDraftPersistenceParams) {
+/**
+ * Draft persistence for the chat composer.
+ *
+ * Restore runs once on mount via `setInput`. Saving is imperative
+ * (`persistDraft`) and driven by the editor's own debounced markdown emit, so
+ * it writes to localStorage via a ref without ever triggering a React
+ * re-render of the (large) Salon page — that decoupling is what keeps typing
+ * from re-rendering the tree.
+ */
+export function useDraftPersistence({ chatId, setInput }: UseDraftPersistenceParams) {
   const draftStorageKey = `quilltap-draft-${chatId}`
-  const draftSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const lastSavedDraftRef = useRef<string>('')
   const hasRestoredDraftRef = useRef<boolean>(false)
 
-  // Restore draft from localStorage on mount
+  // Restore draft from localStorage on mount.
   useEffect(() => {
     if (hasRestoredDraftRef.current) return
     hasRestoredDraftRef.current = true
@@ -23,60 +34,25 @@ export function useDraftPersistence({ chatId, input, setInput }: UseDraftPersist
       const savedDraft = localStorage.getItem(draftStorageKey)
       if (savedDraft) {
         setInput(savedDraft)
-        lastSavedDraftRef.current = savedDraft
       }
     } catch {
       // Failed to restore draft from localStorage
     }
   }, [draftStorageKey, setInput])
 
-  // Save draft to localStorage with debouncing (5 second minimum)
-  useEffect(() => {
-    // Don't save if input hasn't changed from last save
-    if (input === lastSavedDraftRef.current) return
-
-    // Clear any existing timer
-    if (draftSaveTimerRef.current) {
-      clearTimeout(draftSaveTimerRef.current)
-    }
-
-    // Set new timer for 5 seconds
-    draftSaveTimerRef.current = setTimeout(() => {
-      try {
-        if (input.trim()) {
-          localStorage.setItem(draftStorageKey, input)
-          lastSavedDraftRef.current = input
-        } else {
-          // Clear draft if input is empty
-          localStorage.removeItem(draftStorageKey)
-          lastSavedDraftRef.current = ''
-        }
-      } catch {
-        // Failed to save draft to localStorage
-      }
-    }, 5000)
-
-    // Cleanup timer on unmount or input change
-    return () => {
-      if (draftSaveTimerRef.current) {
-        clearTimeout(draftSaveTimerRef.current)
-      }
-    }
-  }, [input, draftStorageKey])
-
-  // Helper to clear draft (called on successful submission)
-  const clearDraft = useCallback(() => {
+  // Persist (or clear) the draft. The caller (composer editor) already debounces
+  // this emit, so we write straight through with no state update.
+  const persistDraft = useCallback((text: string) => {
     try {
-      localStorage.removeItem(draftStorageKey)
-      lastSavedDraftRef.current = ''
-      if (draftSaveTimerRef.current) {
-        clearTimeout(draftSaveTimerRef.current)
-        draftSaveTimerRef.current = null
+      if (text.trim()) {
+        localStorage.setItem(draftStorageKey, text)
+      } else {
+        localStorage.removeItem(draftStorageKey)
       }
     } catch {
-      // Failed to clear draft from localStorage
+      // Failed to persist draft to localStorage
     }
   }, [draftStorageKey])
 
-  return { clearDraft }
+  return { persistDraft }
 }

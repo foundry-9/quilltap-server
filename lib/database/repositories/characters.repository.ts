@@ -6,15 +6,18 @@
  * Handles CRUD operations and advanced queries for Character entities.
  */
 
-import { Character, CharacterInput, CharacterSchema, PhysicalDescription, ClothingRecord, CharacterSystemPrompt, CharacterScenario } from '@/lib/schemas/types';
+import { Character, CharacterInput, CharacterSchema, CharacterSystemPrompt, CharacterScenario } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
-import { TypedQueryFilter } from '../interfaces';
+import { TypedQueryFilter, UpdateSpec } from '../interfaces';
 import {
   applyDocumentStoreOverlay,
   applyDocumentStoreOverlayOne,
   applyDocumentStoreWriteOverlay,
+  syncCharacterVaultWardrobe,
+  MANAGED_FIELDS,
 } from './character-properties-overlay';
+import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 
 /**
  * Characters Repository
@@ -36,9 +39,25 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Find a character by ID without applying the document-store properties overlay.
-   * Used by the export path and the sync-back action, where the canonical DB row
-   * is required regardless of the `readPropertiesFromDocumentStore` switch.
+   * Find a character by ID **without applying the vault overlay**. The returned
+   * Character has empty / default values for every managed field (identity,
+   * description, manifesto, personality, exampleDialogues, title, firstMessage,
+   * talkativeness, pronouns, aliases, physicalDescription, systemPrompts,
+   * scenarios) because the DB columns for those fields were dropped in the 4.6
+   * cutover and now live exclusively in the character vault.
+   *
+   * **Almost no caller wants this.** Use {@link findById} for any normal
+   * read — it overlays the vault and returns the character users see in the
+   * UI. The legitimate exceptions are:
+   *
+   * - The overlay's own bootstrap code (it needs to read the row before it can
+   *   apply itself), inside {@link ./character-properties-overlay}.
+   * - Startup migrations and backfills that operate on the DB row directly
+   *   (e.g. {@link ../../startup/backfill-character-vaults}), where the
+   *   overlay either isn't ready or isn't desired.
+   *
+   * Adding new callers requires a comment justifying why the overlay must be
+   * skipped — otherwise you almost certainly want `findById`.
    */
   async findByIdRaw(id: string): Promise<Character | null> {
     return this._findById(id);
@@ -54,8 +73,9 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Find all characters without applying the document-store properties overlay.
-   * Used by the export path.
+   * Find all characters **without applying the vault overlay**. See the warnings
+   * on {@link findByIdRaw}. Reserved for startup migrations / backfills and the
+   * overlay's own bootstrap.
    */
   async findAllRaw(): Promise<Character[]> {
     return this._findAll();
@@ -174,10 +194,23 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Create a new character
+   * Create a new character.
+   *
+   * Atomic from the caller's perspective: validates input, inserts the DB row,
+   * provisions the character's document-store vault, projects every vault-managed
+   * field (identity, description, manifesto, personality, exampleDialogues,
+   * title, firstMessage, talkativeness, pronouns, aliases, physicalDescription,
+   * systemPrompts, scenarios) into the freshly-scaffolded vault, and sets
+   * `characterDocumentMountPointId` on the row. Callers should NOT call
+   * `ensureCharacterVault` afterwards — `create()` owns the full operation.
+   *
+   * Any `characterDocumentMountPointId` in `data` is dropped: a freshly-created
+   * character always gets a freshly-provisioned vault, since pointing a new
+   * row at an existing vault would cross-link unrelated content.
+   *
    * @param data The character data (without id, createdAt, updatedAt). Fields with defaults are optional.
    * @param options Optional CreateOptions to specify ID and createdAt (for sync)
-   * @returns Promise<Character> The created character with generated id and timestamps
+   * @returns Promise<Character> The created character with generated id, timestamps, and linked vault
    */
   async create(
     data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>,
@@ -185,34 +218,49 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   ): Promise<Character> {
     return this.safeQuery(
       async () => {
-        // Ensure required defaults for Character from CharacterInput
+        // Drop any incoming mountPointId — create always provisions a fresh
+        // vault. Importers that carry a source mountPointId in the payload
+        // shouldn't reuse it; the import-reconciliation pass remaps that
+        // pointer to a vault the importer separately created if applicable.
+        const { characterDocumentMountPointId: _droppedMountId, ...rest } = data as Record<string, unknown> & {
+          characterDocumentMountPointId?: string | null;
+        };
+
         const characterData = {
-          ...data,
-          tags: data.tags ?? [],
-          aliases: data.aliases ?? [],
-          pronouns: data.pronouns ?? null,
-          isFavorite: data.isFavorite ?? false,
-          partnerLinks: data.partnerLinks ?? [],
-          avatarOverrides: data.avatarOverrides ?? [],
-          physicalDescriptions: data.physicalDescriptions ?? [],
-          systemPrompts: data.systemPrompts ?? [],
-          scenarios: data.scenarios ?? [],
-          // New characters default to vault-backed properties. The vault is
-          // provisioned synchronously by callers; if provisioning fails the
-          // overlay short-circuits on the missing mount point and the row
-          // values are used until the next startup backfill.
-          readPropertiesFromDocumentStore: data.readPropertiesFromDocumentStore ?? true,
+          ...rest,
+          tags: (rest as Partial<Character>).tags ?? [],
+          aliases: (rest as Partial<Character>).aliases ?? [],
+          pronouns: (rest as Partial<Character>).pronouns ?? null,
+          isFavorite: (rest as Partial<Character>).isFavorite ?? false,
+          partnerLinks: (rest as Partial<Character>).partnerLinks ?? [],
+          avatarOverrides: (rest as Partial<Character>).avatarOverrides ?? [],
+          physicalDescription: (rest as Partial<Character>).physicalDescription ?? null,
+          systemPrompts: (rest as Partial<Character>).systemPrompts ?? [],
+          scenarios: (rest as Partial<Character>).scenarios ?? [],
+          characterDocumentMountPointId: null,
         } as Omit<Character, 'id' | 'createdAt' | 'updatedAt'>;
 
-        const character = await this._create(characterData, options);
+        const created = await this._create(characterData, options);
+
+        // Provision the vault using the in-memory character (which carries the
+        // input's managed-field values). ensureCharacterVault scaffolds folders,
+        // writes every managed file via writeCharacterVaultManagedFields, and
+        // updates the DB row with the new characterDocumentMountPointId.
+        await ensureCharacterVault(created);
 
         logger.info('Character created', {
-          characterId: character.id,
+          characterId: created.id,
           userId: data.userId,
           name: data.name,
         });
 
-        return character;
+        // Reload through the overlay so the returned character reflects the
+        // vault-backed state, including the freshly-set mountPointId.
+        const finalCharacter = await this.findById(created.id);
+        if (!finalCharacter) {
+          throw new Error(`Character ${created.id} disappeared immediately after creation`);
+        }
+        return finalCharacter;
       },
       'Error creating character',
       { userId: data.userId, name: data.name }
@@ -220,14 +268,32 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Update a character. When the character is in vault mode
-   * (`readPropertiesFromDocumentStore` on with a linked vault), managed
-   * fields in `data` are routed to vault files instead of the DB row;
-   * non-managed fields still go to DB. The returned character is overlaid
-   * so callers see vault-backed values just like findById would.
+   * Re-project a character's wardrobe items into its vault `Wardrobe/` folder.
    *
-   * Use `updateRaw` to bypass the write overlay (e.g. the sync-back action
-   * pulling vault values into the DB row).
+   * Called by import paths that create wardrobe items AFTER the character
+   * itself (so the wardrobe rows didn't exist when `create()` ran its initial
+   * projection). Idempotent — safe to call even when the vault is already in
+   * sync. Equivalent to `repos.wardrobe.create()`'s post-write side effect,
+   * but explicitly invoked so importers don't have to know about it.
+   */
+  async syncWardrobeToVault(characterId: string): Promise<void> {
+    await syncCharacterVaultWardrobe(characterId);
+  }
+
+  /**
+   * Update a character.
+   *
+   * Managed content fields (identity, description, manifesto, personality,
+   * exampleDialogues, title, firstMessage, talkativeness, pronouns, aliases,
+   * physicalDescription, systemPrompts, scenarios) in `data` are routed to
+   * the character's vault via {@link applyDocumentStoreWriteOverlay}; the
+   * remaining DB-only fields are written through `_update`. The returned
+   * character is overlaid through {@link applyDocumentStoreOverlayOne} so
+   * callers see the vault-backed view just as {@link findById} would.
+   *
+   * If a character somehow lacks a vault, `applyDocumentStoreWriteOverlay`
+   * auto-provisions one (loud `logger.error` so the upstream bug surfaces)
+   * before routing the patch — managed fields are never silently dropped.
    */
   async update(id: string, data: Partial<Character>): Promise<Character | null> {
     return this.safeQuery(
@@ -243,19 +309,95 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Update a character bypassing the document-store write overlay. Writes go
-   * directly to the DB row regardless of vault-mode state. Used by the
-   * `sync-properties-from-vault` action so vault values can be copied into
-   * the canonical DB row.
+   * Vault-aware override of the base `_create`. Mirrors `_update`: strips
+   * vault-managed keys before INSERT so callers that pass e.g. `title` or
+   * `description` to `create()` don't blow up with "no such column" — those
+   * fields belong in the character vault, not the DB row.
    */
-  async updateRaw(id: string, data: Partial<Character>): Promise<Character | null> {
-    return this.safeQuery(
-      async () => {
-        return await this._update(id, data);
-      },
-      'Error updating character (raw)',
-      { characterId: id }
-    );
+  protected async _create(
+    data: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
+  ): Promise<Character> {
+    return this.safeQuery(async () => {
+      const id = options?.id || crypto.randomUUID();
+      const now = this.getCurrentTimestamp();
+      const createdAt = options?.createdAt || now;
+      const updatedAt = options?.updatedAt || now;
+
+      const entityInput = {
+        ...data,
+        id,
+        createdAt,
+        updatedAt,
+      };
+
+      const validated = this.validate(entityInput);
+
+      const dbRow = { ...validated } as Record<string, unknown>;
+      for (const f of MANAGED_FIELDS) {
+        delete dbRow[f as string];
+      }
+
+      const collection = await this.getCollection();
+      await collection.insertOne(dbRow as Character);
+
+      logger.info('Entity created', {
+        collection: 'characters',
+        id,
+      });
+
+      return validated;
+    }, 'Error creating character entity');
+  }
+
+  /**
+   * Vault-aware override of the base `_update`. The 4.6 cutover dropped DB
+   * columns for vault-managed fields (title, identity, description, manifesto,
+   * personality, physicalDescription, pronouns, aliases, firstMessage,
+   * talkativeness, exampleDialogues, systemPrompts, scenarios) — they live in
+   * the character vault now. The base implementation reads existing state
+   * through the overlay-aware `findById`, which rehydrates those fields from
+   * the vault; spreading them into `$set` produces UPDATE statements SQLite
+   * rejects with "no such column". Read raw here, and strip any managed-field
+   * keys before writing as a defensive backstop.
+   */
+  protected async _update(id: string, data: Partial<Character>): Promise<Character | null> {
+    return this.safeQuery(async () => {
+      const existing = await this.findByIdRaw(id);
+      if (!existing) {
+        logger.warn('Entity not found for update', {
+          collection: 'characters',
+          id,
+        });
+        return null;
+      }
+
+      const now = this.getCurrentTimestamp();
+      const merged = {
+        ...existing,
+        ...data,
+        id: existing.id,
+        createdAt: existing.createdAt,
+        updatedAt: ('updatedAt' in data)
+          ? (data as Record<string, unknown>).updatedAt as string
+          : now,
+      } as Character;
+
+      const validated = this.validate(merged);
+
+      const dbRow = { ...validated } as Record<string, unknown>;
+      for (const f of MANAGED_FIELDS) {
+        delete dbRow[f as string];
+      }
+
+      const collection = await this.getCollection();
+      await collection.updateOne(
+        { id } as TypedQueryFilter<Character>,
+        { $set: dbRow } as UpdateSpec<Character>
+      );
+
+      return validated;
+    }, 'Error updating character entity', { id });
   }
 
   /**
@@ -511,184 +653,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   // ============================================================================
   // PHYSICAL DESCRIPTION OPERATIONS
   // ============================================================================
-
-  /**
-   * Add a physical description to a character
-   * @param characterId The character ID
-   * @param data The physical description data (without id, createdAt, updatedAt)
-   * @returns Promise<PhysicalDescription | null> The added description if successful, null if character not found
-   */
-  async addDescription(
-    characterId: string,
-    data: Omit<PhysicalDescription, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<PhysicalDescription | null> {
-    return this.addToSubArray<PhysicalDescription>(
-      characterId,
-      (c) => c.physicalDescriptions ?? [],
-      (id, now) => ({ ...data, id, createdAt: now, updatedAt: now }),
-      (items) => ({ physicalDescriptions: items }),
-      'Error adding physical description',
-      { descriptionName: data.name }
-    );
-  }
-
-  /**
-   * Update a physical description
-   * @param characterId The character ID
-   * @param descriptionId The description ID
-   * @param data Partial description data to update
-   * @returns Promise<PhysicalDescription | null> The updated description if found, null otherwise
-   */
-  async updateDescription(
-    characterId: string,
-    descriptionId: string,
-    data: Partial<Omit<PhysicalDescription, 'id' | 'createdAt' | 'updatedAt'>>
-  ): Promise<PhysicalDescription | null> {
-    return this.updateInSubArray<PhysicalDescription>(
-      characterId,
-      descriptionId,
-      (c) => c.physicalDescriptions ?? [],
-      (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
-      (items) => ({ physicalDescriptions: items }),
-      'Error updating physical description',
-      { descriptionId }
-    );
-  }
-
-  /**
-   * Remove a physical description from a character
-   * @param characterId The character ID
-   * @param descriptionId The description ID
-   * @returns Promise<boolean> True if description was deleted, false if not found
-   */
-  async removeDescription(characterId: string, descriptionId: string): Promise<boolean> {
-    return this.removeFromSubArray<PhysicalDescription>(
-      characterId,
-      descriptionId,
-      (c) => c.physicalDescriptions ?? [],
-      (items) => ({ physicalDescriptions: items }),
-      'Error removing physical description'
-    );
-  }
-
-  /**
-   * Get a single physical description by ID
-   * @param characterId The character ID
-   * @param descriptionId The description ID
-   * @returns Promise<PhysicalDescription | null> The description if found, null otherwise
-   */
-  async getDescription(characterId: string, descriptionId: string): Promise<PhysicalDescription | null> {
-    return this.getFromSubArray<PhysicalDescription>(
-      characterId,
-      descriptionId,
-      (c) => c.physicalDescriptions ?? [],
-      'Error getting physical description'
-    );
-  }
-
-  /**
-   * Get all physical descriptions for a character
-   * @param characterId The character ID
-   * @returns Promise<PhysicalDescription[]> Array of all descriptions for the character
-   */
-  async getDescriptions(characterId: string): Promise<PhysicalDescription[]> {
-    return this.getAllFromSubArray<PhysicalDescription>(
-      characterId,
-      (c) => c.physicalDescriptions ?? [],
-      'Error getting physical descriptions'
-    );
-  }
-
-  // ============================================================================
-  // CLOTHING RECORD OPERATIONS
-  // ============================================================================
-
-  /**
-   * Add a clothing record to a character
-   * @param characterId The character ID
-   * @param data The clothing record data (without id, createdAt, updatedAt)
-   * @returns Promise<ClothingRecord | null> The added record if successful, null if character not found
-   */
-  async addClothingRecord(
-    characterId: string,
-    data: Omit<ClothingRecord, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<ClothingRecord | null> {
-    return this.addToSubArray<ClothingRecord>(
-      characterId,
-      (c) => c.clothingRecords ?? [],
-      (id, now) => ({ ...data, id, createdAt: now, updatedAt: now }),
-      (items) => ({ clothingRecords: items }),
-      'Error adding clothing record',
-      { recordName: data.name }
-    );
-  }
-
-  /**
-   * Update a clothing record
-   * @param characterId The character ID
-   * @param recordId The clothing record ID
-   * @param data Partial clothing record data to update
-   * @returns Promise<ClothingRecord | null> The updated record if found, null otherwise
-   */
-  async updateClothingRecord(
-    characterId: string,
-    recordId: string,
-    data: Partial<Omit<ClothingRecord, 'id' | 'createdAt' | 'updatedAt'>>
-  ): Promise<ClothingRecord | null> {
-    return this.updateInSubArray<ClothingRecord>(
-      characterId,
-      recordId,
-      (c) => c.clothingRecords ?? [],
-      (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
-      (items) => ({ clothingRecords: items }),
-      'Error updating clothing record',
-      { recordId }
-    );
-  }
-
-  /**
-   * Remove a clothing record from a character
-   * @param characterId The character ID
-   * @param recordId The clothing record ID
-   * @returns Promise<boolean> True if record was deleted, false if not found
-   */
-  async removeClothingRecord(characterId: string, recordId: string): Promise<boolean> {
-    return this.removeFromSubArray<ClothingRecord>(
-      characterId,
-      recordId,
-      (c) => c.clothingRecords ?? [],
-      (items) => ({ clothingRecords: items }),
-      'Error removing clothing record'
-    );
-  }
-
-  /**
-   * Get a single clothing record by ID
-   * @param characterId The character ID
-   * @param recordId The clothing record ID
-   * @returns Promise<ClothingRecord | null> The record if found, null otherwise
-   */
-  async getClothingRecord(characterId: string, recordId: string): Promise<ClothingRecord | null> {
-    return this.getFromSubArray<ClothingRecord>(
-      characterId,
-      recordId,
-      (c) => c.clothingRecords ?? [],
-      'Error getting clothing record'
-    );
-  }
-
-  /**
-   * Get all clothing records for a character
-   * @param characterId The character ID
-   * @returns Promise<ClothingRecord[]> Array of all clothing records for the character
-   */
-  async getClothingRecords(characterId: string): Promise<ClothingRecord[]> {
-    return this.getAllFromSubArray<ClothingRecord>(
-      characterId,
-      (c) => c.clothingRecords ?? [],
-      'Error getting clothing records'
-    );
-  }
 
   // ============================================================================
   // SYSTEM PROMPT OPERATIONS

@@ -10,6 +10,8 @@ const {
   UUID_RE,
   ambiguous,
   resolveCharacter,
+  resolveCharactersByAlias,
+  readVaultAliases,
   resolveChat,
   resolveProject,
 } = require('./db-helpers');
@@ -318,21 +320,56 @@ function cmdFind(args, ctx) {
 }
 
 function findCharacters(query, { json, limit, ctx }) {
+  // Aliases live in each character's vault `properties.json` post-4.6, not on
+  // the `characters` row, so name matching comes from the main DB and alias
+  // matching/display comes from the mount-index DB.
   const db = ctx.openMain();
+  let mounts = null;
   try {
+    mounts = ctx.openMounts();
+  } catch {
+    mounts = null; // mount-index DB absent — name-only matching, no aliases
+  }
+  try {
+    const SELECT_COLS =
+      'SELECT id, name, npc, isFavorite, controlledBy, characterDocumentMountPointId AS mp FROM characters';
     let rows;
     if (!query) {
-      rows = db.prepare('SELECT id, name, npc, isFavorite, controlledBy FROM characters ORDER BY name LIMIT ?').all(limit);
+      rows = db.prepare(`${SELECT_COLS} ORDER BY name LIMIT ?`).all(limit);
     } else if (UUID_RE.test(query)) {
-      rows = db.prepare('SELECT id, name, npc, isFavorite, controlledBy, aliases FROM characters WHERE id = ?').all(query);
+      rows = db.prepare(`${SELECT_COLS} WHERE id = ?`).all(query);
     } else {
-      rows = db.prepare(
-        'SELECT id, name, npc, isFavorite, controlledBy, aliases FROM characters WHERE LOWER(name) LIKE LOWER(?) OR LOWER(aliases) LIKE LOWER(?) ORDER BY name LIMIT ?'
-      ).all(`%${query}%`, `%${query}%`, limit);
+      const byName = db
+        .prepare(`${SELECT_COLS} WHERE LOWER(name) LIKE LOWER(?) ORDER BY name`)
+        .all(`%${query}%`);
+      const seen = new Set(byName.map((r) => r.id));
+      rows = [...byName];
+      // Fold in alias matches from the vault, then re-fetch their rows so the
+      // output columns stay uniform.
+      for (const m of resolveCharactersByAlias(db, mounts, query)) {
+        if (seen.has(m.id)) continue;
+        seen.add(m.id);
+        const r = db.prepare(`${SELECT_COLS} WHERE id = ?`).get(m.id);
+        if (r) rows.push(r);
+      }
+      rows = rows.slice(0, limit);
     }
-    if (json) return printJson(rows);
-    printTable(rows);
+
+    // Attach vault-sourced aliases for display and drop the internal mount id.
+    const enriched = rows.map(({ mp, ...rest }) => ({
+      ...rest,
+      aliases: readVaultAliases(mounts, mp),
+    }));
+
+    if (json) return printJson(enriched);
+    printTable(
+      enriched.map((r) => ({
+        ...r,
+        aliases: r.aliases.length ? r.aliases.join(', ') : '',
+      })),
+    );
   } finally {
+    if (mounts) { try { mounts.close(); } catch {} }
     db.close();
   }
 }
@@ -388,7 +425,7 @@ function cmdChats(args, ctx) {
   try {
     let rows;
     if (flags.character) {
-      const c = resolveCharacter(db, String(flags.character));
+      const c = resolveCharacter(db, String(flags.character), ctx.openMounts);
       rows = db.prepare(
         "SELECT id, title, chatType, messageCount, lastMessageAt, projectId " +
         "FROM chats WHERE participants LIKE ? ORDER BY lastMessageAt DESC LIMIT ?"
@@ -488,7 +525,7 @@ function cmdLogs(args, ctx) {
     } else if (flags.character) {
       const main = ctx.openMain();
       let c;
-      try { c = resolveCharacter(main, String(flags.character)); } finally { main.close(); }
+      try { c = resolveCharacter(main, String(flags.character), ctx.openMounts); } finally { main.close(); }
       rows = logsDb.prepare(
         'SELECT id, createdAt, type, provider, modelName, chatId, messageId, durationMs FROM llm_logs WHERE characterId = ? ORDER BY createdAt DESC LIMIT ?'
       ).all(c.id, limit);
@@ -561,6 +598,12 @@ function cmdLog(args, ctx) {
     if (!row) throw new Error(`No llm_log with id ${id}`);
     if (json) return printJson(row);
 
+    let finishReason = null;
+    try {
+      const parsed = typeof row.response === 'string' ? JSON.parse(row.response) : row.response;
+      if (parsed && typeof parsed.finishReason === 'string') finishReason = parsed.finishReason;
+    } catch { /* leave null */ }
+
     printRecord(`LLM log ${row.id}`, {
       createdAt: row.createdAt,
       type: row.type,
@@ -570,6 +613,7 @@ function cmdLog(args, ctx) {
       messageId: row.messageId,
       characterId: row.characterId,
       durationMs: row.durationMs,
+      finishReason,
       usage: row.usage,
       cacheUsage: row.cacheUsage,
     });
@@ -598,11 +642,11 @@ function cmdMemories(args, ctx) {
 
   const db = ctx.openMain();
   try {
-    const holder = resolveCharacter(db, String(flags.character));
+    const holder = resolveCharacter(db, String(flags.character), ctx.openMounts);
     const conditions = ['characterId = ?'];
     const params = [holder.id];
     if (flags.about) {
-      const a = resolveCharacter(db, String(flags.about));
+      const a = resolveCharacter(db, String(flags.about), ctx.openMounts);
       conditions.push('aboutCharacterId = ?');
       params.push(a.id);
     }
@@ -634,6 +678,368 @@ function cmdMemories(args, ctx) {
   } finally {
     db.close();
   }
+}
+
+// ---------- verb: characters ----------
+
+// Single-file vault documents the character-properties overlay manages. Must
+// stay in sync with `CHARACTER_VAULT_DESCRIPTORS` in
+// lib/database/repositories/vault-overlay/. Post-4.6-cutover the vault is the
+// only home for these fields.
+//
+// REQUIRED files are written unconditionally by `writeCharacterVaultManagedFields`
+// (empty string when the field is blank), so a healthy character always has all
+// of them. The physical-* pair is OPTIONAL: the writer skips both when the
+// character has no physicalDescription. It writes them as a pair, so having
+// exactly one of the two is an inconsistency worth flagging.
+const REQUIRED_VAULT_SINGLE_FILES = [
+  'properties.json',
+  'identity.md',
+  'description.md',
+  'personality.md',
+  'example-dialogues.md',
+];
+// manifesto is nullable/optional. The full-projection writer writes an empty
+// manifesto.md when the field is blank, but the patch-level write overlay only
+// writes it when a patch carries a `manifesto` key — so a perfectly valid
+// character can simply lack the file. On read, absent == empty == null, so we
+// report manifesto's presence but never count its absence as "missing" or let
+// it block. (Treated like the physical-* pair: optional, surfaced, not required.)
+const OPTIONAL_VAULT_SINGLE_FILES = [
+  'manifesto.md',
+];
+const PHYSICAL_VAULT_FILES = [
+  'physical-description.md',
+  'physical-prompts.json',
+];
+
+function safeJsonArray(raw) {
+  if (raw == null || raw === '') return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeEmpty(v) {
+  if (v == null) return '';
+  return v;
+}
+
+function inspectCharacterVault(row, mounts) {
+  // `flag` / `*Db` / divergence reporting only make sense before the 4.6
+  // vault cutover, when the DB still carried the content columns. After
+  // the cutover the columns are gone and the vault is the only source of
+  // truth — `row` won't carry them. Treat them as null and skip the
+  // divergence check; the file-presence count is still useful.
+  const preCutover = row.identity !== undefined
+    || row.description !== undefined
+    || row.systemPrompts !== undefined;
+
+  const status = {
+    id: row.id,
+    name: row.name,
+    flag: row.readPropertiesFromDocumentStore == null
+      ? null
+      : Number(row.readPropertiesFromDocumentStore),
+    mountPointId: row.characterDocumentMountPointId || null,
+    vault: 'missing',
+    presentSingleFiles: 0,
+    expectedSingleFiles: REQUIRED_VAULT_SINGLE_FILES.length,
+    missingSingleFiles: [],
+    manifestoPresent: false,   // optional single file: present or not, both valid
+    physicalFilesPresent: 0,   // 0, 1, or 2 of the optional physical-* pair
+    physicalInconsistent: false,
+    promptsVault: 0,
+    promptsDb: 0,
+    scenariosVault: 0,
+    scenariosDb: 0,
+    wardrobeVault: 0,
+    diverged: [],
+    issue: null,
+    preCutover,
+  };
+
+  if (preCutover) {
+    status.promptsDb = safeJsonArray(row.systemPrompts).length;
+    status.scenariosDb = safeJsonArray(row.scenarios).length;
+  }
+
+  if (!row.characterDocumentMountPointId) {
+    status.issue = 'no vault';
+    return status;
+  }
+
+  status.vault = 'present';
+  const mountPointId = row.characterDocumentMountPointId;
+
+  // One-shot listing of every link for this vault; the rest is just lookups.
+  const links = mounts.prepare(
+    'SELECT relativePath, fileId FROM doc_mount_file_links WHERE mountPointId = ?'
+  ).all(mountPointId);
+  const byPath = new Map();
+  for (const link of links) {
+    byPath.set(link.relativePath.toLowerCase(), link);
+  }
+
+  for (const p of REQUIRED_VAULT_SINGLE_FILES) {
+    if (byPath.has(p)) {
+      status.presentSingleFiles++;
+    } else {
+      status.missingSingleFiles.push(p);
+    }
+  }
+
+  // Manifesto is optional: report presence, never require it.
+  status.manifestoPresent = OPTIONAL_VAULT_SINGLE_FILES.every((p) => byPath.has(p));
+
+  // Physical-* files are optional (a character may legitimately have no
+  // physical description). Both-or-neither is healthy; exactly one is not.
+  status.physicalFilesPresent = PHYSICAL_VAULT_FILES.filter((p) => byPath.has(p)).length;
+  status.physicalInconsistent = status.physicalFilesPresent === 1;
+
+  for (const [p] of byPath) {
+    if (p.startsWith('prompts/') && p.endsWith('.md')) status.promptsVault++;
+    else if (p.startsWith('scenarios/') && p.endsWith('.md')) status.scenariosVault++;
+    else if (p.startsWith('wardrobe/') && p.endsWith('.md')) status.wardrobeVault++;
+  }
+
+  // Compare vault contents to DB row for each managed field where the
+  // corresponding file is actually present. Only meaningful pre-cutover;
+  // post-cutover the DB no longer carries the columns to compare against.
+  if (preCutover) {
+    const docStmt = mounts.prepare(
+      'SELECT content FROM doc_mount_documents WHERE fileId = ?'
+    );
+    const readVault = (relPath) => {
+      const link = byPath.get(relPath);
+      if (!link) return null;
+      const doc = docStmt.get(link.fileId);
+      return doc ? doc.content : null;
+    };
+
+    const mdFields = [
+      ['identity.md', 'identity'],
+      ['description.md', 'description'],
+      ['manifesto.md', 'manifesto'],
+      ['personality.md', 'personality'],
+      ['example-dialogues.md', 'exampleDialogues'],
+    ];
+    for (const [vaultPath, dbField] of mdFields) {
+      const vault = readVault(vaultPath);
+      if (vault === null) continue;
+      const db = row[dbField] ?? '';
+      if (vault !== db) status.diverged.push(dbField);
+    }
+
+    const propsRaw = readVault('properties.json');
+    if (propsRaw !== null) {
+      try {
+        const props = JSON.parse(propsRaw);
+        const scalarChecks = [
+          ['pronouns', row.pronouns],
+          ['title', row.title],
+          ['firstMessage', row.firstMessage],
+          ['talkativeness', row.talkativeness],
+        ];
+        for (const [k, dbVal] of scalarChecks) {
+          if (normalizeEmpty(props[k]) !== normalizeEmpty(dbVal)) {
+            status.diverged.push(k);
+          }
+        }
+        const vaultAliases = JSON.stringify(Array.isArray(props.aliases) ? props.aliases : []);
+        const dbAliases = JSON.stringify(safeJsonArray(row.aliases));
+        if (vaultAliases !== dbAliases) status.diverged.push('aliases');
+        // systemTransparency: tristate (0 / 1 / null), only reported if vault has it
+        if (props.systemTransparency !== undefined) {
+          if ((props.systemTransparency ?? null) !== (row.systemTransparency ?? null)) {
+            status.diverged.push('systemTransparency');
+          }
+        }
+      } catch {
+        status.diverged.push('properties.json:unparseable');
+      }
+    }
+
+    const physArr = safeJsonArray(row.physicalDescriptions);
+    const primary = physArr[0] || null;
+    const physMd = readVault('physical-description.md');
+    if (physMd !== null) {
+      const dbVal = primary && primary.fullDescription != null ? primary.fullDescription : '';
+      if (physMd !== dbVal) status.diverged.push('physicalDescription.fullDescription');
+    }
+    const physJsonRaw = readVault('physical-prompts.json');
+    if (physJsonRaw !== null) {
+      try {
+        const physJson = JSON.parse(physJsonRaw);
+        const promptChecks = [
+          ['short', primary?.shortPrompt],
+          ['medium', primary?.mediumPrompt],
+          ['long', primary?.longPrompt],
+          ['complete', primary?.completePrompt],
+        ];
+        for (const [k, dbVal] of promptChecks) {
+          if (normalizeEmpty(physJson[k]) !== normalizeEmpty(dbVal)) {
+            status.diverged.push(`physical.${k}Prompt`);
+          }
+        }
+      } catch {
+        status.diverged.push('physical-prompts.json:unparseable');
+      }
+    }
+
+    if (status.promptsVault !== status.promptsDb) {
+      status.diverged.push(`systemPrompts:count(vault=${status.promptsVault},db=${status.promptsDb})`);
+    }
+    if (status.scenariosVault !== status.scenariosDb) {
+      status.diverged.push(`scenarios:count(vault=${status.scenariosVault},db=${status.scenariosDb})`);
+    }
+  }
+
+  const anyContent = status.presentSingleFiles > 0
+    || status.manifestoPresent
+    || status.physicalFilesPresent > 0
+    || status.promptsVault > 0
+    || status.scenariosVault > 0
+    || status.wardrobeVault > 0;
+  if (!anyContent) {
+    status.issue = 'vault empty';
+  } else if (status.missingSingleFiles.length > 0) {
+    status.issue = `${status.missingSingleFiles.length} required files missing`;
+  } else if (status.physicalInconsistent) {
+    status.issue = 'physical files incomplete (1 of 2)';
+  } else if (status.diverged.length > 0) {
+    status.issue = `diverged (${status.diverged.length})`;
+  } else if (!preCutover) {
+    status.issue = 'ok (post-cutover, vault is canonical)';
+  } else if (status.flag === 1) {
+    status.issue = 'ok (vault authoritative)';
+  } else {
+    status.issue = 'ok (db matches vault)';
+  }
+  return status;
+}
+
+function cmdCharacters(args, ctx) {
+  const { flags, positional } = parseSubArgs(args);
+  const sub = positional[0] || 'status';
+  if (sub !== 'status') {
+    throw new Error(`Unknown characters subcommand: ${sub}. Try: status`);
+  }
+
+  const json = asBool(flags.json);
+  const limit = asInt(flags.limit, 0);
+  const onlyDiverged = asBool(flags.diverged);
+  const onlyBlocked = asBool(flags.blocked);
+  const idQuery = flags.id ? String(flags.id) : null;
+
+  const main = ctx.openMain();
+  const mounts = ctx.openMounts();
+  try {
+    // Probe the schema so this verb works both pre- and post-cutover: after
+    // the 4.6 migration the content columns are gone, so we can only ask
+    // for what's there.
+    const existing = new Set(
+      main.prepare('PRAGMA table_info(characters)')
+        .all()
+        .map(r => r.name)
+    );
+    const wanted = [
+      'id', 'name', 'characterDocumentMountPointId', 'systemTransparency',
+      'readPropertiesFromDocumentStore',
+      'identity', 'description', 'manifesto', 'personality', 'exampleDialogues',
+      'pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness',
+      'physicalDescriptions', 'systemPrompts', 'scenarios',
+    ];
+    const cols = wanted.filter(c => existing.has(c));
+    let sql = `SELECT ${cols.join(', ')} FROM characters`;
+    const params = [];
+    if (idQuery) {
+      const c = resolveCharacter(main, idQuery, ctx.openMounts);
+      sql += ' WHERE id = ?';
+      params.push(c.id);
+    } else {
+      sql += ' ORDER BY name';
+      if (limit > 0) {
+        sql += ' LIMIT ?';
+        params.push(limit);
+      }
+    }
+    const rows = main.prepare(sql).all(...params);
+
+    const all = rows.map(r => inspectCharacterVault(r, mounts));
+    const filtered = all.filter(s => {
+      if (onlyBlocked && !(s.issue && (s.issue === 'no vault' || s.issue === 'vault empty' || s.issue.endsWith(' files missing')))) {
+        return false;
+      }
+      if (onlyDiverged && s.diverged.length === 0 && (!s.missingSingleFiles || s.missingSingleFiles.length === 0)) {
+        return false;
+      }
+      return true;
+    });
+
+    if (json) {
+      const summary = {
+        totalScanned: all.length,
+        returned: filtered.length,
+        counts: summarizeCharacterStatuses(all),
+        characters: filtered,
+      };
+      return printJson(summary);
+    }
+
+    const summary = summarizeCharacterStatuses(all);
+    let headline = `Scanned ${all.length} character${all.length === 1 ? '' : 's'}: ` +
+      `${summary.ok} ok, ${summary.diverged} diverged, ${summary.missingFiles} with missing files, ` +
+      `${summary.noVault} with no vault, ${summary.empty} empty`;
+    if (summary.physIncomplete > 0) headline += `, ${summary.physIncomplete} with incomplete physical files`;
+    headline += '.';
+    console.log(headline);
+    console.log('');
+    // The readPropertiesFromDocumentStore flag and the DB side of the
+    // prompts/scenarios counts only exist before the 4.6 cutover. Post-cutover
+    // (the normal case now) the vault is canonical, so drop the dead `flag`
+    // column and show vault-only counts instead of misleading `vault/db`.
+    const anyPreCutover = all.some(s => s.preCutover);
+    printTable(filtered.map(s => {
+      const missing = s.vault === 'missing';
+      const row = { id: s.id.slice(0, 8), name: truncate(s.name, 28) };
+      if (anyPreCutover) row.flag = s.flag == null ? '-' : s.flag;
+      row.vault = s.vault;
+      row.files = missing ? '-' : `${s.presentSingleFiles}/${s.expectedSingleFiles}`;
+      row.manifesto = missing ? '-' : (s.manifestoPresent ? 'yes' : 'no');
+      row.phys = missing ? '-' : `${s.physicalFilesPresent}/2`;
+      row.prompts = missing ? '-' : (anyPreCutover ? `${s.promptsVault}/${s.promptsDb}` : String(s.promptsVault));
+      row.scenarios = missing ? '-' : (anyPreCutover ? `${s.scenariosVault}/${s.scenariosDb}` : String(s.scenariosVault));
+      row.wardrobe = missing ? '-' : s.wardrobeVault;
+      row.status = truncate(s.issue, 60);
+      return row;
+    }));
+
+    if (filtered.length > 0 && filtered.some(s => s.diverged.length > 0)) {
+      console.log('');
+      console.log('Run with --json to see the full diverged-field list per character.');
+    }
+  } finally {
+    try { mounts.close(); } catch {}
+    try { main.close(); } catch {}
+  }
+}
+
+function summarizeCharacterStatuses(all) {
+  let ok = 0, diverged = 0, missingFiles = 0, noVault = 0, empty = 0, physIncomplete = 0;
+  for (const s of all) {
+    if (!s.issue) continue;
+    if (s.issue.startsWith('ok')) ok++;
+    else if (s.issue === 'no vault') noVault++;
+    else if (s.issue === 'vault empty') empty++;
+    else if (s.issue.endsWith(' files missing')) missingFiles++;
+    else if (s.issue.startsWith('physical files incomplete')) physIncomplete++;
+    else if (s.issue.startsWith('diverged')) diverged++;
+  }
+  return { ok, diverged, missingFiles, noVault, empty, physIncomplete };
 }
 
 // ---------- verb: optimize ----------
@@ -1105,6 +1511,7 @@ const VERBS = {
   message: cmdMessage,
   log: cmdLog,
   memories: cmdMemories,
+  characters: cmdCharacters,
   optimize: cmdOptimize,
   backup: cmdBackup,
   integrity: cmdIntegrity,

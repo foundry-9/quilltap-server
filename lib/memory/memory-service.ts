@@ -159,6 +159,14 @@ export interface CreateMemoryOptions {
   sourceMessageId?: string | null
   /** Override createdAt/updatedAt with source message timestamp (for batch extraction) */
   sourceMessageTimestamp?: string
+  /**
+   * Provenance of the conversational moment that produced this memory (4.6
+   * Private Character Rooms). 'user_present' for chats with a user opener,
+   * 'autonomous_room' for autonomous character-to-character chats, 'manual'
+   * for memories created outside the extraction path. Null is treated as
+   * legacy (pre-4.6) and left unset.
+   */
+  witnessedContext?: 'user_present' | 'autonomous_room' | 'manual' | null
 }
 
 /**
@@ -338,6 +346,7 @@ async function createMemoryDirect(
     chatId: data.chatId || null,
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,
+    witnessedContext: data.witnessedContext ?? null,
     reinforcementCount: 1,
     relatedMemoryIds: [],
     reinforcedImportance: importance,
@@ -408,6 +417,7 @@ async function createMemoryDirectWithEmbedding(
     chatId: data.chatId || null,
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,
+    witnessedContext: data.witnessedContext ?? null,
     reinforcementCount: 1,
     relatedMemoryIds: [],
     reinforcedImportance: importance,
@@ -855,88 +865,6 @@ async function searchMemoriesText(
   })
 
   return scoredResults.slice(0, limit)
-}
-
-/**
- * Find semantically similar memories for duplicate detection
- */
-export async function findSimilarMemories(
-  characterId: string,
-  content: string,
-  summary: string,
-  options: MemoryServiceOptions & {
-    threshold?: number
-  }
-): Promise<{ memory: Memory; similarity: number }[]> {
-  const threshold = options.threshold || 0.85
-
-  try {
-    const embeddingResult = await generateEmbeddingForUser(
-      `${summary}\n\n${content}`,
-      options.userId,
-      options.embeddingProfileId,
-      { priority: 'background' }
-    )
-
-    const vectorStore = await getCharacterVectorStore(characterId)
-    const results = vectorStore.search(embeddingResult.embedding, 10)
-
-    // Hydrate only the matched memories, not the whole corpus.
-    const repos = getRepositories()
-    const matchedIds = results.map(r => r.id)
-    const memories = await repos.memories.findByIds(matchedIds)
-    const memoryMap = new Map(memories.map(m => [m.id, m]))
-
-    return results
-      .filter(r => r.score >= threshold)
-      .map(r => ({
-        memory: memoryMap.get(r.id)!,
-        similarity: r.score,
-      }))
-      .filter(r => r.memory)
-  } catch (error) {
-    logger.warn(`[Memory] Semantic similarity check failed`, { characterId, threshold: options.threshold, userId: options.userId, error: String(error) })
-    return []
-  }
-}
-
-/**
- * Find semantically similar memories using a pre-computed embedding vector.
- *
- * Avoids redundant embedding generation when the caller already has the vector
- * (e.g., the memory gate).
- */
-export async function findSimilarMemoriesWithEmbedding(
-  characterId: string,
-  embedding: Float32Array,
-  options: {
-    threshold?: number
-    limit?: number
-  } = {}
-): Promise<{ memory: Memory; similarity: number }[]> {
-  const threshold = options.threshold || 0.85
-  const limit = options.limit || 10
-
-  try {
-    const vectorStore = await getCharacterVectorStore(characterId)
-    const results = vectorStore.search(embedding, limit)
-
-    const repos = getRepositories()
-    const matchedIds = results.map(r => r.id)
-    const memories = await repos.memories.findByIds(matchedIds)
-    const memoryMap = new Map(memories.map(m => [m.id, m]))
-
-    return results
-      .filter(r => r.score >= threshold)
-      .map(r => ({
-        memory: memoryMap.get(r.id)!,
-        similarity: r.score,
-      }))
-      .filter(r => r.memory)
-  } catch (error) {
-    logger.warn('[Memory] Similarity search with embedding failed', { characterId, error: String(error) })
-    return []
-  }
 }
 
 /**

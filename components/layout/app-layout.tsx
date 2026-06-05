@@ -21,6 +21,7 @@ import { LeftSidebar } from './left-sidebar'
 import { PageToolbar } from './page-toolbar'
 import FooterWrapper from '@/components/footer-wrapper'
 import { StartupProgress, useStartupPhase } from '@/components/loading/StartupProgress'
+import { useDictionaryFeed } from '@/lib/spellcheck/useDictionaryFeed'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -75,6 +76,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   return (
     <HelpChatProvider>
       <WardrobeDialogProvider>
+        <DictionaryFeedMount />
         <div className="qt-app-layout">
           <LeftSidebar />
           <div className="qt-app-main">
@@ -92,6 +94,16 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       </WardrobeDialogProvider>
     </HelpChatProvider>
   )
+}
+
+/**
+ * Renderless component that feeds Aurora character names into the Electron
+ * shell's custom spellchecker dictionary. Mounts only inside the authenticated
+ * branch so the `/api/v1/characters` SWR call doesn't fire on auth pages.
+ */
+function DictionaryFeedMount() {
+  useDictionaryFeed()
+  return null
 }
 
 /**

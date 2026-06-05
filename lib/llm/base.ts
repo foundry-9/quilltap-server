@@ -10,13 +10,9 @@ export type {
   ModelMetadata,
   FileAttachment,
   TokenUsage,
-  CacheUsage,
-  AttachmentResults,
 
   // Text provider types
   LLMMessage,
-  JSONSchemaDefinition,
-  ResponseFormat,
   LLMParams,
   LLMResponse,
   StreamChunk,

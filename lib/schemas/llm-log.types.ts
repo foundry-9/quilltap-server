@@ -73,6 +73,11 @@ export const LLMLogResponseSummarySchema = z.object({
   contentLength: z.number(),
   fullContent: z.string().nullable().optional(), // Deprecated: kept for backward compat with old log entries
   error: z.string().nullable().optional(),
+  // Provider-reported reason for ending generation. Normalized to the raw provider
+  // string (e.g. OpenAI/Z.AI `stop`/`length`/`tool_calls`/`content_filter`,
+  // Anthropic `end_turn`/`max_tokens`/`tool_use`/`stop_sequence`,
+  // Google `STOP`/`MAX_TOKENS`/`SAFETY`, OpenAI Responses `completed`/`incomplete`).
+  finishReason: z.string().nullable().optional(),
   toolCalls: z.array(z.object({
     name: z.string(),
     arguments: z.record(z.string(), z.unknown()),
@@ -112,6 +117,7 @@ export type LLMLogCacheUsage = z.infer<typeof LLMLogCacheUsageSchema>;
 export const LLMLogRequestHashesSchema = z.object({
   systemBlock1Hash: z.string().optional(),
   systemBlock2Hash: z.string().optional(),
+  systemBlock3Hash: z.string().optional(),
   toolsArrayHash: z.string().optional(),
   historyTailHash: z.string().optional(),
 });
@@ -146,6 +152,14 @@ export const LLMLogSchema = z.object({
   // Token usage
   usage: LLMLogTokenUsageSchema.nullable().optional(),
   cacheUsage: LLMLogCacheUsageSchema.nullable().optional(),
+
+  // Raw provider-shape `usage` sub-object, captured pre-normalization.
+  // Lets a SQL query compare provider-reported cached tokens against the
+  // normalized `cacheUsage` and catch plugin normalization regressions
+  // (the Z.AI pathology from 2026-04: provider reported cache hits but
+  // plugin never read `prompt_tokens_details.cached_tokens`).
+  // Schema-translator stores `z.record(...)` as a JSON TEXT column.
+  rawProviderUsage: z.record(z.string(), z.unknown()).nullable().optional(),
 
   // Per-tier prefix hashes for cache-stability diagnostics
   requestHashes: LLMLogRequestHashesSchema.nullable().optional(),

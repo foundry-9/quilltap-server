@@ -36,6 +36,8 @@ export const BackgroundJobTypeEnum = z.enum([
   'MEMORY_REGENERATE_CHAT', // Wipe one chat's auto-extracted memories and re-enqueue extraction per turn
   'MEMORY_REGENERATE_ALL', // Fan-out wrapper: enumerate chats + orphans and enqueue MEMORY_REGENERATE_CHAT jobs
   'WARDROBE_OUTFIT_ANNOUNCEMENT', // Debounced Aurora announcement of outfit changes
+  'AUTONOMOUS_ROOM_TURN', // One turn of an autonomous (character-to-character) room run
+  'AUTONOMOUS_ROOM_SCHEDULE_TICK', // Singleton scan: find autonomous rooms due to run per their cron + freshness window
 ]);
 export type BackgroundJobType = z.infer<typeof BackgroundJobTypeEnum>;
 

@@ -35,7 +35,6 @@ export async function handleListCharacters(
         return {
           id: char.id,
           name: char.name,
-          avatarUrl: char.avatarUrl,
           tags: char.tags || [],
         };
       })

@@ -5,7 +5,7 @@ export function sha256OfString(content: string): string {
   return createHash('sha256').update(content, 'utf-8').digest('hex');
 }
 
-/** Hex-encoded SHA-256 digest of a buffer. */
-export function sha256OfBuffer(buffer: Buffer): string {
+/** Hex-encoded SHA-256 digest of binary bytes. */
+export function sha256OfBuffer(buffer: Buffer | Uint8Array): string {
   return createHash('sha256').update(buffer).digest('hex');
 }

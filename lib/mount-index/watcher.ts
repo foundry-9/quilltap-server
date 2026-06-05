@@ -392,9 +392,3 @@ export async function refreshMountPoint(mountPoint: DocMountPoint): Promise<void
   }
 }
 
-/**
- * Test helper — returns the mount point IDs currently being watched.
- */
-export function getWatchedMountPointIds(): string[] {
-  return Array.from(watchers.keys());
-}

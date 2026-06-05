@@ -29,10 +29,18 @@ export type OutfitSlotName = keyof OutfitSlotValues
  * Format resolved wardrobe leaf items as the title/description strings that
  * {@link describeOutfit} expects. Each item collapses to `"title"` or
  * `"title (description)"` depending on whether a description is present.
+ *
+ * Pass `titleOnly: true` for image-generation pipelines — wardrobe item
+ * `description` is human prose (style commentary, narrative voice) that
+ * bloats image prompts and confuses cheap LLMs into echoing it verbatim.
  */
 export function decorateOutfitItems(
   items: ReadonlyArray<{ title: string; description?: string | null }>,
+  options: { titleOnly?: boolean } = {},
 ): string[] {
+  if (options.titleOnly) {
+    return items.map(i => i.title)
+  }
   return items.map(i => (i.description ? `${i.title} (${i.description})` : i.title))
 }
 

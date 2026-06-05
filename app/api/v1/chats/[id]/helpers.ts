@@ -22,6 +22,7 @@ import {
   postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { postProsperoConnectionProfileChangeAnnouncement } from '@/lib/services/prospero-notifications/writer';
+import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip';
 import {
   compileAllIdentityStacks,
   compileIdentityStackForParticipant,
@@ -42,7 +43,6 @@ export async function getEnrichedCharacter(characterId: string, repos: Repos) {
     id: charData.id,
     name: charData.name,
     title: charData.title,
-    avatarUrl: charData.avatarUrl,
     talkativeness: charData.talkativeness ?? 0.5,
     defaultImageId: charData.defaultImageId,
     defaultImage,
@@ -560,6 +560,17 @@ export async function processChatUpdates(
           });
         }
       }
+    }
+  }
+
+  // Per-chat Concierge tri-state. Routed through the manual-flip helper so
+  // each transition does the right combination of DB updates + Concierge
+  // announcement in one place.
+  if (validatedData.conciergeState) {
+    const flipResult = await applyConciergeFlip(chatId, validatedData.conciergeState, updatedChat);
+    if (flipResult.changed) {
+      const refetched = await repos.chats.findById(chatId);
+      if (refetched) updatedChat = refetched;
     }
   }
 

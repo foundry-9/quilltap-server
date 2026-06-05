@@ -123,7 +123,7 @@ export const CharacterSchema = z.object({
   identity: z.string().nullable().optional(),
   /**
    * What someone talking to (or acquainted with) the character perceives. NOT
-   * physical appearance — that lives in `physicalDescriptions`. Behaviour,
+   * physical appearance — that lives in `physicalDescription`. Behaviour,
    * mannerisms, frequent verbal patterns. Things an interlocutor notices, but
    * not the character's internal monologue or self-knowledge.
    */
@@ -148,7 +148,6 @@ export const CharacterSchema = z.object({
   firstMessage: z.string().nullable().optional(),
   exampleDialogues: z.string().nullable().optional(),
   systemPrompts: z.array(CharacterSystemPromptSchema).default([]),  // Named system prompts array
-  avatarUrl: z.string().nullable().optional(),
   defaultImageId: UUIDSchema.nullable().optional(),
   defaultConnectionProfileId: UUIDSchema.nullable().optional(),
   defaultPartnerId: UUIDSchema.nullable().optional(),  // Default user-controlled character to pair with when chatting
@@ -178,13 +177,6 @@ export const CharacterSchema = z.object({
   /** Linked character document store (mountType='database', storeType='character'); null = not linked */
   characterDocumentMountPointId: UUIDSchema.nullable().optional(),
 
-  /**
-   * When true, pronouns/aliases/title/firstMessage/talkativeness are read from
-   * the linked vault's properties.json instead of this row. Requires
-   * characterDocumentMountPointId to be set; writes still go to the DB.
-   */
-  readPropertiesFromDocumentStore: z.boolean().nullable().optional(),
-
   /** Whether this character can change their own outfit using wardrobe tools (null = enabled by default) */
   canDressThemselves: z.boolean().nullable().optional(),
 
@@ -203,6 +195,15 @@ export const CharacterSchema = z.object({
    */
   systemTransparency: z.boolean().nullable().optional(),
 
+  /**
+   * Aurora Core whisper — per-character override of the global `coreWhisper.enabled`
+   * setting. NULL = inherit from global default. When set, applies regardless
+   * of per-chat override (chat → character → global precedence). The Core
+   * whisper periodically re-offers this character's own `Core/` vault folder
+   * before their next turn.
+   */
+  coreWhisperEnabled: z.boolean().nullable().optional(),
+
   // Relationships
   partnerLinks: z.array(z.object({
     partnerId: UUIDSchema,
@@ -215,8 +216,16 @@ export const CharacterSchema = z.object({
     chatId: UUIDSchema,
     imageId: UUIDSchema,
   })).default([]),
-  physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
-  clothingRecords: z.array(ClothingRecordSchema).default([]),
+  /**
+   * The character's physical description plus token-sized prompt variants
+   * (short / medium / long / complete) for image generation. Singular per
+   * character — the data model was collapsed in the 4.6 vault cutover from
+   * an array, since the vault only ever persisted index 0 and the
+   * multi-description shape was a vestige rather than a feature. The vault
+   * file shape (`physical-description.md` + `physical-prompts.json`) is
+   * unchanged.
+   */
+  physicalDescription: PhysicalDescriptionSchema.nullable().optional(),
 
   // Timestamps
   createdAt: TimestampSchema,

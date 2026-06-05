@@ -375,24 +375,4 @@ export async function extractFileContent(file: FileEntry): Promise<ExtractedCont
   }
 }
 
-/**
- * Extract content from multiple files
- *
- * @param files Array of file entries
- * @returns Map of file ID to extracted content
- */
-export async function extractMultipleFileContents(
-  files: FileEntry[]
-): Promise<Map<string, ExtractedContent>> {
-  const results = new Map<string, ExtractedContent>()
-
-  await Promise.all(
-    files.map(async (file) => {
-      const content = await extractFileContent(file)
-      results.set(file.id, content)
-    })
-  )
-
-  return results
-}
 

@@ -20,6 +20,17 @@ export type {
 } from './provider';
 
 export type {
+  ProviderOptionFieldType,
+  ProviderOptionEnumValue,
+  ProviderOptionDirective,
+  ProviderOptionShowIf,
+  ProviderOptionField,
+  ProviderOptionGroup,
+  ProviderOptionsSchema,
+  ProviderOptionsSchemaContext,
+} from './provider-options';
+
+export type {
   ScoringProviderMetadata,
   ScoringProviderConfigRequirements,
   ScoringProviderPlugin,

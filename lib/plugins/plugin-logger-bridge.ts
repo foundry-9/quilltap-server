@@ -43,6 +43,7 @@ function createPluginChildLogger(
 
   return {
     debug: (message: string, context?: LogContext) => {
+      logger.debug(message, { ...baseContext, ...context });
     },
 
     info: (message: string, context?: LogContext) => {

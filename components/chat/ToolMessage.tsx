@@ -44,6 +44,11 @@ interface ToolMessageProps {
     avatarUrl?: string | null
     defaultImage?: { id: string; filepath: string; url?: string } | null
   } | null
+  /** When true, render as a block nested inside a character's message bubble:
+   *  no standalone row/avatar column, a compact tool-name header, wrapped in
+   *  `qt-chat-tool-embedded`. Used by MessageRow for character-initiated tool
+   *  calls so they read as separate paragraphs under the character's prose. */
+  readonly embedded?: boolean
 }
 
 interface ToolResult {
@@ -189,7 +194,7 @@ function formatResultContent(toolData: ToolResult): string {
   }
 }
 
-export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted, headerAvatar }: ToolMessageProps) {
+export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted, headerAvatar, embedded = false }: ToolMessageProps) {
   const [showRequest, setShowRequest] = useState(false)
   const [showResponse, setShowResponse] = useState(false)
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
@@ -332,12 +337,15 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
     ? (toolData.operatorName || 'You')
     : (headerAvatar?.name || character?.name || null)
 
-  // Standalone layout - full width with avatar
+  // Standalone layout uses a full-width row + author avatar. Embedded layout
+  // (nested in a character's bubble) drops the row/avatar and renders the card
+  // directly, wrapped in qt-chat-tool-embedded.
   return (
-    <div className="qt-chat-message-row-tool">
+    <div className={embedded ? 'qt-chat-tool-embedded' : 'qt-chat-message-row-tool'}>
       {/* Avatar slot — author portrait (Prospero or calling character) when
-          known, otherwise the tool's emoji on a muted circle. */}
-      {headerAvatarSrc ? (
+          known, otherwise the tool's emoji on a muted circle. Omitted when
+          embedded, since the character's own avatar already heads the bubble. */}
+      {!embedded && (headerAvatarSrc ? (
         <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden border qt-border-default">
           <img
             src={headerAvatarSrc}
@@ -357,9 +365,9 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
             </div>
           )}
         </div>
-      )}
+      ))}
 
-      <div className="flex-1 min-w-0 group relative">
+      <div className={embedded ? 'min-w-0 group relative' : 'flex-1 min-w-0 group relative'}>
         {/* Wardrobe action notice — prominent summary above tool details */}
         {wardrobeSummary && (
           <div className="qt-chat-wardrobe-notice mb-2">
@@ -396,10 +404,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                 </>
               ) : (
                 <div className="flex items-center gap-2">
-                  {actorName && (
-                    <span className="qt-text-label-xs">
-                      {actorName} ran
-                    </span>
+                  {embedded ? (
+                    // Inside the character's bubble: lead with the tool emoji,
+                    // skip the redundant "<character> ran" attribution.
+                    <span className="text-base leading-none" aria-hidden>{info.icon}</span>
+                  ) : (
+                    actorName && (
+                      <span className="qt-text-label-xs">
+                        {actorName} ran
+                      </span>
+                    )
                   )}
                   <span className="font-semibold text-sm text-foreground">
                     {info.displayName}

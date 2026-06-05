@@ -3,6 +3,7 @@
 import { memo } from 'react'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
+import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
 import { TokenBadge } from '@/components/chat/TokenBadge'
 import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
@@ -10,7 +11,10 @@ import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
 import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-message-labels'
+import { AnnouncementChip, AnnouncementBarContents } from './AnnouncementChip'
 import { CourierBubble } from './CourierBubble'
+import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse-reasoning'
+import { ThinkingBlock } from './ThinkingBlock'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -107,6 +111,14 @@ interface MessageRowProps {
   onToggleSystemMessageExpanded?: (messageId: string) => void
   /** Callback fired after a Courier placeholder is resolved or cancelled — triggers a chat refetch. */
   onCourierTurnSettled?: () => void
+  /** Character-initiated TOOL result rows folded into this assistant message
+   * (see group-tool-messages.ts). Rendered as embedded blocks below the prose. */
+  attachedToolMessages?: Message[]
+  /** Resolved per-chat thinking visibility (chat.showThinking ?? global default).
+   * When false, reasoning blocks are omitted entirely. DISPLAY ONLY. */
+  showThinking?: boolean
+  /** Whether thinking blocks start collapsed (global default). */
+  thinkingCollapsedByDefault?: boolean
 }
 
 function getImageAttachments(message: Message) {
@@ -166,6 +178,9 @@ function MessageRowInner({
   isSystemMessageCollapsed = false,
   onCourierTurnSettled,
   onToggleSystemMessageExpanded,
+  attachedToolMessages,
+  showThinking = false,
+  thinkingCollapsedByDefault = true,
 }: MessageRowProps) {
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
 
@@ -186,6 +201,20 @@ function MessageRowInner({
     ? dangerousContentSettings.displayMode
     : 'SHOW'
   const showDangerBadges = hasDangerFlags && dangerousContentSettings?.showWarningBadges !== false
+
+  // Character-initiated tool calls folded into this assistant message
+  // (group-tool-messages.ts) and reasoning ("thinking") segments are spliced
+  // into the prose at the offsets they fired, merged into one stream ordered by
+  // (anchorOffset, seq). Source view shows the raw body, so it skips
+  // interspersing and renders every folded call in the trailing block instead.
+  // Reasoning is included only when the chat's thinking-visibility is on.
+  const attachedTools = attachedToolMessages ?? []
+  const isSourceView = viewSourceMessageIds.has(message.id)
+  const reasoningSegments = (showThinking && !isSourceView) ? resolveReasoningSegments(message) : []
+  const toolLayout = (attachedTools.length > 0 || reasoningSegments.length > 0) && !isSourceView
+    ? buildInterleavedLayout(message.content, attachedTools, reasoningSegments)
+    : null
+  const trailingTools = isSourceView ? attachedTools : (toolLayout?.trailingTools ?? [])
 
   // The Courier: pending placeholder for a manual / clipboard turn. Render
   // a special bubble with the Markdown blob, copy button, attachment links,
@@ -230,35 +259,13 @@ function MessageRowInner({
   }
 
   if (isSystemMessageCollapsed && message.systemSender && onToggleSystemMessageExpanded) {
-    const senderName = getSystemSenderDisplayName(message.systemSender)
-    const kindLabel = getSystemKindDisplayLabel(message)
+    // Defensive fallback: collapsed announcements normally render packed into an
+    // AnnouncementGroup (see VirtualizedMessageList) and don't reach MessageRow.
+    // The chip itself owns the id/data-message-id scroll anchor, so the wrapper
+    // omits them to avoid a duplicate id.
     return (
-      <div
-        id={`message-${message.id}`}
-        data-message-id={message.id}
-        key={message.id}
-        className={messageRowClasses.join(' ')}
-      >
-        <button
-          type="button"
-          onClick={() => onToggleSystemMessageExpanded(message.id)}
-          className="qt-chat-system-bar"
-          aria-expanded={false}
-          aria-label={`Expand ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
-        >
-          <span className="qt-chat-system-bar-sender">{senderName}</span>
-          {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
-          <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
-          <svg
-            className="qt-chat-system-bar-chevron"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+      <div key={message.id} className={messageRowClasses.join(' ')}>
+        <AnnouncementChip message={message} onToggleExpanded={onToggleSystemMessageExpanded} />
       </div>
     )
   }
@@ -297,18 +304,7 @@ function MessageRowInner({
               aria-expanded={true}
               aria-label={`Collapse ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
             >
-              <span className="qt-chat-system-bar-sender">{senderName}</span>
-              {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
-              <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
-              <svg
-                className="qt-chat-system-bar-chevron qt-chat-system-bar-chevron-down"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              <AnnouncementBarContents message={message} expanded />
             </button>
           )
         })()}
@@ -359,10 +355,50 @@ function MessageRowInner({
                 </div>
               )}
               <DangerContentWrapper displayMode={dangerDisplayMode}>
-                {viewSourceMessageIds.has(message.id) ? (
+                {isSourceView ? (
                   <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
                     {message.content}
                   </div>
+                ) : toolLayout ? (
+                  /* Character-initiated tool calls spliced into the prose at the
+                     point they were invoked. Each prose run renders on its own
+                     (no server-pre-rendered HTML) so per-run Markdown stays
+                     well-formed. Calls with no usable anchor fall through to the
+                     trailing block below. */
+                  toolLayout.parts.map((part, idx) =>
+                    part.kind === 'text' ? (
+                      <LazyMessageContent
+                        key={`seg-${idx}`}
+                        content={part.text}
+                        renderingPatterns={renderingPatterns}
+                        dialogueDetection={dialogueDetection}
+                        forceRender={forceRender}
+                      />
+                    ) : part.kind === 'reasoning' ? (
+                      <ThinkingBlock
+                        key={`reasoning-${idx}`}
+                        content={part.content}
+                        collapsedByDefault={thinkingCollapsedByDefault}
+                        renderingPatterns={renderingPatterns}
+                        dialogueDetection={dialogueDetection}
+                      />
+                    ) : (
+                      <div
+                        key={`tools-${idx}`}
+                        className={`qt-chat-message-tools${toolLayout.parts[idx + 1]?.kind === 'text' ? ' qt-chat-message-tools-before-prose' : ''}`}
+                      >
+                        {part.messages.map((toolMessage) => (
+                          <ToolMessage
+                            key={toolMessage.id}
+                            embedded
+                            message={toolMessage}
+                            character={character}
+                            onImageClick={onImageClick}
+                          />
+                        ))}
+                      </div>
+                    )
+                  )
                 ) : (
                   <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} />
                 )}
@@ -407,6 +443,23 @@ function MessageRowInner({
                         </svg>
                       </div>
                     </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Tool calls without a usable prose anchor (legacy rows, dropped
+                  offsets) — and, in source view, every folded call — render as
+                  separate blocks below the prose, the pre-interspersing layout. */}
+              {trailingTools.length > 0 && (
+                <div className="qt-chat-message-tools">
+                  {trailingTools.map((toolMessage) => (
+                    <ToolMessage
+                      key={toolMessage.id}
+                      embedded
+                      message={toolMessage}
+                      character={character}
+                      onImageClick={onImageClick}
+                    />
                   ))}
                 </div>
               )}
@@ -826,6 +879,21 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
 
   // System-message collapse state
   if (prev.isSystemMessageCollapsed !== next.isSystemMessageCollapsed) return false
+
+  // Attached (nested) tool messages — compare by length and id sequence
+  const prevTools = prev.attachedToolMessages || []
+  const nextTools = next.attachedToolMessages || []
+  if (prevTools.length !== nextTools.length) return false
+  for (let i = 0; i < prevTools.length; i++) {
+    if (prevTools[i].id !== nextTools[i].id) return false
+    if (prevTools[i].content !== nextTools[i].content) return false
+  }
+
+  // Thinking ("reasoning") visibility + content
+  if (prev.showThinking !== next.showThinking) return false
+  if (prev.thinkingCollapsedByDefault !== next.thinkingCollapsedByDefault) return false
+  if (prev.message.reasoningContent !== next.message.reasoningContent) return false
+  if ((prev.message.reasoningSegments?.length ?? 0) !== (next.message.reasoningSegments?.length ?? 0)) return false
 
   // Props are equal, skip re-render
   return true

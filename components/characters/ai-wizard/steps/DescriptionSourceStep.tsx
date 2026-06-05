@@ -67,11 +67,6 @@ export function DescriptionSourceStep({
       const formData = new FormData()
       formData.append('file', file)
 
-      // Add character tag if available
-      if (characterId) {
-        formData.append('tags', JSON.stringify([{ tagType: 'CHARACTER', tagId: characterId }]))
-      }
-
       const response = await fetch('/api/v1/images', {
         method: 'POST',
         body: formData,
@@ -110,11 +105,6 @@ export function DescriptionSourceStep({
     try {
       const formData = new FormData()
       formData.append('file', file)
-
-      // Add character tag if available
-      if (characterId) {
-        formData.append('tags', JSON.stringify([{ tagType: 'CHARACTER', tagId: characterId }]))
-      }
 
       const response = await fetch('/api/v1/files?action=upload', {
         method: 'POST',

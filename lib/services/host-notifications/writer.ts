@@ -135,11 +135,6 @@ export async function buildAddContent(
   lines.push(`The Host welcomes ${character.name} to the Salon.`);
   lines.push('');
 
-  if (character.avatarUrl && character.avatarUrl.trim().length > 0) {
-    lines.push(`![${character.name}](${character.avatarUrl})`);
-    lines.push('');
-  }
-
   const identity = await readVaultIdentity(character);
   if (identity) {
     lines.push('**Identity:**');
@@ -168,11 +163,6 @@ export async function buildAddOpaqueContent(
   const lines: string[] = [];
   lines.push(`${character.name} has joined the scene.`);
   lines.push('');
-
-  if (character.avatarUrl && character.avatarUrl.trim().length > 0) {
-    lines.push(`![${character.name}](${character.avatarUrl})`);
-    lines.push('');
-  }
 
   const identity = await readVaultIdentity(character);
   if (identity) {
@@ -566,24 +556,6 @@ export async function postHostUserCharacterAnnouncement(
   );
 }
 
-export interface HostRosterAnnouncement {
-  chatId: string;
-  respondingCharacterName: string;
-  others: OtherParticipantInfo[];
-}
-
-export async function postHostRosterAnnouncement(
-  params: HostRosterAnnouncement,
-): Promise<MessageEvent | null> {
-  return postHostMessageWithTargets(
-    params.chatId,
-    buildMultiCharacterRosterContent(params.respondingCharacterName, params.others),
-    buildMultiCharacterRosterOpaqueContent(params.respondingCharacterName, params.others),
-    'roster',
-    null,
-  );
-}
-
 export interface HostSilentModeAnnouncement {
   chatId: string;
   characterName: string;
@@ -690,6 +662,7 @@ interface OffSceneCharacterCard {
   name: string;
   aliases?: string[];
   pronouns?: { subject: string; object: string; possessive: string } | null;
+  identity?: string | null;
   description?: string | null;
 }
 
@@ -708,9 +681,9 @@ function renderOffSceneCard(
   if (c.pronouns) {
     lines.push(`Pronouns: ${c.pronouns.subject}/${c.pronouns.object}/${c.pronouns.possessive}`);
   }
-  const desc = (c.description ?? '').trim();
-  if (desc.length > 0) {
-    lines.push(applyHostTemplates(desc, c.name, userCharacterName));
+  const body = ((c.identity ?? '').trim() || (c.description ?? '').trim());
+  if (body.length > 0) {
+    lines.push(applyHostTemplates(body, c.name, userCharacterName));
   }
   return lines.join('\n');
 }

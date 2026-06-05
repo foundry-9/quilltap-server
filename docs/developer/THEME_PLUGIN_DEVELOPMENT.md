@@ -622,8 +622,23 @@ Override these variables for consistent component styling:
 --qt-input-radius
 --qt-input-padding-y
 --qt-input-padding-x
---qt-input-border-width
---qt-input-font-size
+--qt-input-bg
+--qt-input-fg
+--qt-input-border
+--qt-input-placeholder
+--qt-input-focus-ring
+--qt-select-arrow        /* full url() data URI for the <select> chevron */
+
+/* Checkboxes & radios (accent-color is the fill/check hook) */
+--qt-checkbox-size
+--qt-checkbox-radius
+--qt-checkbox-border
+--qt-checkbox-accent
+--qt-checkbox-focus-ring
+--qt-radio-size
+--qt-radio-border
+--qt-radio-accent
+--qt-radio-focus-ring
 
 /* Badges */
 --qt-badge-radius

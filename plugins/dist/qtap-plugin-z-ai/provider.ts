@@ -1,0 +1,519 @@
+/**
+ * Z.AI Provider Implementation for Quilltap Plugin
+ *
+ * Provides chat completion functionality using Z.AI's OpenAI-compatible
+ * Chat Completions API at https://api.z.ai/api/paas/v4.
+ * Supports the GLM family of models including text, vision, tool use,
+ * and native web search via Z.AI's web_search tool.
+ */
+
+import OpenAI from 'openai';
+import type {
+  TextProvider,
+  LLMParams,
+  LLMResponse,
+  StreamChunk,
+  LLMMessage,
+  FileAttachment,
+} from './types';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
+import { STATIC_CHAT_MODEL_IDS, IMAGE_GEN_MODEL_PATTERN } from './models';
+
+const logger = createPluginLogger('qtap-plugin-z-ai');
+
+const Z_AI_SUPPORTED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+];
+
+// Vision-capable model prefixes (accept images in input)
+const VISION_MODEL_PATTERNS = [/^glm-\d+(\.\d+)?v/i, /^glm-5v/i, /^autoglm-phone/i];
+
+// Keys in LLMParams.profileParameters that are forwarded verbatim to the Z.AI
+// request body. Allow-listed so a misconfigured profile can't override model,
+// messages, stream, etc. See https://docs.z.ai — `thinking` toggles reasoning
+// on GLM-4.6V / GLM-4.5 family; `do_sample` disables sampling entirely.
+const Z_AI_PROFILE_PARAM_ALLOWLIST = ['thinking', 'do_sample'] as const;
+
+function isVisionModel(model: string): boolean {
+  return VISION_MODEL_PATTERNS.some((re) => re.test(model));
+}
+
+type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+type ChatContentPart = OpenAI.Chat.Completions.ChatCompletionContentPart;
+
+export class ZAIProvider implements TextProvider {
+  private readonly baseUrl = 'https://api.z.ai/api/paas/v4';
+  readonly supportsFileAttachments = true;
+  readonly supportedMimeTypes = Z_AI_SUPPORTED_MIME_TYPES;
+  readonly supportsWebSearch = true;
+
+  private createClient(apiKey: string): OpenAI {
+    return new OpenAI({
+      apiKey,
+      baseURL: this.baseUrl,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    });
+  }
+
+  /**
+   * Build a user message's content array with any image attachments.
+   * Returns either a plain string (no attachments) or an array of parts.
+   */
+  private buildUserContent(
+    msg: LLMMessage,
+    modelSupportsVision: boolean,
+    sent: string[],
+    failed: { id: string; error: string }[]
+  ): string | ChatContentPart[] {
+    const attachments = msg.attachments ?? [];
+
+    if (attachments.length === 0) {
+      return msg.content;
+    }
+
+    const parts: ChatContentPart[] = [];
+    if (msg.content) {
+      parts.push({ type: 'text', text: msg.content });
+    }
+
+    for (const attachment of attachments) {
+      if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
+        failed.push({
+          id: attachment.id,
+          error: `Unsupported file type: ${attachment.mimeType}. Z.AI supports: ${this.supportedMimeTypes.join(', ')}`,
+        });
+        continue;
+      }
+
+      if (!modelSupportsVision) {
+        failed.push({
+          id: attachment.id,
+          error: 'Selected Z.AI model does not support image input. Use a vision model such as glm-4.5v or glm-4.6v.',
+        });
+        continue;
+      }
+
+      const url = this.attachmentToImageUrl(attachment);
+      if (!url) {
+        failed.push({
+          id: attachment.id,
+          error: 'Attachment missing data or URL',
+        });
+        continue;
+      }
+
+      parts.push({ type: 'image_url', image_url: { url } });
+      sent.push(attachment.id);
+    }
+
+    if (parts.length === 0) {
+      parts.push({ type: 'text', text: '' });
+    }
+
+    return parts;
+  }
+
+  private attachmentToImageUrl(attachment: FileAttachment): string | null {
+    if (attachment.url) return attachment.url;
+    if (attachment.data) return `data:${attachment.mimeType};base64,${attachment.data}`;
+    return null;
+  }
+
+  private formatMessages(
+    messages: LLMMessage[],
+    model: string
+  ): { messages: ChatMessage[]; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } } {
+    const sent: string[] = [];
+    const failed: { id: string; error: string }[] = [];
+    const modelSupportsVision = isVisionModel(model);
+    const out: ChatMessage[] = [];
+
+    for (const msg of messages) {
+      if (msg.role === 'tool') {
+        if (!msg.toolCallId) continue;
+        out.push({
+          role: 'tool',
+          tool_call_id: msg.toolCallId,
+          content: msg.content,
+        });
+        continue;
+      }
+
+      if (msg.role === 'assistant') {
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
+          // GLM thinking-mode parity with DeepSeek: when an assistant turn
+          // carries tool calls, echo the model's own current-turn
+          // `reasoning_content` back so the continuation call keeps a coherent
+          // chain. Harmless when thinking is off (field is simply absent).
+          const assistantMessage: Record<string, unknown> = {
+            role: 'assistant',
+            content: msg.content || null,
+            tool_calls: msg.toolCalls.map((tc) => ({
+              id: tc.id,
+              type: 'function',
+              function: {
+                name: tc.function.name,
+                arguments: tc.function.arguments,
+              },
+            })),
+          };
+          if (msg.reasoningContent) {
+            assistantMessage.reasoning_content = msg.reasoningContent;
+          }
+          out.push(assistantMessage as ChatMessage);
+        } else {
+          out.push({
+            role: 'assistant',
+            content: msg.content,
+          });
+        }
+        continue;
+      }
+
+      if (msg.role === 'system') {
+        out.push({
+          role: 'system',
+          content: msg.content,
+        });
+        continue;
+      }
+
+      // user
+      out.push({
+        role: 'user',
+        content: this.buildUserContent(msg, modelSupportsVision, sent, failed),
+      });
+    }
+
+    return { messages: out, attachmentResults: { sent, failed } };
+  }
+
+  /**
+   * Forward allow-listed Z.AI-specific parameters from the profile into the
+   * request body. Caller supplies the `body` object; we mutate it in place.
+   */
+  private applyProfileParameters(body: Record<string, unknown>, params: LLMParams): void {
+    const profile = params.profileParameters;
+    if (!profile || typeof profile !== 'object') return;
+    for (const key of Z_AI_PROFILE_PARAM_ALLOWLIST) {
+      const value = (profile as Record<string, unknown>)[key];
+      if (value === undefined) continue;
+      // Empty string from the schema-driven profile editor means "omit the
+      // parameter and use the model default." Skip those.
+      if (typeof value === 'string' && value === '') continue;
+      // The schema-driven editor stores `thinking` as a flat string
+      // ("enabled" / "disabled"); Z.AI's wire shape is `{ type: ... }`
+      // (https://docs.z.ai/guides/llm/glm-4.6). Pre-existing profiles that
+      // already stored the object form continue to work unchanged.
+      if (key === 'thinking' && typeof value === 'string') {
+        body[key] = { type: value };
+        continue;
+      }
+      body[key] = value;
+    }
+  }
+
+  /**
+   * Build the z.ai web_search tool definition.
+   * This is Z.AI-specific — it coexists with normal function tools in the tools array.
+   * See: https://docs.z.ai/guides/tools/web-search
+   */
+  private buildWebSearchTool(): Record<string, unknown> {
+    return {
+      type: 'web_search',
+      web_search: {
+        enable: 'True',
+        search_engine: 'search-prime',
+        search_result: 'True',
+      },
+    };
+  }
+
+  async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
+    if (!apiKey) {
+      throw new Error('Z.AI provider requires an API key');
+    }
+
+    const client = this.createClient(apiKey);
+    const { messages, attachmentResults } = this.formatMessages(params.messages, params.model);
+
+    const body: Record<string, unknown> = {
+      model: params.model,
+      messages,
+      temperature: params.temperature ?? 0.7,
+      max_tokens: params.maxTokens ?? 4096,
+      top_p: params.topP ?? 1,
+      stream: false,
+    };
+
+    if (params.stop) {
+      body.stop = params.stop;
+    }
+
+    const tools: unknown[] = [];
+    if (params.webSearchEnabled) {
+      tools.push(this.buildWebSearchTool());
+    }
+    if (params.tools && params.tools.length > 0) {
+      tools.push(...params.tools);
+    }
+    if (tools.length > 0) {
+      body.tools = tools;
+      if (params.toolChoice) body.tool_choice = params.toolChoice;
+    }
+
+    if (params.responseFormat) {
+      if (params.responseFormat.type === 'json_object') {
+        body.response_format = { type: 'json_object' };
+      } else if (params.responseFormat.type === 'json_schema' && params.responseFormat.jsonSchema) {
+        body.response_format = {
+          type: 'json_schema',
+          json_schema: params.responseFormat.jsonSchema,
+        };
+      }
+    }
+
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      body.user = params.cacheKey;
+    }
+
+    this.applyProfileParameters(body, params);
+
+    const response = (await client.chat.completions.create(
+      body as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
+    )) as OpenAI.Chat.Completions.ChatCompletion;
+
+    const choice = response.choices[0];
+    const msg = choice.message;
+
+    const reasoningContent = (msg as { reasoning_content?: string }).reasoning_content;
+
+    const toolCalls = (msg.tool_calls ?? [])
+      .filter((tc): tc is OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall =>
+        (tc as { type?: string }).type === 'function' || 'function' in tc
+      )
+      .map((tc) => {
+        // z.ai may return arguments as an object instead of a JSON string; normalize it.
+        const rawArgs = tc.function.arguments as unknown;
+        const argsString = typeof rawArgs === 'string' ? rawArgs : JSON.stringify(rawArgs ?? {});
+        return {
+          id: tc.id,
+          type: 'function' as const,
+          function: {
+            name: tc.function.name,
+            arguments: argsString,
+          },
+        };
+      });
+
+    const cachedTokens = (response.usage as { prompt_tokens_details?: { cached_tokens?: number } } | undefined)
+      ?.prompt_tokens_details?.cached_tokens;
+    const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
+      ? { cacheReadInputTokens: cachedTokens, cachedTokens }
+      : undefined;
+
+    return {
+      content: msg.content ?? '',
+      finishReason: choice.finish_reason,
+      usage: {
+        promptTokens: response.usage?.prompt_tokens ?? 0,
+        completionTokens: response.usage?.completion_tokens ?? 0,
+        totalTokens: response.usage?.total_tokens ?? 0,
+      },
+      raw: response,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      attachmentResults,
+      ...(reasoningContent ? { reasoningContent } : {}),
+      ...(cacheUsage ? { cacheUsage } : {}),
+    };
+  }
+
+  async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
+    if (!apiKey) {
+      throw new Error('Z.AI provider requires an API key');
+    }
+
+    const client = this.createClient(apiKey);
+    const { messages, attachmentResults } = this.formatMessages(params.messages, params.model);
+
+    const body: Record<string, unknown> = {
+      model: params.model,
+      messages,
+      temperature: params.temperature ?? 0.7,
+      max_tokens: params.maxTokens ?? 4096,
+      top_p: params.topP ?? 1,
+      stream: true,
+      stream_options: { include_usage: true },
+    };
+
+    if (params.stop) {
+      body.stop = params.stop;
+    }
+
+    const tools: unknown[] = [];
+    if (params.webSearchEnabled) {
+      tools.push(this.buildWebSearchTool());
+    }
+    if (params.tools && params.tools.length > 0) {
+      tools.push(...params.tools);
+    }
+    if (tools.length > 0) {
+      body.tools = tools;
+      if (params.toolChoice) body.tool_choice = params.toolChoice;
+    }
+
+    if (params.responseFormat) {
+      if (params.responseFormat.type === 'json_object') {
+        body.response_format = { type: 'json_object' };
+      } else if (params.responseFormat.type === 'json_schema' && params.responseFormat.jsonSchema) {
+        body.response_format = {
+          type: 'json_schema',
+          json_schema: params.responseFormat.jsonSchema,
+        };
+      }
+    }
+
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      body.user = params.cacheKey;
+    }
+
+    this.applyProfileParameters(body, params);
+
+    const stream = (await client.chat.completions.create(
+      body as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming
+    )) as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+
+    // Accumulate tool-call fragments across chunks (same as OpenAI streaming)
+    const toolCallAccumulator = new Map<
+      number,
+      { id: string; name: string; arguments: string }
+    >();
+    let finishReason: string | null = null;
+    let usage: OpenAI.Completions.CompletionUsage | null = null;
+    // GLM reasoning streams as `delta.reasoning_content` (same field name as
+    // DeepSeek) when `thinking: { type: 'enabled' }` is set. Accumulate it and
+    // emit cumulatively; the host pipeline treats it as DISPLAY-ONLY.
+    let reasoningContent = '';
+
+    for await (const chunk of stream) {
+      const choice = chunk.choices[0];
+      if (!choice) {
+        if (chunk.usage) usage = chunk.usage;
+        continue;
+      }
+      const delta = choice.delta;
+
+      if (delta?.content) {
+        yield { content: delta.content, done: false };
+      }
+
+      const deltaReasoning = (delta as { reasoning_content?: string } | undefined)?.reasoning_content;
+      if (deltaReasoning) {
+        reasoningContent += deltaReasoning;
+        yield { content: '', done: false, reasoningContent };
+      }
+
+      if (delta?.tool_calls) {
+        for (const tcDelta of delta.tool_calls) {
+          const idx = tcDelta.index;
+          const existing = toolCallAccumulator.get(idx) ?? { id: '', name: '', arguments: '' };
+          if (tcDelta.id) existing.id = tcDelta.id;
+          if (tcDelta.function?.name) existing.name = tcDelta.function.name;
+          if (tcDelta.function?.arguments) existing.arguments += tcDelta.function.arguments;
+          toolCallAccumulator.set(idx, existing);
+        }
+      }
+
+      if (choice.finish_reason) {
+        finishReason = choice.finish_reason;
+      }
+      if (chunk.usage) {
+        usage = chunk.usage;
+      }
+    }
+
+    const toolCalls = Array.from(toolCallAccumulator.values()).map((tc) => ({
+      id: tc.id,
+      type: 'function' as const,
+      function: { name: tc.name, arguments: tc.arguments },
+    }));
+
+    const rawResponse = {
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: '',
+            tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+            ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
+          },
+          finish_reason: finishReason,
+        },
+      ],
+      usage,
+    };
+
+    const cachedTokens = (usage as { prompt_tokens_details?: { cached_tokens?: number } } | null)
+      ?.prompt_tokens_details?.cached_tokens;
+    const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
+      ? { cacheReadInputTokens: cachedTokens, cachedTokens }
+      : undefined;
+
+    yield {
+      content: '',
+      done: true,
+      usage: {
+        promptTokens: usage?.prompt_tokens ?? 0,
+        completionTokens: usage?.completion_tokens ?? 0,
+        totalTokens: usage?.total_tokens ?? 0,
+      },
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      attachmentResults,
+      rawResponse,
+      rawProviderUsage: (usage ?? null) as Record<string, unknown> | null,
+      ...(reasoningContent ? { reasoningContent } : {}),
+      ...(cacheUsage ? { cacheUsage } : {}),
+    };
+  }
+
+  async validateApiKey(apiKey: string): Promise<boolean> {
+    if (!apiKey) return false;
+    try {
+      const client = this.createClient(apiKey);
+      await client.models.list();
+      return true;
+    } catch (error) {
+      logger.error(
+        'Z.AI API key validation failed',
+        { context: 'ZAIProvider.validateApiKey' },
+        error instanceof Error ? error : undefined
+      );
+      return false;
+    }
+  }
+
+  async getAvailableModels(apiKey: string): Promise<string[]> {
+    // Z.AI's /models endpoint doesn't always list vision-capable models
+    // (e.g. glm-4.5v, glm-4.6v family). Union the API list with our static
+    // chat-model catalog, filtering image-generation IDs which are owned by
+    // the image provider.
+    let apiIds: string[] = [];
+    try {
+      const client = this.createClient(apiKey);
+      const models = await client.models.list();
+      apiIds = models.data.map((m) => m.id);
+    } catch (error) {
+      logger.warn(
+        'Failed to fetch Z.AI models dynamically; falling back to static list',
+        { context: 'ZAIProvider.getAvailableModels' }
+      );
+    }
+    const merged = new Set<string>(apiIds.filter((id) => !IMAGE_GEN_MODEL_PATTERN.test(id)));
+    for (const id of STATIC_CHAT_MODEL_IDS) merged.add(id);
+    return Array.from(merged).sort();
+  }
+}

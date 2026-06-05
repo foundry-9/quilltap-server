@@ -15,6 +15,7 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { successResponse, notFound, badRequest, serverError, forbidden } from '@/lib/api/responses';
+import { getPhotoLinkSummaryBySha256 } from '@/lib/photos/photo-link-summary';
 
 // Post-photos-Phase-3: 'CHARACTER' tag is no longer accepted here. Character
 // galleries are sourced from each character's vault `photos/` folder via
@@ -72,6 +73,31 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
       return { tagId, tagType };
     });
 
+    // Build character gallery links from the photo-link-summary: which
+    // character vaults contain a copy of this image's bytes?
+    const characterGalleryLinks: Array<{ characterId: string; characterName: string; linkId: string }> = [];
+    if (image.sha256) {
+      const mountToCharacter = new Map<string, { id: string; name: string }>();
+      for (const c of allCharacters) {
+        if ((c as any).characterDocumentMountPointId) {
+          mountToCharacter.set((c as any).characterDocumentMountPointId, { id: c.id, name: c.name });
+        }
+      }
+      const summary = await getPhotoLinkSummaryBySha256(image.sha256, repos);
+      for (const linker of summary.linkers) {
+        if (linker.mountStoreType === 'character' && linker.isPhotoAlbum) {
+          const char = mountToCharacter.get(linker.mountPointId);
+          if (char) {
+            characterGalleryLinks.push({
+              characterId: char.id,
+              characterName: char.name,
+              linkId: linker.linkId,
+            });
+          }
+        }
+      }
+    }
+
     return successResponse({
       data: {
         id: image.id,
@@ -88,6 +114,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         createdAt: image.createdAt,
         updatedAt: image.updatedAt,
         tags,
+        characterGalleryLinks,
         _count: {
           charactersUsingAsDefault,
           chatAvatarOverrides,

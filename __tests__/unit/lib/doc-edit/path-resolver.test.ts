@@ -237,6 +237,34 @@ describe('resolveDocEditPath — project scope dispatches through officialMountP
   });
 });
 
+describe('resolveDocEditPath — missing/malformed path guard', () => {
+  // A tool call truncated at the model's output-token limit can arrive with
+  // `path` undefined. Before the guard this crashed in hasTraversalSegments
+  // with "Cannot read properties of undefined (reading 'split')"; now it must
+  // throw a clean, model-readable PathResolutionError instead.
+  it('throws PathResolutionError(INVALID_PATH) for an undefined path', async () => {
+    expect.assertions(2);
+    try {
+      await resolveDocEditPath('project', undefined as unknown as string, { projectId: PROJECT_ID });
+    } catch (err) {
+      expect(err).toBeInstanceOf(PathResolutionError);
+      expect((err as PathResolutionError).code).toBe('INVALID_PATH');
+    }
+  });
+
+  it('throws PathResolutionError(INVALID_PATH) for a null path', async () => {
+    await expect(
+      resolveDocEditPath('document_store', null as unknown as string, { projectId: PROJECT_ID }),
+    ).rejects.toBeInstanceOf(PathResolutionError);
+  });
+
+  it('throws PathResolutionError(INVALID_PATH) for a non-string path', async () => {
+    await expect(
+      resolveDocEditPath('general', { 0: 'a' } as unknown as string, {}),
+    ).rejects.toBeInstanceOf(PathResolutionError);
+  });
+});
+
 describe('resolveDocEditPath — general scope under a symlinked data directory', () => {
   it('resolves an existing file in general storage reached through a symlink', async () => {
     await fs.writeFile(path.join(realFilesDir, '_general', 'Amy.md'), 'character notes', 'utf-8');

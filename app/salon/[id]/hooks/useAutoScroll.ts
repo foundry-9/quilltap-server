@@ -10,8 +10,15 @@ interface UseAutoScrollOptions {
   endRef: React.RefObject<HTMLDivElement | null>
   /** TanStack virtualizer instance */
   virtualizer: Virtualizer<HTMLDivElement, Element>
-  /** Current message count */
+  /** Current message count (flat renderMessages length) — drives new-message detection. */
   messageCount: number
+  /**
+   * Current render-item count (renderItems length). May differ from messageCount
+   * because consecutive collapsed announcements coalesce into one render-item.
+   * Used only as the valid upper bound for virtualizer.scrollToIndex, since the
+   * virtualizer indexes over render-items, not raw messages.
+   */
+  itemCount: number
   /** Whether a message is currently streaming */
   isStreaming: boolean
   /** Whether we're waiting for the first response chunk */
@@ -20,6 +27,14 @@ interface UseAutoScrollOptions {
   streamingContent: string
   /** Whether messages are still loading from API */
   isLoading: boolean
+  /**
+   * Whether to auto-scroll to the newest message when a response finishes
+   * streaming or a new (non-user) message arrives. When false, only the
+   * user-send scroll and the initial-load scroll fire; the view otherwise
+   * stays exactly where the reader left it. Backed by the
+   * `autoScrollOnResponseComplete` chat setting (default false).
+   */
+  autoScrollOnComplete: boolean
 }
 
 interface UseAutoScrollReturn {
@@ -31,6 +46,10 @@ interface UseAutoScrollReturn {
   isAutoScrollEnabled: boolean
   /** Whether the page has settled after initial load */
   isSettled: boolean
+  /** Whether the view is currently at (or near) the bottom — drives the jump-to-bottom button. */
+  isAtBottom: boolean
+  /** Imperatively scroll to the newest message (for the jump-to-bottom button). */
+  scrollToBottom: () => void
 }
 
 /** Threshold in pixels from bottom to consider "at bottom" */
@@ -53,10 +72,12 @@ export function useAutoScroll({
   endRef,
   virtualizer,
   messageCount,
+  itemCount,
   isStreaming,
   isWaitingForResponse,
   streamingContent,
   isLoading,
+  autoScrollOnComplete,
 }: UseAutoScrollOptions): UseAutoScrollReturn {
   // Track whether auto-scroll is enabled (user hasn't scrolled away)
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true)
@@ -107,8 +128,8 @@ export function useAutoScroll({
     // Strategy 1: Tell virtualizer to scroll to last message
     // Note: Always use 'auto' for virtualizer because smooth scrolling is not fully
     // supported with dynamic-sized items (causes console warnings from tanstack-virtual)
-    if (messageCount > 0) {
-      virtualizer.scrollToIndex(messageCount - 1, { align: 'end', behavior: 'auto' })
+    if (itemCount > 0) {
+      virtualizer.scrollToIndex(itemCount - 1, { align: 'end', behavior: 'auto' })
     }
 
     // Strategy 2: Direct container scroll to max position (after brief delay for virtualizer)
@@ -139,10 +160,18 @@ export function useAutoScroll({
         }
       }
     }, 300)
-  }, [messageCount, virtualizer, endRef, containerRef])
+  }, [itemCount, virtualizer, endRef, containerRef])
 
   /**
-   * Handle scroll events to track user intent
+   * Handle scroll events to track user intent.
+   *
+   * `isLoading` is a dependency on purpose: the consuming page renders a
+   * loading spinner (no message container) until the chat loads, so on the
+   * first mount `containerRef.current` is null and we bail early. Without
+   * re-running once loading flips false, the scroll listener would never
+   * attach and `isAutoScrollEnabled` would stay stuck at its initial value —
+   * which would both hide the jump-to-bottom button and break near-bottom
+   * gating. Re-running here attaches the listener as soon as the list exists.
    */
   useEffect(() => {
     const container = containerRef.current
@@ -174,7 +203,7 @@ export function useAutoScroll({
         clearTimeout(scrollCheckTimerRef.current)
       }
     }
-  }, [containerRef, isNearBottom])
+  }, [containerRef, isNearBottom, isLoading])
 
   /**
    * Handle initial load settling
@@ -237,8 +266,9 @@ export function useAutoScroll({
     const wasStreaming = wasStreamingRef.current
     const nowStreaming = isStreaming || isWaitingForResponse
 
-    // Detect streaming completion
-    if (wasStreaming && !nowStreaming && isAutoScrollEnabled && isSettled) {
+    // Detect streaming completion. Only chase the bottom when the user has
+    // opted in via the chat setting AND was already near the bottom.
+    if (wasStreaming && !nowStreaming && autoScrollOnComplete && isAutoScrollEnabled && isSettled) {
       // Small delay to let the final message render
       setTimeout(() => {
         performScrollToBottom('smooth')
@@ -246,7 +276,7 @@ export function useAutoScroll({
     }
 
     wasStreamingRef.current = nowStreaming
-  }, [isStreaming, isWaitingForResponse, isAutoScrollEnabled, isSettled, performScrollToBottom])
+  }, [isStreaming, isWaitingForResponse, autoScrollOnComplete, isAutoScrollEnabled, isSettled, performScrollToBottom])
 
   /**
    * Handle new messages being added (not from streaming)
@@ -255,8 +285,9 @@ export function useAutoScroll({
     const prevCount = prevMessageCountRef.current
     prevMessageCountRef.current = messageCount
 
-    // Detect new message added (not during initial load)
-    if (isSettled && messageCount > prevCount && !isStreaming && !isWaitingForResponse) {
+    // Detect new message added (not during initial load). Gated on the opt-in
+    // setting so finished replies / system announcements don't yank the reader.
+    if (autoScrollOnComplete && isSettled && messageCount > prevCount && !isStreaming && !isWaitingForResponse) {
       // New message added (e.g., after streaming completes and message moves to array)
       if (isAutoScrollEnabled) {
         setTimeout(() => {
@@ -264,7 +295,7 @@ export function useAutoScroll({
         }, 50)
       }
     }
-  }, [messageCount, isSettled, isStreaming, isWaitingForResponse, isAutoScrollEnabled, performScrollToBottom])
+  }, [messageCount, isSettled, isStreaming, isWaitingForResponse, autoScrollOnComplete, isAutoScrollEnabled, performScrollToBottom])
 
   /**
    * Called when user sends a message - always scrolls to bottom
@@ -275,18 +306,31 @@ export function useAutoScroll({
   }, [performScrollToBottom])
 
   /**
-   * Called when streaming completes - scrolls if auto-scroll enabled
+   * Called when streaming completes - scrolls only if the user opted in via
+   * the chat setting and was already near the bottom.
    */
   const scrollOnStreamComplete = useCallback(() => {
-    if (isAutoScrollEnabled) {
+    if (autoScrollOnComplete && isAutoScrollEnabled) {
       performScrollToBottom('smooth')
     }
-  }, [isAutoScrollEnabled, performScrollToBottom])
+  }, [autoScrollOnComplete, isAutoScrollEnabled, performScrollToBottom])
+
+  /**
+   * Imperative scroll to bottom for the jump-to-bottom button. Always scrolls
+   * and re-enables auto-scroll regardless of the setting (the user explicitly
+   * asked to go to the newest message).
+   */
+  const scrollToBottom = useCallback(() => {
+    setIsAutoScrollEnabled(true)
+    performScrollToBottom('smooth')
+  }, [performScrollToBottom])
 
   return {
     scrollOnUserMessage,
     scrollOnStreamComplete,
     isAutoScrollEnabled,
     isSettled,
+    isAtBottom: isAutoScrollEnabled,
+    scrollToBottom,
   }
 }

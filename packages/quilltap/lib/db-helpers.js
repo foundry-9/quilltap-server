@@ -255,25 +255,104 @@ function ambiguous(kind, rows) {
   return err;
 }
 
-function resolveCharacter(db, query) {
+// Read the `aliases` array out of a character vault's `properties.json`.
+// The 4.6 vault cutover dropped the `aliases` (and `pronouns`) columns from
+// the `characters` table — they now live only in the per-character vault — so
+// any alias lookup has to go through the mount-index DB. `mounts` is that
+// handle; `mountPointId` is `characters.characterDocumentMountPointId`.
+// Returns [] for a missing/empty/unparseable vault so callers can treat the
+// absence of aliases as "no match" rather than an error.
+function readVaultAliases(mounts, mountPointId) {
+  if (!mounts || !mountPointId) return [];
+  const rec = mounts.prepare(
+    `SELECT d.content AS content
+       FROM doc_mount_file_links l
+       JOIN doc_mount_documents d ON d.fileId = l.fileId
+      WHERE l.mountPointId = ? AND LOWER(l.relativePath) = 'properties.json'
+      LIMIT 1`
+  ).get(mountPointId);
+  if (!rec || !rec.content) return [];
+  try {
+    const props = JSON.parse(rec.content);
+    return Array.isArray(props.aliases)
+      ? props.aliases.filter((a) => typeof a === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+// Find characters whose vault aliases contain `query` (case-insensitive
+// substring). Requires a mount-index DB handle; returns [{ id, name }].
+// Scans every vaulted character's `properties.json` — fine for a CLI, and only
+// reached on the fuzzy-resolution fallback (a clean name match returns first).
+function resolveCharactersByAlias(db, mounts, query) {
+  if (!mounts) return [];
+  const needle = query.toLowerCase();
+  const chars = db.prepare(
+    'SELECT id, name, characterDocumentMountPointId AS mp FROM characters WHERE characterDocumentMountPointId IS NOT NULL'
+  ).all();
+  const matches = [];
+  for (const c of chars) {
+    const aliases = readVaultAliases(mounts, c.mp);
+    if (aliases.some((a) => a.toLowerCase().includes(needle))) {
+      matches.push({ id: c.id, name: c.name });
+    }
+  }
+  return matches;
+}
+
+// Resolve a UUID / name / alias to a single { id, name } row.
+//
+// `openMounts` (optional) is a zero-arg function that returns a mount-index DB
+// handle (e.g. `ctx.openMounts`). When supplied, the fuzzy fallback also
+// matches against vault-stored aliases; when omitted (or if the mount-index DB
+// can't be opened), resolution degrades gracefully to UUID + name only.
+function resolveCharacter(db, query, openMounts = null) {
   if (UUID_RE.test(query)) {
-    const row = db.prepare('SELECT id, name, aliases FROM characters WHERE id = ?').get(query);
+    const row = db.prepare('SELECT id, name FROM characters WHERE id = ?').get(query);
     if (!row) throw new Error(`No character with id ${query}`);
     return row;
   }
   const exact = db.prepare(
-    'SELECT id, name, aliases FROM characters WHERE LOWER(name) = LOWER(?)'
+    'SELECT id, name FROM characters WHERE LOWER(name) = LOWER(?)'
   ).all(query);
   if (exact.length === 1) return exact[0];
   if (exact.length > 1) {
     throw ambiguous('character', exact);
   }
-  const fuzzy = db.prepare(
-    'SELECT id, name, aliases FROM characters WHERE LOWER(name) LIKE LOWER(?) OR LOWER(aliases) LIKE LOWER(?) ORDER BY name'
-  ).all(`%${query}%`, `%${query}%`);
-  if (fuzzy.length === 0) throw new Error(`No character matching '${query}'`);
-  if (fuzzy.length > 1) throw ambiguous('character', fuzzy);
-  return fuzzy[0];
+
+  const candidates = db.prepare(
+    'SELECT id, name FROM characters WHERE LOWER(name) LIKE LOWER(?) ORDER BY name'
+  ).all(`%${query}%`);
+
+  // Fold in alias matches from the vault when the caller gave us a way to
+  // reach the mount-index DB. Aliases moved into properties.json in 4.6.
+  if (openMounts) {
+    let mounts = null;
+    try {
+      mounts = openMounts();
+    } catch {
+      mounts = null; // mount-index DB absent on this instance — skip aliases
+    }
+    if (mounts) {
+      try {
+        const seen = new Set(candidates.map((r) => r.id));
+        for (const m of resolveCharactersByAlias(db, mounts, query)) {
+          if (!seen.has(m.id)) {
+            seen.add(m.id);
+            candidates.push(m);
+          }
+        }
+      } finally {
+        try { mounts.close(); } catch {}
+      }
+    }
+  }
+
+  if (candidates.length === 0) throw new Error(`No character matching '${query}'`);
+  if (candidates.length > 1) throw ambiguous('character', candidates);
+  return candidates[0];
 }
 
 function resolveChat(db, query) {
@@ -317,6 +396,8 @@ module.exports = {
   UUID_RE,
   ambiguous,
   resolveCharacter,
+  resolveCharactersByAlias,
+  readVaultAliases,
   resolveChat,
   resolveProject,
 };

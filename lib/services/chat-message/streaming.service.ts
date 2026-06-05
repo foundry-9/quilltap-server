@@ -12,11 +12,12 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
-import { buildPromptCacheKey } from '@/lib/llm/cache-key'
+import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
+import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
-import type { StreamingResult } from './types'
+import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
 
 const logger = createServiceLogger('StreamingService')
 
@@ -30,6 +31,7 @@ export interface StreamOptions {
     attachments?: unknown[]
     name?: string
     thoughtSignature?: string
+    reasoningContent?: string
     toolCallId?: string
     toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
     cacheControl?: { type: 'ephemeral' }
@@ -45,6 +47,11 @@ export interface StreamOptions {
   characterId?: string
   /** Previous response ID for conversation chaining (OpenAI Responses API) */
   previousResponseId?: string
+  /** Optional provider stop sequences. Mapped per-provider into the SDK's
+   * native equivalent (OpenAI/Ollama/OpenRouter: `stop`, Anthropic:
+   * `stop_sequences`, Google: `stopSequences`). Pseudo-tool strategies that
+   * want a hard termination on their closing marker set this. */
+  stop?: string[]
 }
 
 /**
@@ -68,9 +75,11 @@ export type StreamChunkCallback = (chunk: {
   done?: boolean
   usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }
   cacheUsage?: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number }
+  rawProviderUsage?: Record<string, unknown> | null
   attachmentResults?: { sent: string[]; failed: { id: string; error: string }[] }
   rawResponse?: unknown
   thoughtSignature?: string
+  reasoningContent?: string
 }) => void
 
 /**
@@ -282,11 +291,13 @@ export async function* streamMessage(
   done?: boolean
   usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }
   cacheUsage?: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number }
+  rawProviderUsage?: Record<string, unknown> | null
   attachmentResults?: { sent: string[]; failed: { id: string; error: string }[] }
   rawResponse?: unknown
   thoughtSignature?: string
+  reasoningContent?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId, stop } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -300,6 +311,7 @@ export async function* streamMessage(
     attachments: m.attachments,
     name: m.name,
     thoughtSignature: m.thoughtSignature,
+    reasoningContent: m.reasoningContent,
     toolCallId: m.toolCallId,
     toolCalls: m.toolCalls,
     cacheControl: m.cacheControl,
@@ -312,11 +324,9 @@ export async function* streamMessage(
   let accumulatedContent = ''
   let lastUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined
   let lastCacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | undefined
+  let lastRawProviderUsage: Record<string, unknown> | null = null
 
-  const promptCacheKey = buildPromptCacheKey(chatId)
-  const profileParametersWithCache: Record<string, unknown> = promptCacheKey
-    ? { ...modelParams, promptCacheKey }
-    : modelParams
+  const cacheKey = buildCharacterCacheKey(characterId)
 
   for await (const chunk of provider.streamMessage(
     {
@@ -327,8 +337,10 @@ export async function* streamMessage(
       topP: modelParams.topP as number | undefined,
       tools: tools.length > 0 ? tools : undefined,
       webSearchEnabled: useNativeWebSearch,
-      profileParameters: profileParametersWithCache,
+      profileParameters: modelParams,
+      cacheKey,
       previousResponseId,
+      stop,
     },
     apiKey
   )) {
@@ -349,12 +361,23 @@ export async function* streamMessage(
     if (chunk.cacheUsage) {
       lastCacheUsage = chunk.cacheUsage
     }
+    // Snapshot the provider-shape `usage` object pre-normalization so future
+    // plugin regressions (provider reports cached tokens but plugin never
+    // reads the field) show up as `rawProviderUsage` populated while
+    // `cacheUsage` is null. Each plugin populates this on its terminal chunk;
+    // shape is provider-specific (OpenAI/Grok/Z.AI: `prompt_tokens_details`
+    // or `input_tokens_details`; Anthropic: `cache_read_input_tokens`;
+    // Google: `usageMetadata.cachedContentTokenCount`).
+    if (chunk.rawProviderUsage && typeof chunk.rawProviderUsage === 'object') {
+      lastRawProviderUsage = chunk.rawProviderUsage as Record<string, unknown>
+    }
     if (chunk.done) {
 
       // Log the LLM call if userId is provided
       if (userId) {
         const durationMs = Date.now() - startTime
         const requestHashes = computeRequestPrefixHashes(llmMessages, tools.length > 0 ? tools : undefined)
+        const finishReason = extractFinishReason(chunk.rawResponse)
 
         logLLMCall({
           userId,
@@ -376,9 +399,11 @@ export async function* streamMessage(
           },
           response: {
             content: accumulatedContent,
+            finishReason,
           },
           usage: lastUsage,
           cacheUsage: lastCacheUsage,
+          rawProviderUsage: lastRawProviderUsage,
           requestHashes,
           durationMs,
         }).catch(err => {
@@ -456,6 +481,76 @@ export function encodeContentChunk(encoder: TextEncoder, content: string): Uint8
 }
 
 /**
+ * Encode a live reasoning ("thinking") chunk for the client. The payload is the
+ * CUMULATIVE reasoning text so far — the client replaces (not appends) its
+ * buffer with each value. DISPLAY ONLY: the client decides whether to render it
+ * based on the chat's thinking-visibility setting; it is never fed to a model.
+ */
+export function encodeReasoningChunk(encoder: TextEncoder, reasoning: string): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ reasoning })}\n\n`)
+}
+
+/**
+ * Hand out the next turn-monotonic sequence number, shared between reasoning
+ * segments and tool-call anchors so same-offset items keep their true emission
+ * order when the Salon interleaves them.
+ */
+export function nextTurnSeq(streaming: Pick<StreamingState, 'nextTurnSeq'>): number {
+  const seq = streaming.nextTurnSeq ?? 0
+  streaming.nextTurnSeq = seq + 1
+  return seq
+}
+
+/**
+ * Capture reasoning from a stream chunk and forward it live to the client.
+ *
+ * Providers emit `reasoningContent` CUMULATIVELY (the full thinking-so-far on
+ * each reasoning-bearing chunk), so we last-wins it onto the streaming state
+ * and push the cumulative value down to the client. DISPLAY ONLY — the captured
+ * value is never re-fed to a model except the in-turn tool round-trip, which
+ * reads `streaming.reasoningContent` directly (not over SSE).
+ */
+export function applyReasoningChunk(
+  streaming: Pick<StreamingState, 'reasoningContent'>,
+  chunk: { reasoningContent?: string },
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+): void {
+  if (!chunk.reasoningContent) return
+  if (chunk.reasoningContent === streaming.reasoningContent) return
+  streaming.reasoningContent = chunk.reasoningContent
+  safeEnqueue(controller, encodeReasoningChunk(encoder, chunk.reasoningContent))
+}
+
+/**
+ * Close the current reasoning run into a positioned {@link ReasoningSegment} if
+ * any reasoning has accumulated since the last flush. Call this at every
+ * reasoning→non-reasoning boundary: when prose resumes, immediately before a
+ * tool-call batch is anchored, and on the terminal chunk. Snapshots the prose
+ * offset (`streaming.fullResponse.length`) at the flush instant and stamps the
+ * shared turn sequence so interleaved thinking/tool/thinking renders in order.
+ *
+ * Cumulative reasoning means the un-flushed buffer is
+ * `reasoningContent.slice(reasoningFlushedLen)`. DISPLAY ONLY.
+ */
+export function flushReasoningSegment(streaming: StreamingState): void {
+  const full = streaming.reasoningContent ?? ''
+  const flushed = streaming.reasoningFlushedLen ?? 0
+  if (full.length <= flushed) return
+  const content = full.slice(flushed)
+  // Advance the cursor regardless so we never re-flush this span.
+  streaming.reasoningFlushedLen = full.length
+  if (content.trim().length === 0) return
+  if (!streaming.reasoningSegments) streaming.reasoningSegments = []
+  const segment: ReasoningSegment = {
+    anchorOffset: streaming.fullResponse.length,
+    content,
+    seq: nextTurnSeq(streaming),
+  }
+  streaming.reasoningSegments.push(segment)
+}
+
+/**
  * Encode the done event
  */
 export function encodeDoneEvent(
@@ -482,6 +577,11 @@ export function encodeDoneEvent(
      * not an actual streamed response. The Salon should skip its optimistic
      * assistant-message push and rely on the prior fetchChat() refresh. */
     pendingExternalTurn?: boolean
+    /** Full reasoning ("thinking") text for the turn — DISPLAY ONLY. Lets the
+     * client's optimistic assistant-message push carry thinking without a refetch. */
+    reasoningContent?: string | null
+    /** Positioned reasoning blocks — DISPLAY ONLY (see ReasoningSegment). */
+    reasoningSegments?: ReasoningSegment[] | null
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)
@@ -606,7 +706,9 @@ export function createStreamingResult(
   cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null,
   attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null,
   rawResponse: unknown,
-  thoughtSignature?: string
+  thoughtSignature?: string,
+  reasoningContent?: string,
+  reasoningSegments?: ReasoningSegment[]
 ): StreamingResult {
   return {
     fullResponse,
@@ -615,5 +717,7 @@ export function createStreamingResult(
     attachmentResults,
     rawResponse,
     thoughtSignature,
+    reasoningContent,
+    reasoningSegments,
   }
 }

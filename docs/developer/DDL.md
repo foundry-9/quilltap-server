@@ -178,42 +178,43 @@ CREATE INDEX "idx_api_keys_userId" ON "api_keys" ("userId");
 
 ### characters
 
+The `characters` table holds only identity, reference fields, behavior
+flags, and the vault pointer. Every content field — identity, description,
+manifesto, personality, exampleDialogues, firstMessage, scenarios,
+systemPrompts, physicalDescription (singular, previously a
+`physicalDescriptions` array), title, talkativeness, aliases, pronouns —
+lives only in the per-character document vault (linked via
+`characterDocumentMountPointId`). The 4.6 `cutover-characters-to-vault-v1`
+migration dropped those columns, along with the now-defunct `avatarUrl`,
+`clothingRecords` (folded into wardrobe_items in 4.5), and
+`readPropertiesFromDocumentStore` opt-in flag (vault-sourcing is now
+unconditional).
+
+`systemTransparency` is **intentionally still a DB column** — it is
+access-control application state, not character content, and is therefore
+not vault-mirrored.
+
 ```sql
 CREATE TABLE "characters" (
   "id" TEXT PRIMARY KEY,
   "userId" TEXT NOT NULL,
   "name" TEXT NOT NULL,
-  "title" TEXT,                           -- The user's or character's own private label/framing (e.g. "the protagonist", "the rival"). Not how others refer to them.
-  "identity" TEXT,                        -- Surface-level public-knowledge view: name, station, occupation, reputation. What strangers know on sight.
-  "description" TEXT,                     -- Acquaintance-perceivable behaviour, mannerisms, verbal patterns. NOT physical (see physicalDescriptions).
-  "manifesto" TEXT,                       -- The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Synced as `manifesto.md` in the character vault.
-  "personality" TEXT,                     -- The character's own self-knowledge — internal driver of speech and behaviour.
-  "scenario" TEXT,                        -- DEPRECATED: use scenarios instead
-  "scenarios" TEXT DEFAULT '[]',          -- JSON array of { id, title, content, createdAt, updatedAt }
-  "firstMessage" TEXT,
-  "exampleDialogues" TEXT,
-  "systemPrompts" TEXT DEFAULT '[]',
-  "avatarUrl" TEXT,
-  "defaultImageId" TEXT,                  -- Vault link id (doc_mount_file_links.id) of the character's portrait. Pre-photos-Phase-3 this was a legacy files.id; the photo-gallery cutover translates every value to the matching vault link id by sha256.
+  "scenario" TEXT,                        -- DEPRECATED legacy column (pre-scenarios-array, also pre-cutover); see convert-scenario-to-scenarios-v1
+  "defaultImageId" TEXT,                  -- Vault link id (doc_mount_file_links.id) of the character's portrait.
   "defaultConnectionProfileId" TEXT,
   "defaultPartnerId" TEXT,
   "defaultRoleplayTemplateId" TEXT,
   "sillyTavernData" TEXT,
   "isFavorite" INTEGER DEFAULT 0,
   "npc" INTEGER DEFAULT 0,
-  "talkativeness" REAL DEFAULT 0.5,
   "controlledBy" TEXT DEFAULT 'llm',
   "partnerLinks" TEXT DEFAULT '[]',
   "tags" TEXT DEFAULT '[]',
-  "avatarOverrides" TEXT DEFAULT '[]',    -- JSON array of { chatId, imageId } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
-  "physicalDescriptions" TEXT DEFAULT '[]',
+  "avatarOverrides" TEXT DEFAULT '[]',    -- JSON array of { chatId, imageId } where imageId is a vault link id.
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL,
   "defaultImageProfileId" TEXT,
   "defaultAgentModeEnabled" INTEGER DEFAULT NULL,
-  "aliases" TEXT DEFAULT '[]',
-  "pronouns" TEXT DEFAULT NULL,
-  "clothingRecords" TEXT DEFAULT '[]',
   "defaultHelpToolsEnabled" INTEGER DEFAULT NULL,
   "defaultTimestampConfig" TEXT DEFAULT NULL,
   "defaultScenarioId" TEXT DEFAULT NULL,
@@ -221,15 +222,60 @@ CREATE TABLE "characters" (
   "canDressThemselves" INTEGER DEFAULT NULL,
   "canCreateOutfits" INTEGER DEFAULT NULL,
   "characterDocumentMountPointId" TEXT DEFAULT NULL,
-  "readPropertiesFromDocumentStore" INTEGER DEFAULT NULL,  -- when 1, pronouns/aliases/title/firstMessage/talkativeness are read from the linked vault's properties.json; identity/description/personality/exampleDialogues are read from their respective .md files
-  "systemTransparency" INTEGER DEFAULT NULL  -- when 1 (true), this character may inspect "the Staff" — the chat-level toggles for self_inventory, Staff messages (Lantern/Aurora/Librarian/Prospero/Host), and character vaults still apply. When NULL or 0 (false), the character cannot see Staff messages, the self_inventory tool is withheld, and all character vaults (own + peers) are hidden from doc_* tools — a hard override on top of chat/project settings. Default NULL (opaque).
+  "systemTransparency" INTEGER DEFAULT NULL,  -- when 1 (true), this character may inspect "the Staff" — the chat-level toggles for self_inventory, Staff messages (Lantern/Aurora/Librarian/Prospero/Host), and character vaults still apply. When NULL or 0 (false), the character cannot see Staff messages, the self_inventory tool is withheld, and all character vaults (own + peers) are hidden from doc_* tools — a hard override on top of chat/project settings. Default NULL (opaque).
+  "coreWhisperEnabled" INTEGER DEFAULT NULL   -- per-character override of the global coreWhisper.enabled setting (Aurora's Core whisper). NULL = inherit from global. Resolution: chat → character → global.
 );
 
 CREATE INDEX "idx_characters_createdAt" ON "characters" ("createdAt" DESC);
 CREATE INDEX "idx_characters_userId" ON "characters" ("userId");
 ```
 
-### wardrobe_items
+#### Vault-managed content fields
+
+These fields no longer live in the DB row. They are stored under
+`<dataDir>/data/quilltap-mount-index.db` in `doc_mount_documents` rows
+keyed by `(mountPointId, relativePath)` where `mountPointId` matches
+`characters.characterDocumentMountPointId`:
+
+| Field | Vault path |
+|---|---|
+| identity | `identity.md` |
+| description | `description.md` |
+| manifesto | `manifesto.md` |
+| personality | `personality.md` |
+| exampleDialogues | `example-dialogues.md` |
+| pronouns, aliases, title, firstMessage, talkativeness | `properties.json` |
+| physicalDescription.fullDescription | `physical-description.md` |
+| physicalDescription.{short,medium,long,complete}Prompt | `physical-prompts.json` |
+| systemPrompts[] | `Prompts/<sanitized-name>.md` (one file per record) |
+| scenarios[] | `Scenarios/<sanitized-title>.md` (one file per record) |
+
+Reads go through `applyDocumentStoreOverlay()` in
+`lib/database/repositories/character-properties-overlay.ts`; writes through
+`applyDocumentStoreWriteOverlay()`. The repository's `*Raw` helpers bypass
+the overlay (used by exports and the migration's populator).
+
+### wardrobe_items — LEGACY/DEPRECATED in 4.6 (vault-first cutover)
+
+As of 4.6 the wardrobe is **vault-first**: this table is no longer the
+write target and is slated for removal. Wardrobe items now live as
+`Wardrobe/*.md` frontmatter files:
+
+- **Character-owned items** live in each character's document vault under
+  `Wardrobe/*.md` (the vault linked via
+  `characters.characterDocumentMountPointId`).
+- **Shared archetypes** (formerly `wardrobe_items` rows with
+  `characterId = NULL`) live in the singleton **"Quilltap General"** mount
+  under a `Wardrobe/` folder. A one-time startup task
+  (`lib/startup/move-shared-wardrobe-to-general.ts`) relocates the existing
+  shared archetypes there and drops their DB rows — it runs as a startup task
+  rather than a migration because migrations execute before the mount-index
+  database is initialized and so can't write vault documents.
+
+Reads/writes flow through the vault overlay (`buildWardrobeItemFile` in
+`lib/mount-index/character-vault.ts`; `parseWardrobeItemFile` in
+`lib/database/repositories/vault-overlay/parsers.ts`). The schema below
+documents the historical table only.
 
 ```sql
 CREATE TABLE "wardrobe_items" (
@@ -252,6 +298,26 @@ CREATE INDEX "idx_wardrobe_items_character" ON "wardrobe_items"("characterId");
 ```
 
 `componentItemIds` is a JSON array of other wardrobe item ids. An empty array (or NULL, treated identically) means a leaf item; a populated array means a composite — equipping the item stores its own id but at read time `expandComposites` resolves the components transitively (cycle-tolerant, depth-capped). Cycles are rejected at save time by `WardrobeRepository`.
+
+#### Wardrobe/*.md frontmatter
+
+The vault-first wardrobe files carry their fields in YAML frontmatter, with
+the markdown body holding the item's description. Optional fields are
+emitted only when set; vault path lookups are case-insensitive.
+
+| Field | Type | Description |
+|---|---|---|
+| id | string (UUID) | Stable item id. Falls back to a deterministic UUID derived from the mount + path if absent. |
+| title | string | Display name. Falls back to a leading `# Heading` or the filename if absent. |
+| types | list | Coverage slots this item designates: any of `top`, `bottom`, `footwear`, `accessories`. For composites this **may be a superset** of the components' slot union (so a composite can designate slots beyond the garments it actually contains, in order to clear them). |
+| componentItems | list (composites only) | Component refs as slugs or UUIDs; resolved to canonical UUIDs in a second pass. Omitted for leaf items. |
+| appropriateness | string | Context tags ("casual", "formal", "intimate", etc.). |
+| default | bool | `true` when the item is part of the character's default outfit. Legacy `isDefault: true` is also honored on read. |
+| replace | bool | **Composites only**, emitted only when `true`. When `true`, equipping the composite first clears every slot it designates (`types`) and then places only its own components; when `false`/absent, equipping is **additive** — components layer onto whatever already occupies those slots without clearing. Leaf items always replace their own slots and ignore the flag. |
+| archived / archivedAt | bool / string (ISO 8601) | `archived: true` marks the item archived; `archivedAt` records when (falls back to the document's `updatedAt`). |
+| migratedFromClothingRecordId | string (UUID) | Provenance from the legacy clothingRecords migration. |
+| createdAt | string (ISO 8601) | Creation timestamp (falls back to the document's `createdAt`). |
+| updatedAt | string (ISO 8601) | Last-update timestamp (falls back to the document's `updatedAt`). |
 
 ### outfit_presets — REMOVED in 4.5
 
@@ -352,7 +418,9 @@ CREATE TABLE "chats" (
   "dangerCategories" TEXT DEFAULT '[]',
   "dangerClassifiedAt" TEXT DEFAULT NULL,
   "dangerClassifiedAtMessageCount" INTEGER DEFAULT NULL,
+  "conciergeOverride" TEXT DEFAULT NULL,  -- per-chat Concierge mode: NULL = follow global; 'OFF' = off-duty (skip every Concierge effect)
   "turnQueue" TEXT DEFAULT '[]',
+  "spokenThisCycleParticipantIds" TEXT DEFAULT '[]',  -- JSON array of participantIds that have spoken in the current rotation cycle (includes user-controlled characters)
   "sceneState" TEXT DEFAULT NULL,
   "renderedMarkdown" TEXT DEFAULT NULL,
   "equippedOutfit" TEXT DEFAULT NULL,
@@ -371,13 +439,42 @@ CREATE TABLE "chats" (
   "allowCrossCharacterVaultReads" INTEGER DEFAULT 0,
   "compiledIdentityStacks" TEXT DEFAULT NULL,
   "courierCheckpoints" TEXT DEFAULT NULL,
-  "commonplaceSceneCache" TEXT DEFAULT NULL
+  "commonplaceSceneCache" TEXT DEFAULT NULL,
+  -- 4.6 Private Character Rooms: budget caps, schedule, run lifecycle, and visibility
+  -- (populated only when chatType = 'autonomous'; NULL on other chats)
+  "budgetMaxTurns" INTEGER DEFAULT NULL,
+  "budgetMaxTokens" INTEGER DEFAULT NULL,
+  "budgetMaxWallClockMs" INTEGER DEFAULT NULL,
+  "budgetEstimatedSpendCapUSD" REAL DEFAULT NULL,
+  "scheduleCron" TEXT DEFAULT NULL,
+  "scheduleFreshnessWindowMs" INTEGER DEFAULT NULL,
+  "scheduleNextRunAt" TEXT DEFAULT NULL,
+  "scheduleLastRunAt" TEXT DEFAULT NULL,
+  "runState" TEXT DEFAULT NULL,            -- 'idle' | 'running' | 'paused' | 'stopped' | 'budgetExhausted' | 'error'
+  "currentRunId" TEXT DEFAULT NULL,        -- UUID of authoritative run; stale-run guard target
+  "runStateMessage" TEXT DEFAULT NULL,
+  "runStartedAt" TEXT DEFAULT NULL,
+  "runEndedAt" TEXT DEFAULT NULL,
+  "runPausedAt" TEXT DEFAULT NULL,         -- ISO time the current paused interval began; cleared on resume
+  "runPausedAccumMs" INTEGER DEFAULT 0,    -- cumulative ms spent paused; wall-clock budget = (now - runStartedAt) - runPausedAccumMs (keeps runStartedAt as the token-window anchor)
+  "runTurnsConsumed" INTEGER DEFAULT NULL,
+  "runTokensConsumed" INTEGER DEFAULT NULL,
+  "runDestructiveToolsAllowed" INTEGER DEFAULT 0,
+  "runVisibility" TEXT DEFAULT NULL,       -- 'owner_only' | 'household' | 'open'; NULL = inherit user default
+  -- Aurora Core whisper per-chat overrides (NULL = inherit from character → global)
+  "coreWhisperEnabled" INTEGER DEFAULT NULL,
+  "coreWhisperInterval" INTEGER DEFAULT NULL,
+  "showThinking" INTEGER DEFAULT NULL          -- added in 4.6 (add-thinking-display-fields-v1): per-chat thinking-visibility override (tri-state). NULL = inherit global chat_settings.thinkingDisplay.defaultVisible; 0 = hide; 1 = show. DISPLAY ONLY.
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");
 CREATE INDEX "idx_chats_createdAt" ON "chats" ("createdAt" DESC);
 CREATE INDEX "idx_chats_projectId" ON "chats" ("projectId");
 CREATE INDEX "idx_chats_userId" ON "chats" ("userId");
+
+-- 4.6 Private Character Rooms — partial indexes driving the scheduler tick and management list
+CREATE INDEX "idx_chats_autonomous_nextRunAt" ON "chats"("scheduleNextRunAt") WHERE "chatType" = 'autonomous';
+CREATE INDEX "idx_chats_autonomous_runState"  ON "chats"("runState")          WHERE "chatType" = 'autonomous';
 ```
 
 ### chat_documents
@@ -533,7 +630,9 @@ CREATE TABLE "chat_messages" (
   "pendingExternalPrompt" TEXT DEFAULT NULL,
   "pendingExternalAttachments" TEXT DEFAULT NULL,
   "pendingExternalPromptFull" TEXT DEFAULT NULL,
-  "opaqueContent" TEXT DEFAULT NULL
+  "opaqueContent" TEXT DEFAULT NULL,
+  "reasoningContent" TEXT DEFAULT NULL,
+  "reasoningSegments" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");
@@ -572,12 +671,42 @@ CREATE TABLE "chat_settings" (
   "dangerousContentSettings" TEXT DEFAULT '{"mode":"OFF","threshold":0.7,"scanTextChat":true,"scanImagePrompts":true,"scanImageGeneration":false,"displayMode":"SHOW","showWarningBadges":true}',
   "autoLockSettings" TEXT DEFAULT '{"enabled":false,"idleMinutes":15}',
   "compositionModeDefault" INTEGER DEFAULT 0,
+  "composerSpellcheck" INTEGER DEFAULT 1, -- added in 4.6 (add-composer-spellcheck-field-v1): governs browser spellcheck on Salon composer + Document Mode rich editor
+  "textReplacementsEnabled" INTEGER DEFAULT 1, -- added in 4.6 (add-text-replacements-enabled-field-v1): master switch for the Layer 1.5 text-replacement plugin; rule list lives in text_replacement_rules
+  "autonomousRoomSettings" TEXT DEFAULT '{}', -- added in 4.6 (add-autonomous-rooms-fields-v1): user-level defaults for autonomous rooms { dailyTokenBudget, defaultFreshnessWindowMs, visibilityDefault, destructiveToolPolicy }
+  "coreWhisper" TEXT DEFAULT '{"enabled":true,"interval":12,"silenceThreshold":3,"packetTokenBudget":4096,"fireOnContextTransition":true}', -- added in 4.6 (add-core-whisper-settings-field-v1): global defaults for Aurora's Core whisper { enabled, interval, silenceThreshold, packetTokenBudget, fireOnContextTransition }. Per-chat/per-character overrides live on chats.coreWhisper*/characters.coreWhisperEnabled. Resolution: chat → character → global.
+  "thinkingDisplay" TEXT DEFAULT '{"defaultVisible":true,"defaultCollapsed":true}', -- added in 4.6 (add-thinking-display-fields-v1): global defaults for showing reasoning models' thinking { defaultVisible, defaultCollapsed }. Per-chat override lives on chats.showThinking. DISPLAY ONLY.
+  "autoScrollOnResponseComplete" INTEGER DEFAULT 0, -- added in 4.6 (add-auto-scroll-on-response-complete-field-v1): when 1, the Salon scrolls to the newest message as a reply finishes / a new message arrives (only when already near the bottom). Default 0 so long replies don't yank the reader away. DISPLAY ONLY.
   UNIQUE("userId")
 );
 
 CREATE INDEX "idx_chat_settings_createdAt" ON "chat_settings" ("createdAt" DESC);
 CREATE INDEX "idx_chat_settings_userId" ON "chat_settings" ("userId" ASC);
 ```
+
+### text_replacement_rules
+
+Global list (no `userId` — single-user model) of literal `from → to` text replacements applied on word boundaries by the Lexical `TextReplacementPlugin`. The master switch sits on `chat_settings.textReplacementsEnabled`; this table holds the rules themselves.
+
+```sql
+CREATE TABLE "text_replacement_rules" (
+  "id" TEXT PRIMARY KEY,
+  "fromText" TEXT NOT NULL,                       -- literal trigger; whole-word match only (no leading/trailing whitespace enforced by the API)
+  "toText" TEXT NOT NULL,                         -- replacement output (verbatim)
+  "caseSensitive" INTEGER NOT NULL DEFAULT 0,     -- 0 = case-insensitive lookup; 1 = exact-case lookup
+  "enabled" INTEGER NOT NULL DEFAULT 1,           -- 0 = rule skipped at compile time
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,         -- UI presentation order; does NOT affect match priority
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
+CREATE INDEX "idx_text_replacement_rules_enabled" ON "text_replacement_rules" ("enabled");
+CREATE INDEX "idx_text_replacement_rules_sortOrder" ON "text_replacement_rules" ("sortOrder");
+```
+
+Match priority is *not* keyed off `sortOrder`. The renderer compiles enabled rows into two maps — `caseSensitive` and `caseInsensitive` (keyed on `fromText.toLowerCase()`) — and looks them up in that order. A `(fromText, caseSensitive)` collision is rejected at the API with 409.
+
+Participates in **backup/restore** (since 4.6) as `data/text-replacement-rules.json` — an optional array, so it did not bump `backupFormat`. Replace-mode restore truncates the table via `clearFormat3Entities()`; merge-mode restore inserts each row and skips `(fromText, caseSensitive)` collisions. Excluded from `.qtap` export/import on purpose: it is global config with no `userId`, the same class as `chat_settings`/`instance_settings`.
 
 ### connection_profiles
 
@@ -610,7 +739,8 @@ CREATE TABLE "connection_profiles" (
   "maxTokens" INTEGER DEFAULT NULL,
   "supportsImageUpload" INTEGER DEFAULT 0,
   "transport" TEXT NOT NULL DEFAULT 'api',
-  "courierDeltaMode" INTEGER DEFAULT 1
+  "courierDeltaMode" INTEGER DEFAULT 1,
+  "pseudoToolMode" TEXT DEFAULT 'auto'
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);
@@ -763,7 +893,8 @@ CREATE TABLE "memories" (
   "reinforcementCount" INTEGER DEFAULT 1,
   "lastReinforcedAt" TEXT DEFAULT NULL,
   "relatedMemoryIds" TEXT DEFAULT '[]',
-  "reinforcedImportance" REAL DEFAULT 0.5
+  "reinforcedImportance" REAL DEFAULT 0.5,
+  "witnessedContext" TEXT DEFAULT NULL   -- added in 4.6 (add-autonomous-rooms-fields-v1): 'user_present' | 'autonomous_room' | 'manual'. NULL on legacy rows.
 );
 
 CREATE INDEX "idx_memories_characterId" ON "memories" ("characterId");
@@ -1113,6 +1244,7 @@ CREATE TABLE "llm_logs" (
   "response" TEXT NOT NULL,
   "usage" TEXT,
   "cacheUsage" TEXT,
+  "rawProviderUsage" TEXT,
   "requestHashes" TEXT,
   "durationMs" INTEGER,
   "createdAt" TEXT NOT NULL,
@@ -1210,7 +1342,9 @@ A `doc_mount_files` row is the **content identity** for a set of bytes — one r
 
 `fileType` is one of `'pdf'`, `'docx'`, `'markdown'`, `'txt'`, `'json'`, `'jsonl'`, or `'blob'`. `'blob'` is the catch-all for arbitrary binaries with no extracted text representation (images, audio, archives, etc.) — their bytes live in `doc_mount_blobs`. `source` is `'filesystem'` when the bytes live on disk (one link per file enforced at the repo layer) or `'database'` when they live in `doc_mount_documents` / `doc_mount_blobs` (any number of links allowed — hard-linkable).
 
-Writers call `findOrCreateByContent(sha256, ...)` rather than `create` directly: if a content row with the matching sha already exists, its UUID is reused so any existing links continue to resolve correctly. The `sha256` INDEX is not UNIQUE because pre-refactor databases may carry duplicate sha rows from the days when every (mountPoint, relativePath) was its own file row; the migration deliberately leaves them in place rather than collapsing.
+Writers call `findOrCreateByContent(sha256, ...)` rather than `create` directly: if a content row with the matching sha already exists, its UUID is reused so any existing links continue to resolve correctly. The `sha256` INDEX is not UNIQUE because pre-refactor databases may carry duplicate sha rows from the days when every (mountPoint, relativePath) was its own file row; the migration deliberately leaves them in place rather than collapsing. `findBySha256` returns the first match.
+
+**Invariant (enforced at write time):** `sha256` equals the SHA-256 of the stored bytes. New content rows are minted by `linkBlobContent` in `doc-mount-file-links.repository`, which recomputes the sha from the actual bytes rather than trusting the caller. Any caller-supplied sha that diverges from the actual bytes hash triggers a warning log; the recomputed value wins. The `repair-mount-blob-sha256-from-bytes-v1` migration corrects pre-existing drifted rows. Note: `files.sha256` in the *main* DB is the input-bytes hash and is intentionally different — it is load-bearing for upload dedup and is not rewritten here.
 
 ### doc_mount_file_links
 
@@ -1322,6 +1456,8 @@ Binary assets for **any** mount point type. Content-addressable: one blob row pe
 
 Cascade off `doc_mount_files` reaps the blob row (and its bytes) when the last link goes away. The extraction lifecycle (`extractedText`, `extractedTextSha256`, `extractionStatus`, `extractionError`) is no longer on this table — it moved to `doc_mount_file_links` so each consumer can override.
 
+**Invariant (enforced at write time):** `doc_mount_blobs.sha256` equals the SHA-256 of the `data` bytes stored in that row, recomputed by `linkBlobContent` in `doc-mount-file-links.repository` at write time. Callers supply a sha as a hint (used for the pre-write dedup check against `doc_mount_files.sha256`), but the value written to `doc_mount_blobs.sha256` is always the result of hashing the actual bytes. A mismatch between the caller's hint and the recomputed value is logged as a warning. The `repair-mount-blob-sha256-from-bytes-v1` migration corrects pre-existing drifted rows.
+
 ---
 
 ## Notes
@@ -1331,7 +1467,8 @@ Cascade off `doc_mount_files` reaps the blob row (and its bytes) when the last l
 - All `TEXT DEFAULT '[]'` and `TEXT DEFAULT '{}'` columns store JSON. The application parses them with Zod schemas.
 - All IDs are UUIDs stored as TEXT.
 - All timestamps (`createdAt`, `updatedAt`) are ISO 8601 strings.
-- Columns added by migrations appear after the original `CREATE TABLE` columns (SQLite `ALTER TABLE ADD COLUMN` appends to the end).
+- Columns added by migrations appear after the original `CREATE TABLE` columns (SQLite `ALTER TABLE ADD COLUMN` appends to the end). `chat_messages.reasoningContent` / `reasoningSegments` were added by `add-chat-message-reasoning-columns-v1`.
+- `chat_messages.reasoningContent` (full chain-of-thought) and `reasoningSegments` (JSON array of `{ anchorOffset, content, seq }` positioning blocks) hold reasoning models' "thinking". They are **DISPLAY ONLY** — surfaced in the Salon but never re-fed to any model as history, summary, or memory. The only in-request reuse of reasoning is the in-turn tool round-trip, which uses an in-memory value, not these columns.
 - The `request` and `response` columns in `llm_logs` contain full JSON payloads of the LLM API calls; these can be large.
 
 ## Key source files

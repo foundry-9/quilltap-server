@@ -23,6 +23,8 @@ const createArchetypeSchema = z.object({
    * Cycle rejection is enforced by the repository.
    */
   componentItemIds: z.array(z.string()).optional(),
+  /** Composite-only: clear the designated slots on equip instead of layering. */
+  replace: z.boolean().optional(),
 });
 
 // GET /api/v1/wardrobe
@@ -54,6 +56,7 @@ export const POST = createAuthenticatedHandler(async (req, { repos }) => {
     componentItemIds: validatedData.componentItemIds ?? [],
     appropriateness: validatedData.appropriateness ?? null,
     isDefault: validatedData.isDefault ?? false,
+    replace: validatedData.replace ?? false,
     migratedFromClothingRecordId: null,
   });
 

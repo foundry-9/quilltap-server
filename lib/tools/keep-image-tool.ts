@@ -7,49 +7,45 @@
  * through the standard character-vault search.
  */
 
-export const keepImageTool = {
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/**
+ * Zod schema for the keep-image tool's input. The single source of truth for both
+ * runtime validation and the derived OpenAI-format `parameters` JSON Schema.
+ */
+export const keepImageToolInputSchema = z.object({
+  uuid: z
+    .string()
+    .min(1)
+    .describe('UUID of the image to keep. Use the id returned by generate_image, list_images, or the catalogue handle from a Librarian "Image attached" announcement.'),
+  caption: z
+    .string()
+    .describe('Optional short caption describing what you wanted to remember about this image.')
+    .optional(),
+  tags: z
+    .array(z.string())
+    .describe('Optional freeform retrieval labels. Indexed alongside the prompt for semantic search.')
+    .optional(),
+});
+
+/**
+ * Input parameters for the keep-image tool
+ */
+export type KeepImageInput = z.infer<typeof keepImageToolInputSchema>;
+
+export const keepImageToolDefinition = {
   type: 'function',
   function: {
     name: 'keep_image',
     description:
       "Save an image to your photo album (a `photos/` folder in your character vault) so it survives chat garbage collection and becomes searchable from your memory. Pass the UUID of an image that was generated in this chat, or the catalogue handle the Librarian announced when someone attached a photo from a gallery. Caption and tags are optional freeform labels for retrieval — they are not the platform's global Tag system. Returns the path the image now lives at in your vault. If you've already kept this image, the call fails — delete the existing copy first if you want to amend the caption or tags.",
-    parameters: {
-      type: 'object',
-      properties: {
-        uuid: {
-          type: 'string',
-          description: 'UUID of the image to keep. Use the id returned by generate_image, list_images, or the catalogue handle from a Librarian "Image attached" announcement.',
-        },
-        caption: {
-          type: 'string',
-          description: 'Optional short caption describing what you wanted to remember about this image.',
-        },
-        tags: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional freeform retrieval labels. Indexed alongside the prompt for semantic search.',
-        },
-      },
-      required: ['uuid'],
-    },
+    parameters: zodToOpenAISchema(keepImageToolInputSchema),
   },
 };
 
 export function validateKeepImageInput(input: unknown): input is KeepImageInput {
-  if (typeof input !== 'object' || input === null) return false;
-  const o = input as Record<string, unknown>;
-  if (typeof o.uuid !== 'string' || !o.uuid) return false;
-  if (o.caption !== undefined && typeof o.caption !== 'string') return false;
-  if (o.tags !== undefined) {
-    if (!Array.isArray(o.tags) || !o.tags.every(t => typeof t === 'string')) return false;
-  }
-  return true;
-}
-
-export interface KeepImageInput {
-  uuid: string;
-  caption?: string;
-  tags?: string[];
+  return keepImageToolInputSchema.safeParse(input).success;
 }
 
 export interface KeepImageOutput {

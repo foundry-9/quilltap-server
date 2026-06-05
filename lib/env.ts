@@ -109,11 +109,6 @@ export function validateEnv(): Env {
 export const env = validateEnv();
 
 /**
- * Check if we're in production
- */
-export const isProduction = env.NODE_ENV === 'production';
-
-/**
  * Check if we're in development
  */
 export const isDevelopment = env.NODE_ENV === 'development';

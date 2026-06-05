@@ -1,0 +1,67 @@
+{
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-deepseek",
+  "title": "DeepSeek",
+  "description": "DeepSeek V4 chat and reasoning models for Quilltap",
+  "version": "1.0.9",
+  "author": {
+    "name": "Foundry-9 LLC",
+    "email": "charles.sebold@foundry-9.com",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=1.7.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": [
+    "LLM_PROVIDER"
+  ],
+  "category": "PROVIDER",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "REACT",
+  "styling": "TAILWIND",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": [
+    "quilltap",
+    "plugin",
+    "deepseek",
+    "llm",
+    "chat",
+    "reasoning"
+  ],
+  "providerConfig": {
+    "providerName": "DEEPSEEK",
+    "displayName": "DeepSeek",
+    "description": "DeepSeek V4 chat and reasoning models via DeepSeek's OpenAI-compatible API",
+    "abbreviation": "DSK",
+    "colors": {
+      "bg": "bg-sky-100",
+      "text": "text-sky-800",
+      "icon": "text-sky-600"
+    },
+    "requiresApiKey": true,
+    "requiresBaseUrl": false,
+    "apiKeyLabel": "DeepSeek API Key",
+    "capabilities": {
+      "chat": true,
+      "imageGeneration": false,
+      "embeddings": false,
+      "webSearch": false
+    },
+    "attachmentSupport": {
+      "supported": false,
+      "mimeTypes": [],
+      "description": "DeepSeek models do not accept file attachments"
+    }
+  },
+  "permissions": {
+    "network": [
+      "api.deepseek.com"
+    ],
+    "userData": false,
+    "database": false
+  }
+}

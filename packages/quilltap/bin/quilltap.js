@@ -13,6 +13,7 @@ const {
   loadDbKey,
 } = require('../lib/db-helpers');
 const { resolveInstance } = require('../lib/instances');
+const { resolveModuleDir, ensureNativeModules } = require('../lib/native-modules');
 
 const PACKAGE_DIR = path.resolve(__dirname, '..');
 
@@ -115,6 +116,8 @@ Examples:
   quilltap -d /mnt/data/quilltap        # Custom data directory
   quilltap -o                           # Start and open browser
   quilltap --update                     # Re-download app files
+  quilltap --instance Friday db schema  # Universal flags (-i/--instance, -d/--data-dir,
+                                        #   --passphrase) work before or after a subcommand
 
 More info: https://quilltap.ai
 `);
@@ -135,85 +138,6 @@ function openBrowser(url) {
       console.log(`Could not open browser automatically. Visit: ${url}`);
     }
   });
-}
-
-// Resolve a native module's directory, handling npm hoisting.
-// Returns the directory containing package.json, or null if not found.
-function resolveModuleDir(moduleName) {
-  try {
-    const pkgJson = require.resolve(moduleName + '/package.json');
-    return path.dirname(pkgJson);
-  } catch {
-    return null;
-  }
-}
-
-// Check if native modules are compiled for the current Node.js version.
-// This handles the case where npx caches the package but the user upgrades
-// Node.js — the cached native modules will have a stale NODE_MODULE_VERSION.
-function ensureNativeModules() {
-  const needsRebuild = [];
-
-  // Check better-sqlite3-multiple-ciphers (provides SQLCipher encryption support).
-  // The main app depends on this via an npm alias as 'better-sqlite3', so we must
-  // ensure the SQLCipher-capable version is available and link it as 'better-sqlite3'.
-  // We must load the native binding directly to detect NODE_MODULE_VERSION mismatches.
-  try {
-    const modDir = resolveModuleDir('better-sqlite3-multiple-ciphers')
-                || resolveModuleDir('better-sqlite3');
-    if (!modDir) throw Object.assign(new Error('not found'), { code: 'MODULE_NOT_FOUND' });
-    const bindingsPath = path.join(modDir, 'build', 'Release', 'better_sqlite3.node');
-    require(bindingsPath);
-  } catch (err) {
-    if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
-      needsRebuild.push('better-sqlite3-multiple-ciphers');
-    } else if (err.code === 'MODULE_NOT_FOUND') {
-      needsRebuild.push('better-sqlite3-multiple-ciphers');
-    }
-  }
-
-  // Check sharp: loads its native binding eagerly on require, but we use
-  // the same explicit-path approach for consistency and reliability.
-  try {
-    require('sharp');
-  } catch (err) {
-    if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
-      needsRebuild.push('sharp');
-    } else if (err.code === 'MODULE_NOT_FOUND') {
-      needsRebuild.push('sharp');
-    }
-  }
-
-  // Check node-pty: backs the Ariel terminal feature. Loaded dynamically by
-  // pty-manager in the standalone server, so resolution must succeed and the
-  // native binding's NODE_MODULE_VERSION must match the runtime.
-  try {
-    require('node-pty');
-  } catch (err) {
-    if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
-      needsRebuild.push('node-pty');
-    } else if (err.code === 'MODULE_NOT_FOUND') {
-      needsRebuild.push('node-pty');
-    }
-  }
-
-  if (needsRebuild.length === 0) return;
-
-  console.log(`  Rebuilding native modules for Node.js ${process.version}...`);
-
-  try {
-    execSync(`npm rebuild ${needsRebuild.join(' ')}`, {
-      cwd: PACKAGE_DIR,
-      stdio: 'inherit',
-    });
-    console.log('  Done.');
-    console.log('');
-  } catch (err) {
-    console.error('');
-    console.error(`  Warning: Failed to rebuild native modules: ${err.message}`);
-    console.error('  Try running: npm rebuild --prefix ' + PACKAGE_DIR);
-    console.error('');
-  }
 }
 
 // Symlink native modules into the standalone directory's node_modules
@@ -266,25 +190,67 @@ function linkNativeModules(standaloneDir) {
                         || resolveModuleDir('better-sqlite3');
   linkModule('better-sqlite3', betterSqlite3Dir);
 
-  // Link node-pty — the standalone tarball strips it (platform-specific),
-  // and pty-manager loads it via a dynamic require, so it needs to resolve
-  // from standaloneDir/node_modules.
-  const nodePtyDir = resolveModuleDir('node-pty');
-  linkModule('node-pty', nodePtyDir);
-  if (nodePtyDir) {
-    // Some npm cache extractions strip the executable bit on spawn-helper,
-    // causing pty.spawn() to fail with `posix_spawnp failed`. Restore it.
-    const prebuildsDir = path.join(nodePtyDir, 'prebuilds');
-    if (fs.existsSync(prebuildsDir)) {
-      try {
-        for (const entry of fs.readdirSync(prebuildsDir, { withFileTypes: true })) {
-          if (!entry.isDirectory()) continue;
-          const helper = path.join(prebuildsDir, entry.name, 'spawn-helper');
-          if (fs.existsSync(helper)) {
-            try { fs.chmodSync(helper, 0o755); } catch { /* best-effort */ }
+  // Link node-pty — but only when we have to. The standalone tarball ships
+  // node-pty intact with cross-platform prebuilds (darwin-arm64, darwin-x64,
+  // win32-arm64, win32-x64). On those platforms the tarball-shipped copy is
+  // already correct, and we MUST NOT replace it with a symlink to the
+  // npm-installed copy: `sudo npm install -g quilltap` on macOS can strip the
+  // executable bit off `spawn-helper`, and we can't chmod a root-owned file
+  // back as a non-root runtime user — pty.spawn() then fails with
+  // `posix_spawnp failed`. Only Linux (which has no node-pty prebuild) and
+  // rebuild-failure cases need the symlink.
+  const standaloneNodePtyPath = path.join(standaloneNodeModules, 'node-pty');
+  const standaloneHasUsablePty = (() => {
+    try {
+      const stat = fs.lstatSync(standaloneNodePtyPath);
+      if (stat.isSymbolicLink()) return false; // prior broken-symlink state — replace it
+      if (!stat.isDirectory()) return false;
+    } catch {
+      return false;
+    }
+    const platformPrebuildDir = path.join(
+      standaloneNodePtyPath,
+      'prebuilds',
+      `${process.platform}-${process.arch}`,
+    );
+    return fs.existsSync(platformPrebuildDir);
+  })();
+
+  if (!standaloneHasUsablePty) {
+    const nodePtyDir = resolveModuleDir('node-pty');
+    linkModule('node-pty', nodePtyDir);
+    if (nodePtyDir) {
+      // Some npm cache extractions (notably `sudo npm install -g`) strip the
+      // executable bit on spawn-helper. Restore it where we can. If chmod
+      // fails because we don't own the file (typical when the CLI was
+      // installed with sudo and is run as a non-root user), warn loudly —
+      // silent failure here produces the `posix_spawnp failed` runtime error
+      // with no actionable hint.
+      const prebuildsDir = path.join(nodePtyDir, 'prebuilds');
+      if (fs.existsSync(prebuildsDir)) {
+        try {
+          for (const entry of fs.readdirSync(prebuildsDir, { withFileTypes: true })) {
+            if (!entry.isDirectory()) continue;
+            const helper = path.join(prebuildsDir, entry.name, 'spawn-helper');
+            if (!fs.existsSync(helper)) continue;
+            try {
+              fs.chmodSync(helper, 0o755);
+            } catch (err) {
+              if (err && err.code === 'EPERM') {
+                console.error('');
+                console.error(`  Warning: Could not make node-pty spawn-helper executable:`);
+                console.error(`    ${helper}`);
+                console.error(`  The file is owned by another user (likely root from a sudo'd`);
+                console.error(`  global install). Terminal sessions will fail to spawn with`);
+                console.error(`  "posix_spawnp failed" until this is fixed. Run:`);
+                console.error(`    sudo chmod 755 "${helper}"`);
+                console.error('');
+              }
+              // Other errors are non-fatal — node-pty may still work if the bit was already set.
+            }
           }
-        }
-      } catch { /* best-effort */ }
+        } catch { /* best-effort */ }
+      }
     }
   }
 
@@ -740,6 +706,11 @@ Subcommands (high-level shortcuts; auto-pick the right database):
   log <id>                    Full request/response of a single LLM log
   memories --character <id>   Memories held by a character
                               (flags: --about <id|name> --source AUTO|MANUAL)
+  characters status           Per-character vault readiness report:
+                              flag value, vault present, single-file count,
+                              Prompts/ and Scenarios/ folder counts, and any
+                              divergence between DB columns and vault content.
+                              (flags: --id <id|name> --diverged --blocked --limit N)
   optimize [target...]        Run maintenance (VACUUM + ANALYZE + PRAGMA optimize)
                               on the named databases, or all of them if no
                               target is given. Targets: main, llm-logs,
@@ -762,6 +733,8 @@ Low-level options (legacy; still supported):
   --tables              List all tables in the active database
   --count <table>       Show row count for a table
   --repl                Interactive SQL prompt (extras: .cols, .find)
+  --json                Emit machine-readable JSON instead of a table
+                        (works with --tables, --count, and raw SQL)
   --llm-logs            Target the LLM logs database
   --mount-points        Target the document mount-index database
   --data-dir <path>     Override data directory (pass instance root)
@@ -869,6 +842,7 @@ async function dbCommand(args) {
   let lockStatus = false;
   let lockClean = false;
   let lockOverride = false;
+  let asJson = false;
 
   let i = 0;
   while (i < cleaned.length) {
@@ -878,6 +852,7 @@ async function dbCommand(args) {
       case '--tables': showTables = true; break;
       case '--count': countTable = cleaned[++i]; break;
       case '--repl': repl = true; break;
+      case '--json': asJson = true; break;
       case '--help': case '-h': showHelp = true; break;
       case '--lock-status': lockStatus = true; break;
       case '--lock-clean': lockClean = true; break;
@@ -971,22 +946,27 @@ async function dbCommand(args) {
   try {
     if (showTables) {
       const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
-      for (const t of tables) console.log(t.name);
+      if (asJson) console.log(JSON.stringify(tables.map(t => t.name), null, 2));
+      else for (const t of tables) console.log(t.name);
     } else if (countTable) {
       const row = db.prepare(`SELECT count(*) as count FROM "${countTable}"`).get();
-      console.log(row.count);
+      if (asJson) console.log(JSON.stringify({ table: countTable, count: row.count }, null, 2));
+      else console.log(row.count);
     } else if (sql) {
       const stmt = db.prepare(sql);
       if (stmt.reader) {
         const rows = stmt.all();
-        if (rows.length === 0) {
+        if (asJson) {
+          console.log(JSON.stringify(rows, null, 2));
+        } else if (rows.length === 0) {
           console.log('(no results)');
         } else {
           console.table(rows);
         }
       } else {
         const info = stmt.run();
-        console.log(`Changes: ${info.changes}`);
+        if (asJson) console.log(JSON.stringify({ changes: info.changes, lastInsertRowid: Number(info.lastInsertRowid) }, null, 2));
+        else console.log(`Changes: ${info.changes}`);
       }
     } else if (repl) {
       const readline = require('readline');
@@ -1069,51 +1049,81 @@ async function dbCommand(args) {
   }
 }
 
-// Route to subcommand or main
-if (process.argv[2] === 'db') {
-  dbCommand(process.argv.slice(3));
-} else if (process.argv[2] === 'themes') {
+// Route to subcommand or main.
+//
+// Universal flags (-i/--instance, -d/--data-dir, --passphrase, -p/--port) may
+// appear *before* the subcommand, e.g. `quilltap --instance Friday db schema`.
+// We locate the subcommand by walking the args and skipping those
+// value-taking flags (so an instance literally named "db" is not mistaken for
+// the subcommand), then hand every other arg — including the leading flags —
+// to the subcommand. Each subcommand parses these flags position-independently,
+// so they behave the same before or after the verb.
+const SUBCOMMANDS = new Set([
+  'db', 'themes', 'docs', 'memories', 'instances', 'memory-diff', 'completion', 'logs', 'migrations',
+]);
+// Global flags that consume the following token as their value.
+const GLOBAL_VALUE_FLAGS = new Set(['-p', '--port', '-d', '--data-dir', '-i', '--instance', '--passphrase']);
+
+function locateSubcommand(argv) {
+  for (let k = 0; k < argv.length; k++) {
+    const a = argv[k];
+    if (GLOBAL_VALUE_FLAGS.has(a)) { k++; continue; } // skip the flag's value
+    if (a.startsWith('-')) continue;                  // boolean / unknown flag
+    return SUBCOMMANDS.has(a) ? k : -1;               // first bare token decides
+  }
+  return -1;
+}
+
+const cliArgs = process.argv.slice(2);
+const subIdx = locateSubcommand(cliArgs);
+const subName = subIdx >= 0 ? cliArgs[subIdx] : '';
+// Everything except the subcommand token itself (leading global flags kept).
+const subArgs = subIdx >= 0 ? [...cliArgs.slice(0, subIdx), ...cliArgs.slice(subIdx + 1)] : [];
+
+if (subName === 'db') {
+  dbCommand(subArgs);
+} else if (subName === 'themes') {
   const { themesCommand } = require('../lib/theme-commands');
-  themesCommand(process.argv.slice(3));
-} else if (process.argv[2] === 'docs') {
+  themesCommand(subArgs);
+} else if (subName === 'docs') {
   const { docsCommand } = require('../lib/docs-commands');
-  docsCommand(process.argv.slice(3));
-} else if (process.argv[2] === 'memories') {
+  docsCommand(subArgs);
+} else if (subName === 'memories') {
   const { memoriesCommand } = require('../lib/memories-commands');
-  memoriesCommand(process.argv.slice(3)).catch(err => {
+  memoriesCommand(subArgs).catch(err => {
     if (!err.silent) {
       console.error(`Error: ${err.message}`);
     }
     const code = err.exitCode != null ? err.exitCode : (err.ambiguous ? 2 : 1);
     process.exit(code);
   });
-} else if (process.argv[2] === 'instances') {
+} else if (subName === 'instances') {
   const { instancesCommand } = require('../lib/instances-commands');
-  instancesCommand(process.argv.slice(3)).catch(err => {
+  instancesCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });
-} else if (process.argv[2] === 'memory-diff') {
+} else if (subName === 'memory-diff') {
   const { memoryDiffCommand } = require('../lib/memory-diff-command');
-  memoryDiffCommand(process.argv.slice(3)).catch(err => {
+  memoryDiffCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });
-} else if (process.argv[2] === 'completion') {
+} else if (subName === 'completion') {
   const { completionCommand } = require('../lib/completion-commands');
-  completionCommand(process.argv.slice(3)).catch(err => {
+  completionCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });
-} else if (process.argv[2] === 'logs') {
+} else if (subName === 'logs') {
   const { logsCommand } = require('../lib/logs-commands');
-  logsCommand(process.argv.slice(3)).catch(err => {
+  logsCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });
-} else if (process.argv[2] === 'migrations') {
+} else if (subName === 'migrations') {
   const { migrationsCommand } = require('../lib/migrations-commands');
-  migrationsCommand(process.argv.slice(3)).catch(err => {
+  migrationsCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });

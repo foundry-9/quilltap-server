@@ -79,6 +79,19 @@ export const ConnectionProfileSchema = z.object({
   useNativeWebSearch: z.boolean().default(false),
   /** Whether tool use is allowed for this profile (master override — when false, no tools are sent regardless of chat/project settings) */
   allowToolUse: z.boolean().default(true),
+  /**
+   * How tool calls are framed on the wire when this profile is in play.
+   * - 'auto'        — pick automatically based on model capability. Native
+   *                   function-calling models use the native protocol; models
+   *                   without native support fall back to the simple-json
+   *                   `<tool_call>` pseudo-tool format.
+   * - 'native'      — force the provider's native function calling.
+   * - 'simple-json' — force the `<tool_call>{...}</tool_call>` JSON-in-XML
+   *                   pseudo-tool format with stop-sequence enforcement.
+   * - 'text-block'  — legacy `[[TOOL ...]]content[[/TOOL]]` pseudo-tool
+   *                   format. Kept for compatibility while users migrate.
+   */
+  pseudoToolMode: z.enum(['auto', 'native', 'simple-json', 'text-block']).default('auto'),
   /** Optional model class name for capability tier classification (e.g., 'Compact', 'Standard', 'Extended', 'Deep') */
   modelClass: z.string().nullable().optional(),
   /** Optional override for the context window size in tokens (caps how much input the model accepts) */

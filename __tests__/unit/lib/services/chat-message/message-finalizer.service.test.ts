@@ -72,6 +72,10 @@ jest.mock('@/lib/chat/turn-manager', () => ({
     cycleComplete: false,
   }),
   getActiveCharacterParticipants: jest.fn((participants: unknown[]) => participants),
+  isUsersTurn: jest.fn(
+    (result: { nextSpeakerId: string | null; reason?: string }) =>
+      result.nextSpeakerId === null || result.reason === 'user_turn',
+  ),
 }))
 
 const createMockRepos = () => ({
@@ -81,6 +85,10 @@ const createMockRepos = () => ({
       { type: 'message', role: 'USER', content: 'Hello there' },
       { type: 'message', role: 'ASSISTANT', content: 'Previous reply', participantId: 'participant-1' },
     ]),
+    // computeNextSpeakerInfo re-reads the chat row to pick up the freshest
+    // `spokenThisCycleParticipantIds`; stub it as empty since the existing
+    // tests don't exercise turn-rotation persistence.
+    findById: jest.fn().mockResolvedValue({ spokenThisCycleParticipantIds: '[]' }),
     update: jest.fn().mockResolvedValue(undefined),
   },
   files: {
@@ -293,6 +301,175 @@ describe('message-finalizer.service', () => {
         } as any,
         participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
         resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
+        userCharacterId: undefined,
+      },
+    })
+
+    expect(memoryTriggers.triggerTurnMemoryExtraction).toHaveBeenCalled()
+  })
+
+  it('finalizeMessageResponse fires per-turn memory extraction when the rotation lands on a user-controlled character', async () => {
+    // User-controlled CHARACTER participants now sit in the rotation; when
+    // picked, selectNextSpeaker returns reason='user_turn' with a non-null
+    // participantId (the user character's id). The finalizer must still treat
+    // this as a closed turn and enqueue memory extraction — otherwise salon
+    // chats with a user character silently lose every memory.
+    const turnManager = jest.requireMock('@/lib/chat/turn-manager') as {
+      selectNextSpeaker: jest.Mock
+    }
+    turnManager.selectNextSpeaker.mockReturnValueOnce({
+      nextSpeakerId: 'participant-user',
+      reason: 'user_turn',
+      cycleComplete: false,
+    })
+
+    const repos = createMockRepos()
+    const controller = { enqueue: jest.fn() } as any
+    const encoder = new TextEncoder()
+
+    await finalizeMessageResponse({
+      repos: repos as any,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      chat: {
+        id: 'chat-1',
+        participants: [
+          { id: 'participant-1', characterId: 'char-1', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+          { id: 'participant-user', characterId: 'char-user', type: 'CHARACTER', controlledBy: 'user', status: 'active' },
+        ],
+        isDangerousChat: false,
+      } as any,
+      character: { id: 'char-1', name: 'Alice', aliases: ['Al'], pronouns: null } as any,
+      characterParticipant: { id: 'participant-1', status: 'active' } as any,
+      userParticipantId: 'participant-user',
+      isMultiCharacter: true,
+      isContinueMode: false,
+      generatedImagePaths: [],
+      toolMessages: [],
+      preGeneratedAssistantMessageId: 'assistant-4',
+      connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+      controller,
+      encoder,
+      streaming: {
+        fullResponse: 'BLOCK:Alice: closing line',
+        effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+        effectiveApiKey: 'sk-test',
+        usage: null,
+        cacheUsage: null,
+        attachmentResults: null,
+        rawResponse: { provider: 'raw' },
+        thoughtSignature: undefined,
+        hasStartedStreaming: true,
+      },
+      compression: {
+        existingMessages: [],
+        content: 'hello',
+        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        compressionEnabled: false,
+        cheapLLMSelection: null,
+        contextCompressionSettings: {
+          enabled: true,
+          windowSize: 5,
+          compressionTargetTokens: 800,
+          systemPromptTargetTokens: 1500,
+          projectContextReinjectInterval: 5,
+        },
+        allProfiles: [],
+      },
+      triggers: {
+        dangerSettings: { mode: 'OFF' } as any,
+        chatSettings: {
+          cheapLLMSettings: { strategy: 'USER_DEFINED' },
+          autoDetectRng: false,
+        } as any,
+        participantCharacters: new Map([
+          ['char-1', { id: 'char-1', name: 'Alice', pronouns: null }],
+          ['char-user', { id: 'char-user', name: 'User', pronouns: null }],
+        ]),
+        resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
+        userCharacterId: 'char-user',
+      },
+    })
+
+    expect(memoryTriggers.triggerTurnMemoryExtraction).toHaveBeenCalled()
+  })
+
+  it('finalizeMessageResponse fires per-turn memory extraction on every character turn in autonomous chats', async () => {
+    // Autonomous rooms have no user → isUsersTurn is permanently false.
+    // Without the chatType branch, the autonomous run would never extract
+    // memories. selectNextSpeaker returns another character (LLM not user)
+    // so isUsersTurn=false, but the autonomous branch should fire anyway.
+    const turnManager = jest.requireMock('@/lib/chat/turn-manager') as {
+      selectNextSpeaker: jest.Mock
+    }
+    turnManager.selectNextSpeaker.mockReturnValueOnce({
+      nextSpeakerId: 'participant-2',
+      reason: 'weighted_selection',
+      cycleComplete: false,
+    })
+
+    const repos = createMockRepos()
+    const controller = { enqueue: jest.fn() } as any
+    const encoder = new TextEncoder()
+
+    await finalizeMessageResponse({
+      repos: repos as any,
+      chatId: 'chat-auto',
+      userId: 'user-1',
+      chat: {
+        id: 'chat-auto',
+        chatType: 'autonomous',
+        participants: [
+          { id: 'participant-1', characterId: 'char-1', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+          { id: 'participant-2', characterId: 'char-2', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+        ],
+        isDangerousChat: false,
+      } as any,
+      character: { id: 'char-1', name: 'Friday', aliases: [], pronouns: null } as any,
+      characterParticipant: { id: 'participant-1', status: 'active' } as any,
+      userParticipantId: null,
+      isMultiCharacter: true,
+      isContinueMode: false,
+      generatedImagePaths: [],
+      toolMessages: [],
+      preGeneratedAssistantMessageId: 'assistant-auto',
+      connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+      controller,
+      encoder,
+      streaming: {
+        fullResponse: 'Friday speaks',
+        effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+        effectiveApiKey: 'sk-test',
+        usage: null,
+        cacheUsage: null,
+        attachmentResults: null,
+        rawResponse: { provider: 'raw' },
+        thoughtSignature: undefined,
+        hasStartedStreaming: true,
+      },
+      compression: {
+        existingMessages: [],
+        content: 'hello',
+        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        compressionEnabled: false,
+        cheapLLMSelection: null,
+        contextCompressionSettings: {
+          enabled: true,
+          windowSize: 5,
+          compressionTargetTokens: 800,
+          systemPromptTargetTokens: 1500,
+          projectContextReinjectInterval: 5,
+        },
+        allProfiles: [],
+      },
+      triggers: {
+        dangerSettings: { mode: 'OFF' } as any,
+        chatSettings: {
+          cheapLLMSettings: { strategy: 'USER_DEFINED' },
+          autoDetectRng: false,
+        } as any,
+        participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Friday', pronouns: null }]]),
+        resolvedIdentity: { name: 'Friday', description: 'desc', characterId: 'char-1' },
         userCharacterId: undefined,
       },
     })

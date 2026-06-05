@@ -25,15 +25,6 @@ export interface QueueStats {
 }
 
 /**
- * Options for creating a job
- */
-export interface CreateJobOptions {
-  priority?: number;
-  maxAttempts?: number;
-  scheduledAt?: string;
-}
-
-/**
  * Background Jobs Repository
  * Implements CRUD operations and queue-specific methods for background jobs.
  */

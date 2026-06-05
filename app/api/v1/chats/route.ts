@@ -22,6 +22,7 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { z } from 'zod';
 import type { ChatEvent, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
 import { TimestampConfigSchema } from '@/lib/schemas/types';
+import { Cron } from 'croner';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   OutfitSelectionSchema,
@@ -59,6 +60,7 @@ import {
 } from '@/lib/services/prospero-notifications/writer';
 import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
+import { startAutonomousRoomManually } from '@/lib/services/chat-message/autonomous-room.service';
 
 type Repos = RepositoryContainer;
 const CHAT_GET_ACTIONS = ['has-dangerous'] as const;
@@ -113,6 +115,18 @@ const createChatSchema = z.object({
    * The source chat must belong to the same user.
    */
   continuationFromChatId: z.uuid().optional(),
+
+  // 4.6 Private Character Rooms — autonomous-room creation fields.
+  // All only consulted when chatType === 'autonomous'.
+  chatType: z.enum(['salon', 'autonomous']).optional(),
+  scheduleCron: z.string().max(120).optional(),
+  scheduleFreshnessWindowMs: z.number().int().positive().optional(),
+  budgetMaxTurns: z.number().int().positive().optional(),
+  budgetMaxTokens: z.number().int().positive().optional(),
+  budgetMaxWallClockMs: z.number().int().positive().optional(),
+  budgetEstimatedSpendCapUSD: z.number().positive().optional(),
+  runVisibility: z.enum(['owner_only', 'household', 'open']).optional(),
+  runDestructiveToolsAllowed: z.boolean().optional(),
 });
 
 // ============================================================================
@@ -122,6 +136,8 @@ const createChatSchema = z.object({
 type ParticipantBuildSuccess = {
   participant: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>;
   tags: string[];
+  /** Character.talkativeness for non-user-controlled characters; undefined otherwise. */
+  talkativeness?: number;
 };
 type ParticipantBuildError = { error: string };
 type ParticipantBuildResult = ParticipantBuildSuccess | ParticipantBuildError;
@@ -187,6 +203,7 @@ async function buildCharacterParticipant(
       isActive: true,
     },
     tags: character.tags || [],
+    talkativeness: isUserControlled ? undefined : (character.talkativeness ?? 0.5),
   };
 }
 
@@ -198,7 +215,7 @@ async function buildAllParticipants(
 ): Promise<BuildParticipantsResult> {
   const builtParticipants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[] = [];
   const allTagIds = new Set<string>();
-  let firstLLMCharacter: { characterId: string; userCharacterId?: string; selectedSystemPromptId?: string } | null = null;
+  const llmCandidates: Array<{ characterId: string; selectedSystemPromptId?: string; talkativeness: number }> = [];
   let firstUserCharacterId: string | null = null;
   let firstImageProfileId: string | null = null;
 
@@ -221,11 +238,12 @@ async function buildAllParticipants(
     }
 
     const isUserControlled = result.participant.controlledBy === 'user';
-    if (!isUserControlled && !firstLLMCharacter && participantData.characterId) {
-      firstLLMCharacter = {
+    if (!isUserControlled && participantData.characterId) {
+      llmCandidates.push({
         characterId: participantData.characterId,
         selectedSystemPromptId: participantData.selectedSystemPromptId || undefined,
-      };
+        talkativeness: result.talkativeness ?? 0.5,
+      });
     }
 
     if (isUserControlled && !firstUserCharacterId && participantData.characterId) {
@@ -233,13 +251,39 @@ async function buildAllParticipants(
     }
   }
 
-  if (!firstLLMCharacter) {
+  if (llmCandidates.length === 0) {
     return { error: 'At least one LLM-controlled CHARACTER participant is required' };
   }
 
-  firstLLMCharacter.userCharacterId = firstUserCharacterId || undefined;
+  // Pick the opening character by weighted-random on talkativeness, matching the
+  // algorithm used by selectNextSpeaker for subsequent turns. Without this the
+  // first character in the list always delivered the greeting, which biased
+  // multi-character chats toward whichever participant the UI happened to list
+  // first.
+  const chosen = pickWeightedByTalkativeness(llmCandidates);
+
+  const firstLLMCharacter = {
+    characterId: chosen.characterId,
+    selectedSystemPromptId: chosen.selectedSystemPromptId,
+    userCharacterId: firstUserCharacterId || undefined,
+  };
 
   return { participants: builtParticipants, tags: allTagIds, firstCharacter: firstLLMCharacter, firstImageProfileId };
+}
+
+function pickWeightedByTalkativeness<T extends { talkativeness: number }>(candidates: T[]): T {
+  let totalWeight = 0;
+  for (const c of candidates) totalWeight += c.talkativeness;
+  if (totalWeight <= 0) {
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+  const r = Math.random() * totalWeight;
+  let cumulative = 0;
+  for (const c of candidates) {
+    cumulative += c.talkativeness;
+    if (r < cumulative) return c;
+  }
+  return candidates[candidates.length - 1];
 }
 
 /**
@@ -317,7 +361,10 @@ async function createInitialMessagesScenarioAndStaff(
     await postHostScenarioAnnouncement({ chatId, scenarioText });
   }
 
-  if (context.userCharacter) {
+  const hasUserParticipant = participants.some(
+    (p) => p.type === 'CHARACTER' && p.controlledBy === 'user',
+  );
+  if (context.userCharacter && hasUserParticipant) {
     await postHostUserCharacterAnnouncement({
       chatId,
       userCharacterName: context.userCharacter.name,
@@ -368,7 +415,7 @@ async function createInitialMessagesScenarioAndStaff(
         ] as string[]
       ).filter((id) => typeof id === 'string' && id.length > 0);
       const equippedItemsData = equippedItemIds.length > 0
-        ? await repos.wardrobe.findByIds(equippedItemIds)
+        ? await repos.wardrobe.findByIdsForCharacter(characterId, equippedItemIds)
         : [];
       const equippedItemsMap = new Map(equippedItemsData.map((item) => [item.id, item]));
 
@@ -732,11 +779,23 @@ async function handleList(req: NextRequest, context: AuthenticatedContext) {
     const { searchParams } = req.nextUrl;
     const excludeTagIdsParam = searchParams.get('excludeTagIds');
     const limitParam = searchParams.get('limit');
+    const includeAutonomous = searchParams.get('includeAutonomous') === 'true';
     const excludeTagIds = excludeTagIdsParam ? excludeTagIdsParam.split(',').filter(Boolean) : [];
     const limit = limitParam ? parseInt(limitParam, 10) : undefined;
     const allChatMetadata = await repos.chats.findByUserId(user.id);
-    // Filter out help chats from salon listing
-    const chatMetadata = allChatMetadata.filter((c: any) => !c.chatType || c.chatType === 'salon');
+    // Default Salon listing: salon chats only (no help, no autonomous unless asked).
+    // Autonomous rooms with per-room runVisibility = 'household' | 'open' are
+    // visible regardless of the includeAutonomous flag (per-room override
+    // wins over the user-level visibility default).
+    const chatMetadata = allChatMetadata.filter((c: any) => {
+      if (!c.chatType || c.chatType === 'salon') return true;
+      if (c.chatType === 'autonomous') {
+        if (includeAutonomous) return true;
+        if (c.runVisibility === 'household' || c.runVisibility === 'open') return true;
+        return false;
+      }
+      return false;
+    });
     const enrichedChats = await enrichChatsForList(chatMetadata, repos);
     let filteredChats = filterChatsByExcludedTags(enrichedChats, excludeTagIds);
 
@@ -777,6 +836,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
   const body = await req.json();
   const validatedData = createChatSchema.parse(body);
+  const isAutonomous = validatedData.chatType === 'autonomous';
 
   // Permission-check the continuation source up front, before doing any
   // create work. The user-scoped repos.chats.findById returns null for chats
@@ -790,6 +850,40 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
         continuationFromChatId: validatedData.continuationFromChatId,
       });
       return notFound('Source chat');
+    }
+  }
+
+  // Autonomous-room preconditions (validated before participant-build to fail fast).
+  let autonomousNextRunAt: string | null = null;
+  if (isAutonomous) {
+    const userParticipants = validatedData.participants.filter((p) => p.controlledBy === 'user');
+    if (userParticipants.length > 0) {
+      return badRequest('Autonomous rooms cannot include user-controlled participants');
+    }
+    const llmCharacterParticipants = validatedData.participants.filter(
+      (p) => p.type === 'CHARACTER' && (!p.controlledBy || p.controlledBy === 'llm'),
+    );
+    if (llmCharacterParticipants.length < 2) {
+      return badRequest('Autonomous rooms require at least two LLM-controlled characters');
+    }
+    if (validatedData.scheduleCron) {
+      const expr = validatedData.scheduleCron.trim();
+      if (expr.length === 0) {
+        // Treat all-whitespace as "no schedule" (manual-only).
+      } else {
+        try {
+          const job = new Cron(expr);
+          const next = job.nextRun(new Date());
+          autonomousNextRunAt = next ? next.toISOString() : null;
+        } catch (error) {
+          logger.warn('[Chats v1] Invalid cron expression on autonomous-room create', {
+            userId: user.id,
+            scheduleCron: expr,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return badRequest(`Invalid cron expression: ${expr}`);
+        }
+      }
     }
   }
 
@@ -930,8 +1024,26 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     disabledTools: projectToolDefaults.disabledTools,
     disabledToolGroups: projectToolDefaults.disabledToolGroups,
     imageProfileId: chatImageProfileId,
-    avatarGenerationEnabled: validatedData.avatarGenerationEnabled ?? projectAvatarGenerationDefault ?? null,
+    avatarGenerationEnabled: isAutonomous
+      ? false
+      : validatedData.avatarGenerationEnabled ?? projectAvatarGenerationDefault ?? null,
     documentEditingMode: chatSettings?.compositionModeDefault ?? false,
+    ...(isAutonomous ? {
+      chatType: 'autonomous' as const,
+      scheduleCron: validatedData.scheduleCron?.trim() ? validatedData.scheduleCron.trim() : null,
+      scheduleFreshnessWindowMs: validatedData.scheduleFreshnessWindowMs ?? null,
+      scheduleNextRunAt: autonomousNextRunAt,
+      budgetMaxTurns: validatedData.budgetMaxTurns ?? null,
+      budgetMaxTokens: validatedData.budgetMaxTokens ?? null,
+      budgetMaxWallClockMs: validatedData.budgetMaxWallClockMs ?? null,
+      budgetEstimatedSpendCapUSD: validatedData.budgetEstimatedSpendCapUSD ?? null,
+      runVisibility: validatedData.runVisibility ?? null,
+      runDestructiveToolsAllowed: validatedData.runDestructiveToolsAllowed ? 1 : 0,
+      runState: 'idle' as const,
+      currentRunId: null,
+      runTurnsConsumed: 0,
+      runTokensConsumed: 0,
+    } : {}),
   });
 
   // Apply outfit selections to the newly created chat
@@ -1024,6 +1136,22 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       resolvedScenario || null,
       { skipFirstMessage: true },
     );
+  } else if (isAutonomous) {
+    // Autonomous rooms: seed system-prompt + scenario/Host whispers (so the
+    // participating characters know the scene), but skip the auto first
+    // "Hello!" message — there's no user to greet, and the first turn is
+    // produced by the per-room procedure when the run starts.
+    await writeSystemPromptMessage(chat.id, chatContext, repos);
+    await createInitialMessagesScenarioAndStaff(
+      chat.id,
+      chatContext,
+      participantsWithTimestamps,
+      user.id,
+      repos,
+      validatedData.projectId || null,
+      resolvedScenario || null,
+      { skipFirstMessage: true },
+    );
   } else {
     await createInitialMessages(
       chat.id,
@@ -1044,6 +1172,27 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     chatId: chat.id,
     continuationFromChatId: validatedData.continuationFromChatId ?? null,
   });
+
+  // Ad-hoc autonomous rooms (no cron schedule) start immediately on create —
+  // the user just configured the participants and budget; there's no separate
+  // Start step. Cron-scheduled rooms wait for the scheduler instead.
+  if (isAutonomous && !chat.scheduleCron) {
+    try {
+      const result = await startAutonomousRoomManually(chat.id, user.id);
+      if (!result.ok) {
+        logger.warn('[Chats v1] Auto-start of ad-hoc autonomous room declined', {
+          chatId: chat.id,
+          reason: result.reason,
+          message: result.message,
+        });
+      }
+    } catch (error) {
+      logger.error('[Chats v1] Auto-start of ad-hoc autonomous room threw', {
+        chatId: chat.id,
+        error: getErrorMessage(error, 'Unknown autonomous-start error'),
+      }, error instanceof Error ? error : undefined);
+    }
+  }
 
   return NextResponse.json({ chat: { ...chat, participants: enrichedParticipants } }, { status: 201 });
 }

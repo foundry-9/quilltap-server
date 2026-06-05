@@ -148,6 +148,27 @@
   --qt-input-focus-ring: var(--color-ring);
   --qt-input-transition: colors 150ms cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* Select dropdown arrow — a full data URI so themes can swap the whole glyph.
+     Default stroke is a neutral slate that reads on light surfaces; the dark
+     baseline below lifts it. Themes override --qt-select-arrow wholesale. */
+  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+
+  /* ==========================================================================
+     CHECKBOX & RADIO VARIABLES
+     accent-color is the real theming hook for native controls (the fill/check);
+     the border/size/radius tokens take effect for appearance:none themes.
+     ========================================================================== */
+  --qt-checkbox-size: 1rem;
+  --qt-checkbox-radius: var(--radius-sm);
+  --qt-checkbox-border: var(--color-border);
+  --qt-checkbox-accent: var(--color-primary);
+  --qt-checkbox-focus-ring: var(--color-ring);
+
+  --qt-radio-size: 1rem;
+  --qt-radio-border: var(--color-border);
+  --qt-radio-accent: var(--color-primary);
+  --qt-radio-focus-ring: var(--color-ring);
+
   /* ==========================================================================
      NAVBAR VARIABLES
      ========================================================================== */
@@ -279,6 +300,15 @@
   --qt-chat-silent-border: #7a9e8e;
   --qt-chat-silent-label-fg: #5d7e6e;
 
+  /* Chat: Thinking / reasoning blocks — a thinking model's chain-of-thought,
+     shown dimmed, italic, and right-justified. DISPLAY ONLY. Defaults dim the
+     assistant foreground and lean on a faint muted backdrop; themes may
+     override, and untouched themes fall back to these via the silent tokens. */
+  --qt-chat-thinking-fg: color-mix(in srgb, var(--qt-chat-assistant-fg) 55%, transparent);
+  --qt-chat-thinking-bg: color-mix(in srgb, var(--qt-chat-silent-bg) 40%, transparent);
+  --qt-chat-thinking-border: color-mix(in srgb, var(--qt-chat-silent-border) 60%, transparent);
+  --qt-chat-thinking-label-fg: var(--qt-chat-silent-label-fg);
+
   /* Chat: Wardrobe action notices — warm amber/gold for dressing room actions */
   --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #c4a24e 40%);
   --qt-chat-wardrobe-fg: var(--qt-chat-assistant-fg);
@@ -291,6 +321,14 @@
   --qt-chat-system-bar-border: var(--color-border);
   --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, var(--color-muted) 45%);
   --qt-chat-system-bar-sender-fg: var(--color-foreground);
+
+  /* Chat: Announcement importance dots — high (red), medium (amber), low (hollow grey).
+     All three track theme tokens so the dots stay on-palette: high follows the theme
+     destructive, medium the theme warning, low the muted foreground. The hardcoded
+     amber/red remain as fallbacks for any theme that omits the token. */
+  --qt-chat-announcement-dot-high: var(--color-destructive, #b4452e);
+  --qt-chat-announcement-dot-medium: var(--color-warning, #d08a1e);
+  --qt-chat-announcement-dot-low: var(--color-muted-foreground);
 
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
@@ -444,6 +482,26 @@
   --qt-badge-capability-bg: hsl(225 55% 55% / 0.08);
   --qt-badge-capability-fg: hsl(225 55% 42%);
 
+   /* Autonomous-room state badge colors */
+   --qt-badge-autonomous-running-bg: var(--qt-status-success-bg);
+   --qt-badge-autonomous-running-fg: var(--qt-status-success-fg);
+   --qt-badge-autonomous-running-border: var(--qt-status-success-border);
+   --qt-badge-autonomous-idle-bg: var(--qt-status-info-bg);
+   --qt-badge-autonomous-idle-fg: var(--qt-status-info-fg);
+   --qt-badge-autonomous-idle-border: var(--qt-status-info-border);
+   --qt-badge-autonomous-paused-bg: var(--qt-status-warning-bg);
+   --qt-badge-autonomous-paused-fg: var(--qt-status-warning-fg);
+   --qt-badge-autonomous-paused-border: var(--qt-status-warning-border);
+   --qt-badge-autonomous-stopped-bg: var(--color-muted);
+   --qt-badge-autonomous-stopped-fg: var(--color-muted-foreground);
+   --qt-badge-autonomous-stopped-border: var(--color-border);
+   --qt-badge-autonomous-budget-bg: var(--qt-badge-related-bg);
+   --qt-badge-autonomous-budget-fg: var(--qt-badge-related-fg);
+   --qt-badge-autonomous-budget-border: color-mix(in srgb, var(--qt-badge-related-fg) 45%, transparent);
+   --qt-badge-autonomous-error-bg: var(--qt-status-danger-bg);
+   --qt-badge-autonomous-error-fg: var(--qt-status-danger-fg);
+   --qt-badge-autonomous-error-border: var(--qt-status-danger-border);
+
   /* Queue status badge colors */
   --qt-queue-badge-radius: var(--radius-sm);
   --qt-queue-badge-padding-x: 0.375rem;
@@ -464,6 +522,13 @@
   --qt-queue-badge-story-bg: hsl(225 12% 38%);
   --qt-queue-badge-story-fg: hsl(0 0% 100%);
   --qt-queue-badge-idle-opacity: 0.35;
+
+  /* Autonomous-room badge colors (shares queue-badge structural tokens) */
+  --qt-autonomous-badge-running-bg: hsl(152 55% 38%);
+  --qt-autonomous-badge-running-fg: hsl(0 0% 100%);
+  --qt-autonomous-badge-idle-bg: hsl(225 12% 38%);
+  --qt-autonomous-badge-idle-fg: hsl(0 0% 100%);
+  --qt-autonomous-badge-button-hover-bg: hsl(0 0% 100% / 0.18);
 
   /* ==========================================================================
      AVATAR VARIABLES
@@ -655,6 +720,9 @@
    Black shadows + faint light edge glow for card definition.
    ============================================================================ */
 [data-theme].dark {
+  /* Select arrow — lighter slate so the glyph reads on dark surfaces */
+  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+
   /* Card shadows — true black for depth, faint white edge for definition */
   --qt-card-shadow: 0 1px 3px hsl(225 12% 0% / 0.25), 0 0 1px hsl(225 12% 100% / 0.04);
   --qt-card-shadow-hover: 0 4px 12px hsl(225 12% 0% / 0.35), 0 0 1px hsl(225 12% 100% / 0.06);
@@ -723,6 +791,26 @@
   --qt-badge-capability-bg: hsl(225 55% 58% / 0.18);
   --qt-badge-capability-fg: hsl(225 55% 72%);
 
+   /* Autonomous-room state badge tokens */
+   --qt-badge-autonomous-running-bg: var(--qt-status-success-bg);
+   --qt-badge-autonomous-running-fg: var(--qt-status-success-fg);
+   --qt-badge-autonomous-running-border: var(--qt-status-success-border);
+   --qt-badge-autonomous-idle-bg: var(--qt-status-info-bg);
+   --qt-badge-autonomous-idle-fg: var(--qt-status-info-fg);
+   --qt-badge-autonomous-idle-border: var(--qt-status-info-border);
+   --qt-badge-autonomous-paused-bg: var(--qt-status-warning-bg);
+   --qt-badge-autonomous-paused-fg: var(--qt-status-warning-fg);
+   --qt-badge-autonomous-paused-border: var(--qt-status-warning-border);
+   --qt-badge-autonomous-stopped-bg: var(--color-muted);
+   --qt-badge-autonomous-stopped-fg: var(--color-muted-foreground);
+   --qt-badge-autonomous-stopped-border: var(--color-border);
+   --qt-badge-autonomous-budget-bg: var(--qt-badge-related-bg);
+   --qt-badge-autonomous-budget-fg: var(--qt-badge-related-fg);
+   --qt-badge-autonomous-budget-border: color-mix(in srgb, var(--qt-badge-related-fg) 50%, transparent);
+   --qt-badge-autonomous-error-bg: var(--qt-status-danger-bg);
+   --qt-badge-autonomous-error-fg: var(--qt-status-danger-fg);
+   --qt-badge-autonomous-error-border: var(--qt-status-danger-border);
+
   /* Queue status badges — slightly brighter */
   --qt-queue-badge-memory-bg: hsl(225 55% 55%);
   --qt-queue-badge-embedding-bg: hsl(270 50% 55%);
@@ -740,6 +828,12 @@
   --qt-chat-silent-border: #4a7a6a;
   --qt-chat-silent-label-fg: #8ab8a4;
 
+  /* Chat: Thinking / reasoning blocks — dark mode */
+  --qt-chat-thinking-fg: color-mix(in srgb, var(--qt-chat-assistant-fg) 60%, transparent);
+  --qt-chat-thinking-bg: color-mix(in srgb, var(--qt-chat-silent-bg) 40%, transparent);
+  --qt-chat-thinking-border: color-mix(in srgb, var(--qt-chat-silent-border) 60%, transparent);
+  --qt-chat-thinking-label-fg: var(--qt-chat-silent-label-fg);
+
   /* Chat: Wardrobe action notices — dark mode */
   --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #8a6d1b 40%);
   --qt-chat-wardrobe-border: #8a6d1b;
@@ -748,6 +842,13 @@
   /* Chat: System-message collapsed bar — dark mode */
   --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--color-muted) 40%);
   --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 45%, var(--color-muted) 55%);
+
+  /* Chat: Announcement importance dots — brighter on dark for contrast. Medium tracks
+     the theme warning (themes ship brightened dark-mode warning values); the amber stays
+     as a fallback. High keeps a fixed bright red so it reads on dark surfaces. */
+  --qt-chat-announcement-dot-high: #e06a52;
+  --qt-chat-announcement-dot-medium: var(--color-warning, #e3a94a);
+  --qt-chat-announcement-dot-low: var(--color-muted-foreground);
 
   /* Response status — brighter indicators */
   --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);

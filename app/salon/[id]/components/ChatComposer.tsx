@@ -1,7 +1,6 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
-import ToolPalette from '@/components/chat/ToolPalette'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
@@ -15,8 +14,19 @@ const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase
 
 interface ChatComposerProps {
   id: string
+  /**
+   * External markdown value (draft restore / resend / post-send clear and the
+   * source-mode textarea). NOT updated on every keystroke — the Lexical editor
+   * owns the live text. Use the editor handle (`inputRef`) to read it for send.
+   */
   input: string
   setInput: (value: string) => void
+  /** Whether the composer currently holds non-blank content (drives Send). */
+  hasContent: boolean
+  /** Debounced editor content-presence reporter (wired to the page). */
+  onContentChange: (hasContent: boolean) => void
+  /** Debounced full-markdown emit for draft persistence. */
+  onPersistDraft?: (markdown: string) => void
   attachedFiles: AttachedFile[]
   onRemoveAttachedFile: (fileId: string) => void
   /** Pending tool results to display in composer */
@@ -37,8 +47,6 @@ interface ChatComposerProps {
     toolName?: string
     characterName?: string
   } | null
-  toolPaletteOpen: boolean
-  setToolPaletteOpen: (open: boolean) => void
   showSource: boolean
   setShowSource: (show: boolean) => void
   uploadingFile: boolean
@@ -47,10 +55,6 @@ interface ChatComposerProps {
   renderingPatterns?: RenderingPattern[]
   /** Optional dialogue detection for paragraph-level styling in preview */
   dialogueDetection?: DialogueDetection | null
-  chatPhotoCount: number
-  chatMemoryCount: number
-  hasImageProfile: boolean
-  isSingleCharacterChat: boolean
   roleplayTemplateId?: string | null
   /** Whether document editing mode is enabled */
   documentEditingMode: boolean
@@ -60,37 +64,15 @@ interface ChatComposerProps {
   onOpenDocumentClick?: () => void
   /** Whether Document Mode is currently active (split/focus) */
   isDocumentModeActive?: boolean
-  /** Whether agent mode is enabled for this chat */
-  agentModeEnabled?: boolean | null
-  /** Callback to toggle agent mode */
-  onAgentModeToggle?: () => void
 
   // Callbacks
   onSubmit: (e: React.FormEvent) => void
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
   onAttachFileClick?: () => void
   onImagePaste: (file: File) => Promise<void>
-  onGalleryClick: () => void
-  onGenerateImageClick: () => void
   onLibraryFileClick: () => void
   onStandaloneGenerateImageClick: () => void
   onInsertAnnouncementClick: () => void
-  onAddCharacterClick: () => void
-  onSettingsClick: () => void
-  onRenameClick?: () => void
-  onProjectClick?: () => void
-  projectName?: string | null
-  onContinueChatClick?: () => void
-  onDeleteChatMemoriesClick: () => void
-  onReextractMemoriesClick: () => void
-  onSearchReplaceClick?: () => void
-  onBulkCharacterReplaceClick?: () => void
-  onToolSettingsClick?: () => void
-  onRunToolClick?: () => void
-  onStateClick?: () => void
-  onRegenerateBackgroundClick?: () => void
-  onRoleplayTemplateChange?: () => void
-  storyBackgroundsEnabled?: boolean
   onStopStreaming: () => void
   /** Hide the stop button (when sidebar has its own stop button) */
   hideStopButton?: boolean
@@ -108,6 +90,9 @@ export function ChatComposer({
   id,
   input,
   setInput,
+  hasContent,
+  onContentChange,
+  onPersistDraft,
   attachedFiles,
   onRemoveAttachedFile,
   pendingToolResults,
@@ -118,51 +103,25 @@ export function ChatComposer({
   streaming,
   waitingForResponse,
   responseStatus,
-  toolPaletteOpen,
-  setToolPaletteOpen,
   showSource,
   setShowSource,
   uploadingFile,
   toolExecutionStatus,
-  renderingPatterns,
-  dialogueDetection,
-  chatPhotoCount,
-  chatMemoryCount,
-  hasImageProfile,
-  isSingleCharacterChat,
+  renderingPatterns: _renderingPatterns,
+  dialogueDetection: _dialogueDetection,
   roleplayTemplateId,
   documentEditingMode,
   onToggleDocumentEditingMode,
   onOpenDocumentClick,
   isDocumentModeActive,
   inputRef: externalInputRef,
-  agentModeEnabled = false,
-  onAgentModeToggle,
   onSubmit,
   onFileSelect,
   onAttachFileClick,
   onImagePaste,
-  onGalleryClick,
-  onGenerateImageClick,
   onLibraryFileClick,
   onStandaloneGenerateImageClick,
   onInsertAnnouncementClick,
-  onAddCharacterClick,
-  onSettingsClick,
-  onRenameClick,
-  onProjectClick,
-  projectName,
-  onContinueChatClick,
-  onDeleteChatMemoriesClick,
-  onReextractMemoriesClick,
-  onSearchReplaceClick,
-  onBulkCharacterReplaceClick,
-  onToolSettingsClick,
-  onRunToolClick,
-  onStateClick,
-  onRegenerateBackgroundClick,
-  onRoleplayTemplateChange,
-  storyBackgroundsEnabled = false,
   onStopStreaming,
   hideStopButton = false,
   onPendingToolResult,
@@ -171,7 +130,6 @@ export function ChatComposer({
   isTerminalModeActive,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
   const editorRef = useRef<ComposerEditorHandle>(null)
   // Track the Lexical editor instance in state so it's available during render
@@ -195,23 +153,22 @@ export function ChatComposer({
     onAttachFileClick?.()
   }
 
-  // Submit handler: reads markdown from Lexical and dispatches form submit
+  // Submit handler: the editor owns the live text, so we just dispatch the
+  // form submit — the page's onSubmit reads markdown straight from the editor
+  // handle (`getMarkdown()`), which is why we no longer round-trip through
+  // setInput here (that was the per-keystroke re-render source).
   const handleEditorSubmit = useCallback(() => {
     const markdown = editorRef.current?.getMarkdown() ?? ''
     if (markdown.trim() || attachedFiles.length > 0 || pendingToolResults.length > 0) {
-      setInput(markdown)
-      // Use a microtask to ensure setInput has propagated
-      setTimeout(() => {
-        const form = document.querySelector<HTMLFormElement>(`#composer-form-${id}`)
-        if (form) {
-          form.dispatchEvent(new Event('submit', { bubbles: true }))
-          setTimeout(() => {
-            editorRef.current?.focus({ preventScroll: true })
-          }, 10)
-        }
-      }, 0)
+      const form = document.querySelector<HTMLFormElement>(`#composer-form-${id}`)
+      if (form) {
+        form.dispatchEvent(new Event('submit', { bubbles: true }))
+        setTimeout(() => {
+          editorRef.current?.focus({ preventScroll: true })
+        }, 10)
+      }
     }
-  }, [id, attachedFiles.length, pendingToolResults.length, setInput])
+  }, [id, attachedFiles.length, pendingToolResults.length])
 
   // Capture the Lexical editor instance when the wrapper mounts
   const composerRefCallback = useCallback(
@@ -352,38 +309,6 @@ export function ChatComposer({
           </div>
         )}
 
-        {/* Tool palette popover - shows above the composer when open */}
-        <ToolPalette
-          isOpen={toolPaletteOpen}
-          onClose={() => setToolPaletteOpen(false)}
-          toggleButtonRef={toolPaletteToggleRef}
-          onGalleryClick={onGalleryClick}
-          onSettingsClick={onSettingsClick}
-          onRenameClick={onRenameClick}
-          onProjectClick={onProjectClick}
-          projectName={projectName}
-          onContinueChatClick={onContinueChatClick}
-          onAddCharacterClick={onAddCharacterClick}
-          onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
-          onReextractMemoriesClick={onReextractMemoriesClick}
-          onSearchReplaceClick={onSearchReplaceClick}
-          onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
-          onToolSettingsClick={onToolSettingsClick}
-          onRunToolClick={onRunToolClick}
-          onStateClick={onStateClick}
-          onRegenerateBackgroundClick={onRegenerateBackgroundClick}
-          chatPhotoCount={chatPhotoCount}
-          showAddCharacter={isSingleCharacterChat}
-          chatId={id}
-          chatMemoryCount={chatMemoryCount}
-          storyBackgroundsEnabled={storyBackgroundsEnabled}
-          disabled={sending || !hasActiveCharacters}
-          agentModeEnabled={agentModeEnabled}
-          onAgentModeToggle={onAgentModeToggle}
-          roleplayTemplateId={roleplayTemplateId}
-          onRoleplayTemplateChange={onRoleplayTemplateChange}
-        />
-
         {/* Formatting toolbar - shown above the form when document editing mode is enabled */}
         {documentEditingMode && lexicalEditor && (
           <FormattingToolbar
@@ -395,8 +320,12 @@ export function ChatComposer({
             setInput={setInput}
             onToggleSource={() => {
               if (showSource) {
-                // Switching back to rich text — sync source edits into Lexical
+                // Leaving source mode — push textarea edits into Lexical.
                 editorRef.current?.setMarkdown(input)
+              } else {
+                // Entering source mode — seed the textarea from the editor's
+                // live content (page `input` lags while typing in rich mode).
+                setInput(editorRef.current?.getMarkdown() ?? '')
               }
               setShowSource(!showSource)
             }}
@@ -430,24 +359,8 @@ export function ChatComposer({
             />
             </div>
 
-            {/* Main toolbar buttons - hamburger and composition mode */}
+            {/* Main toolbar buttons - composition mode, document, terminal */}
             <div className="qt-chat-toolbar">
-              {/* Tool palette toggle button */}
-              <button
-                ref={toolPaletteToggleRef}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setToolPaletteOpen(!toolPaletteOpen)
-                }}
-                className="qt-chat-toolbar-button"
-                title="Tools"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-
               {/* Composition mode toggle button */}
               <button
                 type="button"
@@ -516,7 +429,9 @@ export function ChatComposer({
             <LexicalComposerWrapper
               ref={composerRefCallback}
               input={input}
-              setInput={setInput}
+              onContentChange={onContentChange}
+              onPersistDraft={onPersistDraft}
+              suspendSync={showSource}
               onSubmit={handleEditorSubmit}
               onImagePaste={onImagePaste}
               documentEditingMode={documentEditingMode}
@@ -545,7 +460,7 @@ export function ChatComposer({
             /* Send button - disabled while generating when stop is in sidebar */
             <button
               type="submit"
-              disabled={sending || (streaming || waitingForResponse) || (!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
+              disabled={sending || (streaming || waitingForResponse) || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
               className="qt-chat-composer-send"
               title={!hasActiveCharacters ? "Add a character to start chatting" : (streaming || waitingForResponse) ? "Generating..." : "Send message"}
             >

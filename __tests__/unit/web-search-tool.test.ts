@@ -221,9 +221,9 @@ describe('validateWebSearchInput()', () => {
       expect(validateWebSearchInput(input)).toBe(false)
     })
 
-    it('should accept maxResults as string number (converts via Number())', () => {
+    it('should reject maxResults as a string (no coercion under Zod)', () => {
       const input: unknown = { query: 'test', maxResults: '5' }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).toBe(false)
     })
 
     it('should reject maxResults as null', () => {
@@ -302,10 +302,10 @@ describe('validateWebSearchInput()', () => {
   })
 
   describe('Edge cases and boundary conditions', () => {
-    it('should accept query exceeding max length (no length validation in runtime)', () => {
+    it('should reject query exceeding max length (Zod enforces the JSON Schema maxLength)', () => {
       const longQuery = 'a'.repeat(501)
       const input: unknown = { query: longQuery }
-      expect(validateWebSearchInput(input)).toBe(true)
+      expect(validateWebSearchInput(input)).toBe(false)
     })
 
     it('should accept query at exact min length (1 character)', () => {

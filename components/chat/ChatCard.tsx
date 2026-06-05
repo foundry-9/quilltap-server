@@ -11,6 +11,7 @@
  * Configure via props to show/hide features based on context.
  */
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { TagDisplay } from '@/components/tags/tag-display'
@@ -18,6 +19,7 @@ import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import AvatarStack from '@/components/ui/AvatarStack'
 import { formatChatListDate } from '@/lib/format-time'
 import { CloseIcon } from '@/components/ui/icons'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
 
 // ============================================================================
 // Types
@@ -75,6 +77,8 @@ export interface ChatCardData {
   isDangerousChat?: boolean
   /** Scriptorium rendering status: none = not rendered, rendered = markdown only, embedded = fully indexed */
   scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
+  /** Whether this chat is an autonomous character-to-character room (4.6) */
+  isAutonomous?: boolean
 }
 
 export interface ChatCardProps {
@@ -133,6 +137,23 @@ function TrashIcon({ className }: { className?: string }) {
   )
 }
 
+function LinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  )
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -168,10 +189,25 @@ export function ChatCard({
 }: ChatCardProps) {
   const router = useRouter()
   const { formatCharacterName } = useUserCharacterDisplayName()
+  const [copiedLink, setCopiedLink] = useState(false)
 
   const participantNames = formatParticipantNames(chat.participants)
   const dateStr = formatChatListDate(chat.lastMessageAt || chat.updatedAt, useRelativeDates)
   const displayTitle = chat.title || (characterName ? `Chat with ${characterName}` : 'Untitled Chat')
+
+  const handleCopyLink = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const url = `${window.location.origin}/salon/${chat.id}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedLink(true)
+      showSuccessToast('Link copied to clipboard')
+      setTimeout(() => setCopiedLink(false), 1500)
+    } catch {
+      showErrorToast('Failed to copy link')
+    }
+  }
 
   const handleCardClick = (e: React.MouseEvent) => {
     // Don't navigate if clicking on a button or link
@@ -294,6 +330,31 @@ export function ChatCard({
               {chat.isDangerousChat && (
                 <span className="qt-text-destructive text-sm flex-shrink-0" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>
               )}
+              {chat.isAutonomous && (
+                <span
+                  className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-muted qt-text-secondary px-2 py-0.5 qt-body-sm font-semibold flex-shrink-0"
+                  title="Autonomous character-to-character room"
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <polyline points="12 7 12 12 15 14" />
+                  </svg>
+                  Autonomous
+                </span>
+              )}
+              <button
+                type="button"
+                className="chat-card__badge inline-flex items-center justify-center rounded-full qt-bg-muted qt-text-secondary w-6 h-6 flex-shrink-0 hover:qt-bg-surface-alt transition-colors cursor-pointer"
+                title="Copy link to this chat"
+                aria-label="Copy link to this chat"
+                onClick={handleCopyLink}
+              >
+                {copiedLink ? (
+                  <CheckIcon className="w-3 h-3 qt-text-success" />
+                ) : (
+                  <LinkIcon className="w-3 h-3" />
+                )}
+              </button>
             </div>
 
             {/* Metadata row */}

@@ -26,7 +26,7 @@ import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import { resolveUniqueRelativePath } from '@/lib/file-storage/bridge-path-helpers';
 import type { getRepositories } from '@/lib/database/repositories';
-import { createHash } from 'crypto';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
   buildKeptImageMarkdown,
   buildSlugAndFilename,
@@ -121,7 +121,7 @@ export async function saveToCharacterGallery(
     throw new Error(`Unsupported MIME type for character gallery: ${mimeType}`);
   }
 
-  const sha256 = createHash('sha256').update(data).digest('hex');
+  const sha256 = sha256OfBuffer(data);
 
   // Re-upload guard: refuse a second copy of the same bytes in this
   // character's photos/ folder.
@@ -343,6 +343,100 @@ export async function removeFromCharacterGallery(
   });
 
   return { deleted: true, fileGC: result.fileGC };
+}
+
+export interface SaveFileToCharacterGalleryInput {
+  characterId: string;
+  /** image-v2 FileEntry id to save. */
+  fileId: string;
+  caption?: string | null;
+  tags?: string[];
+  repos: ReturnType<typeof getRepositories>;
+}
+
+/**
+ * Save an existing image-v2 FileEntry into a character's vault `photos/`
+ * folder. Reads the bytes from storage and delegates to
+ * {@link saveToCharacterGallery}.
+ */
+export async function saveFileToCharacterGallery(
+  input: SaveFileToCharacterGalleryInput
+): Promise<SaveToCharacterGalleryOutput> {
+  const { characterId, fileId, caption, tags, repos } = input;
+
+  const fileEntry = await repos.files.findById(fileId);
+  if (!fileEntry) {
+    throw new Error(`Image not found: ${fileId}`);
+  }
+  if (fileEntry.category !== 'IMAGE' && !fileEntry.mimeType.startsWith('image/')) {
+    throw new Error(`File ${fileId} is not an image`);
+  }
+
+  const { fileStorageManager } = await import('@/lib/file-storage/manager');
+  const buffer = await fileStorageManager.downloadFile(fileEntry);
+  if (!buffer || buffer.length === 0) {
+    throw new Error(`Image ${fileId} has empty bytes`);
+  }
+
+  return saveToCharacterGallery({
+    characterId,
+    data: buffer,
+    filename: fileEntry.originalFilename,
+    mimeType: fileEntry.mimeType,
+    caption,
+    tags,
+    repos,
+  });
+}
+
+export interface SaveLinkToCharacterGalleryInput {
+  characterId: string;
+  /** Existing doc_mount_file_links.id to hard-link into this character's vault. */
+  sourceLinkId: string;
+  caption?: string | null;
+  tags?: string[];
+  repos: ReturnType<typeof getRepositories>;
+}
+
+/**
+ * Save an existing vault link (from any character or user gallery) into the
+ * target character's vault `photos/` folder. Reads the bytes from the source
+ * link's blob and delegates to {@link saveToCharacterGallery}, which
+ * dedup-guards against re-uploading into the same vault.
+ *
+ * This is the gallery-to-gallery path: post-Phase-3 photos live as
+ * `doc_mount_file_links` (no images-v2 FileEntry), so the legacy
+ * `saveFileToCharacterGallery` lookup by `fileId` would miss them.
+ */
+export async function saveLinkToCharacterGallery(
+  input: SaveLinkToCharacterGalleryInput
+): Promise<SaveToCharacterGalleryOutput> {
+  const { characterId, sourceLinkId, caption, tags, repos } = input;
+
+  const sourceLink = await repos.docMountFileLinks.findByIdWithContent(sourceLinkId);
+  if (!sourceLink) {
+    throw new Error(`Image link not found: ${sourceLinkId}`);
+  }
+
+  const mimeType = sourceLink.originalMimeType ?? 'application/octet-stream';
+  if (!mimeType.startsWith('image/')) {
+    throw new Error(`Link ${sourceLinkId} is not an image`);
+  }
+
+  const buffer = await repos.docMountBlobs.readDataByFileId(sourceLink.fileId);
+  if (!buffer || buffer.length === 0) {
+    throw new Error(`Image link ${sourceLinkId} has empty bytes`);
+  }
+
+  return saveToCharacterGallery({
+    characterId,
+    data: buffer,
+    filename: sourceLink.originalFileName ?? sourceLink.fileName,
+    mimeType,
+    caption,
+    tags,
+    repos,
+  });
 }
 
 const UNSAFE_LEAF_CHARS = /[\/\\:*?"<>|\x00-\x1f\x7f]/g;

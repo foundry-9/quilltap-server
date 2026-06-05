@@ -115,28 +115,6 @@ export async function fetchEmbeddingModels(
 }
 
 /**
- * Fetch available embedding providers.
- */
-export async function fetchEmbeddingProviders(): Promise<string[]> {
-  const res = await fetch('/api/v1/embedding-profiles?action=list-providers')
-  if (!res.ok) throw new Error('Failed to fetch embedding providers')
-  const data = await res.json()
-  return data.providers || []
-}
-
-/**
- * Fetch available image providers with their default models.
- */
-export async function fetchImageProviders(): Promise<
-  Array<{ value: string; label: string; defaultModels: string[]; apiKeyProvider: string }>
-> {
-  const res = await fetch('/api/v1/image-profiles?action=list-providers')
-  if (!res.ok) throw new Error('Failed to fetch image providers')
-  const data = await res.json()
-  return data.providers || []
-}
-
-/**
  * Fetch available image models for a provider.
  */
 export async function fetchImageModels(

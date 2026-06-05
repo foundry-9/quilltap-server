@@ -33,13 +33,11 @@ const repos = {} as never
 const baseCharacter: Character = {
   id: 'char-1',
   name: 'Charlie',
-  physicalDescriptions: [
-    {
-      id: 'pd-1',
-      mediumPrompt:
-        'Portrait of a middle-aged man with fair skin and short, spiky gray hair. Plain off-white background.',
-    },
-  ],
+  physicalDescription: {
+    id: 'pd-1',
+    mediumPrompt:
+      'Portrait of a middle-aged man with fair skin and short, spiky gray hair. Plain off-white background.',
+  },
 } as unknown as Character
 
 const equipped: EquippedSlots = {
@@ -84,14 +82,14 @@ describe('buildCharacterAvatarPrompt', () => {
   })
 
   it('returns an empty prompt when neither physical description nor outfit is available', async () => {
-    const blank: Character = { ...baseCharacter, physicalDescriptions: [] } as Character
+    const blank: Character = { ...baseCharacter, physicalDescription: null } as Character
     const { prompt, hasAppearance } = await buildCharacterAvatarPrompt(repos, blank, {})
     expect(hasAppearance).toBe(false)
     expect(prompt).toBe('')
   })
 
   it('handles outfit-only characters by leading the list with a blank line after the intro', async () => {
-    const blank: Character = { ...baseCharacter, physicalDescriptions: [] } as Character
+    const blank: Character = { ...baseCharacter, physicalDescription: null } as Character
     const { prompt } = await buildCharacterAvatarPrompt(repos, blank, { equippedSlots: equipped })
     expect(prompt).toMatch(/three-quarter view\.\n\n- \*\*/)
     expect(prompt).toMatch(/\n\nCharacter portrait, detailed/)

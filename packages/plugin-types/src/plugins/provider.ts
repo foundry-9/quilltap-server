@@ -8,6 +8,10 @@ import type { TextProvider } from '../providers/text';
 import type { ImageProvider } from '../providers/image';
 import type { ToolCallRequest, ToolFormatOptions } from '../llm/tools';
 import type { EmbeddingProvider, LocalEmbeddingProvider } from '../providers/embedding';
+import type {
+  ProviderOptionsSchema,
+  ProviderOptionsSchemaContext,
+} from './provider-options';
 
 /**
  * SVG icon data that can be provided by plugins without React dependency
@@ -525,6 +529,25 @@ export interface TextProviderPlugin {
    * Falls back to 8192 if not specified
    */
   defaultContextWindow?: number;
+
+  /**
+   * Describe provider-specific configuration fields the connection-profile
+   * editor should render (optional).
+   *
+   * The returned schema's field keys must match the keys this plugin reads
+   * off `LLMParams.profileParameters` at call time. The host renders the
+   * schema generically and writes results into the same flat `parameters`
+   * map that gets stored on the profile and handed back on every call.
+   *
+   * `context.modelName` is reserved for a future model-keyed gating pass
+   * and is currently ignored by the host renderer.
+   *
+   * @param context Optional render context (current model name, etc.)
+   * @returns A schema, or undefined when this provider has no extra options
+   */
+  getProviderOptionsSchema?: (
+    context?: ProviderOptionsSchemaContext
+  ) => ProviderOptionsSchema | undefined;
 }
 
 /**

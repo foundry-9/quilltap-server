@@ -141,37 +141,6 @@ export function countMessagesTokens(
 }
 
 /**
- * Calculate how many tokens are available for response
- * given a context limit and used tokens
- *
- * @param contextLimit Total context window size
- * @param usedTokens Tokens already used
- * @param minResponseTokens Minimum tokens to reserve for response
- * @returns Available tokens for response
- */
-export function calculateAvailableResponseTokens(
-  contextLimit: number,
-  usedTokens: number,
-  minResponseTokens: number = 1000
-): number {
-  const available = contextLimit - usedTokens
-  return Math.max(minResponseTokens, available)
-}
-
-/**
- * Quick estimation for UI display purposes
- * Less accurate but faster for real-time feedback
- *
- * @param text Text to estimate
- * @returns Quick token estimate
- */
-export function quickEstimateTokens(text: string): number {
-  if (!text) return 0
-  // Simple estimate: ~4 characters per token
-  return Math.ceil(text.length / 4)
-}
-
-/**
  * Format token count for display
  *
  * @param tokens Token count
@@ -185,22 +154,6 @@ export function formatTokenCount(tokens: number): string {
     return `${(tokens / 1000).toFixed(1)}k`
   }
   return tokens.toString()
-}
-
-/**
- * Check if text exceeds a token limit
- *
- * @param text Text to check
- * @param limit Token limit
- * @param provider Optional provider for more accurate estimation
- * @returns true if text exceeds limit
- */
-export function exceedsTokenLimit(
-  text: string,
-  limit: number,
-  provider?: Provider
-): boolean {
-  return estimateTokens(text, provider) > limit
 }
 
 /**

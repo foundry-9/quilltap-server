@@ -97,8 +97,7 @@ function makeCharacter(overrides: Partial<Character>): Character {
     partnerLinks: [],
     tags: [],
     avatarOverrides: [],
-    physicalDescriptions: [],
-    clothingRecords: [],
+    physicalDescription: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -201,19 +200,15 @@ describe('applyDocumentStoreOverlay — basic candidate filtering', () => {
     expect(getRepositoriesMock).not.toHaveBeenCalled();
   });
 
-  it('passes through characters with the switch off without touching the repository', async () => {
-    const chars = [
-      makeCharacter({ id: 'a', readPropertiesFromDocumentStore: false, characterDocumentMountPointId: 'mp-1' }),
-      makeCharacter({ id: 'b' }),
-    ];
-    const result = await applyDocumentStoreOverlay(chars);
-    expect(result).toEqual(chars);
-    expect(getRepositoriesMock).not.toHaveBeenCalled();
-  });
+  // The per-character `readPropertiesFromDocumentStore` opt-in flag was
+  // removed in the 4.6 vault cutover — the overlay now applies unconditionally
+  // whenever the character has a linked vault. Only the
+  // `characterDocumentMountPointId` predicate gates the overlay.
 
-  it('passes through characters with the switch on but no linked vault', async () => {
+  it('passes through characters with no linked vault', async () => {
     const chars = [
-      makeCharacter({ id: 'a', readPropertiesFromDocumentStore: true, characterDocumentMountPointId: null }),
+      makeCharacter({ id: 'a', characterDocumentMountPointId: null }),
+      makeCharacter({ id: 'b' }),
     ];
     const result = await applyDocumentStoreOverlay(chars);
     expect(result).toEqual(chars);
@@ -235,7 +230,6 @@ describe('applyDocumentStoreOverlay — properties.json overlay', () => {
 
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
     });
 
@@ -258,7 +252,6 @@ describe('applyDocumentStoreOverlay — properties.json overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
     });
     const [result] = await applyDocumentStoreOverlay([char]);
@@ -269,7 +262,6 @@ describe('applyDocumentStoreOverlay — properties.json overlay', () => {
     mockRepoPaths({}); // no docs anywhere
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       title: 'db-title',
     });
@@ -285,7 +277,6 @@ describe('applyDocumentStoreOverlay — properties.json overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       title: 'db-title',
     });
@@ -304,7 +295,6 @@ describe('applyDocumentStoreOverlay — properties.json overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       title: 'db-title',
       talkativeness: 0.5,
@@ -328,7 +318,6 @@ describe('applyDocumentStoreOverlay — description.md and personality.md overla
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       description: 'db-description',
     });
@@ -342,7 +331,6 @@ describe('applyDocumentStoreOverlay — description.md and personality.md overla
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       description: 'db-description',
     });
@@ -358,7 +346,6 @@ describe('applyDocumentStoreOverlay — description.md and personality.md overla
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       personality: 'db-personality',
     });
@@ -370,7 +357,6 @@ describe('applyDocumentStoreOverlay — description.md and personality.md overla
     mockRepoPaths({});
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       description: 'db-description',
       personality: 'db-personality',
@@ -394,7 +380,6 @@ describe('applyDocumentStoreOverlay — example-dialogues.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       exampleDialogues: 'db-dialogues',
     });
@@ -410,7 +395,6 @@ describe('applyDocumentStoreOverlay — example-dialogues.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       exampleDialogues: 'db-dialogues',
     });
@@ -422,7 +406,6 @@ describe('applyDocumentStoreOverlay — example-dialogues.md overlay', () => {
     mockRepoPaths({});
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       exampleDialogues: 'db-dialogues',
     });
@@ -436,7 +419,12 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     jest.clearAllMocks();
   });
 
-  it('overrides physicalDescriptions[0].fullDescription from physical-description.md', async () => {
+  // physicalDescriptions[] collapsed to physicalDescription (singular) in the
+  // 4.6 vault cutover. The vault remains authoritative: when any physical-*
+  // vault file exists, the overlay populates `physicalDescription`, synthesizing
+  // a record if the DB had none.
+
+  it('overrides physicalDescription.fullDescription from physical-description.md', async () => {
     mockRepoPaths({
       [CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH]: [
         { mountPointId: 'mp-1', content: 'vault-full-description' },
@@ -444,15 +432,12 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
-      physicalDescriptions: [
-        makePhysicalDescription({ id: 'pd-1', fullDescription: 'db-full' }),
-      ],
+      physicalDescription: makePhysicalDescription({ id: 'pd-1', fullDescription: 'db-full' }),
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.physicalDescriptions[0].fullDescription).toBe('vault-full-description');
-    expect(result.physicalDescriptions[0].id).toBe('pd-1');
+    expect(result.physicalDescription!.fullDescription).toBe('vault-full-description');
+    expect(result.physicalDescription!.id).toBe('pd-1');
   });
 
   it('overrides the four prompt tiers from physical-prompts.json', async () => {
@@ -463,15 +448,14 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
-      physicalDescriptions: [makePhysicalDescription({ id: 'pd-1' })],
+      physicalDescription: makePhysicalDescription({ id: 'pd-1' }),
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.physicalDescriptions[0].shortPrompt).toBe('vault-short');
-    expect(result.physicalDescriptions[0].mediumPrompt).toBe('vault-medium');
-    expect(result.physicalDescriptions[0].longPrompt).toBe('vault-long');
-    expect(result.physicalDescriptions[0].completePrompt).toBe('vault-complete');
+    expect(result.physicalDescription!.shortPrompt).toBe('vault-short');
+    expect(result.physicalDescription!.mediumPrompt).toBe('vault-medium');
+    expect(result.physicalDescription!.longPrompt).toBe('vault-long');
+    expect(result.physicalDescription!.completePrompt).toBe('vault-complete');
   });
 
   it('accepts null prompt values from physical-prompts.json (null means null)', async () => {
@@ -485,13 +469,12 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
-      physicalDescriptions: [makePhysicalDescription({ id: 'pd-1' })],
+      physicalDescription: makePhysicalDescription({ id: 'pd-1' }),
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.physicalDescriptions[0].shortPrompt).toBeNull();
-    expect(result.physicalDescriptions[0].completePrompt).toBeNull();
+    expect(result.physicalDescription!.shortPrompt).toBeNull();
+    expect(result.physicalDescription!.completePrompt).toBeNull();
   });
 
   it('leaves prompts from DB when physical-prompts.json is malformed JSON', async () => {
@@ -502,12 +485,11 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
-      physicalDescriptions: [makePhysicalDescription({ id: 'pd-1', shortPrompt: 'db-short' })],
+      physicalDescription: makePhysicalDescription({ id: 'pd-1', shortPrompt: 'db-short' }),
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.physicalDescriptions[0].shortPrompt).toBe('db-short');
+    expect(result.physicalDescription!.shortPrompt).toBe('db-short');
   });
 
   it('leaves prompts from DB when physical-prompts.json fails schema validation', async () => {
@@ -518,36 +500,20 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
-      physicalDescriptions: [makePhysicalDescription({ id: 'pd-1', shortPrompt: 'db-short' })],
+      physicalDescription: makePhysicalDescription({ id: 'pd-1', shortPrompt: 'db-short' }),
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.physicalDescriptions[0].shortPrompt).toBe('db-short');
+    expect(result.physicalDescription!.shortPrompt).toBe('db-short');
   });
 
-  it('preserves subsequent physical descriptions (only index 0 is patched)', async () => {
-    mockRepoPaths({
-      [CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH]: [
-        { mountPointId: 'mp-1', content: 'vault-full' },
-      ],
-    });
-    const char = makeCharacter({
-      id: 'a',
-      readPropertiesFromDocumentStore: true,
-      characterDocumentMountPointId: 'mp-1',
-      physicalDescriptions: [
-        makePhysicalDescription({ id: 'pd-1', fullDescription: 'db-full' }),
-        makePhysicalDescription({ id: 'pd-2', fullDescription: 'other-db-full' }),
-      ],
-    });
-    const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.physicalDescriptions).toHaveLength(2);
-    expect(result.physicalDescriptions[0].fullDescription).toBe('vault-full');
-    expect(result.physicalDescriptions[1].fullDescription).toBe('other-db-full');
-  });
+  // The old "preserves subsequent physical descriptions" test asserted that
+  // only index 0 of an array was patched. After the singular collapse the
+  // array no longer exists, so the test was removed.
 
-  it('skips physical overlay when the character has no physicalDescriptions', async () => {
+  it('synthesizes a physicalDescription when vault files exist but the DB had none', async () => {
+    // Post-cutover the vault is authoritative: a present vault file creates
+    // a synthetic record even when the character.physicalDescription is null.
     mockRepoPaths({
       [CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH]: [
         { mountPointId: 'mp-1', content: 'vault-full' },
@@ -558,12 +524,13 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
-      physicalDescriptions: [],
+      physicalDescription: null,
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.physicalDescriptions).toEqual([]);
+    expect(result.physicalDescription).not.toBeNull();
+    expect(result.physicalDescription!.fullDescription).toBe('vault-full');
+    expect(result.physicalDescription!.shortPrompt).toBe('vault-short');
   });
 });
 
@@ -594,7 +561,6 @@ describe('applyDocumentStoreOverlay — Prompts/*.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       systemPrompts: [
         {
@@ -634,7 +600,6 @@ describe('applyDocumentStoreOverlay — Prompts/*.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
     });
     const [result] = await applyDocumentStoreOverlay([char]);
@@ -663,7 +628,6 @@ describe('applyDocumentStoreOverlay — Prompts/*.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
     });
     const [result] = await applyDocumentStoreOverlay([char]);
@@ -690,7 +654,6 @@ describe('applyDocumentStoreOverlay — Prompts/*.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
     });
     const [result] = await applyDocumentStoreOverlay([char]);
@@ -711,7 +674,6 @@ describe('applyDocumentStoreOverlay — Prompts/*.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       systemPrompts: [
         {
@@ -734,7 +696,6 @@ describe('applyDocumentStoreOverlay — Prompts/*.md overlay', () => {
     mockRepoPaths({}, {});
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       systemPrompts: [
         {
@@ -764,7 +725,6 @@ describe('applyDocumentStoreOverlay — Prompts/*.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       systemPrompts: [
         {
@@ -794,7 +754,6 @@ describe('applyDocumentStoreOverlay — Prompts/*.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
     });
     const [first] = await applyDocumentStoreOverlay([char]);
@@ -831,7 +790,6 @@ describe('applyDocumentStoreOverlay — Scenarios/*.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
     });
     const [result] = await applyDocumentStoreOverlay([char]);
@@ -855,7 +813,6 @@ describe('applyDocumentStoreOverlay — Scenarios/*.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
     });
     const [result] = await applyDocumentStoreOverlay([char]);
@@ -868,7 +825,6 @@ describe('applyDocumentStoreOverlay — Scenarios/*.md overlay', () => {
     mockRepoPaths({}, {});
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       scenarios: [
         {
@@ -903,7 +859,6 @@ describe('applyDocumentStoreOverlay — Scenarios/*.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
     });
     const [result] = await applyDocumentStoreOverlay([char]);
@@ -924,7 +879,6 @@ describe('applyDocumentStoreOverlay — Scenarios/*.md overlay', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
     });
     const [first] = await applyDocumentStoreOverlay([char]);
@@ -946,7 +900,6 @@ describe('applyDocumentStoreOverlay — per-file independence', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
       title: 'db-title',
       description: 'db-description',
@@ -967,15 +920,16 @@ describe('applyDocumentStoreOverlay — per-file independence', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
-      physicalDescriptions: [
-        makePhysicalDescription({ id: 'pd-1', fullDescription: 'db-full', shortPrompt: 'db-short' }),
-      ],
+      physicalDescription: makePhysicalDescription({
+        id: 'pd-1',
+        fullDescription: 'db-full',
+        shortPrompt: 'db-short',
+      }),
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.physicalDescriptions[0].fullDescription).toBe('vault-full');
-    expect(result.physicalDescriptions[0].shortPrompt).toBe('db-short'); // not overridden
+    expect(result.physicalDescription!.fullDescription).toBe('vault-full');
+    expect(result.physicalDescription!.shortPrompt).toBe('db-short'); // not overridden
   });
 });
 
@@ -993,9 +947,10 @@ describe('applyDocumentStoreOverlay — batching', () => {
     });
 
     const chars = [
-      makeCharacter({ id: 'a', readPropertiesFromDocumentStore: true, characterDocumentMountPointId: 'mp-1' }),
-      makeCharacter({ id: 'b', readPropertiesFromDocumentStore: true, characterDocumentMountPointId: 'mp-2' }),
-      makeCharacter({ id: 'c', readPropertiesFromDocumentStore: false }),
+      makeCharacter({ id: 'a', characterDocumentMountPointId: 'mp-1' }),
+      makeCharacter({ id: 'b', characterDocumentMountPointId: 'mp-2' }),
+      // Character 'c' has no linked vault — overlay should skip it.
+      makeCharacter({ id: 'c', characterDocumentMountPointId: null }),
     ];
 
     const result = await applyDocumentStoreOverlay(chars);
@@ -1016,8 +971,8 @@ describe('applyDocumentStoreOverlay — batching', () => {
       ],
     });
     const chars = [
-      makeCharacter({ id: 'a', readPropertiesFromDocumentStore: true, characterDocumentMountPointId: 'mp-shared' }),
-      makeCharacter({ id: 'b', readPropertiesFromDocumentStore: true, characterDocumentMountPointId: 'mp-shared' }),
+      makeCharacter({ id: 'a', characterDocumentMountPointId: 'mp-shared' }),
+      makeCharacter({ id: 'b', characterDocumentMountPointId: 'mp-shared' }),
     ];
     await applyDocumentStoreOverlay(chars);
     const propsCall = findManyByMountPointsAndPath.mock.calls.find(
@@ -1036,7 +991,6 @@ describe('applyDocumentStoreOverlay — batching', () => {
     const chars = [
       makeCharacter({
         id: 'a',
-        readPropertiesFromDocumentStore: true,
         characterDocumentMountPointId: 'mp-1',
         title: 'db-title',
       }),
@@ -1064,7 +1018,6 @@ describe('applyDocumentStoreOverlayOne', () => {
     });
     const char = makeCharacter({
       id: 'a',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mp-1',
     });
     const result = await applyDocumentStoreOverlayOne(char);
@@ -1353,19 +1306,17 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       description: 'DB desc',
       personality: 'DB personality',
       exampleDialogues: 'DB dialogues',
-      physicalDescriptions: [
-        {
-          id: 'phys-1',
-          name: 'primary',
-          fullDescription: 'primary full',
-          shortPrompt: 'short',
-          mediumPrompt: 'medium',
-          longPrompt: 'long',
-          completePrompt: 'complete',
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-        },
-      ],
+      physicalDescription: {
+        id: 'phys-1',
+        name: 'primary',
+        fullDescription: 'primary full',
+        shortPrompt: 'short',
+        mediumPrompt: 'medium',
+        longPrompt: 'long',
+        completePrompt: 'complete',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
       systemPrompts: [],
       scenarios: [],
     });
@@ -1385,7 +1336,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       title: 'Detective',
       firstMessage: 'Hello there.',
       talkativeness: 0.7,
-      systemTransparency: null,
     });
 
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('DB desc');
@@ -1419,7 +1369,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       firstMessage: null,
       aliases: [],
       pronouns: null,
-      physicalDescriptions: [],
+      physicalDescription: null,
       systemPrompts: [],
       scenarios: [],
     });
@@ -1439,7 +1389,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       title: null,
       firstMessage: null,
       talkativeness: 0.5,
-      systemTransparency: null,
     });
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('');
     expect(getWrite(CHARACTER_PERSONALITY_MD_PATH)).toBe('');
@@ -1451,7 +1400,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
   it('projects systemPrompts into Prompts/*.md with YAML frontmatter and marks the default', async () => {
     const character = makeCharacter({
       id: 'char-prompts',
-      physicalDescriptions: [],
+      physicalDescription: null,
       systemPrompts: [
         {
           id: 'p1',
@@ -1494,7 +1443,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
   it('projects scenarios into Scenarios/*.md with a # heading title', async () => {
     const character = makeCharacter({
       id: 'char-scenarios',
-      physicalDescriptions: [],
+      physicalDescription: null,
       systemPrompts: [],
       scenarios: [
         {
@@ -1539,7 +1488,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
 
     const character = makeCharacter({
       id: 'char-stale',
-      physicalDescriptions: [],
+      physicalDescription: null,
       systemPrompts: [
         {
           id: 'p-new',
@@ -1574,7 +1523,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
   it('projects leaf wardrobe items into Wardrobe/*.md with frontmatter and freeform body', async () => {
     const character = makeCharacter({
       id: 'char-wardrobe',
-      physicalDescriptions: [],
+      physicalDescription: null,
       systemPrompts: [],
       scenarios: [],
     });
@@ -1626,7 +1575,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     // when emitting the frontmatter, so vault hand-edits are friendlier.
     const character = makeCharacter({
       id: 'char-composite',
-      physicalDescriptions: [],
+      physicalDescription: null,
       systemPrompts: [],
       scenarios: [],
     });
@@ -1704,7 +1653,6 @@ describe('syncCharacterVaultWardrobe — vault-only items', () => {
     });
     const findByIdRaw = jest.fn().mockResolvedValue({
       id: 'gary',
-      readPropertiesFromDocumentStore: true,
       characterDocumentMountPointId: 'mount-gary',
     });
 
@@ -1829,7 +1777,6 @@ describe('syncCharacterVaultWardrobe — vault-only items', () => {
       characters: {
         findByIdRaw: jest.fn().mockResolvedValue({
           id: 'gary',
-          readPropertiesFromDocumentStore: true,
           characterDocumentMountPointId: 'mount-gary',
         }),
       },
@@ -1894,7 +1841,6 @@ describe('syncCharacterVaultWardrobe — vault-only items', () => {
       characters: {
         findByIdRaw: jest.fn().mockResolvedValue({
           id: 'gary',
-          readPropertiesFromDocumentStore: true,
           characterDocumentMountPointId: 'mount-gary',
         }),
       },

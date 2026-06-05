@@ -2,6 +2,1182 @@
 
 ## Recent Changes
 
+### 4.6.0
+
+#### CLI: universal flags now work before the subcommand, and `migrations` accepts `-i`
+
+The universal flags (`-i`/`--instance`, `-d`/`--data-dir`, `--passphrase`, `-p`/`--port`) can now appear *before* the subcommand, not just after it — e.g. `quilltap --instance Friday db schema characters` works the same as `quilltap db --instance Friday schema characters`. Previously the top-level router keyed on the exact position of the subcommand (`process.argv[2]`), so any leading global flag made it fall through to the server launcher and fail with "Unknown argument: db".
+
+- `packages/quilltap/bin/quilltap.js`: the router now locates the subcommand by walking the args and skipping value-taking global flag/value pairs (so an instance literally named after a subcommand is not mistaken for one), then hands the remaining args — leading flags included — to the subcommand. Each subcommand already parses these flags position-independently, so they behave identically before or after the verb. No subcommand present still routes to the server launcher unchanged.
+- `packages/quilltap/lib/migrations-commands.js`: added the `-i` alias for `--instance`, matching every other subcommand. (`memories` intentionally keeps `-i` as `grep --ignore-case`; its long `--instance` works everywhere.)
+
+#### Docs: sync Quilltap CLI shell completions and README with shipped verbs
+
+Follow-through on the new pre-release checklist item (verify CLI docs/completions/tooling). Two verbs added in 4.6 — `db characters status` and `docs tree` — were already correct in the CLI's own `--help` output but had never been propagated to the static shell-completion templates or the package README. The drift was confined to the hand-maintained surfaces; the CLI itself was current. There is no automated completion-drift test, so nothing caught it.
+
+- `packages/quilltap/lib/completion/{bash,zsh,fish}.template`: added the `db characters` verb plus its `--id` / `--diverged` / `--blocked` flags, and the `docs tree` verb. Corrected the `docs --sort` value list to the actual accepted values (`name time size links`); it had listed stale, non-existent values (`name path size modified created`).
+- `packages/quilltap/README.md`: documented `db characters status` in the Database Tool subcommands and `docs tree` in the Document Stores read section. Corrected the stated Node.js requirement from "18 or later" to "24 or later" to match `package.json` `engines` (`>=24.0.0`).
+- `CLAUDE.md`: added `db characters status` and `docs tree` to the CLI quick-reference bullets.
+
+#### Docs: fix factual drift in README and API reference
+
+Release-prep accuracy pass over the user- and developer-facing docs. No code changes.
+
+- `README.md`: corrected the plugin extension-point count from "seven" to "eight" (the table lists eight). Removed the dead `File LLM Access` link (`docs/developer/FILE_LLM_ACCESS.md` no longer exists). Fixed the `Memory Management` link to point at `docs/developer/features/complete/memory_management.md`.
+- `docs/developer/API.md`: removed two documented-but-nonexistent character sub-resource sections — `Character Clothing Records` (migrated to Wardrobe; see `migratedFromClothingRecordId`) and `Character Descriptions` (now the `physicalDescription` field, not a CRUD endpoint set) — plus the orphaned table-of-contents entry. Corrected four read-only chat actions documented as `POST` to `GET` (`get-avatars`, `get-state`, `outfit`, `get-background`), matching `app/api/v1/chats/[id]/handlers/get.ts`.
+- `.claude/commands/update-documentation.md`: fixed the documentation tracker's `memory_management.md` entry to point at the `complete/` path, matching the README link correction above.
+- `docs/developer/DEVELOPMENT.md`: added a pre-release checklist item to verify the Quilltap CLI's documentation, shell completions, and tooling are up-to-date.
+
+#### Refactor: split the large characters API route files into SRP-compliant handlers/
+
+Two oversized route files under `app/api/v1/characters/` were broken up into per-verb handler modules. No behavior change — the same endpoints, actions, schemas, and responses; only the file layout moved.
+
+- `app/api/v1/characters/[id]/route.ts` (777 lines) is now a thin delegator that wires `GET`/`PUT`/`DELETE`/`POST` to `./handlers/{get,put,delete,post}.ts` (with a `handlers/index.ts` barrel). All GET/POST action dispatch (export, chats, cascade-preview, default-partner, get-tags, favorite, avatar, add-tag, remove-tag, toggle-controlled-by, set-default-partner, optimize-stream, generate-external-prompt, refresh-archive) moved into the handler modules unchanged.
+- `app/api/v1/characters/route.ts` (662 lines) is likewise thinned to delegate `GET`/`POST` to `./handlers/{get,post}.ts`. The collection POST actions (ai-wizard, ai-wizard-stream, import, quick-create, reset-builtins) and the create/import schemas moved with them.
+
+#### Tests + refactor: consolidate image SHA-256 hashing; add vault/sha256 regression coverage
+
+- Added regression tests covering recent character-vault and image work: `doc_mount_points` schema-drift repair (`alignDocMountPointsSchema`), manifesto nullability at the `CharacterSchema` and vault write/read-overlay layers, image SHA-256 dedup in `images-v2` (`createFile`), and the SHA-256 recorded by the character-avatar and story-background generation handlers (must hash the post-WebP-conversion bytes, not the raw provider bytes).
+- Consolidated the hand-duplicated `createHash('sha256').update(...).digest('hex')` image/file-byte hashing onto the shared `sha256OfBuffer` helper (`lib/utils/sha256.ts`, widened to accept `Buffer | Uint8Array`) across both image-generation handlers, `images-v2`, the images/files/wardrobe-preview routes, `chat-files-v2`, the image-generation tool handler, the filesystem scanner, and the character gallery service. Digests are byte-identical, so no stored data changes. String, truncated, and security-domain hashes were intentionally left untouched.
+
+#### Perf: typing in the Salon composer no longer re-renders the whole page
+
+Typing in the Lexical chat composer froze the Salon tab (browser "page unresponsive" prompts), worst while typing. The composer's markdown was lifted into top-level page state on every keystroke (16ms debounce), so each keystroke re-rendered the entire `app/salon/[id]/page.tsx` tree — `SplitLayout`, `VirtualizedMessageList`, and the Lexical plugin tree (none memoized). In dev this tripped the unresponsive-tab watchdog.
+
+- Added `components/chat/lexical/plugins/ComposerSyncPlugin.tsx` for the chat composer. The editor owns the live text; the plugin reports only a debounced content-presence boolean (drives the Send button) and a debounced draft-markdown string (persisted via refs, no `setState`). Typing no longer triggers a page re-render. The shared `MarkdownBridgePlugin` is unchanged and still used by the Scriptorium document editor and the standalone markdown editor, where per-keystroke `setInput` is intended.
+- The editor is now *controlled* for external writes only (draft restore, resend-into-composer, post-send clear) via the new plugin's loop-free `value → editor` sync. This also fixes two latent bugs: resend (`useMessageActions`) and draft restore (`useDraftPersistence`) set page state but never populated the Lexical editor — they do now.
+- Send reads the live markdown straight from the editor handle (`getMarkdown()`) at submit time, so button-click and Enter both send the freshest text even though page `input` intentionally lags. `useDraftPersistence` no longer takes `input`; it restores on mount and exposes an imperative `persistDraft`.
+
+#### Fix: character editor Identity edits were silently dropped
+
+Editing a character's Identity in the Aurora editor appeared to save (the request returned success) but never wrote `identity.md` in the character vault. The PUT validation schema in `app/api/v1/characters/[id]/route.ts` (`updateCharacterSchema`) was missing the `identity` field, so Zod stripped it from the request body before the update reached the vault-write overlay. Added `identity` to the schema (`z.string().nullable().optional()`, matching the canonical `Character` type). The other managed content fields (title, description, manifesto, personality, etc.) were already present and unaffected.
+
+#### Theme: announcement medium-dot tracks theme warning; brand select-arrow for Art Deco and Great Estate
+
+Aesthetic follow-up to the new Salon surfaces added since 4.5.0. Two small fixes so the new UI stays on-palette across the bundled themes.
+
+- **Announcement importance dots — medium dot now follows the theme.** `--qt-chat-announcement-dot-medium` in `app/styles/qt-components/_variables.css` (light + dark) was a hardcoded amber (`#d08a1e` / `#e3a94a`), unlike its siblings (high = `--color-destructive`, low = `--color-muted-foreground`). It now resolves to `var(--color-warning, …)` with the old amber kept as a fallback, so a cool-palette theme no longer shows a fixed warm dot. All five bundled themes define a `warning` color, so the dot tracks each theme's warning hue.
+- **Brand select-arrow for Art Deco and Great Estate.** The `<select>` chevron used the neutral slate default `--qt-select-arrow`. Both gold-accented themes now override it with a brand-gold glyph — deep gold on the light (cream) inputs, brighter gold on the dark inputs — mirroring each theme's gold tokens (Art Deco `#C19015` / `#F4BE34`; Great Estate `#AD851F` / `#EAB93E`). Data URIs can't reference CSS vars, so the stroke hex is inlined with a comment naming the source token. The other three bundled themes keep the neutral default. Bumped `art-deco` 1.0.8 → 1.0.9 and `great-estate` 1.0.3 → 1.0.4.
+- No new tokens were introduced (both `--qt-select-arrow` and `--qt-chat-announcement-dot-*` already exist and are already documented in the theme-author packages), so no stylebook / `theme-storybook` / `create-quilltap-theme` sync was required.
+
+#### Chore: remove noisy debug logs from bundled provider plugins
+
+- Removed high-volume debug-only traces added to bundled provider plugins for Anthropic, DeepSeek, Google, Grok, OpenAI, OpenRouter, Z.AI, and Ollama. The removed logs were reasoning/thinking fragment capture and embedding/context-cache diagnostics that were not needed for normal operations.
+- Rebuilt plugin distribution artifacts so each plugin's generated `index.js` matches the updated provider TypeScript sources.
+
+#### Feature: back up text replacement rules; remove dead legacy export code
+
+- Backup/restore now includes the global text replacement rules. Previously only the master switch (`chat_settings.textReplacementsEnabled`) was backed up, so restoring a backup re-enabled the feature with zero rules. Rules are written to `data/text-replacement-rules.json` (no `backupFormat` bump — the array is optional, and old backups without the file still restore via the `|| []` guard). Replace-mode restore truncates the table first; merge-mode restore skips rows that collide on the unique `(fromText, caseSensitive)` constraint. Rule IDs are global with no foreign keys, so new-account remap passes them through unchanged. Restore preview and the manifest now report a `textReplacementRules` count.
+- Deleted the dead in-memory export path from `lib/export/quilltap-export-service.ts` (`createExport`, the nine `exportXxx` entity builders, `generateExportFilename`, and the now-orphaned `sanitizeProfile`/`resolveApiKeyLabel`/`resolveTagNames`/`getChatMessages`/`createManifest` helpers). The live `.qtap` export has run through the NDJSON writer (`lib/export/ndjson-writer.ts`) for some time; only `previewExport` from the old service is still used (by the export-preview route). Added a round-trip regression test that exports a chat with a conversation annotation and a chat document through `createNdjsonStream` and asserts both survive reassembly — the deleted `exportChats` builder used to drop them. The legacy nested-JSON import path and `qtap-export.schema.json` are unchanged.
+
+#### Fix: flaky jest-worker SIGSEGV in the full unit suite (native SQLCipher under jsdom)
+
+The eight unit suites that load the real `better-sqlite3`/SQLCipher binding (the `packages/quilltap` CLI suites and the `lib/database/migration/repair-*` suites) inherited the global `jsdom` test environment. Native Buffers returned by the binding live in jsdom's separate realm; across a full parallel run a worker keeps the addon loaded while jsdom realms are torn down per test file, so GC or finalizers touching a freed-realm Buffer could segfault the worker — intermittently, and only on the full parallel run.
+
+- Added a `/** @jest-environment node */` docblock to each of the eight real-binding suites so their native Buffers never cross a jsdom realm boundary (also faster, since these suites don't need a DOM).
+- Added `workerIdleMemoryLimit: '512MB'` to `jest.config.ts` so workers recycle over the ~350-file run instead of accumulating memory that accelerates GC.
+- Rule going forward: any unit suite that loads the real DB binding must include the `@jest-environment node` docblock; suites that use the mocked driver do not.
+
+#### Chore: update npm dependencies across root, packages, and plugins
+
+Ran `npm update -S` on the root project, all packages, and all distributed plugins; bumped and rebuilt the affected packages and plugins.
+
+- Root/app dependency bumps: `next` and `eslint-config-next` 16.2.6 → 16.2.7, `react`/`react-dom` 19.2.6 → 19.2.7, `@types/react` 19.2.15 → 19.2.16, `openai` 6.39.0 → 6.42.0, `@openrouter/sdk` 0.12.35 → 0.12.79, `@tanstack/react-virtual` 3.13.26 → 3.14.2, `tar` 7.5.15 → 7.5.16, `yauzl` 3.3.1 → 3.3.2, plus `@vitest/mocker` and `tsx`.
+- Published packages: `@quilltap/plugin-utils` 2.2.11 → 2.2.12 (openai range), `@quilltap/theme-storybook` 1.0.38 → 1.0.39 (storybook/@storybook/react 10.4.1 → 10.4.2, react/@types/react). Both pushed to npm; the app and all plugins now reference `@quilltap/plugin-utils` ^2.2.12.
+- Plugins rebuilt with patch bumps (package.json + manifest.json): anthropic 1.0.41, curl 1.0.17, deepseek 1.0.8, default-system-prompts 1.1.9, google 1.1.35, grok 1.0.38, mcp 1.1.28, ollama 1.0.29, openai-compatible 1.0.30, openai 1.0.47, openrouter 1.0.43, search-serper 1.0.12, z-ai 1.1.9. `qtap-plugin-builtin-embeddings` had no dependency changes and was left untouched.
+- `create-quilltap-theme` and `plugin-types` had transitive lockfile-only updates with no manifest dependency change, so their versions were not bumped.
+
+#### Chore: sync qt-checkbox/qt-radio/select-arrow tokens into theme-storybook and create-quilltap-theme
+
+Completed the package follow-up deferred from the tokenization refactor below. The new `--qt-checkbox-*`, `--qt-radio-*`, and `--qt-select-arrow` tokens (plus the migrated form-control classes) now also ship in the two published theme-author packages. `@quilltap/theme-storybook` 1.0.37 → 1.0.38 (`src/css/qt-components.css`) and `create-quilltap-theme` 2.0.9 → 2.0.10 (`templates/bundle/styles.css.template` and the `THEME_PLUGIN_DEVELOPMENT.md` token reference), both published to npm. No root dependency bump: the app dropped its `@quilltap/theme-storybook` dependency in 4.4.0 (it's consumed only by external theme projects), and `create-quilltap-theme` is a standalone CLI.
+
+#### Refactor: tokenize qt-checkbox/qt-radio/select-arrow and finish the form-control migration
+
+Closed the gaps found in the previous qt-* audit so the component layer is fully theme-overridable.
+
+- **Checkboxes & radios are now token-driven.** `qt-checkbox`/`qt-radio` previously leaned on raw Tailwind (`text-primary`, `border-border`), which gave themes no hook and didn't actually recolor a native control's fill. Added `--qt-checkbox-{size,radius,border,accent,focus-ring}` and `--qt-radio-{size,border,accent,focus-ring}` to `_variables.css` and wired the classes in `_interactive.css` to use them — `accent-color` now follows the theme primary, and the focus ring matches inputs/buttons (`--color-ring`) instead of the odd-one-out primary ring.
+- **Select arrow is theme-aware.** The `<select>` chevron was a hardcoded gray SVG (`%236b7280`) that ignored the theme and stayed dark on dark surfaces. Introduced `--qt-select-arrow` (a full `url()` data URI) with a lighter dark-mode default; `qt-select` now references the token so themes can swap the glyph wholesale.
+- **`qt-button-success` normalized.** It hand-rolled its own base (`rounded-lg px-4 py-2 font-semibold`); folded it into the shared button base selector so it honors `--qt-button-radius`/padding/font and gains the standard focus-visible ring and disabled handling like every other variant. Success buttons now match the metrics of primary/secondary buttons.
+- **More controls migrated to `qt-*`:** Cancel buttons in `app/aurora/[id]/edit/page.tsx`, `ExternalPromptDialog.tsx`, `NewChatModal.tsx`, and `app/salon/new/page.tsx` → `qt-button qt-button-secondary`; the pronouns/coreWhisper select and scenario-title input in `CharacterBasicInfo.tsx` → `qt-select`/`qt-input`; the cron/freshness/spend-cap inputs and four visibility radios in `NewChatForm.tsx` → `qt-input`/`qt-radio`; three inline selects in `ChatSidebar.tsx` → `qt-select qt-select-sm`.
+- Theme-author token reference in `docs/developer/THEME_PLUGIN_DEVELOPMENT.md` updated with the new input/checkbox/radio/select-arrow tokens.
+- **Resolved:** the matching copies in `packages/theme-storybook` and `packages/create-quilltap-theme` were updated and published (see the sync entry above).
+
+#### Refactor: standardize hand-rolled form controls and buttons on qt-* component classes
+
+Audited the UI components changed since 4.5.1 against the `qt-*` theme utility class standard and converted controls that hand-assembled their look from raw utilities (including theme-aware shadcn tokens like `bg-card`/`text-foreground`) to the existing `qt-*` component classes, so the per-component theme tokens (`--qt-input-*`, `--qt-button-*`, `--qt-checkbox`, …) now reach them. No hard-coded Tailwind palette colors were found anywhere in the changed set; this is a component-class consistency pass with no behavior change.
+
+- Form controls → `qt-input` / `qt-select` / `qt-checkbox`: `app/aurora/[id]/edit/components/CharacterBasicInfo.tsx` (text inputs, pronouns select), `components/new-chat/NewChatForm.tsx` (4 selects, 3 budget inputs), `app/aurora/[id]/view/components/ExternalPromptDialog.tsx` (`selectClasses` const), `components/settings/connection-profiles/ProfileModal.tsx` (10 checkboxes), `components/settings/chat-settings/ThinkingDisplaySettings.tsx` (2 checkboxes).
+- Buttons → `qt-button-*`: `app/aurora/[id]/edit/page.tsx` (Save), `ExternalPromptDialog.tsx` (Generate), `app/salon/new/page.tsx` and `components/new-chat/NewChatModal.tsx` (Start), `components/images/image-detail/ImageMetadata.tsx` (Set Avatar), `ProfileModal.tsx` (Fetch Models, now matching its sibling Test Message button).
+- Consistency: `components/chat/ImageModal.tsx` and `components/chat/ChatGalleryImageViewModal.tsx` delete buttons use `hover:qt-bg-destructive` instead of the bare `hover:bg-destructive` token.
+- Left as-is intentionally: non-full-width inline selects (`components/chat/ChatSidebar.tsx`, the coreWhisper select in `CharacterBasicInfo.tsx`) where `qt-select`'s forced `w-full` would change layout, and custom-shaped affordances (round overlay/icon buttons, the translucent badge pill, the larger `h-5 w-5` transparency toggle) that no `qt-*` component variant matches.
+
+#### Fix: doc_write_file crashed (and silently looped) on tool calls truncated at the output-token limit
+
+A character trying to rewrite a large file in one `doc_write_file` call could hit the model's output-token ceiling mid-arguments, so the streamed tool-call JSON was cut off before `path` was emitted. The parsed arguments arrived with `path` undefined, and `resolveDocEditPath` crashed in `hasTraversalSegments` with an opaque "Cannot read properties of undefined (reading 'split')". The model saw only that cryptic error and retried the identical doomed call until the turn's tool-iteration cap. Two layered fixes:
+
+- **`lib/doc-edit/path-resolver.ts`** — `resolveDocEditPath` now guards against a non-string `relativePath` up front, throwing a clean `PathResolutionError('INVALID_PATH')` ("A file path is required, but none was provided…") instead of letting the `undefined.split()` TypeError escape. This is the single chokepoint for every path-bearing doc tool (read/write/str_replace/insert/move/copy/delete/frontmatter/heading/open), so all of them are now protected. Empty/root paths used by list/grep are unaffected (those don't route through here with a path).
+- **`lib/services/chat-message/native-tool-loop.service.ts`** — the native tool loop now detects a truncated finish reason (`extractFinishReason` → `max_tokens` / `length` / `MAX_TOKENS`) and, when the model emitted tool calls, declines to execute the half-parsed call(s). It returns a recoverable per-call failure ("this call was cut off because the response reached the output token limit… retry with a smaller call — write less content at once or use doc_str_replace… or raise max_tokens") and re-prompts, so the model gets the real reason and can recover. A truncated `submit_final_response` no longer terminates the agent loop or overwrites the response with its partial `response` arg.
+- **Tests** — `__tests__/unit/lib/doc-edit/path-resolver.test.ts` covers the undefined/null/non-string path guard; `__tests__/unit/lib/services/chat-message/native-tool-loop.service.test.ts` covers the truncated-tool-call rejection and the truncated-`submit_final_response` gate.
+
+#### Chore: dead-code sweep (knip)
+
+Removed dead exports and unused local types surfaced by knip. knip reported no unused files and no unused dependencies; the work was in the `Unused exports` / `Unused exported types` lists. A reference-count pass narrowed 1991 flagged symbols to 164 with zero references anywhere (including `packages/`, `plugins/`, tests, configs, dynamic imports) and zero in-file use; each was investigated individually before removal.
+
+- Deleted ~100 dead functions, constants, and unused type/interface declarations across 56 files — net 1,627 deletions / 6 insertions. Largest removals: `getCheapLLMProviderWithPricing` (`lib/llm/cheap-llm.ts`), seven unused query helpers in `lib/services/llm-logging.service.ts`, `findSimilarMemories`/`findSimilarMemoriesWithEmbedding` (`lib/memory/memory-service.ts`), the `lib/files/folder-utils.ts` tree helpers, and `lib/database/backends/sqlite/json-columns.ts` array helpers. Also removed now-orphaned private helper interfaces left behind by those functions.
+- Intentional surface was kept after investigation: lifecycle `stop*`/`is*Running` functions whose `start*` counterparts are wired in `instrumentation.ts`; plugin SDK contract types and registry accessors (moderation/provider registries); theme Ed25519 crypto and validation API; single-user/auth helpers; and all Zod schema / `z.infer` data-model surface and `*ToolInputSchema` exports.
+- `components/providers/chat-context.tsx` was briefly removed then restored — its `ChatProvider` is unused by name but its sibling `useChatContext` is consumed by `app/salon/[id]/page.tsx`.
+- Verified with `npx tsc --noEmit`, the full `npm run test:unit` suite, and `eslint` on the changed files; re-ran knip to confirm the reductions (exports 1237→1170, types 754→727) with no new unused files.
+- Updated `docs/developer/DEAD-CODE-REPORT.md` with the full per-file accounting.
+
+#### Tests: regression coverage for the coreWhisper chat_settings column and the plugin logger debug stub
+
+Added unit tests for two fixes that shipped without dedicated coverage.
+
+- `__tests__/unit/lib/database/migration/add-core-whisper-settings-field.test.ts` — covers the `add-core-whisper-settings-field-v1` migration that fixed the "no such column: coreWhisper" 500 on every chat-settings write: metadata, `shouldRun()` (only fires on SQLite when `chat_settings` exists and lacks the column; no-op once present), and `run()` (issues the `ALTER TABLE ... ADD COLUMN "coreWhisper"`, writes the expected default-JSON shape, is idempotent when the column already exists, and reports failure when the ALTER throws).
+- `__tests__/unit/lib/plugins/plugin-logger-bridge.test.ts` — guards the bridge's `debug()` against regressing back to the empty stub that silently dropped every plugin debug log. Asserts all four levels forward to the core logger with the `plugin`/`module` context attached, that `error` passes the `Error` through, and that `child()` loggers accumulate context.
+
+#### Fix: autonomous room creation redirected to the wrong settings tab
+
+The Autonomous Rooms settings card moved from the System tab to the Chat tab, but the post-creation redirect in `components/new-chat/hooks/useNewChat.ts` still pointed at `/settings?tab=system&section=autonomous-rooms`, where the section no longer renders. Now redirects to `/settings?tab=chat&section=autonomous-rooms`, landing on the correct tab with the card auto-expanded.
+
+#### Terminal Mode: per-session shell bootstrap (data dir, CLI alias, completions, prompt)
+
+Every Ariel terminal is now spawned with a shell bootstrap so the in-terminal `quilltap` CLI targets the right instance and matches the server version.
+
+- **`QUILLTAP_DATA_DIR` (all shells/platforms)** — set in `pty-manager.spawn()` to `getBaseDataDir()` (the instance root; `/app/quilltap` under Docker), authoritatively after any caller-provided env. For bash and zsh it is *also re-exported inside the shell init, after the user's rc is sourced*, so a `QUILLTAP_DATA_DIR` exported by the user's shell config (common for general CLI use) cannot clobber the server's instance. Flag-free `quilltap` commands in the terminal now address the running server's instance via the CLI's `QUILLTAP_DATA_DIR` resolution tier.
+- **`quilltap` alias (bash + zsh)** — when an on-PATH `quilltap` differs from the server version (or is absent), the shell aliases `quilltap` to `node <repo>/packages/quilltap/bin/quilltap.js`. The repo script path is resolved from `process.cwd()` and omitted when absent (standalone/prod), so no alias is emitted there. The version check runs inside the shell init (it has the real PATH); the server only injects its version + the script path.
+- **bash completions (#3) + cwd prompt (#4)** — bash sessions source the `quilltap` bash completions and set `PS1='\[\e[1;34m\]\w\[\e[0m\] \$ '` (colored working directory before `$`).
+- **New `lib/terminal/shell-init.ts`** — pure builders (`buildBashInitScript`, `buildZshInitFiles`, `shellSingleQuote`) plus `prepareShellInit`, which writes a per-session bash `--rcfile` or a zsh `ZDOTDIR` (`.zshenv`/`.zshrc` that source the user's originals and restore `ZDOTDIR`) under `<logsDir>/terminals/`. bash gets `--rcfile` argv; zsh gets `ZDOTDIR`/`QT_ORIG_ZDOTDIR` env overrides; other shells get only the env var. Artifacts are removed by a `cleanupInit` closure on session exit (and on spawn failure). Bootstrap failures degrade to a plain shell.
+- **`lib/terminal/types.ts`** — `PtySession.cleanupInit`. **`lib/terminal/pty-manager.ts`** — wires the args/env/cleanup and adds debug logs.
+- **Tests** — `lib/terminal/__tests__/shell-init.test.ts` covers the builders and `prepareShellInit` wiring.
+
+#### Dev tooling: Concierge tri-state acceptance test script
+
+Added `scripts/concierge-tristate-test.sh`, a CLI harness for the CT-1 (sidebar tri-state control) and CT-2 (off-duty stability) acceptance checks of the per-chat Concierge danger status. State changes are driven through `PUT /api/v1/chats/[id]` (the sidebar's `applyConciergeFlip` path) and assertions are read-only `quilltap db --json` queries, so it never writes to the encrypted DB directly. For each transition it verifies the `(conciergeOverride, isDangerousChat)` pair, the derived header pill, and the synthetic Concierge announcement — covering all four announcement kinds and both flag-preservation cases. CT-2's scan-skip is checked via `--arm`/`--recheck` across a real ~10-min scan tick; the classification handler's off-duty bail-at-entry is covered by running the existing jest guard suites. Flags: `--dry-run`, `--arm`, `--recheck`, `--no-jest`, `--keep`, `--instance`, `--base-url`, `--chat`.
+
+#### Refactor: one canonical derivation for a chat's Concierge danger status
+
+A chat's danger status lives in two fields — `isDangerousChat` (the classification label) and `conciergeOverride` (`'OFF'` = operator flipped the Concierge off-duty). These must always be read together: off-duty preserves the label but suppresses every Concierge effect. Several call sites read `isDangerousChat` alone, so the off-duty override could be silently dropped. Consolidated the derivation into a single primitive and fixed the readers that bypassed it.
+
+- **`lib/services/dangerous-content/chat-override.ts`** — added `ConciergeState` (`'safe' | 'flagged' | 'off'`, matching the manual-flip wire contract) and `getConciergeState(chat)` as THE canonical derivation. `isChatActiveDangerous(chat)` is now `getConciergeState(chat) === 'flagged'`. Two named questions: `isChatActiveDangerous` (should the Concierge act?) and `getConciergeState` (what state to display/manage?).
+- **`lib/services/dangerous-content/manual-flip.ts`** — `currentConciergeState` is now a thin alias of `getConciergeState`; removed the duplicated tri-state logic. `ConciergeUIState` kept as a deprecated alias of `ConciergeState`.
+- **`components/chat/ChatSidebar.tsx`** — removed the third copy of the tri-state logic (`deriveConciergeState`) and imported the canonical helpers. The Concierge control still uses the raw field pair; `ParticipantCard` danger styling now uses `isChatActiveDangerous`, so an off-duty chat no longer shows the danger ring on participant cards.
+- **`app/salon/[id]/page.tsx`** — message-avatar danger styling now uses `isChatActiveDangerous(chat)` instead of the raw flag, so it agrees with the header (which already showed Off-duty vs Flagged) within the same view.
+- **Bug fix — `app/api/v1/chats/[id]/actions/memories.ts`** — the streaming dry-run memory extraction resolved danger settings without the chat and read the raw flag, so an off-duty flagged chat still rerouted memory extraction to the uncensored provider. Now passes the chat to `resolveDangerousContentSettings` and derives the flag via `isChatActiveDangerous`, matching the background extraction handler.
+- **Hardening — `lib/services/chat-message/pre-compute.service.ts`** — the uncensored keyword-extraction reroute now gates on `isChatActiveDangerous(chat)` rather than the raw flag (previously only safe because the upstream-resolved settings collapsed to OFF).
+- **`__tests__/unit/lib/services/dangerous-content/chat-override.test.ts`** — added `getConciergeState` coverage and a consistency check against `isChatActiveDangerous`.
+- List-view card badges (`ChatCard`, `RecentChatItem`) still show the danger marker on off-duty chats by design — those surface the preserved *label*, not the live action state.
+
+#### Tests: regression coverage for the WebP-mimetype, Staff-whisper-prefill, and danger-classification fixes
+
+Added unit tests for three fixes that previously shipped without dedicated coverage, plus one small refactor to make the whisper fix testable.
+
+- **Extracted `normalizeWhisperRoles`** from `buildMessageContext` (`lib/services/chat-message/context-builder.service.ts`) into an exported pure function — same behavior (re-role `systemSender` whispers to `USER`, keep attachment-bearing whispers as `ASSISTANT`, opaque-body swap, clear `systemSender`), now callable in isolation. `buildMessageContext` calls it.
+- **`__tests__/unit/lib/services/chat-message/context-builder.service.test.ts`** — new `normalizeWhisperRoles` block: attachment-less whispers flip to `USER`, a tail of consecutive whispers ends as `user` (no assistant prefill), Lantern whispers with attachments stay `ASSISTANT` and remain discoverable by `collectLanternImageFileIdsForCharacter`, plus the opaque/non-opaque body-swap variants.
+- **`__tests__/unit/background-jobs/chat-danger-classification.test.ts`** — extended the no-summary fallback test to assert `SYSTEM` persona prompts, `TOOL` output, and `systemSender != null` Staff messages are excluded from the classifier input while benign user/character turns reach it.
+- **`__tests__/unit/lib/database/migration/repair-files-mime-and-size-from-mount-blob.test.ts`** — new suite for the repair migration over a real in-memory main DB plus a real temp-file mount-index DB: drifted `mimeType`/`size` rewritten to the blob's values with `sha256` left untouched, already-correct rows skipped, orphaned and malformed `mount-blob:` keys left alone, idempotency, mixed batch, and `shouldRun` / no-op paths. The mocked `better-sqlite3` constructor hands the migration the seeded handle (single connection) and swallows pragmas, so `openMountIndexDb`'s `PRAGMA key` (jest.setup.ts sets `ENCRYPTION_MASTER_PEPPER`) doesn't poison the unencrypted seed handle.
+
+#### Fix: standalone build omitted the `yaml` dependency, breaking the in-chat terminal
+
+The standalone server bundle is compiled by esbuild with `--packages=external`, which leaves `require('yaml')` external — so `yaml` must exist in the traced `node_modules`. Next's output-file tracer only follows the app's import graph, not the custom server bundle's, so `yaml` (reached only through the terminal WebSocket handler's chain: `server.ts`/`ws.ts` → pty-manager → repositories factory → doc-edit markdown parser) was never copied into the standalone output. At runtime the first terminal connection threw `Cannot find module 'yaml'` inside the WS module's esbuild `__esm` once-init wrapper, which flags the module as initialized even when its body throws, leaving its logger `undefined`. Every subsequent connection then failed with the misleading `Cannot read properties of undefined (reading 'info')`, and the browser's ~2-second reconnect loop repeatedly stole focus from the chat input.
+
+- **`next.config.js`** — added `./node_modules/yaml/**/*` to `outputFileTracingIncludes` so standalone and Docker builds ship `yaml`. Any future dependency reached only through the custom server's import graph (not the Next app's) must likewise be listed here.
+
+#### Fix: vault blob sha256 now matches stored bytes
+
+`doc_mount_blobs.sha256` and `doc_mount_files.sha256` could record the hash of the *input* bytes rather than the bytes actually stored. The two photo-save services (`save-image-to-album`, `user-gallery-service`) passed a pre-transcode sha into `linkBlobContent` while the `data` buffer was already the post-transcode WebP. The fix is applied at the write chokepoint:
+
+- **`linkBlobContent` / `upsertByFileId`** (`doc-mount-file-links.repository`, `doc-mount-blobs.repository`) now recompute sha256 from the `data` bytes (`sha256OfBuffer`) instead of trusting the caller. A mismatch between the caller-supplied sha and the recomputed value is logged as a warning; the caller-supplied sha is now advisory only.
+- **`save-image-to-album` / `user-gallery-service`** now recompute sha from the actual (post-transcode) bytes and use that hash for both the duplicate-save guard and the stored value, matching the existing behavior in `character-gallery-service`. Both services also surface the stored-bytes sha in their return value.
+- **Migration `repair-mount-blob-sha256-from-bytes-v1`** recomputes each existing vault blob's sha256 from its bytes and corrects affected `doc_mount_blobs` and `doc_mount_files` rows.
+- `files.sha256` in the main DB remains the input-bytes hash by design (load-bearing for upload dedup).
+
+#### Fix: `db characters status` wrongly flagged manifesto-less characters as incomplete
+
+`manifesto.md` was listed among the required vault single-files, so any character without a manifesto reported `5/6` and "1 required files missing" even though it was a valid, complete character. Manifesto is nullable/optional: the full-projection writer (`writeCharacterVaultManagedFields`) writes an empty `manifesto.md` when the field is blank, but the patch-level write overlay (`applyDocumentStoreWriteOverlay`) only writes it when an update patch carries a `manifesto` key — so a character created or edited without ever touching its manifesto never gets the file. On read, absent == empty == null, so these characters read identically to one with a blank manifesto. The "always written" property holds for the full-projection writer (which the cutover migration uses, so its required-files re-verify is correct in that context) but not for the patch-level overlay — and `db characters status` inspects vaults written by either path, so it can't assume manifesto is present.
+
+- **`packages/quilltap/lib/db-commands.js`** — moved `manifesto.md` out of `REQUIRED_VAULT_SINGLE_FILES` into a new `OPTIONAL_VAULT_SINGLE_FILES`. Required single-files are now 5, so the `files` column reads `/5`. Added a `manifestoPresent` boolean to the `--json` output and a `manifesto` column (`yes`/`no`) to the table. Manifesto still counts toward "any content," so a manifesto-only vault is not mislabeled `vault empty`. Characters lacking only a manifesto now report `ok` and no longer surface under `--diverged` / `--blocked`.
+
+#### Fix: cutover-characters-to-vault migration silently skipped every character
+
+The `cutover-characters-to-vault-v1` migration read characters through `repos.characters.findAllRaw()`, which validates each row against the *post-cutover* `Character` schema and silently drops rows that don't match. Every pre-cutover row fails that validation, so `findAllRaw()` returned `[]` on a populated table — the migration concluded "0 characters," skipped all per-character vault population, and dropped the 16 legacy content columns anyway. On instances whose vaults were already populated (e.g. via the startup backfill) this caused no data loss, but on an instance whose content still lived only in the DB columns it would be unrecoverable. The migration also never emitted the documented per-character warning when a `physicalDescriptions` array had more than one entry (the `physicalArrayTruncatedFrom` counter was declared but never assigned), and its post-populate re-verify treated the optional `physical-*` files as required, which would have wrongly blocked any character with no physical description.
+
+- **`migrations/scripts/cutover-characters-to-vault.ts`** — reads characters via direct SQL (`SELECT * FROM characters`) and maps each row in a new `mapLegacyCharacterRow` (no schema validation, so no rows are dropped). The mapper reshapes the legacy `physicalDescriptions` array into the singular `physicalDescription` (index 0 preserved) and logs one warning per character when extra entries are discarded, and safely parses the legacy JSON columns the vault writer reads (`aliases`, `scenarios`, `systemPrompts`, object-shaped `pronouns`).
+- **Hard abort guard** — if `SELECT COUNT(*)` is greater than the number of rows actually read, the migration logs an error and returns `success: false` *without* dropping any columns, so a future read regression can never silently discard un-migrated data.
+- **Re-verify fix** — the post-populate completeness check now requires only the six always-written files (`properties.json`, `identity.md`, `description.md`, `manifesto.md`, `personality.md`, `example-dialogues.md`); the `physical-*` pair is optional (the writer skips it when there's no physical description), matching `db characters status`.
+- Added `__tests__/unit/lib/database/migration/cutover-characters-to-vault.test.ts` covering the index-0 reshape, the single-warning-per-multi-entry behavior, empty/malformed handling, JSON-column parsing, and pronouns object-vs-string handling.
+
+Note: this migration already ran on existing dev instances (which suffered no data loss because their vaults were pre-populated); the fix applies to any instance that has not yet run the 4.6 cutover.
+
+#### Fix: CLI character resolution broken by the 4.6 vault cutover
+
+The `cutover-characters-to-vault-v1` migration dropped the `aliases` and `pronouns` columns (and the `readPropertiesFromDocumentStore` flag) from the `characters` table — those fields now live only in each character's vault `properties.json`. But the `quilltap` CLI still `SELECT`ed `aliases` from the row, so every command that resolved a character by name/alias threw `no such column: aliases`. This broke `db find character <query>`, `db chats --character`, `db logs --character`, `db memories --character/--about`, `db characters status --id`, and the entire `memories ls/find/grep/show/status/validate --character/--about` surface.
+
+- **`packages/quilltap/lib/db-helpers.js`** — `resolveCharacter` no longer selects the dropped `aliases` column; it resolves by UUID and name from the main DB. It takes an optional third arg `openMounts` (a zero-arg mount-index DB opener, e.g. `ctx.openMounts`); when supplied, the fuzzy fallback also matches vault-stored aliases by reading each vaulted character's `properties.json`. Degrades gracefully (name-only) when the mount-index DB is absent or no opener is passed. Added and exported `readVaultAliases(mounts, mountPointId)` and `resolveCharactersByAlias(db, mounts, query)`.
+- **`packages/quilltap/lib/db-commands.js`** — passed `ctx.openMounts` to all `resolveCharacter` call sites (chats/logs/memories/characters verbs). Rewrote `findCharacters` so `db find character` no longer selects `aliases`; it matches aliases via the vault and shows vault-sourced aliases in the output for all branches.
+- **`packages/quilltap/lib/memories-commands.js`** — `openDb` now also returns an `openMounts` opener; threaded it through `buildWhereClause` and the direct `resolveCharacter` calls in `cmdShow`/`cmdStatus`/`cmdValidate`.
+- **`db characters status` post-cutover display** — split the expected vault files into 6 always-written required files vs. the optional `physical-*` pair (the writer skips both when a character has no physical description), so a character with no physical description is no longer flagged "files missing". Added a `phys` column (`0/2`, `1/2`, `2/2`); exactly one of the pair is now reported as "physical files incomplete (1 of 2)". "vault empty" now means truly no files (not just missing required ones — those read "N required files missing"). Post-cutover the dead `flag` column is dropped and prompts/scenarios show vault-only counts instead of the misleading `vault/db`.
+- Added `__tests__/unit/packages/quilltap/db-helpers.test.js` covering UUID/name/fuzzy/alias resolution, graceful degradation without a mount opener, ambiguity, and `readVaultAliases`.
+
+#### Fix: Salon terminals under the Electron shell (`posix_spawnp failed`)
+
+Spawning an Ariel terminal under the Electron shell (built-in Node server) failed with `posix_spawnp failed`. node-pty needs a `spawn-helper` executable beside the `pty.node` it loads. The launcher rebuilds node-pty for the runtime's Node ABI, which lands a fresh `build/Release/pty.node` (node-pty's loader prefers `build/Release` over `prebuilds/`) but emits only the addon, not node-pty's separate `spawn-helper` build target; the helper then resolves to a nonexistent `build/Release/spawn-helper`. Separately, tar/extract can strip the exec bit off the shipped `prebuilds/*/spawn-helper`. Neither path runs `fix-node-pty-permissions.js`, since the Electron shell launches `standalone/server.js` directly and bypasses `bin/quilltap.js`.
+
+- **Runtime reconciliation.** Added a best-effort `ensureSpawnHelper()` to `scripts/standalone-server-bootstrap.js` (runs for the Electron shell, Docker, and CI standalone) and mirrored it as `reconcileNodePtySpawnHelper()` in `packages/quilltap/lib/native-modules.js` (called from `ensureNativeModules()` for the npx path). On non-Windows it chmods every `prebuilds/*/spawn-helper` back to `0755`, and when `build/Release|Debug/pty.node` exists without a sibling `spawn-helper`, copies the matching `prebuilds/<platform>-<arch>/spawn-helper` in (`spawn-helper` is a plain executable with no Node linkage, so the prebuilt copy is ABI-independent). Synchronous and wrapped so it never blocks startup.
+
+#### Change: Preserve single line breaks in chat markdown
+
+Chat markdown now renders a single newline as an actual line break instead of collapsing it into a space.
+
+- **`remark-breaks` added to both render paths.** A single newline (one Return) now becomes a hard `<br>`; blank lines still separate paragraphs. This matches chat-app convention (Slack/Discord/GitHub comments) and fixes the long-standing annoyance where a multi-line blockquote like `> Line one` / `> Line two` / `> Line three` rendered as one run-on line. Wired into the client renderer (`components/chat/MessageContent.tsx`, `remarkPlugins={[remarkGfm, remarkBreaks]}`) and the server pre-render service (`lib/services/markdown-renderer.service.ts`, in the cached `unified()` pipeline) so the two stay visually consistent. The server `renderedHtml` fast path is recomputed on every chat load, so existing messages pick up the new rendering with no migration. Trade-off: pasted hard-wrapped prose now shows a break per wrapped line — acceptable for a chat surface.
+
+#### Feature: Resizable Salon chat sidebar + tighter sidebar spacing
+
+The right-hand Chat sidebar in the Salon can now be resized and its internal boxing was tightened.
+
+- **Drag-to-resize.** A resize handle on the inner (left) edge of the expanded sidebar lets you drag it wider or narrower; the chat pane reflows to match. Width is clamped to 240–560px and additionally capped so the chat keeps at least 360px. Keyboard accessible (`role="separator"`, focusable): Left/Right nudge by 16px, Home/End jump to min/max. Width persists to `localStorage` under `quilltap.chat-sidebar.width` and is restored on reload. Implemented in `components/chat/ChatSidebar.tsx` (mirrors the `SplitLayout` drag pattern; persists to localStorage like the existing collapsed-state code). The collapsed strip is unaffected.
+- **Tighter spacing.** Reduced the nested padding that made participant cards feel cramped. Scoped to `.qt-chat-sidebar` so the shared `CollapsibleCard` used elsewhere (settings pages) is untouched: `--qt-card-padding` overridden to `0.5rem` (was `1.25rem`) for accordion header/body inside the sidebar, `.qt-chat-sidebar-list` padding `1rem`→`0.375rem`, divider margin scoped to `mx-2`, and the Add Character footer padding trimmed. New `.qt-chat-sidebar-resizer*` classes (visuals modeled on `qt-doc-divider`) in `app/styles/qt-components/_chat.css`.
+
+#### Change: Stop auto-scrolling the Salon on response completion; add a jump-to-bottom button; fix scroll jitter
+
+Two Salon scrolling complaints addressed, plus a structural rendering fix.
+
+- **Auto-scroll on completion is now an opt-in setting (default off).** New `autoScrollOnResponseComplete` boolean on `chat_settings` (migration `add-auto-scroll-on-response-complete-field-v1`, `INTEGER DEFAULT 0`). When off (the default), the Salon no longer jumps to the bottom when an assistant reply finishes streaming or a new message arrives — the view stays where the reader left it. Sending your own message and first opening a chat still scroll to the bottom. When on, the old behavior returns but only fires when the reader is already near the bottom. Toggle lives in Settings → Chat → **Auto-Scroll**. Wired through `lib/schemas/settings.types.ts`, `components/settings/chat-settings/types.ts`, `app/salon/[id]/types.ts`, the chat-settings repository default, `app/api/v1/settings/chat` (PUT), a new `AutoScrollSettings` card + `useChatSettings` handler, and gated inside `useAutoScroll` (the streaming-complete effect, the new-message effect, and `scrollOnStreamComplete`).
+- **Jump-to-latest button.** A floating round button appears in the lower-right of the message area whenever the reader is scrolled up; clicking it smooth-scrolls to the newest message and re-enables auto-scroll. `useAutoScroll` now exposes `isAtBottom` + `scrollToBottom`; `VirtualizedMessageList` wraps the scroll container in a non-scrolling `qt-chat-messages-viewport` and renders the `qt-chat-scroll-to-bottom` button (new `qt-*` classes in `_chat.css`).
+- **Scroll-listener attachment fix** (`useAutoScroll`): the scroll-position listener used to attach in an effect whose deps were `[containerRef, isNearBottom]`. Because the page renders a loading spinner (no message container) on first mount, that effect bailed at `if (!container) return` and never re-ran once the list mounted, so `isAutoScrollEnabled` was stuck at its initial `true` — near-bottom detection never updated. Added `isLoading` to the deps so the listener attaches as soon as the container exists. This also makes the (now opt-in) near-bottom gating actually respect scroll position.
+- **Scroll jitter fix** (`components/chat/LazyMessageContent.tsx`): removed the IntersectionObserver/500ms plain-text-preview path. Under virtualization, rows unmount/remount during scroll, so the preview→full-markdown swap re-measured each row to a taller height mid-scroll and shifted everything below, yanking the reader's position around. Content now renders eagerly (the server `renderedHtml` fast path is unchanged), giving each message one deterministic height that the virtualizer caches by key. The `forceRender` prop is accepted but ignored for call-site compatibility.
+
+#### Feature: Pack Salon announcements into importance-coded chips
+
+Collapsed Staff announcements (any `systemSender` message — Host, Prospero, Lantern, Aurora, Librarian, Concierge, Commonplace Book, Ariel) now render as content-width chips that flex-wrap onto a row instead of one full-width bar each, so a run of them takes far less vertical space. Each chip carries a small colored importance dot before the sender name: red (high), amber (medium), hollow grey (low). No schema or data change — purely a Salon rendering change.
+
+- **Importance tiers** (`app/salon/[id]/components/system-message-labels.ts`): new `getAnnouncementImportance(message)` backed by a single `IMPORTANCE_TABLE` keyed by `(systemSender, rawKind)` with a per-sender `'*'` fallback and a `medium` default. High = Librarian file changes (save/delete/rename/folder/attach), Host add/remove/status-change/user-character, Concierge danger. Medium = Lantern backgrounds/images, Aurora avatar/outfit, Ariel terminal, Prospero connection-profile change. Low = Prospero project/general context, Host time calls, Commonplace Book recalls. A shared `resolveRawKind` helper is now used by both the importance lookup and the existing kind-label path so they can't drift.
+- **Render-item layer** (`app/salon/[id]/announcement-render-items.ts`): new pure `buildRenderItems(renderMessages, expandedSystemMessageIds)` coalesces consecutive *collapsed* announcements into one `announcement-group` render item; everything else (including an expanded announcement) becomes a `message` item. Expanding one announcement mid-run splits its group into chips-before / full message / chips-after. The flat `messageIndex` is carried on every item for the TOOL backward-walk and near-end `forceRender`.
+- **Virtualization** (`app/salon/[id]/page.tsx`, `VirtualizedMessageList.tsx`): the virtualizer now indexes over render items (`count`/`getItemKey` use `renderItems`); the list branches on item kind, rendering packed groups via the new `AnnouncementGroup`. `useAutoScroll` gains a separate `itemCount` (render-item count) for `scrollToIndex` while `messageCount` stays the flat message count, so expand/collapse no longer false-triggers an auto-scroll to the bottom.
+- **Components** (`app/salon/[id]/components/AnnouncementChip.tsx`): new `AnnouncementBarContents` (dot + sender/kind/time/chevron, shared by chips and the expanded header), `AnnouncementChip` (keeps the `id`/`data-message-id` scroll anchor), and `AnnouncementGroup`. `MessageRow` now reuses these for its collapsed-fallback and expanded-header paths.
+- **CSS** (`app/styles/qt-components/_chat.css`, `_variables.css`): new `qt-chat-announcement-group` (flex-wrap container), `qt-chat-announcement-chip` (content-width, neutral background reusing the system-bar tokens), and `qt-chat-announcement-dot[-high|-medium|-low]`; new `--qt-chat-announcement-dot-*` tokens in light and dark.
+- **Tests**: `announcement-render-items.test.ts` (grouping/splitting/index-preservation) and `system-message-labels.test.ts` (tier lookups, `'*'` fallback, content inference, default).
+- **Follow-up**: reflect the new `qt-*` classes/tokens in `packages/theme-storybook` (its `qt-components.css` already lacked the `qt-chat-system-bar` block); bundled themes inherit via the token fallbacks.
+
+#### Change: Unify "wear an item" around the `replace` flag
+
+Wearing a wardrobe item now follows one rule everywhere: for each slot the item covers, the item's `replace` flag decides what happens — `replace: false` (the default for single garments and additive bundles) layers the item in, keeping what's already there; `replace: true` clears those slots and sets just this item. The flag is now the single source of truth across the dressing dialogues, the wardrobe dialog, and the LLM tools. No schema or data migration — `replace` already existed.
+
+- **Fix (dressing dialogues):** in the New Chat "Compose outfit" composer and the wardrobe dialog's Live/Builder composers, picking an item from a slot's `+` picker now fills *every* slot the item covers instead of only the row you opened. A dress lands in top and bottom; an outfit bundle lands in everything it covers. (`components/wardrobe/outfit-selector.tsx`, `wardrobe-control-dialog.tsx`, `equipped-slot-row.tsx`, `wardrobe-item-row.tsx`)
+- **Shared logic** (`lib/wardrobe/outfit-displacement.ts`): new pure `wearItemIntoSlots` (flag-driven) and `replaceItemIntoSlots` (force-swap) helpers; `equipItem` drops its old leaf-always-replaces special case and delegates to `wearItemIntoSlots`; new `replaceItem` DB primitive. `computeDisplacedSlots` modes renamed `equip` → `wear` and gained `replace`.
+- **API** (`POST /api/v1/chats/[id]?action=equip`): mode enum is now `wear | replace | add_to_slot | remove_from_slot | clear_slot | set_all`. `equip` is accepted as a deprecated alias for `wear`. `lib/hooks/use-outfit.ts` exposes a `replaceItem` callback alongside `equipItem`.
+- **LLM tools:** `wardrobe_change_item` modes are now `wear` (honors the flag) / `replace` (force-swap) / `add_to_slot` / `remove_from_slot` / `clear_slot` (the old `equip` is still accepted and routes to `wear`). `wardrobe_set_outfit` gains a `replace` mode and its `wear` description now reflects flag-driven behavior. All three wardrobe tools (`change_item`, `set_outfit`, `create_item` with `equip_now`) now return an `effect` (`layered` / `replaced` / `removed` / `cleared`) and a plain-language `effect_summary` so the model knows exactly what happened per slot. Tool descriptions explain that the item's `replace` flag drives the default behavior.
+- **Note:** because single garments are stored `replace: false`, wearing one now *layers* it. To swap a garment, use `replace` (LLM tools / API) or clear the slot first (dressing UI).
+
+#### Feature: Capture Z.AI (GLM) reasoning in the Salon thinking block
+
+The Z.AI provider now captures GLM chain-of-thought, bringing it in line with the other reasoning providers. GLM hybrid-reasoning models (glm-4.5/4.6 family, glm-5.x) emit reasoning as `reasoning_content` — the same field DeepSeek uses, in `delta.reasoning_content` (streaming) and `message.reasoning_content` (non-streaming). Per Z.AI's docs, thinking is enabled by default (`thinking: { type: 'enabled' | 'disabled' }`, default `enabled`), so GLM was returning reasoning all along — the plugin just dropped it on the floor before it reached the Salon.
+
+- **Provider** (`plugins/dist/qtap-plugin-z-ai` → 1.1.8): `streamMessage` accumulates `delta.reasoning_content` and emits it cumulatively on `StreamChunk.reasoningContent` (no plugin-types change); `sendMessage` reads `message.reasoning_content` into `LLMResponse.reasoningContent`. Both debug-log each capture. The streamed `rawResponse` carries `reasoning_content` back through.
+- **Wire shape**: `applyProfileParameters` now normalizes the flat `thinking` string from the profile editor (`"enabled"`/`"disabled"`) into Z.AI's `{ type: ... }` wire shape, and skips empty-string ("model default") values. The param was already allow-listed but was forwarded verbatim, so a UI toggle would have sent the wrong shape.
+- **Tool round-trip**: `formatMessages` echoes the model's own current-turn `reasoning_content` back on assistant-with-tool-calls turns (mirrors DeepSeek's requirement; harmless when thinking is off).
+- **UI**: the plugin exports a `getProviderOptionsSchema()` adding a **Thinking Mode** enum (model default / Enabled / Disabled) to the Z.AI connection-profile editor. The default leaves Z.AI's enabled-by-default behavior intact (thinking shows on its own once captured); selecting *Disabled* turns reasoning off at the source.
+- Display remains governed by the existing per-chat and global thinking-visibility controls, and reasoning stays display-only (never re-fed to a model except the in-turn tool echo above). Help: `connection-profiles.md` gains a Z.AI section; `thinking-display.md` lists GLM among the supporting engines.
+
+#### Feature: Show thinking models' reasoning ("chain-of-thought") in the Salon
+
+Reasoning models that emit a separate chain-of-thought (DeepSeek thinking mode, Anthropic extended thinking, Gemini 2.5/3 thinking, OpenAI/Grok reasoning summaries, and anything routed through OpenRouter) now have that thinking captured, persisted, and displayed inline in the assistant bubble — streamed live as the model works, then re-readable after reload. The block is offset to the right, dimmed, italic, and collapsible, visually distinct from the final prose, and its body renders through the shared Markdown renderer.
+
+Display is governed by a per-chat "Thinking" visibility toggle in the Salon's Visibility sidebar (tri-state: inherit / show / hide) and a global default in Settings → Chat → Thinking / Reasoning (`thinkingDisplay`: `defaultVisible`, `defaultCollapsed`). The global default is visible-but-collapsed.
+
+**Reasoning is display-only.** It is captured and stored solely to be shown; it is never sent to other characters, never included in conversation history sent to the next model, never folded into summaries or the Commonplace Book, and never used anywhere else. The only in-request reuse is the in-turn tool round-trip, which uses an in-memory value (DeepSeek/Anthropic require their own current-turn reasoning echoed back to finish that turn), never the stored columns.
+
+- **Providers** (`plugins/dist/qtap-plugin-{deepseek,openrouter,anthropic,google,openai,grok}`): each captures reasoning cumulatively during `streamMessage` and emits it on the existing `StreamChunk.reasoningContent` field (no plugin-types change), and populates `LLMResponse.reasoningContent` in `sendMessage` (skipping thinking blocks during text extraction so Anthropic no longer returns empty content when extended thinking is on). OpenRouter un-drops `delta.reasoning` (both the Chat-Completions and SDK paths) and requests `reasoning: { exclude: false }`. Anthropic adds extended-thinking request params (`thinking: { type: 'enabled', budget_tokens }` from `profileParameters.thinkingBudget`/`extendedThinking`, bumping `max_tokens` above the budget and omitting `temperature`/`top_p`), streams `thinking_delta`/`signature_delta`, and echoes thinking+signature blocks back on tool rounds. Gemini requests `includeThoughts: true` and captures thought parts; its thinking-model matcher (`isThinkingModel`) now recognizes `gemini-2.5-flash` and the rolling `gemini-pro-latest` / `gemini-flash-latest` / `gemini-flash-lite-latest` aliases (which resolve to thinking models). Crucially, Gemini 3 configures thinking via `thinkingLevel` (string, **lowercase** `'high'`/`'low'`), not the Gemini 2.5 `thinkingBudget` (numeric) — a new `isGemini3Model` check branches between them, since sending the legacy budget to a Gemini 3 model only sets a ceiling and lets it spend zero thinking tokens. **Known limitation:** Gemini 3/3.1 does not stream thought-summary parts even with `includeThoughts: true` (a documented Google API bug in `streamGenerateContent`); the thinking happens server-side but never reaches the client, so Gemini 3 reasoning will not display until Google fixes their streaming. OpenAI and Grok (a separate plugin, `qtap-plugin-grok`, that uses the same OpenAI Responses API) add `reasoning: { summary: 'auto' }` and capture `response.reasoning_summary_text.delta` plus reasoning items in the non-streaming output. xAI does not always return a summary, so Grok reasoning may be empty even when requested.
+- **Pipeline** (`lib/services/chat-message/`): a shared `applyReasoningChunk` / `flushReasoningSegment` pair in `streaming.service.ts` accumulates reasoning, forwards it live to the client (`encodeReasoningChunk` → `data: {"reasoning": ...}`), and closes it into positioned `reasoningSegments` (`{ anchorOffset, content, seq }`) at every reasoning→prose, reasoning→tool-call, and done boundary. A turn-monotonic `seq`, shared with tool-call anchors, keeps interleaved thinking/tool/thinking in true emission order. The finalizer re-bases segment offsets alongside tool anchors and drops them when the body is rewritten (content-block extraction, `submit_final_response`).
+- **Storage**: two new `chat_messages` columns, `reasoningContent` (TEXT) and `reasoningSegments` (JSON), added by migration `add-chat-message-reasoning-columns-v1`; plus `chats.showThinking` (per-chat tri-state) and `chat_settings.thinkingDisplay` (global-default JSON), added by `add-thinking-display-fields-v1`. Reflected in `MessageEventSchema`/`ChatMetadataSchema`/`ChatSettingsSchema`, `ChatMessageRowSchema`, `qtap-export.schema.json`, and DDL.md. SillyTavern export omits reasoning (no equivalent field).
+- **Rendering**: new pure helper `buildInterleavedLayout` (`app/salon/[id]/intersperse-reasoning.ts`) merges tool calls and reasoning segments into one offset-ordered layout; new `ThinkingBlock` component renders the collapsible block (its body goes through the shared `MessageContent` Markdown renderer); `MessageRow` and the live `StreamingMessage` both render it, gated on the resolved visibility. New `qt-chat-thinking-*` tokens/classes (light + dark, falling back to the silent-message tokens so untouched themes still render). The block is offset to the right (not right-justified) with normal left-to-right body text.
+- **Enabling per provider**: DeepSeek and OpenRouter surface reasoning once their model is a reasoning model (DeepSeek via its existing `thinking` profile param). Gemini 2.5 reasoning works on a genuine reasoning prompt; Gemini 3/3.1 thinking engages but does not stream a summary (see the known limitation above). Anthropic extended thinking is opt-in: the Anthropic connection-profile editor gains an "Extended Thinking" group (enable toggle + token budget) via the plugin's options schema (qtap-plugin-anthropic 1.0.40). OpenAI and Grok reasoning summaries are gated behind a `reasoningSummary` profile flag; the OpenAI and Grok connection-profile editors each gain a "Reasoning → Show Reasoning Summary" toggle via the plugins' options schemas (qtap-plugin-openai 1.0.46, qtap-plugin-grok 1.0.37, qtap-plugin-google 1.1.34). The OpenAI toggle was previously missing, so its already-present capture path could never be turned on; it is now exposed.
+- **Plugin debug logging restored** (`lib/plugins/plugin-logger-bridge.ts`): the bridge that routes plugin logs into the core logger had an empty `debug()` stub, so every plugin's `logger.debug(...)` calls were silently discarded regardless of `LOG_LEVEL`. Fixed to forward to `logger.debug`; plugin debug logs (all providers, both the main process and the forked background-jobs child) now honor the configured level. This was a pre-existing bug, surfaced while diagnosing provider reasoning capture.
+
+#### Feature: Tool calls are spliced into the character's prose where they fired
+
+Building on the earlier change that folds character-initiated tool calls into the assistant bubble, each tool block now renders at the exact point in the prose where the character paused to call it, instead of all stacking at the bottom of the bubble. Multiple calls in one batch stack in order at that point. Because each prose run was a separate model response, rendering them as independent Markdown also fixes run-together artifacts at the boundaries (e.g. a closing `*` from one action and the opening `*` of the next colliding into `**`).
+
+The position is captured server-side and persisted, so it survives reload — and the live streaming bubble interleaves calls the same way as they arrive.
+
+- Each tool message now carries an `anchorOffset` inside its existing JSON `content` (no database or export-schema migration): the number of characters of the turn's prose emitted before the call. The native function-calling loop (`native-tool-loop.service.ts`) captures it from the running `streaming.fullResponse`; the text/simple-json loop (`text-tool-loop.service.ts`) resolves it from the assembled, stripped segments in a single final pass (`assembleStrippedWithOffsets`). Auto-detected RNG rolls in a response anchor to the dice notation that triggered them.
+- The finalizer (`message-finalizer.service.ts`) re-bases captured offsets from streamed-response coordinates into final stored-content coordinates (accounting for the leading character-name-prefix strip), and drops them when the body can't be mapped (content-block extraction, or agent-mode `submit_final_response` overwriting the whole response) so those fall back to bottom-of-bubble rendering.
+- New pure helper `buildInterspersedToolLayout` (`app/salon/[id]/intersperse-tool-messages.ts`) splits the assistant prose at the anchors and interleaves the tool blocks; `MessageRow` renders the result. Calls with no usable anchor (legacy rows, dropped offsets) and source view still render in the trailing block.
+- Streaming: `useSSEStreaming` now tracks in-progress calls as offset-tagged batches (`StreamingToolBatch`) instead of one flat list, and `StreamingMessage` interleaves them into the live prose. Tool tracking was also extended to the continue/nudge streaming path, which previously showed no pending calls.
+
+#### Fix: Legacy JSON-text embeddings (index-keyed object shape) deserialize and self-heal
+
+Some rows persisted embeddings as legacy JSON *text* before the Float32-BLOB format — and a subset were written via `JSON.stringify(Float32Array)`, which serializes a typed array as an index-keyed object (`{"0":..,"1":..}`) rather than an array. On read, the SQLite backend's blob-column hydration `JSON.parse`d these into a plain object that no embedding schema accepts (`Float32Array | number[] | Buffer`), so the row failed validation with "expected Float32Array, received object". In practice this broke `syncHelpDocs` during a reindex: the find-by-path read threw, the sync treated the (existing) doc as missing and tried to INSERT it, and the resulting `UNIQUE constraint failed: help_docs.path` failed the whole `EMBEDDING_REINDEX_ALL` job — rolling back every buffered write, including the conversation-chunk embed jobs the reindex had just enqueued. (Observed on a Friday instance with 41 of 86 `help_docs` rows in the legacy text shape; all confirmed 1024-dim — correct values, only mis-stored.)
+
+Three coordinated changes: (1) Added `parseLegacyEmbeddingText` (`lib/embedding/float32-conversion.ts`), which recovers both the JSON-array and the index-keyed-object legacy shapes into a dense `number[]` (index order). (2) Wired `SQLiteCollection.hydrateRow` to use it, so reads of legacy rows succeed instead of throwing. (3) Extended the every-boot startup repair (`lib/startup/repair-text-embeddings.ts`) to cover `help_docs` and `conversation_chunks` (previously only `vector_entries` and `memories`) and to parse via `parseLegacyEmbeddingText` — which also fixes a latent data-loss bug where the old repair could not parse the object shape and nulled those rows on stall. The two duplicated per-table repair loops were refactored into a single `repairTableTextEmbeddings` helper. Net effect: mis-stored TEXT embeddings convert losslessly to BLOB on the next startup, with no re-embedding needed.
+
+#### Fix: Background-job embeddings no longer fail validation over the child IPC boundary
+
+Embeddings generated in the forked background-job child (`EMBEDDING_GENERATE`, `EMBEDDING_REINDEX_ALL`) are produced as `Float32Array` (`applyEmbeddingProfile`) and shipped back to the parent to be written. Despite `processor-host.ts` forking the child with `serialization: 'advanced'` (V8 structured-clone, which preserves typed arrays), the running dev server's IPC channel was effectively behaving like JSON serialization — so the `Float32Array` arrived at the parent as a plain object and failed every repository embedding schema (`Float32Array | number[] | Buffer`) with "expected Float32Array, received object". This surfaced as a reindex failing en masse (e.g. 83 errors on `help_docs` in Phase 1) and, more broadly, any background embedding write silently dying. Fixed by down-converting `Float32Array` write args to plain `number[]` in the child before buffering (`sanitizeForIpc` in `child-repositories-proxy.ts`'s `appendWrite`) — every embedding schema already accepts `number[]` and transforms it back to `Float32Array` on validation, so the conversion is lossless and independent of the IPC channel's effective serialization mode. Buffers and other typed-array views are left intact; objects/arrays are rebuilt only when they actually contain a `Float32Array`, so embedding-free writes incur no copy and the caller's in-memory args are never mutated.
+
+#### Fix: Ollama embeddings use /api/embed with truncation and a model-sized context window
+
+The Ollama embedding provider (`plugins/dist/qtap-plugin-ollama/embedding-provider.ts`, bumped to v1.0.28) sent `{ model, prompt }` to the legacy `/api/embeddings` endpoint with no `num_ctx` and no `truncate`, so Ollama loaded the model with its stock 2048-token context window. Inputs larger than that — most rendered conversation chunks — failed with "input length exceeds the context length", so the `EMBEDDING_GENERATE` job retried to DEAD and the chunk was never embedded. In the Salon this showed up as chats stuck on the "Rendered but not fully embedded" Scriptorium badge. The provider now POSTs to the modern `/api/embed` endpoint with `truncate: true` (oversize inputs are clipped instead of rejected) and an explicit `num_ctx` derived per-model from `/api/show`'s reported context length, capped at 16384 (fallback 8192 when the context length can't be read). Resolved values are cached per `baseUrl::model` with concurrent lookups deduped; servers predating `/api/embed` fall back to the legacy endpoint on a 404. No schema, API, or UI changes.
+
+#### Feature: Tool calls render inside the character's message in the Salon
+
+Character-initiated tool calls in Salon chats no longer render as standalone `role: 'TOOL'` bubbles in the general message flow. They are now folded into the assistant message that called them and rendered as separate blocks ("paragraphs") below the character's prose, inside the same bubble. This is a pure client-side rendering change — tool messages remain separate rows in the database; they are only grouped for display.
+
+A new pure helper `groupToolMessagesIntoAssistants` (`app/salon/[id]/group-tool-messages.ts`) attaches each character tool result (no `systemSender`, content `initiatedBy !== 'user'`) to the nearest preceding character-assistant entry via a transient `attachedToolMessages` field on the rendered `Message`, dropping it from the flat list. The page memoizes the grouped list (`renderMessages`) and feeds it to the virtualizer, `useAutoScroll`, and `VirtualizedMessageList`. `MessageRow` renders the attached tools via `ToolMessage` in a new `embedded` mode (no standalone row/avatar, compact header, wrapped in the pre-existing `.qt-chat-tool-embedded` class) inside a new `.qt-chat-message-tools` container. `ToolMessage` and `PendingToolCalls` both gained an `embedded` prop.
+
+User-initiated runs (Run Tool modal, composer-attached results, anything authored by Prospero) stay standalone, unchanged. During streaming, in-progress tool calls now nest inside the live streaming bubble (`StreamingMessage` renders `PendingToolCalls` embedded) instead of as a separate row. `useMessageActions.canResendMessage` now resolves its target message by id rather than by positional index, since the rendered list is whisper-filtered and tool-folded (also fixes a latent whisper index mismatch). Help (`help/tools.md`) updated.
+
+#### Fix: Confirming a wardrobe delete/reset closed the Wardrobe dialog
+
+Deleting a wardrobe item (or resetting the Outfit Builder) closed the entire Wardrobe dialog the moment you clicked Confirm. The confirmation prompt (`showConfirmation`) renders into `document.body`, outside the dialog's modal ref, so the `mousedown` on its Confirm button reached `BaseModal`'s click-outside listener and was read as a click outside the wardrobe. Routed all four confirmations in `wardrobe-control-dialog.tsx` through a `requestConfirmation` wrapper that sets a `confirming` flag, and suspended `closeOnClickOutside`/`closeOnEscape` while it is set — mirroring the existing `editorOpen` guard for the editor/import sub-modals.
+
+#### Feature: Composite wardrobe `replace` flag and vault-first wardrobe storage
+
+Composite wardrobe items gained an optional `replace` boolean (default `false`). When `false` (the default), equipping a composite is additive: its components layer onto whatever already occupies the slots it designates, clearing nothing. When `true`, equipping first clears every slot the composite designates (its `types`) and then places only its own components. Leaf (non-composite) items always replace their own slots and ignore the flag. A composite's `types` may now be a superset of its components' slot union, so a composite can designate slots beyond the garments it contains in order to clear them (e.g. a "Naked" composite holding only a wedding ring that designates all four slots and, with `replace: true`, strips everything but the ring). Added `replace` to the `.qtap` export schema (`WardrobeItem`).
+
+Wardrobe storage was cut over to vault-first. Wardrobe items now live as `Wardrobe/*.md` frontmatter files inside each character's document vault, and shared archetypes (formerly `wardrobe_items` rows with `characterId = null`) now live in the singleton "Quilltap General" mount under a `Wardrobe/` folder. The `wardrobe_items` SQLite table is no longer the write target and is deprecated (slated for removal). Shared archetypes are relocated by a one-time startup task (`lib/startup/move-shared-wardrobe-to-general.ts`, chained after `refreshVaultWardrobe`, idempotent via an `instance_settings` flag) — not a migration, because migrations run before the mount-index database is initialized and so cannot write vault documents. The `Wardrobe/*.md` frontmatter is built by `buildWardrobeItemFile` (`lib/mount-index/character-vault.ts`) and read by `parseWardrobeItemFile` (`lib/database/repositories/vault-overlay/parsers.ts`); fields include `id`, `title`, `types`, `componentItems` (composites only), `appropriateness`, `default`, `replace` (emitted only when true), `archived`/`archivedAt`, `migratedFromClothingRecordId`, `createdAt`, `updatedAt`, with the body holding the description. DDL.md updated.
+
+#### Feature: Two-column Open Document picker in Document Mode
+
+Redesigned the Salon's "Open Document" picker (`app/salon/[id]/components/DocumentPickerModal.tsx`) into a wider two-column layout. The left column holds the defaults — New blank document, Project library, General library — followed by the Recent list. The right column groups the chat-accessible document stores into three accordions: Character Vaults, Database-backed document stores, and Filesystem-backed document stores. Clicking a store drills into its file browser (with the existing Back step); the libraries and recents stay on the left.
+
+The Recent list is a collapsible accordion that now persists across chats: it leads with the current chat's documents, then includes recently-opened documents from other chats (every opened doc is already a `chat_documents` row), deduped by file identity and capped at a new shared constant `MAX_RECENT_DOCUMENTS` (`lib/chat-documents/constants.ts`, default 10) — replacing the previous hardcoded this-chat-only limit of 10. Added `ChatDocumentsRepository.findRecentAcrossChats(limit)`.
+
+The store accordions are populated by a new read-only chat action `GET /api/v1/chats/[id]?action=accessible-stores` (`handleAccessibleStores`): by default, the stores reachable from this chat (each participant's character vault, project-linked stores, and the instance-wide Quilltap General mount), bucketed by storeType/mountType. A **Look everywhere** toggle (`&all=true`) widens this to every enabled store — all character vaults (labelled by character name) and all document stores — restoring the old picker's reach-anywhere browsing. Only the project's official mount is held back from the accordions: it is returned separately as `projectLibrary` and backs the left-column "Project library" button, which browses *and* opens that mount (previously the button browsed the project's first-linked mount but opened its official mount — they could disagree), falling back to the legacy `project` filesystem scope when no official mount is provisioned. The left-column "General library" button continues to point at the legacy on-disk `_general` store, which is distinct from the Quilltap General mount (the latter is now reachable via the accordions). No schema or migration changes.
+
+To make opening from any of those stores actually work, the path resolver gained an opt-in `operatorOverride` flag on `PathResolutionContext`: when set, `document_store` resolution may reach any enabled mount. It is set only by the operator's HTTP document actions in `actions/documents.ts` (open/read/write/rename/delete); character `doc_*` tools build their own character-scoped context and never set it, so their sandbox is unchanged. This also fixes a bug where reopening a recent document whose store isn't reachable from the current chat (e.g. a non-participant character's vault, or any file browsed via "Look everywhere") failed with "not found" because the open path still resolved against the chat-accessible set.
+
+#### Fix: Saving chat settings failed with "no such column: coreWhisper"
+
+Any write to chat settings (e.g. changing Agent Mode max turns) returned a 500 with `no such column: coreWhisper`, surfacing in the UI as the console error "Failed to update agent mode max turns". The `ChatSettings` schema and repository expect a global-default `coreWhisper` JSON column on `chat_settings` (resolution precedence chat → character → global), but the original `add-core-whisper-fields-v1` migration only added the per-chat (`chats.coreWhisperEnabled`/`coreWhisperInterval`) and per-character (`characters.coreWhisperEnabled`) override columns — it never added the `chat_settings.coreWhisper` column, so the repository's auto-generated UPDATE referenced a column that didn't exist. Added migration `add-core-whisper-settings-field-v1` to add `chat_settings.coreWhisper TEXT` (default `{"enabled":true,"interval":12,"silenceThreshold":3,"packetTokenBudget":4096,"fireOnContextTransition":true}`). Editing the already-shipped migration wouldn't help instances where it had already run, hence a separate companion migration. DDL.md updated.
+
+#### Cleanup: Drop the dead singular `scenario` column from characters
+
+Added migration `drop-character-scenario-column-v1` to remove the singular `scenario TEXT` column from the `characters` table. It predated the `scenarios[]` array (which the 4.6 vault cutover moved into the per-character vault) and was never read or written by the repository row-mapping, the `Character` type, or its Zod schema — so the column was dead legacy that the cutover left behind because it was never part of the content-field set. No data loss: nothing referenced it. DDL.md already reflected the post-cutover schema without this column.
+
+#### Fix: Resuming a paused autonomous room continues the run instead of starting over
+
+Resuming a *paused* autonomous room now continues the same run rather than starting a fresh one. Previously, "Resume" was a literal alias for the manual-start path, so it minted a new run id, reset the turn/token counters to zero, and posted the "Autonomous room run begun…" banner — making the room look like it restarted even though the transcript was intact. Now a paused room flips straight back to `running` with its `currentRunId`, `runStartedAt`, and counters preserved and no start banner. The fix adds two `chats` columns: `runPausedAt` (migration `add-autonomous-run-paused-at-v1`), the start of the current paused interval, and `runPausedAccumMs` (migration `add-autonomous-run-paused-accum-v1`), the cumulative time spent paused. The wall-clock budget subtracts `runPausedAccumMs` from elapsed time so paused intervals don't count against it — crucially *without* moving `runStartedAt`, which also anchors the per-run token-usage window (an earlier attempt shifted `runStartedAt` and silently reset `runTokensConsumed` because the token window then excluded all pre-pause log entries). Genuinely idle/stopped/budgetExhausted rooms still start fresh. Both run-control surfaces are wired correctly: the toolbar badge already called `resume` for paused rooms, and the Scheduled Autonomous Rooms settings card now does too (it previously fired `start` despite its "Resume" label). Both new columns are included in the `.qtap` export schema.
+
+In a related change, a run interrupted by an abrupt server outage is now **resumable** instead of being silently reset. The startup reconcile (`reconcileAutonomousRunsAtStartup`) used to park a mid-run `running` room at `idle` (which resume treats as a fresh start, losing the counters). It now parks it at `paused` with `runStateMessage: 'restart:interrupted'`, preserving the turn/token counters and stamping `runPausedAt` from the last message so the outage folds into `runPausedAccumMs` on resume (excluded from the wall-clock budget) — so the household can Resume right where the conversation left off. Scheduled (cron) rooms are unaffected operationally: the scheduler tick treats `paused` as eligible, so the next cron slot still starts a fresh run if no one resumes manually.
+
+#### Feature: Duplicate a wardrobe item
+
+Added a **Duplicate** action to each item's `⋮` menu in the Wardrobe Control dialog. It creates an identical copy with a new UUID and "(copy)" appended to the title (escalating to "(copy 2)", "(copy 3)", … when earlier copies exist; an existing "(copy)"/"(copy N)" suffix on the source is stripped first). All fields are copied verbatim, including `componentItemIds` — so duplicating a composite outfit keeps the same component references rather than cloning the member items. Frontend-only: reuses the existing `POST /api/v1/characters/[id]/wardrobe` create path; no API or schema change. New pure helper `lib/wardrobe/next-copy-title.ts` (with unit tests) computes the copy title.
+
+#### Refactor: Split Quilltap import service into single-responsibility modules
+
+Broke up `lib/import/quilltap-import-service.ts` (2,100 lines) into a thin re-export barrel plus ten cohesive modules under `lib/import/quilltap-import/`: `types.ts` (shared types + public preview/options/result interfaces), `legacy-presets.ts` (fold pre-rework outfit presets into composites), `validation.ts` (`parseExportFile`/`validateExportFormat`), `import-profiles.ts` (connection/image/embedding profiles), `import-characters.ts` (characters + wardrobe + plugin data), `import-entities.ts` (tags/roleplay templates/projects/chats/memories), `import-document-stores.ts` (Scriptorium), `reconcile.ts` (post-import relationship reconciliation), `preview.ts` (`previewImport`), and `execute.ts` (the import orchestrator). The public surface imported through `quilltap-import-service` is unchanged (`parseExportFile`, `validateExportFormat`, `previewImport`, `executeImport`, and the `ImportPreviewEntity`/`ImportPreview`/`ImportOptions`/`ImportResult` types). Logic is byte-identical to the original — no behavior change.
+
+#### Refactor: Split restore service into single-responsibility modules
+
+Broke up `lib/backup/restore-service.ts` (2,124 lines) into a thin re-export barrel plus seven cohesive modules under `lib/backup/restore/`: `legacy-migrations.ts` (pure pre-rework backup-shape folding), `json-stream.ts` (disk-backed/streaming JSON readers), `archive.ts` (zip extract, parse, and extracted-dir readers), `delete-service.ts` (`deleteAllUserData`/`previewDeleteAllUserData` + replace-mode deletion), `uuid-remap.ts` (new-account UUID remapping), `preview.ts` (`previewRestore`), and `restore.ts` (the restore orchestrator). The public surface imported through `restore-service` is unchanged (`restore`, `previewRestore`, `parseBackupZip`, `getFileFromExtractedBackup`, `deleteAllUserData`, `previewDeleteAllUserData`, `DeleteSummary`). Logic is identical to the original; the only change is removal of a dead, never-used `ConversationChunk` type import.
+
+#### Refactor: Split character vault overlay into single-responsibility modules
+
+Broke up `lib/database/repositories/character-properties-overlay.ts` (1,944 lines) into a thin re-export barrel plus seven cohesive modules under `lib/database/repositories/vault-overlay/`: `schema.ts` (schemas, types, path constants, descriptor table, `MANAGED_FIELDS`), `parsers.ts` (pure parse/validate helpers), `vault-projection.ts` (generic folder projection), `vault-readers.ts` (per-field readers + `readVaultTextFile`), `read-overlay.ts` (`applyDocumentStoreOverlay`/`applyDocumentStoreOverlayOne`), `wardrobe-sync.ts` (wardrobe read overlay + write-back), and `managed-fields.ts` (`readCharacterVaultManagedFields`, `writeCharacterVaultManagedFields`, `applyDocumentStoreWriteOverlay`). The public surface imported through `character-properties-overlay` is unchanged. Handler logic is byte-identical to the original; the only behavior change is removal of a dead, never-read `routedFieldCount` counter and its empty `if` block in `applyDocumentStoreWriteOverlay`.
+
+#### Refactor: Split doc-edit tool handler into single-responsibility modules
+
+Broke up `lib/tools/handlers/doc-edit-handler.ts` (3,017 lines) into a thin dispatcher plus seven cohesive modules under `lib/tools/handlers/doc-edit/`: `shared.ts` (context type, logger, cross-cutting resolution/permission/reindex helpers), `text-handlers.ts`, `markdown-handlers.ts`, `file-management-handlers.ts`, `document-ui-handlers.ts`, `blob-handlers.ts`, and `photo-handlers.ts`. The public surface (`executeDocEditTool`, `formatDocEditResults`, `isDocEditTool`, `DOC_EDIT_TOOL_NAMES`, `DocEditToolContext`) is unchanged. Handler logic is byte-identical to the original; the only behavior change is removal of a dead empty `if` block in `buildReadResolutionContext`.
+
+#### Chore: Update npm dependencies across root, packages, and plugins
+
+Ran `npm update -S` on the root project, all `packages/*`, and all `plugins/dist/*`. Notable bumps: `better-sqlite3-multiple-ciphers` 12.9.0 → 12.10.0, `openai` 6.38.0 → 6.39.0, `@storybook/react` and `storybook` 10.4.0 → 10.4.1, plus `@tanstack/react-virtual`, `semver`, `ws`, and `yauzl` patch updates.
+
+Bumped versions: `@quilltap/plugin-utils` 2.2.10 → 2.2.11 and `@quilltap/theme-storybook` 1.0.36 → 1.0.37 (both published to npm), and a patch bump for all 14 distributed plugins in both `package.json` and `manifest.json`. Rebuilt plugin bundles with `npm run build:plugins`. `packages/quilltap` is versioned by `scripts/update_version.sh`.
+
+#### Chore: Remove dead clothing-record and physical-description components; tighten knip config
+
+Deleted 8 confirmed-unused component files knip flagged as unreferenced after the inline clothing-records and physical-descriptions surfaces were retired:
+`components/clothing-records/clothing-record-card.tsx`, `clothing-record-editor.tsx`, `clothing-record-list.tsx`, `index.ts`;
+`components/physical-descriptions/physical-description-card.tsx`, `physical-description-editor.tsx`, `physical-description-list.tsx`, `index.ts`.
+
+Updated `knip.json`: bumped `$schema` from `knip@5` to `knip@6`; added `better-sqlite3-multiple-ciphers` to `ignoreDependencies` (test-only conditional fallback, can't be detected statically). Updated `docs/developer/DEAD-CODE-REPORT.md` with 2026-05-28 findings.
+
+#### Refactor: Standardize new settings and autonomous-room UI on qt semantic utility classes
+
+Converted newly added settings and autonomous-room UI components away from direct Tailwind color/form wrappers to qt semantic classes.
+
+- Added autonomous room run-state badge semantics (`qt-badge-autonomous-running|idle|paused|stopped|budget|error`) and matching theme tokens in `app/styles/qt-components/_content.css` and `_variables.css`.
+- Updated `components/tools/autonomous-rooms-card.tsx` to use semantic qt badge classes for run states and schedule chips (`qt-badge-auto`, `qt-badge-manual`).
+- Added reusable settings shell semantics (`qt-settings-shell`, `qt-settings-shell-tight`, `qt-settings-section-heading`, `qt-settings-field-group`, `qt-settings-toggle-row`).
+- Updated new settings components to use qt form semantics (`qt-checkbox`, `qt-select`) and the new settings shell classes:
+  - `components/settings/chat-settings/ComposerSpellcheckSettings.tsx`
+  - `components/settings/chat-settings/TextReplacementSettings.tsx`
+  - `components/settings/core-whisper/CoreWhisperSection.tsx`
+  - `components/settings/connection-profiles/ProviderOptionsPanel.tsx`
+
+#### Chore: Remove unnecessary debug logging added after 01601c5ecf5b064ac2049f16ed6f6ef321875889
+
+Removed low-value debug logging added in recent changes across chat/API/tooling paths, including text replacement routes and plugin, chat danger classification off-duty early return, text replacement repository CRUD debug logs, Core whisper skip-path debug logs, stream cache-key debug logs, spellcheck dictionary push debug logs, self-inventory section-resolution debug logs, simple-json parser success debug logs, and simple-json prompt build debug logs.
+
+Also removed recent plugin-provider debug logs for DeepSeek `user_id` application and Z.AI tool-message skip events in source, then rebuilt plugin bundles with `npm run build:plugins` so dist output is generated by the normal build workflow.
+
+#### Test: Add regression coverage for recently fixed autonomous, self-inventory, doc-move, and gallery-link paths
+
+Added targeted unit/regression tests for changes that landed after `01601c5ecf5b064ac2049f16ed6f6ef321875889` and did not yet have direct assertions:
+
+- `__tests__/unit/app/api/v1/chats/route.continuation-autonomous.test.ts`: ad-hoc autonomous chat create now auto-starts; scheduled autonomous chat create does not auto-start.
+- `__tests__/unit/lib/tools/handlers/self-inventory-handler.test.ts` (new): `quilltap.version`, `quilltap.changelog`, and top-level `quilltap` section rendering/IO gating behavior.
+- `__tests__/unit/lib/tools/handlers/doc-edit-handler-chat-doc-sync.test.ts` (new): `doc_move_file` / `doc_move_folder` sync `chat_documents` pointers and keep move success when sync fails.
+- `__tests__/unit/lib/photos/character-gallery-service.test.ts` (new): `saveLinkToCharacterGallery` copies bytes from source link and writes to target character `photos/`; missing source link throws.
+
+#### Feat: Commonplace Book whispers now include per-memory metadata (importance, relevance, weight, keywords)
+
+Every memory line the Commonplace Book delivers to a character now carries a trailing italicized parenthetical with the metadata the ranker used to surface it. The format is `body text _(importance 0.98 · relevance 0.87 · weight 0.92 · keywords: a, b)_`. Each metric is included only when applicable to the section it appears in:
+
+- `## Relevant Memories` (`formatMemoriesForContext`): all four — importance, relevance (semantic-search score), effective weight, keywords.
+- `## Memories About Other Characters` (`formatInterCharacterMemoriesForContext`): importance, effective weight, keywords. No relevance, because these come from a direct DB query (`findByCharacterAboutCharacters`) rather than semantic search.
+- `## Memory Anchors` (`formatFrozenMemoryArchive`): importance and keywords only. The frozen archive must be byte-stable across turns within a compaction generation for the prompt cache to hit, so `weight` (decayed by `now()`) and `relevance` (per-turn query similarity) are deliberately omitted.
+- Dynamic-head rank instruction (`formatDynamicMemoryHead`): all four. The 200-token budget will trim entries earlier, but each entry that fits carries the full metadata tag.
+
+The whisper appears in two places with the same body: the persona-voiced version posted to the chat transcript (visible in the salon with the Commonplace Book avatar) and the plain "you remember…" version spliced into the user message for the LLM call. Both paths see the new metadata.
+
+- `lib/chat/context/memory-injector.ts`: new `formatMemoryMetadataTag(...)` helper produces the trailing tag (returns `''` when no fields apply). All four formatters now call it and concatenate the result onto each memory line. Numbers are rounded to 2 decimals; non-finite values, null/undefined fields, and empty/whitespace keywords are dropped.
+- `__tests__/unit/lib/chat/context/memory-injector.test.ts`: 14 new tests — the helper's edge cases (empty input, rounding, separator, blank keywords, non-finite numbers, null/undefined tolerance) plus one assertion per formatter that the right subset of fields appears, plus a byte-stability check confirming the archive's output is still identical across consecutive calls.
+
+#### Feat: Host off-scene character introductions prefer `identity` over `description`
+
+The Host whisper that introduces characters who are mentioned in chat but not present (`systemKind: 'off-scene-characters'`) now uses each character's `identity` field as the body of its card, falling back to `description` only when `identity` is empty or whitespace. `manifesto` and `personality` remain excluded — `identity` is the public-facing vantage that fits a third-party introduction; `description` (acquaintance-facing behavior) is the next best match; the other two fields are either foundational truth or internal self-knowledge and don't belong in a Host-spoken card.
+
+- `lib/services/host-notifications/writer.ts`: added optional `identity?` to `OffSceneCharacterCard`; `renderOffSceneCard` resolves the body as `identity` (trimmed) → `description` (trimmed) → omitted.
+- `lib/chat/context-manager.ts`: the newcomer payload mapping now passes `identity: c.identity ?? undefined` through to `postHostOffSceneCharactersAnnouncement`.
+- `__tests__/unit/lib/services/host-notifications-phase-c.test.ts`: three new cases — identity preferred when both present, description fallback when identity absent, description fallback when identity is whitespace.
+
+#### Feat: self_inventory `quilltap` section gets three dotted sub-sections
+
+The `quilltap` section already returns version + runtime + client shell + release notes + changelog as one bundle. Added three finer-grained section identifiers so callers can pull just what they want:
+
+- `quilltap.version` — version, runtime mode, and client shell only
+- `quilltap.releaseNotes` — release notes for the current (or most recent matching) release only
+- `quilltap.changelog` — the changelog only
+
+`quilltap` continues to return all three parts. Passing a sub-section skips the file reads for the parts that weren't asked for — useful when the changelog is large and the caller only needs the version line.
+
+- `lib/tools/self-inventory-tool.ts`: extended `SELF_INVENTORY_SECTIONS` with the three dotted identifiers; new `QUILLTAP_SUB_SECTIONS` constant; added `includedParts: { version, releaseNotes, changelog }` to `SelfInventoryQuilltapSection` so the formatter knows which chunks to render; updated the Zod and tool descriptions to document the new identifiers.
+- `lib/tools/handlers/self-inventory-handler.ts`: `buildQuilltapSection` now takes an `includedParts` flag bag and gates the release-notes and changelog `fs.readFileSync` calls on it; new `resolveQuilltapIncludedParts` collapses `quilltap` + dotted sub-sections into a single flag bag (presence of `quilltap` triggers all three). `formatQuilltapSection` only emits each chunk when its `includedParts` flag is true — no more "(no release notes found)" boilerplate when the caller asked only for the changelog.
+- `lib/tools/__tests__/__snapshots__/tool-definitions-snapshot.test.ts.snap`: refreshed to reflect the three new enum values and updated descriptions.
+
+#### Feat: Per-character prompt caching
+
+Re-keyed the provider prompt-cache identifier from `chatId` to `characterId`. The persona block (manifesto / identity / description / personality) sits high in the prompt, so each speaker rotation already busts the cacheable prefix — keying by character matches reality, and lets the same character share a warm cache across chats. Multi-character group chats now keep N parallel caches by design.
+
+- `lib/llm/cache-key.ts`: `buildPromptCacheKey(chatId)` → `buildCharacterCacheKey(characterId)`. Output prefix `quilltap:char:`. Bumped `PROMPT_CACHE_STRUCTURE_VERSION` from `1` → `2` so existing provider-side caches drop cleanly once on first use after deploy.
+- `@quilltap/plugin-types` → 2.5.1: new first-class `cacheKey?: string` on `LLMParams`. Replaces the previous `profileParameters.promptCacheKey` hack (that bag is for user-set profile knobs, not derived per-request values).
+- `@quilltap/plugin-utils` → 2.2.10: `OpenAICompatibleProvider` forwards `params.cacheKey` as `user` on both Chat Completions paths.
+- `lib/services/chat-message/streaming.service.ts`: builds the cache key from `characterId`, lifts onto the top-level `LLMParams.cacheKey` field, emits a debug log per call (`cacheKey set` / `cacheKey skipped (no characterId)`). The four other direct `provider.sendMessage` / `streamMessage` callsites where the persona block is genuinely in the prefix now also pass `cacheKey`: `lib/chat/initial-greeting.ts`, `lib/services/external-prompt-generator.service.ts`, `lib/services/character-optimizer.service.ts` (threaded `characterId` through `callOptimizerLLM`), and `lib/memory/cheap-llm-tasks/core-execution.ts` (all three send sites). Callsites where the persona is not in the prefix (wardrobe image analysis, auto-configure, ai-import, character-wizard, file-attachment-fallback, dangerous-content gatekeeper) intentionally do not key.
+- `qtap-plugin-deepseek` → 1.0.4: new `user_id` support on both `sendMessage` and `streamMessage` body construction. DeepSeek V4+ uses `user_id` as a true KV-cache isolation namespace (https://api-docs.deepseek.com/quick_start/rate_limit) rather than a routing hint.
+- `qtap-plugin-openai` → 1.0.43: clean cutover from `params.profileParameters?.promptCacheKey` to `params.cacheKey` on the Responses-API request build. Legacy path removed; `prompt_cache_retention: '24h'` opt-in on supported models is unchanged.
+- `qtap-plugin-grok` → 1.0.35: same cutover at both Responses-API code paths (non-streaming and streaming).
+- `qtap-plugin-z-ai` → 1.1.6: forwards `params.cacheKey` as `user` on both Chat Completions paths.
+- `qtap-plugin-openrouter` → 1.0.40: forwards `params.cacheKey` as `user` on both code paths. OpenAI-routed downstreams use it as a sticky-routing hint; other downstreams (Anthropic, etc.) ignore it.
+- `qtap-plugin-openai-compatible` → 1.0.28: picks up the new `OpenAICompatibleProvider` behavior via the plugin-utils bump.
+- `qtap-plugin-anthropic` → 1.0.37: comment-only — `params.cacheKey` is intentionally unused because Anthropic uses content-hashed `cache_control` breakpoints. Existing breakpoint placement is unchanged.
+- `qtap-plugin-google` → 1.1.31: `TODO(per-character-caching)` marker referencing the design doc for a future managed `cachedContents` resource per character. Out of scope this round.
+- `qtap-plugin-ollama` → 1.0.26: comment-only — Ollama runs locally and manages its own KV cache; no remote routing hint applies.
+- No DB migration. The cache key is derived per request, not stored. No `.qtap` or SillyTavern export schema change.
+
+#### Fix: DeepSeek V4 Pro thinking-mode tool calls no longer 400 on the follow-up request
+
+DeepSeek's thinking mode requires `reasoning_content` to be passed back on any assistant turn that carries `tool_calls`; the API returns 400 otherwise (see https://api-docs.deepseek.com/guides/thinking_mode#tool-calls). The DeepSeek plugin was silently dropping `delta.reasoning_content` from the stream, so the in-turn native tool loop sent the second request without it. Fixed end-to-end:
+
+- `@quilltap/plugin-types` → 2.5.0: added optional `reasoningContent?: string` on `LLMMessage`, `LLMResponse`, and `StreamChunk`. Mirrors the existing `thoughtSignature` pattern for Gemini.
+- `qtap-plugin-deepseek` → 1.0.3: captures `delta.reasoning_content` (streaming) and `msg.reasoning_content` (non-streaming), surfaces it on the chunk/response, and re-attaches `reasoning_content` to the wire payload when `formatMessages` emits an assistant message that has `tool_calls`. Bumped `@quilltap/plugin-types` dependency to `^2.5.0`.
+- App side: threaded `reasoningContent` through `StreamingState`, `StreamingResult`, `StreamOptions['messages']`, the streaming-service chunk callback, and the four consumers that mirror `thoughtSignature` (`primary-stream.service.ts`, `native-tool-loop.service.ts`, `text-tool-loop.service.ts`, `provider-failover.service.ts`). The orchestrator initializes the new field to `undefined`.
+- Scope is deliberately limited to in-turn tool loops. Intermediate assistant-with-tool_calls messages are not persisted (only the final text response is), so no DB schema change or migration was needed. OpenRouter's separate `delta.reasoning` channel is not touched here — that's tracked separately.
+
+#### Fix: Aurora's Core whisper now fires for every character in a multi-char rotation, and bootstraps on chats that predate the feature
+
+Two related bugs were keeping the Core whisper from offering itself to characters other than the one immediately responding to a user message. Both are fixed.
+
+- `lib/chat/context-manager.ts`: the Core whisper block was gated on `respondingParticipant && newUserMessage`, which made it skip every assistant turn in a multi-character auto-rotation (e.g. Amy speaking right after Friday, with no new user message in between). Replaced with `respondingParticipant && !isContinueMode` — the explicit continue/nudge/chained-turn signal already plumbed through the chat-message pipeline. `BuildContextOptions` now accepts `isContinueMode?: boolean` and `lib/services/chat-message/context-builder.service.ts` forwards `options.isContinueMode` into `buildContext`. The internal `shouldFireCoreWhisper` continue-mode short-circuit remains as a defensive belt-and-braces check.
+- `lib/chat/context/core-whisper-trigger.ts`: the Librarian "rolling-summary fold" detector was matching `systemKind` substrings for `summary`, `rolling`, or `fold`. The last keyword false-matched `folder-created-by-character` — a character filing a folder is not a memory fold. Switched to kebab-segment membership on `summary` / `rolling` so the actual rolling-summary kinds still match cleanly. Regression test added.
+- `lib/chat/context/core-whisper-trigger.ts`: broadened the "first" trigger from "character has never spoken" to "character has never been offered a Core whisper in this chat." This is the bootstrap case for chats that predate the feature — a character with many prior turns but no prior whisper now gets one on their next turn, instead of having to accumulate `interval` more turns before periodic fires. Existing tests updated; the periodic / silence / context-transition cases now seed a prior whisper to exercise the post-bootstrap cadence.
+
+#### Feat: Aurora's Core whisper — periodic re-offering of each character's `Core/` vault folder
+
+Aurora now offers each character their own `Core/` vault folder back to them at three moments: their first turn in a chat, every N of their own turns thereafter (default 12), and after a silence of N other-voice turns immediately before their re-entry (default 3). Also fires once after a Librarian rolling-summary fold when `fireOnContextTransition` is enabled. The whisper is character-private, persisted to the transcript with Aurora's avatar, and inlined into the LLM context as plain second-person framing with a required advisory paragraph ("offered, not imposed").
+
+- `lib/services/aurora-notifications/core-whisper.ts`: new module mirroring `lib/services/commonplace-notifications/writer.ts`. `assembleCorePacket(characterId, packetTokenBudget)` reads every markdown file under `Core/**` in the character's DB-backed vault via the extended `docMountDocuments.findManyByMountPointsInFolder(..., { recursive: true })`, strips frontmatter, sorts case-insensitively by path, and dedupes case-fold collisions with a `logger.error` (deterministic keep-lexicographically-first). Three builders: `buildCoreWhisperContent` (persona-voiced with Aurora's stage direction), `buildCoreWhisperOpaqueContent` (persona stripped, for participants whose `systemTransparency !== true`), `buildCoreWhisperLLMContext` (plain second-person + closing advisory). `postCoreWhisper` persists with `systemSender: 'aurora'`, `systemKind: 'core-whisper'`, always-targeted at the responding participant. Oversized packets emit `logger.warn` with the literal phrase `"Core packet exceeds soft budget; consider refactoring Core documents."` and include full content — no truncation. `resolveCoreWhisperConfig(chat, character, global)` centralizes the precedence chat → character → global.
+- `lib/chat/context/core-whisper-trigger.ts`: pure trigger function `shouldFireCoreWhisper`. Single forward pass tracking the last Core whisper index for this recipient, this character's visible turns after it, and a trailing run of visible turns by others. `isVisibleConversationalTurn` excludes Staff whispers (`systemSender` set), `isSilentMessage`, empty/tool-only assistant content, and private whispers targeted away from this character. Continue/nudge skips entirely. Returns `'first' | 'periodic' | 'silence' | 'context-transition'`. Tests cover empty history, continue/nudge skip, periodic boundary, silence boundary, multi-trigger composition, prior-whisper reset, private-whisper isolation, silent-message masking, and Librarian fold detection.
+- `lib/chat/context-manager.ts`: new block inserted immediately before the Commonplace Book whisper block (with an `ORDERING:` comment explaining why identity grounds memory). Wrapped in try/catch — turn processing never fails because a Core packet couldn't be assembled. Sweeps stale prior Core whispers for the same recipient (filter by `systemSender === 'aurora'` + `systemKind === 'core-whisper'` + target match). The LLM-context form is composed into `composedUserContent` ahead of the Commonplace recall.
+- `lib/database/repositories/doc-mount-documents.repository.ts`: `findManyByMountPointsInFolder` gained an `options.recursive` flag (default `false`, preserving existing top-level-only behavior for character properties). When `true`, nested files under the folder are included.
+- `lib/schemas/settings.types.ts`: new `CoreWhisperSettingsSchema` (enabled / interval / silenceThreshold / packetTokenBudget / fireOnContextTransition) on `ChatSettings` as `coreWhisper`, defaults `{ true, 12, 3, 4096, true }`.
+- `lib/schemas/chat.types.ts`: `ChatMetadataSchema` and `ChatMetadataBaseSchema` gain nullable `coreWhisperEnabled` (boolean) and `coreWhisperInterval` (int >= 1) for per-chat overrides.
+- `lib/schemas/character.types.ts`: `CharacterSchema` gains nullable `coreWhisperEnabled` (boolean) for per-character override.
+- `migrations/scripts/add-core-whisper-fields.ts`: `add-core-whisper-fields-v1` adds `chats.coreWhisperEnabled` (INTEGER NULL), `chats.coreWhisperInterval` (INTEGER NULL), and `characters.coreWhisperEnabled` (INTEGER NULL). Pretty label: "Fitting Aurora's workshop with a plumb line".
+- `docs/developer/DDL.md`: documented all three new columns.
+- `public/schemas/qtap-export.schema.json`: imports tolerate the new optional columns.
+- `help/core-whisper.md`: new help doc in the house voice.
+
+#### Chore: Remove dead embedding-job-scheduler helpers
+
+Removed `scheduleEmbedding`, `scheduleMemoryEmbedding`, and `cancelPendingRefit` from `lib/embedding/embedding-job-scheduler.ts` — none had callers, and memory embeddings are generated inline inside the memory gate rather than as queued `EMBEDDING_GENERATE` jobs. `scheduleRefit` (debounced BUILTIN-profile refits) and `handleEntityDeletion` (embedding-status cleanup) remain, used by the memories API routes.
+
+#### Fix: "Re-extract memories" works on autonomous chats
+
+Clicking the recreate-memories badge on an autonomous chat (the salon list's memory-count badge runs `DELETE /api/v1/memories?chatId=...` followed by `POST /api/v1/chats/[id]?action=queue-memories`) returned `"No user messages found in this chat — nothing to extract memories from."` and never enqueued any extraction jobs. The cause was that `handleQueueMemories` only enumerated `role='USER'` messages as turn openers, but autonomous chats have no USER messages — only ASSISTANT messages from characters speaking among themselves. As a separate bug, the live autonomous trigger in `triggerTurnMemoryExtraction` enqueued every job with `(chatId, turnOpenerMessageId=null)`, so the queue's per-chat dedupe collapsed every successive trigger to the same row and only the first autonomous turn was ever extracted.
+
+- `lib/background-jobs/queue-service.ts`: added optional `extractionAnchorMessageId: string | null` to `MemoryExtractionPayload`. `enqueueMemoryExtraction` now keys dedupe on `(chatId, turnOpenerMessageId, extractionAnchorMessageId)` so autonomous chats can use the latest ASSISTANT message as the anchor without colliding with the salon-style `(chatId, userMessageId)` keys. `enqueueMemoryExtractionBatch` accepts entries in both the legacy `string | null` shape (salon turn openers) and a new `{ turnOpenerMessageId, extractionAnchorMessageId }` shape (autonomous turns) — existing callers (`lib/import/sillytavern-import-service.ts`, `lib/background-jobs/handlers/memory-regenerate-chat.ts`) keep working unchanged.
+- `lib/services/chat-message/turn-transcript.ts`: `BuildTurnTranscriptOptions` gains `extractionAnchorMessageId?: string | null`. When set, the forward walk breaks after collecting the message whose id matches, bounding each autonomous-turn transcript at its own speaker.
+- `lib/background-jobs/handlers/memory-extraction.ts`: passes `payload.extractionAnchorMessageId ?? null` through to `buildTurnTranscript` and includes it in the "Turn processed" log line.
+- `lib/services/chat-message/memory-trigger.service.ts`: when `findTurnOpenerMessageId` returns `null` (autonomous chats, greeting-only chats) the trigger now walks history backwards for the latest non-system, non-silent ASSISTANT message and passes its id as the anchor. Greeting-only salon chats with no assistant tail still enqueue with anchor=null (same behavior as before).
+- `app/api/v1/chats/[id]/actions/memories.ts`: `handleQueueMemories` branches on `chat.chatType === 'autonomous'`. Salon chats keep the existing USER-message enumeration. Autonomous chats enumerate every non-system, non-silent ASSISTANT message with a `participantId` and queue one job per message with `turnOpenerMessageId=null` and `extractionAnchorMessageId=msg.id`. The user-facing error string is now chat-type-aware ("No assistant messages found" vs "No user messages found").
+
+#### Fix: Salon memory extraction no longer skipped when the rotation lands on a user-controlled character
+
+After commit `83f4368a` ("user-controlled characters take turns in the rotation, Phase 2"), `selectNextSpeaker` started returning the user character's participant ID (not `null`) with `reason: 'user_turn'` when the rotation picked them. Three sites still defined "user's turn" as `nextSpeakerId === null`, so they treated that case as "another LLM character is about to speak" and never closed the turn. The visible consequence: every salon chat with a user-controlled CHARACTER participant stopped producing memories — no `MEMORY_EXTRACTION` background jobs were enqueued at all. Autonomous rooms were unaffected (their separate `chatType === 'autonomous'` branch fires extraction regardless of `isUsersTurn`).
+
+- `lib/chat/turn-manager/utils.ts`: `isUsersTurn(result)` now returns true when either `nextSpeakerId === null` *or* `reason === 'user_turn'`. Doc-comment spells out both shapes so the predicate doesn't drift again.
+- `lib/services/chat-message/message-finalizer.service.ts`: `calculateNextSpeaker` imports and calls `isUsersTurn(nextSpeakerResult)` instead of duplicating the predicate inline. This is the gate on `triggerTurnMemoryExtraction`, so it's the load-bearing site.
+- `app/api/v1/chats/[id]/actions/turn.ts`: the turn-action API response uses the same helper, so the salon UI's "your turn" banner agrees with what the server thinks.
+- `__tests__/unit/lib/services/chat-message/message-finalizer.service.test.ts`: new regression test asserts that a `selectNextSpeaker` result with `nextSpeakerId: 'participant-user', reason: 'user_turn'` still triggers per-turn memory extraction. The existing `jest.mock('@/lib/chat/turn-manager', ...)` block gained an `isUsersTurn` mock implementation matching the helper.
+
+#### Feat: Memory / Scriptorium badges and copy-link button on the Salon list
+
+The Salon chat list (`/salon`) now shows the same memory-count and Scriptorium-status badges that the Aurora character "Conversations" tab already had, and both pages get a small copy-link button next to the badges that copies a deep link to the chat (`<origin>/salon/<chatId>`).
+
+- `components/chat/ChatCard.tsx`: added a copy-link icon button at the end of the badge row. Click writes the URL to the clipboard and flashes a green checkmark for 1.5s; toast feedback on success/failure. The existing memory and Scriptorium badges keep their click-to-reextract / click-to-render behavior.
+- `lib/chat-utils.ts`: `SalonChatShape` and `transformSalonChatToCardData` now pass `memoryCount` (from `_count.memories`) and `scriptoriumStatus` through to the card data.
+- `lib/services/chat-enrichment.service.ts`: `EnrichedChatSummary` gains `scriptoriumStatus` and `_count.memories`. `enrichChatsForList` batches the lookups: one GROUP BY query for per-chat memory counts, one for conversation-chunk total + embedded counts (scoped to chats with rendered markdown). `enrichChatForList` falls back to per-chat reads when called without preload (single-chat path).
+- `lib/database/repositories/memories.repository.ts`: new `countByChatIds(chatIds)` returning `Map<chatId, count>` via a single SQL GROUP BY.
+- `lib/database/repositories/conversation-chunks.repository.ts`: new `countByChatIds(chatIds)` returning `Map<chatId, { total, embedded }>` via a single SQL GROUP BY (counts rows with non-NULL `embedding` as embedded).
+- `app/salon/page.tsx`: wired `onReextractMemories` and `onRenderConversation` callbacks (mirror of `components/character/character-conversations-tab.tsx`), with toast + queue-change notification + SWR mutate. Calls `DELETE /api/v1/memories?chatId=` followed by `POST /api/v1/chats/[id]?action=queue-memories` for memory re-extraction, and `POST /api/v1/chats/[id]?action=render-conversation` for Scriptorium re-render. No polling for status transitions — relies on SWR refresh.
+- `__tests__/unit/lib/services/chat-enrichment.service.test.ts`: mock repos now declare `memories.countByChatId`, `memories.countByChatIds`, `conversationChunks.findByChatId`, and `conversationChunks.countByChatIds`. `EnrichedChatSummary` literals in `filterChatsByExcludedTags` / `cleanEnrichedChats` cases pick up the new `scriptoriumStatus: 'none'` and `_count.memories: 0` fields.
+
+#### Fix: `quilltap` CLI postinstall verifies native modules against the current Node ABI
+
+A stale `better-sqlite3-multiple-ciphers` binary in `packages/quilltap/node_modules/` (compiled against NODE_MODULE_VERSION 127 / Node 22, running under Node 24's MODULE_VERSION 137) was crashing four unit-test suites with `Cannot read properties of null (reading 'close')` after their `new Database(...)` calls threw at load time. `bin/quilltap.js` already had a runtime self-heal (`ensureNativeModules`), but it only fired when a user actually invoked the CLI — `npm install` left the stale binary in place, and tests that loaded the native binding directly bypassed the self-heal entirely.
+
+- `packages/quilltap/lib/native-modules.js` (new): extracted `resolveModuleDir` and `ensureNativeModules` from `bin/quilltap.js` into a shared module. When `require.main === module`, runs the check and exits 0 — used as the package's `postinstall` script. `require.resolve` calls now pass `{ paths: [PACKAGE_DIR] }` so resolution works correctly under both hoisted installs and the package's own `node_modules/`.
+- `packages/quilltap/bin/quilltap.js`: replaced the inline `resolveModuleDir` and `ensureNativeModules` definitions with `require('../lib/native-modules')`. No behavioral change to the runtime self-heal — same ABI check, same `npm rebuild` invocation, same warning-not-error failure mode.
+- `packages/quilltap/package.json`: added `"scripts": { "postinstall": "node lib/native-modules.js" }`. Silent on healthy installs; rebuilds when a stale or missing binding is detected; warns (but does not fail the install) on rebuild failure.
+
+#### Fix: Document Mode follows LLM-driven file/folder renames instead of 404'ing
+
+When a character called `doc_move_file` (or `doc_move_folder`) on a file currently open in the chat's Document Mode pane, the salon page's existing `reloadFromServer` trigger re-fetched the stale `chat_documents` row, which still pointed at the old path. The next `read-document` request 404'd with `File not found: <old path>` and bubbled up as a Next.js dev error overlay. Seen on a `Small Group/How People Change/Chatper 05 - Discussion Notes.md → Chapter 05 - Discussion Notes.md` rename in the wild.
+
+- `lib/database/repositories/chat-documents.repository.ts`: new `renameFilePathInStore(scope, mountPoint, oldPath, newPath, newDisplayTitle)` and `renameFolderPathInStore(scope, mountPoint, oldFolderPath, newFolderPath)`. Both scope-guard by `(scope, mountPoint)` so overlapping paths in different stores don't collide; the folder variant rewrites the `oldFolderPath/` prefix and refreshes `displayTitle` to the new basename. The pre-existing unscoped `renameFilePath` (used by startup migrations) is left alone.
+- `lib/tools/handlers/doc-edit-handler.ts`: `handleMoveFile` and `handleMoveFolder` now call new internal helpers `syncChatDocumentsAfterFileMove` / `syncChatDocumentsAfterFolderMove` after the move succeeds (both DB-backed and filesystem branches). Failures are logged and swallowed so a sync miss can't block the tool result.
+- `app/salon/[id]/page.tsx`: `doc_move_folder` and `doc_delete_folder` join `doc_write_file` / `doc_move_file` / `doc_delete_file` in the SSE `onToolResult` set that triggers `documentModeHook.reloadFromServer()`. With chat_documents now correctly updated on the server side, the reload reads the new path on the first try.
+
+#### Fix: Title-update cursor advances on cheap-LLM failure to stop per-turn re-fires
+
+`handleTitleUpdate` only advanced `chats.lastRenameCheckInterchange` on success paths (rename applied, no rename needed, or manually-renamed). On any cheap-LLM failure — including a persistent `429 quota exceeded` from OpenAI — the handler logged the error and returned with the cursor untouched. Because `shouldCheckTitleAtInterchange(N, 0)` always crosses checkpoint 2 for any `N >= 2`, every following turn re-enqueued a fresh TITLE_UPDATE job, all of which failed the same way. Observed on a 31-message chat in the wild: five title-update jobs all 429'd, cursor stuck at 0, no rename, and (because story backgrounds queue only after a successful rename) no background generation either.
+
+The handler now advances the cursor on the `!result.success` branch and on the `!cheapLLMSelection` short-circuit. Trade-off: a one-off transient failure now skips that single checkpoint instead of retrying every turn, but the next checkpoint (3 → 5 → 7 → 10 → …) still gets its chance.
+
+- `lib/background-jobs/handlers/title-update.ts`: write `lastRenameCheckInterchange: payload.currentInterchange` in both the no-cheap-LLM and the LLM-call-failed branches.
+- `__tests__/unit/lib/background-jobs/handlers/title-update.test.ts` (new): three cases covering cursor advancement on cheap-LLM failure, on no-cheap-LLM, and on the existing no-rename-needed success branch.
+
+#### Fix: Autonomous-room turn counter resets per run instead of accumulating across runs
+
+`runTurnsConsumed` on an autonomous chat was accumulating across every run for the lifetime of the chat, because the post-turn bookkeeping in `handleAutonomousRoomTurn` did a read-modify-write off a freshly re-read chat row. The forked job child opens a readonly DB connection and buffers writes in `AsyncLocalStorage`; the `runTurnsConsumed: 0` reset queued at the idle → running transition was therefore invisible to the post-turn `findById`. The handler picked up the previous run's stale counter and queued an increment-write that landed *after* the reset at flush time, clobbering it ("last write wins") and leaving the counter to grow forever. On a chat observed in the wild the counter had reached 446 across three sequential runs that produced 447 character messages total — but inside any single run, the value looked like 3×–4× the actual number of messages, which would trip `budgetExhausted` after a single message on any run with `budgetMaxTurns` set after the first.
+
+- `lib/background-jobs/handlers/autonomous-room-turn.ts`: the post-turn increment now reads from the local in-handler `chat` snapshot (already mutated to 0 on the idle → running transition when applicable), not the re-read `post`. The end-of-run budget check also passes the freshly-computed `runTurnsConsumed` / `runTokensConsumed` into `checkBudget` so it sees the value just queued, not the stale re-read.
+- `__tests__/unit/lib/background-jobs/handlers/autonomous-room-turn.test.ts` (new): mock harness that simulates the readonly-DB + buffered-writes semantics; covers reset-on-new-run, continue-on-existing-run, error-doesn't-increment, no-false-exhaustion-on-first-turn-of-new-run, and exhaustion-on-the-turn-the-cap-is-hit.
+
+#### Feat: Autonomous-room badges in the page toolbar
+
+The page toolbar now shows a compact badge for every autonomous chat in `idle`, `paused`, or `running` state, placed just before the background-job queue badges. Each badge abbreviates the chat title (and the parent project, if any: e.g. `QP:CWAaF` for "Chat With Amy and Friday" inside "Quilltap Plans"), shows a single budget-remaining readout (tokens > messages > time), and exposes an inline play/pause button. Running rooms are green; idle and paused rooms share a muted slate. Hovering reveals a multi-line tooltip with the unabridged project / chat title / used-vs-total / status. Clicking the body of the badge navigates to `/salon/[id]`; clicking the button toggles `start`/`resume`/`pause`.
+
+- `components/layout/autonomous-room-badges.tsx` (new): SWR-polling client component (5s refresh, matching the queue badges and the management list). A 1s local tick refreshes the MM:SS readout between polls for time-budgeted running rooms. Token formatting uses 1024-based units (`950K`, `1.5M`, etc.); message budgets show raw integers remaining; time budgets show `MM:SS`. Play/pause button stops propagation and calls `POST /api/v1/chats/[id]/autonomous-room?action=pause|resume|start`, then `mutate()`s the SWR cache immediately.
+- `components/layout/page-toolbar.tsx`: inserted `<AutonomousRoomBadges />` as the first child of `qt-page-toolbar-right`, immediately before `<QueueStatusBadges />`. The toolbar's existing `gap-2` provides visual separation from the queue badges, which keep their own tight 1px internal gap.
+- `app/api/v1/system/autonomous-rooms/route.ts`: response now includes `projectId` and `projectName` for each room (resolved via `repos.projects.findById` over the distinct project IDs in the result set). Existing fields and sort order unchanged.
+- `app/styles/qt-components/_content.css`: added `.qt-autonomous-badge-group`, `.qt-autonomous-badge`, `.qt-autonomous-badge-running`, `.qt-autonomous-badge-idle`, and `.qt-autonomous-badge-button` classes. Group allows wrap.
+- `app/styles/qt-components/_variables.css`: added `--qt-autonomous-badge-running-{bg,fg}`, `--qt-autonomous-badge-idle-{bg,fg}`, and `--qt-autonomous-badge-button-hover-bg` tokens (light mode only; dark mode reuses the same values since they already read well on the toolbar background).
+
+#### Fix: Autonomous-room token budget no longer stuck at zero
+
+`runTokensConsumed` on an autonomous chat was permanently zero because the post-turn bookkeeping in `runAutonomousRoomTurn` tried to delta `chats.totalPromptTokens + totalCompletionTokens` between two reads inside the same job. The forked job child opens a readonly DB connection and buffers writes in `AsyncLocalStorage` until the job ends, so the post-turn read always returned the same totals as the pre-turn read and the delta was always 0. The token-budget check (`chat.runTokensConsumed >= chat.budgetMaxTokens`) therefore never tripped, and rooms with only a token cap ran indefinitely (seen in the wild at 4.6M prompt tokens against a 250K cap).
+
+- `lib/database/repositories/llm-logs.repository.ts`: new `getTotalTokenUsageForChatSince(chatId, sinceTimestamp)` that sums prompt/completion/total tokens from `llm_logs` for one chat since a given ISO timestamp. The filter uses `usage: { $exists: true }` only — adding `$ne: null` (as the sibling per-user helpers do) translates to `usage != NULL` in the SQLite query, which is always unknown/false under SQL NULL semantics and silently matches zero rows. A comment in the new method calls out the latent bug in the sibling methods.
+- `lib/background-jobs/handlers/autonomous-room-turn.ts`: post-turn bookkeeping now calls `getTotalTokenUsageForChatSince(chatId, chat.runStartedAt)` instead of computing a chat-row delta. The previous turn's log writes have flushed by the time the next turn's job opens its DB connection, so the sum converges with a one-turn lag. The pre-existing TODO comment about swapping to an `llm_logs`-keyed accumulator was the planned trajectory; this is its cheaper, no-schema-change form. Tagging logs with `runId` for an exact (non-windowed) sum is still the eventual refinement.
+
+#### Fix: Ad-hoc autonomous rooms now auto-start and stay visible while idle
+
+Creating an autonomous room without a cron schedule used to leave it sitting in `runState: 'idle'` with no way to launch a run. The Chat-tab management list was the only Start surface, and commit `1900d780` had narrowed it to "rooms with a cron expression, plus ad-hoc rooms currently running or paused" — so a freshly-created idle ad-hoc room could not appear in the list, and therefore could not be started. Two changes:
+
+- `app/api/v1/chats/route.ts`: `handleCreate` now calls `startAutonomousRoomManually(chat.id, user.id)` after the autonomous-room initialization steps when `isAutonomous && !chat.scheduleCron`. Failures are logged at warn/error and do not roll back the chat creation.
+- `components/tools/autonomous-rooms-card.tsx`: the visible-rooms filter now also includes `runState === 'idle'`. Empty-state copy updated. Cron rooms still always appear; stopped/error/budgetExhausted ad-hoc rooms still drop off after a run ends.
+- `help/autonomous-rooms.md`: copy updated to describe the new auto-start behavior for ad-hoc rooms and the loosened list filter.
+
+#### Fix: Allow "Continue Elsewhere" to hand off into an autonomous room
+
+`POST /api/v1/chats` previously returned 400 ("Autonomous rooms cannot be created via continuation") when a request set both `continuationFromChatId` and `chatType: 'autonomous'`. The NewChatModal's "Continue Conversation Elsewhere" flow surfaced this as a toast and a `console.error` of an empty-looking object whenever the user tried to withdraw from a salon and let the LLMs continue autonomously. The block has been removed; the existing branching already routes continuation requests through `writeSystemPromptMessage → applyChatContinuation → createInitialMessagesScenarioAndStaff({ skipFirstMessage: true })`, which is exactly the right shape for an autonomous handoff (carry over source-chat tail, no auto-greeting). Autonomous preconditions (≥2 LLM characters, no user-controlled participants, cron validity) still apply.
+
+- `app/api/v1/chats/route.ts`: dropped the early `badRequest('Autonomous rooms cannot be created via continuation')` from `handleCreate`. No other logic changes — the continuation branch already runs the right initialization sequence for the autonomous case.
+- `__tests__/unit/app/api/v1/chats/route.continuation-autonomous.test.ts` (new): regression test that POSTs both fields together, asserts the formerly-rejected combination returns 201 and triggers `applyChatContinuation`, and confirms the autonomous min-characters guard still rejects a 1-LLM continuation.
+
+#### Refactor: Provider-options refactor — plugins own the connection-profile schema
+
+`ProfileModal` no longer carries hand-rolled per-provider option blocks. Each LLM plugin now exports a `getProviderOptionsSchema()` describing the fields the host should render, and a single generic `ProviderOptionsPanel` consumes whatever the active provider declares. DeepSeek picks up its first UI surface for thinking-mode in the process; the wire-side passthrough already shipped in DeepSeek 1.0.1.
+
+- `packages/plugin-types` → 2.4.0: new `provider-options.ts` exporting `ProviderOptionsSchema`, `ProviderOptionField`, `ProviderOptionGroup`, `ProviderOptionEnumValue`, `ProviderOptionFieldType`, `ProviderOptionDirective`, `ProviderOptionShowIf`, `ProviderOptionsSchemaContext`. New optional `getProviderOptionsSchema?(context?)` method on `TextProviderPlugin`. `PLUGIN_TYPES_VERSION` updated to track package version (was stale at 2.2.1).
+- Plugin schemas (mirroring today's UI 1:1, no behavior change for existing profiles):
+  - `qtap-plugin-anthropic` → 1.0.36: `enableCacheBreakpoints`, `cacheStrategy`, `cacheTTL` with `showIf` gates.
+  - `qtap-plugin-openai` → 1.0.42: `verbosity`, `reasoningEffort` (empty string = use model default).
+  - `qtap-plugin-openrouter` → 1.0.39: `enableZDR`, `useCustomModel` (with `affects: 'modelInput'` directive), `fallbackModels`. Provider now reads the flat `enableZDR` key alongside the legacy nested `providerPreferences.dataCollection`, so existing profiles keep working unchanged.
+  - `qtap-plugin-deepseek` → 1.0.2: new UI for `thinking` and `reasoning_effort`. `applyProfileParameters` now normalizes a flat string `thinking: 'enabled' | 'disabled'` into DeepSeek's wire shape `{ type: ... }`, and skips empty-string defaults.
+- `app/api/v1/providers/route.ts`: response now includes each provider's `optionsSchema` (or `null` when the plugin declares none).
+- `components/settings/connection-profiles/ProviderOptionsPanel.tsx` (new): generic renderer for boolean / enum / multi-enum / string / number fields, with `showIf` conditional rendering and an `onDirective` callback for `affects: 'modelInput'`-style fields.
+- `components/settings/connection-profiles/ProfileModal.tsx`: deleted the three sub-components (`OpenRouterOptions`, `AnthropicOptions`, `OpenAIOptions`). The model-input branch no longer keys off `provider === 'OPENROUTER' && useCustomModel`; instead it tracks a `useCustomModelDirective` state driven by the schema's directive callback. No `provider === '...'` literals remain in the modal.
+- `components/settings/connection-profiles/hooks/useProfileForm.ts`: per-provider arms in `buildRequestBody` collapsed — provider-specific fields now flow through the new `parameters` form field. `loadProfileIntoForm` translates the legacy OpenRouter nested `providerPreferences.dataCollection: 'deny'` into the flat `enableZDR: true` key when hydrating an existing profile.
+- `components/settings/connection-profiles/types.ts`: `ProfileFormData` lost nine top-level provider-specific fields (`fallbackModels`, `enableZDR`, `providerOrder`, `useCustomModel`, `enableCacheBreakpoints`, `cacheStrategy`, `cacheTTL`, `verbosity`, `reasoningEffort`) and gained a single `parameters: Record<string, unknown>`. `ProviderConfig` gained an optional `optionsSchema`.
+- Tests: new `__tests__/unit/components/settings/provider-options-panel.test.tsx` covering each field type, `showIf` gating, directive callbacks, and multi-enum cap behavior. New `__tests__/unit/plugins/provider-options-schema-snapshot.test.ts` snapshotting each plugin's schema so future drift is caught at review time.
+- No DB migration — `ConnectionProfile.parameters` stays a JSON blob and existing profiles keep their keys. The OpenRouter plugin reads both shapes; everything else was already flat.
+
+#### Feat: DeepSeek plugin updated for V4 catalog and thinking-mode passthrough
+
+DeepSeek's `/models` endpoint now returns `deepseek-v4-flash` and `deepseek-v4-pro`; the static catalog still listed the retired V3 IDs (`deepseek-chat`, `deepseek-reasoner`). Updated the catalog and added profile-parameter passthrough for thinking mode.
+
+- `plugins/dist/qtap-plugin-deepseek/models.ts`: replaced `deepseek-chat` / `deepseek-reasoner` with `deepseek-v4-flash` and `deepseek-v4-pro`. Both share a 1M-token context window and a 384K max output; both report `supportsTools: true`.
+- `plugins/dist/qtap-plugin-deepseek/provider.ts`: added `thinking` and `reasoning_effort` to `DEEPSEEK_PROFILE_PARAM_ALLOWLIST` so they flow verbatim into the request body. Same raw-passthrough pattern as `frequency_penalty` / `logprobs`. When `thinking.type === 'enabled'` the plugin strips `temperature`, `top_p`, `frequency_penalty`, and `presence_penalty` from the body — DeepSeek ignores them in thinking mode and sending them produces noise in the logs.
+- `plugins/dist/qtap-plugin-deepseek/index.ts`: `cheapModels.defaultModel` and `recommendedModels` point at `deepseek-v4-flash`. Metadata description updated.
+- `plugins/dist/qtap-plugin-deepseek/README.md`: model table and profile-parameter section refreshed.
+- `plugins/dist/qtap-plugin-deepseek/{package,manifest}.json`: bumped to 1.0.1.
+- `reasoning_content` capture on the response side is deliberately deferred — needs a cross-provider channel design before any one plugin starts surfacing it.
+
+#### Feat: Cache-observability follow-up — block-3 hash, raw provider usage snapshot, per-plugin reference table
+
+Finishes the unfinished pieces of the 2026-04-30 cache-observability design doc. The structural fix from that doc (commit 24215b2c, splitting the rolling compressed history into its own system block so the persona prefix stays byte-stable) had a self-inflicted gap: `computeRequestPrefixHashes` only hashed the first two system blocks, so the new churning block 3 it introduced was invisible to the diagnostic.
+
+- `lib/llm/cache-prefix-hashes.ts`: hash `systemBlocks[2]` when present, emit `systemBlock3Hash`. `lib/schemas/llm-log.types.ts`: new optional `systemBlock3Hash` on `LLMLogRequestHashesSchema`. No DB migration — `requestHashes` is a TEXT JSON column.
+- `lib/schemas/llm-log.types.ts`: new `rawProviderUsage` field on `LLMLogSchema` (`z.record(z.string(), z.unknown())` so the schema translator stores it as a JSON column). Captures each provider's unmodified `usage` sub-object pre-normalization. Lets a single SQL query (`WHERE rawProviderUsage IS NOT NULL AND cacheUsage IS NULL`) catch the next Z.AI-style normalization regression — provider reported cache hits but the plugin never read the field. Migration `add-llm-logs-raw-provider-usage-column-v1` adds the column on existing instances.
+- All five provider plugins (Anthropic, OpenAI, Grok, Google, Z.AI) now emit `rawProviderUsage` on their terminal stream chunk. Anthropic merges `message_start.usage` and `message_delta.usage` because both carry pieces of the provider envelope. Google's lives in `usageMetadata` (different field name from the OpenAI-family `usage`); the others pass through `usage` directly.
+- `packages/plugin-types` bumped to 2.3.3 to add `rawProviderUsage` to the `StreamChunk` interface. Each plugin's `package.json` + `manifest.json` patch-bumped: anthropic 1.0.35, openai 1.0.41, grok 1.0.34, google 1.1.30, z-ai 1.1.5.
+- `docs/developer/features/llm_api_costs_breakdown.md`: new "Per-plugin cache-field reference" subsection with a table covering each plugin's provider field path, normalized target, raw passthrough location, and the SQL probe for spotting future gaps.
+- `__tests__/unit/lib/llm/cache-prefix-hashes.test.ts`: new fixture covering three system messages — asserts block 3 is hashed and that blocks 1/2 stay pinned when block 3 churns.
+
+The labeled block-hash array (§5 of the design doc) and the turn-over-turn tool-manifest auto-diff (§2) remain deferred. With only one new tier to track today (compressed history), the flat `systemBlock3Hash` is the right shape; the labeled array form can wait for a 4th tier. The tool-manifest hash is already logged per turn, so drift can be queried after the fact without a write-time differ.
+
+#### Fix: PhotoGalleryModal character/persona mode tests against stale endpoint
+
+The character-mode and user-character-mode test cases in `__tests__/unit/photo-gallery-modal-deleted-handling.test.tsx` were still mocking `/api/v1/images` with the legacy `{data: [{id, filename, filepath, ...}]}` shape. After PR #19 moved the gallery to `/api/v1/characters/[id]/photos` returning `{entries: [{linkId, fileName, blobUrl, mimeType, fileSizeBytes, keptAt, ...}]}`, the component received zero photos and rendered the empty state, so `getByRole('img')` failed. Updated both `beforeEach` blocks to match the `/photos` URL and return the new entries shape; `linkId` values preserved so the existing `deleted-placeholder-img-1` / `deleted-placeholder-img-2` testid assertions still match.
+
+#### Fix: Compression cache lost participant entries under concurrent writes
+
+In multi-character chats, every assistant turn finishes by triggering an async pre-compression for that participant; the result is persisted into `chats.compressionCache`, a JSON object keyed by participantId. The persist path did a load-modify-save (read the full field, splice in this participant's entry, write the whole field back). Two finalizers completing back-to-back could interleave their reads and writes so the later writer overwrote the earlier writer's entry — silently erasing it. Caches for characters that finalize in the same window as other characters could be wiped permanently, forcing them to pay full sync compression on every subsequent turn.
+
+- `lib/services/chat-message/compression-cache.service.ts`: added `withPersistLock(chatId, fn)`, an in-process mutex chained via `prev.then(fn, fn)` so a failed write doesn't jam the queue and the map entry is dropped only when nothing newer is chained on top. `persistToDatabase` and `clearFromDatabase` are now wrapped in the lock; the clear has to share the same lock or it could wipe the field between a concurrent persist's read and write.
+- The lock is per-`chatId`, so unrelated chats still run concurrently.
+- Doesn't change the cold-cache-on-next-speaker behavior — only the previous speaker's cache is still pre-warmed. That's a separate issue.
+
+#### Fix: .qtap export emitted hollow characters
+
+Re-exporting a vault-linked character via `.qtap` was producing a record with empty `identity`, `description`, `manifesto`, `personality`, `exampleDialogues`, `title`, `firstMessage`, `talkativeness`, `pronouns`, `aliases`, `physicalDescription`, `systemPrompts`, and `scenarios`. The export service was calling `repos.characters.findByIdRaw(id)` — the variant that skips the vault overlay — and the 4.6 cutover dropped the matching DB columns, so the raw row had no managed-field data left. Reimporting such an export would land an empty shell on the target instance.
+
+- `lib/export/quilltap-export-service.ts` and `lib/export/ndjson-writer.ts` now read characters via `findById` / `findAll`, which apply the vault overlay before returning. Same fix for the small number of incidental lookups that only used `character.name` — kept consistent so future contributors don't have to remember which lookups are safe.
+- Bundled export → reimport round-trips now preserve managed fields end-to-end.
+
+#### Refactor: CharactersRepository owns vault provisioning end-to-end
+
+Creating a character used to require two coordinated calls: `repos.characters.create(data)` to insert the DB row, then `ensureCharacterVault(character)` (or `provisionImportedCharacterVault`, depending on the caller) to set up the document-store vault and project the managed fields into it. Every API handler, importer, and seed script had to remember the second step. Skip it and the character ended up with an empty vault and no managed-field data anywhere.
+
+- `lib/database/repositories/characters.repository.ts`: `create()` now provisions the vault, scaffolds folders, writes every managed field via `writeCharacterVaultManagedFields`, sets `characterDocumentMountPointId` on the row, and returns the overlaid character — atomic from the caller's perspective. Any `characterDocumentMountPointId` in the input is dropped; new rows always get a freshly-provisioned vault.
+- Removed the post-create `provisionVault` / `ensureCharacterVault` / `provisionImportedCharacterVault` calls from `app/api/v1/characters/route.ts`, `lib/import/quilltap-import-service.ts`. The startup backfill at `lib/startup/backfill-character-vaults.ts` and the avatar-reseed path in `lib/startup/seed-initial-data.ts` keep their `ensureCharacterVault` calls as recovery paths for older characters that might predate the inline provisioning.
+- Added `repos.characters.syncWardrobeToVault(id)` as a thin wrapper for import paths that create wardrobe items after the character — wardrobe items already trigger their own per-row sync via `repos.wardrobe.create`, so the wrapper is currently belt-and-braces.
+
+#### Refactor: Consolidated vault writers; deprecated DB↔vault sync API actions
+
+`populateVaultWithCharacterData` (in `lib/mount-index/character-vault.ts`) and `writeCharacterVaultManagedFields` (in `lib/database/repositories/character-properties-overlay.ts`) were two implementations of the same character-row → vault-files projection, with subtle differences in physical-description handling and folder-projection semantics. They've been collapsed into the latter; `ensureCharacterVault` now reads wardrobe via `repos.wardrobe.findByCharacterIdRaw` and delegates to the unified writer. The Phase 3 cutover migration was updated to call the unified writer too.
+
+The `sync-properties-from-vault` and `sync-properties-to-vault` POST actions on `/api/v1/characters/[id]` have been removed. Post-cutover, the DB columns for managed fields no longer exist, so `sync-properties-from-vault` was logging "synced N properties" while silently writing nothing useful. `sync-properties-to-vault` was worse — it read the character's raw row (managed fields all null) and projected those nulls back into the vault, which would have wiped existing vault content. No UI surface invoked either action, so this is purely a cleanup. The unused `wardrobe.deleteRaw` helper (only used by the removed sync action) and `characters.updateRaw` (same) have also been dropped.
+
+#### Fix: update() now auto-provisions a vault if one is missing
+
+`applyDocumentStoreWriteOverlay` had a silent escape hatch: when a character had no `characterDocumentMountPointId`, the function returned the patch unmodified and let it flow through to the base `_update`, which would then strip every managed field (the columns are gone) and write nothing. Any character that lost its vault link by some other bug would have silently lost any managed-field write performed against it. Every character is supposed to have a vault — the startup backfill provisions one for any that don't — so reaching this branch was a bug, but a quiet one.
+
+- The branch now checks whether the patch carries any managed fields. If yes, it logs a loud `logger.error` (so the upstream bug surfaces) and calls `ensureCharacterVault` to provision one on the fly, then reloads the row and proceeds with the routed write. If no managed fields, the patch passes through unchanged as before.
+
+#### Fix: Save-to-character-gallery from a vault photo
+
+Clicking "Save to character gallery" in the image-detail modal when the image came from a character or user vault gallery (Aurora's embedded gallery or `PhotoGalleryModal` in `character`/`user-character` mode) was failing with an "Image not found" 400 from the server. The two gallery callers set `image.id = entry.linkId` (a `doc_mount_file_links.id` post-Phase-3), but the modal's `addToCharacterGallery` POSTed `{ fileId: image.id }` to `/api/v1/characters/[id]/photos`, and `saveFileToCharacterGallery` looked the value up in `repos.files` (images-v2 FileEntry) — nothing matched, since Phase-3 photos no longer have a FileEntry. The chat-files gallery path was unaffected because chat files still use real FileEntry ids.
+
+- Added `saveLinkToCharacterGallery({ characterId, sourceLinkId, ... })` in `lib/photos/character-gallery-service.ts`. Reads the source link via `repos.docMountFileLinks.findByIdWithContent`, fetches bytes from the existing blob via `repos.docMountBlobs.readDataByFileId`, then delegates to `saveToCharacterGallery` to hard-link them into the target character's `photos/` folder. Existing same-vault dedup (`Image already in <name>'s photo album`) still applies.
+- Route `app/api/v1/characters/[id]/photos/route.ts` accepts either `fileId` or `linkId` (exactly one required, enforced via Zod `.refine`) and dispatches to the matching service helper.
+- Added `linkId?: string` to `ImageData` in `components/images/image-detail/types.ts`. `useImageActions.ts` sends `{ linkId }` when populated, else falls back to `{ fileId: image.id }`.
+- `components/images/embedded-gallery/EmbeddedPhotoGallery.tsx` and `components/images/PhotoGalleryModal.tsx` (character / user-character modes) now set `linkId: entry.linkId` on the ImageData they hand to the modal. The chat-files path is untouched.
+
+#### Feature: Post-hoc Concierge reroute on image moderation rejection
+
+Story-background generation already had this: when the image provider rejects an already-issued request for content moderation, retry once with the Concierge's configured uncensored profile. Now the character-avatar background job and the inline `generate_image` tool do the same. Mostly relevant when the cheap-LLM pre-flight classifier rates a prompt below the danger threshold but the provider's own safety filter is stricter and refuses.
+
+- Extracted `isImageModerationError(error)` and `resolveUncensoredImageProfileForReroute(currentProfileId, dangerSettings, userId)` from the inline story-background implementation into `lib/services/dangerous-content/provider-routing.service.ts`.
+- The resolver returns `null` (no reroute) when AUTO_ROUTE is off, no `uncensoredImageProfileId` is configured, the configured uncensored profile equals the one that just rejected (prevents loops when pre-flight already rerouted), or the profile / API key can't be loaded. Deliberately does not fall back to scanning `isDangerousCompatible` profiles — post-hoc reroute requires the user's explicit choice.
+- `lib/background-jobs/handlers/character-avatar.ts` and `lib/tools/handlers/image-generation-handler.ts` now wrap the provider's `generateImage` call: on a moderation rejection they look up the uncensored profile via the helper, retry once, log the reroute attempt, and update downstream metadata (`generationModel`, saved-file provider/model) to reflect the profile that actually produced the image.
+- `lib/background-jobs/handlers/story-background.ts` refactored onto the shared helpers — its local `isImageModerationError` and the inline profile / key lookup block are gone.
+
+#### Fix: characters._update wrote vault-managed columns that no longer exist
+
+The 4.6 cutover dropped DB columns for vault-managed character fields (`title`, `identity`, `description`, `manifesto`, `personality`, `physicalDescription`, `pronouns`, `aliases`, `firstMessage`, `talkativeness`, `exampleDialogues`, `systemPrompts`, `scenarios`) — they live in the character vault now. The `CharactersRepository.update` wrapper correctly stripped managed keys from the *incoming patch* via `applyDocumentStoreWriteOverlay`, but then deferred to the base `_update`, which re-read existing state through the overlay-aware `findById`. The overlay rehydrates the dropped fields from the vault; the base `$set: validated` then wrote the full record back, generating SQL like `UPDATE characters SET title = ?, ...` and SQLite responded with `no such column: title`. Most visibly fatal for character-avatar background jobs, which generated the image successfully (bytes hit disk) but then rolled back the whole apply transaction in the parent — file rows never materialized, `chat.characterAvatars` stayed null, and the job was marked DEAD after three retries.
+
+- Added `_update` override on `CharactersRepository` (`lib/database/repositories/characters.repository.ts`) that reads via `findByIdRaw` so the merge base never carries vault-hydrated keys, and strips every `MANAGED_FIELDS` entry from the validated record before `$set` as a defensive backstop. Both `update()` and `updateRaw()` now route through the override.
+- Added a parallel `_create` override with the same managed-field strip, so callers that pass e.g. `title` or `description` to `characters.create` don't blow up either. Same latent bug shape, different code path.
+- No DDL change — the columns were already dropped at 4.6. This restores the matching write-side behavior.
+
+#### Fix: Participant talkativeness slider now reflects the character's actual value
+
+The Salon participant slider was initializing to 50% for every character that didn't have a per-chat override, regardless of the character's vault-stored `talkativeness`. A character set to 0.8 in `properties.json` would show as 0.5 in the sidebar, and the predicted-turn-order sidebar plus the client-side "next speaker" preview both treated everyone as equal-weighted (0.5) for the same reason. Server-side speaker selection was unaffected — it reads the override from `chat.participants[].talkativeness` and falls through to `repos.characters.findById().talkativeness`, both of which were correct. The bug was purely on the chat-detail enrichment payload.
+
+- `EnrichedCharacterBase` in `lib/services/chat-enrichment.service.ts` did not declare a `talkativeness` field, and neither `getCharacterSummary` nor `getCharacterDetail` populated one. The client then read `p.character?.talkativeness` (`useParticipants.ts`, `ParticipantCard.tsx`, `turn-order.ts`) and got undefined every time, falling through to the literal 0.5.
+- Added `talkativeness: number` to `EnrichedCharacterBase` and populated it from `character.talkativeness ?? 0.5` in `getCharacterSummary` and both return branches of `getCharacterDetail` (default and avatar-override).
+- No data-model or DDL change: `talkativeness` already lives on the character row (via the `properties.json` overlay) and on `ChatParticipantBase` for the per-chat override. This fix just stops the enrichment layer from dropping the field on its way to the client.
+- No behavior change to actual speaker picking; the slider and order preview now match what the server was already doing.
+
+#### Fix: Streaming bubble avatar matches the actual responder from the first character
+
+While a response was streaming in, the streaming bubble's avatar/name could show one character while the green "X is responding…" chip below the composer named another. The two indicators read from different sources: the chip uses a server-baked status string (`${character.name} is responding...` from `lib/services/chat-message/primary-stream.service.ts`), and the bubble's avatar reads from `respondingParticipantId`, which `useSSEStreaming.sendMessage` initialized to a *client-side guess* (`getFirstCharacterParticipant()` — the first active character in the participants array). Under turn rotation, autonomous rooms, or any user-controlled-character setup, that guess routinely disagrees with the server's `resolveRespondingParticipant` choice. The mismatch only existed during streaming — the final `done` event carries the authoritative `participantId`, so the saved message attaches to the correct character.
+
+- For chained turns 2+, `lib/services/chat-message/turn-orchestrator.service.ts` already emits a `turnStart` SSE event that the client uses to correct `respondingParticipantId`. The first turn had no analog.
+- Fix: `processMessage` in `lib/services/chat-message/orchestrator.service.ts` now emits `turnStart` (with `chainDepth: 0`) immediately after `resolveRespondingParticipant` returns, before the "Setting up …" status. The client's existing `onTurnStart` handler in `app/salon/[id]/hooks/useSSEStreaming.ts` realigns `respondingParticipantId` to the server's choice with no client changes.
+- The chained path still emits its own `turnStart` from the orchestrator first; the inner `processMessage` will emit a redundant second event with the same `participantId`, which the client treats as a no-op.
+
+#### Feature: DeepSeek provider plugin
+
+New bundled provider at `plugins/dist/qtap-plugin-deepseek` (`providerName: DEEPSEEK`). Talks to DeepSeek's OpenAI-compatible Chat Completions API at `https://api.deepseek.com`.
+
+- `DeepSeekProvider` in `provider.ts` extends `OpenAICompatibleProvider` from `@quilltap/plugin-utils` and overrides `sendMessage` / `streamMessage` to forward `tools`, `tool_choice`, `response_format` (JSON object and JSON Schema), and DeepSeek-specific profile parameters (`frequency_penalty`, `presence_penalty`, `logprobs`, `top_logprobs`).
+- Surfaces DeepSeek's `prompt_cache_hit_tokens` as Quilltap's `cacheUsage.cacheReadInputTokens` so cached-prompt savings show up in usage reporting.
+- Static model catalog: `deepseek-chat` (128K context, tools) and `deepseek-reasoner` (128K context, R1-style reasoning). The plugin merges DeepSeek's `/models` output with the static list before sorting so the chat picker stays populated if the endpoint omits a flagship name.
+- No file attachments, no embeddings, no image generation, no web search — those capabilities are explicitly off in the manifest and the provider returns attachment failures for any incoming images.
+- Bundles the standard OpenAI SDK as a direct dep; built via the shared `npm run build:plugins` flow.
+
+#### Change: Autonomous-rooms management list moved to Chat tab, filtered to scheduled rooms
+
+The autonomous-rooms management card (pause/resume/stop) used to live at `/settings?tab=system&section=autonomous-rooms` and listed every autonomous chat ever created, including ad-hoc rooms that had long since completed — clutter that grew unbounded.
+
+- Moved the card from `DataSystemTabContent` to `ChatTabContent`, placed immediately after the user-level Autonomous Rooms defaults card so all autonomous-room controls live together. New sectionId `autonomous-room-schedules` (the defaults card keeps `autonomous-rooms`).
+- Filtered the list to rooms that are either scheduled (`scheduleCron` set) or actively running/paused. Idle, stopped, error, and budget-exhausted ad-hoc rooms no longer appear. Empty-state copy updated accordingly.
+- Updated `help/autonomous-rooms.md` settings-reference and in-chat-navigation links to point at the new tab/section. The defaults link is unchanged.
+
+#### Fix: Autonomous rooms — title renames now actually persist
+
+Follow-up to the earlier autonomous-rooms title-rename fix (which made `shouldCheckTitleAtInterchange` actually fire at the right checkpoints). The check was firing — the cheap LLM was happily proposing new titles ("The Estate of Friday and Amy", "The East Pool Covenant", "Cedar, Water, and the Quiet Covenant", …), the log line `[Title Update] Updated title for chat ... to: ...` was being written, and the database row was sitting unchanged at `Chat with Friday and Amy` with `lastRenameCheckInterchange = 0`. Same shape as before, different root cause.
+
+- `checkAndGenerateSummaryIfNeeded` in `lib/chat/context-summary.ts` called the title-update code via a detached `considerTitleUpdateAsync(...).catch(...)` promise. Inside the autonomous-room turn handler — which runs in the forked job-runner child — the handler's `runWithJobScope` flushes pending writes back to the parent the moment the handler returns. The fire-and-forget title-update promise finishes 3–4 seconds later (after the LLM round-trip), calls `repos.chats.update(...)`, which pushes the write into the same per-job buffer that has already been flushed. `appendWrite` doesn't throw (the `AsyncLocalStorage` scope still exists), so the new payload silently rots. Normal chats were unaffected because the route handler runs in the parent, where `getRepositories()` is the real writable container.
+- Replaced the inline call with `enqueueTitleUpdate(...)`. The existing `TITLE_UPDATE` handler at `lib/background-jobs/handlers/title-update.ts` was already wired up but had no callers; ported the missing bits from the inline path so behavior is preserved: `isManuallyRenamed` short-circuit, help-chat branch (`considerHelpChatTitleUpdate`), `createTitleGenerationEvent` for token-cost tracking, advance `lastRenameCheckInterchange` even when the LLM says no rename is needed, skip story-background queueing for help chats, and unified the log prefix to `[Title Update]`.
+- Added a chatId-keyed dedup in `enqueueTitleUpdate` (PENDING/PROCESSING scan, same pattern as `enqueueMemoryExtraction`) so multi-character turns and the every-character-turn autonomous re-fire fold into a single pending job.
+- Same architectural pattern leaks for `generateContextSummaryAsync` (also detached, also called from `checkAndGenerateSummaryIfNeeded`) — the inline summary path eats its writes inside the child too. Not fixed in this commit; deferred follow-up to convert it to a `CONTEXT_SUMMARY` job enqueue analogously.
+
+#### Chore: Version string normalized to 4.6.0-dev after Phase 2 squash merge
+
+The Phase 2 user-character-rotation squash merge carried over its branch-derived version (`4.6.0-phase-2-wip-user-character-rotation.42`). Re-ran `scripts/update_version.sh` on `main` to reset to `4.6.0-dev.39` and sync `packages/quilltap/package.json` and the README badge.
+
+#### Fix: Agent mode — submit_final_response no longer overwrites roleplay prose or drops sibling tools
+
+Two coupled bugs in `lib/services/chat-message/native-tool-loop.service.ts` that surface most visibly in autonomous rooms (where the same characters speak many times and pattern-match against their own past output).
+
+- **Spurious `submit_final_response` calls were overwriting streamed prose.** When the model emitted both prose and `submit_final_response` on the same turn, the loop blindly replaced `streaming.fullResponse` with `args.response`. In autonomous rooms this manifested as every-other-turn "I have successfully completed the significant task…" messages — the model saw past `submit_final_response` calls in history, pattern-matched, and kept wrapping purely-roleplay turns with stale-feeling completion summaries that obliterated the actual prose. Fix: new `realWorkIterations` counter tracks iterations that processed non-submit tool calls. When `submit_final_response` fires and no real tool work has happened this turn, preserve `streaming.fullResponse` (the streamed prose) instead of letting `args.response` overwrite it. The submit call itself still terminates the loop. The existing ghost-wrap guard (iteration-0, sole submit, no prose) is unchanged — it still rejects-and-retries the truly-empty case.
+- **Sibling tool calls were silently dropped when emitted alongside `submit_final_response`.** A single response containing `[edit_file, submit_final_response]` would break the loop on submit before `processToolCalls` ever ran for the edit. Fix: in the submit-accept branch, partition `toolCalls` into sibling tools vs the submit call, run `processToolCalls` on the siblings first, then handle the submit. Sibling work counts as real work for the prose-preservation gate, so a model that does meaningful work and wraps in one shot still gets `args.response` substituted as intended.
+- Tests: updated the existing "two tool calls on iteration 0 is NOT ghost-wrap" test to assert that the sibling is now processed (with only the non-submit call passed to `processToolCalls`) rather than dropped. New "prose-and-submit preserves streamed prose" test pins the autonomous-room replay guard. Existing ghost-wrap rejection, max-turns force-final, and standard iteration cases unchanged.
+
+#### Fix: Autonomous rooms — memory extraction, title rename, and summarization all silently broken
+
+Three independent pipelines were not firing for autonomous chats. Found by inspecting a fresh autonomous-room run (`00f46a53-…`) whose Mem/Emb/Sum counters stayed at 0 and whose title stayed at the default "Chat with Friday and Amy" through 36 interchanges. Symptoms also confirmed against the previous 369-message autonomous run, which produced zero memories.
+
+- **Memory extraction never fires** (`lib/services/chat-message/message-finalizer.service.ts:256`). The trigger was gated on `turnInfo.isUsersTurn`, which is permanently false in autonomous rooms (there's no user). Fix: also fire when `chat.chatType === 'autonomous'`. Each character turn is the natural extraction point in an autonomous room.
+- **Title rename skips its checkpoints** (`shouldCheckTitleAtInterchange` in `lib/chat/context-summary.ts`). The interchange counter for autonomous rooms counts every assistant-role message including Staff whispers (Host, Lantern, Commonplace Book, etc.), so the count climbs by 5+ per character turn — regularly skipping past exact 10/20/30 marks. The check used `currentInterchange % 10 === 0`, which means it never fires when the counter jumps over a multiple of 10. Fix: use crossing semantics. Each early checkpoint (`2, 3, 5, 7, 10`) fires once the counter reaches or passes it; post-10 the check fires when the most-recent-multiple-of-10 ≤ `currentInterchange` is greater than `lastCheckedInterchange`. Property preserved: each checkpoint still fires exactly once.
+- **Context summarization always bails with "No messages to summarize"** (`partitionMessagesIntoTurns` in `lib/chat/context-summary.ts:260`). The function defined a turn as starting with a USER message. Autonomous rooms have zero USER messages → `turns.length === 0` → the summary generator returned `{ success: false, error: 'No messages to summarize' }` on every gate fire (seen 4+ times in the log for the test chat). Fix: when `chatType === 'autonomous'`, each character-attributed ASSISTANT message starts its own turn (Staff whispers are still excluded by the existing `systemSender` filter). Caller in `generateContextSummary` now passes `chat.chatType` through. Regular chats unchanged.
+- Tests: new autonomous-partition coverage and chatType-omitted-still-works in `summary-fold.test.ts`; new "crossing semantics" suite for `shouldCheckTitleAtInterchange` (regular jump-over-checkpoint, autonomous-style 8→14 jump, post-10 fires once per new multiple-of-10 boundary crossed, fire-exactly-once-per-checkpoint property, help-chat early fire). New finalizer test exercises the autonomous branch — confirms extraction fires when `isUsersTurn` is false but `chatType === 'autonomous'`.
+
+The "Img 0" counter for autonomous rooms is by design (`suppressAutomaticImages: true`) and "Dgr 0" reflects no flagged content (the Gatekeeper IS running — confirmed in logs).
+
+#### Feature: Per-chat talkativeness override on participants + slider wired up
+
+The talkativeness slider on the participant card in the salon sidebar was wired to a no-op (`onTalkativenessChange={() => {}}` in `app/salon/[id]/page.tsx`). The slider visually moved but never persisted; the turn manager always read the character-level value. Two changes fix this end-to-end:
+
+- New optional `talkativeness` field on `ChatParticipantBaseSchema` (and `ChatParticipantSchema`) in `lib/schemas/chat.types.ts`. `0.1`–`1.0`, nullable. Lives in the existing `chats.participants` JSON column — no new DB column. Null means "inherit from the character record". Added to the enrichment payload (`EnrichedParticipantDetail`) so the field round-trips to the client, and to `public/schemas/qtap-export.schema.json` for export/import.
+- Turn-manager `pickWeighted` (`lib/chat/turn-manager/selection.ts`) now resolves talkativeness as `participant.talkativeness ?? character.talkativeness ?? 0.5`. The UI's `useParticipants` hook surfaces the resolved value as `character.talkativeness` in `ParticipantData`, so the sidebar's predicted turn order (which sorts by talkativeness) and the slider's initial value Just Work without changes downstream.
+- Salon slider wired to a real handler: `useChatControls.handleTalkativenessChange` POSTs to `/api/v1/chats/[id]?action=update-participant` with the new value. Debounced (400ms) so a slider drag fires one request when the user releases, not a flood. `updateParticipantSchema` accepts the field; the existing `handleParticipantUpdate` plumbing carries it through to the JSON column.
+- Tests: new turn-manager coverage for override precedence (bumped Friday wins ~65% over default Amy, matching the 0.95/0.5 weights) and for null-fallthrough (no override → character value used). Updated `chat-enrichment.service.test.ts` for the new `talkativeness: null` field on the enriched payload.
+
+#### Feature: User-controlled characters take turns in the salon rotation
+
+User-controlled CHARACTER participants now sit in the weighted-talkativeness rotation alongside LLM characters. When the rotation lands on a user character, the salon pauses and the composer area shows a "[Name]'s turn — type as them, or skip…" banner with a Skip button that hands the turn off to the next character. Cycle tracking is persisted per chat so the rotation survives reloads and is consistent across the orchestrator, the chain decision, the first-responder pick, and the autonomous-room path.
+
+- New SQLite column `chats.spokenThisCycleParticipantIds` (`TEXT DEFAULT '[]'`) + migration `add-spoken-this-cycle-field-v1` + matching prettify label + DDL.md entry. Replicated through chat continuation/import. Auto-mapped via the base repo; no per-method wiring needed.
+- `lib/chat/turn-manager/state.ts`: `calculateTurnStateFromHistory` sources `spokenSinceUserTurn` from the persisted field rather than walking history. `updateTurnStateAfterMessage` treats USER and ASSISTANT messages symmetrically — a USER message with a `participantId` (typed as a user-controlled character) advances the cycle; a bare USER message is a no-op. Two new helpers — `computeSpokenThisCycleAfterMessage` (called from the repository's `addMessage` and `addMessages` to keep persistence central) and `computeSpokenThisCycleAfterSkip` (called from the skip endpoint) — implement cycle-wrap at write time: when the set of spoken participants matches the active set, the next round restarts fresh with just the new speaker.
+- `lib/chat/turn-manager/selection.ts`: rewritten to include user-controlled CHARACTER participants in the candidate pool. The cycle-wrap branch now applies to salon chats too (previously only autonomous). When the pick lands on a user-controlled participant, the result returns `reason: 'user_turn'` with their `participantId` so the UI can label the pause.
+- `lib/database/repositories/chats-messages.ops.ts`: `addMessage` and `addMessages` call `computeSpokenThisCycleAfterMessage` alongside the existing `messageCount` / `lastMessageAt` chat-row update. This is the single chokepoint for cycle persistence — every existing save site (orchestrator user message, message-finalizer assistant message, autonomous-room handler announcements) is covered automatically.
+- `lib/services/chat-message/participant-resolver.service.ts`: `resolveRespondingParticipant` no longer falls back to "first active character" when no `requestedRespondingParticipantId` is given. It now performs weighted selection from LLM-only candidates using the persisted cycle state, so the first-responder pick respects talkativeness and rotation. User-controlled participants are excluded from the first-responder pool (they wait for the human).
+- `lib/services/chat-message/turn-orchestrator.service.ts`: `shouldChainNext` now surfaces `participantId` and `characterName` on the chain decision when it ends on `user_turn`, so the chain-complete SSE event and the persisted `lastTurnParticipantId` both identify which user character is up.
+- `app/api/v1/chats/[id]/actions/turn.ts` + `schemas.ts`: new `skipUserTurn` action. Appends the given user-controlled participantId to `spokenThisCycleParticipantIds` (wrapping the cycle if it completes the set), marks them as the last speaker, and recomputes the next speaker so the response can immediately trigger the next character. Refuses non-user-controlled participants with a 400.
+- `app/salon/[id]/hooks/useTurnManagement.ts`: new `handleSkipUserTurn(participantId)` action that calls the skip endpoint and, if the next pick is an LLM character, triggers continue mode to advance the chain.
+- `app/salon/[id]/page.tsx`: new banner between the SpeakerSelector and the ChatComposer, rendered when `turnSelectionResult.nextSpeakerId` belongs to a user-controlled participant and nothing is currently streaming. Includes the character's name and a Skip button.
+- Tests: `__tests__/unit/lib/chat/turn-manager.test.ts` updated for the new semantics — history no longer drives spokenSinceUserTurn, USER messages no longer reset the cycle, the cycle wraps to a fresh weighted pick, monologue mode no longer depends on the user-participant hint. Added coverage for `computeSpokenThisCycleAfterMessage` (append, wrap, whisper/no-participantId no-ops, malformed JSON tolerance) and `computeSpokenThisCycleAfterSkip`. New `__tests__/unit/lib/services/chat-message/participant-resolver.service.test.ts` smoke test for first-responder selection (single LLM candidate, explicit requestedId honored, weighted across multiple candidates with spoken-this-cycle respected, user-controlled participants excluded). Also stubbed `findById` in the existing message-finalizer test mock so the freshness re-read in `computeNextSpeakerInfo` doesn't trip the existing assertions.
+
+#### Change: Pick the opening character at random, weighted by talkativeness
+
+`buildAllParticipants` in `app/api/v1/chats/route.ts` was hard-coded to use the first LLM-controlled character in the request as `firstLLMCharacter`, which meant the auto-generated greeting always came from whichever participant the UI happened to list first. It now collects all non-user CHARACTER candidates with each character's `talkativeness` and picks one via the same weighted-random algorithm `selectNextSpeaker` uses for subsequent turns (default 0.5; single-LLM-character chats trivially pick that one character). Applies to both salon and autonomous-room chats. Side effect: when a caller passes `scenarioId`, the randomly chosen character may not own that scenario — the existing "scenarioId not found on character" warning still fires and the chat starts without the scenario. Single-character workflows are unaffected.
+
+#### Fix: Autonomous-room polish — user-char intro, run-start naming, rename, project picker
+
+Four small fixes shaken out by reviewing a 369-message Friday-instance autonomous room (Friday + Amy, no human user character).
+
+- **Suppress the user-character intro when no user character is in the chat.** `app/api/v1/chats/route.ts` was posting the Host `user-character` whisper ("…who will be the user's voice…") whenever `context.userCharacter` was defined — i.e. the instance's default user character — even for autonomous rooms with no `controlledBy: 'user'` participant. Now gated on `participants.some(p => p.type === 'CHARACTER' && p.controlledBy === 'user')`.
+- **Name the participants in the autonomous-room-start announcement.** `lib/background-jobs/handlers/autonomous-room-turn.ts` was emitting "Autonomous room run begun. Caps: …". Now prefixes with the active participant names: "Autonomous room run begun with Friday and Amy. Caps: …".
+- **Make the chat rename fire on autonomous chats.** `lib/chat/context-summary.ts` `calculateInterchangeCount` returned `min(userMessages, assistantMessages)` — permanently zero for autonomous rooms, so `shouldCheckTitleAtInterchange` never tripped and the title stayed "Chat with Friday and Amy" forever. The function now takes an optional `chatType` and counts each assistant turn as one interchange when `chatType === 'autonomous'`. Same change unblocks the summarization gate on the autonomous path.
+- **Restore the project picker for new-chat creation (incl. autonomous rooms).** The standalone `/salon/new` page only inherited `projectId` from the URL and the in-form display was read-only; there was no way to file a chat under a project unless launched from a project page. `useNewChat` now fetches `/api/v1/projects`, owns `selectedProjectId` (initialized from the prop, re-syncs if the prop changes), and exposes `availableProjects` + `setSelectedProjectId`. `NewChatForm` renders an in-form picker with "— None (General) —" when the new props are wired in. `NewChatModal` drops its locally-duplicated continuation-mode project list and wires its existing picker to the hook's state. Submit reads `selectedProjectId`, so the chosen project always persists.
+
+#### Fix: Concurrency guard against parallel autonomous-room turns
+
+Adds a handler-entry guard in `handleAutonomousRoomTurn` (right after the existing stale-run guard) that detects another PROCESSING `AUTONOMOUS_ROOM_TURN` job for the same chatId and yields to the elder. The stale-run guard only catches jobs whose `runId` was *displaced* by a newer run; it does not catch the case where two jobs end up PROCESSING in parallel with the *same* runId, which can happen if the dispatcher's stuck-job sweep (default 10-min timeout) flips a hung PROCESSING job back to PENDING and the dispatcher re-claims it while the original handler is still alive in another child. Tie-break is `(createdAt, id)` so exactly one sibling proceeds when two race in. With the singleTurn fix in 43e8ce35, individual turns are short enough that hitting the stuck-job threshold is very unlikely, but the guard is cheap (one extra read) and the failure mode without it is two parallel chains writing to the same chat. Scheduler-tick and manual-start paths already filter on `runState === 'running'`; no change needed there.
+
+#### Fix: Autonomous-room turns are one-job-per-character-turn
+
+The autonomous-room handler was calling `handleSendMessage` with `neverPauseForUser: true` but no other chain-control flag, so the orchestrator's `executeTurnChain` looped up to 20 character turns inside a single background job before returning. Three observable problems fell out of that:
+
+- **Same character every iteration.** The forked job child buffers all repository writes in `AsyncLocalStorage` until the job ends. `shouldChainNext` re-reads `repos.chats.getMessages()` mid-chain, so on every iteration it saw the same pre-job message history, `lastSpeakerId` stayed frozen at whoever spoke *before* the job started, and `selectNextSpeaker` re-picked the same participant. In a two-character Friday-instance run, Friday spoke 20 consecutive times; Amy was never picked.
+- **Per-turn budget check bypassed.** `handleAutonomousRoomTurn`'s pre-turn budget enforcement only fires between jobs, so a 20-deep chain overshot the configured 250K-token room cap by ~7× before the next job's check caught it.
+- **Long turn latency.** One "autonomous turn" was actually 20 character responses (+ 20× commonplace whispers + 20× host time-stamp whispers); ~3-4 minutes of LLM time per job.
+
+`SendMessageOptions.singleTurn` and `ExecuteTurnChainOptions.singleTurn` are new flags; `executeTurnChain` early-returns when set. The autonomous-room handler now passes `singleTurn: true` alongside the existing `neverPauseForUser` / `suppressAutomaticImages` flags, and the existing self-re-enqueue at the bottom of `handleAutonomousRoomTurn` handles the next turn — one job per character turn, buffered writes flush at job end, budget check fires every turn. `neverPauseForUser` is now defensive (the chain it gates no longer runs in this path), kept for code clarity. Other chat types are unaffected — the flag defaults to `false`.
+
+#### Fix: Skip async pre-compression in autonomous-room chains
+
+`lib/services/chat-message/message-finalizer.service.ts` no longer calls `triggerAsyncCompression` after each assistant message when `chat.chatType === 'autonomous'`. The async pre-compression path exists to make the next human message feel fast; autonomous-room chains have no human, and each chain step appends enough messages (character + host + commonplace whispers) to trip the staleness threshold within ~2 iterations — so the post-message trigger was firing the cheap-LLM compression call dozens of times per turn for a cache that no one inside the turn ever read. Observed in a Friday-instance turn: 59 compression starts for 20 chain iterations, 0 cache hits within the turn. Skipping the trigger drops autonomous-room cheap-LLM compression calls from dozens per turn to 0–2 (only when the next turn's first chain step misses the cache and falls back to sync compression in-line). Other chat types are unaffected.
+
+#### Fix: Child-process readonly DB writes + autonomous-room startup reconcile
+
+Three correctness fixes uncovered while investigating a stuck autonomous room in development. All three were silent failures masked by surrounding code.
+
+- **Repository factory routing in child-executed code.** `lib/services/chat-message/compression-cache.service.ts` (3 dynamic-import sites), `lib/tools/handlers/doc-edit-handler.ts`, `lib/photos/save-image-to-album.ts`, and `lib/photos/photo-link-summary.ts` were importing `getRepositories` from `@/lib/database/repositories` (the raw container) instead of `@/lib/repositories/factory` (the proxy-aware wrapper that returns the buffered-write proxy when `QUILLTAP_JOB_CHILD === '1'`). When those code paths ran inside the forked job-runner child, repository write methods went straight to the readonly SQLCipher connection and threw `attempt to write a readonly database`. The compression cache's fire-and-forget wrapper swallowed the error, so it manifested as silent cache misses — every turn re-paid the compression cost without persisting the result.
+- **Roleplay-templates seed moved to startup.** `lib/database/repositories/roleplay-templates.repository.ts` was lazy-seeding `BUILT_IN_TEMPLATES` from inside four read methods (`findById`, `findAll`, `findBuiltIn`, `findAllForUser`) via direct `collection.insertOne` / `updateOne` calls — bypassing the repository proxy entirely (proxies wrap repository methods, not the underlying SQLite collection). The four inline seed calls are removed; `lib/startup/seed-initial-data.ts` now invokes `repos.roleplayTemplates.seedBuiltInTemplates()` unconditionally near the top of `seedInitialData`, before the first-startup gate, so code-side template changes still propagate on every boot.
+- **Autonomous-room startup reconcile.** When the server is killed mid-turn, the autonomous chat's `runState` stays at `'running'` forever and `startAutonomousRoomManually` refuses to re-engage. New `reconcileAutonomousRunsAtStartup()` in `lib/services/chat-message/autonomous-room.service.ts` runs from `instrumentation.ts` Phase 3.5 before `scheduleAutonomousRooms()` starts ticking: finds `chatType='autonomous'` rows with `runState='running'`, transitions each to `'idle'`, stamps `runEndedAt`, bumps `currentRunId` so any zombie `AUTONOMOUS_ROOM_TURN` job re-claimed by `resetOrphanedJobs()` exits cleanly via the stale-run guard on its next tick, and records `runStateMessage: 'restart:reconciled'`. Idempotent — no writes when nothing is stuck.
+
+#### Feature: Private Character Rooms — Salon creation flow + chat-list toggle (Sub-task G complete)
+
+Closes out the 4.6 UI: owners can now create autonomous rooms from the Salon and the homepage without dropping to SQL, and autonomous rooms are hidden from `/salon` by default with a per-user toggle to bring them back in.
+
+- `app/api/v1/chats/route.ts`: `createChatSchema` accepts `chatType: 'autonomous'` plus the autonomous-room fields (`scheduleCron`, `scheduleFreshnessWindowMs`, `budgetMaxTurns`/`Tokens`/`MaxWallClockMs`, `budgetEstimatedSpendCapUSD`, `runVisibility`, `runDestructiveToolsAllowed`). Autonomous creation requires at least two LLM characters and refuses user-controlled participants. `scheduleCron` is parsed with `croner` at the route layer; bad expressions 400 with the offending text. Initial `scheduleNextRunAt` is computed at create time. Autonomous chats are seeded with system-prompt + scenario/Host whispers but no auto first-message. `handleList` accepts `?includeAutonomous=true`; per-room `runVisibility: 'household' | 'open'` still surfaces autonomous rooms regardless of the flag.
+- `lib/services/chat-enrichment.service.ts`: `EnrichedChatSummary` carries `chatType` so the client can render an "Autonomous" badge on ChatCard.
+- `lib/chat-utils.ts`: `SalonChatShape` gains `chatType`; `transformSalonChatToCardData` maps it to `isAutonomous`.
+- `components/chat/ChatCard.tsx`: new "Autonomous" pill next to the title.
+- `components/providers/quick-hide-provider.tsx`: third localStorage-backed boolean `includeAutonomousRooms` (`quilltap.quickHide.includeAutonomousRooms`), with matching toggle in `components/dashboard/nav-user-menu-quick-hide.tsx` under Content Filters.
+- `app/salon/page.tsx`: reads `chat_settings.autonomousRoomSettings.visibilityDefault`. When `'owner_only'`, the listing fetch omits autonomous rooms unless the toggle is on; for `'household' | 'open'`, autonomous rooms always come through. An inline hint surfaces when at least one autonomous room owned by the user is currently hidden. Header gains a "New Autonomous Room" button next to "New Chat".
+- `components/new-chat/{types,hooks/useNewChat,NewChatForm}.tsx`: `NewChatFormState` adds an `autonomous` slice (cron, freshness hours, four budget caps, visibility, destructive-tools). `useNewChat` prefetches `/api/v1/settings/chat` to seed defaults (freshness window) and ceiling (`destructiveToolPolicy === 'always_refuse'` disables the per-room checkbox); accepts `initialAutonomous`. `handleCreateChat` branches: autonomous rooms suppress the user-character participant and the avatar-generation flag, send `chatType: 'autonomous'` + the autonomous fields, and redirect to `/settings?tab=system&section=autonomous-rooms` (where the operator can Start the run) rather than the chat transcript.
+- `app/salon/new/page.tsx`: reads `?autonomous=1`, passes through, flips the heading and submit-button copy, and disables submit when autonomous-mode constraints (≥2 LLM, no user) aren't met.
+- `components/homepage/QuickActionsRow.tsx`: new "Start Autonomous Room" link next to "Start a Chat", same `/salon/new?autonomous=1` destination.
+
+#### Feature: Private Character Rooms — turn driver, scheduler, API, help doc (Sub-tasks B-E, partial F-G, H)
+
+Builds the runtime, scheduler, API surface, and help documentation for 4.6 autonomous character-to-character chat rooms.
+
+**Sub-task B — turn driver core.** SendMessageOptions gains `neverPauseForUser` (bypasses the all-LLM pause threshold so the autonomous-room runner can drive its own lifecycle) and `suppressAutomaticImages` (skips automatic Lantern + avatar-refresh triggers; deliberate character image-tool calls still work). New handler `lib/background-jobs/handlers/autonomous-room-turn.ts` drives one turn of an autonomous chat — stale-run guard against `payload.runId !== chat.currentRunId`, idle→running transition with counter reset, pre-turn budget check, speaker selection via `selectNextSpeaker`, message via `handleSendMessage` with the new flags, post-turn bookkeeping, self-re-enqueue. Avatar-refresh gate in `lib/wardrobe/avatar-generation.ts:143` and story-background gate in `lib/background-jobs/handlers/title-update.ts` short-circuit on `chatType === 'autonomous'`.
+
+**Sub-task C — tool filtering + daily user-token cap.** `lib/services/chat-message/orchestrator.service.ts` filters `DESTRUCTIVE_TOOL_NAMES` from the per-turn tool list when the chat is autonomous and either `runDestructiveToolsAllowed === 0` or the user-level `destructiveToolPolicy === 'always_refuse'` (the user policy is a ceiling). New `lib/database/repositories/llm-logs.repository.ts:getTotalTokenUsageSince()` powers the daily user-token budget; the rollover boundary is instance-local midnight. The cap transitions the run to `paused` (resumed by the scheduler at the next midnight), not `budgetExhausted`.
+
+**Sub-task D — memory attribution.** `lib/memory/memory-processor.ts:TurnMemoryExtractionContext` gains `inAutonomousRoom`. The SELF and OTHER extraction prompt builders in `lib/memory/cheap-llm-tasks/memory-tasks.ts` prepend a user-absence clause when set; memories are written with `witnessedContext: 'autonomous_room'`. Ordinary chats write `'user_present'`. The memory-extraction handler reads `chat.chatType === 'autonomous'` and forwards.
+
+**Sub-task E — scheduler + manual-start service + Host announcements.** `lib/background-jobs/scheduled-autonomous-rooms.ts` (new) is a parent-process `setInterval(60_000)` that enqueues per-user `AUTONOMOUS_ROOM_SCHEDULE_TICK` jobs; started from `instrumentation.ts` Phase 3.5 alongside the existing schedulers. `lib/background-jobs/handlers/autonomous-room-schedule-tick.ts` (new) scans autonomous rooms with cron + non-terminal state; for each due row within the freshness window, generates a `runId`, atomically transitions to `'idle'`, advances `scheduleNextRunAt`, enqueues a turn. Stale slots are logged + skipped, never caught up. Cron evaluation via `croner ^10.0.1` (new dependency). `lib/services/chat-message/autonomous-room.service.ts` (new) houses `startAutonomousRoomManually` / `pauseAutonomousRoom` / `stopAutonomousRoom` / `resumeAutonomousRoom`. Manual start refuses on `runState === 'running'` and consumes any cron slot inside the current freshness window. The turn handler posts Host-authored `autonomous-room-start` / `autonomous-room-end` / `autonomous-room-paused` system messages at lifecycle transitions and recomputes `scheduleNextRunAt` from the cron when a run ends cleanly.
+
+**API surface (partial F-G).** `app/api/v1/chats/[id]/autonomous-room/route.ts` exposes the management endpoints — POST with `?action=start|pause|stop|resume` and GET for a status snapshot — wired to the manual-start service. UI scaffolding for `/settings?tab=chat&section=autonomous-rooms`, `/settings?tab=system&section=autonomous-rooms`, and the Salon room-creation flow remain TODO; the backend is ready for them.
+
+**Sub-task H — help doc.** `help/autonomous-rooms.md` walks the household through budgets, scheduling, freshness windows, tool restrictions, automatic-image suppression, the Concierge's adjusted behavior, memory provenance, and the settings surfaces, in the project's Wodehouse-steampunk voice.
+
+#### Feature: Private Character Rooms — schema substrate (Sub-task A)
+
+Schema-only first slice of 4.6 Private Character Rooms (autonomous character-to-character chats). No runtime behavior yet; this slice only widens the schema so subsequent sub-tasks have something to write to.
+
+- New migration `add-autonomous-rooms-fields-v1` (`migrations/scripts/add-autonomous-rooms-fields.ts`): adds nullable columns to `chats` (`budgetMaxTurns`, `budgetMaxTokens`, `budgetMaxWallClockMs`, `budgetEstimatedSpendCapUSD`, `scheduleCron`, `scheduleFreshnessWindowMs`, `scheduleNextRunAt`, `scheduleLastRunAt`, `runState`, `currentRunId`, `runStateMessage`, `runStartedAt`, `runEndedAt`, `runTurnsConsumed`, `runTokensConsumed`, `runDestructiveToolsAllowed`, `runVisibility`); adds partial indexes `idx_chats_autonomous_nextRunAt` and `idx_chats_autonomous_runState`; adds `autonomousRoomSettings` JSON column to `chat_settings`; adds `witnessedContext` TEXT column to `memories`.
+- `lib/schemas/chat.types.ts`: `ChatTypeEnum` extended to include `'autonomous'`; new `AutonomousRunStateEnum` and `AutonomousRunVisibilityEnum`; the new autonomous-room fields added to both `ChatMetadataSchema` and `ChatMetadataBaseSchema`.
+- `lib/schemas/job.types.ts`: `BackgroundJobTypeEnum` extended with `'AUTONOMOUS_ROOM_TURN'` and `'AUTONOMOUS_ROOM_SCHEDULE_TICK'`.
+- `lib/schemas/memory.types.ts`: new `WitnessedContextEnum` and a nullable `witnessedContext` field on `MemorySchema`. Existing rows stay NULL; the memory-extraction path will start writing this in Sub-task D.
+- `lib/schemas/settings.types.ts`: new `AutonomousRoomSettingsSchema` (with `dailyTokenBudget`, `defaultFreshnessWindowMs`, `visibilityDefault`, `destructiveToolPolicy`) added to `ChatSettingsSchema`.
+- `lib/tools/destructive-tools.ts` (new): exports `DESTRUCTIVE_TOOL_NAMES` (`'doc_delete_file'`, `'doc_delete_folder'`) and an `isDestructiveTool()` predicate. Not consumed yet; the per-turn filter in Sub-task C will read from this set.
+- `lib/startup/prettify.ts`: added the migration's pretty label ("Preparing the autonomous salon quarters").
+- `docs/developer/DDL.md`: `chats`, `chat_settings`, `memories` sections updated; partial indexes documented.
+- `public/schemas/qtap-export.schema.json`: extended `Chat` properties with all new autonomous-room fields after `conciergeOverride`.
+
+#### Fix: Suppress react-hooks/set-state-in-effect lint error in DescriptionsTab
+
+`app/aurora/[id]/view/components/DescriptionsTab.tsx`: added the standard `// eslint-disable-next-line react-hooks/set-state-in-effect` directive to the fetch-on-mount effect, matching the pattern used in `useCharacterEdit.ts` and other Aurora hooks.
+
+#### Change: Always inline `[Name]` prefix on user-role turns in multi-character chats
+
+In `lib/llm/message-formatter.ts`, `formatMessagesForProvider` now prepends a `[Name]` tag to every user-role message that carries a participant name, regardless of whether the provider supports the OpenAI-style `name` field. When the provider supports `name`, we send both. Assistant-role turns are unchanged (native `name` field when supported, prefix fallback otherwise).
+
+Why: in multi-character chats, every other character's previous turn is downgraded from `ASSISTANT` → `user` and given `name: <CharacterName>`. The `name` field is a weak attribution signal on OpenAI-compatible providers — the model attends much more strongly to role + content. With multiple characters speaking in first person under the `user` role, the responding character would sometimes echo the immediately-preceding "I"-voice (e.g. Amy parroting Friday's `*I feel her.*` opening word-for-word). Inlining `[Friday] *I feel her.*` gives the model a strong in-content anchor for cross-speaker attribution.
+
+Response-side `stripCharacterNamePrefix` is unchanged — it already only strips the responding character's own name, so a mirrored `[Amy]` at the start of Amy's reply still gets removed.
+
+Test updated: `__tests__/unit/lib/llm/message-formatter.test.ts` OPENAI case now expects both `name: 'Alicia_Keys'` and `content: '[Alicia Keys] Hello'`; added a no-double-prefix case.
+
+#### Change: Aurora UI follow-up to the character vault cutover
+
+Tore out the dead multi-`physicalDescription` and `readPropertiesFromDocumentStore` UI left over from the Phase 3 cutover, and migrated callers off the deleted `/api/v1/characters/[id]/descriptions/*` and `/clothing/*` routes.
+
+- `app/aurora/[id]/view/types.ts` and `edit/types.ts`: `physicalDescriptions: CharacterPhysicalDescription[]` → `physicalDescription: CharacterPhysicalDescription | null`; dropped `readPropertiesFromDocumentStore` from both.
+- `app/aurora/[id]/view/hooks/useCharacterView.ts`: template-count loop and the template-replace flow collapsed from `physicalDescriptions.map(...)` to a single-record check; writes the singular `physicalDescription` field on PUT.
+- `app/aurora/[id]/view/components/DescriptionsTab.tsx`: rewritten as a self-contained single-record editor. No longer mounts `PhysicalDescriptionList` or `ClothingRecordList`; PUTs `{ physicalDescription: {...} }` to `/api/v1/characters/[id]` directly. Same field set as the old editor (name, usageContext, four prompt sizes, fullDescription).
+- `app/aurora/[id]/view/components/ExternalPromptDialog.tsx`: dropped the clothing branch entirely and the physical-description picker. `generateExternalPromptSchema` on the server side already accepts neither; the dropdowns were dead.
+- `app/aurora/[id]/view/page.tsx`: dropped the `overlayActive` prop and the `readPropertiesFromDocumentStore` half of `CharacterOptimizerModal`'s `vaultAvailable` — vault availability is now just `!!character?.characterDocumentMountPointId`.
+- `app/aurora/[id]/edit/page.tsx`: dropped `physicalDescriptionsRefreshKey` and the two `handleSyncProperties*AndRefreshLists` wrappers; descriptions tab now uses the new `DescriptionsTab`; wizard's physical-description save migrated from POST `/descriptions` to PUT `/characters/[id]` with `{ physicalDescription: ... }`.
+- `app/aurora/[id]/edit/hooks/useCharacterEdit.ts`: dropped `readPropertiesFromDocumentStore` from form state and removed `handleReadFromDocStoreToggle`, `handleSyncPropertiesFromVault`, `handleSyncPropertiesToVault`.
+- `app/aurora/[id]/edit/components/CharacterBasicInfo.tsx`: removed the Scriptorium-overlay toggle card, the Copy-vault/Copy-database buttons, the `hasLinkedVault` prop, and the `overlayOn` conditional copy in the Scenarios section.
+- `app/aurora/new/page.tsx`: wizard's physical-description save migrated from POST `/descriptions` to PUT `/characters/[id]` with `{ physicalDescription: ... }`.
+
+Server-side: extended `updateCharacterSchema` in `app/api/v1/characters/[id]/route.ts` to accept the singular `physicalDescription` (nullable) and normalize missing id/createdAt/updatedAt via `PhysicalDescriptionSchema.parse`. Without this the UI's PUT was being silently stripped by Zod.
+
+Stale comments scrubbed: `lib/database/repositories/wardrobe.repository.ts`, `lib/database/repositories/characters.repository.ts`, `lib/export/ndjson-writer.ts`, `lib/startup/refresh-vault-wardrobe.ts` no longer mention `readPropertiesFromDocumentStore`.
+
+Out of scope for this pass (still calls the deleted routes and will 404 at runtime): `components/physical-descriptions/*`, `components/clothing-records/*`, `components/chat/CreateNPCDialog.tsx`, and the suggestion-category keys `physicalDescriptions` / `clothingRecords` in `components/characters/optimizer/*`.
+
+Verification: `grep -rn "physicalDescriptions\b\|readPropertiesFromDocumentStore\|clothingRecords" app/aurora` is clean. `npx tsc --noEmit` is clean.
+
+#### Change: Character vault cutover — Phase 3 (Feature 0)
+
+Completed the multi-phase move of character content fields into the per-character document vault. After the `cutover-characters-to-vault-v1` migration runs, the `characters` table holds only identity, the vault pointer (`characterDocumentMountPointId`), default-reference fields, behavior flags, `systemTransparency`, and `sillyTavernData`. Every content field is now read from and written to the vault unconditionally.
+
+Dropped columns from the `characters` table: `identity`, `description`, `manifesto`, `personality`, `exampleDialogues`, `firstMessage`, `scenarios`, `systemPrompts`, `physicalDescriptions`, `title`, `talkativeness`, `aliases`, `pronouns`, `clothingRecords`, `avatarUrl`, `readPropertiesFromDocumentStore`. `systemTransparency` is NOT dropped — it remains as application-state access control on the DB row.
+
+`physicalDescriptions` (array) reshaped to `physicalDescription` (singular `PhysicalDescription | null`). The vault file shape is unchanged — `physical-description.md` for the fullDescription, `physical-prompts.json` for the short/medium/long/complete prompts. The migration logs a per-character warning when a pre-cutover record had more than one entry; only index 0 is preserved.
+
+The overlay (`lib/database/repositories/character-properties-overlay.ts`) no longer branches on `readPropertiesFromDocumentStore`; vault routing is unconditional whenever `characterDocumentMountPointId` is set. The overlay also stops mirroring `systemTransparency` into `properties.json`; the migration's per-character pass scrubs the residual key from any existing file.
+
+Backup safeguard: before per-character work, the migration calls the existing `createPhysicalBackup` / `createMountIndexPhysicalBackup` / `createLLMLogsPhysicalBackup` functions in `lib/database/backends/sqlite/physical-backup.ts` — the same `VACUUM INTO`-based snapshot path the server already runs at every startup. Those functions skip if a backup younger than 24h is on disk, so the typical "already started this morning" path is a no-op. After each call, the migration verifies a recent backup actually exists on disk (the create-functions return null both on "skipped" and on "silent failure"); if the main DB has no recent backup, the migration aborts before destructive work. The refusal gate: if any character's vault can't be verified complete after the per-character pass, the schema mutations are skipped and the operator can re-run after fixing the underlying issue.
+
+Pre-flight inspection: new `npx quilltap db characters status` CLI verb reports per-character vault readiness — vault present, `readPropertiesFromDocumentStore` flag value, files present (`N/8`), Prompts/Scenarios/Wardrobe counts, and any divergence between DB columns and vault files. Supports `--json`, `--id <name|uuid>`, `--diverged`, `--blocked`, `--limit N`. Schema-probes the `characters` table so it works both pre- and post-cutover.
+
+API surface: deleted `/api/v1/characters/[id]/clothing/*` (clothing has been wardrobe-managed since 4.5) and `/api/v1/characters/[id]/descriptions/*` (no longer an array). Character creates/updates with `clothingRecords`, `avatarUrl`, or `readPropertiesFromDocumentStore` payloads are silently dropped by the Zod schema.
+
+`.qtap` export schema (`public/schemas/qtap-export.schema.json`) drops `readPropertiesFromDocumentStore`; `avatarUrl` and the legacy `physicalDescriptions` array are kept on the schema as deprecated-but-tolerated for backwards compatibility with older `.qtap` files. New `physicalDescription` singular field documented. `lib/backup/restore-service.ts` folds legacy `physicalDescriptions[0]` into the singular form on import and silently drops `clothingRecords`.
+
+Files: new migration at `migrations/scripts/cutover-characters-to-vault.ts` (registered, PRETTY_LABELS entry added). `populateVaultWithCharacterData` exported from `lib/mount-index/character-vault.ts`. DDL.md updated with the post-cutover schema plus a vault-managed-fields cross-reference.
+
+Known follow-ups (tracked in session chips): Aurora UI multi-physicalDescription tear-down (the edit/view tabs still iterate on the array form; they compile but render dead controls). The AI-import / character-wizard services have been cleaned up (`lib/services/ai-import.service.ts` and `lib/services/character-wizard.service.ts` now emit the singular `physicalDescription` and no longer write `clothingRecords`).
+
+#### Change: Composer text replacement (Layer 1.5 of the spellcheck/autocorrect plan)
+
+Salon composer and Document Mode rich editor now apply user-defined word-boundary text replacements as you type (e.g. `teh ` → `the `, `Aris ` → `Aristarchus the Wise `). Cross-platform substitute for OS autocorrect, which Chromium does not run on contentEditable. Literal-string matching only; no snippets, no regex.
+
+New table `text_replacement_rules` (`migrations/scripts/add-text-replacement-rules-table.ts`): per-rule `fromText`, `toText`, `caseSensitive`, `enabled`, `sortOrder`, timestamps. Global per instance (no userId — single-user model). New `chat_settings.textReplacementsEnabled` boolean (default 1; `migrations/scripts/add-text-replacements-enabled-field.ts`) is the master toggle, kept separate from the rule list so the feature can be A/B'd without losing rules. Both migrations registered in `migrations/scripts/index.ts` with pretty labels in `lib/startup/prettify.ts`. DDL.md updated.
+
+Zod schemas at `lib/schemas/text-replacement.types.ts` (rule + input + patch shapes). Repository at `lib/database/repositories/text-replacement-rules.repository.ts`: standard CRUD plus `list({ enabledOnly })`, `bulkReplace(rules)`, and a `TextReplacementRuleConflictError` that the API translates to 409. Conflict detection on `(fromText, caseSensitive)` — two case-insensitive rules with the same lower-cased trigger are rejected; case-sensitive vs case-insensitive rules with the same `fromText` are legal (case-sensitive wins at lookup time). Repository registered in `lib/database/repositories/index.ts` as `repos.textReplacementRules`.
+
+REST endpoints under `app/api/v1/settings/text-replacements/`: `GET` lists, `POST` creates, `POST?action=bulk-replace` swaps the full list, `PATCH /[id]` updates, `DELETE /[id]` removes. Master toggle persisted via the existing `PUT /api/v1/settings/chat` route (extended to accept `textReplacementsEnabled`).
+
+Renderer hook at `lib/text-replacement/useTextReplacementRules.ts` fetches via SWR and memoises two lookup maps (`caseSensitive`, `caseInsensitive`) plus an `empty` short-circuit flag. Lexical plugin at `components/chat/lexical/plugins/TextReplacementPlugin.tsx` registers a `KEY_DOWN_COMMAND` listener at `COMMAND_PRIORITY_LOW`, bails on IME composition / master-toggle-off / empty rules, and only fires when the cursor sits at the end of a `TextNode`. Trigger characters: ASCII space, NBSP, tab, and `. , ; : ! ? )`. Newline is intentionally excluded so submit/paragraph-break handlers own that key. Replacement is wrapped in `editor.update(..., { tag: 'text-replacement' })` so one Cmd-Z reverts to the literal typed text. Plugin mounted in both `components/chat/lexical/LexicalComposerWrapper.tsx` and `app/salon/[id]/components/DocumentPane.tsx`'s `DocumentEditorPlugins`. Source-mode textareas keep their explicit `spellCheck={false}` and are unaffected.
+
+Settings UI at `components/settings/chat-settings/TextReplacementSettings.tsx`: master toggle, add-rule form (trigger + replacement + case-sensitive), editable rule list (in-place edits commit on blur/Enter, plus per-row Enabled and Delete), and a scratch "Try it" textarea. Mounted in a new "Text Replacement" `CollapsibleCard` (`sectionId="text-replacements"`) on the Chat tab in `components/settings/tabs/ChatTabContent.tsx`. New `handleTextReplacementsEnabledChange` handler in `useChatSettings` mirrors the spellcheck-toggle pattern. `ChatSettings` interface in `components/settings/chat-settings/types.ts` gains `textReplacementsEnabled?`.
+
+Help docs: new **Text Replacement** section in `help/chat-settings.md` (Quilltap voice).
+
+Not in qtap-export: chat_settings and text_replacement_rules are global per-instance state, not per-entity. SQLCipher backup via `npx quilltap db backup` captures both automatically.
+
+#### Change: LLM logs now record the provider's reported finish reason
+
+The streaming chat-message path captures `finish_reason` / `stop_reason` / `finishReason` / `status` from the provider's raw response and stores it on the log row.
+
+- `LLMLogResponseSummarySchema` (`lib/schemas/llm-log.types.ts`) gains an optional `finishReason: string | null` field. JSON blob, no migration needed.
+- New helper `lib/llm/extract-finish-reason.ts` sniffs the well-known raw-response shapes (OpenAI `choices[0].finish_reason`, Anthropic `stop_reason`, Google `candidates[0].finishReason`, OpenAI Responses `status`). Pure, provider-agnostic.
+- `streamMessage` in `lib/services/chat-message/streaming.service.ts` calls the helper on the `done` chunk's `rawResponse` and passes the value through `logLLMCall`.
+- `LogLLMCallParams.response` and `summarizeResponse()` in `lib/services/llm-logging.service.ts` thread the field through to the stored row.
+- `npx quilltap db log <id>` (`packages/quilltap/lib/db-commands.js`) surfaces `finishReason` as a top-line field alongside `durationMs`, `usage`, and `cacheUsage`. Old rows display nothing (printRecord skips null), new rows show e.g. `stop`, `length`, `tool_calls`, `content_filter`, `end_turn`, `STOP`, `completed`.
+
+Motivation: diagnosing a GLM 5.1 cutoff where the model halted mid-sentence at an opening backtick whenever tools were present in the request. Without `finishReason` in the log, we couldn't tell whether the provider reported `stop`, `length`, `tool_calls`, or `content_filter`.
+
+#### Change: Composer spellcheck toggle (Salon composer + Document Mode rich editor)
+
+A new `composerSpellcheck` boolean (default on) governs browser spellcheck on the two Lexical rich-text surfaces — the Salon `ChatComposer` (`components/chat/lexical/LexicalComposerWrapper.tsx`) and the Document Mode rich editor (`app/salon/[id]/components/DocumentPane.tsx`'s `DocumentEditorPlugins`). Source-mode editors (the Markdown source view and plain-text source view in `DocumentPane`, plus `components/markdown-editor/MarkdownLexicalEditor.tsx`) keep their explicit `spellCheck={false}` — Markdown syntax against a monospace font becomes squiggle noise.
+
+Wired through the standard chat-settings path: Zod field on `ChatSettingsSchema` (`lib/schemas/settings.types.ts`), TypeScript interface on `ChatSettings` (`components/settings/chat-settings/types.ts`), pass-through in `PUT /api/v1/settings/chat`, new `handleComposerSpellcheckChange` handler in `useChatSettings`, new `ComposerSpellcheckSettings` card under a "Composer" `CollapsibleCard` (`sectionId="composer-spellcheck"`) on the Chat tab. The two ContentEditable surfaces read the value via `useSWR('/api/v1/settings/chat')` (matching the pattern in `AutoLockSettingsCard.tsx`); SWR deduplication keeps it one request per render tree. While settings are loading, the surfaces default to `spellCheck={true}` rather than `false`.
+
+Schema additions: `migrations/scripts/add-composer-spellcheck-field.ts` adds a `composerSpellcheck INTEGER DEFAULT 1` column to `chat_settings`, registered in `migrations/scripts/index.ts` with a pretty-label in `lib/startup/prettify.ts`.
+
+Electron-only dictionary feed: `lib/spellcheck/useDictionaryFeed.ts` is a renderer-side hook that watches `/api/v1/characters` and pushes tokenized character names into the shell's custom spellchecker dictionary via `window.quilltap.setDictionaryWords` (feature-detected — silent no-op in the browser). Tokenization splits on `[\s\p{P}]+`, drops <2-char and pure-digit tokens, dedupes, and caps at 5000 with a warn. The hook is mounted once via a renderless (returns-null) `DictionaryFeedMount` inside the authenticated branch of `components/layout/app-layout.tsx` so the SWR call doesn't fire on auth/setup/unlock screens.
+
+Type declarations: `types/quilltap-bridge.d.ts` gains three optional methods on `QuilltapElectronBridge` — `setDictionaryWords`, `setSpellCheckerLanguages`, `getSpellCheckerStatus` — so consumers can feature-detect without `(window as any)` casts. The matching shell-side handlers will land in `quilltap-shell`; this server-side change ships safely without them because every consumer feature-detects.
+
+DDL.md updated. Unit tests for `tokenizeNames` at `lib/spellcheck/__tests__/tokenizeNames.test.ts`. Help docs at `help/chat-settings.md` describe the new toggle and the desktop right-click menu.
+
+#### Fix: Deleting a mount point no longer leaks folder rows
+
+`DELETE /api/v1/mount-points/[id]` in `app/api/v1/mount-points/[id]/route.ts` cleared chunks, file links, documents, blobs, project links, and the mount-point row itself, but never called `docMountFolders.deleteByMountPointId(id)`. `doc_mount_folders` has no FK to any of those tables, so the folder hierarchy was orphaned on every mount-point deletion. Added the call between the blobs delete and the project-links delete. Pre-existing orphan folder rows must be cleaned up by hand (e.g. via `quilltap db --mount-points` against the mount-index DB).
+
+#### Fix: `quilltap db` raw-SQL path now accepts `--json`
+
+The verb subcommands (`db chats`, `db schema`, etc.) already supported `--json` via `lib/db-commands.js`, but the legacy `db <SQL>` / `db --tables` / `db --count` path rejected it with `Unknown option: --json`. Added `--json` to the legacy flag parser in `packages/quilltap/bin/quilltap.js`. With `--tables` it emits a JSON array of table names; with `--count` an object `{ table, count }`; with raw SQL a JSON array of rows for SELECTs and `{ changes, lastInsertRowid }` for writes. Help text updated.
+
+#### Change: Per-chat Concierge tri-state (Safe / Flagged / Off-duty)
+
+Each chat now carries an explicit Concierge mode the operator can set from the sidebar. A new `chats.conciergeOverride` column (TEXT, NULL or `'OFF'`, default NULL) is added by `migrations/scripts/add-chat-concierge-override.ts`. The control lives in the Chat Sidebar's Chat section: Safe (default — global moderation applies, classifier may auto-flip to Flagged), Flagged (treat the chat as dangerous; uncensored routing for text, image gen, cheap-LLM, etc.), and Off-duty (`conciergeOverride='OFF'` — disables every Concierge effect for this chat; never auto-flips out).
+
+Implementation:
+
+- `lib/services/dangerous-content/chat-override.ts` exports `isConciergeOffDuty()` and `isChatActiveDangerous()`. The latter replaces direct `chat.isDangerousChat === true` reads everywhere routing or sanitization decisions are made: `danger-orchestrator.service.ts`, `image-generation-handler.ts`, `appearance-resolution`-aware paths, `cheap-llm.ts`, `chat/context-summary.ts`, `memory-trigger.service.ts`, `orchestrator.service.ts`, `message-finalizer.service.ts`, and the background handlers (`memory-extraction`, `memory-regenerate-all`, `scene-state-tracking`, `story-background`, `title-update`).
+- `resolveDangerousContentSettings()` accepts an optional `chat` argument and returns `OFF_DUTY_DANGEROUS_CONTENT_SETTINGS` (mode `OFF`, every scan disabled) when the chat is off-duty, so callers that already gated on `dangerSettings.mode !== 'OFF'` pick up the override automatically.
+- `scheduled-danger-scan.ts` skips off-duty chats during enumeration. `chat-danger-classification` handler bails at the top with a debug log if the chat is off-duty when its job runs.
+- `lib/services/dangerous-content/manual-flip.ts` is the single chokepoint for manual transitions: it writes the appropriate combination of `conciergeOverride` and `isDangerousChat` (and clears classifier metadata when returning to Safe so the scheduler can re-evaluate), then posts a synthetic Concierge announcement via the new `postConciergeManualAnnouncement` (four variants: manual-flagged, manual-safe, manual-off-duty, manual-on-duty).
+- `PUT /api/v1/chats/[id]` accepts a new `conciergeState: 'safe' | 'flagged' | 'off'` field that the helper maps onto storage.
+- `ChatSidebar.tsx` adds a tri-state `<select>` at the top of the Chat section, mirroring the existing "Announce Generated Images" pattern. The salon-page toolbar pill now shows an "Off-duty" badge when applicable instead of the "Flagged" badge.
+- Export schema (`public/schemas/qtap-export.schema.json`) declares `conciergeOverride` alongside the existing danger fields (which were previously undeclared) so the value round-trips through `.qtap` export/import.
+- DDL.md and `lib/startup/prettify.ts` updated to mention the new column and migration.
+
+#### Change: Salon Tools palette and Chat Settings modal consolidated into a new Chat Sidebar
+
+The right-side Participants Sidebar on the Salon chat page is now the **Chat Sidebar** (`components/chat/ChatSidebar.tsx`), built as a single-open accordion with five sections: Participants, Chat, Visibility, Organize, Edit Content. Every control that used to live in the composer's Tools palette popover, and every setting from the Chat Settings modal, now lives inline inside the appropriate accordion section. The two inline toggles that floated above the message list in multi-character chats (Shared Vaults, All Whispers) moved into the Visibility section.
+
+- **Chat section** holds Agent Mode toggle, Roleplay Template dropdown, Project picker, Image Provider dropdown, Announce Generated Images dropdown, Auto-generate Avatars toggle, Tools modal launcher, Run Tool modal launcher, and Regenerate Background.
+- **Organize** holds Rename, State editor, Continue Elsewhere, Export, and Gallery (conditional on `chatPhotoCount > 0`).
+- **Edit Content** holds Replace, Bulk Replace, Re-extract Memories, and Delete Memories.
+- **Participants** absorbs the existing turn list, talkativeness sliders, pause/resume, queue indicator, and Add Character button. Default-open on first render.
+- **Visibility** is gated on `isMultiChar` to match the previous behavior of the inline toggles.
+
+The narrow mini-avatar collapsed mode of the sidebar is preserved unchanged. Accordion open/closed state is session-only — no localStorage, no server persistence — and the section is always reset to Participants on reload.
+
+The Tools hamburger button on the composer is gone, along with `ToolPalette.tsx`, `ChatSettingsModal.tsx`, and the original `ParticipantSidebar.tsx`. `CollapsibleCard` gained optional `isOpen` / `onOpenChange` props so the parent can drive single-open behavior; uncontrolled callers are unaffected. `useModalState.ts` lost `toolPaletteOpen` and `chatSettingsModalOpen`. Files touched: `app/salon/[id]/page.tsx`, `app/salon/[id]/components/ChatComposer.tsx`, `app/salon/[id]/components/ChatModals.tsx`, `app/salon/[id]/hooks/useModalState.ts`, `components/ui/CollapsibleCard.tsx`, plus the new `components/chat/ChatSidebar.tsx`.
+
+The previous `ParticipantSidebar.test.tsx` (1310 lines, tightly coupled to the old flat layout) and `tool-palette.test.tsx` are removed.
+
+#### Change: Help files updated for the new Chat Sidebar
+
+Reworked `chat-participants.md` as the **Chat Sidebar** reference (covering all five drawers), added a per-chat / global note to `chat-settings.md`, and corrected access paths in `chat-multi-character.md`, `run-tool.md`, `agent-mode.md`, `help-chat.md`, `chats.md`, `chat-state.md`, `templates-in-chats.md`, `rng-tool.md`, `lantern.md`, `chat-turn-manager.md`, `chat-message-actions.md`, `salon-host-introductions.md`, and `the-courier.md` to point at the right Chat Sidebar drawer (or, for the RNG dropdown, at the composer's gutter dice icon).
+
+#### Fix: Save Image now works for mount-file attachments whose images-v2 sister was reaped
+
+`saveImageToAlbum` in `lib/photos/save-image-to-album.ts` rejected with `IMAGE_NOT_FOUND` when the Salon Save-Image button (or the LLM `keep_image` tool) was used on a Librarian-attached mount file whose underlying `files` (images-v2) row no longer existed. The lookup chain — `getImageById` → `docMountFileLinks.findByIdWithContent` → `files.findBySha256` — bailed out if all three missed, even though the actual bytes were still readable from `doc_mount_blobs`. This typically hit older Lantern-generated story backgrounds that survived in a project document store after their original FileEntry was reaped by file-storage reconciliation.
+
+The third lookup now has a fallback: it reads the bytes via `docMountBlobs.readDataByFileId(sourceLink.fileId)` and ingests them into images-v2 to synthesize a fresh `FileEntry`. The new `ingestImageBuffer` helper in `lib/images-v2.ts` wraps the internal `createFile` path (auto-WebP-convert, SHA256 dedup, dimension capture) so the synthesized entry is indistinguishable from a normal upload. The synthesized FileEntry loses the original generation metadata (prompt/model/revisedPrompt) — that vanished with the reaped row — but the photo itself survives and the save proceeds. MIME type comes from the link's `originalMimeType` with a filename-extension fallback (`inferImageMimeFromFilename`).
+
+#### Fix: Chat-level danger classification no longer misclassifies persona prompts and Staff announcements
+
+Two bugs let chat-level reclassification flag entire chats as dangerous based on content that wasn't user/character speech.
+
+1. `lib/background-jobs/handlers/chat-danger-classification.ts` ran in the forked job-runner child. When `classifyContent`'s moderation-provider path returned `null` (no provider registered, or no auto-detected API key), it silently fell through to the cheap-LLM classifier (gpt-5-nano). On Friday-style instances this happened intermittently — the child's plugin init runs asynchronously at startup, so jobs dispatched before init completed never saw the OpenAI moderation provider.
+2. The same handler's no-summary fallback concatenated every chat message as `ROLE: content` and shipped the first 4 KB to the classifier. With no filtering, a chat's `SYSTEM`-role persona prompt was the leading content; Staff announcements (Concierge, Lantern, Host, Librarian, Aurora, Prospero, Pascal, Ariel, Commonplace Book) and tool messages were also included. A persona prompt mentioning polyamory was enough to score a chat as NSFW even when the conversation itself was benign.
+
+`classifyWithModerationProvider` in `lib/services/dangerous-content/gatekeeper.service.ts` now emits a `warn` log on each null-return branch, distinguishing "no moderation provider registered" (with `registryInitialized` + `providerCount` for diagnostics) from "no API key auto-detected" (with the provider name). Future regressions surface in `combined.log` instead of being absorbed silently.
+
+`chat-danger-classification`'s no-summary fallback now filters out `SYSTEM` role, `TOOL` role, and any message with `systemSender != null` before concatenation. Only participant speech (user + character `USER` / `ASSISTANT` turns) reaches the classifier. Test mocks for both gatekeeper test suites were extended to cover the new `isInitialized` / `getAllProviders` calls.
+
+#### Change: Concierge danger announcement names the contributing categories, scores, and threshold
+
+When a chat is first classified as dangerous, the Concierge's in-chat announcement now states exactly what triggered the verdict: the contributing categories (using the canonical labels, e.g. `Sexual/NSFW content`, `Violence or graphic content`), each category's severity score, the overall score, the active threshold, and which assayer rendered the decision (moderation provider or cheap-LLM fallback, identified by provider name). Categories at or above the threshold are listed; if none cross individually (e.g. a moderation `flagged=true` aggregate case), the top scores by rank are shown instead, capped at three. The narrative version weaves these details into the Concierge's voice; the opaque/LLM-context body states them plainly without naming "the Concierge."
+
+To support this, `DangerClassificationResult` gained optional `source: 'moderation' | 'llm'` and `providerName` fields, stamped inside `classifyContent` on both paths. `CATEGORY_LABELS` is now exported from `gatekeeper.service.ts` and used by the writer to keep labels consistent (the cheap-LLM path's free-text `label` is no longer relied on for display). `chat-danger-classification` handler now passes the full classification result plus the active threshold through to the writer.
+
+Files: `lib/services/concierge-notifications/writer.ts`, `lib/services/dangerous-content/gatekeeper.service.ts`, `lib/background-jobs/handlers/chat-danger-classification.ts`, `help/dangerous-content.md`, and new specifics-rendering tests in `__tests__/unit/lib/services/staff-opaque-voicing.test.ts`.
+
+#### Change: Prospero's connection-profile-change announcement is terser
+
+The synthetic message Prospero posts when a character is reassigned to a different connection profile now reads `Amy's current response model is now ChatGPT 5.5 Low Verb; previous model was Kimi-K2 Thinking.` instead of the older `Prospero notes that Amy has been reassigned to ChatGPT 5.5 Low Verb (previously Kimi-K2 Thinking).` Both the visible message and the opaque LLM-context body use the same wording (the opaque body previously diverged). Null fallback (no profile assigned) now reads `unassigned` rather than `no connection profile`. `lib/services/prospero-notifications/writer.ts` + matching test in `staff-opaque-voicing.test.ts`.
+
+#### Fix: OOC text in pre-rendered messages no longer leaks `"qt-chat-ooc">` as visible text
+
+A user-visible bug of long standing: a message like `((some comment))` in a chat using the Standard rendering patterns would render with the literal text `"qt-chat-ooc">((some comment))` and lose its OOC styling. `applyRoleplayPatterns` in `lib/services/markdown-renderer.service.ts` (the server-side path that writes `chat_messages.renderedHtml`) ran each pattern's `string.replace` sequentially, so the dialogue pattern (`"..."` ) matched the just-inserted `"qt-chat-ooc"` attribute value inside the OOC span and wrapped it, producing `<p><span class=<span class="qt-chat-dialogue">"qt-chat-ooc"</span>>((..))</span></p>`. The browser then parsed the outer span as `<span class=` followed by stray text. The client-side `MessageContent.tsx` already used the correct single-pass earliest-match algorithm (`processRoleplayText`); the server path now mirrors it. Already-stored bad `renderedHtml` values will only correct themselves when the message is re-rendered (e.g. edited, regenerated, or imported again).
+
+#### Fix: Characters using non-native (`simple-json`) tool calls now respond to results and can chain calls
+
+When a model without native function-calling (e.g. `moonshotai/kimi-k2-thinking` via OpenRouter) emitted a `<tool_call>{...}</tool_call>` block, the system ran the tool but the character produced no follow-up: the continuation request to the model came back with empty content. Two design problems in `lib/services/chat-message/text-tool-loop.service.ts` combined to cause this:
+
+1. The `<tool_call>` block was stripped from the prior assistant turn before the continuation was re-sent, so the model could not see that *it* had asked for the tool. The model only saw its own preamble prose followed by a synthetic user message carrying a `<tool_result>` — a broken causal chain. Thinking models would burn 300+ reasoning tokens and emit nothing.
+2. The pass ran exactly once. Native function-calling loops up to 5 turns (`native-tool-loop.service.ts:104`); this pass did not, so even if the character had responded, it could not chain a second tool call.
+
+`runTextToolPass` is now a `while`-loop capped at `MAX_TEXT_TOOL_ITERATIONS = 5` (mirrors the native loop). Each iteration's continuation slate carries the un-stripped assistant turn, restoring the causal chain. Duplicate-call detection mirrors the help-chat orchestrator (`help-chat/orchestrator.service.ts:335`): JSON-stringified `{name, arguments}` signatures are tracked per pass, and the third identical call is refused with a synthetic user nudge ("you've already called this with the same arguments — respond now, in character") plus one final response stream. Final `streaming.fullResponse` is each iteration's raw response stripped of markers and joined.
+
+Test fixture for `text-tool-loop.service.test.ts` gained a FIFO chunk queue so multi-call passes can yield different content per call; three new tests cover multi-iteration accumulation, dedupe nudge, and the iteration cap. All existing tests updated for the un-stripped-assistant-turn expectation.
+
+#### Fix: Anthropic Sonnet 4.6 no longer 400s when a chat tail is all Staff whispers
+
+Sibling fix to the WebP-mimetype one: any chat where a character's response fails and synthetic whispers (Lantern, Host, Prospero, Librarian, Commonplace Book) accumulate at the tail produced `400 invalid_request_error: This model does not support assistant message prefill. The conversation must end with a user message.` on the next turn. The whispers are stored as `role: ASSISTANT` because that's how the Salon UI groups them, but for the LLM they are external annotations to the character — not the character's own speech.
+
+Two places were leaking assistant-role whispers into the LLM tail:
+
+1. **Historical whispers in chat history.** `buildMessageContext` in `lib/services/chat-message/context-builder.service.ts` now re-roles `systemSender` messages to `USER` when building the LLM-bound message list. The opaque-anywhere body swap (persona body → `opaqueContent` in opaque mode) rides on the same map; both modes get the role flip. Exception: whispers carrying attachments (Lantern image generations, Librarian-attach announcements) keep `role: ASSISTANT` so `collectLanternImageFileIdsForCharacter`, which discriminates Lantern-published images structurally as "assistant + attachments," still picks them up. The whispers that needed flipping (host, prospero, librarian-no-attach, commonplace) have no attachments, so this carve-out is naturally safe.
+
+2. **In-line whispers injected at the very end of context-build.** `lib/chat/context-manager.ts` was pushing two whisper kinds straight into the final `contextMessages` array *after* the selected-messages loop ran, with `role: 'assistant'` hard-coded: the off-scene character introduction (a Host announcement when a workspace character is name-dropped for the first time) and the auto-prepend timestamp whisper. In non-continue mode this got buried by the trailing user message at line 1576; in continue/nudge mode there's no user message and these whisper pushes formed the tail. Both pushes are now `role: 'user'` for the same reason as (1) — they're Host voices, not character speech.
+
+Conceptually correct and provider-agnostic: every provider sees the Staff as external input rather than as the character's voice. The Lantern walker (`filteredExistingMessages` consumer) and the `hasPriorResponse` participantId check are unaffected; both key off signals untouched by the flip. All existing context-builder, librarian, host-notification, summary-fold, turn-transcript, and courier-transport tests pass without modification.
+
+#### Fix: Chat attachments no longer 400 with "media_type X but bytes are Y"
+
+The Scriptorium storage bridges (`writeProjectFileToMountStore`, `writeUserUploadToMountStore`, `writeLanternBackgroundToMountStore`, `writeCharacterAvatarToVault`) transcode bitmap uploads to WebP via `transcodeToWebP` before persisting. Each bridge returns the post-transcode `storedMimeType`, `sizeBytes`, and `sha256`, but every caller (`FileStorageManager.uploadFile`, `uploadFileToProject` in `chat-files-v2.ts`, the character-avatar and story-background job handlers, `image-generation-handler`, `images-v2`, `app/api/v1/images`, `app/api/v1/wardrobe/preview-avatar`, `app/api/v1/files/shared.ts`, and `restore-service`) discarded those return values and stamped the new `files` row with the *input* `mimeType` and `buffer.length` instead. The resulting `FileEntry` lied about what was on disk: stored bytes were WebP, the row said `image/jpeg` (or whatever the user uploaded).
+
+The visible symptom was Anthropic rejecting any attachment whose underlying blob was transcoded: `messages.N.content.M.image.source.base64: The image was specified using the image/jpeg media type, but the image appears to be a image/webp image`. HTTP `Content-Type` headers on `/api/v1/files/[id]?action=download` and `/api/v1/files/proxy/[...key]` were similarly wrong (browsers sniff and recover, so this was silent).
+
+`UploadResult` in `lib/file-storage/manager.ts` now exposes `storedMimeType`, `sizeBytes`, and `sha256` alongside `storageKey`. All eight callers were updated to use the post-bridge values when building the `FileEntry`. `sha256` on the FileEntry is still the input-bytes hash — upload-time deduplication (`findBySha256`) runs before the transcode, so swapping it would silently break dedup of same-source re-uploads. The mismatch between `files.sha256` (input bytes) and `doc_mount_blobs.sha256` (stored bytes) is by design.
+
+Repair migration `repair-files-mime-and-size-from-mount-blob-v1` walks every `files` row whose `storageKey` starts with `mount-blob:`, joins to `doc_mount_blobs` on the blob id encoded in the key, and rewrites `mimeType` / `size` when they disagree with the blob's `storedMimeType` / `sizeBytes`. `sha256` is left alone. Idempotent; orphaned mount-blob keys (no matching blob) are logged and skipped rather than aborting. Depends on `relink-files-to-mount-blobs-v1`.
+
+#### Feature: Z.AI (GLM) provider plugin bundled with Quilltap
+
+`plugins/dist/qtap-plugin-z-ai/` now ships in-tree (previously a separately-published `@quilltap/qtap-plugin-z-ai` package). Source moved verbatim; `package.json`, `manifest.json`, and `esbuild.config.mjs` were rewritten to match the other bundled provider plugins (unscoped name, `Foundry-9 LLC` author, plain `dependencies` instead of peer-deps, `index.js` at plugin root). Version bumped 1.1.3 → 1.1.4 to mark the move. No app-side registration changes — the build-plugins script discovers it automatically via `manifest.json` with `typescript: true`.
+
+Provides GLM-4.6, GLM-4.5 family, GLM-4.6V / GLM-4.5V vision, tool/function calling, Z.AI's native `web_search` tool, and CogView-4 / GLM-Image image generation. Endpoint: `https://api.z.ai/api/paas/v4`.
+
+#### Fix: Lantern story-background prompts no longer re-append portraits for participants
+
+`appendMissingCharacterEnumerations` in `lib/background-jobs/handlers/story-background.ts` was scanning the full user-workspace character list and appending canonical `Name: A woman. <description>` entries for every participant whose name appeared in the crafted prompt without a `Name:` enumeration. Since the crafter LLM normally weaves participants into the scene inline ("On the left, Friday, a woman with strawberry-blonde…") rather than as `Friday: …` enumerations, the safety net was firing on every participant, dumping portrait-style side cards after the integrated scene. Image providers rendered the result as a divided triptych of head-shot tiles instead of a unified scene.
+
+The fallback's original purpose (`c8df7d58`) was non-participant characters who get name-dropped via scene context or SceneState actions but were never handed to the crafter. The call site now filters `userCharacters` down to non-participants using `payload.characterIds` before invoking the helper — participants already had their descriptions woven in by the crafter, so they don't need a fallback portrait append. Non-participants still get the safety-net enumeration so the image provider doesn't invent appearances for them.
+
+#### Fix: CLI no longer breaks node-pty's spawn-helper executable bit on macOS
+
+`packages/quilltap/bin/quilltap.js` was unconditionally replacing the standalone tarball's bundled `node_modules/node-pty` with a symlink to the npm-installed copy under `/usr/local/lib/node_modules/quilltap/node_modules/node-pty`. On macOS, `sudo npm install -g quilltap` extracts that copy with the executable bit stripped off `prebuilds/<platform>/spawn-helper` (a known npm-as-root tar-extraction wart). The CLI tried to restore the bit with `chmodSync(helper, 0o755)`, but the file is owned by root and the CLI runs as a non-root user — the chmod returned `EPERM` and was swallowed by a silent `try {} catch {}`. Result: terminal spawns failed with `posix_spawnp failed` at runtime, with no actionable hint.
+
+`linkNativeModules()` now checks whether the standalone dir already has a real (non-symlink) `node-pty` directory with a `prebuilds/<platform>-<arch>/` subdirectory for the current platform. If yes — which is the case on macOS and Windows, where the tarball ships working prebuilds — the symlink step is skipped entirely and the tarball's correct copy survives. Linux (no node-pty prebuild) and pre-existing broken-symlink states still fall through to the symlink + chmod path. The chmod failure case now logs a clear warning with the exact `sudo chmod 755 …` command instead of failing silently.
+
+#### Fix: Lantern story-background prompts no longer dump full wardrobe prose
+
+The Lantern's image-prompt pipeline was leaking wardrobe items' human-prose `description` fields straight into image-generation prompts, producing multi-thousand-character prompts full of markdown bullets and style commentary ("Good for moving between Lodge, office, balcony…", "She's not hiding those hands"). Three independent leak paths fixed:
+
+1. `lib/wardrobe/outfit-description.ts:decorateOutfitItems` gained a `titleOnly` option. Image-gen-adjacent callers (`lib/wardrobe/avatar-prompt.ts`, `lib/background-jobs/handlers/scene-state-tracking.ts`) now pass `titleOnly: true`. The two inline `valuesFor` builders in `lib/image-gen/appearance-resolution.ts` and `lib/memory/cheap-llm-tasks/image-scene-tasks.ts:resolveAppearance` were collapsed to titles-only the same way. Chat-context formatting (which is rendered to a model that can use the prose) is untouched.
+
+2. `APPEARANCE_RESOLUTION_PROMPT` was sharpened: `clothingDescription` is now capped at 200 chars of plain prose with explicit no-markdown / no-parenthetical-asides / no-commentary rules, and the equipped-wardrobe section is no longer labeled "Current Outfit … takes precedence", which a cheap LLM was reading as the "narrative → use verbatim" branch and echoing the entire input back.
+
+3. `appendMissingCharacterEnumerations` in `lib/background-jobs/handlers/story-background.ts` (introduced by the c8df7d58 missing-enumeration fix) was injecting the *resolved* participant description — which carried the bloated wardrobe text — back into the prompt for any character whose name appeared without a `Name:` enumeration. It now always uses the compact `buildBasicEnumeration` form (gender prefix + mediumPrompt/shortPrompt); the `resolvedDescriptionsByCharacterId` parameter was dropped.
+
+Two test expectations in `__tests__/unit/image-gen/appearance-resolution.test.ts` updated to assert the new title-only fallback output.
+
+#### Docs: tool plugin development guide reflects the Zod-source-of-truth convention
+
+`docs/developer/TOOL_PLUGIN_DEVELOPMENT.md` rewrote the calculator example to declare a Zod input schema, derive the OpenAI-shape `parameters` JSON via a small `zodToOpenAISchema` helper (Zod 4's native `z.toJSONSchema()` with `target: 'draft-7'`, plus a strip of `$schema`/`$id`/`definitions`/`$defs`), and have `validateCalculatorInput` delegate to `safeParse`. Added a section on `.refine()` for trim-non-empty / allowlists / cross-field constraints that JSON Schema cannot express alone. Best-practice and troubleshooting bullets updated to point at the Zod schema when input validation fails. Provider plugin docs unchanged — provider plugins consume tool definitions rather than define them.
+
+#### Refactor: Zod schemas as the single source of truth for all 49 tool definitions
+
+Every tool definition in `lib/tools/*-tool.ts` now declares a Zod input schema (`xxxToolInputSchema`) as the canonical contract. The OpenAI-shape `parameters` JSON Schema served to native function-calling providers is derived from that schema via a new helper `lib/tools/zod-to-openai-schema.ts` (built on Zod 4's native `z.toJSONSchema()`), and every `validateXxxInput` function is now a one-line delegate to `schema.safeParse(input).success`. Closes the long-standing gap where the JSON Schema and the runtime validator could quietly drift apart.
+
+The conversion exposed and fixed several real drift cases that had been masked: `web_search`'s validator silently coerced string `maxResults` via `Number()` and ignored its own documented `maxLength: 500` on `query` — Zod enforces both correctly now. `whisper` rejected empty strings; the JSON Schema didn't say so; the Zod schema does now (`.min(1)`). `help_navigate`'s allowlist of permitted route prefixes lived only in the validator, never in the JSON Schema sent to the LLM — it's now a Zod `.refine()` so both surfaces see the same rule. `wardrobe_create_item`'s cross-field "either types or components must be supplied" check moved into a Zod object-level `.refine()`.
+
+Two web-search tests that previously documented the discrepancy ("should accept maxResults as string number — converts via Number()" and "should accept query exceeding max length — no length validation in runtime") were rewritten to assert the new strict behavior. The whole point of this refactor is that the JSON Schema and the validator are now the same thing.
+
+Snapshot test added at `lib/tools/__tests__/tool-definitions-snapshot.test.ts` captures the derived `parameters` JSON for all 49 tools so future Zod-side edits surface as snapshot diffs in review. Removed the now-unused `zod-to-json-schema` package — Zod 4 has native JSON Schema emission and `zod-to-json-schema@3.25` does not support Zod 4 schemas anyway.
+
+Naming convention also standardized: every tool file exports `xxxToolDefinition` as the canonical name. The previously-mixed naming (some files used `xxxTool`, others `xxxToolDefinition`) has been reconciled — `lib/tools/index.ts` still re-exports both for back-compat where consumers expected the short name.
+
+#### Feature: Simple JSON pseudo-tool surface for models without native function calling
+
+Replaced the legacy `[[TOOL ...]]content[[/TOOL]]` text-block pseudo-tool format with a smaller, more robustly-parsed `<tool_call>{...}</tool_call>` JSON-in-XML surface. The new format is designed around three principles: a familiar syntax (JSON inside an XML tag), exactly one tool call per turn, and a hard provider stop sequence (`</tool_call>`) so the model can't emit a valid call and then keep narrating fake results.
+
+New modules: `lib/tools/simple-json-parser.ts` (three-tier lenient parser — strict `JSON.parse`, `jsonrepair`, then a balanced-brace walker that recovers when the closing tag is dropped entirely; alias tags `<toolcall>`, `<tool>`, `<call>`, `<function_call>` are accepted) and `lib/tools/simple-json-prompt.ts` (uniform `(name: type)` signatures derived from each tool's existing OpenAI-shape `parameters` JSON Schema, replacing 15 hand-written prompt blurbs).
+
+Strategy wiring: `TextToolStrategy` in `lib/services/chat-message/text-tool-loop.service.ts` gains `formatToolResult(toolName, content)` and an optional `stopSequences?: string[]`. The inline `[Tool Result: ...]` template that the loop hard-coded is now strategy-scoped — simple-json frames results as `<tool_result name="...">...</tool_result>`, while the legacy text-block and provider-text-markers strategies keep the existing template. Orchestrator picks the strategy from a new `resolveToolMode()` helper in `lib/tools/pseudo-tool-support.ts` and injects `stop: ['</tool_call>']` into both the initial primary stream and the continuation re-stream when simple-json is active.
+
+Provider stop-sequence plumbing: `StreamOptions.stop?: string[]` flows through to each provider adapter. OpenAI's Responses API, Anthropic (`stop_sequences`, capped at 4), Ollama's streamMessage path, OpenRouter's chat-completions + SDK paths, and the shared `OpenAICompatibleProvider.streamMessage` all honour it now. Google and Grok already did. Each touched plugin bumps its patch version; `packages/plugin-utils` goes 2.2.8 → 2.2.9 and must be republished before the next plugin release.
+
+Profile schema: new `pseudoToolMode` column on `connection_profiles` (enum: `auto` | `native` | `simple-json` | `text-block`, default `auto`). Migration `add-pseudo-tool-mode-field-v1` ALTER-adds the column and backfills existing rows to `'auto'`. The "Tool format" selector now lives in the connection-profile editor (`components/settings/connection-profiles/ProfileModal.tsx`, conditional on `allowToolUse`). Default `auto` resolves to native on capable models and simple-json on everything else (the spec's Phase 5 flip); the legacy text-block surface remains selectable for compatibility while users migrate.
+
+Forcing `pseudoToolMode = 'native'` on a model that genuinely can't do native function calling now falls back to simple-json (graceful degradation) rather than shipping a broken native request. The pseudo-tool.service test that asserted the old behavior was updated accordingly.
+
+Legacy modules moved: `lib/tools/text-block-parser.ts` and `text-block-prompt.ts` (plus their tests) now live in `lib/tools/legacy/`. Public re-exports through `lib/tools/index.ts` keep behavior identical for all consumers; only direct relative-path importers (`whisper-handler.ts` and one mock) were updated.
+
+Help: `help/connection-profiles.md` gained a "Tool Format" section in the project's steampunk-Wodehouse voice, explaining each setting and why simple-json is the modern default. The help message-pack index needs rebuilding before release.
+
+Tests: 55 unit tests covering the parser (three tiers, alias tags, jsonrepair recovery, balanced-brace fallback, failure modes) and the prompt builder (signature rendering for primitive/enum/array/oneOf/zero-param shapes, instruction structure); 3 new integration tests in `text-tool-loop.service.test.ts` covering the strategy's `formatToolResult` indirection and `stopSequences` passthrough. All 805 existing service/repo tests still green.
+
+The Zod refactor of tool definitions called for by the implementation plan is deferred to a follow-up commit so this diff stays reviewable. `describeToolSignature` walks the existing OpenAI-shape `parameters` JSON, so the simple-json feature works fully without the refactor.
+
+#### Fix: CI test suites couldn't resolve the SQLCipher driver
+
+Four test suites (`__tests__/unit/packages/quilltap/{memories-commands,db-backup,graph-integrity}.test.js` and `__tests__/unit/lib/database/migration/repair-dangling-related-memory-edges-v1.test.ts`) failed in GitHub Actions with `Cannot find module 'better-sqlite3-multiple-ciphers'`. Their `loadDriver()` helpers tried `packages/quilltap/node_modules/better-sqlite3-multiple-ciphers` first and fell back to the bare `better-sqlite3-multiple-ciphers` require. Locally the first path resolves because `packages/quilltap/` carries its own `node_modules/`, but in CI only the root `npm ci` runs, and the root `package.json` declares the dep as `"better-sqlite3": "npm:better-sqlite3-multiple-ciphers@..."` — npm installs that under the alias name, so neither candidate resolves. Added a third fallback that requires `better-sqlite3` (the alias the runtime already uses) and documented the resolution rule in CLAUDE.md so future tests pick the right import path from the start.
+
+The third fallback then failed differently — `TypeError: Database is not a constructor` — because `jest.config.ts`'s `moduleNameMapper` redirects `^better-sqlite3$` to a manual mock at `__mocks__/better-sqlite3.ts` whose `MockDatabase` is exported via `export default`. `require('better-sqlite3')` therefore returned `{ default: MockDatabase }`, not a constructor. Reworked the third fallback in all four `loadDriver()` helpers to require by absolute filesystem path (`<root>/node_modules/better-sqlite3`); moduleNameMapper only matches bare specifiers, so the absolute path bypasses the mock and loads the real native binding for these tests, which is what they need.
+
+One more failure remained: `__tests__/unit/packages/quilltap/db-backup.test.js` → `cmdBackup round trip`. The test's own loadDriver was now fine, but `cmdBackup` reaches into the production CLI's `packages/quilltap/lib/db-helpers.js → openEncryptedDb`, which does `require('better-sqlite3-multiple-ciphers')` then falls back to `require('better-sqlite3')`. In CI the first fails (alias install), the second hit jest's moduleNameMapper and got the same `{ default: MockDatabase }` non-constructor — so the opener threw, `backupOneDb` caught it, returned `ok: false`, the snapshot file was never written, and the test's `expect(fs.existsSync(snapPath)).toBe(true)` failed. Production code shouldn't need to know about jest mocks, so the fix went into the mock: append `module.exports = MockDatabase` (mirroring the real driver's CJS shape) plus a re-attached `.default` so existing `import Database from 'better-sqlite3'` callers keep working via esModuleInterop.
+
 ### 4.5.1
 
 #### Fix: story-background prompt missed enumerating non-participant characters
@@ -11,246 +1187,3 @@ When the cheap LLM that crafts the Lantern's story-background image prompt place
 #### Fix: shell completion coverage gaps
 
 The bash/zsh/fish completion templates were missing the `logs` and `migrations` top-level subcommands, the `instances default` and `instances rename` verbs, and the global `--passphrase` flag. The bash template's per-subcommand flag lists were also stale relative to the actual parsers in `db-commands.js`, `docs-commands.js`, and `memories-commands.js`. Rewrote all three templates (`packages/quilltap/lib/completion/{bash,zsh,fish}.template`) to enumerate the full surface — every verb, every documented flag, value-list completion for `--source` (AUTO/MANUAL), `--stream` (combined/error/stdout/stderr/startup), `--field` (request/response/both), `--sort`, `--type`. Bash now also two-level dispatches on sub-verbs (e.g. `themes registry` exposes `add/remove/refresh/keygen/sign`), and instances-targeting verbs (`show`, `remove`, `rename`, `default`, `set-passphrase`) tab-complete registered instance names. Bash smoke-tested with nine scenarios covering all new verbs and flag-value completions; zsh syntax-checked with `zsh -n`. Users who already saved a completion script need to regenerate it.
-
-### 4.5.0
-
-#### docs: add release notes for 4.5.0
-
-Added release notes at [4.5.0](./releases/4.5.0.md).
-
-#### Maintenance: npm dependency refresh
-
-Ran `npm update -S` across root, all `packages/*`, and all `plugins/dist/*`. Bumped `@quilltap/plugin-utils` 2.2.7 → 2.2.8 and `@quilltap/theme-storybook` 1.0.35 → 1.0.36, published both, and refreshed the `^2.2.8` caret pin + lockfiles + plugin `node_modules` in all 11 consuming plugins plus the root app. Bumped the patch version on every plugin whose `package.json` had dependency changes (12 plugins total: anthropic, builtin-embeddings, curl, default-system-prompts, google, grok, mcp, ollama, openai, openai-compatible, openrouter, search-serper) and updated each matching `manifest.json`. Rebuilt all plugins via `npm run build:plugins`.
-
-#### test: add regression coverage for zsh completion subcommand parsing fix
-
-Added `__tests__/unit/packages/quilltap/completion-template.test.js` to lock in the zsh completion template fix. The test asserts `_arguments -C '1: :->subcommand'` and `_describe 'command' subcommands` are present, and that the broken legacy positional spec (`"1: :(${subcommands[@]%:*})"`) does not reappear.
-
-#### Maintenance: remove post-4.4.0 debug logs added during 4.5-cli work
-
-Removed debug-level log lines introduced after `4.4.0` in:
-
-- `lib/memory/memory-gate.ts` (`deleteMemoryWithUnlink` and `deleteMemoriesWithUnlinkBatch`)
-- `lib/mount-index/reindex.ts` (`reindexLinks`)
-
-- **Salon — add missing `prospero` case to `getMessageAvatar`**: `prospero` was added to the `systemSender` enum and has an avatar file (`prospero-avatar.webp`) but had no branch in `getMessageAvatar`; messages authored by Prospero would silently fall through to a wrong avatar. Added the branch. (`app/salon/[id]/page.tsx`)
-
-#### Documentation
-
-- **CLAUDE.md — rebased on 4.5-cli; updated for current state**: Replaced with the comprehensive 4.5-cli version which includes: Background Jobs tech-stack entry; testing updated to "Jest (with native coverage)" (dropped Istanbul/nyc); LLM services expanded to include Ollama and any OpenAI-compatible endpoint (Grok renamed from xAI/Grok); Character field semantics section (manifesto, identity, description, personality, title vantage-point definitions); Writing migrations section (pretty-labels and reportProgress rules); updated Feature Names (all features now include settings-tab links, The Librarian and The Host added as named entries); complete `systemSender` enum with all 8 senders including `commonplaceBook` and `ariel` with full descriptions; and expanded CLI database instructions. Kept the existing `prospero` fix in `getMessageAvatar` (`app/salon/[id]/page.tsx`). Added note that old content UI routes (`/chats`, `/characters`, `/projects`) redirect to current equivalents. (`CLAUDE.md`)
-
-#### Fix: zsh completion "doubled argument definition" error
-
-`quilltap completion zsh` produced a script that crashed at first tab with a `doubled argument definition: 1: :(docs)` error from the zsh `_arguments` helper. The top-level subcommand spec used `"1: :(${subcommands[@]%:*})"` — inside double quotes, `[@]` still expands each array element as a separate word, so `_arguments` received `"1: :(db"`, `"docs"`, `"themes"`, ... as separate positional specs and rejected the duplicates. Replaced with the idiomatic `_arguments -C '1: :->subcommand'` + `_describe 'command' subcommands` pattern in `packages/quilltap/lib/completion/zsh.template`. Bash and fish templates were unaffected. Users who already saved `_quilltap` need to regenerate it: `quilltap completion zsh > ~/.zsh/completions/_quilltap` (and `rm -f ~/.zcompdump*` if the cache is stale). Per-shell installation blocks in `packages/quilltap/README.md` and `help/cli-completion.md` were expanded to cover both the one-line `source <(...)` form and the canonical `fpath` setup, plus an oh-my-zsh note.
-
-#### CLI Tier 2 — semantic search (item 7)
-
-Two new `--semantic` modes on the existing literal grep verbs, plus one new server endpoint:
-
-- **`POST /api/v1/mount-points?action=semantic-search`** — new collection-route action on `app/api/v1/mount-points/route.ts`. Embeds the query via `generateEmbeddingForUser` (interactive priority), then calls `searchDocumentChunks` from `lib/mount-index/document-search.ts` (already in place from earlier Scriptorium work). Body schema: `{ query: string, mountPointIds?: string[], projectId?: string, pathPrefix?: string, top?: 1..500, threshold?: 0..1 }`. Returns ranked `DocumentSearchResult[]` with score, file path, and snippet. Surfaces `EMBEDDING_DIMENSION_MISMATCH` with both dimensions when the active embedding profile has drifted from the corpus, and `EMBEDDING_FAILED` (400) when no profile is configured.
-- **`POST /api/v1/memories?action=search`** (already shipped, no change) is reused for memory-side semantic search. Schema requires `characterId: uuid`.
-- **`quilltap docs grep --semantic <query>`** — CLI client. Flags: `--top N` (default 20), `--threshold 0..1` (default 0.5), `--mount <name|id>` (local resolve via `requireMount` to a UUID), `--json`. Renders ranked results: `score  mount:path  [heading]` followed by a snippet. Unreachable server, embedding-failed, and dimension-mismatch errors all produce clear messages with the next-step pointer (start the server, configure embeddings, or reindex). Implementation in `packages/quilltap/lib/docs-commands.js` (`handleSemanticGrep`).
-- **`quilltap memories grep --semantic --character <name|id> <query>`** — CLI client posting to the existing memories search endpoint. `--character` is required (server-side schema enforces one holder per query); `all` is rejected with a clear message. `--source AUTO|MANUAL` and `--min-importance` pass through to the server filter. `--top` and `--threshold` semantics match the docs side. Local character resolution to a UUID happens before the HTTP call so the user gets a useful error rather than the server's generic "Validation error" on a bad name. Implementation in `packages/quilltap/lib/memories-commands.js` (`cmdSemanticGrep`).
-
-Server-side similarity, mount-point cache, and dimension-mismatch surfacing all reuse the same helpers the chat-path recall and the Scriptorium UI already exercise (`searchDocumentChunks`, `searchMemoriesSemantic`, `assertEmbeddingDimensionsMatch`, `EmbeddingDimensionMismatchError`). The CLI side is a thin client. Help files `help/cli-docs.md` and `help/cli-memories.md` get new "Semantic Search" subsections inside the existing `find`/`grep` blocks.
-
-#### CLI Tier 2 — ergonomic follow-ups (items 1–6)
-
-Six small per-item friction reductions on the CLI surface. Each is independent; items 1–6 ship as one batch. (Item 7, semantic search, is a separate follow-up PR.)
-
-- **Shell completion (`quilltap completion bash|zsh|fish`).** Emits a completion script for the requested shell. Sourcing the bash output makes `quilltap d<TAB>` propose `db docs`. Dynamic completions for `--instance` / `--character` / `--mount` shell out to `quilltap instances list --names-only` (and analogous hidden flags). Templates live as reviewable plain-text files in `packages/quilltap/lib/completion/{bash,zsh,fish}.template`. New help file `help/cli-completion.md` with per-shell install instructions; same install block added to `packages/quilltap/README.md`.
-- **`quilltap logs`.** Tail or print an instance's log files without remembering where they live. Flags: `--stream combined|error|stdout|stderr|startup` (comma-separated for multi-stream output with `[stream]` prefixes), `--tail N` (default 100), `--follow`/`-f` (survives `combined.0.log`-style rotation by detecting inode change in the watched directory), `--grep <pattern>` (JS regex, no `rg` dependency). Color is applied to JSON log lines by substring match on `"level":"..."`; suppressed when stdout isn't a TTY. Implementation in `packages/quilltap/lib/logs-commands.js`. New help file `help/cli-logs.md`.
-- **`docs ls --recursive` and `docs tree`.** `docs ls -R <mount>` lists every file in the mount, grouped by folder header lines and reusing the path-prefix membership pattern (the 4.5-dev `folderId`-drift fix) so the listing stays honest even when `folderId` is null on link rows. `docs tree <mount> [path]` produces ASCII tree output matching the box-drawing convention used by `memories tree`. Flags: `--depth N`, `--max-nodes N` (default 1000, prints a clear truncation message at the cap), `--json` (returns a nested object tree). Implementation in `packages/quilltap/lib/docs-commands.js` (`handleLs` extension, new `handleTree`).
-- **`docs ls --sort time|size|links` plus `-r`/`--reverse`.** Sort by name (default, case-insensitive), `modified` DESC, file size DESC, or `linkCount` (hard-link sibling count) DESC; `-r` flips order. Folders still group before files within each sort. Same `handleLs` extension as `--recursive`. Help file `help/cli-docs.md` updated.
-- **`instances default <name>` and `instances rename <old> <new>`.** New `defaultInstance: string | null` field added to `instances.json` (atomic temp-then-rename write at mode 0o600 preserved). `instances default <name>` writes the default; `--clear` clears it; bare `instances default` prints the current default. `instances rename <old> <new>` renames the key in the JSON map and preserves the stored path and passphrase; if the renamed instance was the default, `defaultInstance` is updated to the new name. `instances list` marks the default with `*` in the table and includes `isDefault: boolean` per entry in `--json` output. `resolveDataDirAndPassphrase` (`packages/quilltap/lib/db-helpers.js`) consults the registered default between `--instance` and `QUILLTAP_DATA_DIR`, and the default-instance hint suppresses itself when the registered default is honored. New help file `help/cli-instances.md`.
-- **`quilltap migrations` namespace.** Read-only verbs `status`, `pending`, and `run --dry-run`. Cross-references the in-source migrations array in `migrations/scripts/index.ts` (read as text, then each migration file is read to extract the canonical `id:` value — heuristic camelCase→kebab conversion is unreliable because some IDs omit `-v1` or use `-v2`) against the `migrations_state` table in the encrypted main DB. `status` reports source total, recorded-applied count, retired-from-active count (rows in `migrations_state` that are no longer in the active source array), and not-yet-recorded count. `run --dry-run` lists not-yet-recorded migrations and notes that the `shouldRun()` predicate is evaluated at startup — the CLI does not invoke predicates. Refuses any actual `migrations run` without `--dry-run` because the migration runner stays at startup. Implementation in `packages/quilltap/lib/migrations-commands.js`. New help file `help/cli-migrations.md`.
-
-CLI dispatcher in `packages/quilltap/bin/quilltap.js` wires three new top-level verbs (`completion`, `logs`, `migrations`). `npx tsc` and `npm run lint` are clean. No DDL or schema changes. The `packages/quilltap` version is left for the release workflow to bump.
-
-#### Memory deletion chokepoint + dangling-edge repair
-
-Memory deletions now route through a single chokepoint helper that scrubs the deleted ID from every neighbor's `relatedMemoryIds` before the row is removed. Until this landed, `relatedMemoryIds` (a JSON array with no FK enforcement) accumulated dangling UUIDs every time a memory was deleted — Friday's smoke test caught 9,390 of them.
-
-- Two new helpers in `lib/memory/memory-gate.ts`: `deleteMemoryWithUnlink(id)` for single deletions and `deleteMemoriesWithUnlinkBatch(ids)` for cascades. The batch variant scans neighbors once for the whole doomed set, scrubs the doomed IDs from every neighbor's array, then deletes the batch grouped by character.
-- All nine leaking deletion paths rerouted through the chokepoints: the manual-delete API (`app/api/v1/memories/[id]/route.ts`), character cascade (`lib/cascade-delete.ts`), housekeeping retention (`lib/memory/housekeeping.ts`), dedup merge (`lib/tools/memory-dedup.ts`), and four memory-service surfaces (single delete with vector, source-message cascade, swipe-group cascade, chat cascade).
-- New migration `repair-dangling-related-memory-edges-v1` does a one-time, idempotent scan that removes any UUID from every `relatedMemoryIds` that no longer resolves to a row. Pretty-label entry: "Pruning phantom links from the memory graph".
-- New read-only CLI verb `quilltap memories validate [--character <name|id|all>] [--list] [--json]`. Exits `0` on a clean graph, `1` on any dangling edges remaining. The dangling-edge scan is now a shared helper at `packages/quilltap/lib/graph-integrity.js` consumed by both `memories status` and `memories validate`.
-- The global `@/lib/database/manager` mock added to `jest.setup.ts` lets unit tests that pull memory-gate into their import graph (housekeeping, cascade-delete, etc.) run without spinning up the real SQLite backend.
-
-After this lands and the migration runs on Friday, `quilltap memories status` should report `dangling edges: 0` and `quilltap memories validate` should exit 0 indefinitely.
-
-#### `quilltap memories` — new read-only CLI namespace
-
-New top-level subcommand with six read-only verbs (`ls`, `find`, `grep`, `show`, `tree`, `status`) for surveying the memories table. Mirrors the shape of `quilltap docs`: shared filter flags (`--character`, `--about` with `self`/`none` shortcuts, `--source`, `--chat` with `none` shortcut, `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`), shared sort vocabulary (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, `-r` to reverse), `--limit N`, `--json`. All verbs open `quilltap.db` read-only.
-
-- `ls` — column listing modelled on `docs ls`. Defaults to `reinforcedImportance DESC` (what the recall path uses), not `createdAt DESC` like the legacy `db memories` verb. Shows holder + `imp` + `rein` + `src` + `about` + `chat` + `links` + `emb` + `summary`; holder column conditional on `--character all`.
-- `find <pattern>` — substring match against `summary` (default), `content`, or `both` via `--in`. Relevance ranking when `--sort` is unset (summary-hit > content-only-hit, then reinforced + recency).
-- `grep <pattern>` — pattern search inside `content` with snippet formatting. Same `-i` / `-l` / `--max` / `--context` semantics as `docs grep`.
-- `show <id|prefix>` — long-form record with related-memory neighbors. `--depth N` (default 1, cap 4), `--no-related`, prefix-matching at ≥8 chars.
-- `tree <id|prefix>` — ASCII walk of the bidirectional related-memory graph. Cycle handling via visited-set (renders as `↺ <id>`), dangling edges render as `✗ <id>  (deleted or missing)`. `--depth N` (default 2, cap 4), `--max-nodes N` (default 100, cap 1000).
-- `status` — per-holder rollup: AUTO/MANUAL split, about-distribution (self / about-others / legacy-null), embedding presence, graph stats (with-links / isolated / avg degree / max degree / dangling edges). Top-5 by `reinforcedImportance`. Dangling-edge count surfaces stale UUIDs in `relatedMemoryIds` after deletions; logs offenders to stderr.
-
-The legacy `quilltap db memories --character <name>` verb is unchanged. Implementation in `packages/quilltap/lib/memories-commands.js`; dispatcher branch added to `bin/quilltap.js`. Character / chat / project resolvers moved from `lib/db-commands.js` into `lib/db-helpers.js` so both namespaces share them. New migration `add-memories-reinforced-importance-index-v1` adds `idx_memories_reinforcedImportance` so the new default sort uses an index instead of a full-table sort on instances with tens of thousands of memories.
-
-#### CLI: friendlier guidance when targeting the wrong instance
-
-Two small UX fixes on the `quilltap docs` / `quilltap db` CLI surfaces:
-
-1. **Default-instance hint.** When neither `--instance` nor `--data-dir` is passed (and `QUILLTAP_DATA_DIR` is unset), the CLI now writes a one-line stderr hint listing the registered instances and the data directory it ended up using, so it is obvious when a command silently fell back to the platform default. Fires at most once per process; set `QUILLTAP_QUIET_HINTS=1` to silence. Wired up in `bin/quilltap.js` (db subcommand), `lib/docs-commands.js` (every `docs` verb via `openDb`), and `lib/memory-diff-command.js`.
-
-2. **Pre-flight mount-index schema check.** `docs` verbs now verify the `doc_mount_file_links` table exists before any `prepare()` runs, and exit with an explanatory error pointing at the offending database, the missing table, and what to do (boot the server against that data directory once to run migrations, or pass `--instance <name>`). Previously the read failed deep inside a prepared statement with `Error: no such table: doc_mount_file_links`. Implementation in `lib/docs-commands.js` (`assertDocsSchema`).
-
-`resolveDataDirAndPassphrase` in `lib/db-helpers.js` now returns a `usedPlatformDefault` flag so the hint can tell explicit targeting (`--instance`, `--data-dir`, env var) from a silent fallback. New exported helper `printDefaultInstanceHint(resolved)` consumes it.
-
-#### `quilltap db backup` — online encrypted snapshots
-
-New CLI verb that produces a consistent snapshot of all three encrypted databases (or one named target) without requiring the server to be stopped. Default destination is `<dataDir>/backups/<ISO-timestamp>/`; override with `--out <dir>`. `--json` is supported.
-
-Implementation: SQLCipher's `sqlcipher_export` is not compiled into `better-sqlite3-multiple-ciphers`, and the SQLite online-backup API refuses cross-cipher copies, so the verb instead opens the source RW, runs `PRAGMA wal_checkpoint(TRUNCATE)`, takes a brief `BEGIN EXCLUSIVE` lock, copies the encrypted `.db` file byte-for-byte, and releases the lock. The destination inherits the source's encryption key transparently because the pages are already encrypted. Post-flight: each snapshot is re-opened with the same pepper and `PRAGMA quick_check` is asserted.
-
-Lock policy: unlike `optimize`, does not refuse on a live lock — logs "Live instance detected (PID X) — taking online snapshot" and proceeds. The exclusive lock held during the file copy is short (~150 ms for 300 MB on local SSD) and falls within SQLite's busy_timeout. Implementation in `packages/quilltap/lib/db-commands.js` (`cmdBackup`, registered in `VERBS`). Help text in `bin/quilltap.js` `printDbHelp()` and the "Database Protection" help page.
-
-#### `quilltap db integrity` — online cipher + structural health checks
-
-New CLI verb that runs `PRAGMA cipher_integrity_check` plus `PRAGMA integrity_check` against the encrypted databases. Read-only; safe alongside a running instance. Exit codes: 0 on clean, 1 on any reported issue, 2 on open failure. `--json` is supported. Implementation in `lib/db-commands.js` (`cmdIntegrity`).
-
-#### `quilltap docs find` / `docs grep` — substring search across mounts
-
-Two read-only CLI verbs that fill the gap left by `docs ls` (which assumes you already know the path). `find <pattern>` matches `pattern` as a case-insensitive substring against `doc_mount_file_links.relativePath`; `grep <pattern>` matches against the extracted text of each file, reusing the same content-resolution decision tree as `docs read --rendered`.
-
-- `find` flags: `--mount <name|id|all>`, `--type file|folder`, `--ext <ext>`, `--limit N` (default 100).
-- `grep` flags: `--mount <name|id|all>`, `--ignore-case`, `-l` (paths-only), `--max N` per file (default 5), `--context N` lines (default 0).
-
-Both default to all mounts when `--mount` is omitted (the mount-name column is included in output). Implementation: simple `LIKE` scans on the mount-index DB plus a JS substring search for `grep` — no FTS5 indexes added in v1. Documented as a known performance trade-off in `help/cli-docs.md` ("Searching" section). Implementation in `packages/quilltap/lib/docs-commands.js` (`handleFind`, `handleGrep`).
-
-#### `quilltap docs reindex` / `docs embed` — explicit pipeline triggers
-
-Two CLI verbs and two API actions that re-run extraction and embedding on demand. Both require the running server (the background-job queue and the embedding pipeline live in the parent Next.js process); the CLI refuses with a clear error if the server is unreachable rather than falling back to a partial state.
-
-- `docs reindex <mount> [path] [--force]` — synchronous. Resolves `path` to either one file or every link under a folder prefix, then re-extracts plaintext via `convertBufferToPlainText`, re-chunks via `chunkDocument`, replaces the existing chunk set, and updates the link's `extractionStatus` / `extractedText` / `extractedTextSha256` / `chunkCount`. Without `--force`, only PDFs/DOCX in `none|pending|failed|skipped` (and text-native files with no chunks yet) are touched; with `--force`, every link in scope.
-- `docs embed <mount> [path] [--force] [--wait]` — enqueues `EMBEDDING_GENERATE` jobs for chunks under the path scope. Without `--force`, only `embedding IS NULL` chunks; with `--force`, every chunk in scope (though the queue's existing dedup avoids double-enqueue). `--wait` polls `GET /api/v1/system/jobs/[id]` until each job reaches a terminal state.
-
-New helper `lib/mount-index/reindex.ts` exports `reindexLinks(mountPoint, opts)` and `enqueueEmbeddingJobsScoped(mountPoint, opts)`. Two new actions on `POST /api/v1/mount-points/[id]`: `reindex` and `embed`, registered in the existing `withActionDispatch` map. CLI handlers in `packages/quilltap/lib/docs-commands.js` (`handleReindex`, `handleEmbed`, `callMountAction`, `pollJob`).
-
-#### `quilltap docs status` — instance-wide extraction + embedding rollup
-
-New read-only CLI verb that aggregates `doc_mount_file_links` and `doc_mount_chunks` counts per mount and prints the result as a human-scannable block per mount. Reports text-native vs. extracted vs. extraction-pending vs. extraction-failed file counts, total vs. embedded chunk counts, and the oldest pending / failed extractions (sample list size controlled by `--top N`, default 5; `0` disables). `--mount` narrows to one mount; `--json` emits the full structured object. Implementation in `lib/docs-commands.js` (`handleStatus`).
-
-#### `doc_mount_file_links.folderId` drift — auto-derive on write + repair migration
-
-The three `link*` methods on `DocMountFileLinksRepository` (`linkBlobContent`, `linkDocumentContent`, `linkFilesystemFile`) now derive `folderId` from `relativePath` inside their existing transaction, creating any missing `doc_mount_folders` rows along the way. The caller-supplied `folderId` field is treated as informational and ignored; the repository logs a `warn` when the caller's value disagrees with the derived one so we can find the broken writer.
-
-The root cause was the scanner (`lib/mount-index/scanner.ts:193`) calling `linkFilesystemFile` without passing `folderId` at all — every filesystem-scanned row landed at `folderId = NULL` regardless of subfolder. Surface symptom: `quilltap docs ls` filtering by `folderId` returned partial results, and any UI / API path that joined through `folderId` produced the same wrong answer.
-
-<!-- cspell:ignore folderids -->
-New migration `repair-doc-mount-file-link-folderids-v1` walks every `doc_mount_file_links` row, computes the canonical `folderId` from `(mountPointId, relativePath)`, creates any missing folder rows, and `UPDATE`s on drift. Idempotent; `shouldRun()` short-circuits when no `folderId IS NULL AND relativePath LIKE '%/%'` row exists. Pretty-label and `reportProgress(...)` wired up per the migration rules.
-
-#### `quilltap docs ls` / `dir` — POSIX-style folder listing with hard-link counts
-
-New read subcommand that lists one folder (or one file) in `ls -l` style:
-
-```text
-T  links     size  modified          text  emb  name
-d      -        -  2026-04-18 11:49     -    -  Wardrobe/
--      2   3.4 KB  2026-05-11 13:47     =    Y  Manifesto.md
--     20      0 B  2026-05-18 10:04     =    -  example-dialogues.md
--      2  71.7 KB  2026-05-15 13:30     T    Y  2026-03-24T06-24-23.319Z-kept.webp
-```
-
-- `<mount> [path]`: path defaults to the mount root; `/` and `.` are treated as root. A path that resolves to a single file shows just that file.
-- The `links` column reports how many `doc_mount_file_links` rows share the same `fileId` — i.e., how many hard-linked siblings the underlying content row has across the entire mount-index DB. Folders show `-`.
-- The `text` column is a single-character marker for the file's textual representation: `=` raw bytes are already textual (markdown/txt/json/jsonl); `T` separately-extracted plaintext is stored on the link row (`extractionStatus = 'converted'`); `~` extraction is pending; `!` extraction failed; `-` no extracted text and the file is not text-native.
-- The `emb` column is a single-character marker for chunk embeddings: `Y` every chunk has an embedding; `~` chunks exist but only some / none are embedded yet; `-` no chunks at all.
-- `--links` expands each file with `linkCount > 1` to print the sibling list as indented arrows. Same-mount siblings are shown as bare paths; cross-mount siblings are prefixed with `mountName:`.
-- `--json` always emits the full `links` array (mount UUID, mount name, relative path) regardless of `--links` — there is no display-noise advantage to omitting the current mount in machine output. JSON also includes `textRepresentation` (`kind`, `extractionStatus`, `hasExtractedText`) and `embedding` (`chunkCount`, `embeddedChunkCount`, `fullyEmbedded`) objects per file.
-- Folders are listed before files; within each group, ordering is case-insensitive by name.
-- `dir` is an alias for `ls`.
-
-Membership filtering uses path-prefix matching on `relativePath` / `path` rather than `folderId` / `parentId`, because `doc_mount_file_links.folderId` is observed to drift to NULL on existing instances — multiple `Knowledge/*.md` files in Friday's "Quilltap General" mount had `folderId = NULL`, which made the folderId-based query return only the one row that still carried the correct pointer. Path-prefix matching produces the same answer `docs files --folder` already gives and is unaffected by that drift. Single-file lookups go by exact `relativePath` match. An implicit-folder fallback (no `doc_mount_folders` row but children exist under the prefix) keeps a path like `quilltap docs ls <mount> Knowledge` working even on instances where the folder row itself is missing.
-
-Read-only — opens the mount-index DB directly, so it works with or without the server running.
-
-#### `quilltap docs` — accept global flags before the verb
-
-`quilltap docs --instance Friday read <mount> <path>` (and other docs invocations with `--instance`, `--data-dir`, `--passphrase`, `--port`, `--json`, etc. placed before the subcommand) failed with `Unknown docs subcommand: --instance`. The dispatcher took `args[0]` as the verb before parsing flags, so any flag in front of the verb was treated as the subcommand. Fixed by parsing flags across the entire arg list first, then shifting the first positional as the verb — matching how `db`, `themes`, and `memory-diff` already behave.
-
-#### `quilltap docs` read subcommands — fix queries against post-link-table schema
-
-`docs show`, `docs files`, `docs read`, and `docs export` were still issuing the pre-`doc_mount_file_links` queries (`SELECT … FROM doc_mount_files WHERE mountPointId = ? AND relativePath = ?` and similar against `doc_mount_blobs`/`doc_mount_documents`), so every invocation failed with `Error: no such column: mountPointId` once a database had been through the link-table migration. Reissued every query through the new schema:
-
-- File lookups join `doc_mount_file_links` (`mountPointId`, `relativePath`) to `doc_mount_files` (`fileId` → content row).
-- Content lookups in `doc_mount_documents` and `doc_mount_blobs` go by `fileId` directly (both are 1:1 with `doc_mount_files.id`).
-- Chunks read by `linkId` instead of `fileId`.
-- `docs show` blob/doc counts join through `doc_mount_file_links` to scope per-mount counts under the new content-addressable layout.
-- `docs read --rendered` reads `extractedText` from `doc_mount_file_links` (the field moved off `doc_mount_blobs` in the migration).
-- Dropped the legacy "defensive" pass in `docs export` that scanned `doc_mount_blobs` directly for rows without a `doc_mount_files` entry — link rows are now the authoritative membership signal.
-
-#### `quilltap docs` — write subcommands (write/delete/mkdir/move/copy)
-
-New CLI verbs that mutate document mounts in addition to the existing read-only set. Mount arguments accept either the mount name (case-insensitive) or its UUID; ambiguous names print candidates and exit non-zero.
-
-- `write [--force] <mount> <path> [file]` — write bytes from a local file or stdin; refuses to overwrite without `--force`.
-- `delete <mount> <path>` — idempotent (no-op if the path is already gone).
-- `mkdir <mount> <path>` — idempotent; creates parent folders as needed.
-- `move <srcMount> <srcPath> <dstMount> <dstPath>` — hard-links where the storage layout allows (DB↔DB shares a content row by `fileId`; FS↔FS on the same device uses `fs.rename`); falls back to a byte copy across storage types or devices.
-- `copy [--force] <srcMount> <srcPath> <dstMount> <dstPath>` — same hard-link semantics. `--force` overwrites and skips the hard-link path for a real byte copy (FS↔FS only; DB content is sha-deduplicated regardless).
-
-Every write computes a SHA-256 on both ends and refuses to declare success unless the digests match. The CLI talks to the running server when reachable (so reindex/embed kicks off automatically); when the server is down it falls back to direct filesystem writes for filesystem-backed mounts, and errors out for database-backed mounts.
-
-Implementation:
-
-- New server-side helper `lib/mount-index/file-ops.ts` with `moveFile`, `copyFile`, `writeFile`, and `deleteFile`. Centralizes the four storage-type combinations (FS→FS, DB→DB, and the two cross-storage directions), hard-link primitives, byte-copy fallbacks, and pre/post sha verification. Exposes `FileOpError` with structured codes (`SOURCE_NOT_FOUND`, `DEST_EXISTS`, `INVALID_PATH`, `VERIFY_FAILED`, etc.).
-- New actions on `POST /api/v1/mount-points/[id]`: `move-file`, `copy-file`, `write-file`, `delete-file`.
-- CLI changes in `packages/quilltap/lib/docs-commands.js`: `handleWrite`, `handleDelete`, `handleMkdir`, and `handleFileOp` (shared by move/copy). `requireMount` now resolves either a name or a UUID; existing read subcommands inherit that.
-- Help: `help/cli-docs.md` describes the new subcommands, hard-link semantics, and verification policy.
-
-#### `quilltap instances` — named-instance registry for the CLI
-
-New CLI subcommand and `--instance <name>` flag. The CLI now stores a per-user registry of named Quilltap instances (path + optional database passphrase) at `~/Library/Application Support/Quilltap/instances.json` on macOS (`~/.quilltap/instances.json` on Linux, `%APPDATA%\Quilltap\instances.json` on Windows). Once an instance is registered, every subcommand that accepts `--data-dir` will also accept `--instance Friday` — the CLI translates it to the correct data directory and supplies the stored passphrase if one is set.
-
-Verbs:
-
-- `quilltap instances list` (default) — table of registered instances with path and whether a passphrase is stored
-- `quilltap instances add <name> [<path>]` — register an instance; prompts (hidden, with confirmation) for an optional passphrase and verifies it against the instance's `.dbkey` before saving
-- `quilltap instances remove <name>` — forget an instance
-- `quilltap instances set-passphrase <name>` — change or clear the stored passphrase; same verification as add
-- `quilltap instances show <name>` — print path + whether a passphrase is set + presence of `data/`, `.dbkey`, `quilltap.db`
-- `quilltap instances path` — print the path to `instances.json`
-
-The file contains plaintext passphrases, so the read path refuses to load it unless it is owned by the current user and has POSIX permissions with no group/other bits set (mode `0o600` or stricter). Failure prints the exact `chmod 600 <path>` to run. Writes go through a temp-file-then-rename with mode `0o600` from creation so the file never exists with looser bits. The check is skipped on Windows.
-
-`--instance` works with the server launcher (`quilltap --instance Friday` to start the server pointed at Friday's data directory) and the `db`, `docs`, `themes`, and `memory-diff` subcommands. `--instance` and `--data-dir` are mutually exclusive — supplying both errors out. The passphrase resolution chain is now: explicit `--passphrase` > stored passphrase from `--instance` > `QUILLTAP_DB_PASSPHRASE` env var > interactive hidden prompt.
-
-Implementation: `packages/quilltap/lib/instances.js` (registry I/O, permission check, passphrase verification), `packages/quilltap/lib/instances-commands.js` (CLI surface), `resolveDataDirAndPassphrase()` added to `packages/quilltap/lib/db-helpers.js`, and `--instance` wiring in `bin/quilltap.js`, `lib/docs-commands.js`, `lib/theme-commands.js`, and `lib/memory-diff-command.js`.
-
-#### `quilltap db optimize` — basic database maintenance
-
-New CLI verb that runs `VACUUM`, `ANALYZE`, and `PRAGMA optimize` against the encrypted SQLite databases. Reclaims free pages and refreshes query-planner stats.
-
-Usage: `quilltap db optimize` (all three databases) or `quilltap db optimize <main|llm-logs|mount-points>` (one). Default with no positional argument hits all three. `--json` is supported. Per-database output shows before/after file size and per-step timing, plus a total-reclaimed summary across all targets.
-
-Refuses to run while the instance lock is actively held (live PID on this host, or a fresh VM heartbeat). Proceeds when the lock is absent or stale. Lock state is inspected via the new shared helper `packages/quilltap/lib/lock-helpers.js` (`getLockStatus(dataDir)`), which encapsulates the PID/`verifyPidIsNode`/heartbeat logic previously inlined in `bin/quilltap.js`.
-
-Implementation lives in `packages/quilltap/lib/db-commands.js` (`cmdOptimize`, wired into the `VERBS` table; `pepper` is now exposed on the verb-dispatch ctx so optimize can open writable handles via the existing `openMainDb` / `openLlmLogsDb` / `openMountIndexDb` helpers). Help text in `bin/quilltap.js` `printDbHelp()` and the "Database Protection" help page describe the new verb.
-
-#### `quilltap db` high-level subcommands
-
-`packages/quilltap` gains a verb-based layer on top of the existing flag/SQL CLI so common drill-downs no longer require hand-written SQL. New file `packages/quilltap/lib/db-commands.js`; `bin/quilltap.js` dispatches to it when `args[0]` matches a known verb, otherwise the legacy flag path runs unchanged.
-
-Verbs:
-
-- `schema [table]` — column list with FKs and indexes; `schema` alone prints tables grouped by domain; `schema --grep <text>` searches tables/columns. Single-table output ends with `→ docs/developer/DDL.md#<table>` so the canonical reference is one click away.
-- `find character|chat|project [query]` — fuzzy name → UUID (character lookup also searches `aliases`).
-- `chats --character <name|id>` (uses `participants LIKE`), `chats --project <name|id>`.
-- `messages --chat <id|title>` with `--last N`, `--full`, `--from`, `--type`.
-- `logs --chat|--message|--character|--tail` — auto-resolves name→UUID across the main/llm-logs DB boundary.
-- `message <id>` and `log <id>` — full single-record body (log accepts `--field request|response|both`).
-- `memories --character <id|name>` with `--about` and `--source` filters.
-
-All verbs accept `--json` and `--limit N`. Ambiguous name resolution prints all candidates and exits with code 2.
-
-REPL gains `.cols <table>` (alias for `PRAGMA table_info`) and `.find <text>` (tables/columns substring search). Existing `.tables` and `.schema` are unchanged.
-
-`packages/quilltap/lib/db-helpers.js` factored out `openEncryptedDb(dbPath, pepper, opts)` and added `openMainDb` / `openLlmLogsDb` alongside the existing `openMountIndexDb`, so all three databases open through the same code path.
-
-Docs updated: `packages/quilltap/README.md` (new "Database Tool" section), `docs/developer/DDL.md` ("How to Query" split into high-level and low-level), `CLAUDE.md` (claude-specific instructions point at the subcommands first).

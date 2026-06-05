@@ -40,6 +40,21 @@ export function useProfileForm(providers: ProviderConfig[]) {
 
   const loadProfileIntoForm = useCallback(
     (profile: ConnectionProfile) => {
+      // Build the provider-options `parameters` map for the schema renderer.
+      // Strip top-level form-managed keys (temperature/max_tokens/top_p)
+      // and translate the legacy OpenRouter nested `providerPreferences`
+      // shape into the flat keys the new schema exposes.
+      const rawParams: Record<string, unknown> = { ...(profile.parameters ?? {}) }
+      const TOP_LEVEL_KEYS = ['temperature', 'max_tokens', 'top_p'] as const
+      for (const key of TOP_LEVEL_KEYS) delete rawParams[key]
+      const legacyPrefs = rawParams.providerPreferences as
+        | { dataCollection?: 'allow' | 'deny'; order?: string[] }
+        | undefined
+      if (legacyPrefs?.dataCollection === 'deny' && rawParams.enableZDR === undefined) {
+        rawParams.enableZDR = true
+      }
+      delete rawParams.providerPreferences
+
       form.setFormData({
         name: profile.name,
         transport: (profile as { transport?: 'api' | 'courier' }).transport ?? 'api',
@@ -55,23 +70,13 @@ export function useProfileForm(providers: ProviderConfig[]) {
         isCheap: profile.isCheap ?? false,
         isDangerousCompatible: profile.isDangerousCompatible ?? false,
         allowToolUse: profile.allowToolUse ?? true,
+        pseudoToolMode: profile.pseudoToolMode ?? 'auto',
         supportsImageUpload: profile.supportsImageUpload ?? false,
         allowWebSearch: profile.allowWebSearch ?? false,
         useNativeWebSearch: profile.useNativeWebSearch ?? false,
         modelClass: profile.modelClass ?? '',
         maxContext: profile.maxContext ? String(profile.maxContext) : '',
-        // OpenRouter-specific fields
-        fallbackModels: profile.parameters?.fallbackModels ?? [],
-        enableZDR: profile.parameters?.providerPreferences?.dataCollection === 'deny',
-        providerOrder: profile.parameters?.providerPreferences?.order ?? [],
-        useCustomModel: profile.parameters?.useCustomModel ?? false,
-        // Anthropic-specific fields
-        enableCacheBreakpoints: profile.parameters?.enableCacheBreakpoints ?? false,
-        cacheStrategy: profile.parameters?.cacheStrategy ?? 'system_and_long_context',
-        cacheTTL: profile.parameters?.cacheTTL ?? '5m',
-        // OpenAI-specific fields
-        verbosity: profile.parameters?.verbosity ?? '',
-        reasoningEffort: profile.parameters?.reasoningEffort ?? '',
+        parameters: rawParams,
       })
     },
     [form]
@@ -105,51 +110,14 @@ export function useProfileForm(providers: ProviderConfig[]) {
       }
     }
 
-    // Start with base parameters
+    // Base parameters carry sampling controls; provider-specific options
+    // come from the schema-driven `parameters` form field, which already
+    // matches the wire-side key names each plugin reads.
     const parameters: Record<string, any> = {
       temperature: parseFloat(String(form.formData.temperature)),
       max_tokens: parseInt(String(form.formData.maxTokens)),
       top_p: parseFloat(String(form.formData.topP)),
-    }
-
-    // Add OpenRouter-specific parameters
-    if (form.formData.provider === 'OPENROUTER') {
-      if (form.formData.fallbackModels.length > 0) {
-        parameters.fallbackModels = form.formData.fallbackModels
-      }
-      // Build providerPreferences if any options are set
-      const providerPreferences: Record<string, any> = {}
-      if (form.formData.enableZDR) {
-        providerPreferences.dataCollection = 'deny'
-      }
-      if (form.formData.providerOrder.length > 0) {
-        providerPreferences.order = form.formData.providerOrder
-      }
-      if (Object.keys(providerPreferences).length > 0) {
-        parameters.providerPreferences = providerPreferences
-      }
-      // Save custom model preference
-      if (form.formData.useCustomModel) {
-        parameters.useCustomModel = true
-      }
-    }
-
-    // Add Anthropic-specific parameters
-    if (form.formData.provider === 'ANTHROPIC' && form.formData.enableCacheBreakpoints) {
-      parameters.enableCacheBreakpoints = true
-      parameters.cacheStrategy = form.formData.cacheStrategy
-      parameters.cacheTTL = form.formData.cacheTTL
-    }
-
-    // Add OpenAI-specific parameters. Empty string means "don't send the parameter
-    // — let the model use its default" so we omit those keys entirely.
-    if (form.formData.provider === 'OPENAI') {
-      if (form.formData.verbosity) {
-        parameters.verbosity = form.formData.verbosity
-      }
-      if (form.formData.reasoningEffort) {
-        parameters.reasoningEffort = form.formData.reasoningEffort
-      }
+      ...form.formData.parameters,
     }
 
     const requestBody: any = {
@@ -161,6 +129,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
       isCheap: form.formData.isCheap,
       isDangerousCompatible: form.formData.isDangerousCompatible,
       allowToolUse: form.formData.allowToolUse,
+      pseudoToolMode: form.formData.pseudoToolMode,
       supportsImageUpload: form.formData.supportsImageUpload,
       allowWebSearch: form.formData.allowWebSearch,
       useNativeWebSearch: form.formData.useNativeWebSearch,

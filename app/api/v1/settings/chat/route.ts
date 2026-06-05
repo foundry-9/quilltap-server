@@ -38,7 +38,12 @@ async function updateChatSettings(
   contextCompressionSettings?: unknown,
   dangerousContentSettings?: unknown,
   autoLockSettings?: unknown,
-  compositionModeDefault?: boolean
+  compositionModeDefault?: boolean,
+  composerSpellcheck?: boolean,
+  textReplacementsEnabled?: boolean,
+  autonomousRoomSettings?: unknown,
+  thinkingDisplay?: unknown,
+  autoScrollOnResponseComplete?: boolean,
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -169,6 +174,74 @@ async function updateChatSettings(
     }
     updateData.compositionModeDefault = compositionModeDefault
   }
+  if (typeof composerSpellcheck !== 'undefined') {
+    if (typeof composerSpellcheck !== 'boolean') {
+      throw new Error('Invalid composerSpellcheck value (must be boolean)')
+    }
+    updateData.composerSpellcheck = composerSpellcheck
+  }
+  if (typeof textReplacementsEnabled !== 'undefined') {
+    if (typeof textReplacementsEnabled !== 'boolean') {
+      throw new Error('Invalid textReplacementsEnabled value (must be boolean)')
+    }
+    updateData.textReplacementsEnabled = textReplacementsEnabled
+  }
+  if (typeof autoScrollOnResponseComplete !== 'undefined') {
+    if (typeof autoScrollOnResponseComplete !== 'boolean') {
+      throw new Error('Invalid autoScrollOnResponseComplete value (must be boolean)')
+    }
+    updateData.autoScrollOnResponseComplete = autoScrollOnResponseComplete
+    logger.debug('[Settings v1] autoScrollOnResponseComplete updated', { userId, autoScrollOnResponseComplete })
+  }
+  if (typeof autonomousRoomSettings !== 'undefined') {
+    // 4.6 Private Character Rooms — shape validation kept lightweight here;
+    // the Zod schema on chat_settings ultimately governs the persisted shape.
+    if (autonomousRoomSettings !== null && typeof autonomousRoomSettings !== 'object') {
+      throw new Error('Invalid autonomousRoomSettings value (must be an object)')
+    }
+    const validVisibilities = ['owner_only', 'household', 'open']
+    const validPolicies = ['always_refuse', 'opt_in_per_room']
+    if (autonomousRoomSettings && typeof autonomousRoomSettings === 'object') {
+      const s = autonomousRoomSettings as Record<string, unknown>
+      if (
+        typeof s.dailyTokenBudget !== 'undefined'
+        && s.dailyTokenBudget !== null
+        && (typeof s.dailyTokenBudget !== 'number' || !Number.isFinite(s.dailyTokenBudget) || s.dailyTokenBudget <= 0)
+      ) {
+        throw new Error('Invalid dailyTokenBudget (must be positive number or null)')
+      }
+      if (
+        typeof s.defaultFreshnessWindowMs !== 'undefined'
+        && (typeof s.defaultFreshnessWindowMs !== 'number' || !Number.isFinite(s.defaultFreshnessWindowMs) || s.defaultFreshnessWindowMs <= 0)
+      ) {
+        throw new Error('Invalid defaultFreshnessWindowMs (must be positive number)')
+      }
+      if (typeof s.visibilityDefault !== 'undefined' && !validVisibilities.includes(s.visibilityDefault as string)) {
+        throw new Error('Invalid visibilityDefault')
+      }
+      if (typeof s.destructiveToolPolicy !== 'undefined' && !validPolicies.includes(s.destructiveToolPolicy as string)) {
+        throw new Error('Invalid destructiveToolPolicy')
+      }
+    }
+    updateData.autonomousRoomSettings = autonomousRoomSettings
+  }
+  if (typeof thinkingDisplay !== 'undefined') {
+    // Thinking / reasoning display defaults. Lightweight shape check; the Zod
+    // schema on chat_settings governs the persisted shape. DISPLAY ONLY.
+    if (thinkingDisplay !== null && typeof thinkingDisplay !== 'object') {
+      throw new Error('Invalid thinkingDisplay value (must be an object)')
+    }
+    if (thinkingDisplay && typeof thinkingDisplay === 'object') {
+      const s = thinkingDisplay as Record<string, unknown>
+      if (typeof s.defaultVisible !== 'undefined' && typeof s.defaultVisible !== 'boolean') {
+        throw new Error('Invalid thinkingDisplay.defaultVisible (must be boolean)')
+      }
+      if (typeof s.defaultCollapsed !== 'undefined' && typeof s.defaultCollapsed !== 'boolean') {
+        throw new Error('Invalid thinkingDisplay.defaultCollapsed (must be boolean)')
+      }
+    }
+    updateData.thinkingDisplay = thinkingDisplay
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -231,6 +304,11 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       dangerousContentSettings,
       autoLockSettings,
       compositionModeDefault,
+      composerSpellcheck,
+      textReplacementsEnabled,
+      autonomousRoomSettings,
+      thinkingDisplay,
+      autoScrollOnResponseComplete,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -254,7 +332,12 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       contextCompressionSettings,
       dangerousContentSettings,
       autoLockSettings,
-      compositionModeDefault
+      compositionModeDefault,
+      composerSpellcheck,
+      textReplacementsEnabled,
+      autonomousRoomSettings,
+      thinkingDisplay,
+      autoScrollOnResponseComplete,
     )
 
     return successResponse(chatSettings)

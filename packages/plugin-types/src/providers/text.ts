@@ -31,6 +31,13 @@ export interface LLMMessage {
   cacheControl?: { type: 'ephemeral' };
   /** Google Gemini thought signature for thinking models */
   thoughtSignature?: string;
+  /**
+   * Reasoning / chain-of-thought content from thinking-mode providers
+   * (e.g. DeepSeek V4 Pro `reasoning_content`). Must be passed back on
+   * assistant turns that carry `toolCalls` or DeepSeek's API returns 400.
+   * Providers that don't expose a separate reasoning channel ignore this.
+   */
+  reasoningContent?: string;
 }
 
 /**
@@ -93,6 +100,19 @@ export interface LLMParams {
   profileParameters?: Record<string, unknown>;
   /** Previous response ID for conversation chaining (OpenAI Responses API) */
   previousResponseId?: string;
+  /**
+   * Per-character cache identifier. Quilltap builds this from the
+   * speaking character's ID so the stable persona block (manifesto /
+   * description / personality) becomes the actual cache prefix. Each
+   * provider decides how to apply it:
+   *  - OpenAI / Grok use it as `prompt_cache_key` (sticky routing hint).
+   *  - DeepSeek uses it as `user_id` (KV-cache isolation namespace).
+   *  - OpenAI-compatible / Z.AI / OpenRouter forward it as `user`.
+   *  - Anthropic ignores it (content-hashed `cache_control` breakpoints).
+   *  - Ollama / Curl ignore it.
+   * Undefined when no character is active (e.g. user-only chats, titling).
+   */
+  cacheKey?: string;
 }
 
 /**
@@ -113,6 +133,8 @@ export interface LLMResponse {
   attachmentResults?: AttachmentResults;
   /** Google Gemini thought signature */
   thoughtSignature?: string;
+  /** Reasoning / chain-of-thought content (DeepSeek thinking mode, etc.) */
+  reasoningContent?: string;
   /** Cache usage statistics */
   cacheUsage?: CacheUsage;
 }
@@ -135,8 +157,19 @@ export interface StreamChunk {
   rawResponse?: unknown;
   /** Google Gemini thought signature */
   thoughtSignature?: string;
-  /** Cache usage statistics */
+  /** Reasoning / chain-of-thought content, typically on final chunk */
+  reasoningContent?: string;
+  /** Cache usage statistics (normalized) */
   cacheUsage?: CacheUsage;
+  /**
+   * Provider-shape `usage` sub-object, captured pre-normalization for
+   * cache-instrumentation diagnostics. Each provider's shape differs
+   * (OpenAI/Grok/Z.AI: `prompt_tokens_details.cached_tokens`; Anthropic:
+   * `cache_read_input_tokens`; Google: `cachedContentTokenCount`).
+   * Lets the logger compare provider-reported cache hits against the
+   * normalized `cacheUsage` and catch field-mapping regressions.
+   */
+  rawProviderUsage?: Record<string, unknown> | null;
 }
 
 /**

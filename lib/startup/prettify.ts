@@ -78,6 +78,10 @@ const PRETTY_LABELS: Record<string, string> = {
   'decrypt-api-key-values-v1': 'Decrypting stray API key values',
   'drop-api-key-encryption-columns-v1': 'Retiring old API-key columns',
 
+  // 4.6 character vault cutover
+  'cutover-characters-to-vault-v1': "Settling every character into their vault for keeps",
+  'drop-character-scenario-column-v1': 'Sweeping out a disused scenario drawer',
+
   // Per-character fields
   'add-default-image-profile-field-v1': 'Adding default image profile to characters',
   'add-character-aliases-field-v1': 'Adding aliases to characters',
@@ -99,9 +103,12 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-chat-tool-settings-fields-v1': 'Adding tool settings to chats',
   'add-chat-image-profile-field-v1': 'Moving the image profile onto each chat',
   'add-chat-message-missing-columns-v1': 'Filling in missing chat-message columns',
+  'add-chat-message-reasoning-columns-v1': "Setting aside room for each thinker's reasoning",
+  'add-thinking-display-fields-v1': 'Wiring up the thinking-visibility switches',
   'add-chat-scenario-text-field-v1': 'Recording scenario text on each chat',
   'add-chat-type-field-v1': 'Adding chat type field',
   'add-chat-danger-classification-fields-v1': "Adding the Concierge's classification fields",
+  'add-chat-concierge-override-v1': "Adding the Concierge's per-chat off-duty switch",
   'add-chat-cross-character-vault-reads-field-v1': 'Adding cross-character vault permission to chats',
   'add-whisper-target-field-v1': 'Adding whisper targets to chat messages',
   'add-turn-queue-field-v1': 'Adding the turn queue to chats',
@@ -122,6 +129,14 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-terminal-mode-fields-v1': 'Adding terminal mode fields to chats',
   'add-document-mode-fields-v1': 'Adding document mode fields to chats',
   'add-composition-mode-default-field-v1': 'Adding composition-mode default to chat settings',
+  'add-composer-spellcheck-field-v1': 'Teaching the composer to flag misspellings',
+  'add-text-replacement-rules-table-v1': 'Building the autocorrect ledger',
+  'add-text-replacements-enabled-field-v1': 'Wiring the autocorrect master switch',
+  'add-auto-scroll-on-response-complete-field-v1': 'Deciding whether the Salon should chase each reply to its end',
+  'add-autonomous-rooms-fields-v1': 'Preparing the autonomous salon quarters',
+  'add-autonomous-run-paused-at-v1': 'Noting when the salon paused for breath',
+  'add-autonomous-run-paused-accum-v1': 'Tallying the salon’s quiet interludes',
+  'add-spoken-this-cycle-field-v1': 'Tallying who has held forth in this rotation',
   'add-auto-housekeeping-settings-field-v1': 'Adding auto-housekeeping settings to chats',
   'add-auto-lock-settings-field-v1': 'Adding auto-lock settings to chats',
   'add-auto-detect-rng-field-v1': 'Adding auto-detect-RNG flag to chats',
@@ -142,6 +157,7 @@ const PRETTY_LABELS: Record<string, string> = {
 
   // Connection profiles
   'add-profile-allow-tool-use-field-v1': 'Adding tool-use flag to connection profiles',
+  'add-pseudo-tool-mode-field-v1': 'Choosing the proper instrument for tool conversation',
   'add-profile-supports-image-upload-field-v1': 'Adding image-upload support to connection profiles',
   'add-connection-profile-model-class-field-v1': 'Adding model-class to connection profiles',
   'add-connection-profile-max-tokens-field-v1': 'Adding max-tokens to connection profiles',
@@ -149,6 +165,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-courier-transport-fields-v1': "Dispatching the Courier's carriage",
   'add-courier-delta-fields-v1': "Teaching the Courier to travel light",
   'add-commonplace-scene-cache-v1': "Marking the Commonplace Book's bookmarks",
+  'add-core-whisper-fields-v1': "Fitting Aurora's workshop with a plumb line",
+  'add-core-whisper-settings-field-v1': "Hanging Aurora's plumb line from the rafters",
 
   // Embedding + vector
   'normalize-vector-storage-v1': 'Normalising vector storage to Float32 BLOBs',
@@ -180,6 +198,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'convert-project-files-to-document-stores-v1': "Moving each project's files into a document store",
   'reabsorb-leftover-project-files-v1': "Re-absorbing leftover project files",
   'relink-files-to-mount-blobs-v1': 'Re-linking files to their mount-blob shims',
+  'repair-files-mime-and-size-from-mount-blob-v1': "Squaring each file's stated format with the bytes resting on its shelf",
+  'repair-mount-blob-sha256-from-bytes-v1': "Reconciling each file's fingerprint with the bytes on record",
   'add-doc-mount-file-links-v1': 'Reorganising the document index so a single file may inhabit several shelves at once',
   'repair-doc-mount-file-link-folderids-v1': 'Restoring each filed document to its proper drawer',
   'add-uncensored-image-description-profile-field-v1': 'Making room for a more candid set of eyes when describing photographs',
@@ -201,6 +221,7 @@ const PRETTY_LABELS: Record<string, string> = {
   // Logs
   'move-llm-logs-to-separate-db-v1': 'Relocating LLM logs to their own dossier',
   'add-llm-logs-request-hashes-column-v1': 'Adding request hashes to the LLM logbook',
+  'add-llm-logs-raw-provider-usage-column-v1': 'Snapshotting raw provider usage in the LLM logbook',
 
   // Templates + dangerous content
   'add-narration-delimiters-field-v1': 'Adding narration delimiters to templates',
@@ -250,19 +271,4 @@ export function humanize(rawLabel: string): string {
       ? word.charAt(0).toUpperCase() + word.slice(1)
       : word
   ).join(' ');
-}
-
-/**
- * Test helper — returns true if `rawLabel` has a curated pretty entry.
- * Used by the unit tests for the prettify table to verify coverage.
- */
-export function hasPrettyEntry(rawLabel: string): boolean {
-  return Object.prototype.hasOwnProperty.call(PRETTY_LABELS, rawLabel);
-}
-
-/**
- * Test helper — list of all curated keys, for coverage tests.
- */
-export function curatedKeys(): string[] {
-  return Object.keys(PRETTY_LABELS);
 }

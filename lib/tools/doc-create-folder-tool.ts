@@ -5,71 +5,50 @@
  * Scriptorium Phase 3.4
  */
 
-export const docCreateFolderTool = {
-  type: 'function',
-  function: {
-    name: 'doc_create_folder',
-    description:
-      'Create a new folder in a document store, project files, or general files. Creates parent folders automatically. Succeeds silently if the folder already exists.',
-    parameters: {
-      type: 'object',
-      properties: {
-        scope: {
-          type: 'string',
-          enum: ['document_store', 'project', 'general'],
-          default: 'document_store',
-          description:
-            'The file scope. "document_store" for mounted document stores, "project" for project files, "general" for general files.',
-        },
-        mount_point: {
-          type: 'string',
-          description: 'Mount point name. Required when scope is "document_store".',
-        },
-        path: {
-          type: 'string',
-          description: 'Relative path for the folder to create within the selected scope.',
-        },
-      },
-      required: ['path'],
-    },
-  },
-};
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/**
+ * Zod schema for the doc_create_folder tool's input.
+ */
+export const docCreateFolderToolInputSchema = z.object({
+  scope: z
+    .enum(['document_store', 'project', 'general'])
+    .default('document_store')
+    .describe(
+      'The file scope. "document_store" for mounted document stores, "project" for project files, "general" for general files.'
+    )
+    .optional(),
+  mount_point: z
+    .string()
+    .describe('Mount point name. Required when scope is "document_store".')
+    .optional(),
+  path: z
+    .string()
+    .describe('Relative path for the folder to create within the selected scope.'),
+});
+
+/**
+ * Input parameters for the doc_create_folder tool
+ */
+export type DocCreateFolderInput = z.infer<typeof docCreateFolderToolInputSchema>;
 
 /**
  * Validates input for doc_create_folder tool.
  */
 export function validateDocCreateFolderInput(input: unknown): input is DocCreateFolderInput {
-  if (typeof input !== 'object' || input === null) {
-    return false;
-  }
-
-  const obj = input as Record<string, unknown>;
-
-  // path is required
-  if (typeof obj.path !== 'string') {
-    return false;
-  }
-
-  // scope must be valid enum if provided
-  if (obj.scope !== undefined) {
-    if (typeof obj.scope !== 'string' || !['document_store', 'project', 'general'].includes(obj.scope)) {
-      return false;
-    }
-  }
-
-  // mount_point must be string if provided
-  if (obj.mount_point !== undefined && typeof obj.mount_point !== 'string') {
-    return false;
-  }
-
-  return true;
+  return docCreateFolderToolInputSchema.safeParse(input).success;
 }
 
-export interface DocCreateFolderInput {
-  scope?: 'document_store' | 'project' | 'general';
-  mount_point?: string;
-  path: string;
-}
+export const docCreateFolderToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'doc_create_folder',
+    description:
+      'Create a new folder in a document store, project files, or general files. Creates parent folders automatically. Succeeds silently if the folder already exists.',
+    parameters: zodToOpenAISchema(docCreateFolderToolInputSchema),
+  },
+};
 
 export interface DocCreateFolderOutput {
   success: boolean;

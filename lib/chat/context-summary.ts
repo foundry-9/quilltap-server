@@ -8,15 +8,14 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { foldChatSummary, ChatMessage, generateTitleFromSummary, considerTitleUpdate, considerHelpChatTitleUpdate, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
-import { countMessagesTokens } from '@/lib/tokens/token-counter'
-import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
+import { foldChatSummary, ChatMessage, generateTitleFromSummary, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
 import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent } from '@/lib/schemas/types'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
-import { queueStoryBackgroundIfEnabled } from '@/lib/background-jobs/handlers/title-update'
+import { enqueueTitleUpdate } from '@/lib/background-jobs/queue-service'
 import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
 
 /**
@@ -84,19 +83,27 @@ export function evaluateSummarizationGate(
 }
 
 /**
- * Calculates the number of interchanges in a chat
- * An interchange is one user message + one assistant response
+ * Calculates the number of interchanges in a chat.
+ *
+ * For normal chats an interchange is one user message + one assistant
+ * response — count is the minimum of the two so partial pairs don't tick the
+ * meter. Autonomous rooms have no human user, so that floor is permanently
+ * zero; instead, count each assistant turn as one interchange so the title
+ * check and summarization gate fire on the natural cadence of the room.
  */
-export function calculateInterchangeCount(messages: Array<{ role?: string; type?: string }>): number {
+export function calculateInterchangeCount(
+  messages: Array<{ role?: string; type?: string }>,
+  chatType?: string,
+): number {
   let userMessages = 0
   let assistantMessages = 0
-  
+
   for (const msg of messages) {
     // Skip non-message types (like context-summary, tool-result, etc.)
     if (msg.type && msg.type !== 'message') {
       continue
     }
-    
+
     const role = msg.role?.toUpperCase()
     if (role === 'USER') {
       userMessages++
@@ -104,16 +111,29 @@ export function calculateInterchangeCount(messages: Array<{ role?: string; type?
       assistantMessages++
     }
   }
-  
+
+  if (chatType === 'autonomous') {
+    return assistantMessages
+  }
+
   // An interchange is complete when both user and assistant have spoken
   // Return the minimum of the two (limiting factor)
   return Math.min(userMessages, assistantMessages)
 }
 
 /**
- * Determines if we should check for title update at this interchange count
- * Regular chats: checks at 2, 3, 5, 7, 10, then every 10 after
- * Help chats: checks at 1, 2, 3, 5, 7, 10, then every 10 after (fires immediately after first Q&A)
+ * Determines if we should check for title update at this interchange count.
+ *
+ * - Regular chats: checks at 2, 3, 5, 7, 10, then every 10 after
+ * - Help chats: checks at 1, 2, 3, 5, 7, 10, then every 10 after (fires
+ *   immediately after first Q&A)
+ *
+ * Crossing semantics: each checkpoint fires when the counter has *reached
+ * or passed* it since the last check. This matters for autonomous rooms,
+ * where the interchange counter is "assistant messages including staff
+ * whispers" and a single character turn can bump the count by 5+ — easily
+ * skipping past exact 10/20/30 marks. Using `>=` here means the check
+ * fires on the first turn after we cross 10, then again after 20, etc.
  */
 export function shouldCheckTitleAtInterchange(
   currentInterchange: number,
@@ -129,15 +149,23 @@ export function shouldCheckTitleAtInterchange(
     return false
   }
 
-  // If we haven't checked yet, and we're at one of the early checkpoints
+  // Fire if we've crossed any not-yet-checked early checkpoint.
   const earlyCheckpoints = isHelpChat ? [1, 2, 3, 5, 7, 10] : [2, 3, 5, 7, 10]
-  if (earlyCheckpoints.includes(currentInterchange) && currentInterchange > lastCheckedInterchange) {
-    return true
+  for (const checkpoint of earlyCheckpoints) {
+    if (currentInterchange >= checkpoint && lastCheckedInterchange < checkpoint) {
+      return true
+    }
   }
 
-  // After 10, check every 10 interchanges
-  if (currentInterchange >= 10 && currentInterchange % 10 === 0 && currentInterchange > lastCheckedInterchange) {
-    return true
+  // After 10, fire if the most recently crossed multiple of 10 is one we
+  // haven't checked yet. `Math.floor(n / 10) * 10` is the highest multiple
+  // of 10 ≤ n; if that's greater than `lastCheckedInterchange`, we've
+  // crossed a new boundary since the last check.
+  if (currentInterchange >= 10) {
+    const lastCrossedMultipleOf10 = Math.floor(currentInterchange / 10) * 10
+    if (lastCrossedMultipleOf10 > lastCheckedInterchange) {
+      return true
+    }
   }
 
   return false
@@ -178,55 +206,6 @@ export interface SummaryGenerationResult {
   }
 }
 
-/**
- * Check if a chat needs a context summary
- * Based on message count and estimated token usage
- */
-export async function chatNeedsSummary(
-  chatId: string,
-  provider: Provider,
-  modelName: string
-): Promise<{ needsSummary: boolean; reason?: string }> {
-  const repos = getRepositories()
-
-  // Get chat metadata
-  const chat = await repos.chats.findById(chatId)
-  if (!chat) {
-    return { needsSummary: false, reason: 'Chat not found' }
-  }
-
-  // If already has a summary, check if it needs updating
-  if (chat.contextSummary) {
-    // Get message count since last summary
-    // For now, we regenerate if message count exceeds threshold
-    if (chat.messageCount < 100) {
-      return { needsSummary: false, reason: 'Existing summary is recent enough' }
-    }
-  }
-
-  // Get messages to estimate token count
-  const messages = await repos.chats.getMessages(chatId)
-  const conversationMessages = messages
-    .filter(msg => msg.type === 'message')
-    .filter(msg => {
-      const role = (msg as { role: string }).role
-      return role === 'USER' || role === 'ASSISTANT'
-    })
-    .map(msg => ({ role: (msg as { role: string }).role, content: (msg as { content: string }).content }))
-
-  const estimatedTokens = countMessagesTokens(conversationMessages, provider)
-  const contextLimit = getModelContextLimit(provider, modelName)
-
-  if (shouldSummarizeConversation(conversationMessages.length, estimatedTokens, contextLimit)) {
-    return {
-      needsSummary: true,
-      reason: `Conversation has ${conversationMessages.length} messages using ~${estimatedTokens} tokens (${Math.round((estimatedTokens / contextLimit) * 100)}% of context)`,
-    }
-  }
-
-  return { needsSummary: false }
-}
-
 interface FoldedTurn {
   /** 1-indexed turn number. */
   turnNumber: number
@@ -244,10 +223,19 @@ interface FoldedTurn {
  * turn numbering. ASSISTANT-only greeting messages before any USER message
  * are folded into turn 1.
  */
-export function partitionMessagesIntoTurns(allMessages: ChatEvent[]): FoldedTurn[] {
+export function partitionMessagesIntoTurns(
+  allMessages: ChatEvent[],
+  chatType?: string,
+): FoldedTurn[] {
   const turns: FoldedTurn[] = []
   let currentTurn: FoldedTurn | null = null
   let leadingAssistant: { messages: MessageEvent[]; ids: string[] } | null = null
+  // Autonomous rooms have no USER pivot — partition on each character-
+  // attributed ASSISTANT message instead. Without this, `turns.length` is
+  // permanently 0 for autonomous chats and summarisation always bails with
+  // "No messages to summarize". Staff whispers (systemSender set) are still
+  // skipped by the filter below.
+  const isAutonomous = chatType === 'autonomous'
 
   for (const msg of allMessages) {
     if (msg.type !== 'message') continue
@@ -255,7 +243,10 @@ export function partitionMessagesIntoTurns(allMessages: ChatEvent[]): FoldedTurn
     if (m.role !== 'USER' && m.role !== 'ASSISTANT') continue
     if (m.systemSender) continue
 
-    if (m.role === 'USER') {
+    const startsNewTurn = m.role === 'USER'
+      || (isAutonomous && m.role === 'ASSISTANT')
+
+    if (startsNewTurn) {
       const turnNumber = turns.length + 1
       const startMessages = leadingAssistant ? [...leadingAssistant.messages, m] : [m]
       const startIds = leadingAssistant ? [...leadingAssistant.ids, m.id] : [m.id]
@@ -325,9 +316,9 @@ export async function generateContextSummary(
       return { success: false, error: 'No cheap LLM provider available', wasGenerated: false }
     }
 
-    if (chat.isDangerousChat === true) {
+    if (isChatActiveDangerous(chat)) {
       const chatSettingsForDanger = await repos.chatSettings.findByUserId(userId)
-      const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettingsForDanger)
+      const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettingsForDanger, chat)
       cheapLLM = resolveUncensoredCheapLLMSelection(
         cheapLLM,
         true,
@@ -337,7 +328,7 @@ export async function generateContextSummary(
     }
 
     const allChatMessages = await repos.chats.getMessages(chatId)
-    const allTurns = partitionMessagesIntoTurns(allChatMessages)
+    const allTurns = partitionMessagesIntoTurns(allChatMessages, chat.chatType)
     const currentTurn = allTurns.length
 
     if (currentTurn === 0) {
@@ -581,24 +572,6 @@ export async function invalidateContextSummaryIfMessageCovered(
 }
 
 /**
- * Clear the context summary for a chat
- */
-export async function clearContextSummary(chatId: string): Promise<boolean> {
-  const repos = getRepositories()
-
-  try {
-    await repos.chats.update(chatId, {
-      contextSummary: null,
-      updatedAt: new Date().toISOString(),
-    })
-    return true
-  } catch (error) {
-    logger.error('Failed to clear context summary:', {}, error instanceof Error ? error : new Error(String(error)))
-    return false
-  }
-}
-
-/**
  * Generate summary in the background (non-blocking)
  * Used after message exchanges to keep summaries up to date
  */
@@ -615,143 +588,6 @@ export function generateContextSummaryAsync(options: GenerateSummaryOptions): vo
     .catch(error => {
       logger.error(`[Context Summary] Error for chat ${options.chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
     })
-}
-
-/**
- * Considers updating the chat title based on recent messages
- * Runs asynchronously in the background
- */
-async function considerTitleUpdateAsync(
-  chatId: string,
-  userId: string,
-  connectionProfile: ConnectionProfile,
-  cheapLLMSettings: CheapLLMSettings,
-  availableProfiles: ConnectionProfile[],
-  currentInterchange: number
-): Promise<void> {
-  try {
-    const repos = getRepositories()
-    const chat = await repos.chats.findById(chatId)
-
-    if (!chat) {
-      logger.warn(`[Title Update] Chat ${chatId} not found`)
-      return
-    }
-
-    // Skip title update if user has manually renamed the chat
-    if (chat.isManuallyRenamed) {
-
-      return
-    }
-
-    // Get cheap LLM provider
-    const cheapLLM = getCheapLLMProvider(
-      connectionProfile,
-      {
-        strategy: cheapLLMSettings.strategy,
-        userDefinedProfileId: cheapLLMSettings.userDefinedProfileId ?? undefined,
-        defaultCheapProfileId: cheapLLMSettings.defaultCheapProfileId ?? undefined,
-        fallbackToLocal: cheapLLMSettings.fallbackToLocal,
-      },
-      availableProfiles
-    )
-    if (!cheapLLM) {
-      logger.warn(`[Title Update] No cheap LLM available for chat ${chatId}`)
-      return
-    }
-
-    // Get messages for context
-    const allMessages = await repos.chats.getMessages(chatId)
-    const conversationMessages: ChatMessage[] = allMessages
-      .filter(msg => msg.type === 'message')
-      .filter(msg => {
-        const role = (msg as { role: string }).role
-        return role === 'USER' || role === 'ASSISTANT'
-      })
-      .map(msg => ({
-        role: (msg as { role: string }).role.toLowerCase() as 'user' | 'assistant',
-        content: (msg as { content: string }).content,
-      }))
-    
-    if (conversationMessages.length === 0) {
-      return
-    }
-    
-    // Get recent messages since last check
-    // We'll take the last 10 messages as "recent" context
-    const recentMessages = conversationMessages.slice(-10)
-    
-    // Use existing summary if available, otherwise use current title
-    const context = chat.contextSummary || chat.title
-    
-    // Ask the cheap LLM if title needs updating — use help-specific prompt for help chats
-    const isHelpChat = chat.chatType === 'help'
-    const considerationResult = isHelpChat
-      ? await considerHelpChatTitleUpdate(chat.title, recentMessages, context, cheapLLM, userId, chatId)
-      : await considerTitleUpdate(chat.title, recentMessages, context, cheapLLM, userId, chatId)
-    
-    if (considerationResult.success && considerationResult.result) {
-      const { needsNewTitle, reason, suggestedTitle } = considerationResult.result
-
-      logger.info(`[Title Update] Chat ${chatId} - needsNewTitle: ${needsNewTitle}, reason: ${reason}`)
-
-      // Create system event for title consideration token tracking
-      if (considerationResult.usage && (considerationResult.usage.promptTokens > 0 || considerationResult.usage.completionTokens > 0)) {
-        try {
-          const costResult = await estimateMessageCost(
-            cheapLLM.provider,
-            cheapLLM.modelName,
-            considerationResult.usage.promptTokens,
-            considerationResult.usage.completionTokens,
-            userId
-          )
-          await createTitleGenerationEvent(
-            chatId,
-            considerationResult.usage,
-            cheapLLM.provider,
-            cheapLLM.modelName,
-            costResult.cost
-          )
-        } catch (e) {
-          logger.error('[Title Update] Failed to create system event:', {}, e instanceof Error ? e : new Error(String(e)))
-        }
-      }
-
-      if (needsNewTitle && suggestedTitle) {
-        // Update the chat title
-        await repos.chats.update(chatId, {
-          title: suggestedTitle,
-          lastRenameCheckInterchange: currentInterchange,
-          updatedAt: new Date().toISOString(),
-        })
-        logger.info(`[Title Update] Updated title for chat ${chatId} to: "${suggestedTitle}"`)
-
-        // Queue story background generation if enabled (skip for help chats — no Lantern support)
-        if (!isHelpChat) {
-          const chatSettings = await repos.chatSettings.findByUserId(userId)
-          if (chatSettings) {
-            // Re-fetch chat to get updated title
-            const updatedChat = await repos.chats.findById(chatId)
-            if (updatedChat) {
-              queueStoryBackgroundIfEnabled(userId, updatedChat, chatSettings, suggestedTitle).catch(error => {
-                logger.error(`[Title Update] Failed to queue story background for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
-              })
-            }
-          }
-        }
-      } else {
-        // Still update the last check interchange even if no title change
-        await repos.chats.update(chatId, {
-          lastRenameCheckInterchange: currentInterchange,
-          updatedAt: new Date().toISOString(),
-        })
-      }
-    } else {
-      logger.warn(`[Title Update] Failed for chat ${chatId}: ${considerationResult.error}`)
-    }
-  } catch (error) {
-    logger.error(`[Title Update] Error for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
-  }
 }
 
 /**
@@ -778,7 +614,7 @@ export async function checkAndGenerateSummaryIfNeeded(
 
   // Get all messages to calculate interchange count
   const allMessages = await repos.chats.getMessages(chatId)
-  const currentInterchange = calculateInterchangeCount(allMessages)
+  const currentInterchange = calculateInterchangeCount(allMessages, chat.chatType)
 
   // Check if we should consider updating the title
   const lastCheckedInterchange = chat.lastRenameCheckInterchange || 0
@@ -788,17 +624,23 @@ export async function checkAndGenerateSummaryIfNeeded(
   if (isAtTitleCheckpoint) {
     logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for ${chat.chatType === 'help' ? 'help ' : ''}chat ${chatId}`)
 
-    // Run title consideration in background (non-blocking)
-    considerTitleUpdateAsync(
-      chatId,
-      userId,
-      connectionProfile,
-      cheapLLMSettings,
-      availableProfiles,
-      currentInterchange
-    ).catch(error => {
-      logger.error(`[Title Update] Background error for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
-    })
+    // Enqueue a TITLE_UPDATE job rather than running the cheap-LLM call
+    // inline. Inline used to leak writes when this path ran inside the
+    // forked job-runner child (autonomous rooms): the title update's
+    // `repos.chats.update` was detached from the handler's write-buffer
+    // flush, so the rename happened in the LLM but never reached the DB.
+    // The job gets its own AsyncLocalStorage scope, so its writes flush
+    // back to the parent normally. Dedup on chatId folds repeat firings
+    // at the same checkpoint into a single pending job.
+    try {
+      await enqueueTitleUpdate(userId, {
+        chatId,
+        connectionProfileId: connectionProfile.id,
+        currentInterchange,
+      })
+    } catch (error) {
+      logger.error(`[Title Update] Failed to enqueue title-update job for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
+    }
   }
 
   const decision = evaluateSummarizationGate({

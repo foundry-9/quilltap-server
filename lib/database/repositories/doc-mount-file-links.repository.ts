@@ -19,6 +19,7 @@
 import { randomUUID } from 'crypto';
 import * as posixPath from 'path/posix';
 import { logger } from '@/lib/logger';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
   DocMountFile,
   DocMountFileLink,
@@ -119,6 +120,11 @@ interface LinkBlobInput {
   originalFileName: string;
   originalMimeType: string;
   storedMimeType: string;
+  /**
+   * Advisory only. The content-addressed store is authoritative about its
+   * own hashes: linkBlobContent recomputes sha256 from `data` and uses the
+   * computed value for dedup and both inserts, warning on any mismatch.
+   */
   sha256: string;
   /** Already-transcoded bytes destined for doc_mount_blobs. */
   data: Buffer;
@@ -513,12 +519,35 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
     const now = new Date().toISOString();
     const sizeBytes = input.data.length;
 
+    // The content-addressed store is authoritative about its own hashes:
+    // recompute sha256 from the actual bytes rather than trusting the caller.
+    // This keeps the invariant sha256 == sha256(stored bytes) — a wrong value
+    // (e.g. an upstream input-bytes hash that pre-dates a transcode) would
+    // silently defeat dedup and advertise a hash that won't match the bytes.
+    const computed = sha256OfBuffer(input.data);
+    logger.debug('linkBlobContent: computed content hash', {
+      mountPointId: input.mountPointId,
+      relativePath: input.relativePath,
+      passedSha: input.sha256,
+      computedSha: computed,
+      sizeBytes,
+    });
+    if (input.sha256 !== computed) {
+      logger.warn('linkBlobContent: caller sha256 disagrees with stored bytes; using computed', {
+        mountPointId: input.mountPointId,
+        relativePath: input.relativePath,
+        passedSha: input.sha256,
+        computedSha: computed,
+        sizeBytes,
+      });
+    }
+
     // Find-or-create the content row by sha. UUID stability invariant: if
     // a content row already exists for these bytes, reuse its id.
     let fileRow = db.prepare(
       `SELECT id, sha256, fileSizeBytes, fileType, source, createdAt, updatedAt
        FROM doc_mount_files WHERE sha256 = ?`
-    ).get(input.sha256) as DocMountFile | undefined;
+    ).get(computed) as DocMountFile | undefined;
 
     const fileType: FileType = input.fileType ?? 'blob';
     // Default per-link conversion lifecycle: blob fileType has no chunkable
@@ -533,10 +562,10 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         db.prepare(
           `INSERT INTO doc_mount_files (id, sha256, fileSizeBytes, fileType, source, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, 'database', ?, ?)`
-        ).run(id, input.sha256, sizeBytes, fileType, now, now);
+        ).run(id, computed, sizeBytes, fileType, now, now);
         fileRow = {
           id,
-          sha256: input.sha256,
+          sha256: computed,
           fileSizeBytes: sizeBytes,
           fileType,
           source: 'database',
@@ -573,7 +602,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         db.prepare(
           `INSERT INTO doc_mount_blobs (id, fileId, sha256, sizeBytes, storedMimeType, data, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(blobId, fileRow.id, input.sha256, sizeBytes, input.storedMimeType, input.data, now, now);
+        ).run(blobId, fileRow.id, computed, sizeBytes, input.storedMimeType, input.data, now, now);
       }
 
       // Upsert the link row. The UNIQUE(mountPointId, relativePath) index

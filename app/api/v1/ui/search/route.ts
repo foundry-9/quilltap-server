@@ -128,7 +128,6 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
           createdAt: char.createdAt || new Date().toISOString(),
           updatedAt: char.updatedAt || new Date().toISOString(),
           title: char.title || null,
-          avatarUrl: char.avatarUrl || null,
           isFavorite: char.isFavorite || false,
         });
         typesFound.add('characters');

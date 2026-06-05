@@ -44,7 +44,7 @@ When several absent characters are mentioned together for the first time in the 
 
 ## What This Doesn't Do
 
-- **It doesn't add the character to the chat.** The character remains absent from the participant list. To bring them into the scene, use the Participants Sidebar to add them as a participant.
+- **It doesn't add the character to the chat.** The character remains absent from the participant list. To bring them into the scene, open the **Chat Sidebar** on the right, expand the **Participants** drawer, and use **Add Character** at the bottom.
 - **It doesn't fire for the user-controlled character.** Your own persona is excluded.
 - **It doesn't re-introduce known characters.** A character introduced earlier in the chat — even thousands of messages ago — is not reintroduced when their name comes up again.
 - **It doesn't broadcast across chats.** The introduction is per-Salon. The same character may be introduced in another conversation if their name surfaces there too.

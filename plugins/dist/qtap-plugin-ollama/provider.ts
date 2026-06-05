@@ -10,6 +10,8 @@ import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils
 
 const logger = createPluginLogger('qtap-plugin-ollama');
 
+// `params.cacheKey` is ignored: Ollama runs locally and manages its own
+// per-process KV cache; no remote routing or isolation hint applies.
 export class OllamaProvider implements TextProvider {
   readonly supportsFileAttachments = false;
   readonly supportedMimeTypes: string[] = [];
@@ -173,6 +175,7 @@ export class OllamaProvider implements TextProvider {
         temperature: params.temperature ?? 0.7,
         num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
+        stop: params.stop,
       },
     };
     // Add tools if provided

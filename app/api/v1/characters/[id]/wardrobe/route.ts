@@ -20,6 +20,8 @@ const createWardrobeItemSchema = z.object({
   isDefault: z.boolean().optional(),
   /** Optional composite components — empty/omitted = leaf item. */
   componentItemIds: z.array(z.string()).optional(),
+  /** Composite-only: clear the designated slots on equip instead of layering. */
+  replace: z.boolean().optional(),
 });
 
 // GET /api/v1/characters/[id]/wardrobe
@@ -61,6 +63,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       componentItemIds: validatedData.componentItemIds ?? [],
       appropriateness: validatedData.appropriateness ?? null,
       isDefault: validatedData.isDefault ?? false,
+      replace: validatedData.replace ?? false,
       migratedFromClothingRecordId: null,
     });
 

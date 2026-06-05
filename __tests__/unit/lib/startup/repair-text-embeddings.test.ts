@@ -129,4 +129,66 @@ describe('repairTextEmbeddings', () => {
     expect(updateMemoryRun.mock.calls[0]?.[1]).toBe('mem-1')
     expect(updateMemoryRun).toHaveBeenCalledWith(null, 'mem-empty')
   })
+
+  it('repairs help_docs embeddings stored in the index-keyed object shape', async () => {
+    // The legacy hot-reload bug wrote some embeddings via JSON.stringify(Float32Array),
+    // producing {"0":..,"1":..} rather than an array. The old repair could not parse
+    // these and nulled them (data loss); they must now convert to BLOB.
+    const objectShape = JSON.stringify(new Float32Array([0.1, 0.2, 0.3, 0.4]))
+    expect(objectShape.startsWith('{')).toBe(true)
+
+    const helpTable = new Map<string, string | Buffer | null>([
+      ['doc-array', '[0.5, 0.6]'],
+      ['doc-object', objectShape],
+    ])
+
+    const updateHelpRun = jest.fn((value: Buffer | null, id: string) => {
+      helpTable.set(id, value)
+    })
+    const nullifyHelpRun = jest.fn((id: string) => helpTable.set(id, null))
+
+    const textRowsFrom = (table: Map<string, string | Buffer | null>) =>
+      [...table.entries()]
+        .filter(([, v]) => typeof v === 'string')
+        .map(([id, embedding]) => ({ id, embedding: embedding as string }))
+
+    const db = {
+      prepare: jest.fn((sql: string) => {
+        if (sql.includes('sqlite_master')) {
+          return { get: (tableName: string) => ({ count: tableName === 'help_docs' ? 1 : 0 }) }
+        }
+        if (sql.includes('COUNT(*) as count FROM help_docs')) {
+          return { get: () => ({ count: textRowsFrom(helpTable).length }) }
+        }
+        if (sql.includes('SELECT id, embedding FROM help_docs')) {
+          return { all: () => textRowsFrom(helpTable) }
+        }
+        if (sql.includes('UPDATE help_docs SET embedding = NULL')) {
+          return { run: nullifyHelpRun }
+        }
+        if (sql.includes('UPDATE help_docs SET embedding = ? WHERE id = ?')) {
+          return { run: updateHelpRun }
+        }
+        throw new Error(`Unexpected SQL in test: ${sql}`)
+      }),
+      transaction: jest.fn((fn: (rows: unknown[]) => void) => (rows: unknown[]) => fn(rows)),
+    }
+
+    const backend = new (SQLiteBackend as any)()
+    backend.db = db
+    mockGetDatabaseAsync.mockResolvedValue(backend)
+
+    const { repairTextEmbeddings } = await import('@/lib/startup/repair-text-embeddings')
+    const result = await repairTextEmbeddings()
+
+    expect(result.helpDocsRepaired).toBe(2)
+    // Both rows became BLOBs; neither was nulled.
+    expect(nullifyHelpRun).not.toHaveBeenCalled()
+    expect(updateHelpRun).toHaveBeenCalledTimes(2)
+    const convertedIds = updateHelpRun.mock.calls.map(c => c[1]).sort()
+    expect(convertedIds).toEqual(['doc-array', 'doc-object'])
+    for (const [blob] of updateHelpRun.mock.calls) {
+      expect((blob as Uint8Array).byteLength).toBeGreaterThan(0)
+    }
+  })
 })

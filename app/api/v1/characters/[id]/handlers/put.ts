@@ -1,0 +1,137 @@
+/**
+ * Characters API v1 - PUT Handler
+ *
+ * PUT /api/v1/characters/[id] - Update a character
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
+import { checkOwnership } from '@/lib/api/middleware';
+import { z } from 'zod';
+import { PronounsSchema, PhysicalDescriptionSchema } from '@/lib/schemas/character.types';
+import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
+import type { Character } from '@/lib/schemas/types';
+import { logger } from '@/lib/logger';
+import { notFound } from '@/lib/api/responses';
+import type { AuthenticatedContext } from '@/lib/api/middleware';
+
+const updateCharacterSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  title: z.string().optional(),
+  identity: z.string().nullable().optional(),
+  description: z.string().optional(),
+  manifesto: z.string().nullable().optional(),
+  personality: z.string().optional(),
+  scenarios: z
+    .array(
+      z.object({
+        id: z.string().uuid().optional(),
+        title: z.string().min(1).max(200),
+        content: z.string().min(1),
+        createdAt: z.string().optional(),
+        updatedAt: z.string().optional(),
+      })
+    )
+    .optional(),
+  firstMessage: z.string().optional(),
+  exampleDialogues: z.string().optional(),
+  defaultConnectionProfileId: z.uuid()
+    .optional()
+    .or(
+      z.literal('').transform(() => undefined)
+    ),
+  defaultImageProfileId: z.uuid()
+    .optional()
+    .or(
+      z.literal('').transform(() => undefined)
+    )
+    .nullable(),
+  aliases: z.array(z.string()).optional(),
+  pronouns: PronounsSchema.nullable().optional(),
+  controlledBy: z.enum(['llm', 'user']).optional(),
+  npc: z.boolean().optional(),
+  defaultAgentModeEnabled: z.boolean().nullable().optional(),
+  defaultHelpToolsEnabled: z.boolean().nullable().optional(),
+  defaultTimestampConfig: TimestampConfigSchema.nullable().optional(),
+  defaultScenarioId: z.uuid().nullable().optional(),
+  defaultSystemPromptId: z.uuid().nullable().optional(),
+  characterDocumentMountPointId: z.uuid()
+    .optional()
+    .or(z.literal('').transform(() => null))
+    .nullable(),
+  systemTransparency: z.boolean().nullable().optional(),
+  coreWhisperEnabled: z.boolean().nullable().optional(),
+  physicalDescription: z
+    .object({
+      id: z.string().uuid().optional(),
+      name: z.string().min(1),
+      usageContext: z.string().max(200).nullable().optional(),
+      shortPrompt: z.string().max(350).nullable().optional(),
+      mediumPrompt: z.string().max(500).nullable().optional(),
+      longPrompt: z.string().max(750).nullable().optional(),
+      completePrompt: z.string().max(1000).nullable().optional(),
+      fullDescription: z.string().nullable().optional(),
+      createdAt: z.string().optional(),
+      updatedAt: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+});
+
+export async function handlePut(
+  req: NextRequest,
+  ctx: AuthenticatedContext,
+  id: string
+): Promise<NextResponse> {
+  const { user, repos } = ctx;
+
+  const existingCharacter = await repos.characters.findById(id);
+
+  if (!checkOwnership(existingCharacter, user.id)) {
+    return notFound('Character');
+  }
+
+  const body = await req.json();
+  const validatedData = updateCharacterSchema.parse(body);
+
+  // Normalize scenarios: fill in missing id/createdAt/updatedAt
+  const { scenarios: rawScenarios, physicalDescription: rawPhysical, ...restValidatedData } = validatedData;
+  const updatePayload: Partial<Character> = { ...restValidatedData };
+  if (rawScenarios) {
+    const now = new Date().toISOString();
+    updatePayload.scenarios = rawScenarios.map(s => ({
+      id: s.id ?? crypto.randomUUID(),
+      title: s.title,
+      content: s.content,
+      createdAt: s.createdAt ?? now,
+      updatedAt: s.updatedAt ?? now,
+    }));
+  }
+  if (rawPhysical !== undefined) {
+    if (rawPhysical === null) {
+      updatePayload.physicalDescription = null;
+    } else {
+      const now = new Date().toISOString();
+      updatePayload.physicalDescription = PhysicalDescriptionSchema.parse({
+        id: rawPhysical.id ?? crypto.randomUUID(),
+        name: rawPhysical.name,
+        usageContext: rawPhysical.usageContext ?? null,
+        shortPrompt: rawPhysical.shortPrompt ?? null,
+        mediumPrompt: rawPhysical.mediumPrompt ?? null,
+        longPrompt: rawPhysical.longPrompt ?? null,
+        completePrompt: rawPhysical.completePrompt ?? null,
+        fullDescription: rawPhysical.fullDescription ?? null,
+        createdAt: rawPhysical.createdAt ?? now,
+        updatedAt: now,
+      });
+    }
+  }
+
+  const character = await repos.characters.update(id, updatePayload);
+
+  revalidatePath('/');
+
+  logger.info('[Characters v1] Character updated', { characterId: id });
+
+  return NextResponse.json({ character });
+}

@@ -85,6 +85,7 @@ complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'logs' -d 'Get LL
 complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'message' -d 'Get single message'
 complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'log' -d 'Get single log entry'
 complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'memories' -d 'List memories'
+complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'characters' -d 'Per-character vault status'
 complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'optimize' -d 'Optimize database'
 complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'backup' -d 'Backup database'
 complete -c quilltap -n '__quilltap_using_subcommand db' -f -a 'integrity' -d 'Check integrity'
@@ -114,6 +115,9 @@ complete -c quilltap -n '__quilltap_using_subcommand db' -l 'mount-points' -d 'T
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'lock-status' -d 'Show instance lock status'
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'lock-clean' -d 'Clean stale lock'
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'lock-override' -d 'Override active lock'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'id' -d 'Single character by name or id' -x
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'diverged' -d 'Only diverged characters'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'blocked' -d 'Only characters with vault issues'
 
 # ---------- docs verbs ----------
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'list' -d 'List mount points'
@@ -121,6 +125,7 @@ complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'show' -d 'Show
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'files' -d 'List files in mount'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'ls' -d 'ls-style listing'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'dir' -d 'Directory listing'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'tree' -d 'ASCII tree view'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'read' -d 'Print file contents'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'export' -d 'Export mount'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'scan' -d 'Trigger rescan'
@@ -153,7 +158,7 @@ complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'ignore-case' -d '
 complete -c quilltap -n '__quilltap_using_subcommand docs' -s 'l' -d 'Paths only'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'wait' -d 'Wait for completion'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'recursive' -s 'R' -d 'Recursive listing'
-complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'sort' -d 'Sort field' -x -a 'name path size modified created'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'sort' -d 'Sort field' -x -a 'name time size links'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'reverse' -s 'r' -d 'Reverse sort order'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'depth' -d 'Maximum traversal depth' -x
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'max-nodes' -d 'Maximum graph nodes' -x

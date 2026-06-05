@@ -25,13 +25,13 @@ describe('character-wizard FIELD_PROMPTS', () => {
     expect(p).toMatch(/never include physical appearance/i)
   })
 
-  it('description prompt forbids physical appearance and points to physicalDescriptions', () => {
+  it('description prompt forbids physical appearance and points to physicalDescription', () => {
     const p = FIELD_PROMPTS.description
     // The old prompt had "Physical appearance (if visual reference available)"
     // as a positive bullet; that must be gone.
     expect(p).not.toMatch(/physical appearance \(if visual reference/i)
     expect(p).toMatch(/do not describe physical appearance/i)
-    expect(p.toLowerCase()).toContain('physicaldescriptions')
+    expect(p.toLowerCase()).toContain('physicaldescription')
   })
 
   it('description prompt focuses on behaviour and mannerisms', () => {

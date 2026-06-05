@@ -583,5 +583,3 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 }
 
-// Export singleton instance
-export const chatsRepository = new ChatsRepository();

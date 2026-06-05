@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-05-17
+**Last Updated**: 2026-06-03
 **Tool Used**: knip
-**Codebase**: Quilltap v4.4.0-dev.228
+**Codebase**: Quilltap v4.6.0-dev.111
 
 ---
 
@@ -12,14 +12,129 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | Cleaned up 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + 4 dead modal/form components + 2 sidebar components) |
-| Migration Scripts | Deleted (migrations complete) |
-| Unused Dependencies | @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom removed 2026-05-17; @aws-sdk/client-s3, svgo removed 2026-03-05; bcrypt, qrcode, ts-jest removed 2026-01-30 |
-| Unused Exported Types | ~700 flagged; most are intentional plugin/barrel re-exports |
+| Unused Files | None flagged as of 2026-06-03. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
+| Unused Dependencies | None flagged as of 2026-06-03. Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
+| Unused Exports | 1237 → 1170 (2026-06-03); remainder are intentional barrel/plugin/registry/lifecycle/schema surface |
+| Unused Exported Types | 754 → 727 (2026-06-03); most are intentional plugin contracts and Zod `z.infer` data-model surface |
 | Unused Enum Members | 3 in ErrorCode (preserved for future use) |
-| Duplicate Exports | ~42 (named + default pattern, low priority) |
+| Duplicate Exports | ~44 (named + default pattern, low priority) |
 
 ---
+
+## 2026-06-03 — Dead-function and dead-type sweep (knip)
+
+knip reported **0 unused files** and **0 unused/unlisted dependencies** — the file- and dependency-level surface is clean. The actionable work this round was inside the `Unused exports` / `Unused exported types` lists. Of 1991 flagged symbols, a reference-count pass isolated 164 with **zero references anywhere outside their own definition and zero in-file usage**. Each was investigated individually (whole-repo `rg` including `packages/`, `plugins/`, tests, configs, dynamic-import-by-path, string dispatch). Genuinely-dead symbols were removed; intentional API surface was kept.
+
+**Net change: 56 files, 6 insertions, 1,627 deletions (−1,621 lines).** Verified with `npx tsc --noEmit` (clean), the full `npm run test:unit` suite (passing), and `eslint` on the changed files (clean). A re-run of knip confirmed the reductions with **no new unused files**.
+
+### Functions / consts / components removed
+
+| File | Removed |
+|------|---------|
+| `lib/llm/cheap-llm.ts` | `getCheapLLMProviderWithPricing` (+ private `CheapLLMSelectionWithPricing` and now-orphaned `./pricing` / `./pricing-fetcher` imports) |
+| `lib/services/llm-logging.service.ts` | `getLogsForMessage`, `getLogsForChat`, `getLogsForCharacter`, `getRecentLogs`, `countLogsForUser`, `getLogsByType`, `getStandaloneLogs` (API routes call `repos.llmLogs.*` directly) |
+| `lib/memory/memory-service.ts` | `findSimilarMemories`, `findSimilarMemoriesWithEmbedding` |
+| `lib/memory/housekeeping-outcome-cache.ts` | `_clearHousekeepingOutcomesForTest` (no test referenced it) |
+| `lib/chat/annotations.ts` | `insertFormat`, `getAnnotationTooltip` (+ private `InsertableFormat`) |
+| `lib/chat/context-summary.ts` | `chatNeedsSummary`, `clearContextSummary` (+ orphaned token/model-context imports) |
+| `lib/chat/tool-executor.ts` | `executeToolCall` (legacy back-compat signature) |
+| `lib/llm/plugin-factory.ts` | `getAllAvailableEmbeddingProviders` |
+| `lib/tokens/token-counter.ts` | `calculateAvailableResponseTokens`, `quickEstimateTokens`, `exceedsTokenLimit` |
+| `lib/services/system-events.service.ts` | `createSummarizationEvent`, `createImagePromptCraftingEvent` |
+| `lib/services/file-content-extractor.ts` | `extractMultipleFileContents` |
+| `lib/services/commonplace-notifications/writer.ts` | `voiceCommonplaceContent` (deprecated) |
+| `lib/services/host-notifications/writer.ts` | `postHostRosterAnnouncement` (+ private `HostRosterAnnouncement`) |
+| `lib/files/folder-utils.ts` | `buildFolderTree`, `isInFolder`, `isInFolderRecursive` (+ private `FolderTreeNode`) |
+| `lib/database/backends/sqlite/json-columns.ts` | `jsonArrayPush`, `jsonArrayPull`, `buildJsonCondition` |
+| `lib/database/repositories/chats.repository.ts` | `chatsRepository` singleton (class reached via repositories container) |
+| `lib/database/repositories/files.repository.ts` | `filesRepository` singleton (class reached via repositories container) |
+| `lib/images-v2.ts` | `deleteImageById` (+ private `deleteFile`) |
+| `lib/mount-index/file-ops.ts` | `pathExistsInMount`, `readSha256` |
+| `lib/mount-index/watcher.ts` | `getWatchedMountPointIds` (test helper, unused) |
+| `lib/paths.ts` | `getMountIndexDbKeyPath` |
+| `lib/photos/resolve-character-avatar.ts` | `resolveCharacterAvatars` (batched variant; singular `resolveCharacterAvatar` stays) |
+| `lib/background-jobs/processor.ts` | `getMemoryExtractionConcurrencyOverride` (setter stays) |
+| `lib/backup/temporary-storage.ts` | `hasTemporaryBackup`, `getTemporaryBackupCount` |
+| `lib/instance-settings/index.ts` | `setGeneralMountPointId`, `setUserUploadsMountPointId`, `setLanternBackgroundsMountPointId`, `InstanceSettingsKeys` (getters stay; migrations set these via raw SQL) |
+| `lib/startup/index.ts` | `initializeAllServices`, `initializeFileStorageIfNeeded` (+ private `ServiceInitializationResult`); `instrumentation.ts` initializes plugins + file storage directly |
+| `lib/startup/prettify.ts` | `hasPrettyEntry`, `curatedKeys` |
+| `lib/plugins/site-plugins.ts` | `getSitePluginsConfig` (+ private `SitePluginsConfig`); `isSitePluginEnabled` stays |
+| `lib/env.ts` | `isProduction` (`isDevelopment`/`isTest` stay) |
+| `lib/host-rewrite.ts` | `_resetGatewayCache` |
+| `lib/api/responses.ts` | `serviceUnavailable` |
+| `lib/schemas/wardrobe.types.ts` | `buildCoverageSummary` (+ orphaned `describeOutfit` import) |
+| `lib/sillytavern/multi-char-parser.ts` | `buildSpeakerEntityMap` |
+| `lib/sillytavern/persona.ts` | `isMultiPersonaBackup`, `convertMultiPersonaBackup` (+ private `MultiPersonaBackup`, `PersonaDescription`) |
+| `lib/tools/destructive-tools.ts` | `isDestructiveTool` (the `DESTRUCTIVE_TOOL_NAMES` set it wrapped stays) |
+| `lib/tools/index.ts` | dead re-export aliases `docDeleteBlobTool`, `docListBlobsTool`, `docMoveFolderTool`, `docReadBlobTool`, `docWriteBlobTool` (the `*Definition` exports stay) |
+| `lib/wardrobe/resolve-equipped.ts` | `flattenLeafItems` |
+| `components/dashboard/nav-user-menu-theme.tsx` | `ThemeIcon` |
+| `components/files/FilePreview/types.ts` | `getPreviewTypeLabel` (`getPreviewType` stays) |
+| `components/providers/session-provider.tsx` | `useSessionOptional` |
+| `components/providers/sidebar-provider.tsx` | `useSidebarOptional`, `MAX_SIDEBAR_WIDTH`, `MIN_SIDEBAR_WIDTH` |
+| `components/settings/ai-import/types.ts` | `OPTIONAL_STEPS` (`CORE_STEPS` stays) |
+| `components/setup-wizard/wizard-api.ts` | `fetchEmbeddingProviders`, `fetchImageProviders` |
+| `hooks/useAvatarDisplay.ts` | `useAvatarDisplayOptional` |
+
+### Types removed (unused, file-local)
+
+| File | Removed |
+|------|---------|
+| `lib/llm/base.ts` | `AttachmentResults`, `CacheUsage`, `JSONSchemaDefinition`, `ResponseFormat` (unused re-exports of `@quilltap/plugin-types`) |
+| `lib/database/interfaces.ts` | `BackendRegistry` |
+| `lib/database/repositories/background-jobs.repository.ts` | `CreateJobOptions` |
+| `lib/background-jobs/queue-service.ts` | `AutonomousRoomScheduleTickPayload` |
+| `lib/services/help-chat/types.ts` | `HelpChatCreateOptions`, `HelpChatEligibilityResult`, `HelpChatUpdateContextOptions` |
+| `lib/sillytavern/multi-char-parser.ts` | `ImportMappingConfig` |
+| `lib/tools/capabilities-report.ts` | `DatabaseStats` (`EnhancedDatabaseStats` is the live one) |
+| `lib/api/responses.ts` | `SuccessResponse` |
+| `components/characters/optimizer/types.ts` | `OptimizerState` |
+| `components/chat/lexical/plugins/MarkdownBridgePlugin.tsx` | `MarkdownBridgeRef` |
+| `components/files/FilePreview/types.ts` | `FileMetadataPanelProps` |
+| `components/images/image-detail/types.ts` | `TagActionParams` |
+| `components/settings/appearance/types.ts` | `ThemePreviewSwatchesProps` |
+| `components/tools/restore/types.ts` | `RestoreActions` |
+| `components/ui/ProfileCard.tsx` | `ProfileCardAction`, `ProfileCardDeleteConfig` (+ now-unused `SettingsCard*` imports) |
+
+### Investigated but KEPT (intentional surface / false positives)
+
+These were flagged by the same reference-count pass but deliberately retained:
+
+- **`ChatProvider`** (`components/providers/chat-context.tsx`) — knip flags it as unused, but the file's sibling export `useChatContext` is consumed by `app/salon/[id]/page.tsx`. The provider/consumer pair is entangled; removing it (initially over-removed by the sweep) broke `tsc` and was reverted.
+- **Lifecycle pairs** — `stopWatcher`, `stopMountWatchers`, `stopAutonomousRoomsScheduler`/`isAutonomousRoomsSchedulerRunning`, `stopHousekeepingScheduler`/`isHousekeepingSchedulerRunning`, `closeReadonlyChildSQLiteClient`, `isReadonlyChildSQLiteConnected`. Their `start*`/`schedule*`/`get*Client` counterparts are wired in `instrumentation.ts`; the stop/status halves belong to the same lifecycle API.
+- **Plugin SDK contracts** — all `lib/plugins/interfaces/*` types (moderation/scoring/provider interfaces), `ImageGenerationModelInfo` (used by the Google/OpenRouter plugins), `createToolLogger`. Plugins implement these structurally; knip cannot see `packages/`/`plugins/` consumers.
+- **Registry accessors** — `lib/plugins/moderation-provider-registry.ts` (8 accessors) and `provider-registry.ts` (3 accessors). The registry modules are live (imported by installer/gatekeeper/plugin-init); their symmetric `get*`/`has*`/`register*` API is retained for plugin self-registration and diagnostics.
+- **Theme crypto / validation** — `signJSON`, `verifyJSONSignature` (`lib/themes/crypto.ts`) and the `validateTheme*`/`safeValidate*`/`createDefaultThemePreference` family (`lib/themes/types.ts`). Security-sensitive Ed25519 signing and the documented public theme-validation API.
+- **Auth helpers** — `getCurrentUserId`, `getRequiredUserId`, `getOrCreateUnauthenticatedUser`, `isUnauthenticatedUser`. Security-sensitive single-user/back-compat surface; retained pending a deliberate auth review.
+- **Zod schema surface** — every `lib/schemas/*` schema and its `z.infer` type (plugin-manifest, settings, terminal, file, text-replacement, etc.), plus tool type surface (`MemorySearchToolOutput`, `ProjectFileInfo`, `QuilltapSubSection`, `CreateWardrobeItemSlotType`) and all `*ToolInputSchema` exports (single-source-of-truth convention per CLAUDE.md, consumed in-file by `zodToOpenAISchema` and by the tool-definitions snapshot test).
+
+---
+
+## 2026-05-28 — Remove retired clothing/descriptions components
+
+### Unused Files Removed
+
+| File | Reason |
+|------|--------|
+| `components/clothing-records/clothing-record-card.tsx` | Dead internal display component; only consumed by retired `clothing-record-list.tsx` |
+| `components/clothing-records/clothing-record-editor.tsx` | Dead internal editor component; only consumed by retired `clothing-record-list.tsx` |
+| `components/clothing-records/clothing-record-list.tsx` | Retired feature surface; no importers in app |
+| `components/clothing-records/index.ts` | Barrel with no importers |
+| `components/physical-descriptions/physical-description-card.tsx` | Dead internal display component; only consumed by retired `physical-description-list.tsx` |
+| `components/physical-descriptions/physical-description-editor.tsx` | Dead internal editor component; only consumed by retired `physical-description-list.tsx` |
+| `components/physical-descriptions/physical-description-list.tsx` | Retired feature surface; no importers in app |
+| `components/physical-descriptions/index.ts` | Barrel with no importers |
+
+### Verification
+
+- Before cleanup: `Unused files (8)`, `Unlisted dependencies (4)`
+- After cleanup: no `Unused files` section, no `Unlisted dependencies` section
+- Remaining major findings unchanged: `Unused exports (1215)`, `Unused exported enum members (3)`, `Duplicate exports (44)`, `Configuration hints (2)`
+
+### knip.json Updates
+
+- Updated `$schema` from `knip@5` to `knip@6` (installed version is 6.14.2)
+- Added `better-sqlite3-multiple-ciphers` to `ignoreDependencies`; 4 test files import it as the documented fallback when the root `better-sqlite3` alias is unavailable (see CLAUDE.md). Knip cannot see the conditional require, so it flags it as unlisted.
 
 ## 2026-05-17 — Barrel slim-down and dependency cleanup
 

@@ -42,18 +42,6 @@ export interface OptimizerSubStep {
 
 export type SuggestionDecision = 'accepted' | 'rejected' | 'edited';
 
-export interface OptimizerState {
-  phase: OptimizerPhase;
-  analysis: OptimizerAnalysis | null;
-  suggestions: OptimizerSuggestion[];
-  currentIndex: number;
-  decisions: Map<string, SuggestionDecision>;
-  editedValues: Map<string, string>;
-  error: string | null;
-  memoryCount: number;
-  loading: boolean;
-}
-
 export interface OptimizerFilterOptions {
   maxMemories: number;
   searchQuery: string;

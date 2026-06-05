@@ -5,10 +5,9 @@
  * into the `Wardrobe/<title>.md` + `Outfits/<name>.md` folder layout from the
  * canonical DB state (wardrobe_items + outfit_presets tables) and deletes any
  * legacy `wardrobe.json` left over from the older single-file format. The
- * read overlay treats vault wardrobe files as authoritative whenever a
- * character has `readPropertiesFromDocumentStore` on, so this refresh runs
- * once per database to bring every vault onto the folder format the moment
- * the user upgrades.
+ * read overlay treats vault wardrobe files as authoritative post-cutover, so
+ * this refresh runs once per database to bring every vault onto the folder
+ * format the moment the user upgrades.
  *
  * Idempotent via the `wardrobe_folder_migrated_v1` flag in `instance_settings`:
  * runs exactly once per database, then no-ops on every subsequent startup.

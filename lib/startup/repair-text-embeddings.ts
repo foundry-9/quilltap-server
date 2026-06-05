@@ -4,9 +4,17 @@
  * During development hot-reloads, the SQLiteCollection's blobColumns set can
  * lose its registration, causing embeddings to be written as JSON text instead
  * of compact Float32 BLOBs. This repair runs on every startup and converts any
- * TEXT embeddings back to BLOBs in both `vector_entries` and `memories` tables.
+ * TEXT embeddings back to BLOBs across every table that stores an embedding:
+ * `vector_entries`, `memories`, `help_docs`, and `conversation_chunks`.
  *
- * This is idempotent and fast when there's nothing to fix (a single COUNT query).
+ * This is idempotent and fast when there's nothing to fix (a single COUNT query
+ * per table).
+ *
+ * Two legacy TEXT shapes are handled (see `parseLegacyEmbeddingText`): a JSON
+ * array and the index-keyed object left by `JSON.stringify(Float32Array)`
+ * (`{"0":..,"1":..}`). The older repair only handled the array shape and nulled
+ * the object shape on stall — silent data loss for embeddings that were in fact
+ * recoverable. Both shapes now convert losslessly to BLOB.
  *
  * Memory-bounded: pages through TEXT rows in batches of PAGE_SIZE rather than
  * materializing the entire result set with .all(). A 1536- or 4096-dimension
@@ -17,26 +25,142 @@
  */
 
 import { logger } from '@/lib/logger'
-import { embeddingToBlob } from '@/lib/embedding/float32-conversion'
+import { embeddingToBlob, parseLegacyEmbeddingText } from '@/lib/embedding/float32-conversion'
 
 interface RepairResult {
   vectorEntriesRepaired: number
   memoriesRepaired: number
+  helpDocsRepaired: number
+  conversationChunksRepaired: number
   durationMs: number
 }
 
 const PAGE_SIZE = 500
 
+/** Tables that store a Float32-BLOB `embedding` column, with a progress noun. */
+const EMBEDDING_TABLES: ReadonlyArray<{ table: string; unit: string }> = [
+  { table: 'vector_entries', unit: 'vector entries' },
+  { table: 'memories', unit: 'memories' },
+  { table: 'help_docs', unit: 'help docs' },
+  { table: 'conversation_chunks', unit: 'conversation chunks' },
+]
+
+interface StartupProgressLike {
+  setCurrent: (label: string, opts: { detail: string }) => void
+  setSubProgress: (tiers: Array<{ current: number; total: number; unit: string }> | null) => void
+}
+
 /**
- * Repair any TEXT embeddings found in vector_entries and memories tables.
- * Converts them to Float32 BLOBs for proper dimension handling and storage efficiency.
+ * Convert legacy TEXT embeddings in one table to Float32 BLOBs, paging so the
+ * whole table is never materialized. Empty embeddings become NULL; rows that
+ * can't be parsed after repeated stalls are nulled so they don't re-trip the
+ * repair on every restart. `db` is the raw better-sqlite3 handle; the table
+ * names come from the trusted EMBEDDING_TABLES list (no injection surface).
+ */
+function repairTableTextEmbeddings(
+  db: any,
+  table: string,
+  unit: string,
+  startupProgress: StartupProgressLike
+): number {
+  const textCount = db.prepare(
+    `SELECT COUNT(*) as count FROM ${table} WHERE embedding IS NOT NULL AND typeof(embedding) = 'text'`
+  ).get() as { count: number }
+
+  if (textCount.count === 0) return 0
+
+  logger.info(`Repairing TEXT embeddings in ${table}`, {
+    context: 'startup.repair-text-embeddings',
+    table,
+    count: textCount.count,
+  })
+
+  startupProgress.setCurrent('subsystem:embedding-repair:start', {
+    detail: `${textCount.count} ${unit} rows`,
+  })
+
+  const selectPage = db.prepare(
+    `SELECT id, embedding FROM ${table}
+     WHERE embedding IS NOT NULL AND typeof(embedding) = 'text'
+     LIMIT ${PAGE_SIZE}`
+  )
+  const updateStmt = db.prepare(`UPDATE ${table} SET embedding = ? WHERE id = ?`)
+
+  let repaired = 0
+
+  const applyPage = db.transaction((batch: { id: string; embedding: string }[]) => {
+    for (const row of batch) {
+      const embedding = parseLegacyEmbeddingText(row.embedding)
+      if (embedding === undefined) {
+        // Unparseable — leave for the stall handler below.
+        continue
+      }
+      if (embedding.length > 0) {
+        updateStmt.run(embeddingToBlob(embedding), row.id)
+      } else {
+        updateStmt.run(null, row.id)
+      }
+      repaired++
+    }
+  })
+
+  // Page until no TEXT rows remain. UPDATEs in applyPage flip rows out of the
+  // WHERE filter, so progress is guaranteed as long as at least one row
+  // converts each iteration.
+  let stalledIterations = 0
+  while (true) {
+    const page = selectPage.all() as { id: string; embedding: string }[]
+    if (page.length === 0) break
+    const before = repaired
+    applyPage(page)
+    const converted = repaired - before
+    startupProgress.setSubProgress([{ current: repaired, total: textCount.count, unit }])
+    if (converted === 0) {
+      // No row in this page could be parsed — break to avoid an infinite loop.
+      stalledIterations++
+      if (stalledIterations >= 2) {
+        logger.warn(`Stopping ${table} repair — page of unparseable rows`, {
+          context: 'startup.repair-text-embeddings',
+          table,
+          remaining: page.length,
+        })
+        // Nudge the remaining unparseable rows to NULL so they don't re-trip
+        // the repair on every restart. Index lookups treat them as missing
+        // embeddings, same as never-embedded rows.
+        const nullify = db.prepare(`UPDATE ${table} SET embedding = NULL WHERE id = ?`)
+        const nullifyBatch = db.transaction((ids: string[]) => {
+          for (const id of ids) nullify.run(id)
+        })
+        nullifyBatch(page.map(r => r.id))
+        break
+      }
+    } else {
+      stalledIterations = 0
+    }
+  }
+
+  return repaired
+}
+
+/**
+ * Repair any TEXT embeddings found in the embedding-bearing tables.
+ * Converts them to Float32 BLOBs for proper dimension handling and storage
+ * efficiency.
  *
- * Safe to call on every startup — returns immediately if no TEXT embeddings exist.
+ * Safe to call on every startup — returns immediately if no TEXT embeddings
+ * exist. Non-fatal: never throws into the startup path.
  */
 export async function repairTextEmbeddings(): Promise<RepairResult> {
   const startTime = Date.now()
-  let vectorEntriesRepaired = 0
-  let memoriesRepaired = 0
+  const counts: Record<string, number> = {}
+
+  const buildResult = (): RepairResult => ({
+    vectorEntriesRepaired: counts['vector_entries'] ?? 0,
+    memoriesRepaired: counts['memories'] ?? 0,
+    helpDocsRepaired: counts['help_docs'] ?? 0,
+    conversationChunksRepaired: counts['conversation_chunks'] ?? 0,
+    durationMs: Date.now() - startTime,
+  })
 
   try {
     // Dynamic import to avoid circular dependencies during startup
@@ -46,16 +170,15 @@ export async function repairTextEmbeddings(): Promise<RepairResult> {
 
     const backend = await getDatabaseAsync()
     if (!(backend instanceof SQLiteBackend)) {
-      return { vectorEntriesRepaired: 0, memoriesRepaired: 0, durationMs: Date.now() - startTime }
+      return buildResult()
     }
 
     // Access the raw SQLite database for direct queries
     const db = (backend as any).db
     if (!db) {
-      return { vectorEntriesRepaired: 0, memoriesRepaired: 0, durationMs: Date.now() - startTime }
+      return buildResult()
     }
 
-    // Check if there are any TEXT embeddings in vector_entries
     const tableExists = (name: string): boolean => {
       try {
         const row = db.prepare(
@@ -67,197 +190,38 @@ export async function repairTextEmbeddings(): Promise<RepairResult> {
       }
     }
 
-    // Repair vector_entries
-    if (tableExists('vector_entries')) {
-      const textCount = db.prepare(
-        `SELECT COUNT(*) as count FROM vector_entries WHERE typeof(embedding) = 'text'`
-      ).get() as { count: number }
-
-      if (textCount.count > 0) {
-        logger.info('Repairing TEXT embeddings in vector_entries', {
-          context: 'startup.repair-text-embeddings',
-          count: textCount.count,
-        })
-
-        startupProgress.setCurrent('subsystem:embedding-repair:start', {
-          detail: `${textCount.count} vector_entries rows`,
-        })
-
-        const selectPage = db.prepare(
-          `SELECT id, embedding FROM vector_entries
-           WHERE typeof(embedding) = 'text'
-           LIMIT ${PAGE_SIZE}`
-        )
-        const updateStmt = db.prepare(
-          `UPDATE vector_entries SET embedding = ? WHERE id = ?`
-        )
-
-        const applyPage = db.transaction((batch: { id: string; embedding: string }[]) => {
-          for (const row of batch) {
-            try {
-              const embedding = JSON.parse(row.embedding) as number[]
-              if (Array.isArray(embedding) && embedding.length > 0) {
-                const blob = embeddingToBlob(embedding)
-                updateStmt.run(blob, row.id)
-                vectorEntriesRepaired++
-              }
-            } catch {
-              logger.warn('Failed to repair vector_entries embedding, skipping', {
-                context: 'startup.repair-text-embeddings',
-                entryId: row.id,
-              })
-            }
-          }
-        })
-
-        // Page until no TEXT rows remain. UPDATEs in applyPage flip rows out
-        // of the WHERE filter, so progress is guaranteed as long as at least
-        // one row converts each iteration.
-        let stalledIterations = 0
-        while (true) {
-          const page = selectPage.all() as { id: string; embedding: string }[]
-          if (page.length === 0) break
-          const before = vectorEntriesRepaired
-          applyPage(page)
-          const converted = vectorEntriesRepaired - before
-          startupProgress.setSubProgress([
-            { current: vectorEntriesRepaired, total: textCount.count, unit: 'vector entries' },
-          ])
-          if (converted === 0) {
-            // No row in this page could be parsed — break to avoid infinite loop.
-            // Remaining rows will be flagged again on the next startup.
-            stalledIterations++
-            if (stalledIterations >= 2) {
-              logger.warn('Stopping vector_entries repair — page of unparseable rows', {
-                context: 'startup.repair-text-embeddings',
-                remaining: page.length,
-              })
-              // Nudge the remaining unparseable rows to NULL so they don't
-              // re-trip the repair on every restart. Index lookups will treat
-              // them as missing embeddings, same as never-embedded rows.
-              const nullify = db.prepare(
-                `UPDATE vector_entries SET embedding = NULL WHERE id = ?`
-              )
-              const nullifyBatch = db.transaction((ids: string[]) => {
-                for (const id of ids) nullify.run(id)
-              })
-              nullifyBatch(page.map(r => r.id))
-              break
-            }
-          } else {
-            stalledIterations = 0
-          }
-        }
+    for (const { table, unit } of EMBEDDING_TABLES) {
+      if (tableExists(table)) {
+        counts[table] = repairTableTextEmbeddings(db, table, unit, startupProgress)
       }
     }
 
-    // Repair memories
-    if (tableExists('memories')) {
-      const textCount = db.prepare(
-        `SELECT COUNT(*) as count FROM memories WHERE embedding IS NOT NULL AND typeof(embedding) = 'text'`
-      ).get() as { count: number }
-
-      if (textCount.count > 0) {
-        logger.info('Repairing TEXT embeddings in memories', {
-          context: 'startup.repair-text-embeddings',
-          count: textCount.count,
-        })
-
-        startupProgress.setCurrent('subsystem:embedding-repair:start', {
-          detail: `${textCount.count} memories rows`,
-        })
-
-        const selectPage = db.prepare(
-          `SELECT id, embedding FROM memories
-           WHERE embedding IS NOT NULL AND typeof(embedding) = 'text'
-           LIMIT ${PAGE_SIZE}`
-        )
-        const updateStmt = db.prepare(
-          `UPDATE memories SET embedding = ? WHERE id = ?`
-        )
-
-        const applyPage = db.transaction((batch: { id: string; embedding: string }[]) => {
-          for (const row of batch) {
-            try {
-              const embedding = JSON.parse(row.embedding) as number[]
-              if (Array.isArray(embedding)) {
-                if (embedding.length > 0) {
-                  const blob = embeddingToBlob(embedding)
-                  updateStmt.run(blob, row.id)
-                } else {
-                  updateStmt.run(null, row.id)
-                }
-                memoriesRepaired++
-              }
-            } catch {
-              logger.warn('Failed to repair memories embedding, skipping', {
-                context: 'startup.repair-text-embeddings',
-                memoryId: row.id,
-              })
-            }
-          }
-        })
-
-        let stalledIterations = 0
-        while (true) {
-          const page = selectPage.all() as { id: string; embedding: string }[]
-          if (page.length === 0) break
-          const before = memoriesRepaired
-          applyPage(page)
-          const converted = memoriesRepaired - before
-          startupProgress.setSubProgress([
-            { current: memoriesRepaired, total: textCount.count, unit: 'memories' },
-          ])
-          if (converted === 0) {
-            stalledIterations++
-            if (stalledIterations >= 2) {
-              logger.warn('Stopping memories repair — page of unparseable rows', {
-                context: 'startup.repair-text-embeddings',
-                remaining: page.length,
-              })
-              const nullify = db.prepare(
-                `UPDATE memories SET embedding = NULL WHERE id = ?`
-              )
-              const nullifyBatch = db.transaction((ids: string[]) => {
-                for (const id of ids) nullify.run(id)
-              })
-              nullifyBatch(page.map(r => r.id))
-              break
-            }
-          } else {
-            stalledIterations = 0
-          }
-        }
-      }
-    }
-
-    const durationMs = Date.now() - startTime
-    const totalRepaired = vectorEntriesRepaired + memoriesRepaired
+    const totalRepaired = Object.values(counts).reduce((sum, n) => sum + n, 0)
 
     if (totalRepaired > 0) {
+      const result = buildResult()
       logger.info('TEXT embedding repair complete', {
         context: 'startup.repair-text-embeddings',
-        vectorEntriesRepaired,
-        memoriesRepaired,
-        durationMs,
+        ...result,
       })
-      const { startupProgress } = await import('@/lib/startup/progress')
       startupProgress.publish({
         rawLabel: 'subsystem:embedding-repair:complete',
-        detail: `${vectorEntriesRepaired} vector entries, ${memoriesRepaired} memories`,
+        detail: EMBEDDING_TABLES
+          .filter(({ table }) => (counts[table] ?? 0) > 0)
+          .map(({ table, unit }) => `${counts[table]} ${unit}`)
+          .join(', '),
       })
       startupProgress.setSubProgress(null)
     }
 
-    return { vectorEntriesRepaired, memoriesRepaired, durationMs }
+    return buildResult()
   } catch (error) {
     logger.error('TEXT embedding repair failed', {
       context: 'startup.repair-text-embeddings',
       error: error instanceof Error ? error.message : String(error),
-      vectorEntriesRepaired,
-      memoriesRepaired,
+      ...buildResult(),
     })
     // Non-fatal — don't block startup
-    return { vectorEntriesRepaired, memoriesRepaired, durationMs: Date.now() - startTime }
+    return buildResult()
   }
 }

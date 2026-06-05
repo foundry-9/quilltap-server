@@ -1,16 +1,17 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Character } from './types'
+import type { Character, CharacterGalleryLink } from './types'
 
 interface ImageMetadataProps {
   imageId: string
   characters: Character[]
   loadingEntities: boolean
-  taggedCharacterIds: Set<string>
-  taggingInProgress: Set<string>
+  characterGalleryLinks: CharacterGalleryLink[]
+  savingToGalleryFor: Set<string>
   settingAvatar: Set<string>
-  onToggleCharacterTag: (characterId: string) => void
+  onAddToCharacterGallery: (characterId: string) => void
+  onRemoveFromCharacterGallery: (characterId: string) => void
   onSetAsAvatar: (entityType: 'character', entityId: string) => void
 }
 
@@ -18,31 +19,35 @@ export function ImageMetadata({
   imageId,
   characters,
   loadingEntities,
-  taggedCharacterIds,
-  taggingInProgress,
+  characterGalleryLinks,
+  savingToGalleryFor,
   settingAvatar,
-  onToggleCharacterTag,
+  onAddToCharacterGallery,
+  onRemoveFromCharacterGallery,
   onSetAsAvatar,
 }: ImageMetadataProps) {
-  // Split characters into tagged and untagged lists
-  const { taggedCharacters, untaggedCharacters } = useMemo(() => {
-    const tagged: Character[] = []
-    const untagged: Character[] = []
+  const inGalleryCharacterIds = useMemo(
+    () => new Set(characterGalleryLinks.map((l) => l.characterId)),
+    [characterGalleryLinks]
+  )
+
+  const { galleryCharacters, availableCharacters } = useMemo(() => {
+    const inGallery: Character[] = []
+    const available: Character[] = []
 
     characters.forEach((character) => {
-      if (taggedCharacterIds.has(character.id)) {
-        tagged.push(character)
+      if (inGalleryCharacterIds.has(character.id)) {
+        inGallery.push(character)
       } else {
-        untagged.push(character)
+        available.push(character)
       }
     })
 
-    // Sort both lists alphabetically by name
-    tagged.sort((a, b) => a.name.localeCompare(b.name))
-    untagged.sort((a, b) => a.name.localeCompare(b.name))
+    inGallery.sort((a, b) => a.name.localeCompare(b.name))
+    available.sort((a, b) => a.name.localeCompare(b.name))
 
-    return { taggedCharacters: tagged, untaggedCharacters: untagged }
-  }, [characters, taggedCharacterIds])
+    return { galleryCharacters: inGallery, availableCharacters: available }
+  }, [characters, inGalleryCharacterIds])
 
   return (
     <div className="qt-panel qt-bg-overlay-medium backdrop-blur-sm w-full max-w-2xl">
@@ -51,13 +56,13 @@ export function ImageMetadata({
           <p className="qt-text-secondary text-sm">Loading characters...</p>
         )}
 
-        {/* Section 1: Tagged Characters */}
-        {!loadingEntities && taggedCharacters.length > 0 && (
+        {/* Section 1: Characters whose gallery contains this photo */}
+        {!loadingEntities && galleryCharacters.length > 0 && (
           <div>
-            <h3 className="text-foreground font-semibold mb-3">Tagged to Characters</h3>
+            <h3 className="text-foreground font-semibold mb-3">In Photo Albums</h3>
             <div className="flex flex-col gap-2">
-              {taggedCharacters.map((character) => {
-                const isLoading = taggingInProgress.has(`char-${character.id}`)
+              {galleryCharacters.map((character) => {
+                const isLoading = savingToGalleryFor.has(character.id)
                 const isAvatar = character.defaultImageId === imageId
                 const isSettingAvatar = settingAvatar.has(`character-${character.id}-avatar`)
 
@@ -80,7 +85,7 @@ export function ImageMetadata({
                           onSetAsAvatar('character', character.id)
                         }}
                         disabled={isSettingAvatar}
-                        className="px-2 py-1 bg-success hover:qt-bg-success/90 qt-text-success-foreground rounded text-xs font-medium transition-colors disabled:opacity-50"
+                        className="qt-button-success qt-button-sm"
                         title="Set as avatar"
                       >
                         {isSettingAvatar ? '...' : 'Set Avatar'}
@@ -89,11 +94,11 @@ export function ImageMetadata({
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        onToggleCharacterTag(character.id)
+                        onRemoveFromCharacterGallery(character.id)
                       }}
                       disabled={isLoading}
                       className="w-6 h-6 flex items-center justify-center qt-text-secondary hover:qt-text-destructive hover:qt-bg-destructive/20 rounded transition-colors disabled:opacity-50"
-                      title="Remove tag"
+                      title="Remove from photo album"
                     >
                       {isLoading ? '...' : '×'}
                     </button>
@@ -104,29 +109,29 @@ export function ImageMetadata({
           </div>
         )}
 
-        {/* Section 2: Add Character Dropdown */}
-        {!loadingEntities && untaggedCharacters.length > 0 && (
+        {/* Section 2: Save to character photo album */}
+        {!loadingEntities && availableCharacters.length > 0 && (
           <div>
             <label
-              htmlFor="add-character-tag"
+              htmlFor="add-to-character-gallery"
               className="block text-foreground font-semibold mb-2"
             >
-              Add to character
+              Save to photo album
             </label>
             <select
-              id="add-character-tag"
+              id="add-to-character-gallery"
               className="qt-select w-full"
               value=""
               onChange={(e) => {
                 if (e.target.value) {
-                  onToggleCharacterTag(e.target.value)
+                  onAddToCharacterGallery(e.target.value)
                 }
               }}
             >
               <option value="" disabled>
                 Select a character...
               </option>
-              {untaggedCharacters.map((character) => (
+              {availableCharacters.map((character) => (
                 <option key={character.id} value={character.id}>
                   {character.name}
                 </option>
@@ -137,7 +142,7 @@ export function ImageMetadata({
 
         {/* No characters available message */}
         {!loadingEntities && characters.length === 0 && (
-          <p className="qt-text-secondary text-sm">No characters available for tagging.</p>
+          <p className="qt-text-secondary text-sm">No characters available.</p>
         )}
       </div>
     </div>

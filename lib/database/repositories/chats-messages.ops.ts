@@ -18,6 +18,7 @@ import { QueryFilter, SortSpec } from '../interfaces';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
 import { safeQuery } from './safe-query';
+import { computeSpokenThisCycleAfterMessage } from '@/lib/chat/turn-manager';
 
 /**
  * Schema for individual chat message rows in SQLite
@@ -39,6 +40,14 @@ export const ChatMessageRowSchema = z.object({
   attachments: z.array(UUIDSchema).nullable().default([]),  // JSON array
   debugMemoryLogs: z.array(z.string()).nullable().optional(),  // JSON array
   thoughtSignature: z.string().nullable().optional(),
+  // Reasoning / chain-of-thought from thinking models. DISPLAY ONLY — never re-fed to any model.
+  reasoningContent: z.string().nullable().optional(),
+  // Positioned reasoning blocks (JSON array) for splicing thinking into the prose. DISPLAY ONLY.
+  reasoningSegments: z.array(z.object({
+    anchorOffset: z.number(),
+    content: z.string(),
+    seq: z.number(),
+  })).nullable().optional(),
   participantId: UUIDSchema.nullable().optional(),
   recoveryType: z.enum(['token_limit', 'token_limit_static', 'content_limit', 'content_limit_static']).nullable().optional(),
   // Server-side pre-rendered HTML for simple messages
@@ -199,6 +208,14 @@ export class ChatMessagesOps {
           updateData.lastMessageAt = now;
           updateData.updatedAt = now;
         }
+        const cycleUpdate = computeSpokenThisCycleAfterMessage(
+          validated,
+          chat.participants,
+          chat.spokenThisCycleParticipantIds,
+        );
+        if (cycleUpdate !== null) {
+          updateData.spokenThisCycleParticipantIds = cycleUpdate;
+        }
         await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
       }
       return validated;
@@ -241,6 +258,20 @@ export class ChatMessagesOps {
         if (hasActualMessages) {
           updateData.lastMessageAt = now;
           updateData.updatedAt = now;
+        }
+        // Fold each message through the cycle helper in order so a batch that
+        // wraps the cycle mid-stream still lands on the right final state.
+        let currentSpoken = chat.spokenThisCycleParticipantIds;
+        let spokenChanged = false;
+        for (const msg of validated) {
+          const next = computeSpokenThisCycleAfterMessage(msg, chat.participants, currentSpoken);
+          if (next !== null) {
+            currentSpoken = next;
+            spokenChanged = true;
+          }
+        }
+        if (spokenChanged) {
+          updateData.spokenThisCycleParticipantIds = currentSpoken;
         }
         await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
       }

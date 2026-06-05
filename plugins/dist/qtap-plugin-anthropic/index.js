@@ -6055,7 +6055,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.38.0";
+var VERSION2 = "6.42.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser2 = () => {
@@ -9328,6 +9328,43 @@ var Certificates = class extends APIResource2 {
   }
 };
 
+// ../../../node_modules/openai/resources/admin/organization/data-retention.mjs
+var DataRetention = class extends APIResource2 {
+  /**
+   * Retrieves organization data retention controls.
+   *
+   * @example
+   * ```ts
+   * const organizationDataRetention =
+   *   await client.admin.organization.dataRetention.retrieve();
+   * ```
+   */
+  retrieve(options) {
+    return this._client.get("/organization/data_retention", {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates organization data retention controls.
+   *
+   * @example
+   * ```ts
+   * const organizationDataRetention =
+   *   await client.admin.organization.dataRetention.update({
+   *     retention_type: 'zero_data_retention',
+   *   });
+   * ```
+   */
+  update(body, options) {
+    return this._client.post("/organization/data_retention", {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
 // ../../../node_modules/openai/resources/admin/organization/invites.mjs
 var Invites = class extends APIResource2 {
   /**
@@ -9425,6 +9462,22 @@ var Roles = class extends APIResource2 {
     });
   }
   /**
+   * Retrieves an organization role.
+   *
+   * @example
+   * ```ts
+   * const role = await client.admin.organization.roles.retrieve(
+   *   'role_id',
+   * );
+   * ```
+   */
+  retrieve(roleID, options) {
+    return this._client.get(path2`/organization/roles/${roleID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
    * Updates an existing organization role.
    *
    * @example
@@ -9471,6 +9524,92 @@ var Roles = class extends APIResource2 {
    */
   delete(roleID, options) {
     return this._client.delete(path2`/organization/roles/${roleID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
+// ../../../node_modules/openai/resources/admin/organization/spend-alerts.mjs
+var SpendAlerts = class extends APIResource2 {
+  /**
+   * Creates an organization spend alert.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendAlert =
+   *   await client.admin.organization.spendAlerts.create({
+   *     currency: 'USD',
+   *     interval: 'month',
+   *     notification_channel: {
+   *       recipients: ['string'],
+   *       type: 'email',
+   *     },
+   *     threshold_amount: 0,
+   *   });
+   * ```
+   */
+  create(body, options) {
+    return this._client.post("/organization/spend_alerts", {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates an organization spend alert.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendAlert =
+   *   await client.admin.organization.spendAlerts.update(
+   *     'alert_id',
+   *     {
+   *       currency: 'USD',
+   *       interval: 'month',
+   *       notification_channel: {
+   *         recipients: ['string'],
+   *         type: 'email',
+   *       },
+   *       threshold_amount: 0,
+   *     },
+   *   );
+   * ```
+   */
+  update(alertID, body, options) {
+    return this._client.post(path2`/organization/spend_alerts/${alertID}`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Lists organization spend alerts.
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const organizationSpendAlert of client.admin.organization.spendAlerts.list()) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(query = {}, options) {
+    return this._client.getAPIList("/organization/spend_alerts", ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+  }
+  /**
+   * Deletes an organization spend alert.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendAlertDeleted =
+   *   await client.admin.organization.spendAlerts.delete(
+   *     'alert_id',
+   *   );
+   * ```
+   */
+  delete(alertID, options) {
+    return this._client.delete(path2`/organization/spend_alerts/${alertID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -9588,6 +9727,24 @@ var Usage = class extends APIResource2 {
     });
   }
   /**
+   * Get file search calls usage details for the organization.
+   *
+   * @example
+   * ```ts
+   * const response =
+   *   await client.admin.organization.usage.fileSearchCalls({
+   *     start_time: 0,
+   *   });
+   * ```
+   */
+  fileSearchCalls(query, options) {
+    return this._client.get("/organization/usage/file_search_calls", {
+      query,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
    * Get images usage details for the organization.
    *
    * @example
@@ -9641,6 +9798,24 @@ var Usage = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
+  /**
+   * Get web search calls usage details for the organization.
+   *
+   * @example
+   * ```ts
+   * const response =
+   *   await client.admin.organization.usage.webSearchCalls({
+   *     start_time: 0,
+   *   });
+   * ```
+   */
+  webSearchCalls(query, options) {
+    return this._client.get("/organization/usage/web_search_calls", {
+      query,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/groups/roles.mjs
@@ -9660,6 +9835,25 @@ var Roles2 = class extends APIResource2 {
   create(groupID, body, options) {
     return this._client.post(path2`/organization/groups/${groupID}/roles`, {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves an organization role assigned to a group.
+   *
+   * @example
+   * ```ts
+   * const role =
+   *   await client.admin.organization.groups.roles.retrieve(
+   *     'role_id',
+   *     { group_id: 'group_id' },
+   *   );
+   * ```
+   */
+  retrieve(roleID, params, options) {
+    const { group_id } = params;
+    return this._client.get(path2`/organization/groups/${group_id}/roles/${roleID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -9723,6 +9917,25 @@ var Users = class extends APIResource2 {
     });
   }
   /**
+   * Retrieves a user in a group.
+   *
+   * @example
+   * ```ts
+   * const user =
+   *   await client.admin.organization.groups.users.retrieve(
+   *     'user_id',
+   *     { group_id: 'group_id' },
+   *   );
+   * ```
+   */
+  retrieve(userID, params, options) {
+    const { group_id } = params;
+    return this._client.get(path2`/organization/groups/${group_id}/users/${userID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
    * Lists the users assigned to a group.
    *
    * @example
@@ -9779,6 +9992,23 @@ var Groups = class extends APIResource2 {
   create(body, options) {
     return this._client.post("/organization/groups", {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves a group.
+   *
+   * @example
+   * ```ts
+   * const group =
+   *   await client.admin.organization.groups.retrieve(
+   *     'group_id',
+   *   );
+   * ```
+   */
+  retrieve(groupID, options) {
+    return this._client.get(path2`/organization/groups/${groupID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -9957,6 +10187,142 @@ var Certificates2 = class extends APIResource2 {
   }
 };
 
+// ../../../node_modules/openai/resources/admin/organization/projects/data-retention.mjs
+var DataRetention2 = class extends APIResource2 {
+  /**
+   * Retrieves project data retention controls.
+   *
+   * @example
+   * ```ts
+   * const projectDataRetention =
+   *   await client.admin.organization.projects.dataRetention.retrieve(
+   *     'project_id',
+   *   );
+   * ```
+   */
+  retrieve(projectID, options) {
+    return this._client.get(path2`/organization/projects/${projectID}/data_retention`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates project data retention controls.
+   *
+   * @example
+   * ```ts
+   * const projectDataRetention =
+   *   await client.admin.organization.projects.dataRetention.update(
+   *     'project_id',
+   *     { retention_type: 'organization_default' },
+   *   );
+   * ```
+   */
+  update(projectID, body, options) {
+    return this._client.post(path2`/organization/projects/${projectID}/data_retention`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
+// ../../../node_modules/openai/resources/admin/organization/projects/hosted-tool-permissions.mjs
+var HostedToolPermissions = class extends APIResource2 {
+  /**
+   * Returns hosted tool permissions for a project.
+   *
+   * @example
+   * ```ts
+   * const projectHostedToolPermissions =
+   *   await client.admin.organization.projects.hostedToolPermissions.retrieve(
+   *     'project_id',
+   *   );
+   * ```
+   */
+  retrieve(projectID, options) {
+    return this._client.get(path2`/organization/projects/${projectID}/hosted_tool_permissions`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates hosted tool permissions for a project.
+   *
+   * @example
+   * ```ts
+   * const projectHostedToolPermissions =
+   *   await client.admin.organization.projects.hostedToolPermissions.update(
+   *     'project_id',
+   *   );
+   * ```
+   */
+  update(projectID, body, options) {
+    return this._client.post(path2`/organization/projects/${projectID}/hosted_tool_permissions`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
+// ../../../node_modules/openai/resources/admin/organization/projects/model-permissions.mjs
+var ModelPermissions = class extends APIResource2 {
+  /**
+   * Returns model permissions for a project.
+   *
+   * @example
+   * ```ts
+   * const projectModelPermissions =
+   *   await client.admin.organization.projects.modelPermissions.retrieve(
+   *     'project_id',
+   *   );
+   * ```
+   */
+  retrieve(projectID, options) {
+    return this._client.get(path2`/organization/projects/${projectID}/model_permissions`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates model permissions for a project.
+   *
+   * @example
+   * ```ts
+   * const projectModelPermissions =
+   *   await client.admin.organization.projects.modelPermissions.update(
+   *     'project_id',
+   *     { mode: 'allow_list', model_ids: ['string'] },
+   *   );
+   * ```
+   */
+  update(projectID, body, options) {
+    return this._client.post(path2`/organization/projects/${projectID}/model_permissions`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Deletes model permissions for a project.
+   *
+   * @example
+   * ```ts
+   * const projectModelPermissionsDeleted =
+   *   await client.admin.organization.projects.modelPermissions.delete(
+   *     'project_id',
+   *   );
+   * ```
+   */
+  delete(projectID, options) {
+    return this._client.delete(path2`/organization/projects/${projectID}/model_permissions`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
 // ../../../node_modules/openai/resources/admin/organization/projects/rate-limits.mjs
 var RateLimits = class extends APIResource2 {
   /**
@@ -10014,6 +10380,25 @@ var Roles3 = class extends APIResource2 {
   create(projectID, body, options) {
     return this._client.post(path2`/projects/${projectID}/roles`, {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves a project role.
+   *
+   * @example
+   * ```ts
+   * const role =
+   *   await client.admin.organization.projects.roles.retrieve(
+   *     'role_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  retrieve(roleID, params, options) {
+    const { project_id } = params;
+    return this._client.get(path2`/projects/${project_id}/roles/${roleID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -10121,6 +10506,22 @@ var ServiceAccounts = class extends APIResource2 {
     });
   }
   /**
+   * Updates a service account in the project.
+   *
+   * @example
+   * ```ts
+   * const projectServiceAccount =
+   *   await client.admin.organization.projects.serviceAccounts.update(
+   *     'service_account_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  update(serviceAccountID, params, options) {
+    const { project_id, ...body } = params;
+    return this._client.post(path2`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, { body, ...options, __security: { adminAPIKeyAuth: true } });
+  }
+  /**
    * Returns a list of service accounts in the project.
    *
    * @example
@@ -10157,6 +10558,101 @@ var ServiceAccounts = class extends APIResource2 {
   }
 };
 
+// ../../../node_modules/openai/resources/admin/organization/projects/spend-alerts.mjs
+var SpendAlerts2 = class extends APIResource2 {
+  /**
+   * Creates a project spend alert.
+   *
+   * @example
+   * ```ts
+   * const projectSpendAlert =
+   *   await client.admin.organization.projects.spendAlerts.create(
+   *     'project_id',
+   *     {
+   *       currency: 'USD',
+   *       interval: 'month',
+   *       notification_channel: {
+   *         recipients: ['string'],
+   *         type: 'email',
+   *       },
+   *       threshold_amount: 0,
+   *     },
+   *   );
+   * ```
+   */
+  create(projectID, body, options) {
+    return this._client.post(path2`/organization/projects/${projectID}/spend_alerts`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Updates a project spend alert.
+   *
+   * @example
+   * ```ts
+   * const projectSpendAlert =
+   *   await client.admin.organization.projects.spendAlerts.update(
+   *     'alert_id',
+   *     {
+   *       project_id: 'project_id',
+   *       currency: 'USD',
+   *       interval: 'month',
+   *       notification_channel: {
+   *         recipients: ['string'],
+   *         type: 'email',
+   *       },
+   *       threshold_amount: 0,
+   *     },
+   *   );
+   * ```
+   */
+  update(alertID, params, options) {
+    const { project_id, ...body } = params;
+    return this._client.post(path2`/organization/projects/${project_id}/spend_alerts/${alertID}`, {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Lists project spend alerts.
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const projectSpendAlert of client.admin.organization.projects.spendAlerts.list(
+   *   'project_id',
+   * )) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(projectID, query = {}, options) {
+    return this._client.getAPIList(path2`/organization/projects/${projectID}/spend_alerts`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+  }
+  /**
+   * Deletes a project spend alert.
+   *
+   * @example
+   * ```ts
+   * const projectSpendAlertDeleted =
+   *   await client.admin.organization.projects.spendAlerts.delete(
+   *     'alert_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  delete(alertID, params, options) {
+    const { project_id } = params;
+    return this._client.delete(path2`/organization/projects/${project_id}/spend_alerts/${alertID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
 // ../../../node_modules/openai/resources/admin/organization/projects/groups/roles.mjs
 var Roles4 = class extends APIResource2 {
   /**
@@ -10175,6 +10671,25 @@ var Roles4 = class extends APIResource2 {
     const { project_id, ...body } = params;
     return this._client.post(path2`/projects/${project_id}/groups/${groupID}/roles`, {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves a project role assigned to a group.
+   *
+   * @example
+   * ```ts
+   * const role =
+   *   await client.admin.organization.projects.groups.roles.retrieve(
+   *     'role_id',
+   *     { project_id: 'project_id', group_id: 'group_id' },
+   *   );
+   * ```
+   */
+  retrieve(roleID, params, options) {
+    const { project_id, group_id } = params;
+    return this._client.get(path2`/projects/${project_id}/groups/${group_id}/roles/${roleID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -10244,6 +10759,26 @@ var Groups2 = class extends APIResource2 {
     });
   }
   /**
+   * Retrieves a project's group.
+   *
+   * @example
+   * ```ts
+   * const projectGroup =
+   *   await client.admin.organization.projects.groups.retrieve(
+   *     'group_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  retrieve(groupID, params, options) {
+    const { project_id, ...query } = params;
+    return this._client.get(path2`/organization/projects/${project_id}/groups/${groupID}`, {
+      query,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
    * Lists the groups that have access to a project.
    *
    * @example
@@ -10299,6 +10834,25 @@ var Roles5 = class extends APIResource2 {
     const { project_id, ...body } = params;
     return this._client.post(path2`/projects/${project_id}/users/${userID}/roles`, {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves a project role assigned to a user.
+   *
+   * @example
+   * ```ts
+   * const role =
+   *   await client.admin.organization.projects.users.roles.retrieve(
+   *     'role_id',
+   *     { project_id: 'project_id', user_id: 'user_id' },
+   *   );
+   * ```
+   */
+  retrieve(roleID, params, options) {
+    const { project_id, user_id } = params;
+    return this._client.get(path2`/projects/${project_id}/users/${user_id}/roles/${roleID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -10456,8 +11010,12 @@ var Projects = class extends APIResource2 {
     this.serviceAccounts = new ServiceAccounts(this._client);
     this.apiKeys = new APIKeys(this._client);
     this.rateLimits = new RateLimits(this._client);
+    this.modelPermissions = new ModelPermissions(this._client);
+    this.hostedToolPermissions = new HostedToolPermissions(this._client);
     this.groups = new Groups2(this._client);
     this.roles = new Roles3(this._client);
+    this.dataRetention = new DataRetention2(this._client);
+    this.spendAlerts = new SpendAlerts2(this._client);
     this.certificates = new Certificates2(this._client);
   }
   /**
@@ -10555,8 +11113,12 @@ Projects.Users = Users2;
 Projects.ServiceAccounts = ServiceAccounts;
 Projects.APIKeys = APIKeys;
 Projects.RateLimits = RateLimits;
+Projects.ModelPermissions = ModelPermissions;
+Projects.HostedToolPermissions = HostedToolPermissions;
 Projects.Groups = Groups2;
 Projects.Roles = Roles3;
+Projects.DataRetention = DataRetention2;
+Projects.SpendAlerts = SpendAlerts2;
 Projects.Certificates = Certificates2;
 
 // ../../../node_modules/openai/resources/admin/organization/users/roles.mjs
@@ -10576,6 +11138,25 @@ var Roles6 = class extends APIResource2 {
   create(userID, body, options) {
     return this._client.post(path2`/organization/users/${userID}/roles`, {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves an organization role assigned to a user.
+   *
+   * @example
+   * ```ts
+   * const role =
+   *   await client.admin.organization.users.roles.retrieve(
+   *     'role_id',
+   *     { user_id: 'user_id' },
+   *   );
+   * ```
+   */
+  retrieve(roleID, params, options) {
+    const { user_id } = params;
+    return this._client.get(path2`/organization/users/${user_id}/roles/${roleID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -10702,6 +11283,8 @@ var Organization = class extends APIResource2 {
     this.users = new Users3(this._client);
     this.groups = new Groups(this._client);
     this.roles = new Roles(this._client);
+    this.dataRetention = new DataRetention(this._client);
+    this.spendAlerts = new SpendAlerts(this._client);
     this.certificates = new Certificates(this._client);
     this.projects = new Projects(this._client);
   }
@@ -10713,6 +11296,8 @@ Organization.Invites = Invites;
 Organization.Users = Users3;
 Organization.Groups = Groups;
 Organization.Roles = Roles;
+Organization.DataRetention = DataRetention;
+Organization.SpendAlerts = SpendAlerts;
 Organization.Certificates = Certificates;
 Organization.Projects = Projects;
 
@@ -14641,7 +15226,10 @@ var OpenAI = class {
       if (isTimeout) {
         throw new APIConnectionTimeoutError2();
       }
-      throw new APIConnectionError2({ cause: response });
+      throw new APIConnectionError2({
+        message: getConnectionErrorMessage(response),
+        cause: response
+      });
     }
     const specialHeaders = [...response.headers.entries()].filter(([name]) => name === "x-request-id").map(([name, value]) => ", " + name + ": " + JSON.stringify(value)).join("");
     const responseInfo = `[${requestLogID}${retryLogStr}${specialHeaders}] ${req.method} ${url} ${response.ok ? "succeeded" : "failed"} with status ${response.status} in ${headersTime - startTime}ms`;
@@ -14922,6 +15510,23 @@ OpenAI.Evals = Evals;
 OpenAI.Containers = Containers;
 OpenAI.Skills = Skills2;
 OpenAI.Videos = Videos;
+function getConnectionErrorMessage(error) {
+  if (isUndiciDispatcherVersionMismatchError(error)) {
+    return `Connection error. This may be caused by passing an undici dispatcher, such as ProxyAgent, that is incompatible with the fetch implementation. If you are using undici's ProxyAgent, pass the fetch implementation from the same undici package: import { fetch, ProxyAgent } from 'undici'; new OpenAI({ fetch, fetchOptions: { dispatcher: new ProxyAgent(...) } });`;
+  }
+  return void 0;
+}
+function isUndiciDispatcherVersionMismatchError(error) {
+  let current = error;
+  for (let i = 0; i < 8 && current && typeof current === "object"; i++) {
+    const err = current;
+    if (err.code === "UND_ERR_INVALID_ARG" && typeof err.message === "string" && err.message.includes("invalid onRequestStart method")) {
+      return true;
+    }
+    current = err.cause;
+  }
+  return false;
+}
 
 // node_modules/@quilltap/plugin-utils/dist/index.mjs
 var import_fs = require("fs");
@@ -15241,6 +15846,9 @@ var AnthropicProvider = class {
     const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false;
     const cacheStrategy = profileParams?.cacheStrategy || "system_and_long_context";
     const cacheTTL = profileParams?.cacheTTL;
+    const rawThinkingBudget = profileParams?.thinkingBudget;
+    const thinkingBudget = typeof rawThinkingBudget === "number" && rawThinkingBudget >= 1024 ? rawThinkingBudget : profileParams?.extendedThinking === true ? 4096 : 0;
+    const thinkingEnabled = thinkingBudget > 0;
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
@@ -15248,11 +15856,16 @@ var AnthropicProvider = class {
     if (cachingEnabled) {
       this.applyMidHistoryBreakpoint(messages, cacheTTL);
     }
+    const baseMaxTokens = params.maxTokens ?? 4096;
+    const effectiveMaxTokens = thinkingEnabled ? Math.max(baseMaxTokens, thinkingBudget + 1024) : baseMaxTokens;
     const requestParams = {
       model: params.model,
       messages,
-      max_tokens: params.maxTokens ?? 4096
+      max_tokens: effectiveMaxTokens
     };
+    if (thinkingEnabled) {
+      requestParams.thinking = { type: "enabled", budget_tokens: thinkingBudget };
+    }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
         requestParams.system = systemMessages.map((m, i) => {
@@ -15274,12 +15887,14 @@ var AnthropicProvider = class {
         }));
       }
     }
-    if (params.temperature !== void 0) {
-      requestParams.temperature = params.temperature;
-    } else if (params.topP !== void 0) {
-      requestParams.top_p = params.topP;
-    } else {
-      requestParams.temperature = 1;
+    if (!thinkingEnabled) {
+      if (params.temperature !== void 0) {
+        requestParams.temperature = params.temperature;
+      } else if (params.topP !== void 0) {
+        requestParams.top_p = params.topP;
+      } else {
+        requestParams.temperature = 1;
+      }
     }
     const tools = params.tools ? [...params.tools] : [];
     if (tools.length > 0) {
@@ -15292,17 +15907,28 @@ var AnthropicProvider = class {
       }
       requestParams.tools = tools;
     }
+    if (params.stop) {
+      const stopArr = (Array.isArray(params.stop) ? params.stop : [params.stop]).filter(Boolean);
+      if (stopArr.length > 0) {
+        requestParams.stop_sequences = stopArr.slice(0, 4);
+        if (stopArr.length > 4) {
+          logger.warn("Anthropic accepts at most 4 stop sequences; truncating", {
+            context: "AnthropicProvider.sendMessage",
+            requested: stopArr.length
+          });
+        }
+      }
+    }
     const response = await client.messages.create(requestParams);
-    const content = response.content[0];
+    const textContent = response.content.filter((block) => block.type === "text").map((block) => block.text).join("");
+    const thinkingContent = response.content.filter((block) => block.type === "thinking").map((block) => block.thinking).join("");
     const rawUsage = response.usage;
     const cacheUsage = rawUsage.cache_creation_input_tokens !== void 0 || rawUsage.cache_read_input_tokens !== void 0 ? {
       cacheCreationInputTokens: rawUsage.cache_creation_input_tokens,
       cacheReadInputTokens: rawUsage.cache_read_input_tokens
     } : void 0;
-    if (cacheUsage) {
-    }
     return {
-      content: content.type === "text" ? content.text : "",
+      content: textContent,
       finishReason: response.stop_reason ?? "stop",
       usage: {
         promptTokens: response.usage.input_tokens,
@@ -15311,7 +15937,8 @@ var AnthropicProvider = class {
       },
       raw: response,
       attachmentResults,
-      cacheUsage
+      cacheUsage,
+      ...thinkingContent ? { reasoningContent: thinkingContent } : {}
     };
   }
   async *streamMessage(params, apiKey) {
@@ -15324,6 +15951,9 @@ var AnthropicProvider = class {
     const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false;
     const cacheStrategy = profileParams?.cacheStrategy || "system_and_long_context";
     const cacheTTL = profileParams?.cacheTTL;
+    const streamRawThinkingBudget = profileParams?.thinkingBudget;
+    const streamThinkingBudget = typeof streamRawThinkingBudget === "number" && streamRawThinkingBudget >= 1024 ? streamRawThinkingBudget : profileParams?.extendedThinking === true ? 4096 : 0;
+    const streamThinkingEnabled = streamThinkingBudget > 0;
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
@@ -15331,12 +15961,17 @@ var AnthropicProvider = class {
     if (cachingEnabled) {
       this.applyMidHistoryBreakpoint(messages, cacheTTL);
     }
+    const streamBaseMaxTokens = params.maxTokens ?? 4096;
+    const streamEffectiveMaxTokens = streamThinkingEnabled ? Math.max(streamBaseMaxTokens, streamThinkingBudget + 1024) : streamBaseMaxTokens;
     const requestParams = {
       model: params.model,
       messages,
-      max_tokens: params.maxTokens ?? 4096,
+      max_tokens: streamEffectiveMaxTokens,
       stream: true
     };
+    if (streamThinkingEnabled) {
+      requestParams.thinking = { type: "enabled", budget_tokens: streamThinkingBudget };
+    }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
         requestParams.system = systemMessages.map((m, i) => {
@@ -15358,12 +15993,14 @@ var AnthropicProvider = class {
         }));
       }
     }
-    if (params.temperature !== void 0) {
-      requestParams.temperature = params.temperature;
-    } else if (params.topP !== void 0) {
-      requestParams.top_p = params.topP;
-    } else {
-      requestParams.temperature = 1;
+    if (!streamThinkingEnabled) {
+      if (params.temperature !== void 0) {
+        requestParams.temperature = params.temperature;
+      } else if (params.topP !== void 0) {
+        requestParams.top_p = params.topP;
+      } else {
+        requestParams.temperature = 1;
+      }
     }
     const tools = params.tools ? [...params.tools] : [];
     if (tools.length > 0) {
@@ -15376,6 +16013,18 @@ var AnthropicProvider = class {
       }
       requestParams.tools = tools;
     }
+    if (params.stop) {
+      const stopArr = (Array.isArray(params.stop) ? params.stop : [params.stop]).filter(Boolean);
+      if (stopArr.length > 0) {
+        requestParams.stop_sequences = stopArr.slice(0, 4);
+        if (stopArr.length > 4) {
+          logger.warn("Anthropic accepts at most 4 stop sequences; truncating", {
+            context: "AnthropicProvider.streamMessage",
+            requested: stopArr.length
+          });
+        }
+      }
+    }
     const stream = await client.messages.create(requestParams);
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
@@ -15385,12 +16034,16 @@ var AnthropicProvider = class {
     let model = null;
     let cacheCreationInputTokens;
     let cacheReadInputTokens;
+    let rawProviderUsage = null;
+    let streamReasoning = "";
     const contentBlocks = [];
     for await (const event of stream) {
       if (event.type === "content_block_start") {
         const block = event.content_block;
         if (block.type === "text") {
           contentBlocks[event.index] = { type: "text", text: block.text || "" };
+        } else if (block.type === "thinking") {
+          contentBlocks[event.index] = { type: "thinking", thinking: "", signature: "" };
         } else if (block.type === "tool_use") {
           contentBlocks[event.index] = {
             type: "tool_use",
@@ -15413,6 +16066,16 @@ var AnthropicProvider = class {
             content: delta.text,
             done: false
           };
+        } else if (delta?.type === "thinking_delta" && delta?.thinking) {
+          if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === "thinking") {
+            contentBlocks[blockIndex].thinking = (contentBlocks[blockIndex].thinking || "") + delta.thinking;
+          }
+          streamReasoning += delta.thinking;
+          yield { content: "", done: false, reasoningContent: streamReasoning };
+        } else if (delta?.type === "signature_delta" && delta?.signature) {
+          if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === "thinking") {
+            contentBlocks[blockIndex].signature = (contentBlocks[blockIndex].signature || "") + delta.signature;
+          }
         } else if (delta?.type === "input_json_delta" && delta?.partial_json) {
           if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === "tool_use") {
             contentBlocks[blockIndex].partialJson = (contentBlocks[blockIndex].partialJson || "") + delta.partial_json;
@@ -15442,11 +16105,17 @@ var AnthropicProvider = class {
         const rawUsage = event.message.usage;
         cacheCreationInputTokens = rawUsage.cache_creation_input_tokens;
         cacheReadInputTokens = rawUsage.cache_read_input_tokens;
+        rawProviderUsage = { ...rawUsage };
       }
       if (event.type === "message_delta") {
         totalOutputTokens = event.usage.output_tokens;
         if (event.delta.stop_reason) {
           stopReason = event.delta.stop_reason;
+        }
+        if (rawProviderUsage) {
+          rawProviderUsage = { ...rawProviderUsage, ...event.usage };
+        } else {
+          rawProviderUsage = { ...event.usage };
         }
       }
       if (event.type === "message_stop") {
@@ -15455,11 +16124,20 @@ var AnthropicProvider = class {
           cacheReadInputTokens
         } : void 0;
         const toolUseCount = contentBlocks.filter((b) => b.type === "tool_use").length;
+        const fullMessageContent = contentBlocks.length > 0 ? contentBlocks.map((b) => {
+          if (b.type === "thinking") {
+            return { type: "thinking", thinking: b.thinking || "", signature: b.signature || "" };
+          }
+          if (b.type === "tool_use") {
+            return { type: "tool_use", id: b.id, name: b.name, input: b.input };
+          }
+          return { type: "text", text: b.text || "" };
+        }) : [{ type: "text", text: fullContent }];
         const fullMessage = {
           id: messageId,
           type: "message",
           role: "assistant",
-          content: contentBlocks.length > 0 ? contentBlocks : [{ type: "text", text: fullContent }],
+          content: fullMessageContent,
           model,
           stop_reason: stopReason,
           usage: {
@@ -15477,7 +16155,9 @@ var AnthropicProvider = class {
           },
           attachmentResults,
           rawResponse: fullMessage,
-          cacheUsage
+          rawProviderUsage,
+          cacheUsage,
+          ...streamReasoning ? { reasoningContent: streamReasoning } : {}
         };
       }
     }
@@ -15901,6 +16581,67 @@ var cheapModels = {
   defaultModel: "claude-haiku-4-5-20251001",
   recommendedModels: ["claude-haiku-4-5-20251001", "claude-3-haiku-20240307"]
 };
+var optionsSchema = {
+  groups: [
+    {
+      title: "Anthropic Options",
+      helpText: "Prompt caching can reduce costs by up to 90% for repeated context.",
+      fields: [
+        {
+          key: "enableCacheBreakpoints",
+          label: "Enable Prompt Caching",
+          type: "boolean",
+          default: false
+        },
+        {
+          key: "cacheStrategy",
+          label: "Cache Strategy",
+          type: "enum",
+          default: "system_and_long_context",
+          enumValues: [
+            { value: "system_only", label: "System message only" },
+            {
+              value: "system_and_long_context",
+              label: "System + tools + conversation (recommended)"
+            }
+          ],
+          showIf: { field: "enableCacheBreakpoints", equals: true }
+        },
+        {
+          key: "cacheTTL",
+          label: "Cache Duration",
+          type: "enum",
+          default: "5m",
+          enumValues: [
+            { value: "5m", label: "5 minutes (1.25x write cost)" },
+            { value: "1h", label: "1 hour (2x write cost)" }
+          ],
+          showIf: { field: "enableCacheBreakpoints", equals: true }
+        }
+      ]
+    },
+    {
+      title: "Extended Thinking",
+      helpText: "Let the model reason before answering. The reasoning is shown in chat (display only) and never re-fed to the model. While thinking is on, temperature and top_p are left at their defaults (extended thinking requires this), and max_tokens is raised above the budget if needed (the API requires budget \u2265 1024 and < max_tokens).",
+      fields: [
+        {
+          key: "extendedThinking",
+          label: "Enable Extended Thinking",
+          type: "boolean",
+          default: false
+        },
+        {
+          key: "thinkingBudget",
+          label: "Thinking Budget (tokens)",
+          helpText: "Maximum tokens the model may spend thinking. Minimum 1024; defaults to 4096 when left blank.",
+          type: "number",
+          default: 4096,
+          showIf: { field: "extendedThinking", equals: true }
+        }
+      ]
+    }
+  ]
+};
 var plugin = {
   metadata,
   icon: {
@@ -15918,6 +16659,12 @@ var plugin = {
   toolFormat: "anthropic",
   cheapModels,
   defaultContextWindow: 2e5,
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   * The `context` argument is currently advisory; the schema is returned
+   * unconditionally.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
   /**
    * Factory method to create an Anthropic LLM provider instance
    */

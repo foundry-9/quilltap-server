@@ -104,6 +104,25 @@ export interface SelectedCharacter {
   controlledBy: 'llm' | 'user'
 }
 
+/**
+ * Autonomous-room creation slice on NewChatFormState. Only consulted when
+ * `autonomous.enabled` is true; the rest of the form continues to operate
+ * normally otherwise. Numeric fields are kept in human-friendly units
+ * (hours, minutes) and converted to milliseconds at submit time.
+ */
+export interface NewChatAutonomousState {
+  enabled: boolean
+  scheduleCron: string
+  scheduleFreshnessHours: number | null
+  budgetMaxTurns: number | null
+  budgetMaxTokens: number | null
+  budgetMaxWallClockMinutes: number | null
+  budgetEstimatedSpendCapUSD: number | null
+  /** Null = inherit user-default visibility from chat_settings. */
+  runVisibility: 'owner_only' | 'household' | 'open' | null
+  runDestructiveToolsAllowed: boolean
+}
+
 export interface NewChatFormState {
   selectedUserCharacterId: string
   imageProfileId: string
@@ -116,6 +135,7 @@ export interface NewChatFormState {
   timestampConfig: TimestampConfig | null
   avatarGenerationEnabled: boolean
   outfitSelections: OutfitSelection[]
+  autonomous: NewChatAutonomousState
 }
 
 export const USER_CONTROLLED_PROFILE = '__USER_CONTROLLED__'

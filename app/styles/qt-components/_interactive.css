@@ -22,6 +22,7 @@
   .qt-button-ghost,
   .qt-button-destructive,
   .qt-button-warning,
+  .qt-button-success,
   .qt-button-icon {
     @apply inline-flex items-center justify-center gap-2;
     @apply text-sm font-medium;
@@ -107,12 +108,14 @@
   }
 
   /**
-   * Success button - positive actions like Chat, Start, Save
+   * Success button - positive actions like Chat, Start, Save.
+   * Shares the common button base (token-driven radius/padding/focus/disabled);
+   * only the colors are success-specific.
    */
   .qt-button-success {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition cursor-pointer;
     background: var(--qt-button-success-bg);
     color: var(--qt-button-success-fg);
+    box-shadow: var(--qt-button-primary-shadow);
   }
 
   .qt-button-success:hover:not(:disabled) {
@@ -183,7 +186,7 @@
    */
   .qt-select {
     @apply cursor-pointer appearance-none;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-image: var(--qt-select-arrow);
     background-position: right 0.5rem center;
     background-repeat: no-repeat;
     background-size: 1.5em 1.5em;
@@ -264,19 +267,35 @@
      ========================================================================== */
 
   /**
-   * Checkbox input
+   * Checkbox input — token-driven so themes can restyle the fill (accent-color),
+   * border, size, radius, and focus ring.
    */
   .qt-checkbox {
-    @apply w-4 h-4 rounded border-border;
-    @apply text-primary focus:ring-primary;
+    @apply focus:ring-2;
+    width: var(--qt-checkbox-size);
+    height: var(--qt-checkbox-size);
+    border-radius: var(--qt-checkbox-radius);
+    border: 1px solid var(--qt-checkbox-border);
+    accent-color: var(--qt-checkbox-accent);
+  }
+
+  .qt-checkbox:focus {
+    --tw-ring-color: var(--qt-checkbox-focus-ring);
   }
 
   /**
-   * Radio input
+   * Radio input — same token model as the checkbox (radii stay circular).
    */
   .qt-radio {
-    @apply w-4 h-4 border-border;
-    @apply text-primary focus:ring-primary;
+    @apply rounded-full focus:ring-2;
+    width: var(--qt-radio-size);
+    height: var(--qt-radio-size);
+    border: 1px solid var(--qt-radio-border);
+    accent-color: var(--qt-radio-accent);
+  }
+
+  .qt-radio:focus {
+    --tw-ring-color: var(--qt-radio-focus-ring);
   }
 
   /* ==========================================================================

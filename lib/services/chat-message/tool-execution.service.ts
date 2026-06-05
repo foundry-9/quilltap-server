@@ -203,6 +203,14 @@ export async function saveToolMessages(
         result: toolMsg.content,
         arguments: toolMsg.arguments,
         callId: toolMsg.callId,
+        // Prose offset where the character paused to call this tool, used by the
+        // Salon UI to splice the block back into the message at that point.
+        // Omitted (not null) when unavailable so legacy/end-anchored rows fall
+        // through to bottom-of-bubble rendering.
+        ...(typeof toolMsg.anchorOffset === 'number' ? { anchorOffset: toolMsg.anchorOffset } : {}),
+        // Turn-monotonic sequence shared with reasoning segments so the Salon
+        // orders same-offset thinking/tool items in true emission order.
+        ...(typeof toolMsg.seq === 'number' ? { seq: toolMsg.seq } : {}),
         provider: toolMsg.metadata?.provider,
         model: toolMsg.metadata?.model,
         prompt: toolMsg.metadata?.expandedPrompt,

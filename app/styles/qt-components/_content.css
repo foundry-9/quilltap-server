@@ -164,6 +164,12 @@
   .qt-badge-source-manual,
   .qt-badge-capability,
   .qt-badge-version,
+  .qt-badge-autonomous-running,
+  .qt-badge-autonomous-idle,
+  .qt-badge-autonomous-paused,
+  .qt-badge-autonomous-stopped,
+  .qt-badge-autonomous-budget,
+  .qt-badge-autonomous-error,
   .qt-badge-provider-openai,
   .qt-badge-provider-ollama,
   .qt-badge-provider-openrouter,
@@ -247,6 +253,45 @@
     border: 1px solid var(--qt-status-info-border);
   }
 
+  /**
+   * Autonomous-room state badges
+   */
+  .qt-badge-autonomous-running {
+    background: var(--qt-badge-autonomous-running-bg);
+    color: var(--qt-badge-autonomous-running-fg);
+    border: 1px solid var(--qt-badge-autonomous-running-border);
+  }
+
+  .qt-badge-autonomous-idle {
+    background: var(--qt-badge-autonomous-idle-bg);
+    color: var(--qt-badge-autonomous-idle-fg);
+    border: 1px solid var(--qt-badge-autonomous-idle-border);
+  }
+
+  .qt-badge-autonomous-paused {
+    background: var(--qt-badge-autonomous-paused-bg);
+    color: var(--qt-badge-autonomous-paused-fg);
+    border: 1px solid var(--qt-badge-autonomous-paused-border);
+  }
+
+  .qt-badge-autonomous-stopped {
+    background: var(--qt-badge-autonomous-stopped-bg);
+    color: var(--qt-badge-autonomous-stopped-fg);
+    border: 1px solid var(--qt-badge-autonomous-stopped-border);
+  }
+
+  .qt-badge-autonomous-budget {
+    background: var(--qt-badge-autonomous-budget-bg);
+    color: var(--qt-badge-autonomous-budget-fg);
+    border: 1px solid var(--qt-badge-autonomous-budget-border);
+  }
+
+  .qt-badge-autonomous-error {
+    background: var(--qt-badge-autonomous-error-bg);
+    color: var(--qt-badge-autonomous-error-fg);
+    border: 1px solid var(--qt-badge-autonomous-error-border);
+  }
+
   /* ==========================================================================
      QUEUE STATUS BADGE GROUP
      ========================================================================== */
@@ -322,6 +367,65 @@
   .qt-queue-badge-story {
     background: var(--qt-queue-badge-story-bg);
     color: var(--qt-queue-badge-story-fg);
+  }
+
+  /* ==========================================================================
+     AUTONOMOUS-ROOM BADGES
+     Compact handles in the page toolbar for autonomous chats that are idle,
+     paused, or running. Wraps to a second line when there are too many to
+     fit. Each badge is an anchor to the chat with an inline play/pause
+     button that stops propagation.
+     ========================================================================== */
+
+  .qt-autonomous-badge-group {
+    @apply inline-flex items-center flex-wrap;
+    gap: var(--qt-queue-badge-group-gap);
+  }
+
+  .qt-autonomous-badge {
+    @apply inline-flex items-center gap-1 flex-shrink-0 leading-none whitespace-nowrap no-underline;
+    padding: var(--qt-queue-badge-padding-y) var(--qt-queue-badge-padding-x);
+    font-size: var(--qt-queue-badge-font-size);
+    font-weight: var(--qt-queue-badge-font-weight);
+    border-radius: var(--qt-queue-badge-radius);
+    cursor: pointer;
+    transition: opacity 200ms ease, filter 200ms ease;
+  }
+
+  .qt-autonomous-badge:hover {
+    filter: brightness(1.1);
+  }
+
+  .qt-autonomous-badge-running {
+    background: var(--qt-autonomous-badge-running-bg);
+    color: var(--qt-autonomous-badge-running-fg);
+  }
+
+  .qt-autonomous-badge-idle {
+    background: var(--qt-autonomous-badge-idle-bg);
+    color: var(--qt-autonomous-badge-idle-fg);
+  }
+
+  .qt-autonomous-badge-button {
+    @apply inline-flex items-center justify-center;
+    background: transparent;
+    color: inherit;
+    border: 0;
+    padding: 0 1px;
+    margin-left: 2px;
+    border-radius: 2px;
+    cursor: pointer;
+    line-height: 0;
+    transition: background 150ms ease, opacity 150ms ease;
+  }
+
+  .qt-autonomous-badge-button:hover {
+    background: var(--qt-autonomous-badge-button-hover-bg);
+  }
+
+  .qt-autonomous-badge-button:disabled {
+    opacity: 0.55;
+    cursor: default;
   }
 
   /* ==========================================================================
@@ -1028,6 +1132,42 @@
   .qt-text-section {
     @apply text-lg font-medium;
     color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  /* ==========================================================================
+     SETTINGS FORM SHELLS
+     Shared semantic wrappers for settings cards and toggle rows.
+     ========================================================================== */
+
+  .qt-settings-shell {
+    @apply p-4 border rounded;
+    border-color: var(--qt-card-border);
+    background: color-mix(in srgb, var(--color-card) 96%, transparent);
+  }
+
+  .qt-settings-shell-tight {
+    @apply p-3 border rounded;
+    border-color: var(--qt-card-border);
+    background: color-mix(in srgb, var(--color-card) 96%, transparent);
+  }
+
+  .qt-settings-section-heading {
+    @apply text-sm font-medium;
+    color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  .qt-settings-field-group {
+    @apply space-y-2;
+  }
+
+  .qt-settings-toggle-row {
+    @apply flex items-start gap-3 p-4 border rounded cursor-pointer;
+    border-color: var(--qt-card-border);
+    transition: background-color 150ms ease;
+  }
+
+  .qt-settings-toggle-row:hover {
+    background: var(--qt-card-hover-bg, var(--color-accent));
   }
 
   /* ==========================================================================

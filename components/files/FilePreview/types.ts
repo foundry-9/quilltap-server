@@ -53,21 +53,6 @@ export interface FilePreviewActionsProps {
   canMoveToProject?: boolean
 }
 
-export interface FileMetadataPanelProps {
-  /** The file to show metadata for */
-  file: FileInfo
-  /** Resolved character associations */
-  characters?: Array<{ id: string; name: string }>
-  /** Resolved project association */
-  project?: { id: string; name: string } | null
-  /** Called when character association is toggled */
-  onToggleCharacter?: (characterId: string) => void
-  /** Called when project is changed */
-  onChangeProject?: (projectId: string | null) => void
-  /** Whether association changes are in progress */
-  isUpdating?: boolean
-}
-
 /**
  * Determine the preview type for a file based on its MIME type and isPlainText flag
  * @param mimeType The file's MIME type
@@ -87,20 +72,4 @@ export function getPreviewType(mimeType: string, isPlainText?: boolean): Preview
     return 'text'
   }
   return 'unsupported'
-}
-
-/**
- * Get a human-readable preview type label
- */
-export function getPreviewTypeLabel(previewType: PreviewType): string {
-  switch (previewType) {
-    case 'image':
-      return 'Image'
-    case 'pdf':
-      return 'PDF Document'
-    case 'text':
-      return 'Text File'
-    case 'unsupported':
-      return 'File'
-  }
 }

@@ -120,7 +120,7 @@ Write the IDENTITY field for this character: 1-2 short paragraphs of public-know
 Strict rules:
 - Never include internal motivation, beliefs, or self-knowledge (those belong in PERSONALITY).
 - Never include private mannerisms, verbal tics, or behaviour someone has to be acquainted with the character to notice (those belong in DESCRIPTION).
-- Never include physical appearance — that lives in physicalDescriptions and is generated separately.
+- Never include physical appearance — that lives in physicalDescription and is generated separately.
 
 Write in third person, present tense.`,
 
@@ -129,7 +129,7 @@ Write in third person, present tense.`,
 Write the DESCRIPTION field for this character: 1-2 short paragraphs of what someone who has interacted with the character would notice — behaviour, mannerisms, frequent verbal patterns, conversational tics, the way they handle themselves around others.
 
 Strict rules:
-- Do NOT describe physical appearance. Physical appearance lives in physicalDescriptions and is generated separately. If a visual reference has been provided, ignore it for this field.
+- Do NOT describe physical appearance. Physical appearance lives in physicalDescription and is generated separately. If a visual reference has been provided, ignore it for this field.
 - Do NOT restate the public-facing reputation that already belongs in IDENTITY.
 - Do NOT write the character's private inner monologue or self-knowledge — that belongs in PERSONALITY.
 

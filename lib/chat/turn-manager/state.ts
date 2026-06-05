@@ -6,7 +6,8 @@
 
 import { turnManagerLogger as logger } from './logger';
 import type { TurnState, CalculateTurnStateOptions } from './types';
-import type { MessageEvent } from '@/lib/schemas/types';
+import type { ChatEvent, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types';
+import { isParticipantPresent } from '@/lib/schemas/chat.types';
 
 /**
  * Creates a fresh turn state (e.g., for a new chat or after reset)
@@ -23,98 +24,199 @@ export function createInitialTurnState(): TurnState {
 }
 
 /**
- * Calculates turn state from existing message history.
- * Used when reloading a chat to restore turn tracking.
+ * Calculates turn state, sourcing `spokenSinceUserTurn` (semantically "spoken
+ * this cycle") from the chat row's persisted field rather than walking message
+ * history. `lastSpeakerId` is still derived from history — the most recent
+ * non-whisper USER or ASSISTANT message with a participantId.
  *
- * Algorithm:
- * 1. Find the last USER message
- * 2. Track all ASSISTANT messages since then (spokenSinceUserTurn)
- * 3. Set lastSpeakerId to the most recent ASSISTANT message's participantId
+ * USER and ASSISTANT messages count symmetrically — user-controlled
+ * characters take turns in the rotation by the human typing as them.
  */
 export function calculateTurnStateFromHistory(
   options: CalculateTurnStateOptions
 ): TurnState {
-  const { messages, participants, userParticipantId } = options;
+  const { messages, spokenThisCycleParticipantIds } = options;
   const state = createInitialTurnState();
 
-  if (messages.length === 0) {
-    return state;
-  }
-
-  // Find the index of the last USER message
-  let lastUserMessageIndex = -1;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'USER') {
-      lastUserMessageIndex = i;
-      break;
-    }
-  }
-
-  // Track ASSISTANT messages since last user message
-  // Skip whisper messages — they don't count as "speaking" for turn order
-  const startIndex = lastUserMessageIndex + 1;
-  for (let i = startIndex; i < messages.length; i++) {
-    const msg = messages[i];
-    if (msg.role === 'ASSISTANT' && msg.participantId) {
-      // Whisper messages (targetParticipantIds set) don't affect turn order
-      const isWhisper = 'targetParticipantIds' in msg
-        && Array.isArray(msg.targetParticipantIds)
-        && msg.targetParticipantIds.length > 0;
-      if (isWhisper) continue;
-
-      if (!state.spokenSinceUserTurn.includes(msg.participantId)) {
-        state.spokenSinceUserTurn.push(msg.participantId);
+  // Source spokenThisCycle from persisted state (defaults to empty).
+  if (spokenThisCycleParticipantIds) {
+    try {
+      const parsed = JSON.parse(spokenThisCycleParticipantIds);
+      if (Array.isArray(parsed)) {
+        state.spokenSinceUserTurn = parsed.filter((id): id is string => typeof id === 'string');
       }
-      state.lastSpeakerId = msg.participantId;
+    } catch {
+      // Default to empty cycle on parse failure — recovers naturally on next save.
     }
   }
+
+  // lastSpeakerId = most recent non-whisper message with a participantId.
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role !== 'USER' && msg.role !== 'ASSISTANT') continue;
+    if (!msg.participantId) continue;
+    const isWhisper = 'targetParticipantIds' in msg
+      && Array.isArray(msg.targetParticipantIds)
+      && msg.targetParticipantIds.length > 0;
+    if (isWhisper) continue;
+    state.lastSpeakerId = msg.participantId;
+    break;
+  }
+
   return state;
 }
 
 /**
- * Updates turn state after a message is sent.
- * Call this after saving each message to keep turn state current.
+ * Updates turn state after a message is sent. Call this after saving each
+ * message to keep in-memory state current.
+ *
+ * USER and ASSISTANT messages are treated symmetrically — user-controlled
+ * characters take turns in the rotation. `spokenSinceUserTurn` accumulates
+ * across the cycle and only clears when the cycle wraps (i.e. when everyone
+ * has spoken at least once); cycle wrap is signalled by `selectNextSpeaker`
+ * returning `cycleComplete: true` and is applied by the orchestrator's
+ * persisted-state writer.
  */
 export function updateTurnStateAfterMessage(
   currentState: TurnState,
   message: MessageEvent,
-  userParticipantId: string | null
+  _userParticipantId: string | null
 ): TurnState {
+  if (message.role !== 'USER' && message.role !== 'ASSISTANT') return currentState;
+  if (!message.participantId) return currentState;
+  // Whisper messages don't affect turn order
+  const isWhisper = 'targetParticipantIds' in message
+    && Array.isArray(message.targetParticipantIds)
+    && message.targetParticipantIds.length > 0;
+  if (isWhisper) return currentState;
+
   const newState = { ...currentState };
-  if (message.role === 'USER') {
-    // User spoke - reset the cycle
-    newState.spokenSinceUserTurn = [];
-    newState.lastSpeakerId = null;
-    newState.currentTurnParticipantId = null;
+  const participantId = message.participantId;
 
-    // If user was in queue, remove them
-    if (userParticipantId) {
-      newState.queue = newState.queue.filter(id => id !== userParticipantId);
-    }
-  } else if (message.role === 'ASSISTANT' && message.participantId) {
-    // Whisper messages don't affect turn order
-    const isWhisper = 'targetParticipantIds' in message
-      && Array.isArray(message.targetParticipantIds)
-      && message.targetParticipantIds.length > 0;
-    if (isWhisper) return currentState;
-
-    // Character spoke
-    const participantId = message.participantId;
-
-    // Add to spoken list if not already there
-    if (!newState.spokenSinceUserTurn.includes(participantId)) {
-      newState.spokenSinceUserTurn = [...newState.spokenSinceUserTurn, participantId];
-    }
-
-    // Update last speaker
-    newState.lastSpeakerId = participantId;
-
-    // Remove from queue if they were queued
-    newState.queue = newState.queue.filter(id => id !== participantId);
-
-    // Clear current turn (will be recalculated)
-    newState.currentTurnParticipantId = null;
+  if (!newState.spokenSinceUserTurn.includes(participantId)) {
+    newState.spokenSinceUserTurn = [...newState.spokenSinceUserTurn, participantId];
   }
 
+  newState.lastSpeakerId = participantId;
+  newState.queue = newState.queue.filter(id => id !== participantId);
+  newState.currentTurnParticipantId = null;
+
   return newState;
+}
+
+/**
+ * Returns the next value for `chat.spokenThisCycleParticipantIds` after the
+ * given message is persisted, or `null` if the field should not change (the
+ * message doesn't affect turn order — wrong type, role, whisper, or missing
+ * participantId).
+ *
+ * The list wraps (resets to just the new speaker) once every active CHARACTER
+ * participant has spoken at least once this cycle. This mirrors the
+ * cycle-wrap logic in `selectNextSpeaker`: when the set of spoken participants
+ * matches the active set, the next round starts fresh with only the new
+ * speaker recorded.
+ *
+ * Returns the JSON-encoded string ready for the chat-row update, or `null`
+ * to signal "no write needed". Returning `null` (rather than the existing
+ * value) lets callers skip the column entirely in their update payload.
+ */
+export function computeSpokenThisCycleAfterMessage(
+  message: ChatEvent,
+  participants: ChatParticipantBase[],
+  currentSpokenJson: string | null | undefined,
+): string | null {
+  if (message.type !== 'message') return null;
+  if (message.role !== 'USER' && message.role !== 'ASSISTANT') return null;
+  if (!message.participantId) return null;
+
+  const isWhisper = 'targetParticipantIds' in message
+    && Array.isArray(message.targetParticipantIds)
+    && message.targetParticipantIds.length > 0;
+  if (isWhisper) return null;
+
+  const participantId = message.participantId;
+
+  let current: string[] = [];
+  if (currentSpokenJson) {
+    try {
+      const parsed = JSON.parse(currentSpokenJson);
+      if (Array.isArray(parsed)) {
+        current = parsed.filter((id): id is string => typeof id === 'string');
+      }
+    } catch {
+      // Treat as empty cycle; we'll overwrite.
+    }
+  }
+
+  const next = current.includes(participantId)
+    ? current
+    : [...current, participantId];
+
+  // Cycle wrap: when every active CHARACTER participant has spoken at least
+  // once this cycle, reset to just the new speaker so the next round starts
+  // fresh. This matches the wrap behavior `selectNextSpeaker` produces when
+  // it returns `cycleComplete: true`.
+  const activeIds = new Set(
+    participants
+      .filter(p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId)
+      .map(p => p.id),
+  );
+
+  if (activeIds.size > 0) {
+    const spokenActive = next.filter(id => activeIds.has(id));
+    if (spokenActive.length >= activeIds.size) {
+      return JSON.stringify([participantId]);
+    }
+  }
+
+  if (next === current) return null; // no-op
+  return JSON.stringify(next);
+}
+
+/**
+ * Returns the next value for `chat.spokenThisCycleParticipantIds` after a
+ * skip-user-turn action. The given user-controlled participant is appended to
+ * the cycle (as if they had taken a turn), so the rotation can advance to the
+ * next character without the human having to type. Cycle-wrap rules match
+ * `computeSpokenThisCycleAfterMessage`.
+ *
+ * Returns `null` if the participantId is already recorded and no other change
+ * is needed (the caller can skip the column in their update payload).
+ */
+export function computeSpokenThisCycleAfterSkip(
+  skippedParticipantId: string,
+  participants: ChatParticipantBase[],
+  currentSpokenJson: string | null | undefined,
+): string | null {
+  let current: string[] = [];
+  if (currentSpokenJson) {
+    try {
+      const parsed = JSON.parse(currentSpokenJson);
+      if (Array.isArray(parsed)) {
+        current = parsed.filter((id): id is string => typeof id === 'string');
+      }
+    } catch {
+      // Treat as empty cycle.
+    }
+  }
+
+  const next = current.includes(skippedParticipantId)
+    ? current
+    : [...current, skippedParticipantId];
+
+  const activeIds = new Set(
+    participants
+      .filter(p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId)
+      .map(p => p.id),
+  );
+
+  if (activeIds.size > 0) {
+    const spokenActive = next.filter(id => activeIds.has(id));
+    if (spokenActive.length >= activeIds.size) {
+      return JSON.stringify([skippedParticipantId]);
+    }
+  }
+
+  if (next === current) return null;
+  return JSON.stringify(next);
 }

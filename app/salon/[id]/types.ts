@@ -71,6 +71,20 @@ export interface Message {
     sizeBytes: number
     downloadUrl: string
   }> | null
+  /** Transient, UI-only: character-initiated TOOL result rows folded into this
+   * assistant message for rendering (see group-tool-messages.ts). Never
+   * persisted — populated client-side so tool calls render inside the
+   * character's bubble instead of as standalone rows in the flow. */
+  attachedToolMessages?: Message[]
+  /** Reasoning models' full chain-of-thought ("thinking"), DISPLAY ONLY. Shown
+   * collapsibly in the bubble when the chat's thinking-visibility is on; never
+   * fed to any model. */
+  reasoningContent?: string | null
+  /** Positioned reasoning blocks (DISPLAY ONLY) for splicing thinking into the
+   * prose at the point it fired, mirroring tool-call anchors. Each carries an
+   * `anchorOffset`, `content`, and a `seq` shared with tool anchors so
+   * same-offset items render in true emission order. */
+  reasoningSegments?: Array<{ anchorOffset: number; content: string; seq: number }> | null
 }
 
 export interface CharacterData {
@@ -128,6 +142,8 @@ export interface Participant {
   // Multi-character chat fields
   hasHistoryAccess?: boolean
   joinScenario?: string | null
+  /** Per-chat talkativeness override (0.1–1.0). Null/undefined → inherit from character. */
+  talkativeness?: number | null
   createdAt?: string
   updatedAt?: string
 }
@@ -155,6 +171,8 @@ export interface Chat {
   activeTypingParticipantId?: string | null
   /** Turns since last user input or pause (for all-LLM pause logic) */
   allLLMPauseTurnCount?: number
+  /** JSON-encoded array of participantIds that have spoken in the current rotation cycle */
+  spokenThisCycleParticipantIds?: string
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode?: boolean
   /** Document Mode layout state: normal (chat only), split (chat + document), focus (document only) */
@@ -183,6 +201,12 @@ export interface Chat {
   disabledToolGroups?: string[]
   /** When true, characters may read (read-only) other present participants' character vaults via doc_* tools */
   allowCrossCharacterVaultReads?: boolean
+  /** Per-chat override for Aurora's Core whisper enabled state (null = inherit from character → global). */
+  coreWhisperEnabled?: boolean | null
+  /** Per-chat override for Aurora's Core whisper cadence (assistant turns between offerings). null = inherit. */
+  coreWhisperInterval?: number | null
+  /** Per-chat override for showing reasoning models' thinking (null = inherit global `thinkingDisplay.defaultVisible`; true = show; false = hide). DISPLAY ONLY. */
+  showThinking?: boolean | null
   /** Image profile ID for generating images in this chat (shared by all participants) */
   imageProfileId?: string | null
   /** Whether to auto-generate character avatars when outfits change */
@@ -193,6 +217,8 @@ export interface Chat {
   isDangerousChat?: boolean | null
   /** Categories of dangerous content detected (e.g. 'nsfw', 'violence') */
   dangerCategories?: string[]
+  /** Per-chat Concierge tri-state override: NULL = follow global, 'OFF' = off-duty */
+  conciergeOverride?: 'OFF' | null
   /** Off-scene character cards referenced by ad-hoc announcement bubbles (customAnnouncer.kind === 'character'). Populated server-side from message rows. */
   offSceneCharacters?: Array<{
     id: string
@@ -242,6 +268,10 @@ export interface ChatSettings {
   llmLoggingSettings?: { enabled?: boolean; verboseMode?: boolean; retentionDays?: number }
   storyBackgroundsSettings?: StoryBackgroundsSettings
   dangerousContentSettings?: DangerousContentSettings
+  /** Global defaults for showing reasoning models' thinking. DISPLAY ONLY. */
+  thinkingDisplay?: { defaultVisible: boolean; defaultCollapsed: boolean }
+  /** Whether the Salon auto-scrolls to the newest message when a response completes (only when already near the bottom). DISPLAY ONLY. */
+  autoScrollOnResponseComplete?: boolean
   createdAt: string
   updatedAt: string
 }

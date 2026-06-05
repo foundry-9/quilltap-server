@@ -15,6 +15,7 @@ import type {
   TextProviderPlugin,
   EmbeddingModelInfo,
   ImageGenerationModelInfo,
+  ProviderOptionsSchema,
 } from './types';
 import { OpenRouterProvider } from './provider';
 import { OpenRouterEmbeddingProvider } from './embedding-provider';
@@ -100,6 +101,48 @@ const cheapModels = {
 };
 
 /**
+ * Connection-profile options schema rendered by the Quilltap host.
+ * Flat keys map 1:1 to the `profileParameters` blob; the provider's
+ * `resolveProviderPrefs` helper translates them into OpenRouter's wire
+ * shape (`provider.dataCollection`, etc.). The legacy nested
+ * `providerPreferences` shape on older profiles still works.
+ */
+const optionsSchema: ProviderOptionsSchema = {
+  groups: [
+    {
+      title: 'OpenRouter Options',
+      fields: [
+        {
+          key: 'enableZDR',
+          label: 'Enable Zero Data Retention (ZDR)',
+          helpText:
+            'Providers will not store or log your prompts and responses.',
+          type: 'boolean',
+          default: false,
+        },
+        {
+          key: 'useCustomModel',
+          label: 'Use Custom Model ID',
+          helpText:
+            'Enter an arbitrary model ID not in the fetched list.',
+          type: 'boolean',
+          default: false,
+          affects: 'modelInput',
+        },
+        {
+          key: 'fallbackModels',
+          label: 'Fallback Models (max 2)',
+          type: 'multi-enum',
+          multiEnumSource: 'fetchedModels',
+          max: 2,
+          default: [],
+        },
+      ],
+    },
+  ],
+};
+
+/**
  * The OpenRouter Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  * Provides access to cutting-edge and open-source models via unified API
@@ -126,6 +169,11 @@ export const plugin: TextProviderPlugin = {
   toolFormat: 'openai', // OpenRouter uses OpenAI format
   cheapModels,
   defaultContextWindow: 128000,
+
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
 
   /**
    * Factory method to create an OpenRouter LLM provider instance

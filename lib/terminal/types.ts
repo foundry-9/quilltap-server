@@ -42,6 +42,8 @@ export interface PtySession {
   arielIdleTimer: NodeJS.Timeout | null;
   /** Max-age cap: fires `ARIEL_FLUSH_MAX_AGE_MS` after the buffer started, regardless of activity. */
   arielMaxAgeTimer: NodeJS.Timeout | null;
+  /** Removes per-session shell-init artifacts (bash rcfile / zsh ZDOTDIR). Called on exit. */
+  cleanupInit?: (() => void) | null;
 }
 
 export type WsClientMsg = WsClientMessage;

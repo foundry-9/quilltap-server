@@ -189,23 +189,29 @@ async function replicateTurnState(
     return participantMap.get(oldId) ?? null;
   };
 
-  // Parse the source turn queue, remap, drop unknowns, re-stringify.
-  let newTurnQueue = '[]';
-  try {
-    const parsed = JSON.parse(sourceChat.turnQueue || '[]');
-    if (Array.isArray(parsed)) {
+  const remapJsonIdArray = (raw: string | undefined, fieldName: string): string => {
+    try {
+      const parsed = JSON.parse(raw || '[]');
+      if (!Array.isArray(parsed)) return '[]';
       const remapped = parsed
         .map((id) => (typeof id === 'string' ? participantMap.get(id) : undefined))
         .filter((id): id is string => typeof id === 'string' && id.length > 0);
-      newTurnQueue = JSON.stringify(remapped);
+      return JSON.stringify(remapped);
+    } catch (err) {
+      logger.warn(`[ChatContinuation] Failed to parse source ${fieldName}, defaulting to empty`, {
+        sourceChatId: sourceChat.id,
+        newChatId,
+        error: getErrorMessage(err),
+      });
+      return '[]';
     }
-  } catch (err) {
-    logger.warn('[ChatContinuation] Failed to parse source turnQueue, defaulting to empty', {
-      sourceChatId: sourceChat.id,
-      newChatId,
-      error: getErrorMessage(err),
-    });
-  }
+  };
+
+  const newTurnQueue = remapJsonIdArray(sourceChat.turnQueue, 'turnQueue');
+  const newSpokenThisCycle = remapJsonIdArray(
+    sourceChat.spokenThisCycleParticipantIds,
+    'spokenThisCycleParticipantIds',
+  );
 
   const newImpersonating = (sourceChat.impersonatingParticipantIds || [])
     .map((id) => participantMap.get(id))
@@ -218,6 +224,7 @@ async function replicateTurnState(
     impersonatingParticipantIds: newImpersonating,
     allLLMPauseTurnCount: sourceChat.allLLMPauseTurnCount ?? 0,
     turnQueue: newTurnQueue,
+    spokenThisCycleParticipantIds: newSpokenThisCycle,
   };
 
   await repos.chats.update(newChatId, update);

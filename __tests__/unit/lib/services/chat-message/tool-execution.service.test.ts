@@ -500,5 +500,37 @@ describe('tool-execution.service', () => {
       expect(await persistedTarget('search', undefined)).toBeNull()
       expect(await persistedTarget('doc_read_file', undefined)).toBeNull()
     })
+
+    it('persists a numeric anchorOffset into the tool message content', async () => {
+      const { repos, addMessage } = buildRepos()
+      await saveToolMessages(
+        repos,
+        chatId,
+        'user-uuid',
+        [{ ...buildToolMessage('rng'), anchorOffset: 42 }],
+        noImages,
+        callerCharacterId,
+        callerParticipantId,
+        baseWhisper,
+      )
+      const persisted = addMessage.mock.calls[0][1] as { content: string }
+      expect(JSON.parse(persisted.content).anchorOffset).toBe(42)
+    })
+
+    it('omits anchorOffset entirely when not set (legacy / end-anchored rows)', async () => {
+      const { repos, addMessage } = buildRepos()
+      await saveToolMessages(
+        repos,
+        chatId,
+        'user-uuid',
+        [buildToolMessage('rng')],
+        noImages,
+        callerCharacterId,
+        callerParticipantId,
+        baseWhisper,
+      )
+      const persisted = addMessage.mock.calls[0][1] as { content: string }
+      expect('anchorOffset' in JSON.parse(persisted.content)).toBe(false)
+    })
   })
 })

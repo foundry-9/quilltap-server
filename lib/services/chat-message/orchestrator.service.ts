@@ -45,19 +45,29 @@ import {
   encodeDoneEvent,
   encodeErrorEvent,
   encodeStatusEvent,
+  encodeTurnStartEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
 import { dispatchCourierTransport } from './courier-transport.service'
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 import {
   buildNativeToolSystemInstructions,
   determineEnabledToolOptions,
   checkShouldUseTextBlockTools,
+  checkResolvedToolMode,
   buildTextBlockSystemInstructions,
+  buildSimpleJsonSystemInstructions,
   parseTextBlocksFromResponse,
   stripTextBlockMarkersFromResponse,
+  parseSimpleJsonFromResponse,
+  stripSimpleJsonFromResponse,
+  hasSimpleJsonInResponse,
   determineTextBlockToolOptions,
   logTextBlockToolUsage,
+  logSimpleJsonToolUsage,
+  formatSimpleJsonToolResult,
+  SIMPLE_JSON_STOP,
 } from './pseudo-tool.service'
 import {
   hasTextBlockMarkers,
@@ -171,10 +181,18 @@ export async function handleSendMessage(
             repos,
             chatId,
             userId,
-            chainOptions,
+            // Autonomous-room chain turns inherit the same flags as the initial call.
+            {
+              ...chainOptions,
+              neverPauseForUser: options.neverPauseForUser,
+              suppressAutomaticImages: options.suppressAutomaticImages,
+              singleTurn: options.singleTurn,
+            },
             controller,
             encoder
           ),
+          neverPauseForUser: options.neverPauseForUser === true,
+          singleTurn: options.singleTurn === true,
         })
 
         // Trigger scene state tracking once after processing (and after any turn chain)
@@ -263,6 +281,17 @@ async function processMessage(
     userParticipantId,
     isMultiCharacter,
   } = participantResult
+
+  // Tell the client which participant is actually responding before any
+  // content arrives. Without this, the streaming bubble's avatar/name comes
+  // from the client's `getFirstCharacterParticipant()` guess, which diverges
+  // from the server's choice under turn rotation. Chained turns 2+ get the
+  // same event from the turn orchestrator; this is the first-turn analog.
+  safeEnqueue(controller, encodeTurnStartEvent(encoder, {
+    participantId: characterParticipant.id,
+    characterName: character.name,
+    chainDepth: 0,
+  }))
 
   // Now that we know who's responding, update status with character name
   safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -407,6 +436,7 @@ async function processMessage(
     attachmentResults: null,
     rawResponse: null,
     thoughtSignature: undefined,
+    reasoningContent: undefined,
     hasStartedStreaming: false,
   }
 
@@ -710,16 +740,60 @@ async function processMessage(
     tools = builtTools.tools
     modelSupportsNativeTools = builtTools.modelSupportsNativeTools
     useNativeWebSearch = builtTools.useNativeWebSearch
+
+    // 4.6 Private Character Rooms — destructive-tool filter for autonomous rooms.
+    // Apply BEFORE the LLM call so the model never sees disallowed tools.
+    // User-level destructiveToolPolicy is a CEILING: 'always_refuse' overrides
+    // any permissive per-room runDestructiveToolsAllowed flag.
+    if (chat.chatType === 'autonomous') {
+      const { DESTRUCTIVE_TOOL_NAMES } = await import('@/lib/tools/destructive-tools')
+      const chatSettings = await repos.chatSettings.findByUserId(userId)
+      const policy = chatSettings?.autonomousRoomSettings?.destructiveToolPolicy ?? 'opt_in_per_room'
+      const allowedAtRoom = (chat as { runDestructiveToolsAllowed?: number }).runDestructiveToolsAllowed === 1
+      const destructiveAllowed = policy !== 'always_refuse' && allowedAtRoom
+      if (!destructiveAllowed) {
+        const before = tools.length
+        tools = tools.filter((tool: unknown) => {
+          const toolObj = tool as { function?: { name?: string }; name?: string }
+          const toolName = toolObj.function?.name || toolObj.name
+          return !toolName || !DESTRUCTIVE_TOOL_NAMES.has(toolName)
+        })
+        if (before !== tools.length) {
+          logger.info('Autonomous room: destructive tools filtered from per-turn list', {
+            chatId,
+            policy,
+            allowedAtRoom,
+            removed: before - tools.length,
+          })
+        }
+      }
+    }
   }
 
-  const useTextBlockTools = !isEffectiveCourier && checkShouldUseTextBlockTools(modelSupportsNativeTools)
+  const profilePseudoToolMode = (streamingState.effectiveProfile as { pseudoToolMode?: 'auto' | 'native' | 'simple-json' | 'text-block' }).pseudoToolMode
+  const resolvedToolMode = isEffectiveCourier
+    ? 'native' // Courier sends no tools anyway; the value is unused.
+    : checkResolvedToolMode(modelSupportsNativeTools, profilePseudoToolMode)
+  const useTextBlockTools = !isEffectiveCourier && resolvedToolMode !== 'native'
   const actualTools = useTextBlockTools ? [] : tools
 
-  // Build tool instructions (text-block or native tool rules)
+  // Build tool instructions (simple-json, text-block, or native tool rules)
   let toolInstructions: string | undefined
   if (isEffectiveCourier) {
     toolInstructions = undefined
-  } else if (useTextBlockTools) {
+  } else if (resolvedToolMode === 'simple-json') {
+    const enabledOptions = determineTextBlockToolOptions(
+      imageProfileId,
+      streamingState.effectiveProfile.allowWebSearch,
+      isMultiCharacter,
+      !!chat.projectId,
+      helpToolsEnabled,
+      canDressThemselves,
+      canCreateOutfits
+    )
+    toolInstructions = buildSimpleJsonSystemInstructions(enabledOptions)
+    logSimpleJsonToolUsage(streamingState.effectiveProfile.provider, streamingState.effectiveProfile.modelName, enabledOptions)
+  } else if (resolvedToolMode === 'text-block') {
     const textBlockOptions = determineTextBlockToolOptions(
       imageProfileId,
       streamingState.effectiveProfile.allowWebSearch,
@@ -734,6 +808,12 @@ async function processMessage(
   } else if (actualTools.length > 0) {
     toolInstructions = buildNativeToolSystemInstructions()
   }
+
+  // Provider stop sequences (currently only simple-json needs them). Applied
+  // to both the initial primary stream and the continuation re-stream so the
+  // model is hard-cut at the closing `</tool_call>` tag.
+  const initialStopSequences: string[] | undefined =
+    resolvedToolMode === 'simple-json' ? SIMPLE_JSON_STOP : undefined
 
   // Build message context
   const modelParams = streamingState.effectiveProfile.parameters as Record<string, unknown>
@@ -798,8 +878,9 @@ async function processMessage(
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
       // Proactive memory recall results
       preSearchedMemories,
-      // Memory recap: uncensored fallback for dangerous chats
-      uncensoredFallbackOptions: (chat.isDangerousChat && dangerSettings && cheapLLMSelection)
+      // Memory recap: uncensored fallback for dangerous chats. Off-duty
+      // chats opt out, so the fallback is not engaged for them.
+      uncensoredFallbackOptions: (isChatActiveDangerous(chat) && dangerSettings && cheapLLMSelection)
         ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
         : undefined,
       // Status callback for budget-driven compression phases
@@ -1044,6 +1125,7 @@ async function processMessage(
     actualTools,
     useNativeWebSearch,
     previousResponseId,
+    stop: initialStopSequences,
     preGeneratedAssistantMessageId,
     attachedFiles: fileProcessing.attachedFiles,
     originalMessage: options.content,
@@ -1102,6 +1184,7 @@ async function processMessage(
         hasMarkers: pluginHasMarkers,
         parse: pluginParse,
         strip: pluginStrip,
+        formatToolResult: (toolName, content) => `[Tool Result: ${toolName}]\n${content}`,
       },
       formattedMessages,
       modelParams,
@@ -1117,33 +1200,68 @@ async function processMessage(
     })
   }
 
-  // Phase 20: text-block tool calls (`[[TOOL_NAME ...]]content[[/TOOL_NAME]]`),
-  // runs for ALL providers. When useTextBlockTools is on, the continuation
-  // suppresses native tools and web search so the model can't re-emit the
-  // markers it just had stripped.
-  await runTextToolPass({
-    chatId,
-    userId,
-    character,
-    preGeneratedAssistantMessageId,
-    strategy: {
-      name: 'text-block',
-      hasMarkers: hasTextBlockMarkers,
-      parse: parseTextBlocksFromResponse,
-      strip: stripTextBlockMarkersFromResponse,
-    },
-    formattedMessages,
-    modelParams,
-    continuationTools: useTextBlockTools ? [] : actualTools,
-    continuationUseNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
-    toolContext,
-    streaming: streamingState,
-    toolMessages,
-    generatedImagePaths,
-    controller,
-    encoder,
-    preservePartialOnError,
-  })
+  // Phase 20: text-format tool calls (simple-json `<tool_call>{...}</tool_call>`
+  // or legacy text-block `[[TOOL ...]]content[[/TOOL]]`), runs for ALL providers.
+  // When useTextBlockTools is on, the continuation suppresses native tools and
+  // web search so the model can't re-emit the markers it just had stripped.
+  if (resolvedToolMode === 'simple-json') {
+    await runTextToolPass({
+      chatId,
+      userId,
+      character,
+      preGeneratedAssistantMessageId,
+      strategy: {
+        name: 'simple-json',
+        hasMarkers: hasSimpleJsonInResponse,
+        parse: (response) =>
+          parseSimpleJsonFromResponse(response, {
+            provider: streamingState.effectiveProfile.provider,
+            model: streamingState.effectiveProfile.modelName,
+          }),
+        strip: stripSimpleJsonFromResponse,
+        formatToolResult: formatSimpleJsonToolResult,
+        stopSequences: SIMPLE_JSON_STOP,
+      },
+      formattedMessages,
+      modelParams,
+      continuationTools: useTextBlockTools ? [] : actualTools,
+      continuationUseNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
+      toolContext,
+      streaming: streamingState,
+      toolMessages,
+      generatedImagePaths,
+      controller,
+      encoder,
+      preservePartialOnError,
+    })
+  } else {
+    // text-block (legacy) and the native/courier paths both fall through here
+    // — for native/courier the pass no-ops because no markers are emitted.
+    await runTextToolPass({
+      chatId,
+      userId,
+      character,
+      preGeneratedAssistantMessageId,
+      strategy: {
+        name: 'text-block',
+        hasMarkers: hasTextBlockMarkers,
+        parse: parseTextBlocksFromResponse,
+        strip: stripTextBlockMarkersFromResponse,
+        formatToolResult: (toolName, content) => `[Tool Result: ${toolName}]\n${content}`,
+      },
+      formattedMessages,
+      modelParams,
+      continuationTools: useTextBlockTools ? [] : actualTools,
+      continuationUseNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
+      toolContext,
+      streaming: streamingState,
+      toolMessages,
+      generatedImagePaths,
+      controller,
+      encoder,
+      preservePartialOnError,
+    })
+  }
 
   const contentWasFlaggedDangerous = !!(dangerFlags && dangerFlags.length > 0)
   const { uncensoredRetryAttempted, sameProviderRetryAttempted } = await attemptEmptyResponseRecovery({

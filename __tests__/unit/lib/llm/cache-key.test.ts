@@ -1,38 +1,43 @@
 import { describe, expect, it } from '@jest/globals'
 
 import {
-  buildPromptCacheKey,
+  buildCharacterCacheKey,
   PROMPT_CACHE_STRUCTURE_VERSION,
 } from '@/lib/llm/cache-key'
 
-describe('buildPromptCacheKey', () => {
-  it('returns undefined when chatId is undefined', () => {
-    expect(buildPromptCacheKey(undefined)).toBeUndefined()
+describe('buildCharacterCacheKey', () => {
+  it('returns undefined when characterId is undefined', () => {
+    expect(buildCharacterCacheKey(undefined)).toBeUndefined()
   })
 
-  it('returns undefined when chatId is empty string', () => {
-    expect(buildPromptCacheKey('')).toBeUndefined()
+  it('returns undefined when characterId is empty string', () => {
+    expect(buildCharacterCacheKey('')).toBeUndefined()
   })
 
-  it('builds a key embedding the chatId and structure version', () => {
-    const key = buildPromptCacheKey('abc-123')
-    expect(key).toBe(`quilltap:chat:abc-123:v${PROMPT_CACHE_STRUCTURE_VERSION}`)
+  it('builds a key embedding the characterId and structure version', () => {
+    const key = buildCharacterCacheKey('abc-123')
+    expect(key).toBe(`quilltap:char:abc-123:v${PROMPT_CACHE_STRUCTURE_VERSION}`)
   })
 
-  it('keys for different chatIds are different', () => {
-    const a = buildPromptCacheKey('chat-aaa')
-    const b = buildPromptCacheKey('chat-bbb')
+  it('keys for different characterIds are different', () => {
+    const a = buildCharacterCacheKey('char-aaa')
+    const b = buildCharacterCacheKey('char-bbb')
     expect(a).not.toBe(b)
   })
 
-  it('key is stable across calls with the same chatId', () => {
-    const id = 'chat-stable'
-    expect(buildPromptCacheKey(id)).toBe(buildPromptCacheKey(id))
+  it('key is stable across calls with the same characterId', () => {
+    const id = 'char-stable'
+    expect(buildCharacterCacheKey(id)).toBe(buildCharacterCacheKey(id))
   })
 
   it('key contains the version number', () => {
-    const key = buildPromptCacheKey('chat-x') as string
+    const key = buildCharacterCacheKey('char-x') as string
     expect(key).toContain(`v${PROMPT_CACHE_STRUCTURE_VERSION}`)
+  })
+
+  it('uses the char: prefix (not chat:)', () => {
+    const key = buildCharacterCacheKey('any') as string
+    expect(key.startsWith('quilltap:char:')).toBe(true)
   })
 
   it('PROMPT_CACHE_STRUCTURE_VERSION is a positive integer', () => {

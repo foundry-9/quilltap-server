@@ -37,6 +37,8 @@ import {
   takeOffBundleFromSlots,
 } from '@/lib/wardrobe/bundle-mutations'
 import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
+import { wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
+import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
 import { WardrobeItemEditor } from './wardrobe-item-editor'
 import { WardrobeItemRow } from './wardrobe-item-row'
@@ -141,6 +143,22 @@ function WardrobeControlDialogInner({
   const [resetMenuOpen, setResetMenuOpen] = useState(false)
   const resetMenuRef = useRef<HTMLDivElement>(null)
   const fittingSeedKeyRef = useRef<string | null>(null)
+
+  // True while an imperative confirmation dialog is up. That dialog renders into
+  // document.body (outside this modal's ref), so a click on its buttons bubbles
+  // to BaseModal's click-outside listener and would otherwise be read as a click
+  // outside the wardrobe — closing it the instant you confirm a delete/reset.
+  // Routing every confirmation through `requestConfirmation` flips this flag so
+  // we can suspend click-outside/Escape closing while the dialog is open.
+  const [confirming, setConfirming] = useState(false)
+  const requestConfirmation = useCallback(async (message: string): Promise<boolean> => {
+    setConfirming(true)
+    try {
+      return await showConfirmation(message)
+    } finally {
+      setConfirming(false)
+    }
+  }, [])
 
   // -------- Staged Live-outfit edits --------
   //
@@ -300,7 +318,7 @@ function WardrobeControlDialogInner({
   const handleDelete = useCallback(
     async (item: WardrobeItem) => {
       if (!selectedCharacterId) return
-      if (!(await showConfirmation(`Delete "${item.title}"? This cannot be undone.`))) return
+      if (!(await requestConfirmation(`Delete "${item.title}"? This cannot be undone.`))) return
       const url = item.characterId
         ? `/api/v1/characters/${item.characterId}/wardrobe/${item.id}`
         : `/api/v1/wardrobe/${item.id}`
@@ -316,7 +334,53 @@ function WardrobeControlDialogInner({
         await outfit.refreshOutfit()
       }
     },
-    [selectedCharacterId, reloadItems, isInChat, outfit],
+    [selectedCharacterId, reloadItems, isInChat, outfit, requestConfirmation],
+  )
+
+  const handleDuplicate = useCallback(
+    async (item: WardrobeItem) => {
+      if (!selectedCharacterId) return
+      // Duplicate is only offered for character-owned items (the kebab is
+      // hidden for shared archetypes), so always POST to the character route.
+      const title = nextCopyTitle(
+        item.title,
+        items.map((i) => i.title),
+      )
+      console.debug('[WardrobeControlDialog] Duplicating wardrobe item', {
+        sourceId: item.id,
+        characterId: selectedCharacterId,
+        newTitle: title,
+        // Composite references are copied verbatim — member items are not cloned.
+        componentItemIds: item.componentItemIds,
+      })
+      const result = await fetchJson<{ wardrobeItem: WardrobeItem }>(
+        `/api/v1/characters/${selectedCharacterId}/wardrobe`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            description: item.description ?? null,
+            types: item.types,
+            appropriateness: item.appropriateness ?? null,
+            isDefault: item.isDefault,
+            componentItemIds: item.componentItemIds,
+            replace: item.replace,
+          }),
+        },
+      )
+      if (!result.ok) {
+        showErrorToast(result.error || 'Failed to duplicate item')
+        return
+      }
+      showSuccessToast(`Duplicated "${item.title}"`)
+      await reloadItems()
+      if (isInChat) {
+        outfit.invalidateWardrobe(selectedCharacterId)
+        await outfit.refreshOutfit()
+      }
+    },
+    [selectedCharacterId, items, reloadItems, isInChat, outfit],
   )
 
   // Lookup map shared between Live-tab staging mutators and Builder-tab
@@ -342,14 +406,13 @@ function WardrobeControlDialogInner({
     [selectedCharacterId, outfit.outfitState],
   )
 
+  // The "Wear" button honors the item's `replace` flag (layer when off,
+  // replace when on) across every slot it covers — the same rule as the live
+  // equip path. To force a swap, clear the slot first.
   const handleEquipItem = useCallback(
     (item: WardrobeItem) => {
       if (!isInChat) return
-      updateLiveStaged((prev) => {
-        const next = cloneSlots(prev)
-        for (const slot of item.types) next[slot] = [item.id]
-        return next
-      })
+      updateLiveStaged((prev) => wearItemIntoSlots(prev, item))
     },
     [isInChat, updateLiveStaged],
   )
@@ -366,15 +429,20 @@ function WardrobeControlDialogInner({
     [isInChat, updateLiveStaged],
   )
 
+  // Picking an item from a slot row wears it (fills every slot it covers,
+  // layering or replacing per the item's flag) rather than dropping it into
+  // the one row the picker was opened from.
   const handleSlotAdd = useCallback(
     (slot: WardrobeItemType, itemId: string) => {
       if (!isInChat) return
       const item = itemsById.get(itemId)
-      if (item && !item.types.includes(slot)) return
-      updateLiveStaged((prev) => {
-        if (prev[slot].includes(itemId)) return prev
-        return { ...prev, [slot]: [...prev[slot], itemId] }
-      })
+      updateLiveStaged((prev) =>
+        item
+          ? wearItemIntoSlots(prev, item)
+          : prev[slot].includes(itemId)
+            ? prev
+            : { ...prev, [slot]: [...prev[slot], itemId] },
+      )
     },
     [isInChat, itemsById, updateLiveStaged],
   )
@@ -402,11 +470,8 @@ function WardrobeControlDialogInner({
     (slot: WardrobeItemType, itemId: string) => {
       const item = itemsById.get(itemId)
       if (!item) return
-      if (!item.types.includes(slot)) return
-      setFittingSlots((prev) => {
-        if (prev[slot].includes(itemId)) return prev
-        return { ...prev, [slot]: [...prev[slot], itemId] }
-      })
+      // Wear it across every slot it covers, honoring the `replace` flag.
+      setFittingSlots((prev) => wearItemIntoSlots(prev, item))
     },
     [itemsById],
   )
@@ -425,37 +490,37 @@ function WardrobeControlDialogInner({
     const target = wornSlots ? cloneSlots(wornSlots) : { ...EMPTY_EQUIPPED_SLOTS }
     if (
       !equippedSlotsEqual(fittingSlots, target) &&
-      !(await showConfirmation(
+      !(await requestConfirmation(
         'Discard your composition and start from what’s currently worn?',
       ))
     ) {
       return
     }
     setFittingSlots(target)
-  }, [selectedCharacterId, outfit.outfitState, fittingSlots])
+  }, [selectedCharacterId, outfit.outfitState, fittingSlots, requestConfirmation])
 
   const fittingResetToDefaults = useCallback(async () => {
     const target = buildDefaultOutfit(items)
     if (
       !equippedSlotsEqual(fittingSlots, target) &&
-      !(await showConfirmation(
+      !(await requestConfirmation(
         'Discard your composition and start from this character’s default outfit?',
       ))
     ) {
       return
     }
     setFittingSlots(target)
-  }, [items, fittingSlots])
+  }, [items, fittingSlots, requestConfirmation])
 
   const fittingClearAll = useCallback(async () => {
     if (
       !equippedSlotsEqual(fittingSlots, EMPTY_EQUIPPED_SLOTS) &&
-      !(await showConfirmation('Empty every slot in the Outfit Builder?'))
+      !(await requestConfirmation('Empty every slot in the Outfit Builder?'))
     ) {
       return
     }
     setFittingSlots({ ...EMPTY_EQUIPPED_SLOTS })
-  }, [fittingSlots])
+  }, [fittingSlots, requestConfirmation])
 
   /**
    * Open the editor in `Outfit bundle` mode with `componentItemIds`
@@ -603,13 +668,9 @@ function WardrobeControlDialogInner({
   const rowEquip = useCallback(
     (item: WardrobeItem) => {
       if (useFittingActions) {
-        // Replace each slot the item covers with [item.id], matching the
-        // semantics of `equipItem` for the live state.
-        setFittingSlots((prev) => {
-          const next = cloneSlots(prev)
-          for (const slot of item.types) next[slot] = [item.id]
-          return next
-        })
+        // Honor the item's `replace` flag across every slot it covers,
+        // matching `wearItemIntoSlots` / the live equip path.
+        setFittingSlots((prev) => wearItemIntoSlots(prev, item))
         return
       }
       handleEquipItem(item)
@@ -746,8 +807,8 @@ function WardrobeControlDialogInner({
         title="Wardrobe"
         maxWidth="4xl"
         showCloseButton
-        closeOnClickOutside={!editorOpen}
-        closeOnEscape={!editorOpen}
+        closeOnClickOutside={!editorOpen && !confirming}
+        closeOnEscape={!editorOpen && !confirming}
         footer={
           <div className="flex items-center justify-end gap-2 w-full">
             <button
@@ -868,6 +929,7 @@ function WardrobeControlDialogInner({
                     isUpdatingDefault={updatingDefaultId === item.id}
                     onToggleDefault={handleToggleDefault}
                     onEdit={(it) => setEditingItem(it)}
+                    onDuplicate={handleDuplicate}
                     onDelete={handleDelete}
                     onEquip={rowEquip}
                     onAddToSlot={rowAddToSlot}

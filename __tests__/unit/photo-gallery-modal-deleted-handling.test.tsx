@@ -192,21 +192,22 @@ describe('PhotoGalleryModal - Deleted Image Handling', () => {
   describe('Character mode - deleted image handling', () => {
     beforeEach(() => {
       ;(global.fetch as jest.Mock).mockImplementation((url) => {
-        if (url.includes('/api/v1/images')) {
+        if (url.includes('/photos')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({
-              data: [
+              entries: [
                 {
-                  id: 'img-1',
-                  filename: 'char-img.png',
-                  filepath: '/uploads/char-img.png',
-                  url: '/uploads/char-img.png',
+                  linkId: 'img-1',
+                  fileName: 'char-img.png',
+                  blobUrl: '/uploads/char-img.png',
                   mimeType: 'image/png',
-                  size: 1024,
-                  createdAt: '2025-01-01T00:00:00Z',
+                  fileSizeBytes: 1024,
+                  keptAt: '2025-01-01T00:00:00Z',
                 },
               ],
+              total: 1,
+              hasMore: false,
             }),
           })
         }
@@ -248,21 +249,22 @@ describe('PhotoGalleryModal - Deleted Image Handling', () => {
   describe('Persona mode - deleted image handling', () => {
     beforeEach(() => {
       ;(global.fetch as jest.Mock).mockImplementation((url) => {
-        if (url.includes('/api/v1/images')) {
+        if (url.includes('/photos')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({
-              data: [
+              entries: [
                 {
-                  id: 'img-2',
-                  filename: 'persona-img.png',
-                  filepath: '/uploads/persona-img.png',
-                  url: '/uploads/persona-img.png',
+                  linkId: 'img-2',
+                  fileName: 'persona-img.png',
+                  blobUrl: '/uploads/persona-img.png',
                   mimeType: 'image/png',
-                  size: 1024,
-                  createdAt: '2025-01-01T00:00:00Z',
+                  fileSizeBytes: 1024,
+                  keptAt: '2025-01-01T00:00:00Z',
                 },
               ],
+              total: 1,
+              hasMore: false,
             }),
           })
         }

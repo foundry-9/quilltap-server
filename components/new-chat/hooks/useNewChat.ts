@@ -36,6 +36,23 @@ interface UseNewChatOptions {
   initialImageProfileId?: string | null
   initialAvatarGenerationEnabled?: boolean
   initialTimestampConfig?: TimestampConfig | null
+  /**
+   * When true, the form starts in autonomous-room mode: `state.autonomous.enabled`
+   * is true at mount, and freshness-window / visibility defaults are seeded
+   * from the user's chat_settings.autonomousRoomSettings.
+   */
+  initialAutonomous?: boolean
+}
+
+/**
+ * Slim project record used by the in-form project picker. The full `Project`
+ * with defaults still loads via `/api/v1/projects/[id]` once a project is
+ * selected, since the list endpoint omits the default-* fields.
+ */
+export interface ProjectListEntry {
+  id: string
+  name: string
+  color?: string | null
 }
 
 interface UseNewChatReturn {
@@ -51,6 +68,11 @@ interface UseNewChatReturn {
   projectScenarios: ProjectScenarioOption[]
   /** General scenarios from `/api/v1/scenarios`; fetched for every non-help chat. */
   generalScenarios: GeneralScenarioOption[]
+  /** Every project the user owns, for the in-form picker. */
+  availableProjects: ProjectListEntry[]
+  /** Currently chosen project ID, or null for "no project (general)". */
+  selectedProjectId: string | null
+  setSelectedProjectId: (id: string | null) => void
   // Form state
   selectedCharacters: SelectedCharacter[]
   setSelectedCharacters: React.Dispatch<React.SetStateAction<SelectedCharacter[]>>
@@ -70,6 +92,17 @@ const INITIAL_STATE: NewChatFormState = {
   timestampConfig: null,
   avatarGenerationEnabled: false,
   outfitSelections: [],
+  autonomous: {
+    enabled: false,
+    scheduleCron: '',
+    scheduleFreshnessHours: null,
+    budgetMaxTurns: null,
+    budgetMaxTokens: null,
+    budgetMaxWallClockMinutes: null,
+    budgetEstimatedSpendCapUSD: null,
+    runVisibility: null,
+    runDestructiveToolsAllowed: false,
+  },
 }
 
 function generateTitle(selected: SelectedCharacter[]): string {
@@ -92,6 +125,7 @@ export function useNewChat({
   initialImageProfileId,
   initialAvatarGenerationEnabled,
   initialTimestampConfig,
+  initialAutonomous = false,
 }: UseNewChatOptions = {}): UseNewChatReturn {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -104,9 +138,24 @@ export function useNewChat({
   const [project, setProject] = useState<Project | null>(null)
   const [projectScenarios, setProjectScenarios] = useState<ProjectScenarioOption[]>([])
   const [generalScenarios, setGeneralScenarios] = useState<GeneralScenarioOption[]>([])
+  const [availableProjects, setAvailableProjects] = useState<ProjectListEntry[]>([])
+
+  // selectedProjectId is the live picker value. It seeds from the `projectId`
+  // prop (set by the URL on /salon/new or by the parent on the modal) and
+  // re-syncs whenever the prop changes — the same props-as-state pattern
+  // NewChatModal previously implemented locally for continuation mode.
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId ?? null)
+  const [lastSeenProjectIdProp, setLastSeenProjectIdProp] = useState<string | undefined>(projectId)
+  if (projectId !== lastSeenProjectIdProp) {
+    setLastSeenProjectIdProp(projectId)
+    setSelectedProjectId(projectId ?? null)
+  }
 
   const [selectedCharacters, setSelectedCharacters] = useState<SelectedCharacter[]>([])
-  const [state, setState] = useState<NewChatFormState>(INITIAL_STATE)
+  const [state, setState] = useState<NewChatFormState>(() => ({
+    ...INITIAL_STATE,
+    autonomous: { ...INITIAL_STATE.autonomous, enabled: initialAutonomous },
+  }))
 
   const seededRef = useRef(false)
   const prevLlmIdsRef = useRef<string>('')
@@ -125,10 +174,12 @@ export function useNewChat({
           fetch('/api/v1/connection-profiles'),
           fetch('/api/v1/image-profiles'),
           fetch('/api/v1/scenarios'),
+          fetch('/api/v1/settings/chat'),
+          fetch('/api/v1/projects'),
         ]
-        if (projectId) {
-          requests.push(fetch(`/api/v1/projects/${projectId}`))
-          requests.push(fetch(`/api/v1/projects/${projectId}/scenarios`))
+        if (selectedProjectId) {
+          requests.push(fetch(`/api/v1/projects/${selectedProjectId}`))
+          requests.push(fetch(`/api/v1/projects/${selectedProjectId}/scenarios`))
         }
         if (initialCharacterId) {
           requests.push(fetch(`/api/v1/characters/${initialCharacterId}`))
@@ -143,8 +194,10 @@ export function useNewChat({
         const profilesRes = responses[idx++]
         const imageProfilesRes = responses[idx++]
         const generalScenariosRes = responses[idx++]
-        const projectRes = projectId ? responses[idx++] : null
-        const projectScenariosRes = projectId ? responses[idx++] : null
+        const chatSettingsRes = responses[idx++]
+        const projectListRes = responses[idx++]
+        const projectRes = selectedProjectId ? responses[idx++] : null
+        const projectScenariosRes = selectedProjectId ? responses[idx++] : null
         const seedCharacterRes = initialCharacterId ? responses[idx++] : null
         const seedPartnerRes = initialCharacterId ? responses[idx++] : null
 
@@ -184,12 +237,26 @@ export function useNewChat({
             status: generalScenariosRes.status,
           })
         }
+        let loadedAvailableProjects: ProjectListEntry[] = []
+        if (projectListRes && projectListRes.ok) {
+          const data = await projectListRes.json()
+          loadedAvailableProjects = Array.isArray(data?.projects)
+            ? data.projects.map((p: { id: string; name: string; color?: string | null }) => ({
+                id: p.id,
+                name: p.name,
+                color: p.color ?? null,
+              }))
+            : []
+        } else if (projectListRes && !projectListRes.ok) {
+          console.warn('[useNewChat] Failed to load project list', { status: projectListRes.status })
+        }
+
         let loadedProject: Project | null = null
         if (projectRes && projectRes.ok) {
           const data = await projectRes.json()
           loadedProject = data.project || data
         } else if (projectRes && !projectRes.ok) {
-          console.warn('[useNewChat] Failed to load project', { projectId, status: projectRes.status })
+          console.warn('[useNewChat] Failed to load project', { projectId: selectedProjectId, status: projectRes.status })
         }
 
         let loadedProjectScenarios: ProjectScenarioOption[] = []
@@ -206,7 +273,7 @@ export function useNewChat({
           }))
         } else if (projectScenariosRes && !projectScenariosRes.ok) {
           console.warn('[useNewChat] Failed to load project scenarios', {
-            projectId,
+            projectId: selectedProjectId,
             status: projectScenariosRes.status,
           })
         }
@@ -222,6 +289,29 @@ export function useNewChat({
           seededPartnerId = data.partnerId || null
         }
 
+        // Autonomous-room defaults from chat_settings.autonomousRoomSettings.
+        // Only seeded when starting in autonomous mode — non-autonomous chats
+        // don't need them. Stored unconditionally on state.autonomous so the
+        // toggle can flip without re-fetching.
+        let autonomousSeedFreshnessHours: number | null = null
+        let autonomousSeedDestructivePolicyAlwaysRefuse = false
+        if (chatSettingsRes && chatSettingsRes.ok) {
+          try {
+            const settings = await chatSettingsRes.json()
+            const ar = settings?.autonomousRoomSettings ?? {}
+            if (typeof ar.defaultFreshnessWindowMs === 'number' && ar.defaultFreshnessWindowMs > 0) {
+              autonomousSeedFreshnessHours = Math.round(ar.defaultFreshnessWindowMs / (60 * 60 * 1000))
+            }
+            if (ar.destructiveToolPolicy === 'always_refuse') {
+              autonomousSeedDestructivePolicyAlwaysRefuse = true
+            }
+          } catch (err) {
+            console.warn('[useNewChat] Failed to parse chat-settings response', {
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        }
+
         setCharacters(loadedCharacters)
         setUserControlledCharacters(loadedUserChars)
         setProfiles(loadedProfiles)
@@ -229,6 +319,7 @@ export function useNewChat({
         setProject(loadedProject)
         setProjectScenarios(loadedProjectScenarios)
         setGeneralScenarios(loadedGeneralScenarios)
+        setAvailableProjects(loadedAvailableProjects)
 
         // Project default wins over general default for pre-selection. When a
         // project default exists, seed `projectScenarioPath`; otherwise fall
@@ -340,6 +431,24 @@ export function useNewChat({
             generalScenarioPath: generalDefaultScenarioPath,
           }))
         }
+
+        // Always merge autonomous-room defaults from user settings so the
+        // freshness-window placeholder and the "always refuse" ceiling are
+        // available even before the user flips the toggle on.
+        setState((prev) => ({
+          ...prev,
+          autonomous: {
+            ...prev.autonomous,
+            scheduleFreshnessHours:
+              prev.autonomous.scheduleFreshnessHours ?? autonomousSeedFreshnessHours,
+            // If the user's chat-settings ceiling is "always refuse", force the
+            // per-room checkbox off and disabled in the form. The form reads
+            // back the same chat-settings response from SWR to disable the input.
+            runDestructiveToolsAllowed: autonomousSeedDestructivePolicyAlwaysRefuse
+              ? false
+              : prev.autonomous.runDestructiveToolsAllowed,
+          },
+        }))
       } catch (err) {
         if (cancelled) return
         console.error('[useNewChat] Failed to fetch data', {
@@ -361,7 +470,7 @@ export function useNewChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     initialCharacterId,
-    projectId,
+    selectedProjectId,
     continuationFromChatId,
     initialSelectedKey,
     initialUserCharacterId,
@@ -401,6 +510,20 @@ export function useNewChat({
       return null
     }
 
+    const isAutonomous = state.autonomous.enabled
+
+    if (isAutonomous) {
+      const llmSelected = selectedCharacters.filter((sc) => sc.controlledBy === 'llm')
+      if (llmSelected.length < 2) {
+        showErrorToast('Autonomous rooms need at least two LLM-controlled characters')
+        return null
+      }
+      if (selectedCharacters.some((sc) => sc.controlledBy === 'user')) {
+        showErrorToast('Autonomous rooms have no user — remove user-controlled characters')
+        return null
+      }
+    }
+
     const llmMissingProfile = selectedCharacters.filter(
       (sc) => sc.controlledBy === 'llm' && !sc.connectionProfileId
     )
@@ -434,7 +557,8 @@ export function useNewChat({
         controlledBy: sc.controlledBy,
       }))
 
-      if (state.selectedUserCharacterId) {
+      // Autonomous rooms have no user character; suppress the Play-As entry.
+      if (!isAutonomous && state.selectedUserCharacterId) {
         participants.push({
           type: 'CHARACTER' as const,
           characterId: state.selectedUserCharacterId,
@@ -466,11 +590,11 @@ export function useNewChat({
         requestBody.timestampConfig = state.timestampConfig
       }
 
-      if (project?.id) {
-        requestBody.projectId = project.id
+      if (selectedProjectId) {
+        requestBody.projectId = selectedProjectId
       }
 
-      if (state.avatarGenerationEnabled) {
+      if (!isAutonomous && state.avatarGenerationEnabled) {
         requestBody.avatarGenerationEnabled = true
       }
 
@@ -480,6 +604,34 @@ export function useNewChat({
 
       if (continuationFromChatId) {
         requestBody.continuationFromChatId = continuationFromChatId
+      }
+
+      if (isAutonomous) {
+        requestBody.chatType = 'autonomous'
+        const auto = state.autonomous
+        const cron = auto.scheduleCron.trim()
+        if (cron.length > 0) requestBody.scheduleCron = cron
+        if (auto.scheduleFreshnessHours != null && auto.scheduleFreshnessHours > 0) {
+          requestBody.scheduleFreshnessWindowMs = auto.scheduleFreshnessHours * 60 * 60 * 1000
+        }
+        if (auto.budgetMaxTurns != null && auto.budgetMaxTurns > 0) {
+          requestBody.budgetMaxTurns = auto.budgetMaxTurns
+        }
+        if (auto.budgetMaxTokens != null && auto.budgetMaxTokens > 0) {
+          requestBody.budgetMaxTokens = auto.budgetMaxTokens
+        }
+        if (auto.budgetMaxWallClockMinutes != null && auto.budgetMaxWallClockMinutes > 0) {
+          requestBody.budgetMaxWallClockMs = auto.budgetMaxWallClockMinutes * 60 * 1000
+        }
+        if (auto.budgetEstimatedSpendCapUSD != null && auto.budgetEstimatedSpendCapUSD > 0) {
+          requestBody.budgetEstimatedSpendCapUSD = auto.budgetEstimatedSpendCapUSD
+        }
+        if (auto.runVisibility) {
+          requestBody.runVisibility = auto.runVisibility
+        }
+        if (auto.runDestructiveToolsAllowed) {
+          requestBody.runDestructiveToolsAllowed = true
+        }
       }
 
       const res = await fetch('/api/v1/chats', {
@@ -494,8 +646,13 @@ export function useNewChat({
       }
 
       const data = await res.json()
-      showSuccessToast(continuationFromChatId ? 'Conversation continued in a new chat!' : 'Chat created!')
-      router.push(`/salon/${data.chat.id}`)
+      if (isAutonomous) {
+        showSuccessToast('Autonomous room created!')
+        router.push('/settings?tab=chat&section=autonomous-rooms')
+      } else {
+        showSuccessToast(continuationFromChatId ? 'Conversation continued in a new chat!' : 'Chat created!')
+        router.push(`/salon/${data.chat.id}`)
+      }
       return { chatId: data.chat.id }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create chat'
@@ -517,6 +674,9 @@ export function useNewChat({
     project,
     projectScenarios,
     generalScenarios,
+    availableProjects,
+    selectedProjectId,
+    setSelectedProjectId,
     selectedCharacters,
     setSelectedCharacters,
     state,

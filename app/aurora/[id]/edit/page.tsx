@@ -4,13 +4,12 @@ import { use, useEffect, useState } from 'react'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { EntityTabs, Tab } from '@/components/tabs'
-import { PhysicalDescriptionList } from '@/components/physical-descriptions'
-import { ClothingRecordList } from '@/components/clothing-records'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor'
 import { AIWizardModal, type GeneratedCharacterData, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
 import LLMLogsSection from '@/components/characters/LLMLogsSection'
+import { DescriptionsTab } from '../view/components/DescriptionsTab'
 import { useCharacterEdit } from './hooks'
 import { CharacterBasicInfo } from './components'
 import type { CharacterScenario } from './types'
@@ -92,11 +91,9 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     handlePronounsChange,
     handleScenariosChange,
     handleSystemTransparencyChange,
+    handleCoreWhisperEnabledChange,
     handleSubmit,
     handleCancel,
-    handleReadFromDocStoreToggle,
-    handleSyncPropertiesFromVault,
-    handleSyncPropertiesToVault,
     setCharacterAvatar,
     getAvatarSrc,
     toggleAvatarSelector,
@@ -107,28 +104,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   } = useCharacterEdit(id)
 
   const [showWizard, setShowWizard] = useState(false)
-  const [physicalDescriptionsRefreshKey, setPhysicalDescriptionsRefreshKey] = useState(0)
   const wardrobeDialog = useWardrobeDialogOptional()
-
-  // Wrap the sync-from-vault handler so the child lists that fetch their own
-  // data (physical descriptions, etc.) re-query after the DB is updated.
-  // handleSyncPropertiesFromVault itself refetches the character row; the
-  // physical descriptions list hangs off a refreshKey prop. The wardrobe
-  // dialog manages its own loading.
-  const handleSyncPropertiesFromVaultAndRefreshLists = async () => {
-    await handleSyncPropertiesFromVault()
-    setPhysicalDescriptionsRefreshKey((prev) => prev + 1)
-  }
-
-  // The reverse direction doesn't change the DB, but when the overlay is on,
-  // the overlaid values the child lists read are derived from vault files;
-  // pushing DB→vault therefore needs the same refresh so lists reflect the
-  // freshly-written vault state.
-  const handleSyncPropertiesToVaultAndRefreshLists = async () => {
-    await handleSyncPropertiesToVault()
-    setPhysicalDescriptionsRefreshKey((prev) => prev + 1)
-  }
-
 
   // Handle applying wizard-generated data
   const handleWizardApply = async (data: GeneratedCharacterData) => {
@@ -146,36 +122,37 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       bumpExternalUpdateCount()
     }
 
-    // Handle physical description if generated
+    // Handle physical description if generated. The cutover collapsed the
+    // multi-record array to a single record; PATCH the character row directly
+    // and the repository's write overlay routes it into the vault.
     if (data.physicalDescription) {
       try {
-        // Use the correct API endpoint for character physical descriptions
-        const response = await fetch(`/api/v1/characters/${id}/descriptions`, {
-          method: 'POST',
+        const response = await fetch(`/api/v1/characters/${id}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name: data.physicalDescription.name,
-            shortPrompt: data.physicalDescription.shortPrompt,
-            mediumPrompt: data.physicalDescription.mediumPrompt,
-            longPrompt: data.physicalDescription.longPrompt,
-            completePrompt: data.physicalDescription.completePrompt,
-            fullDescription: data.physicalDescription.fullDescription,
+            physicalDescription: {
+              name: data.physicalDescription.name,
+              shortPrompt: data.physicalDescription.shortPrompt,
+              mediumPrompt: data.physicalDescription.mediumPrompt,
+              longPrompt: data.physicalDescription.longPrompt,
+              completePrompt: data.physicalDescription.completePrompt,
+              fullDescription: data.physicalDescription.fullDescription,
+            },
           }),
         })
 
         if (response.ok) {
-          showSuccessToast('Physical description created')
-          // Trigger refresh of PhysicalDescriptionList without wiping form state
-          setPhysicalDescriptionsRefreshKey((prev) => prev + 1)
+          showSuccessToast('Physical description saved')
         } else {
-          const errorData = await response.json()
-          showErrorToast(errorData.error || 'Failed to create physical description')
+          const errorData = await response.json().catch(() => ({}))
+          showErrorToast(errorData.error || 'Failed to save physical description')
         }
       } catch (err) {
-        console.error('Failed to create physical description', {
+        console.error('Failed to save physical description', {
           error: err instanceof Error ? err.message : String(err),
         })
-        showErrorToast('Failed to create physical description')
+        showErrorToast('Failed to save physical description')
       }
     }
 
@@ -335,16 +312,13 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                   <CharacterBasicInfo
                     characterId={id}
                     formData={formData}
-                    hasLinkedVault={!!character?.characterDocumentMountPointId}
                     externalUpdateCount={externalUpdateCount}
                     onChange={handleChange}
                     onAliasesChange={handleAliasesChange}
                     onPronounsChange={handlePronounsChange}
                     onScenariosChange={handleScenariosChange}
                     onSystemTransparencyChange={handleSystemTransparencyChange}
-                    onReadFromDocStoreToggle={handleReadFromDocStoreToggle}
-                    onSyncPropertiesFromVault={handleSyncPropertiesFromVaultAndRefreshLists}
-                    onSyncPropertiesToVault={handleSyncPropertiesToVaultAndRefreshLists}
+                    onCoreWhisperEnabledChange={handleCoreWhisperEnabledChange}
                   />
                 )
 
@@ -378,18 +352,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                 )
 
               case 'descriptions':
-                return (
-                  <div className="space-y-8">
-                    <PhysicalDescriptionList
-                      entityType="character"
-                      entityId={id}
-                      refreshKey={physicalDescriptionsRefreshKey}
-                    />
-                    <ClothingRecordList
-                      entityId={id}
-                    />
-                  </div>
-                )
+                return <DescriptionsTab characterId={id} />
 
               case 'rename':
                 return (
@@ -413,14 +376,14 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-primary-foreground shadow transition hover:qt-bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="qt-button qt-button-primary qt-button-lg flex-1"
           >
             {saving ? 'Saving...' : 'Save Character'}
           </button>
           <button
             type="button"
             onClick={handleCancel}
-            className="rounded-lg border qt-border-default qt-bg-card px-6 py-3 text-base font-medium qt-text-secondary shadow transition hover:qt-bg-muted"
+            className="qt-button qt-button-secondary qt-button-lg"
           >
             Cancel
           </button>

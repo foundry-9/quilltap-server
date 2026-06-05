@@ -71,6 +71,7 @@ export {
   DangerousContentSettingsSchema,
   ChatSettingsSchema,
   GeneralSettingsSchema,
+  CoreWhisperSettingsSchema,
 } from './settings.types';
 
 export type {
@@ -86,6 +87,7 @@ export type {
   DangerousContentSettings,
   ChatSettings,
   GeneralSettings,
+  CoreWhisperSettings,
 } from './settings.types';
 
 // ============================================================================
@@ -167,6 +169,9 @@ export {
   ChatMetadataSchema,
   ChatMetadataBaseSchema,
   ChatMetadataLegacySchema,
+  ChatTypeEnum,
+  AutonomousRunStateEnum,
+  AutonomousRunVisibilityEnum,
 } from './chat.types';
 
 export type {
@@ -187,6 +192,9 @@ export type {
   ChatMetadataBase,
   ChatMetadataInput,
   ChatMetadataLegacy,
+  ChatType,
+  AutonomousRunState,
+  AutonomousRunVisibility,
 } from './chat.types';
 
 // ============================================================================
@@ -233,12 +241,14 @@ export {
   MemorySourceEnum,
   MemorySchema,
   MemoriesFileSchema,
+  WitnessedContextEnum,
 } from './memory.types';
 
 export type {
   MemorySource,
   Memory,
   MemoriesFile,
+  WitnessedContext,
 } from './memory.types';
 
 // ============================================================================

@@ -20,6 +20,7 @@ interface ChatFile {
 
 interface GalleryImage {
   id: string
+  linkId?: string
   filename: string
   filepath: string
   url?: string
@@ -97,8 +98,8 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     mode === 'chat'
       ? 'No photos in this chat'
       : mode === 'character'
-      ? 'No photos tagged to this character'
-      : 'No photos tagged to this character'
+      ? 'No photos in this character\'s album'
+      : 'No photos in this character\'s album'
 
   const loadItems = useCallback(async () => {
     if (!isOpen) return
@@ -116,18 +117,29 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
         const imageFiles = (data.files || []).filter((f: ChatFile) => f.mimeType.startsWith('image/'))
         setItems(imageFiles.map((file: ChatFile) => ({ kind: 'chat', data: file })))
       } else if (mode !== 'chat' && (characterId || userCharacterId)) {
-        const params = new URLSearchParams({
-          tagType: 'CHARACTER',
-          tagId: mode === 'character' ? (characterId as string) : (userCharacterId as string),
-        })
-        const response = await fetch(`/api/v1/images?${params.toString()}`)
+        const targetId = mode === 'character' ? (characterId as string) : (userCharacterId as string)
+        const response = await fetch(`/api/v1/characters/${targetId}/photos?limit=200`)
         const data = await response.json()
 
         if (!response.ok) {
-          throw new Error(data.error || 'Failed to load images')
+          throw new Error(data.error || 'Failed to load photos')
         }
 
-        setItems((data.data || []).map((image: GalleryImage) => ({ kind: 'image', data: image })))
+        const entries = data.entries || []
+        setItems(entries.map((entry: any) => ({
+          kind: 'image' as const,
+          data: {
+            id: entry.linkId,
+            linkId: entry.linkId,
+            filename: entry.fileName,
+            filepath: entry.blobUrl,
+            url: entry.blobUrl,
+            mimeType: entry.mimeType || 'image/webp',
+            size: entry.fileSizeBytes || 0,
+            createdAt: entry.keptAt,
+            tags: [],
+          },
+        })))
       }
     } catch (error) {
       console.error('Failed to load gallery items:', { error: error instanceof Error ? error.message : String(error) })

@@ -10,7 +10,7 @@
  * - Web search integration
  */
 
-import type { TextProviderPlugin, EmbeddingModelInfo } from './types';
+import type { TextProviderPlugin, EmbeddingModelInfo, ProviderOptionsSchema } from './types';
 import { OpenAIProvider } from './provider';
 import { OpenAIImageProvider } from './image-provider';
 import { OpenAIEmbeddingProvider } from './embedding-provider';
@@ -88,6 +88,63 @@ const cheapModels = {
 };
 
 /**
+ * Connection-profile options schema rendered by the Quilltap host.
+ * Keys map 1:1 to the `profileParameters` blob the provider reads at call time.
+ * Empty-string default means "omit the parameter and use the model default."
+ */
+const optionsSchema: ProviderOptionsSchema = {
+  groups: [
+    {
+      title: 'OpenAI Options',
+      fields: [
+        {
+          key: 'verbosity',
+          label: 'Verbosity',
+          type: 'enum',
+          default: '',
+          helpText:
+            'Scales how long and detailed the answer is. Supported on GPT-5 and newer models; older models will ignore it.',
+          enumValues: [
+            { value: '', label: '(model default)' },
+            { value: 'low', label: 'Low' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High' },
+          ],
+        },
+        {
+          key: 'reasoningEffort',
+          label: 'Reasoning Effort',
+          type: 'enum',
+          default: '',
+          helpText:
+            'How hard the model thinks before responding. Applies to reasoning models (o-series, GPT-5); ignored on non-reasoning models. Background tasks always use Low regardless of this setting.',
+          enumValues: [
+            { value: '', label: '(model default)' },
+            { value: 'minimal', label: 'Minimal' },
+            { value: 'low', label: 'Low' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Reasoning',
+      helpText:
+        "Request a reasoning summary so the model's thinking can be shown in chat (display only; never re-fed to the model). Only the reasoning OpenAI models (GPT-5, o-series) produce one. OpenAI does not always expose a summary — if nothing appears, the model simply did not return one.",
+      fields: [
+        {
+          key: 'reasoningSummary',
+          label: 'Show Reasoning Summary',
+          type: 'boolean',
+          default: false,
+        },
+      ],
+    },
+  ],
+};
+
+/**
  * The OpenAI Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
@@ -116,6 +173,11 @@ export const plugin: TextProviderPlugin = {
   toolFormat: 'openai',
   cheapModels,
   defaultContextWindow: 128000,
+
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
 
   /**
    * Factory method to create an OpenAI LLM provider instance

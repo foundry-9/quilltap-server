@@ -162,6 +162,10 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const documentsDeleted = await repos.docMountDocuments.deleteByMountPointId(id);
       const blobsDeleted = await repos.docMountBlobs.deleteByMountPointId(id);
 
+      // Delete folder hierarchy. Folder rows don't cascade from any other delete
+      // above (no FK to mount points or file_links), so they'd otherwise leak.
+      await repos.docMountFolders.deleteByMountPointId(id);
+
       // Delete project links
       const links = await repos.projectDocMountLinks.findByMountPointId(id);
       for (const link of links) {

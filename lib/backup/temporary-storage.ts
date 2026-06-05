@@ -125,20 +125,3 @@ export function retrieveTemporaryBackup(backupId: string): TemporaryBackup | nul
 
   return data;
 }
-
-/**
- * Check if a temporary backup exists (without removing it)
- *
- * @param backupId - The backup ID to check
- * @returns True if the backup exists
- */
-export function hasTemporaryBackup(backupId: string): boolean {
-  return getStorage().has(backupId);
-}
-
-/**
- * Get the count of stored temporary backups
- */
-export function getTemporaryBackupCount(): number {
-  return getStorage().size;
-}

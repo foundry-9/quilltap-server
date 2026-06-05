@@ -178,39 +178,6 @@ export function getFolderDepth(path: string): number {
 }
 
 /**
- * Check if a file is in a specific folder (exact match).
- *
- * @param file - The file entry to check
- * @param folderPath - The folder path to check against
- * @returns True if the file is directly in this folder
- */
-export function isInFolder(file: FileEntry, folderPath: string): boolean {
-  const normalizedFilePath = normalizeFolderPath(file.folderPath);
-  const normalizedFolderPath = normalizeFolderPath(folderPath);
-
-  return normalizedFilePath === normalizedFolderPath;
-}
-
-/**
- * Check if a file is in a folder or any of its subfolders (recursive).
- *
- * @param file - The file entry to check
- * @param folderPath - The folder path to check against
- * @returns True if the file is in this folder or a subfolder
- */
-export function isInFolderRecursive(file: FileEntry, folderPath: string): boolean {
-  const normalizedFilePath = normalizeFolderPath(file.folderPath);
-  const normalizedFolderPath = normalizeFolderPath(folderPath);
-
-  // Root folder contains everything
-  if (normalizedFolderPath === '/') {
-    return true;
-  }
-
-  return normalizedFilePath.startsWith(normalizedFolderPath);
-}
-
-/**
  * Extract unique folder paths from a list of files.
  *
  * Returns all unique folder paths including parent folders.
@@ -248,67 +215,6 @@ export function listFolders(files: FileEntry[]): string[] {
     }
     return a.localeCompare(b);
   });
-}
-
-/**
- * Build a folder tree structure from a list of files.
- *
- * @param files - Array of file entries
- * @returns Tree structure with nested children
- */
-export interface FolderTreeNode {
-  path: string;
-  name: string;
-  depth: number;
-  children: FolderTreeNode[];
-  fileCount: number;
-}
-
-export function buildFolderTree(files: FileEntry[]): FolderTreeNode {
-  const folders = listFolders(files);
-
-  // Count files per folder
-  const fileCountMap = new Map<string, number>();
-  for (const file of files) {
-    const folderPath = normalizeFolderPath(file.folderPath);
-    fileCountMap.set(folderPath, (fileCountMap.get(folderPath) || 0) + 1);
-  }
-
-  // Build node map
-  const nodeMap = new Map<string, FolderTreeNode>();
-  for (const path of folders) {
-    nodeMap.set(path, {
-      path,
-      name: getFolderName(path) || 'Root',
-      depth: getFolderDepth(path),
-      children: [],
-      fileCount: fileCountMap.get(path) || 0,
-    });
-  }
-
-  // Link children to parents
-  for (const path of folders) {
-    if (path === '/') continue;
-    const parentPath = getParentPath(path);
-    const parentNode = nodeMap.get(parentPath);
-    const currentNode = nodeMap.get(path);
-    if (parentNode && currentNode) {
-      parentNode.children.push(currentNode);
-    }
-  }
-
-  // Sort children alphabetically
-  for (const node of nodeMap.values()) {
-    node.children.sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  return nodeMap.get('/') || {
-    path: '/',
-    name: 'Root',
-    depth: 0,
-    children: [],
-    fileCount: 0,
-  };
 }
 
 /**

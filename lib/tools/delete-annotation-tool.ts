@@ -7,12 +7,25 @@
  * annotation is affected.
  */
 
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/**
+ * Zod schema for the delete-annotation tool's input. The single source of truth for both
+ * runtime validation and the derived OpenAI-format `parameters` JSON Schema.
+ */
+export const deleteAnnotationToolInputSchema = z.object({
+  message_index: z
+    .number()
+    .int()
+    .min(0)
+    .describe('The 0-based message number to remove your annotation from.'),
+});
+
 /**
  * Input parameters for the delete annotation tool
  */
-export interface DeleteAnnotationToolInput {
-  message_index: number
-}
+export type DeleteAnnotationToolInput = z.infer<typeof deleteAnnotationToolInputSchema>;
 
 /**
  * Output from the delete annotation tool
@@ -33,18 +46,7 @@ export const deleteAnnotationToolDefinition = {
     name: 'delete_annotation',
     description:
       'Remove your annotation from a specific message in this conversation. Only removes your own annotation — other characters\' annotations are not affected.',
-    parameters: {
-      type: 'object',
-      properties: {
-        message_index: {
-          type: 'integer',
-          minimum: 0,
-          description:
-            'The 0-based message number to remove your annotation from.',
-        },
-      },
-      required: ['message_index'],
-    },
+    parameters: zodToOpenAISchema(deleteAnnotationToolInputSchema),
   },
 }
 
@@ -54,20 +56,5 @@ export const deleteAnnotationToolDefinition = {
 export function validateDeleteAnnotationInput(
   input: unknown
 ): input is DeleteAnnotationToolInput {
-  if (typeof input !== 'object' || input === null) {
-    return false
-  }
-
-  const obj = input as Record<string, unknown>
-
-  // message_index is required
-  if (obj.message_index === undefined) {
-    return false
-  }
-  const index = Number(obj.message_index)
-  if (!Number.isInteger(index) || index < 0) {
-    return false
-  }
-
-  return true
+  return deleteAnnotationToolInputSchema.safeParse(input).success;
 }

@@ -80,18 +80,6 @@ export interface SpeakerMapping {
 }
 
 /**
- * Full import mapping configuration
- */
-export interface ImportMappingConfig {
-  /** Mappings for each speaker */
-  mappings: SpeakerMapping[]
-  /** Default connection profile for new characters */
-  defaultConnectionProfileId: string
-  /** Whether to trigger title generation after import */
-  triggerTitleGeneration?: boolean
-}
-
-/**
  * Parse a SillyTavern chat file (JSONL or JSON format)
  *
  * Detection strategy:
@@ -240,35 +228,6 @@ export function extractUniqueSpeakers(messages: STMessage[]): ParsedSpeaker[] {
   })
 
   return speakers
-}
-
-/**
- * Build a speaker name to entity ID map from mappings
- */
-export function buildSpeakerEntityMap(
-  mappings: SpeakerMapping[]
-): Map<string, { entityId: string; entityType: 'character' | 'persona'; isUser: boolean; controlledBy?: 'llm' | 'user' }> {
-  const map = new Map<string, { entityId: string; entityType: 'character' | 'persona'; isUser: boolean; controlledBy?: 'llm' | 'user' }>()
-
-  for (const mapping of mappings) {
-    if (mapping.mappingType === 'skip' || !mapping.entityId) {
-      continue
-    }
-
-    // Determine entity type - new approach treats user speakers as user-controlled characters
-    const entityType = mapping.mappingType.includes('character') ? 'character' : 'persona'
-    // Determine controlledBy - user speakers should be user-controlled
-    const controlledBy = mapping.controlledBy || (mapping.isUser ? 'user' : 'llm')
-
-    map.set(mapping.speakerName, {
-      entityId: mapping.entityId,
-      entityType,
-      isUser: mapping.isUser,
-      controlledBy,
-    })
-  }
-
-  return map
 }
 
 /**

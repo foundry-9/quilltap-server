@@ -205,9 +205,6 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
   async findById(id: string): Promise<RoleplayTemplate | null> {
     return this.safeQuery(
       async () => {
-        // Ensure built-in templates are seeded
-        await this.seedBuiltInTemplates();
-
         return await this._findById(id);
       },
       'Error finding roleplay template by ID',
@@ -222,9 +219,6 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
   async findAll(): Promise<RoleplayTemplate[]> {
     return this.safeQuery(
       async () => {
-        // Ensure built-in templates are seeded
-        await this.seedBuiltInTemplates();
-
         return await this._findAll();
       },
       'Error finding all roleplay templates',
@@ -251,9 +245,6 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
   async findBuiltIn(): Promise<RoleplayTemplate[]> {
     return this.safeQuery(
       async () => {
-        // Ensure built-in templates are seeded
-        await this.seedBuiltInTemplates();
-
         return await this.findByFilter({ isBuiltIn: true });
       },
       'Error finding built-in roleplay templates',
@@ -268,9 +259,6 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
   async findAllForUser(userId: string): Promise<RoleplayTemplate[]> {
     return this.safeQuery(
       async () => {
-        // Ensure built-in templates are seeded
-        await this.seedBuiltInTemplates();
-
         return await this.findByFilter({
           $or: [
             { isBuiltIn: true },

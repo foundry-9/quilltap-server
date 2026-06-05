@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals'
-import { embeddingToBlob, blobToEmbedding, documentToRow } from '@/lib/database/backends/sqlite/json-columns'
+import { embeddingToBlob, blobToEmbedding, documentToRow, parseLegacyEmbeddingText } from '@/lib/database/backends/sqlite/json-columns'
 
 describe('embeddingToBlob', () => {
   it('converts a number array to a Buffer', () => {
@@ -135,5 +135,58 @@ describe('documentToRow with blobColumns', () => {
     const row = documentToRow(doc, [], blobColumns)
 
     expect(row.embedding).toBeNull()
+  })
+})
+
+describe('parseLegacyEmbeddingText', () => {
+  it('parses the JSON-array legacy shape', () => {
+    const result = parseLegacyEmbeddingText('[0.1, 0.2, 0.3]')
+    expect(result).toEqual([0.1, 0.2, 0.3])
+  })
+
+  it('recovers the index-keyed object shape left by JSON.stringify(Float32Array)', () => {
+    // JSON.stringify(new Float32Array([...])) yields {"0":..,"1":..,...}.
+    const original = new Float32Array([0.5, -0.25, 0.125, 0.0625])
+    const legacyText = JSON.stringify(original)
+    expect(legacyText.startsWith('{')).toBe(true) // confirms the object shape
+
+    const result = parseLegacyEmbeddingText(legacyText)
+    expect(Array.isArray(result)).toBe(true)
+    expect(result).toHaveLength(4)
+    // Values come back in index order.
+    expect((result as number[])[0]).toBeCloseTo(0.5, 5)
+    expect((result as number[])[1]).toBeCloseTo(-0.25, 5)
+    expect((result as number[])[3]).toBeCloseTo(0.0625, 5)
+  })
+
+  it('preserves index order for a large index-keyed object', () => {
+    const dims = 1024
+    const original = Array.from({ length: dims }, (_, i) => i / dims)
+    const legacyText = JSON.stringify(new Float32Array(original))
+    const result = parseLegacyEmbeddingText(legacyText) as number[]
+
+    expect(result).toHaveLength(dims)
+    expect(result[0]).toBeCloseTo(0, 5)
+    expect(result[512]).toBeCloseTo(512 / dims, 5)
+    expect(result[dims - 1]).toBeCloseTo((dims - 1) / dims, 5)
+  })
+
+  it('returns undefined for unparseable or non-embedding text', () => {
+    expect(parseLegacyEmbeddingText('not json')).toBeUndefined()
+    expect(parseLegacyEmbeddingText('42')).toBeUndefined()
+    expect(parseLegacyEmbeddingText('"a string"')).toBeUndefined()
+    expect(parseLegacyEmbeddingText('null')).toBeUndefined()
+  })
+
+  it('round-trips an index-keyed object back into a Float32 BLOB', () => {
+    const original = [0.1, 0.2, 0.3, 0.4]
+    const legacyText = JSON.stringify(new Float32Array(original))
+    const recovered = parseLegacyEmbeddingText(legacyText) as number[]
+    const roundTripped = blobToEmbedding(embeddingToBlob(recovered))
+
+    expect(roundTripped).toHaveLength(4)
+    for (let i = 0; i < original.length; i++) {
+      expect(roundTripped[i]).toBeCloseTo(original[i], 5)
+    }
   })
 })

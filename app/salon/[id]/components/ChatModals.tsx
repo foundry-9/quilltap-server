@@ -2,7 +2,6 @@
 
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
-import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import ChatProjectModal from '@/components/chat/ChatProjectModal'
 import ChatRenameModal from '@/components/chat/ChatRenameModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
@@ -39,8 +38,6 @@ interface ChatModalsProps {
   setModalImage: (img: { src: string; filename: string; fileId?: string } | null) => void
   galleryOpen: boolean
   closeGallery: () => void
-  chatSettingsModalOpen: boolean
-  closeChatSettings: () => void
   chatProjectModalOpen: boolean
   closeChatProject: () => void
   renameModalOpen: boolean
@@ -109,7 +106,6 @@ export function ChatModals({
   // Modal state
   modalImage, setModalImage,
   galleryOpen, closeGallery,
-  chatSettingsModalOpen, closeChatSettings,
   chatProjectModalOpen, closeChatProject,
   renameModalOpen, closeRename,
   generateImageDialogOpen, closeGenerateImage,
@@ -182,16 +178,6 @@ export function ChatModals({
           )
           fetchChatPhotoCount()
         }}
-      />
-
-      <ChatSettingsModal
-        isOpen={chatSettingsModalOpen}
-        onClose={closeChatSettings}
-        chatId={chatId}
-        imageProfileId={chat?.imageProfileId}
-        avatarGenerationEnabled={chat?.avatarGenerationEnabled}
-        alertCharactersOfLanternImages={chat?.alertCharactersOfLanternImages}
-        onSuccess={fetchChat}
       />
 
       <ChatProjectModal

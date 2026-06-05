@@ -10,9 +10,9 @@
 6. You must update the [changelog](../../docs/CHANGELOG.md) for **every** git commit; no exceptions. If this is in the "bugfix" column, then it belongs in the next release section (if the last release was 3.1.2 then your changes probably belong in a 3.1.3 section), otherwise put it in the next dev section (if the last release was 3.1.2, then your changes probably belong in a 3.2-dev section). **Changelog entries are an exception to the Quilltap writing style.** Write them concisely, in straightforward American English words and spellings — the steampunk / Roaring Twenties / Wodehouse / Lemony Snicket voice we use for user-facing docs and UI does **not** apply to the changelog. Keep it terse and direct.
 7. If you have not already done so, it is worth running the following commands before the commit just to be sure it won't trip you up:
 
-    - `npm run lint`
+    - `npm run lint` - this must run for all the source. Fix all warnings and errors that you find, regardless of whether you think you caused them.
     - `npx tsc`
-    - `npm run test:unit`
+    - `npm run test:unit` - this must run for all the testable source. Fix all test failures, regardless of whether you think you caused them.
 
 8. If (and only if) either the Electron source or the Next.js source or the quilltap CLI package source has changed in any way, run `scripts/update_version.sh` to update the version number of the application.
 9. Please don't credit yourself in the commit message.

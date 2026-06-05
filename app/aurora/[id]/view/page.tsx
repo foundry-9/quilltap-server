@@ -248,12 +248,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         )
 
       case 'descriptions':
-        return (
-          <DescriptionsTab
-            characterId={id}
-            overlayActive={character?.readPropertiesFromDocumentStore === true}
-          />
-        )
+        return <DescriptionsTab characterId={id} />
 
       default:
         return null
@@ -342,10 +337,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           characterName={character?.name || 'Character'}
           profiles={profiles}
           defaultConnectionProfileId={character?.defaultConnectionProfileId}
-          vaultAvailable={
-            !!character?.readPropertiesFromDocumentStore &&
-            !!character?.characterDocumentMountPointId
-          }
+          vaultAvailable={!!character?.characterDocumentMountPointId}
           onClose={() => setShowOptimizerModal(false)}
           onApplied={() => {
             fetchCharacter()

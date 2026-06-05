@@ -24,18 +24,34 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
     const plugins = providerRegistry.getAllProviders();
 
     // Transform to response format
-    const providerList = plugins.map((plugin) => ({
-      id: plugin.metadata.providerName,
-      name: plugin.metadata.providerName,
-      displayName: plugin.metadata.displayName,
-      description: plugin.metadata.description,
-      abbreviation: plugin.metadata.abbreviation,
-      colors: plugin.metadata.colors,
-      icon: plugin.icon || null,
-      type: 'llm',
-      capabilities: plugin.capabilities,
-      configRequirements: plugin.config,
-    }));
+    const providerList = plugins.map((plugin) => {
+      // Ask each plugin for its connection-profile options schema, if any.
+      // Plugins that don't implement the hook fall back to undefined and
+      // the host renderer draws nothing for them.
+      let optionsSchema: ReturnType<NonNullable<typeof plugin.getProviderOptionsSchema>> | undefined;
+      try {
+        optionsSchema = plugin.getProviderOptionsSchema?.();
+      } catch (err) {
+        logger.warn('[Providers v1] getProviderOptionsSchema threw', {
+          provider: plugin.metadata.providerName,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        optionsSchema = undefined;
+      }
+      return {
+        id: plugin.metadata.providerName,
+        name: plugin.metadata.providerName,
+        displayName: plugin.metadata.displayName,
+        description: plugin.metadata.description,
+        abbreviation: plugin.metadata.abbreviation,
+        colors: plugin.metadata.colors,
+        icon: plugin.icon || null,
+        type: 'llm',
+        capabilities: plugin.capabilities,
+        configRequirements: plugin.config,
+        optionsSchema: optionsSchema ?? null,
+      };
+    });
 
     // Get all registered search providers
     const searchPlugins = searchProviderRegistry.getAllProviders();

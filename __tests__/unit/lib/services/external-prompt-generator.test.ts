@@ -82,9 +82,7 @@ function makeRepos(overrides: Record<string, any> = {}): RepositoryContainer {
         scenarios: [
           { id: 'sc-1', title: 'Tavern', content: 'A cozy tavern by the fire.' },
         ],
-      }),
-      getDescriptions: jest.fn().mockResolvedValue([
-        {
+        physicalDescription: {
           id: 'desc-1',
           name: 'Standard',
           fullDescription: 'Tall with silver hair and green eyes.',
@@ -93,10 +91,7 @@ function makeRepos(overrides: Record<string, any> = {}): RepositoryContainer {
           mediumPrompt: null,
           shortPrompt: null,
         },
-      ]),
-      getClothingRecords: jest.fn().mockResolvedValue([
-        { id: 'cloth-1', name: 'Adventure Gear', description: 'Leather armor with a dark cloak.' },
-      ]),
+      }),
       ...overrides.characters,
     },
   } as unknown as RepositoryContainer;
@@ -107,8 +102,6 @@ function makeRequest(overrides: Partial<ExternalPromptRequest> = {}): ExternalPr
     connectionProfileId: 'conn-1',
     systemPromptId: 'sp-1',
     scenarioId: 'sc-1',
-    descriptionId: 'desc-1',
-    clothingRecordId: 'cloth-1',
     maxTokens: 4000,
     ...overrides,
   };
@@ -142,43 +135,56 @@ describe('generateExternalPrompt', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('resolves scenario, description, and clothing when IDs are provided', async () => {
+  it('resolves scenario and the character physical description when provided', async () => {
     const repos = makeRepos();
     const request = makeRequest();
 
     await generateExternalPrompt('char-1', request, 'user-1', repos);
 
-    expect(repos.characters.getDescriptions).toHaveBeenCalledWith('char-1');
-    expect((repos.characters as any).getClothingRecords).toHaveBeenCalledWith('char-1');
-
-    // The user message sent to LLM should include scenario, appearance, and clothing sections
+    // The user message sent to LLM should include scenario and appearance sections.
+    // Clothing records are no longer part of the Character schema; only physical
+    // description (singular) flows through.
     const sentMessages = mockSendMessage.mock.calls[0][0].messages;
     const userMessage: string = sentMessages[1].content;
     expect(userMessage).toContain('Scenario / Setting');
     expect(userMessage).toContain('A cozy tavern by the fire.');
     expect(userMessage).toContain('Physical Appearance');
     expect(userMessage).toContain('Tall with silver hair and green eyes.');
-    expect(userMessage).toContain('Clothing / Attire');
-    expect(userMessage).toContain('Leather armor with a dark cloak.');
   });
 
   // 2. Generation without optional fields
   it('generates a prompt without optional fields', async () => {
-    const repos = makeRepos();
+    // Strip the optional scenario from the request, and override findById to
+    // return a character with no physicalDescription so the appearance section
+    // is omitted as well.
+    const repos = makeRepos({
+      characters: {
+        findById: jest.fn().mockResolvedValue({
+          id: 'char-1',
+          name: 'Aria',
+          title: 'The Brave',
+          aliases: ['Shadow'],
+          pronouns: { subject: 'she', object: 'her', possessive: 'her' },
+          description: 'A brave adventurer.',
+          personality: 'Bold and curious.',
+          firstMessage: 'Hello, traveler.',
+          exampleDialogues: 'User: Hi\nAria: Well met!',
+          systemPrompts: [
+            { id: 'sp-1', name: 'Default', content: 'You are Aria, a bold adventurer.' },
+          ],
+          scenarios: [],
+          physicalDescription: null,
+        }),
+      },
+    });
     const request = makeRequest({
       scenarioId: undefined,
-      descriptionId: undefined,
-      clothingRecordId: undefined,
     });
 
     const result = await generateExternalPrompt('char-1', request, 'user-1', repos);
 
     expect(result.success).toBe(true);
     expect(result.prompt).toBe(DEFAULT_LLM_RESPONSE.content);
-
-    // Should not have called getDescriptions or getClothingRecords
-    expect(repos.characters.getDescriptions).not.toHaveBeenCalled();
-    expect((repos.characters as any).getClothingRecords).not.toHaveBeenCalled();
 
     // User message should not contain optional sections
     const userMessage: string = mockSendMessage.mock.calls[0][0].messages[1].content;
@@ -208,8 +214,6 @@ describe('generateExternalPrompt', () => {
     const repos = makeRepos({
       characters: {
         findById: jest.fn().mockResolvedValue(null),
-        getDescriptions: jest.fn(),
-        getClothingRecords: jest.fn(),
       },
     });
     const request = makeRequest();

@@ -35,13 +35,39 @@ interface OpenRouterProviderPreferences {
 
 /**
  * OpenRouter-specific profile parameters
+ *
+ * Two shapes are accepted for backward compatibility:
+ * - The original nested `providerPreferences` object — still written by
+ *   profiles that predate the provider-options-schema refactor.
+ * - The flat keys (`enableZDR`, `useCustomModel`, etc.) written by the
+ *   schema-driven profile editor. `useCustomModel` is a UI directive and
+ *   is intentionally not consumed here.
  */
 interface OpenRouterProfileParams {
   fallbackModels?: string[];
   providerPreferences?: OpenRouterProviderPreferences;
+  enableZDR?: boolean;
+  useCustomModel?: boolean;
   temperature?: number;
   maxTokens?: number;
   topP?: number;
+  reasoningEffort?: string;
+}
+
+/**
+ * Merge the legacy nested `providerPreferences` shape with the flat keys
+ * written by the schema-driven profile editor. Flat keys take precedence
+ * because they are what the new UI emits.
+ */
+function resolveProviderPrefs(
+  profileParams: OpenRouterProfileParams | undefined
+): OpenRouterProviderPreferences | undefined {
+  if (!profileParams) return undefined;
+  const merged: OpenRouterProviderPreferences = { ...(profileParams.providerPreferences ?? {}) };
+  if (profileParams.enableZDR === true) {
+    merged.dataCollection = 'deny';
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 type OpenAIContentPart =
@@ -154,6 +180,13 @@ export class OpenRouterProvider implements TextProvider {
       stream: false,
     };
 
+    // Forward Quilltap's per-character cache identifier as `user`. OpenAI-
+    // routed downstreams use it as a sticky-routing hint; other downstreams
+    // (Anthropic, etc.) ignore it.
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      requestParams.user = params.cacheKey;
+    }
+
     // Add tools if provided
     if (params.tools && params.tools.length > 0) {
       requestParams.tools = params.tools;
@@ -193,7 +226,7 @@ export class OpenRouterProvider implements TextProvider {
     }
 
     // Add provider preferences if configured
-    const providerPrefs = profileParams?.providerPreferences;
+    const providerPrefs = resolveProviderPrefs(profileParams);
     if (providerPrefs) {
       requestParams.provider = {};
       if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
@@ -204,6 +237,14 @@ export class OpenRouterProvider implements TextProvider {
       if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
     }
 
+    // Enable reasoning output for models that support it in the non-streaming path.
+    const sendReasoningEffort = profileParams?.reasoningEffort;
+    if (typeof sendReasoningEffort === 'string' && sendReasoningEffort.length > 0) {
+      requestParams.reasoning = { effort: sendReasoningEffort, exclude: false };
+    } else {
+      requestParams.reasoning = { exclude: false };
+    }
+
     const response = await client.chat.send({
       chatRequest: requestParams,
     });
@@ -211,6 +252,9 @@ export class OpenRouterProvider implements TextProvider {
     const choice = response.choices[0];
     const content = choice.message.content;
     const contentStr = typeof content === 'string' ? content : '';
+
+    // Extract reasoning from the message if available
+    const sendReasoningContent = (choice.message as any)?.reasoning;
 
     // Extract cache usage if available
     const usageAny = response.usage as any;
@@ -233,6 +277,7 @@ export class OpenRouterProvider implements TextProvider {
       raw: response,
       attachmentResults,
       cacheUsage,
+      ...(sendReasoningContent && typeof sendReasoningContent === 'string' ? { reasoningContent: sendReasoningContent } : {}),
     };
   }
 
@@ -290,7 +335,15 @@ export class OpenRouterProvider implements TextProvider {
       temperature: params.temperature ?? 0.7,
       maxOutputTokens: params.maxTokens ?? 4096,
       topP: params.topP ?? 1,
+      stop: params.stop,
     };
+
+    // Forward Quilltap's per-character cache identifier as `user`. OpenAI-
+    // routed downstreams use it as a sticky-routing hint; other downstreams
+    // (Anthropic, etc.) ignore it.
+    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+      requestParams.user = params.cacheKey;
+    }
 
     // Add web search tool if enabled
     if (params.webSearchEnabled) {
@@ -326,7 +379,7 @@ export class OpenRouterProvider implements TextProvider {
     }
 
     // Add provider preferences if configured
-    const providerPrefs = profileParams?.providerPreferences;
+    const providerPrefs = resolveProviderPrefs(profileParams);
     if (providerPrefs) {
       requestParams.provider = {};
       if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
@@ -335,6 +388,14 @@ export class OpenRouterProvider implements TextProvider {
       if (providerPrefs.dataCollection) requestParams.provider.dataCollection = providerPrefs.dataCollection;
       if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
       if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
+    }
+
+    // Enable reasoning output for models that support it.
+    const sdkReasoningEffort = profileParams?.reasoningEffort;
+    if (typeof sdkReasoningEffort === 'string' && sdkReasoningEffort.length > 0) {
+      requestParams.reasoning = { effort: sdkReasoningEffort, exclude: false };
+    } else {
+      requestParams.reasoning = { exclude: false };
     }
 
     // Use callModel() which returns ModelResult with streaming capabilities
@@ -376,6 +437,20 @@ export class OpenRouterProvider implements TextProvider {
       completionTokens: response.usage.outputTokens ?? 0,
       totalTokens: (response.usage.inputTokens ?? 0) + (response.usage.outputTokens ?? 0),
     } : undefined;
+
+    // Extract reasoning from the response output (reasoning items contain summary text)
+    let sdkReasoning = '';
+    if (response.output && Array.isArray(response.output)) {
+      for (const item of response.output) {
+        if ((item as any).type === 'reasoning' && (item as any).summary) {
+          for (const summaryPart of (item as any).summary) {
+            if (summaryPart.type === 'summary_text' && summaryPart.text) {
+              sdkReasoning += summaryPart.text;
+            }
+          }
+        }
+      }
+    }
 
     // Extract cache usage if available
     const responseUsage = response.usage as any;
@@ -421,6 +496,7 @@ export class OpenRouterProvider implements TextProvider {
       attachmentResults,
       rawResponse,
       cacheUsage,
+      ...(sdkReasoning ? { reasoningContent: sdkReasoning } : {}),
     };
   }
 
@@ -466,6 +542,7 @@ export class OpenRouterProvider implements TextProvider {
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 4096,
       top_p: params.topP ?? 1,
+      stop: params.stop,
     };
 
     // Convert tools to OpenAI format and attach if present
@@ -491,6 +568,15 @@ export class OpenRouterProvider implements TextProvider {
     const profileParams = params.profileParameters as OpenRouterProfileParams | undefined;
     if (profileParams?.fallbackModels?.length) {
       body.route = 'fallback';
+    }
+
+    // Enable reasoning output for models that support it. `exclude: false`
+    // tells OpenRouter not to suppress reasoning from the response.
+    const reasoningEffort = profileParams?.reasoningEffort;
+    if (typeof reasoningEffort === 'string' && reasoningEffort.length > 0) {
+      body.reasoning = { effort: reasoningEffort, exclude: false };
+    } else {
+      body.reasoning = { exclude: false };
     }
 
     try {
@@ -525,6 +611,7 @@ export class OpenRouterProvider implements TextProvider {
       let buffer = '';
       let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined;
       let toolCalls: any[] = [];
+      let fetchReasoning = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -548,6 +635,13 @@ export class OpenRouterProvider implements TextProvider {
                 content: choice.delta.content,
                 done: false,
               };
+            }
+
+            // OpenRouter's reasoning field on the delta (mirrors OpenAI Chat Completions)
+            const deltaReasoning = choice?.delta?.reasoning;
+            if (deltaReasoning) {
+              fetchReasoning += deltaReasoning;
+              yield { content: '', done: false, reasoningContent: fetchReasoning };
             }
 
             // Accumulate tool calls
@@ -598,6 +692,7 @@ export class OpenRouterProvider implements TextProvider {
         usage,
         attachmentResults,
         rawResponse,
+        ...(fetchReasoning ? { reasoningContent: fetchReasoning } : {}),
       };
 
     } catch (error) {

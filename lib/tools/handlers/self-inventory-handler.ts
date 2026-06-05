@@ -1,11 +1,13 @@
 /**
  * Self-Inventory Tool Handler
  *
- * Assembles the seven-section introspection report. Each section is wrapped
+ * Assembles the eight-section introspection report. Each section is wrapped
  * in a try/catch so a single failing lookup yields an "unavailable" marker
  * rather than throwing the whole report away.
  */
 
+import fs from 'fs';
+import path from 'path';
 import packageJson from '@/package.json';
 import { logger } from '@/lib/logger';
 import { formatBytes } from '@/lib/utils/format-bytes';
@@ -19,6 +21,14 @@ import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types';
 import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
 import {
+  isDockerEnvironment,
+  isElectronShell,
+  isLimaEnvironment,
+  getElectronShellVersion,
+} from '@/lib/paths';
+import { isDevelopment } from '@/lib/env';
+import {
+  SELF_INVENTORY_SECTIONS,
   SelfInventoryToolInput,
   SelfInventoryToolOutput,
   SelfInventoryVaultSection,
@@ -31,7 +41,12 @@ import {
   SelfInventoryChatSection,
   SelfInventoryPromptSection,
   SelfInventoryLastTurnSection,
+  SelfInventoryQuilltapSection,
+  SelfInventoryQuilltapIncludedParts,
+  SelfInventoryRuntimeMode,
+  SelfInventoryClientShell,
   validateSelfInventoryInput,
+  type SelfInventorySection,
 } from '../self-inventory-tool';
 
 export interface SelfInventoryToolContext {
@@ -570,6 +585,153 @@ async function buildLastTurnSection(
   }
 }
 
+function resolveRuntimeMode(): SelfInventoryRuntimeMode {
+  const shell = isElectronShell();
+  const docker = isDockerEnvironment();
+  const vm = isLimaEnvironment();
+
+  if (shell && vm) return 'electron-vm';
+  if (shell && docker) return 'electron-docker';
+  if (shell) return 'electron';
+  if (vm) return 'vm';
+  if (docker) return 'docker';
+  if (isDevelopment) return 'local-dev';
+  return 'local-production';
+}
+
+function resolveClientShell(): SelfInventoryClientShell {
+  const shellVersion = getElectronShellVersion();
+  if (shellVersion) return { type: 'electron', shellVersion };
+  if (isElectronShell()) return { type: 'electron', shellVersion: 'unknown' };
+  return { type: 'browser' };
+}
+
+function parseSemanticVersion(version: string): [number, number, number] {
+  const base = version.split('-')[0];
+  const parts = base.split('.').map(Number);
+  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+}
+
+function findReleaseNotesFile(version: string): { filePath: string; version: string } | null {
+  const releasesDir = path.join(process.cwd(), 'docs', 'releases');
+
+  let files: string[];
+  try {
+    files = fs.readdirSync(releasesDir).filter((f) => f.endsWith('.md'));
+  } catch {
+    return null;
+  }
+
+  const [targetMajor, targetMinor, targetPatch] = parseSemanticVersion(version);
+
+  const candidates: { file: string; version: string; major: number; minor: number; patch: number }[] = [];
+  for (const file of files) {
+    const stem = file.replace(/\.md$/, '');
+    const parts = stem.split('.').map(Number);
+    if (parts.some(isNaN)) continue;
+
+    const major = parts[0] ?? 0;
+    const minor = parts[1] ?? 0;
+    const patch = parts[2] ?? 0;
+
+    if (
+      major < targetMajor ||
+      (major === targetMajor && minor < targetMinor) ||
+      (major === targetMajor && minor === targetMinor && patch <= targetPatch)
+    ) {
+      candidates.push({ file, version: stem, major, minor, patch });
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (a.major !== b.major) return b.major - a.major;
+    if (a.minor !== b.minor) return b.minor - a.minor;
+    return b.patch - a.patch;
+  });
+
+  return {
+    filePath: path.join(releasesDir, candidates[0].file),
+    version: candidates[0].version,
+  };
+}
+
+function buildQuilltapSection(
+  includedParts: SelfInventoryQuilltapIncludedParts
+): SelfInventoryQuilltapSection {
+  // The top-level identity (version + runtime + clientShell) is always cheap
+  // to compute and lives at the top of the section header in the formatter,
+  // so we resolve it unconditionally. The two file reads (release notes,
+  // changelog) are skipped when not requested — saves an fs.readFileSync on
+  // a potentially large changelog when the caller only asked for the version.
+  const version = packageJson.version;
+  const runtimeMode = resolveRuntimeMode();
+  const clientShell = resolveClientShell();
+
+  let releaseNotes: string | null = null;
+  let releaseNotesVersion: string | null = null;
+  if (includedParts.releaseNotes) {
+    const found = findReleaseNotesFile(version);
+    if (found) {
+      try {
+        releaseNotes = fs.readFileSync(found.filePath, 'utf-8');
+        releaseNotesVersion = found.version;
+      } catch {
+        // File disappeared between readdir and readFile
+      }
+    }
+  }
+
+  let changelog: string | null = null;
+  if (includedParts.changelog) {
+    try {
+      changelog = fs.readFileSync(path.join(process.cwd(), 'docs', 'CHANGELOG.md'), 'utf-8');
+    } catch {
+      // Changelog not available (e.g. standalone/Docker build without docs)
+    }
+  }
+
+  return {
+    available: true,
+    includedParts,
+    version,
+    runtimeMode,
+    clientShell,
+    releaseNotes,
+    releaseNotesVersion,
+    changelog,
+  };
+}
+
+function resolveQuilltapIncludedParts(
+  requested: Set<SelfInventorySection>
+): SelfInventoryQuilltapIncludedParts | null {
+  const wantsAll = requested.has('quilltap');
+  const wantsVersion = wantsAll || requested.has('quilltap.version');
+  const wantsReleaseNotes = wantsAll || requested.has('quilltap.releaseNotes');
+  const wantsChangelog = wantsAll || requested.has('quilltap.changelog');
+
+  if (!wantsVersion && !wantsReleaseNotes && !wantsChangelog) {
+    return null;
+  }
+
+  return {
+    version: wantsVersion,
+    releaseNotes: wantsReleaseNotes,
+    changelog: wantsChangelog,
+  };
+}
+
+function resolveRequestedSections(input: unknown): Set<SelfInventorySection> {
+  const parsed = input as { sections?: SelfInventorySection[] } | null | undefined;
+  const requested = parsed?.sections;
+  if (!requested || requested.length === 0) {
+    return new Set(SELF_INVENTORY_SECTIONS);
+  }
+  return new Set(requested);
+}
+
 export async function executeSelfInventoryTool(
   input: unknown,
   context: SelfInventoryToolContext
@@ -581,57 +743,14 @@ export async function executeSelfInventoryTool(
     });
   }
 
+  const requested = resolveRequestedSections(input);
+
   if (!context.characterId) {
     return {
       success: false,
       quilltapVersion: packageJson.version,
       characterId: '',
       characterName: '',
-      vault: { available: false, reason: 'error', message: 'Missing characterId.' },
-      vaultAccess: {
-        available: false,
-        sharedVaultsEnabled: false,
-        message: 'Missing characterId.',
-      },
-      memory: {
-        available: false,
-        totalCount: 0,
-        highImportanceCount: 0,
-        highImportancePercent: 0,
-        threshold: HIGH_IMPORTANCE_THRESHOLD,
-        message: 'Missing characterId.',
-      },
-      loadedMemories: {
-        available: false,
-        message: 'Missing characterId.',
-      },
-      chats: {
-        available: false,
-        chatCount: 0,
-        earliestCreatedAt: null,
-        latestActivityAt: null,
-        message: 'Missing characterId.',
-      },
-      prompt: {
-        available: false,
-        systemPrompt: null,
-        characterCount: 0,
-        approxTokens: null,
-        message: 'Missing characterId.',
-      },
-      lastTurn: {
-        available: false,
-        source: null,
-        provider: null,
-        modelName: null,
-        promptTokens: null,
-        completionTokens: null,
-        totalTokens: null,
-        contextWindow: null,
-        utilizationPercent: null,
-        loggedAt: null,
-        message: 'Missing characterId.',
-      },
       error: 'self_inventory requires a character context',
     };
   }
@@ -644,138 +763,121 @@ export async function executeSelfInventoryTool(
       quilltapVersion: packageJson.version,
       characterId: context.characterId,
       characterName: '',
-      vault: { available: false, reason: 'error', message: 'Character not found.' },
-      vaultAccess: {
-        available: false,
-        sharedVaultsEnabled: false,
-        message: 'Character not found.',
-      },
-      memory: {
-        available: false,
-        totalCount: 0,
-        highImportanceCount: 0,
-        highImportancePercent: 0,
-        threshold: HIGH_IMPORTANCE_THRESHOLD,
-        message: 'Character not found.',
-      },
-      loadedMemories: {
-        available: false,
-        message: 'Character not found.',
-      },
-      chats: {
-        available: false,
-        chatCount: 0,
-        earliestCreatedAt: null,
-        latestActivityAt: null,
-        message: 'Character not found.',
-      },
-      prompt: {
-        available: false,
-        systemPrompt: null,
-        characterCount: 0,
-        approxTokens: null,
-        message: 'Character not found.',
-      },
-      lastTurn: {
-        available: false,
-        source: null,
-        provider: null,
-        modelName: null,
-        promptTokens: null,
-        completionTokens: null,
-        totalTokens: null,
-        contextWindow: null,
-        utilizationPercent: null,
-        loggedAt: null,
-        message: 'Character not found.',
-      },
       error: `Character ${context.characterId} not found`,
     };
   }
 
-  const vault: SelfInventoryVaultSection = await buildVaultSection(character).catch(
-    (err) => ({
-      available: false as const,
-      reason: 'error' as const,
-      message: getErrorMessage(err),
-    })
-  );
-
-  const vaultAccess: SelfInventoryVaultAccessSection = await buildVaultAccessSection(
-    character,
-    context
-  ).catch((err) => ({
-    available: false as const,
-    sharedVaultsEnabled: false,
-    message: getErrorMessage(err),
-  }));
-
-  const memory: SelfInventoryMemorySection = await buildMemorySection(
-    context.characterId
-  ).catch((err) => ({
-    available: false,
-    totalCount: 0,
-    highImportanceCount: 0,
-    highImportancePercent: 0,
-    threshold: HIGH_IMPORTANCE_THRESHOLD,
-    message: getErrorMessage(err),
-  }));
-
-  const loadedMemories: SelfInventoryLoadedMemoriesSection = buildLoadedMemoriesSection(
-    context.loadedMemories
-  );
-
-  const chats: SelfInventoryChatSection = await buildChatsSection(
-    context.characterId
-  ).catch((err) => ({
-    available: false,
-    chatCount: 0,
-    earliestCreatedAt: null,
-    latestActivityAt: null,
-    message: getErrorMessage(err),
-  }));
-
-  const prompt: SelfInventoryPromptSection = await buildPromptSection(
-    character,
-    context
-  ).catch((err) => ({
-    available: false,
-    systemPrompt: null,
-    characterCount: 0,
-    approxTokens: null,
-    message: getErrorMessage(err),
-  }));
-
-  const lastTurn: SelfInventoryLastTurnSection = await buildLastTurnSection(
-    character,
-    context
-  ).catch((err) => ({
-    available: false,
-    source: null,
-    provider: null,
-    modelName: null,
-    promptTokens: null,
-    completionTokens: null,
-    totalTokens: null,
-    contextWindow: null,
-    utilizationPercent: null,
-    loggedAt: null,
-    message: getErrorMessage(err),
-  }));
-
-  return {
+  const result: SelfInventoryToolOutput = {
     success: true,
     quilltapVersion: packageJson.version,
     characterId: character.id,
     characterName: character.name,
-    vault,
-    vaultAccess,
-    memory,
-    loadedMemories,
-    chats,
-    prompt,
-    lastTurn,
   };
+
+  if (requested.has('vault')) {
+    result.vault = await buildVaultSection(character).catch(
+      (err) => ({
+        available: false as const,
+        reason: 'error' as const,
+        message: getErrorMessage(err),
+      })
+    );
+  }
+
+  if (requested.has('vaultAccess')) {
+    result.vaultAccess = await buildVaultAccessSection(
+      character,
+      context
+    ).catch((err) => ({
+      available: false as const,
+      sharedVaultsEnabled: false,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  if (requested.has('memory')) {
+    result.memory = await buildMemorySection(
+      context.characterId
+    ).catch((err) => ({
+      available: false,
+      totalCount: 0,
+      highImportanceCount: 0,
+      highImportancePercent: 0,
+      threshold: HIGH_IMPORTANCE_THRESHOLD,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  if (requested.has('loadedMemories')) {
+    result.loadedMemories = buildLoadedMemoriesSection(
+      context.loadedMemories
+    );
+  }
+
+  if (requested.has('chats')) {
+    result.chats = await buildChatsSection(
+      context.characterId
+    ).catch((err) => ({
+      available: false,
+      chatCount: 0,
+      earliestCreatedAt: null,
+      latestActivityAt: null,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  if (requested.has('prompt')) {
+    result.prompt = await buildPromptSection(
+      character,
+      context
+    ).catch((err) => ({
+      available: false,
+      systemPrompt: null,
+      characterCount: 0,
+      approxTokens: null,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  if (requested.has('lastTurn')) {
+    result.lastTurn = await buildLastTurnSection(
+      character,
+      context
+    ).catch((err) => ({
+      available: false,
+      source: null,
+      provider: null,
+      modelName: null,
+      promptTokens: null,
+      completionTokens: null,
+      totalTokens: null,
+      contextWindow: null,
+      utilizationPercent: null,
+      loggedAt: null,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  const includedQuilltapParts = resolveQuilltapIncludedParts(requested);
+  if (includedQuilltapParts) {
+    try {
+      result.quilltap = buildQuilltapSection(includedQuilltapParts);
+    } catch (err) {
+      result.quilltap = {
+        available: false,
+        includedParts: includedQuilltapParts,
+        version: packageJson.version,
+        runtimeMode: 'local-dev',
+        clientShell: { type: 'unknown' },
+        releaseNotes: null,
+        releaseNotesVersion: null,
+        changelog: null,
+        message: getErrorMessage(err),
+      };
+    }
+  }
+
+  return result;
 }
 
 function formatVaultSection(section: SelfInventoryVaultSection): string {
@@ -939,6 +1041,56 @@ function formatLastTurnSection(section: SelfInventoryLastTurnSection): string {
   ].join('\n');
 }
 
+const RUNTIME_MODE_LABELS: Record<SelfInventoryRuntimeMode, string> = {
+  'local-dev': 'Local (development)',
+  'local-production': 'Local (production)',
+  'docker': 'Docker',
+  'vm': 'VM (Lima/WSL2)',
+  'electron': 'Electron desktop app',
+  'electron-docker': 'Electron + Docker',
+  'electron-vm': 'Electron + VM',
+};
+
+function formatQuilltapSection(section: SelfInventoryQuilltapSection): string {
+  if (!section.available) {
+    return `## Quilltap\nUnavailable — ${section.message ?? 'unknown error'}`;
+  }
+
+  const parts: string[] = [`## Quilltap`];
+
+  if (section.includedParts.version) {
+    parts.push(
+      `Version: ${section.version}`,
+      `Runtime: ${RUNTIME_MODE_LABELS[section.runtimeMode] ?? section.runtimeMode}`,
+    );
+    if (section.clientShell.type === 'electron') {
+      parts.push(`Client: Electron shell v${section.clientShell.shellVersion}`);
+    } else if (section.clientShell.type === 'browser') {
+      parts.push(`Client: Web browser`);
+    } else {
+      parts.push(`Client: (unknown)`);
+    }
+  }
+
+  if (section.includedParts.releaseNotes) {
+    if (section.releaseNotes) {
+      parts.push('', `### Release Notes (v${section.releaseNotesVersion})`, section.releaseNotes);
+    } else {
+      parts.push('', `### Release Notes`, '(no release notes found for this version)');
+    }
+  }
+
+  if (section.includedParts.changelog) {
+    if (section.changelog) {
+      parts.push('', `### Changelog`, section.changelog);
+    } else {
+      parts.push('', `### Changelog`, '(changelog not available)');
+    }
+  }
+
+  return parts.join('\n');
+}
+
 export function formatSelfInventoryResults(output: SelfInventoryToolOutput): string {
   if (!output.success) {
     return `You are running on Quilltap v${output.quilltapVersion}.\n\nSelf-Inventory Error: ${output.error ?? 'Unknown error'}`;
@@ -949,21 +1101,32 @@ export function formatSelfInventoryResults(output: SelfInventoryToolOutput): str
     ``,
     `# Self-Inventory Report`,
     `Character: ${output.characterName} (id: ${output.characterId})`,
-    ``,
-    formatVaultSection(output.vault),
-    ``,
-    formatVaultAccessSection(output.vaultAccess),
-    ``,
-    formatMemorySection(output.memory),
-    ``,
-    formatLoadedMemoriesSection(output.loadedMemories),
-    ``,
-    formatChatsSection(output.chats),
-    ``,
-    formatPromptSection(output.prompt),
-    ``,
-    formatLastTurnSection(output.lastTurn),
   ];
+
+  if (output.vault) {
+    lines.push('', formatVaultSection(output.vault));
+  }
+  if (output.vaultAccess) {
+    lines.push('', formatVaultAccessSection(output.vaultAccess));
+  }
+  if (output.memory) {
+    lines.push('', formatMemorySection(output.memory));
+  }
+  if (output.loadedMemories) {
+    lines.push('', formatLoadedMemoriesSection(output.loadedMemories));
+  }
+  if (output.chats) {
+    lines.push('', formatChatsSection(output.chats));
+  }
+  if (output.prompt) {
+    lines.push('', formatPromptSection(output.prompt));
+  }
+  if (output.lastTurn) {
+    lines.push('', formatLastTurnSection(output.lastTurn));
+  }
+  if (output.quilltap) {
+    lines.push('', formatQuilltapSection(output.quilltap));
+  }
 
   return lines.join('\n');
 }

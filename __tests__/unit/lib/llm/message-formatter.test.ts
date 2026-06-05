@@ -62,10 +62,14 @@ describe('message formatter utilities', () => {
       { role: 'assistant' as const, content: 'Hi', name: 'Lyra', thoughtSignature: 'sig' },
     ]
 
-    it('uses native name field when supported by provider', () => {
+    it('inlines [Name] prefix on user turns and uses native name field for assistant turns when supported', () => {
       const formatted = formatMessagesForProvider(messages, 'OPENAI', 'Lyra')
       expect(formatted[0]).toEqual({ role: 'system', content: 'Rules' })
-      expect(formatted[1]).toMatchObject({ role: 'user', name: 'Alicia_Keys', content: 'Hello' })
+      expect(formatted[1]).toMatchObject({
+        role: 'user',
+        name: 'Alicia_Keys',
+        content: '[Alicia Keys] Hello',
+      })
       expect(formatted[2]).toMatchObject({ role: 'assistant', name: 'Lyra', content: 'Hi', thoughtSignature: 'sig' })
     })
 
@@ -73,6 +77,38 @@ describe('message formatter utilities', () => {
       const formatted = formatMessagesForProvider(messages, 'ANTHROPIC', 'Lyra')
       expect(formatted[1]).toEqual({ role: 'user', content: '[Alicia Keys] Hello' })
       expect(formatted[2]).toEqual({ role: 'assistant', content: '[Lyra] Hi', thoughtSignature: 'sig' })
+    })
+
+    it('does not double-prefix user turns whose content already starts with [Name]', () => {
+      const prefixed = [
+        { role: 'user' as const, content: '[Alicia Keys] Already tagged', name: 'Alicia Keys' },
+      ]
+      const formatted = formatMessagesForProvider(prefixed, 'OPENAI', 'Lyra')
+      expect(formatted[0]).toMatchObject({
+        role: 'user',
+        content: '[Alicia Keys] Already tagged',
+        name: 'Alicia_Keys',
+      })
+    })
+
+    // DISPLAY-ONLY GUARD: a character's stored reasoning ("thinking") must never
+    // be re-fed to any model via history. Even if a history message carries
+    // reasoningContent, the provider-shaped output must not include it.
+    it('never carries reasoningContent into the provider-shaped history', () => {
+      const withReasoning = [
+        { role: 'system' as const, content: 'Rules', reasoningContent: 'system should-not-appear' },
+        { role: 'user' as const, content: 'Hello', name: 'Alicia Keys', reasoningContent: 'user should-not-appear' },
+        { role: 'assistant' as const, content: 'Hi', name: 'Lyra', thoughtSignature: 'sig', reasoningContent: 'secret chain-of-thought' },
+      ] as unknown as Parameters<typeof formatMessagesForProvider>[0]
+
+      for (const provider of ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'DEEPSEEK'] as const) {
+        const formatted = formatMessagesForProvider(withReasoning, provider, 'Lyra')
+        for (const m of formatted) {
+          expect(m).not.toHaveProperty('reasoningContent')
+          expect(JSON.stringify(m)).not.toContain('should-not-appear')
+          expect(JSON.stringify(m)).not.toContain('secret chain-of-thought')
+        }
+      }
     })
   })
 

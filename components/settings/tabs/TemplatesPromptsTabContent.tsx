@@ -4,6 +4,7 @@ import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import RoleplayTemplatesTab from '@/components/settings/roleplay-templates'
 import PromptsTab from '@/components/settings/prompts-tab'
+import { CoreWhisperSection } from '@/components/settings/core-whisper/CoreWhisperSection'
 import { useSettingsSection } from './useSettingsSection'
 
 export function TemplatesPromptsTabContent() {
@@ -21,6 +22,10 @@ export function TemplatesPromptsTabContent() {
 
         <CollapsibleCard title="Prompts" description="Configure system prompts and prompt blocks" sectionId="prompts" forceOpen={activeSection === 'prompts'}>
           <PromptsTab />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Aurora's Core Whisper" description="Periodic re-offering of each character's own Core/ vault folder" sectionId="core-whisper" forceOpen={activeSection === 'core-whisper'}>
+          <CoreWhisperSection />
         </CollapsibleCard>
       </div>
     </div>

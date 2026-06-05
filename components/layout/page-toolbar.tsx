@@ -11,6 +11,7 @@
 
 import { SearchBar } from '@/components/search/search-bar'
 import { NavContentWidthToggle } from '@/components/dashboard/nav-content-width-toggle'
+import { AutonomousRoomBadges } from '@/components/layout/autonomous-room-badges'
 import { QueueStatusBadges } from '@/components/layout/queue-status-badges'
 import { usePageToolbarOptional } from '@/components/providers/page-toolbar-provider'
 
@@ -30,8 +31,9 @@ export function PageToolbar() {
         <SearchBar />
       </div>
 
-      {/* Right section: queue status + page-specific content + full-width toggle */}
+      {/* Right section: autonomous rooms + queue status + page-specific content + full-width toggle */}
       <div className="qt-page-toolbar-right">
+        <AutonomousRoomBadges />
         <QueueStatusBadges />
         {pageToolbar?.rightContent}
         <NavContentWidthToggle />

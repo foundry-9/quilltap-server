@@ -7,15 +7,20 @@ import type { TurnState } from '@/lib/chat/turn-manager'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 import type { Message, CharacterData, ChatSettings } from '../types'
 import type { SwipeState } from '../hooks/useChatData'
+import type { RenderItem } from '../announcement-render-items'
 import { MessageRow } from './MessageRow'
-import { PendingToolCalls } from './PendingToolCalls'
+import { AnnouncementGroup } from './AnnouncementChip'
 import { EphemeralMessages as EphemeralMessagesComponent } from './EphemeralMessages'
 import { StreamingMessage } from './StreamingMessage'
-import type { PendingToolCall } from '../hooks/useSSEStreaming'
+import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
 
 interface VirtualizedMessageListProps {
+  /** Flat (post-tool-grouping) message list. Still needed for the TOOL-row
+   *  backward participant-walk and the near-end forceRender heuristic. */
   messages: Message[]
+  /** Render-items the virtualizer indexes over: messages + packed announcement groups. */
+  renderItems: RenderItem[]
   virtualizer: Virtualizer<HTMLDivElement, Element>
   messagesContainerRef: React.RefObject<HTMLDivElement | null>
   messagesEndRef: React.RefObject<HTMLDivElement | null>
@@ -56,7 +61,7 @@ interface VirtualizedMessageListProps {
     switchSwipe: (groupId: string, direction: 'prev' | 'next', swipeStates: Record<string, SwipeState>, setSwipeStates: (value: any) => void) => void
     copyMessageContent: (content: string) => void
     resendMessage: (message: Message) => Promise<void>
-    canResendMessage: (messageId: string, index: number) => boolean
+    canResendMessage: (messageId: string) => boolean
   }
   turnManagement: {
     handleNudge: (participantId: string) => void | Promise<void>
@@ -78,8 +83,8 @@ interface VirtualizedMessageListProps {
   // LLM logs
   messagesWithLogs: Set<string>
   onViewLLMLogs: (messageId: string) => void
-  // Pending tool calls
-  pendingToolCalls: PendingToolCall[]
+  // In-progress tool calls, batched by prose offset, for the streaming bubble
+  streamingToolBatches: StreamingToolBatch[]
   // Ephemeral messages
   ephemeralMessages: EphemeralMessageData[]
   // Streaming message display
@@ -98,10 +103,21 @@ interface VirtualizedMessageListProps {
   userParticipantIdSet?: Set<string>
   /** Whether the Concierge has flagged this chat as dangerous */
   isDangerousChat?: boolean
+  /** Resolved per-chat thinking visibility (chat.showThinking ?? global default). DISPLAY ONLY. */
+  showThinking?: boolean
+  /** Whether thinking blocks start collapsed (global default). */
+  thinkingCollapsedByDefault?: boolean
+  /** Live cumulative reasoning ("thinking") for the in-progress streaming message. DISPLAY ONLY. */
+  streamingReasoning?: string
+  /** Whether to show the floating jump-to-bottom button (reader has scrolled up). */
+  showScrollToBottom?: boolean
+  /** Click handler for the jump-to-bottom button. */
+  onScrollToBottom?: () => void
 }
 
 export function VirtualizedMessageList({
   messages,
+  renderItems,
   virtualizer,
   messagesContainerRef,
   messagesEndRef,
@@ -137,7 +153,7 @@ export function VirtualizedMessageList({
   fetchChat,
   messagesWithLogs,
   onViewLLMLogs,
-  pendingToolCalls,
+  streamingToolBatches,
   ephemeralMessages,
   getRespondingCharacter,
   shouldShowAvatars,
@@ -146,6 +162,11 @@ export function VirtualizedMessageList({
   participantNames,
   userParticipantIdSet,
   isDangerousChat = false,
+  showThinking = false,
+  thinkingCollapsedByDefault = true,
+  streamingReasoning = '',
+  showScrollToBottom = false,
+  onScrollToBottom,
 }: VirtualizedMessageListProps) {
   // Resolve per-message character from participantData, falling back to first character
   const getCharacterForMessage = (message: Message): CharacterData | undefined => {
@@ -159,6 +180,7 @@ export function VirtualizedMessageList({
   }
 
   return (
+    <div className="qt-chat-messages-viewport">
     <div className="qt-chat-messages" ref={messagesContainerRef}>
       <div className="qt-chat-messages-list">
         {/* Virtualized messages rendering */}
@@ -170,11 +192,38 @@ export function VirtualizedMessageList({
           }}
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
-            const messageIndex = virtualRow.index
-            const message = messages[messageIndex]
+            const item = renderItems[virtualRow.index]
+            if (!item) return null
+
+            // Packed run of consecutive collapsed announcements — one virtual row
+            // of flex-wrapping chips.
+            if (item.kind === 'announcement-group') {
+              return (
+                <div
+                  key={item.id}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <AnnouncementGroup
+                    members={item.members}
+                    onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
+                  />
+                </div>
+              )
+            }
+
+            const message = item.message
+            const messageIndex = item.messageIndex
             const isEditing = editingMessageId === message.id
             const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
-            const showResendButton = messageActions.canResendMessage(message.id, messageIndex)
+            const showResendButton = messageActions.canResendMessage(message.id)
 
             if (message.role === 'TOOL') {
               // Fall back to the most recent ASSISTANT message's participant
@@ -296,6 +345,9 @@ export function VirtualizedMessageList({
                   hasLLMLogs={messagesWithLogs.has(message.id)}
                   onViewLLMLogs={onViewLLMLogs}
                   onCourierTurnSettled={fetchChat}
+                  attachedToolMessages={message.attachedToolMessages}
+                  showThinking={showThinking}
+                  thinkingCollapsedByDefault={thinkingCollapsedByDefault}
                   participantNames={participantNames}
                   isOverheardWhisper={
                     !!(message.targetParticipantIds?.length) &&
@@ -310,16 +362,13 @@ export function VirtualizedMessageList({
           })}
         </div>
 
-        {/* Pending tool calls */}
-        <PendingToolCalls pendingToolCalls={pendingToolCalls} />
-
         {/* Ephemeral messages */}
         <EphemeralMessagesComponent
           messages={ephemeralMessages}
           onDismiss={turnManagement.handleDismissEphemeral}
         />
 
-        {/* Streaming message */}
+        {/* Streaming message — in-progress tool calls nest inside this bubble */}
         <StreamingMessage
           streaming={streaming}
           streamingContent={streamingContent}
@@ -329,10 +378,38 @@ export function VirtualizedMessageList({
           dialogueDetection={roleplayDialogueDetection}
           shouldShowAvatars={shouldShowAvatars()}
           isDangerousChat={isDangerousChat}
+          streamingToolBatches={streamingToolBatches}
+          streamingReasoning={showThinking ? streamingReasoning : ''}
+          thinkingCollapsedByDefault={thinkingCollapsedByDefault}
         />
 
         <div ref={messagesEndRef} />
       </div>
+    </div>
+
+      {showScrollToBottom && (
+        <button
+          type="button"
+          className="qt-chat-scroll-to-bottom"
+          onClick={onScrollToBottom}
+          aria-label="Jump to latest message"
+          title="Jump to latest message"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      )}
     </div>
   )
 }

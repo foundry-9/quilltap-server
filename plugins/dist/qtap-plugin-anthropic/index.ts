@@ -8,7 +8,7 @@
  * - Function calling / tool use
  */
 
-import type { TextProviderPlugin } from './types'
+import type { TextProviderPlugin, ProviderOptionsSchema } from './types'
 import { AnthropicProvider } from './provider'
 import {
   createPluginLogger,
@@ -88,6 +88,72 @@ const cheapModels = {
 };
 
 /**
+ * Connection-profile options schema rendered by the Quilltap host.
+ * Keys map 1:1 to the `profileParameters` blob the provider reads at call time.
+ */
+const optionsSchema: ProviderOptionsSchema = {
+  groups: [
+    {
+      title: 'Anthropic Options',
+      helpText: 'Prompt caching can reduce costs by up to 90% for repeated context.',
+      fields: [
+        {
+          key: 'enableCacheBreakpoints',
+          label: 'Enable Prompt Caching',
+          type: 'boolean',
+          default: false,
+        },
+        {
+          key: 'cacheStrategy',
+          label: 'Cache Strategy',
+          type: 'enum',
+          default: 'system_and_long_context',
+          enumValues: [
+            { value: 'system_only', label: 'System message only' },
+            {
+              value: 'system_and_long_context',
+              label: 'System + tools + conversation (recommended)',
+            },
+          ],
+          showIf: { field: 'enableCacheBreakpoints', equals: true },
+        },
+        {
+          key: 'cacheTTL',
+          label: 'Cache Duration',
+          type: 'enum',
+          default: '5m',
+          enumValues: [
+            { value: '5m', label: '5 minutes (1.25x write cost)' },
+            { value: '1h', label: '1 hour (2x write cost)' },
+          ],
+          showIf: { field: 'enableCacheBreakpoints', equals: true },
+        },
+      ],
+    },
+    {
+      title: 'Extended Thinking',
+      helpText: "Let the model reason before answering. The reasoning is shown in chat (display only) and never re-fed to the model. While thinking is on, temperature and top_p are left at their defaults (extended thinking requires this), and max_tokens is raised above the budget if needed (the API requires budget ≥ 1024 and < max_tokens).",
+      fields: [
+        {
+          key: 'extendedThinking',
+          label: 'Enable Extended Thinking',
+          type: 'boolean',
+          default: false,
+        },
+        {
+          key: 'thinkingBudget',
+          label: 'Thinking Budget (tokens)',
+          helpText: 'Maximum tokens the model may spend thinking. Minimum 1024; defaults to 4096 when left blank.',
+          type: 'number',
+          default: 4096,
+          showIf: { field: 'extendedThinking', equals: true },
+        },
+      ],
+    },
+  ],
+};
+
+/**
  * The Anthropic Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
@@ -113,6 +179,13 @@ export const plugin: TextProviderPlugin = {
   toolFormat: 'anthropic',
   cheapModels,
   defaultContextWindow: 200000,
+
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   * The `context` argument is currently advisory; the schema is returned
+   * unconditionally.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
 
   /**
    * Factory method to create an Anthropic LLM provider instance

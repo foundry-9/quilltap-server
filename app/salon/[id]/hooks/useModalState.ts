@@ -23,8 +23,6 @@ export interface SelectLLMProfileDialogState {
 export function useModalState() {
   // Simple boolean modals
   const [galleryOpen, setGalleryOpen] = useState(false)
-  const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
-  const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [chatProjectModalOpen, setChatProjectModalOpen] = useState(false)
   const [continueChatModalOpen, setContinueChatModalOpen] = useState(false)
   const [renameModalOpen, setRenameModalOpen] = useState(false)
@@ -51,8 +49,6 @@ export function useModalState() {
   // Convenience open/close helpers
   const openGallery = useCallback(() => setGalleryOpen(true), [])
   const closeGallery = useCallback(() => setGalleryOpen(false), [])
-  const openChatSettings = useCallback(() => setChatSettingsModalOpen(true), [])
-  const closeChatSettings = useCallback(() => setChatSettingsModalOpen(false), [])
   const openChatProject = useCallback(() => setChatProjectModalOpen(true), [])
   const closeChatProject = useCallback(() => setChatProjectModalOpen(false), [])
   const openContinueChat = useCallback(() => setContinueChatModalOpen(true), [])
@@ -83,8 +79,6 @@ export function useModalState() {
   return {
     // Simple boolean modals
     galleryOpen, setGalleryOpen,
-    toolPaletteOpen, setToolPaletteOpen,
-    chatSettingsModalOpen,
     chatProjectModalOpen,
     continueChatModalOpen,
     renameModalOpen,
@@ -106,7 +100,6 @@ export function useModalState() {
 
     // Convenience helpers
     openGallery, closeGallery,
-    openChatSettings, closeChatSettings,
     openChatProject, closeChatProject,
     openContinueChat, closeContinueChat,
     openRename, closeRename,

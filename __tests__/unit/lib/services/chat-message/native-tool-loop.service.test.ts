@@ -52,6 +52,13 @@ jest.mock('@/lib/services/chat-message/streaming.service', () => ({
   encodeContentChunk: (e: TextEncoder, t: string) => mockEncodeContentChunk(e, t),
   encodeStatusEvent: (e: TextEncoder, p: unknown) => mockEncodeStatusEvent(e, p),
   safeEnqueue: (c: { enqueue: (x: unknown) => void }, x: unknown) => mockSafeEnqueue(c, x),
+  applyReasoningChunk: jest.fn(),
+  flushReasoningSegment: jest.fn(),
+  nextTurnSeq: (s: { nextTurnSeq?: number }) => {
+    const n = s.nextTurnSeq ?? 0
+    s.nextTurnSeq = n + 1
+    return n
+  },
 }))
 
 jest.mock('@/lib/services/chat-message/tool-execution.service', () => ({
@@ -157,6 +164,9 @@ describe('native-tool-loop.service', () => {
     expect(mockProcessToolCalls).toHaveBeenCalledTimes(1)
     expect(opts.toolMessages).toHaveLength(1)
     expect(opts.toolMessages[0]?.callId).toBe('tc-1')
+    // Anchored to the prose length at the moment the tool fired (the primary
+    // response 'I should open it. ', before the continuation appended).
+    expect(opts.toolMessages[0]?.anchorOffset).toBe('I should open it. '.length)
     expect(opts.streaming.fullResponse).toBe('I should open it. after-tool-response')
     expect(opts.streaming.usage).toEqual({ promptTokens: 9 })
     expect(opts.streaming.rawResponse).toEqual({ id: 'raw-2' })
@@ -248,21 +258,57 @@ describe('native-tool-loop.service', () => {
     expect(streamMessageCalls).toHaveLength(1)
   })
 
-  it('agent mode: submit_final_response with two tool calls on iteration 0 is NOT ghost-wrap (terminates)', async () => {
+  it('agent mode: sibling tool calls alongside submit_final_response are processed (not silently dropped) and the response arg replaces prose', async () => {
+    // Earlier behaviour: the loop broke on submit_final_response before any
+    // accompanying tool could run, so `[edit_file, submit_final_response]`
+    // would lose the file edit. Fix: sibling tools run first, then submit
+    // takes effect.
     mockDetectToolCalls.mockReturnValueOnce([
       { name: 'submit_final_response', arguments: { response: 'final' }, callId: 'tc-final' },
-      { name: 'doc_open_file', arguments: {}, callId: 'tc-1' },
+      { name: 'doc_open_file', arguments: { path: 'a.md' }, callId: 'tc-1' },
     ])
+    mockProcessToolCalls.mockResolvedValueOnce({
+      toolMessages: [{ toolName: 'doc_open_file', content: 'opened', callId: 'tc-1', success: true }],
+      generatedImagePaths: [],
+    })
     const opts = makeBaseOpts({
       agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
       streaming: makeStreaming({ fullResponse: '' }),
     })
     await runNativeToolLoop(opts as any)
     expect(opts.streaming.fullResponse).toBe('final')
+    expect(mockProcessToolCalls).toHaveBeenCalledTimes(1)
+    // The sibling-processing call only passes the non-submit tool calls.
+    const callArgs = mockProcessToolCalls.mock.calls[0]
+    const passedToolCalls = callArgs?.[0] as Array<{ name: string }>
+    expect(passedToolCalls.map(tc => tc.name)).toEqual(['doc_open_file'])
+    expect(opts.toolMessages).toHaveLength(1)
+    expect(opts.toolMessages[0]?.toolName).toBe('doc_open_file')
+  })
+
+  it('agent mode: submit_final_response with prose and no real tool work preserves the streamed prose (autonomous-room replay guard)', async () => {
+    // This is the autonomous-room "every other turn repeats the completion
+    // summary" pattern. Old behaviour: streaming.fullResponse gets overwritten
+    // by args.response (or currentResponse when args.response is missing).
+    // Fix: when no non-submit tool work happened this turn, preserve the
+    // streamed prose instead of replacing it.
+    mockDetectToolCalls.mockReturnValueOnce([
+      { name: 'submit_final_response', arguments: { response: 'I have successfully completed the task...' }, callId: 'tc-final' },
+    ])
+    const opts = makeBaseOpts({
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
+      streaming: makeStreaming({ fullResponse: '*Amy leans into the embrace, the warm light catching her hair.*' }),
+    })
+    await runNativeToolLoop(opts as any)
+    expect(opts.streaming.fullResponse).toBe('*Amy leans into the embrace, the warm light catching her hair.*')
     expect(mockProcessToolCalls).not.toHaveBeenCalled()
   })
 
-  it('agent mode: submit_final_response with prose on iteration 0 is NOT ghost-wrap (terminates, falls back to currentResponse when no response arg)', async () => {
+  it('agent mode: submit_final_response with prose and no response arg also preserves prose', async () => {
+    // Same prose-preservation guard, but the model omits the response
+    // argument entirely. Old behaviour fell back to `currentResponse`, which
+    // happens to equal the prose anyway, so the visible outcome was already
+    // correct — this test pins the behaviour.
     mockDetectToolCalls.mockReturnValueOnce([
       { name: 'submit_final_response', arguments: {}, callId: 'tc-final' },
     ])
@@ -365,6 +411,78 @@ describe('native-tool-loop.service', () => {
 
     expect(streamMessageCalls).toHaveLength(5)
     expect(mockRepoChatsUpdate).not.toHaveBeenCalled()
+  })
+
+  it('truncation guard: a tool call cut off at the output-token limit is NOT executed and gets a recoverable failure message', async () => {
+    // Friday's bug: a doc_write_file whose huge `content` blew past the output
+    // token ceiling, so the streamed arguments JSON was cut off before `path`
+    // was emitted. The parsed arguments are missing `path`; executing them
+    // crashed path resolution with "Cannot read properties of undefined
+    // (reading 'split')". Now the loop detects stop_reason=max_tokens and
+    // rejects the call instead of running it.
+    mockDetectToolCalls
+      .mockReturnValueOnce([{ name: 'doc_write_file', arguments: { content: 'a giant partial blob…' }, callId: 'tc-1' }])
+      .mockReturnValueOnce([])
+
+    nextStreamMessageScripts = [[
+      { content: 'let me try a smaller write' },
+      { done: true, usage: null, cacheUsage: null, rawResponse: { stop_reason: 'end_turn' } },
+    ]]
+    nextStreamMessageBehaviours = ['happy']
+
+    const opts = makeBaseOpts({
+      streaming: makeStreaming({ fullResponse: '', rawResponse: { stop_reason: 'max_tokens' } }),
+    })
+    await runNativeToolLoop(opts as any)
+
+    // The truncated call is never handed to the executor.
+    expect(mockProcessToolCalls).not.toHaveBeenCalled()
+    // A failure tool message is synthesized so the tool_use has a matching
+    // tool_result (providers pair them by callId) and the model learns why.
+    expect(opts.toolMessages).toHaveLength(1)
+    expect(opts.toolMessages[0]?.toolName).toBe('doc_write_file')
+    expect(opts.toolMessages[0]?.success).toBe(false)
+    expect(opts.toolMessages[0]?.callId).toBe('tc-1')
+    expect(opts.toolMessages[0]?.content).toContain('cut off')
+    expect(opts.toolMessages[0]?.content).toContain('output token limit')
+
+    // The loop re-prompts so the model can retry smaller.
+    expect(streamMessageCalls).toHaveLength(1)
+    const sent = streamMessageCalls[0]!
+    const messages = sent.messages as Array<{ role: string; content?: string; toolCallId?: string }>
+    expect(messages[messages.length - 1]).toMatchObject({ role: 'tool', toolCallId: 'tc-1' })
+    expect(opts.streaming.fullResponse).toBe('let me try a smaller write')
+  })
+
+  it('truncation guard: a truncated submit_final_response does NOT terminate the agent loop or overwrite the response', async () => {
+    // Without the !truncated gate, a submit_final_response cut off mid-arguments
+    // would still set streaming.fullResponse to its partial `response` arg and
+    // end the turn. It must be rejected like any other truncated call.
+    mockDetectToolCalls
+      .mockReturnValueOnce([{ name: 'submit_final_response', arguments: { response: 'SHOULD-NOT-USE' }, callId: 'tc-f' }])
+      .mockReturnValueOnce([])
+
+    nextStreamMessageScripts = [[
+      { content: 'recovered-prose' },
+      { done: true, usage: null, cacheUsage: null, rawResponse: { stop_reason: 'end_turn' } },
+    ]]
+    nextStreamMessageBehaviours = ['happy']
+
+    const opts = makeBaseOpts({
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
+      // Non-empty prose so this isn't classified as a ghost-wrap; we want to
+      // prove the *truncation* gate (not the ghost-wrap gate) does the work.
+      streaming: makeStreaming({ fullResponse: 'I will finish now. ', rawResponse: { stop_reason: 'max_tokens' } }),
+    })
+    await runNativeToolLoop(opts as any)
+
+    expect(mockProcessToolCalls).not.toHaveBeenCalled()
+    expect(opts.streaming.fullResponse).toBe('I will finish now. recovered-prose')
+    expect(opts.streaming.fullResponse).not.toContain('SHOULD-NOT-USE')
+    expect(opts.toolMessages).toHaveLength(1)
+    expect(opts.toolMessages[0]?.toolName).toBe('submit_final_response')
+    expect(opts.toolMessages[0]?.success).toBe(false)
+    expect(opts.toolMessages[0]?.content).toContain('cut off')
   })
 
   it('on follow-up stream error: preservePartialOnError is called and the error re-throws', async () => {

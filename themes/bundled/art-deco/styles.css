@@ -47,6 +47,10 @@
   --deco-gold: hsl(43 85% 55%);
   --deco-gold-light: hsl(43 75% 72%);
   --deco-gold-dark: hsl(43 80% 42%);
+  /* Select dropdown chevron — antique gold to match the deco accent (deep enough
+     to read on the cream/ivory inputs). Data URIs can't take a CSS var, so the
+     stroke mirrors --deco-gold-dark hsl(43 80% 42%) ≈ #C19015. */
+  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23C19015' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
   --deco-navy: hsl(222 47% 11%);
   --deco-navy-mid: hsl(222 35% 22%);
   --deco-ivory: hsl(45 28% 75%);
@@ -444,6 +448,9 @@
   --deco-gold: hsl(43 90% 58%);
   --deco-gold-light: hsl(43 80% 68%);
   --deco-gold-dark: hsl(43 75% 38%);
+  /* Brighter gold chevron so it reads on the dark inputs. Mirrors --deco-gold
+     hsl(43 90% 58%) ≈ #F4BE34. */
+  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23F4BE34' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
   --deco-navy: hsl(222 47% 7%);
   --deco-navy-mid: hsl(222 35% 16%);
   --deco-ivory: hsl(45 15% 90%);

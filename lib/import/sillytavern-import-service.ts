@@ -217,7 +217,6 @@ export async function importMultiCharacterChat(
         personality: null,
         firstMessage: null,
         exampleDialogues: null,
-        avatarUrl: null,
         defaultConnectionProfileId:
           controlledBy === 'llm' ? (mapping.connectionProfileId || defaultConnectionProfileId) : null,
         isFavorite: false,
@@ -225,8 +224,7 @@ export async function importMultiCharacterChat(
         partnerLinks: [] as { partnerId: string; isDefault: boolean }[],
         avatarOverrides: [] as { chatId: string; imageId: string }[],
         defaultImageId: null,
-        physicalDescriptions: [],
-        clothingRecords: [],
+        physicalDescription: null,
       })
       entityId = character.id
       if (controlledBy === 'llm') {
@@ -264,15 +262,13 @@ export async function importMultiCharacterChat(
         personality: null,
         firstMessage: null,
         exampleDialogues: null,
-        avatarUrl: null,
         defaultConnectionProfileId: null, // User-controlled characters don't need a connection profile
         isFavorite: false,
         tags: [] as string[],
         partnerLinks: [] as { partnerId: string; isDefault: boolean }[],
         avatarOverrides: [] as { chatId: string; imageId: string }[],
         defaultImageId: null,
-        physicalDescriptions: [],
-        clothingRecords: [],
+        physicalDescription: null,
       })
       entityId = character.id
       createdEntities.characters.push(character)

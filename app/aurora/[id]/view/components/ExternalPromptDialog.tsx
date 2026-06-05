@@ -24,16 +24,6 @@ interface ConnectionProfile {
   isDefault: boolean
 }
 
-interface PhysicalDescription {
-  id: string
-  name: string
-}
-
-interface ClothingRecord {
-  id: string
-  name: string
-}
-
 interface ExternalPromptDialogProps {
   characterId: string
   characterName: string | undefined
@@ -54,26 +44,20 @@ export function ExternalPromptDialog({
   const [connectionProfileId, setConnectionProfileId] = useState('')
   const [systemPromptId, setSystemPromptId] = useState('')
   const [scenarioId, setScenarioId] = useState('')
-  const [descriptionId, setDescriptionId] = useState('')
-  const [clothingRecordId, setClothingRecordId] = useState('')
   const [maxTokens, setMaxTokens] = useState(4000)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
-  const [descriptions, setDescriptions] = useState<PhysicalDescription[]>([])
-  const [clothingRecords, setClothingRecords] = useState<ClothingRecord[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Fetch connection profiles, descriptions, and clothing on mount
+  // Fetch connection profiles on mount. The character's physical description
+  // and wardrobe are pulled in by the server; the dialog no longer asks the
+  // user to pick which record to use.
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [profilesRes, descriptionsRes, clothingRes] = await Promise.all([
-          fetch('/api/v1/connection-profiles'),
-          fetch(`/api/v1/characters/${characterId}/descriptions`),
-          fetch(`/api/v1/characters/${characterId}/clothing`),
-        ])
+        const profilesRes = await fetch('/api/v1/connection-profiles')
 
         if (profilesRes.ok) {
           const data = await profilesRes.json()
@@ -86,16 +70,6 @@ export function ExternalPromptDialog({
             setConnectionProfileId(fetchedProfiles[0].id)
           }
         }
-
-        if (descriptionsRes.ok) {
-          const data = await descriptionsRes.json()
-          setDescriptions(data.descriptions || [])
-        }
-
-        if (clothingRes.ok) {
-          const data = await clothingRes.json()
-          setClothingRecords(data.clothingRecords || [])
-        }
       } catch {
         // Non-critical — dropdowns will just be empty
       } finally {
@@ -104,7 +78,7 @@ export function ExternalPromptDialog({
     }
 
     fetchData()
-  }, [characterId])
+  }, [])
 
   // Pre-select default system prompt
   useEffect(() => {
@@ -130,8 +104,6 @@ export function ExternalPromptDialog({
         maxTokens,
       }
       if (scenarioId) body.scenarioId = scenarioId
-      if (descriptionId) body.descriptionId = descriptionId
-      if (clothingRecordId) body.clothingRecordId = clothingRecordId
 
       const res = await fetch(`/api/v1/characters/${characterId}?action=generate-external-prompt`, {
         method: 'POST',
@@ -156,7 +128,7 @@ export function ExternalPromptDialog({
   const estimatedChars = maxTokens * 4
   const canGenerate = connectionProfileId && systemPromptId && !generating
 
-  const selectClasses = 'w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring'
+  const selectClasses = 'qt-select'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
@@ -238,50 +210,6 @@ export function ExternalPromptDialog({
               </div>
             )}
 
-            {/* Physical Description (optional) */}
-            {descriptions.length > 0 && (
-              <div>
-                <label htmlFor="ext-description" className="mb-2 block text-sm qt-text-primary">
-                  Physical Description (Optional)
-                </label>
-                <select
-                  id="ext-description"
-                  value={descriptionId}
-                  onChange={(e) => setDescriptionId(e.target.value)}
-                  className={selectClasses}
-                >
-                  <option value="">None</option>
-                  {descriptions.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Clothing Record (optional) */}
-            {clothingRecords.length > 0 && (
-              <div>
-                <label htmlFor="ext-clothing" className="mb-2 block text-sm qt-text-primary">
-                  Clothing / Attire (Optional)
-                </label>
-                <select
-                  id="ext-clothing"
-                  value={clothingRecordId}
-                  onChange={(e) => setClothingRecordId(e.target.value)}
-                  className={selectClasses}
-                >
-                  <option value="">None</option>
-                  {clothingRecords.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             {/* Token Size Slider */}
             <div>
               <label htmlFor="ext-max-tokens" className="mb-2 block text-sm qt-text-primary">
@@ -317,18 +245,18 @@ export function ExternalPromptDialog({
           <button
             onClick={onCancel}
             disabled={generating}
-            className="rounded-lg border qt-border-default qt-bg-card px-4 py-2 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted disabled:opacity-50"
+            className="qt-button qt-button-secondary"
           >
             Cancel
           </button>
           <button
             onClick={handleGenerate}
             disabled={!canGenerate}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90 disabled:opacity-50"
+            className="qt-button qt-button-primary"
           >
             {generating ? (
               <span className="inline-flex items-center gap-2">
-                <span className="animate-spin h-4 w-4 border-2 qt-border-primary-foreground border-t-transparent rounded-full" />
+                <span className="animate-spin h-4 w-4 qt-border-primary-foreground border-t-transparent rounded-full" />
                 Generating...
               </span>
             ) : (

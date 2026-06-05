@@ -18,6 +18,9 @@ export const updateChatSchema = z.object({
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shared by all participants)
   alertCharactersOfLanternImages: z.boolean().nullish(),
   allowCrossCharacterVaultReads: z.boolean().optional(),
+  coreWhisperEnabled: z.boolean().nullish(),
+  coreWhisperInterval: z.number().int().min(1).nullish(),
+  showThinking: z.boolean().nullish(), // Per-chat thinking visibility (tri-state). DISPLAY ONLY.
   // Layout state for the salon split panes
   documentMode: z.enum(['normal', 'split', 'focus']).optional(),
   dividerPosition: z.number().min(20).max(80).optional(),
@@ -37,6 +40,11 @@ export const updateParticipantSchema = z.object({
   controlledBy: z.enum(['llm', 'user']).optional(),
   hasHistoryAccess: z.boolean().optional(),
   joinScenario: z.string().nullish(),
+  /**
+   * Per-chat talkativeness override (0.1–1.0). Pass `null` to clear the
+   * override and inherit from the character record again.
+   */
+  talkativeness: z.number().min(0.1).max(1.0).nullish(),
 });
 
 export const addParticipantSchema = z.object({
@@ -66,6 +74,14 @@ export const chatUpdateRequestSchema = z.object({
   removeParticipantId: z.uuid().optional(),
   roleplayTemplateId: z.string().nullish(),
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shortcut, same as chat.imageProfileId)
+  /**
+   * Tri-state per-chat Concierge mode set from the sidebar:
+   *   - 'safe'    : moderation runs as usual, classifier may auto-flip → 'flagged'
+   *   - 'flagged' : the chat is treated as dangerous (uncensored routing, etc.)
+   *   - 'off'     : the Concierge is off-duty for this chat (no moderation)
+   * The handler maps this onto chats.conciergeOverride + chats.isDangerousChat.
+   */
+  conciergeState: z.enum(['safe', 'flagged', 'off']).optional(),
 });
 
 export const addTagSchema = z.object({
@@ -94,6 +110,7 @@ export const turnActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('queue'), participantId: z.uuid() }),
   z.object({ action: z.literal('dequeue'), participantId: z.uuid() }),
   z.object({ action: z.literal('query') }),
+  z.object({ action: z.literal('skipUserTurn'), participantId: z.uuid() }),
 ]);
 
 export const persistTurnSchema = z.object({

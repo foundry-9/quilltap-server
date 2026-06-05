@@ -103,28 +103,6 @@ export async function createMemoryExtractionEvent(
 }
 
 /**
- * Create a system event for summarization
- */
-export async function createSummarizationEvent(
-  chatId: string,
-  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null,
-  provider?: string,
-  modelName?: string,
-  estimatedCostUSD?: number | null
-): Promise<SystemEvent | null> {
-  return createSystemEvent(chatId, {
-    systemEventType: 'SUMMARIZATION',
-    description: 'Summarized conversation for context window',
-    promptTokens: usage?.promptTokens,
-    completionTokens: usage?.completionTokens,
-    totalTokens: usage?.totalTokens,
-    provider,
-    modelName,
-    estimatedCostUSD,
-  });
-}
-
-/**
  * Create a system event for title generation
  */
 export async function createTitleGenerationEvent(
@@ -168,24 +146,3 @@ export async function createContextSummaryEvent(
   });
 }
 
-/**
- * Create a system event for image prompt crafting
- */
-export async function createImagePromptCraftingEvent(
-  chatId: string,
-  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null,
-  provider?: string,
-  modelName?: string,
-  estimatedCostUSD?: number | null
-): Promise<SystemEvent | null> {
-  return createSystemEvent(chatId, {
-    systemEventType: 'IMAGE_PROMPT_CRAFTING',
-    description: 'Crafted image generation prompt',
-    promptTokens: usage?.promptTokens,
-    completionTokens: usage?.completionTokens,
-    totalTokens: usage?.totalTokens,
-    provider,
-    modelName,
-    estimatedCostUSD,
-  });
-}

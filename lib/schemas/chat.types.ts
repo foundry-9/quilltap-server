@@ -65,12 +65,42 @@ export type SceneState = z.infer<typeof SceneStateSchema>;
 // CHAT TYPE
 // ============================================================================
 
-export const ChatTypeEnum = z.enum(['salon', 'help']);
+export const ChatTypeEnum = z.enum(['salon', 'help', 'autonomous']);
 export type ChatType = z.infer<typeof ChatTypeEnum>;
+
+// ============================================================================
+// AUTONOMOUS-ROOM RUN STATE
+// ============================================================================
+
+export const AutonomousRunStateEnum = z.enum([
+  'idle',
+  'running',
+  'paused',
+  'stopped',
+  'budgetExhausted',
+  'error',
+]);
+export type AutonomousRunState = z.infer<typeof AutonomousRunStateEnum>;
+
+export const AutonomousRunVisibilityEnum = z.enum(['owner_only', 'household', 'open']);
+export type AutonomousRunVisibility = z.infer<typeof AutonomousRunVisibilityEnum>;
 
 // ============================================================================
 // MESSAGE EVENTS
 // ============================================================================
+
+/**
+ * One positioned reasoning / chain-of-thought block on an assistant message.
+ * DISPLAY ONLY — see `reasoningSegments` on the message schema. Mirrors how
+ * tool calls carry an `anchorOffset`; `seq` is shared with tool anchors so
+ * same-offset items render in true emission order.
+ */
+export const ReasoningSegmentSchema = z.object({
+  anchorOffset: z.number(),
+  content: z.string(),
+  seq: z.number(),
+});
+export type ReasoningSegment = z.infer<typeof ReasoningSegmentSchema>;
 
 export const MessageEventSchema = z.object({
   type: z.literal('message'),
@@ -92,6 +122,20 @@ export const MessageEventSchema = z.object({
   // Google Gemini thought signature for thinking models (e.g., gemini-3-pro)
   // Must be preserved and passed back for multi-turn conversations with function calling
   thoughtSignature: z.string().nullable().optional(),
+  /**
+   * Reasoning / chain-of-thought text from thinking models, captured for
+   * DISPLAY ONLY. The full concatenated reasoning for the turn. Never re-fed to
+   * any model as history/summary/memory — the only in-request reuse is the
+   * in-turn tool round-trip, which uses an in-memory value, not this column.
+   */
+  reasoningContent: z.string().nullable().optional(),
+  /**
+   * Positioned reasoning blocks (DISPLAY ONLY) used by the Salon to splice
+   * thinking into the prose at the point it fired, the same way tool calls are
+   * anchored. `anchorOffset` is the prose offset; `seq` is the turn-monotonic
+   * counter shared with tool anchors for stable same-offset ordering.
+   */
+  reasoningSegments: ReasoningSegmentSchema.array().nullable().optional(),
   // Multi-character chat: which participant sent this message
   participantId: UUIDSchema.nullable().optional(),
   // Recovery type: indicates this message was generated as an error recovery response
@@ -374,6 +418,12 @@ export const ChatParticipantSchema = z.object({
   hasHistoryAccess: z.boolean().default(false),  // Whether this participant can see messages from before they joined
   joinScenario: z.string().nullable().optional(), // Custom scenario text for how they joined the chat
 
+  // Per-chat talkativeness override. When null/undefined, the turn manager
+  // falls back to the underlying character's talkativeness. Lets a chat
+  // boost a normally-quiet character (or vice versa) without editing the
+  // character record.
+  talkativeness: z.number().min(0.1).max(1.0).nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -403,6 +453,8 @@ export const ChatParticipantBaseSchema = z.object({
   removedAt: TimestampSchema.nullable().optional(),  // Soft-delete timestamp
   hasHistoryAccess: z.boolean().default(false),
   joinScenario: z.string().nullable().optional(),
+  // Per-chat talkativeness override. Null/undefined → inherit from character.
+  talkativeness: z.number().min(0.1).max(1.0).nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -470,6 +522,13 @@ export const ChatMetadataSchema = z.object({
   allLLMPauseTurnCount: z.number().default(0),
   /** Server-side turn queue for chained responses (JSON array of participant IDs) */
   turnQueue: z.string().default('[]'),
+  /**
+   * Participants (LLM + user) who have spoken in the current rotation cycle.
+   * Stored as a JSON array of participant IDs. The turn manager refuses to
+   * pick anyone in this list again until the cycle wraps (i.e. everyone has
+   * spoken at least once). Cleared automatically when the cycle completes.
+   */
+  spokenThisCycleParticipantIds: z.string().default('[]'),
 
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
@@ -562,6 +621,14 @@ export const ChatMetadataSchema = z.object({
   dangerClassifiedAt: TimestampSchema.nullable().optional(),
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
+  /**
+   * Per-chat Concierge mode override. NULL means follow the global Concierge
+   * setting and let `isDangerousChat` decide Safe vs Flagged. 'OFF' disables
+   * every Concierge effect for this chat: no classification, no scanning, no
+   * uncensored-provider reroute, no synthetic Concierge messages. Operators
+   * who flip this on accept the risk of provider refusals.
+   */
+  conciergeOverride: z.enum(['OFF']).nullable().optional(),
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
@@ -578,8 +645,8 @@ export const ChatMetadataSchema = z.object({
   /** Whether to auto-generate character avatars when outfits change (null = disabled) */
   avatarGenerationEnabled: z.boolean().nullable().optional(),
 
-  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
-  chatType: z.enum(['salon', 'help']).default('salon'),
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms */
+  chatType: ChatTypeEnum.default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
 
@@ -625,6 +692,76 @@ export const ChatMetadataSchema = z.object({
    * Commonplace Book whisper.
    */
   commonplaceSceneCache: JsonSchema.nullable().optional(),
+
+  // ==========================================================================
+  // 4.6 Private Character Rooms — autonomous-room runtime + scheduling
+  // Populated only when chatType === 'autonomous'; null/zero on other chats.
+  // ==========================================================================
+
+  /** Hard cap on character turns per run. NULL = unlimited (use other caps). */
+  budgetMaxTurns: z.number().int().positive().nullable().optional(),
+  /** Cap on cumulative `promptTokens + completionTokens` per run. */
+  budgetMaxTokens: z.number().int().positive().nullable().optional(),
+  /** Cap on wall-clock duration per run, in milliseconds. */
+  budgetMaxWallClockMs: z.number().int().positive().nullable().optional(),
+  /** Optional spend cap in USD, evaluated against running spend from llm_logs. */
+  budgetEstimatedSpendCapUSD: z.number().positive().nullable().optional(),
+
+  /** Cron expression. NULL = manual-only room. */
+  scheduleCron: z.string().nullable().optional(),
+  /** Catch-up window in ms; NULL = use user-default (12h). */
+  scheduleFreshnessWindowMs: z.number().int().positive().nullable().optional(),
+  /** ISO timestamp of the next scheduled run. */
+  scheduleNextRunAt: TimestampSchema.nullable().optional(),
+  /** ISO timestamp of the most recent run start (manual or scheduled). */
+  scheduleLastRunAt: TimestampSchema.nullable().optional(),
+
+  /** Current run-state lifecycle. NULL on non-autonomous chats. */
+  runState: AutonomousRunStateEnum.nullable().optional(),
+  /** UUID of the run currently authoritative for this room (stale-run guard). */
+  currentRunId: UUIDSchema.nullable().optional(),
+  /** Human-readable detail for paused/error states. */
+  runStateMessage: z.string().nullable().optional(),
+  /** ISO timestamp of the current/most-recent run start. */
+  runStartedAt: TimestampSchema.nullable().optional(),
+  /** ISO timestamp of the current/most-recent run end. */
+  runEndedAt: TimestampSchema.nullable().optional(),
+  /** ISO timestamp the current run was paused; cleared on resume. Marks the start of the current paused interval. */
+  runPausedAt: TimestampSchema.nullable().optional(),
+  /** Cumulative milliseconds the current run has spent paused, across all pause/resume cycles. The wall-clock budget subtracts this from elapsed time so paused intervals are excluded without disturbing runStartedAt (the token-accounting window start). */
+  runPausedAccumMs: z.number().int().nonnegative().nullable().optional(),
+  /** Turns consumed in the current/most-recent run. */
+  runTurnsConsumed: z.number().int().nonnegative().nullable().optional(),
+  /** Tokens consumed in the current/most-recent run. */
+  runTokensConsumed: z.number().int().nonnegative().nullable().optional(),
+
+  /** 1 = owner pre-authorized destructive tools (DESTRUCTIVE_TOOL_NAMES); 0 = disabled. */
+  runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),
+  /** Per-room override of user-default visibility; NULL = inherit user default. */
+  runVisibility: AutonomousRunVisibilityEnum.nullable().optional(),
+
+  /**
+   * Aurora Core whisper — per-chat override of the global `coreWhisper.enabled`
+   * setting. NULL = inherit from character override → global default. The Core
+   * whisper periodically re-offers each character's own `Core/` vault folder
+   * before their next turn.
+   */
+  coreWhisperEnabled: z.boolean().nullable().optional(),
+  /**
+   * Aurora Core whisper — per-chat override of the global `coreWhisper.interval`
+   * setting (assistant turns between periodic whispers). NULL = inherit from
+   * global default.
+   */
+  coreWhisperInterval: z.number().int().min(1).nullable().optional(),
+
+  /**
+   * Per-chat override for showing reasoning models' thinking in the Salon.
+   * Tri-state: NULL = inherit the global `chat.thinkingDisplay.defaultVisible`
+   * default; true = always show; false = always hide. DISPLAY ONLY — this only
+   * affects whether captured reasoning is rendered, never whether it is stored
+   * or fed to any model.
+   */
+  showThinking: z.boolean().nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
@@ -672,6 +809,13 @@ export const ChatMetadataBaseSchema = z.object({
   allLLMPauseTurnCount: z.number().default(0),
   /** Server-side turn queue for chained responses (JSON array of participant IDs) */
   turnQueue: z.string().default('[]'),
+  /**
+   * Participants (LLM + user) who have spoken in the current rotation cycle.
+   * Stored as a JSON array of participant IDs. The turn manager refuses to
+   * pick anyone in this list again until the cycle wraps (i.e. everyone has
+   * spoken at least once). Cleared automatically when the cycle completes.
+   */
+  spokenThisCycleParticipantIds: z.string().default('[]'),
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
 
@@ -759,6 +903,14 @@ export const ChatMetadataBaseSchema = z.object({
   dangerClassifiedAt: TimestampSchema.nullable().optional(),
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
+  /**
+   * Per-chat Concierge mode override. NULL means follow the global Concierge
+   * setting and let `isDangerousChat` decide Safe vs Flagged. 'OFF' disables
+   * every Concierge effect for this chat: no classification, no scanning, no
+   * uncensored-provider reroute, no synthetic Concierge messages. Operators
+   * who flip this on accept the risk of provider refusals.
+   */
+  conciergeOverride: z.enum(['OFF']).nullable().optional(),
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
@@ -775,8 +927,8 @@ export const ChatMetadataBaseSchema = z.object({
   /** Whether to auto-generate character avatars when outfits change (null = disabled) */
   avatarGenerationEnabled: z.boolean().nullable().optional(),
 
-  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
-  chatType: z.enum(['salon', 'help']).default('salon'),
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms */
+  chatType: ChatTypeEnum.default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
 
@@ -799,6 +951,38 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** The Commonplace Book — per-target scene-state emission cache. See ChatMetadataSchema for the contract. */
   commonplaceSceneCache: JsonSchema.nullable().optional(),
+
+  // ==========================================================================
+  // 4.6 Private Character Rooms — autonomous-room runtime + scheduling.
+  // See ChatMetadataSchema for the per-field contract.
+  // ==========================================================================
+  budgetMaxTurns: z.number().int().positive().nullable().optional(),
+  budgetMaxTokens: z.number().int().positive().nullable().optional(),
+  budgetMaxWallClockMs: z.number().int().positive().nullable().optional(),
+  budgetEstimatedSpendCapUSD: z.number().positive().nullable().optional(),
+  scheduleCron: z.string().nullable().optional(),
+  scheduleFreshnessWindowMs: z.number().int().positive().nullable().optional(),
+  scheduleNextRunAt: TimestampSchema.nullable().optional(),
+  scheduleLastRunAt: TimestampSchema.nullable().optional(),
+  runState: AutonomousRunStateEnum.nullable().optional(),
+  currentRunId: UUIDSchema.nullable().optional(),
+  runStateMessage: z.string().nullable().optional(),
+  runStartedAt: TimestampSchema.nullable().optional(),
+  runEndedAt: TimestampSchema.nullable().optional(),
+  runPausedAt: TimestampSchema.nullable().optional(),
+  runPausedAccumMs: z.number().int().nonnegative().nullable().optional(),
+  runTurnsConsumed: z.number().int().nonnegative().nullable().optional(),
+  runTokensConsumed: z.number().int().nonnegative().nullable().optional(),
+  runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),
+  runVisibility: AutonomousRunVisibilityEnum.nullable().optional(),
+
+  /** Aurora Core whisper — per-chat override of the global `coreWhisper.enabled` setting. NULL = inherit. */
+  coreWhisperEnabled: z.boolean().nullable().optional(),
+  /** Aurora Core whisper — per-chat override of the global `coreWhisper.interval` setting (assistant turns between periodic whispers). NULL = inherit. */
+  coreWhisperInterval: z.number().int().min(1).nullable().optional(),
+
+  /** Per-chat override for showing reasoning models' thinking. NULL = inherit global `chat.thinkingDisplay.defaultVisible`; true = show; false = hide. DISPLAY ONLY. */
+  showThinking: z.boolean().nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

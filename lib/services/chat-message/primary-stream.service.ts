@@ -18,7 +18,7 @@
  * gate that flips on the first content chunk, and the previousResponseId
  * extraction all live here. Mutations: `streaming.fullResponse`,
  * `streaming.usage`, `streaming.cacheUsage`, `streaming.attachmentResults`,
- * `streaming.rawResponse`, `streaming.thoughtSignature`, and
+ * `streaming.rawResponse`, `streaming.thoughtSignature`, `streaming.reasoningContent`, and
  * `streaming.hasStartedStreaming` are written in place.
  *
  * `makePreservePartialOnError` builds the idempotent partial-preserver that
@@ -34,6 +34,8 @@ import {
   encodeStatusEvent,
   safeEnqueue,
   streamMessage,
+  applyReasoningChunk,
+  flushReasoningSegment,
   type StreamOptions,
 } from './streaming.service'
 import { saveAssistantMessage } from './message-finalizer.service'
@@ -93,7 +95,10 @@ export function makePreservePartialOnError(
         [],
         preGeneratedAssistantMessageId,
         streaming.effectiveProfile.provider,
-        streaming.effectiveProfile.modelName
+        streaming.effectiveProfile.modelName,
+        undefined,
+        streaming.reasoningContent,
+        streaming.reasoningSegments
       )
       logger.info('Preserved partial streamed response after upstream error', {
         chatId,
@@ -130,6 +135,8 @@ export interface RunPrimaryStreamOptions {
   actualTools: unknown[]
   useNativeWebSearch: boolean
   previousResponseId?: string
+  /** Optional provider stop sequences (e.g. simple-json's `</tool_call>`). */
+  stop?: string[]
   preGeneratedAssistantMessageId: string
   attachedFiles: AttachedFile[]
   originalMessage?: string
@@ -158,7 +165,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
   const {
     chatId, userId, chat, character, characterParticipant, userParticipantId, isMultiCharacter,
     formattedMessages, modelParams, actualTools, useNativeWebSearch,
-    previousResponseId, preGeneratedAssistantMessageId,
+    previousResponseId, stop, preGeneratedAssistantMessageId,
     attachedFiles, originalMessage, connectionProfile,
     streaming, controller, encoder, preservePartialOnError,
     repos,
@@ -184,7 +191,10 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
       chatId,
       characterId: character.id,
       previousResponseId,
+      stop,
     })) {
+      // Capture + live-forward reasoning ("thinking") on any chunk. DISPLAY ONLY.
+      applyReasoningChunk(streaming, chunk, controller, encoder)
       if (chunk.content) {
         if (!streaming.hasStartedStreaming) {
           safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -195,6 +205,8 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
           }))
           streaming.hasStartedStreaming = true
         }
+        // Prose resumed — close any pending reasoning run into a positioned segment.
+        flushReasoningSegment(streaming)
         streaming.fullResponse += chunk.content
         controller.enqueue(encodeContentChunk(encoder, chunk.content))
       }
@@ -207,6 +219,8 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
         if (chunk.thoughtSignature) {
           streaming.thoughtSignature = chunk.thoughtSignature
         }
+        // Flush any trailing reasoning that arrived without subsequent prose.
+        flushReasoningSegment(streaming)
       }
     }
   } catch (streamingError) {
@@ -240,6 +254,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
           messageId: preGeneratedAssistantMessageId,
           chatId,
         })) {
+          applyReasoningChunk(streaming, chunk, controller, encoder)
           if (chunk.content) {
             if (!streaming.hasStartedStreaming) {
               safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -250,6 +265,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
               }))
               streaming.hasStartedStreaming = true
             }
+            flushReasoningSegment(streaming)
             streaming.fullResponse += chunk.content
             controller.enqueue(encodeContentChunk(encoder, chunk.content))
           }
@@ -262,6 +278,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
             if (chunk.thoughtSignature) {
               streaming.thoughtSignature = chunk.thoughtSignature
             }
+            flushReasoningSegment(streaming)
           }
         }
 
