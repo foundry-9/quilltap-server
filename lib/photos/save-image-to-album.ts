@@ -19,8 +19,11 @@
  * @module photos/save-image-to-album
  */
 
+import { extname } from 'node:path';
 import { logger } from '@/lib/logger';
-import { getRepositories } from '@/lib/database/repositories';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
+import { getRepositories } from '@/lib/repositories/factory';
+import { SINGLE_USER_ID } from '@/lib/auth/single-user';
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { emitDocumentWritten } from '@/lib/mount-index/db-store-events';
@@ -93,6 +96,20 @@ export class SaveImageToAlbumError extends Error {
   }
 }
 
+function inferImageMimeFromFilename(filename: string): string | null {
+  const ext = extname(filename).toLowerCase();
+  switch (ext) {
+    case '.webp': return 'image/webp';
+    case '.png': return 'image/png';
+    case '.jpg':
+    case '.jpeg': return 'image/jpeg';
+    case '.gif': return 'image/gif';
+    case '.avif': return 'image/avif';
+    case '.svg': return 'image/svg+xml';
+    default: return null;
+  }
+}
+
 async function findExistingPhotosLinkBySha(
   mountPointId: string,
   sha256: string
@@ -124,7 +141,7 @@ export async function saveImageToAlbum(
 
   // Lazy-import images-v2 so the photos module doesn't pull sharp/webp into
   // unrelated consumers' module load (mirrors the pattern in keep_image).
-  const { getImageById, readImageBuffer } = await import('@/lib/images-v2');
+  const { getImageById, readImageBuffer, ingestImageBuffer } = await import('@/lib/images-v2');
 
   // `fileId` may be either an images-v2 FileEntry id (the original
   // generated/uploaded image's UUID) or a `doc_mount_file_links.id` — the
@@ -132,7 +149,10 @@ export async function saveImageToAlbum(
   // LLM seeing an attached photo can call `keep_image` with the same id it
   // saw in the message. When given a link id we resolve to the underlying
   // FileEntry by sha256; this preserves the generation metadata for the new
-  // save.
+  // save. If the sister FileEntry was reaped (or never existed for a
+  // filesystem-scanned mount-file), fall back to ingesting the mount-blob
+  // bytes so the save can still proceed — we lose the original generation
+  // metadata, but the photo itself survives.
   let fileEntry = await getImageById(fileId);
   if (!fileEntry) {
     const reposEarly = getRepositories();
@@ -142,6 +162,26 @@ export async function saveImageToAlbum(
       const sister = sisters.find(f => f.category === 'IMAGE') ?? sisters[0] ?? null;
       if (sister) {
         fileEntry = sister;
+      } else {
+        const bytes = await reposEarly.docMountBlobs.readDataByFileId(sourceLink.fileId);
+        if (bytes && bytes.length > 0) {
+          const mimeType = sourceLink.originalMimeType
+            ?? inferImageMimeFromFilename(sourceLink.fileName)
+            ?? 'application/octet-stream';
+          fileEntry = await ingestImageBuffer({
+            buffer: bytes,
+            originalFilename: sourceLink.originalFileName ?? sourceLink.fileName,
+            mimeType,
+            userId: SINGLE_USER_ID,
+          });
+          logger.info('[saveImageToAlbum] synthesized FileEntry from mount-blob fallback', {
+            linkId: sourceLink.id,
+            mountFileId: sourceLink.fileId,
+            sha256: sourceLink.sha256,
+            mimeType,
+            newFileEntryId: fileEntry.id,
+          });
+        }
       }
     }
   }
@@ -161,15 +201,12 @@ export async function saveImageToAlbum(
     throw new SaveImageToAlbumError('MOUNT_NOT_FOUND', `Mount point not found: ${mountPointId}`);
   }
 
-  const collision = await findExistingPhotosLinkBySha(mountPointId, fileEntry.sha256);
-  if (collision) {
-    throw new SaveImageToAlbumError(
-      'ALREADY_SAVED',
-      `Image already saved to ${mountPoint.name} on ${collision.createdAt} as ${collision.relativePath}`,
-      { existingRelativePath: collision.relativePath, existingCreatedAt: collision.createdAt }
-    );
-  }
-
+  // Read the bytes first, then dedup on the hash of those actual bytes. The
+  // FileEntry's sha256 is an upload-time *input* hash (computed before the
+  // storage bridge's transcode); it can diverge from the stored bytes, so
+  // keying the re-save guard off it would let duplicates slip through and
+  // record a hash that won't match what we store. Hash the real bytes once
+  // and reuse that value for both the guard and the link write.
   let buffer: Buffer;
   try {
     buffer = await readImageBuffer(fileEntry.id);
@@ -179,6 +216,16 @@ export async function saveImageToAlbum(
   }
   if (!buffer || buffer.length === 0) {
     throw new SaveImageToAlbumError('EMPTY_BYTES', `Image ${fileId} has empty bytes`);
+  }
+  const sha256 = sha256OfBuffer(buffer);
+
+  const collision = await findExistingPhotosLinkBySha(mountPointId, sha256);
+  if (collision) {
+    throw new SaveImageToAlbumError(
+      'ALREADY_SAVED',
+      `Image already saved to ${mountPoint.name} on ${collision.createdAt} as ${collision.relativePath}`,
+      { existingRelativePath: collision.relativePath, existingCreatedAt: collision.createdAt }
+    );
   }
 
   let parsedSceneState = null;
@@ -234,7 +281,7 @@ export async function saveImageToAlbum(
     originalFileName: fileEntry.originalFilename,
     originalMimeType: fileEntry.mimeType,
     storedMimeType: fileEntry.mimeType,
-    sha256: fileEntry.sha256,
+    sha256,
     data: buffer,
     description: caption ?? '',
     extractedText: markdown,
@@ -261,7 +308,7 @@ export async function saveImageToAlbum(
 
   logger.info('[saveImageToAlbum] saved', {
     fileEntryId: fileEntry.id,
-    sha256: fileEntry.sha256,
+    sha256,
     linkId: link.id,
     mountPointId,
     mountPointName: mountPoint.name,
@@ -276,6 +323,6 @@ export async function saveImageToAlbum(
     linkId: link.id,
     keptAt,
     fileId: fileEntry.id,
-    sha256: fileEntry.sha256,
+    sha256,
   };
 }

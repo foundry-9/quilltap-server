@@ -143,6 +143,12 @@ export async function triggerAvatarGenerationIfEnabled(
     if (!chat?.avatarGenerationEnabled) {
       return;
     }
+    // Autonomous rooms (4.6 Private Character Rooms): automatic avatar refresh is
+    // disabled by design — wardrobe state still advances, but no image is
+    // generated. Character-invoked image-generation tool calls are unaffected.
+    if (chat.chatType === 'autonomous') {
+      return;
+    }
     await triggerAvatarGeneration(repos, params);
   } catch (error) {
     logger.warn('Failed to enqueue avatar generation after outfit change', {

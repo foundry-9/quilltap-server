@@ -12,16 +12,12 @@ import {
   SettingsCard,
   SettingsCardBadge,
   SettingsCardMetadata,
-  SettingsCardAction,
-  SettingsCardDeleteConfig,
   SettingsCardProps,
 } from './SettingsCard'
 
 // Re-export types with original names for backward compatibility
 export type ProfileCardBadge = SettingsCardBadge
 export type ProfileCardMetadata = SettingsCardMetadata
-export type ProfileCardAction = SettingsCardAction
-export type ProfileCardDeleteConfig = SettingsCardDeleteConfig
 export type ProfileCardProps = SettingsCardProps
 
 // ProfileCard is now an alias for SettingsCard

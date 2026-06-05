@@ -47,7 +47,10 @@ export interface MemoryChatSettings {
  * most recent non-system USER message). When no qualifying user message
  * exists (greeting-only chats, fresh chats), the trigger still enqueues
  * a job with `turnOpenerMessageId: null` so self-pass extraction still
- * runs against the assistant tail.
+ * runs against the assistant tail. For autonomous chats — which never
+ * have a USER opener — the latest non-system ASSISTANT message ID is
+ * passed as the dedupe anchor so successive triggers enqueue distinct
+ * jobs instead of collapsing into a single (chatId, null) row.
  */
 export async function triggerTurnMemoryExtraction(
   repos: ReturnType<typeof getRepositories>,
@@ -70,9 +73,24 @@ export async function triggerTurnMemoryExtraction(
 
     const turnOpenerMessageId = findTurnOpenerMessageId(messageEvents)
 
+    let extractionAnchorMessageId: string | null = null
+    if (turnOpenerMessageId === null) {
+      for (let i = messageEvents.length - 1; i >= 0; i--) {
+        const m = messageEvents[i]
+        if (m.type !== 'message') continue
+        if (m.role !== 'ASSISTANT') continue
+        if (m.systemSender) continue
+        if (m.isSilentMessage) continue
+        if (!m.participantId) continue
+        extractionAnchorMessageId = m.id
+        break
+      }
+    }
+
     await enqueueMemoryExtraction(options.userId, {
       chatId: options.chatId,
       turnOpenerMessageId,
+      extractionAnchorMessageId,
       connectionProfileId: options.connectionProfile.id,
     })
   } catch (error) {
@@ -136,16 +154,18 @@ export async function triggerChatDangerClassification(
   }
 ): Promise<void> {
   try {
-    // Resolve danger settings — bail if mode is OFF
-    const chatSettings = await repos.chatSettings.findByUserId(options.userId)
-    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings)
-    if (dangerSettings.mode === 'OFF') {
+    // Get the chat first so an Off-duty override short-circuits before we
+    // do any setting lookups.
+    const chat = await repos.chats.findById(options.chatId)
+    if (!chat) {
       return
     }
 
-    // Get the chat
-    const chat = await repos.chats.findById(options.chatId)
-    if (!chat) {
+    // Resolve danger settings — bail if mode is OFF (also collapses to OFF
+    // when the chat itself is Off-duty)
+    const chatSettings = await repos.chatSettings.findByUserId(options.userId)
+    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat)
+    if (dangerSettings.mode === 'OFF') {
       return
     }
 

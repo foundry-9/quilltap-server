@@ -64,6 +64,7 @@ function createBackupZipFile(options: {
   roleplayTemplates?: any[]
   providerModels?: any[]
   projects?: any[]
+  textReplacementRules?: any[]
   rootFolder?: string
   includeFileData?: Array<{
     id: string
@@ -107,6 +108,7 @@ function createBackupZipFile(options: {
       roleplayTemplates: options.roleplayTemplates?.length || 0,
       providerModels: options.providerModels?.length || 0,
       projects: options.projects?.length || 0,
+      textReplacementRules: options.textReplacementRules?.length || 0,
     },
     ...options.manifest,
   }
@@ -186,6 +188,14 @@ function createBackupZipFile(options: {
       JSON.stringify(options.projects, null, 2)
     )
   }
+  // Optional: text replacement rules (omit the file entirely to simulate a
+  // pre-change backup that predates this entity).
+  if (options.textReplacementRules !== undefined) {
+    fs.writeFileSync(
+      path.join(stagingDir, 'data', 'text-replacement-rules.json'),
+      JSON.stringify(options.textReplacementRules, null, 2)
+    )
+  }
 
   // Add file data if provided
   if (options.includeFileData) {
@@ -254,6 +264,67 @@ describe('Backup Parser', () => {
         expect(result.tags).toHaveLength(1)
 
         // Clean up extraction dir
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
+    }, 15000)
+
+    it('round-trips text replacement rules through the archive', async () => {
+      const now = new Date().toISOString()
+      const textReplacementRules = [
+        { id: 'trr-1', fromText: 'teh', toText: 'the', caseSensitive: false, enabled: true, sortOrder: 0, createdAt: now, updatedAt: now },
+        { id: 'trr-2', fromText: 'QT', toText: 'Quilltap', caseSensitive: true, enabled: false, sortOrder: 1, createdAt: now, updatedAt: now },
+      ]
+
+      const zipPath = createBackupZipFile({
+        characters: [],
+        chats: [],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
+        textReplacementRules,
+      })
+
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
+
+        // Manifest count reflects the seeded rules.
+        expect(result.manifest.counts.textReplacementRules).toBe(2)
+
+        // The rules survive the archive with every field intact.
+        expect(result.textReplacementRules).toHaveLength(2)
+        const byId = Object.fromEntries((result.textReplacementRules ?? []).map((r) => [r.id, r]))
+        expect(byId['trr-1']).toMatchObject({ fromText: 'teh', toText: 'the', caseSensitive: false, enabled: true, sortOrder: 0 })
+        expect(byId['trr-2']).toMatchObject({ fromText: 'QT', toText: 'Quilltap', caseSensitive: true, enabled: false, sortOrder: 1 })
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
+    }, 15000)
+
+    it('parses a pre-change backup with no text-replacement-rules.json', async () => {
+      // Omit textReplacementRules entirely → the data file is never written,
+      // simulating a backup taken before this entity was added. The optional
+      // read guard must default it to an empty array, not throw.
+      const zipPath = createBackupZipFile({
+        characters: [],
+        chats: [],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
+      })
+
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
+        expect(result.textReplacementRules).toEqual([])
         fs.rmSync(extractDir, { recursive: true, force: true })
       } finally {
         cleanupZip(zipPath)

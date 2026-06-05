@@ -52,7 +52,6 @@ export async function handleGetDefault(
         return {
           id: char.id,
           name: char.name,
-          avatarUrl: char.avatarUrl,
           defaultImageId: char.defaultImageId,
           defaultImage,
           tags: char.tags || [],

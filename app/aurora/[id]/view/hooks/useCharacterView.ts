@@ -95,11 +95,12 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const defaultPartner = userControlledCharacters.find(c => c.id === defaultPartnerId)
   const defaultPartnerName = defaultPartner?.name || null
 
-  // Count template replacement opportunities across every prose field and every
-  // entry in prose-carrying arrays (systemPrompts, physicalDescriptions,
-  // scenarios). Keys are synthetic per-entry so countTemplateReplacements can
-  // return per-field totals even inside arrays. `properties.json` metadata
-  // (pronouns, aliases, title, talkativeness) is intentionally excluded.
+  // Count template replacement opportunities across every prose field plus the
+  // single physicalDescription record and the prose-carrying arrays
+  // (systemPrompts, scenarios). Keys are synthetic per-entry so
+  // countTemplateReplacements can return per-field totals. `properties.json`
+  // metadata (pronouns, aliases, title, talkativeness) is intentionally
+  // excluded.
   const templateFields: Record<string, string | null | undefined> = {
     description: character?.description,
     manifesto: character?.manifesto,
@@ -110,7 +111,8 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   for (const p of character?.systemPrompts ?? []) {
     templateFields[`systemPrompt:${p.id}`] = p.content
   }
-  for (const pd of character?.physicalDescriptions ?? []) {
+  const pd = character?.physicalDescription
+  if (pd) {
     templateFields[`physicalDescription:${pd.id}:fullDescription`] = pd.fullDescription
     templateFields[`physicalDescription:${pd.id}:shortPrompt`] = pd.shortPrompt
     templateFields[`physicalDescription:${pd.id}:mediumPrompt`] = pd.mediumPrompt
@@ -273,39 +275,36 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
           (updates as Record<string, unknown>).systemPrompts = updatedPrompts
         }
       }
-      // Apply template replacement across every physicalDescription entry and each of
-      // the five prose fields it carries. Vault-mode characters only round-trip index 0
-      // through physical-description.md / physical-prompts.json; index 1+ lives on the
-      // DB row, which the server-side write overlay already routes correctly.
-      if (character.physicalDescriptions && character.physicalDescriptions.length > 0) {
-        const updatedPhysical = character.physicalDescriptions.map(pd => {
-          const fullDescription = pd.fullDescription
-            ? replaceWithTemplate(pd.fullDescription, nameToReplace, template)
-            : pd.fullDescription
-          const shortPrompt = pd.shortPrompt
-            ? replaceWithTemplate(pd.shortPrompt, nameToReplace, template)
-            : pd.shortPrompt
-          const mediumPrompt = pd.mediumPrompt
-            ? replaceWithTemplate(pd.mediumPrompt, nameToReplace, template)
-            : pd.mediumPrompt
-          const longPrompt = pd.longPrompt
-            ? replaceWithTemplate(pd.longPrompt, nameToReplace, template)
-            : pd.longPrompt
-          const completePrompt = pd.completePrompt
-            ? replaceWithTemplate(pd.completePrompt, nameToReplace, template)
-            : pd.completePrompt
-          const changed =
-            fullDescription !== pd.fullDescription ||
-            shortPrompt !== pd.shortPrompt ||
-            mediumPrompt !== pd.mediumPrompt ||
-            longPrompt !== pd.longPrompt ||
-            completePrompt !== pd.completePrompt
-          return changed
-            ? { ...pd, fullDescription, shortPrompt, mediumPrompt, longPrompt, completePrompt }
-            : pd
-        })
-        if (updatedPhysical.some((pd, i) => pd !== character.physicalDescriptions![i])) {
-          (updates as Record<string, unknown>).physicalDescriptions = updatedPhysical
+      // Apply template replacement to the singular physicalDescription's five
+      // prose fields. The vault round-trips this record through
+      // physical-description.md / physical-prompts.json.
+      const pd = character.physicalDescription
+      if (pd) {
+        const fullDescription = pd.fullDescription
+          ? replaceWithTemplate(pd.fullDescription, nameToReplace, template)
+          : pd.fullDescription
+        const shortPrompt = pd.shortPrompt
+          ? replaceWithTemplate(pd.shortPrompt, nameToReplace, template)
+          : pd.shortPrompt
+        const mediumPrompt = pd.mediumPrompt
+          ? replaceWithTemplate(pd.mediumPrompt, nameToReplace, template)
+          : pd.mediumPrompt
+        const longPrompt = pd.longPrompt
+          ? replaceWithTemplate(pd.longPrompt, nameToReplace, template)
+          : pd.longPrompt
+        const completePrompt = pd.completePrompt
+          ? replaceWithTemplate(pd.completePrompt, nameToReplace, template)
+          : pd.completePrompt
+        const changed =
+          fullDescription !== pd.fullDescription ||
+          shortPrompt !== pd.shortPrompt ||
+          mediumPrompt !== pd.mediumPrompt ||
+          longPrompt !== pd.longPrompt ||
+          completePrompt !== pd.completePrompt
+        if (changed) {
+          (updates as Record<string, unknown>).physicalDescription = {
+            ...pd, fullDescription, shortPrompt, mediumPrompt, longPrompt, completePrompt,
+          }
         }
       }
 

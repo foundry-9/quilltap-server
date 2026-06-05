@@ -19,7 +19,7 @@
  * @module photos/photo-link-summary
  */
 
-import { getRepositories } from '@/lib/database/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { parseKeptImageFrontmatter } from './keep-image-markdown';
 import { isPhotosRelativePath } from './photos-paths';
 import { logger } from '@/lib/logger';

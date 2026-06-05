@@ -143,58 +143,10 @@ abstract class UserScopedTaggableRepository<
  * User-scoped Characters Repository
  */
 class UserScopedCharactersRepository extends UserScopedTaggableRepository<Character, CharactersRepository> {
-  /**
-   * Return all characters without applying the document-store properties overlay.
-   * Used by the export path so round-trips are lossless.
-   */
-  async findAllRaw(): Promise<Character[]> {
-    return this.filterByUser(await this.baseRepo.findAllRaw());
-  }
-
-  /**
-   * Return a single character without applying the document-store properties overlay.
-   * Used by the export path and the sync-back action.
-   */
-  async findByIdRaw(id: string): Promise<Character | null> {
-    const item = await this.baseRepo.findByIdRaw(id);
-    if (!item || item.userId !== this.userId) return null;
-    return item;
-  }
-
   async setFavorite(characterId: string, isFavorite: boolean): Promise<Character | null> {
     const character = await this.findById(characterId);
     if (!character) return null;
     return this.baseRepo.setFavorite(characterId, isFavorite);
-  }
-
-  async addDescription(characterId: string, description: any): Promise<any> {
-    const character = await this.findById(characterId);
-    if (!character) return null;
-    return this.baseRepo.addDescription(characterId, description);
-  }
-
-  async updateDescription(characterId: string, descriptionId: string, data: any): Promise<any> {
-    const character = await this.findById(characterId);
-    if (!character) return null;
-    return this.baseRepo.updateDescription(characterId, descriptionId, data);
-  }
-
-  async removeDescription(characterId: string, descriptionId: string): Promise<boolean> {
-    const character = await this.findById(characterId);
-    if (!character) return false;
-    return this.baseRepo.removeDescription(characterId, descriptionId);
-  }
-
-  async getDescription(characterId: string, descriptionId: string): Promise<any> {
-    const character = await this.findById(characterId);
-    if (!character) return null;
-    return this.baseRepo.getDescription(characterId, descriptionId);
-  }
-
-  async getDescriptions(characterId: string): Promise<any[]> {
-    const character = await this.findById(characterId);
-    if (!character) return [];
-    return this.baseRepo.getDescriptions(characterId);
   }
 
   async addPartnerLink(characterId: string, partnerId: string, isDefault?: boolean): Promise<Character | null> {

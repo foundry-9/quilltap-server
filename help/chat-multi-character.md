@@ -29,7 +29,7 @@ This is ideal for:
 ### Starting Fresh
 
 1. Start a new chat with your first character
-2. Once in the chat, expand the **Participants Sidebar** (right side)
+2. Once in the chat, expand the **Chat Sidebar** (right side)
 3. Click **Add Character** button
 4. Select another character to add
 5. Repeat to add more characters
@@ -37,7 +37,7 @@ This is ideal for:
 ### From an Existing Chat
 
 1. Open any chat
-2. Expand the **Participants Sidebar**
+2. Expand the **Chat Sidebar**
 3. Click **Add Character**
 4. Choose characters to add to the conversation
 
@@ -98,9 +98,9 @@ Each character can be:
 
 ## Managing Participants
 
-### The Participants Sidebar
+### The Chat Sidebar
 
-The sidebar shows all characters in the chat:
+The right-hand cabinet — see [Chat Sidebar](chat-participants.md) for the full tour — opens with a **Participants** drawer that shows everyone in the chat:
 
 **Collapsed View (Default):**
 
@@ -109,7 +109,7 @@ The sidebar shows all characters in the chat:
 - Queue position badges
 - Pause/Resume button for all-LLM chats
 
-**Expanded View:**
+**Expanded View (Participants drawer open by default):**
 
 - Full character cards with details
 - Talkativeness sliders
@@ -117,7 +117,7 @@ The sidebar shows all characters in the chat:
 - Impersonation controls
 - Remove buttons
 
-Click the expand/collapse button to switch views.
+Beneath the Participants drawer sit **Chat**, **Visibility**, **Organize**, and **Edit Content** — each described briefly on the [Chat Sidebar](chat-participants.md) page. Click the expand/collapse arrow to switch between the full cabinet and the narrow mini-avatar strip.
 
 ### Character Cards
 
@@ -133,7 +133,7 @@ Each participant card shows:
 
 Control how often each character speaks:
 
-1. Expand the Participants Sidebar
+1. Expand the Chat Sidebar
 2. Find the character's card
 3. Adjust the **Talkativeness** slider:
    - **Low (left)** — Character speaks less often
@@ -204,7 +204,7 @@ Impersonation lets you control a character directly, typing their responses your
 
 ### Starting Impersonation
 
-1. Find the character in the Participants Sidebar
+1. Find the character in the Chat Sidebar
 2. Click **Impersonate** button
 3. The character is now user-controlled
 4. When it's their turn, you type their response
@@ -259,7 +259,7 @@ To prevent runaway conversations:
 
 ### Manual Pause Control
 
-- Click **Pause** in the Participants Sidebar header
+- Click **Pause** in the Chat Sidebar header
 - Characters stop responding
 - Click **Resume** when ready to continue
 - Useful for reading or planning your next action
@@ -307,7 +307,7 @@ A whisper is a message visible only to its sender and its intended recipient. Al
 ### Visibility
 
 - **Default:** Whispers between AI characters are hidden from the chat display, preserving the illusion that some things are, in fact, private.
-- **Show All Whispers:** A toggle in the chat header lets you peek behind the curtain and see all whispers, including those between characters. These "overheard" whispers appear with a distinctive faded style, as if glimpsed through a frosted window.
+- **Show All Whispers:** A toggle in the **Visibility** drawer of the Chat Sidebar lets you peek behind the curtain and see all whispers, including those between characters. These "overheard" whispers appear with a distinctive faded style, as if glimpsed through a frosted window.
 - **Your Whispers:** Whispers you send, or whispers addressed to characters you control, are always visible to you.
 
 ### Context and Memory
@@ -433,6 +433,6 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Chats Overview](chats.md) — Basic chat functionality
 - [Turn Manager](chat-turn-manager.md) — Detailed turn management documentation
-- [Participants Sidebar](chat-participants.md) — Full sidebar documentation
+- [Chat Sidebar](chat-participants.md) — Full sidebar documentation, including the Chat / Visibility / Organize / Edit Content drawers
 - [Message Actions](chat-message-actions.md) — Editing and managing messages
 - [Characters](characters.md) — Creating and managing characters

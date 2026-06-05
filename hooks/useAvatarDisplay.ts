@@ -1,5 +1,4 @@
-import { useAvatarDisplayContext, useAvatarDisplayContextOptional } from '@/components/providers/avatar-display-provider'
-import type { AvatarDisplayStyle } from '@/lib/avatar-styles'
+import { useAvatarDisplayContext } from '@/components/providers/avatar-display-provider'
 
 /**
  * Hook to get the current avatar display style setting from the user's preferences.
@@ -22,34 +21,3 @@ export function useAvatarDisplay() {
   }
 }
 
-/**
- * Optional version that returns default values if used outside provider context.
- * Useful for components that may be rendered before provider is mounted.
- */
-export function useAvatarDisplayOptional(): {
-  style: AvatarDisplayStyle
-  loading: boolean
-  error: string | null
-  updateAvatarDisplayStyle: ((newStyle: AvatarDisplayStyle) => Promise<void>) | null
-  syncAvatarDisplayStyle: ((newStyle: AvatarDisplayStyle) => void) | null
-} {
-  const ctx = useAvatarDisplayContextOptional()
-
-  if (!ctx) {
-    return {
-      style: 'CIRCULAR',
-      loading: false,
-      error: null,
-      updateAvatarDisplayStyle: null,
-      syncAvatarDisplayStyle: null,
-    }
-  }
-
-  return {
-    style: ctx.style,
-    loading: ctx.loading,
-    error: ctx.error,
-    updateAvatarDisplayStyle: ctx.updateStyle,
-    syncAvatarDisplayStyle: ctx.syncStyle,
-  }
-}

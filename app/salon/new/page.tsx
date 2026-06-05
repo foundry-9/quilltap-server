@@ -2,12 +2,34 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import useSWR from 'swr'
 import { CharacterPickerPanel, NewChatForm, useNewChat } from '@/components/new-chat'
+
+interface ChatSettingsResponse {
+  autonomousRoomSettings?: {
+    visibilityDefault?: 'owner_only' | 'household' | 'open'
+    destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
+    defaultFreshnessWindowMs?: number
+  }
+}
 
 export default function NewChatPage() {
   const searchParams = useSearchParams()
   const projectIdParam = searchParams.get('projectId') || undefined
   const characterIdParam = searchParams.get('characterId') || undefined
+  const autonomousParam = searchParams.get('autonomous') === '1'
+
+  const { data: chatSettings } = useSWR<ChatSettingsResponse>('/api/v1/settings/chat')
+  const autonomousHint = chatSettings?.autonomousRoomSettings
+    ? {
+        visibilityDefault: chatSettings.autonomousRoomSettings.visibilityDefault,
+        destructiveToolPolicy: chatSettings.autonomousRoomSettings.destructiveToolPolicy,
+        defaultFreshnessHours:
+          chatSettings.autonomousRoomSettings.defaultFreshnessWindowMs != null
+            ? Math.round(chatSettings.autonomousRoomSettings.defaultFreshnessWindowMs / (60 * 60 * 1000))
+            : undefined,
+      }
+    : undefined
 
   const {
     loading,
@@ -19,6 +41,9 @@ export default function NewChatPage() {
     project,
     projectScenarios,
     generalScenarios,
+    availableProjects,
+    selectedProjectId,
+    setSelectedProjectId,
     selectedCharacters,
     setSelectedCharacters,
     state,
@@ -27,7 +52,10 @@ export default function NewChatPage() {
   } = useNewChat({
     initialCharacterId: characterIdParam,
     projectId: projectIdParam,
+    initialAutonomous: autonomousParam,
   })
+
+  const isAutonomous = state.autonomous.enabled
 
   if (loading) {
     return (
@@ -37,12 +65,15 @@ export default function NewChatPage() {
     )
   }
 
+  const llmCount = selectedCharacters.filter((sc) => sc.controlledBy === 'llm').length
+  const hasUserCharacter = selectedCharacters.some((sc) => sc.controlledBy === 'user')
   const canSubmit =
     !creating &&
     selectedCharacters.length > 0 &&
-    selectedCharacters.some((sc) => sc.controlledBy === 'llm') &&
+    llmCount > 0 &&
     !selectedCharacters.some((sc) => sc.controlledBy === 'llm' && !sc.connectionProfileId) &&
-    (profiles.length > 0 || !selectedCharacters.some((sc) => sc.controlledBy === 'llm'))
+    profiles.length > 0 &&
+    (!isAutonomous || (llmCount >= 2 && !hasUserCharacter))
 
   return (
     <div className="qt-page-container min-h-screen text-foreground">
@@ -54,7 +85,7 @@ export default function NewChatPage() {
           ← Back to {project ? project.name : 'Chats'}
         </Link>
 
-        <h1 className="mb-6 qt-heading-1">New Chat</h1>
+        <h1 className="mb-6 qt-heading-1">{isAutonomous ? 'New Autonomous Room' : 'New Chat'}</h1>
 
         {project && (
           <div className="mb-6 rounded-lg border qt-border-default qt-bg-card/50 p-4">
@@ -119,15 +150,19 @@ export default function NewChatPage() {
             project={project}
             projectScenarios={projectScenarios}
             generalScenarios={generalScenarios}
+            availableProjects={availableProjects}
+            selectedProjectId={selectedProjectId}
+            onSelectedProjectIdChange={setSelectedProjectId}
             creating={creating}
             showSingleCharacterControls={false}
+            autonomousSettingsHint={autonomousHint}
           />
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
           <Link
             href={project ? `/prospero/${project.id}` : '/salon'}
-            className="rounded-lg border qt-border-default qt-bg-card px-6 py-2 font-medium qt-text-small transition hover:qt-bg-muted"
+            className="qt-button qt-button-secondary"
           >
             Cancel
           </Link>
@@ -135,9 +170,13 @@ export default function NewChatPage() {
             type="button"
             onClick={() => void handleCreateChat()}
             disabled={!canSubmit}
-            className="rounded-lg bg-success px-6 py-2 font-semibold qt-text-success-foreground transition hover:qt-bg-success/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="qt-button-success"
           >
-            {creating ? 'Creating...' : 'Create Chat'}
+            {creating
+              ? 'Creating...'
+              : isAutonomous
+                ? 'Create Autonomous Room'
+                : 'Create Chat'}
           </button>
         </div>
       </div>

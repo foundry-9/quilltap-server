@@ -89,7 +89,7 @@ _quilltap_complete() {
       return
       ;;
     --sort)
-      COMPREPLY=($(compgen -W "name path size modified created reinforced importance accessed reinforcement-count links" -- "$cur"))
+      COMPREPLY=($(compgen -W "name time size links reinforced importance created accessed reinforcement-count" -- "$cur"))
       return
       ;;
     --field)
@@ -109,10 +109,10 @@ _quilltap_complete() {
   # Subcommand-specific completion
   case "$subcommand" in
     db)
-      local db_verbs="schema find chats messages logs message log memories optimize backup integrity"
+      local db_verbs="schema find chats messages logs message log memories characters optimize backup integrity"
       local db_flags="--instance --data-dir --passphrase --json --limit --grep \
         --character --project --about --source --chat --message --rendered --field \
-        --tail --last --full --from --type --out --help \
+        --tail --last --full --from --type --out --id --diverged --blocked --help \
         --tables --count --repl --llm-logs --mount-points \
         --lock-status --lock-clean --lock-override"
       if [[ -z "$subverb" ]]; then
@@ -126,7 +126,7 @@ _quilltap_complete() {
       fi
       ;;
     docs)
-      local docs_verbs="list show files ls dir read export scan write delete mkdir move copy status find grep reindex embed"
+      local docs_verbs="list show files ls dir tree read export scan write delete mkdir move copy status find grep reindex embed"
       local docs_flags="--mount --instance --data-dir --passphrase --port --json --help \
         --force --rendered --links --folder --type --ext --limit --max --context --top --threshold \
         --ignore-case -l --wait -R --recursive --sort -r --reverse --depth --max-nodes --long --semantic"

@@ -73,6 +73,7 @@ describe('chats [id] document actions', () => {
         },
         chatDocuments: {
           findByChatId: jest.fn(),
+          findRecentAcrossChats: jest.fn().mockResolvedValue([]),
           findActiveForChat: jest.fn(),
           openDocument: jest.fn(),
         },
@@ -102,7 +103,10 @@ describe('chats [id] document actions', () => {
       }
     }).reverse()
 
+    // This chat's own documents lead the list; the cross-chat window adds
+    // nothing new here (it returns the same rows, which dedupe away).
     ctx.repos.chatDocuments.findByChatId.mockResolvedValueOnce(docs)
+    ctx.repos.chatDocuments.findRecentAcrossChats.mockResolvedValueOnce(docs)
 
     const response = await handleRecentDocuments(chatId, ctx)
     const body = await response.json()
@@ -114,6 +118,43 @@ describe('chats [id] document actions', () => {
     expect(body.documents[1].id).toBe('doc-1')
     expect(body.documents.some((doc: any) => doc.isActive === true)).toBe(true)
     expect(body.documents.some((doc: any) => doc.isActive === false)).toBe(true)
+    // Every returned row belongs to this chat, so all carry fromCurrentChat.
+    expect(body.documents.every((doc: any) => doc.fromCurrentChat === true)).toBe(true)
+  })
+
+  it('lists this chat first, then deduped documents from other chats, capped at the max', async () => {
+    const chatId = 'chat-1'
+    const now = new Date('2026-04-15T10:00:00.000Z')
+    // Two docs in this chat (newest), plus an other-chat doc, plus an other-chat
+    // duplicate of a this-chat file (same scope+mountPoint+path) that must collapse.
+    const mine = [
+      { id: 'mine-0', chatId, filePath: 'a.md', scope: 'project', mountPoint: null,
+        displayTitle: 'A', isActive: true, updatedAt: now.toISOString(), createdAt: now.toISOString() },
+      { id: 'mine-1', chatId, filePath: 'b.md', scope: 'project', mountPoint: null,
+        displayTitle: 'B', isActive: false, updatedAt: new Date(now.getTime() - 60000).toISOString(), createdAt: now.toISOString() },
+    ]
+    const others = [
+      // duplicate of mine-0's file but updated more recently in another chat —
+      // dedupe must keep the this-chat attribution and drop this one.
+      { id: 'other-dup', chatId: 'chat-2', filePath: 'a.md', scope: 'project', mountPoint: null,
+        displayTitle: 'A', isActive: true, updatedAt: new Date(now.getTime() + 60000).toISOString(), createdAt: now.toISOString() },
+      { id: 'other-new', chatId: 'chat-2', filePath: 'c.md', scope: 'project', mountPoint: null,
+        displayTitle: 'C', isActive: true, updatedAt: new Date(now.getTime() - 120000).toISOString(), createdAt: now.toISOString() },
+    ]
+
+    ctx.repos.chatDocuments.findByChatId.mockResolvedValueOnce(mine)
+    ctx.repos.chatDocuments.findRecentAcrossChats.mockResolvedValueOnce([...others, ...mine])
+
+    const response = await handleRecentDocuments(chatId, ctx)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    // this chat's two docs first, then the one genuinely-new other-chat doc
+    expect(body.documents.map((d: any) => d.id)).toEqual(['mine-0', 'mine-1', 'other-new'])
+    expect(body.documents[0].fromCurrentChat).toBe(true)
+    expect(body.documents[2].fromCurrentChat).toBe(false)
+    // an other-chat row is never reported as the active doc for this chat
+    expect(body.documents[2].isActive).toBe(false)
   })
 
   it('returns active document metadata when one exists', async () => {

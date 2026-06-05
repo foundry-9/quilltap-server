@@ -36,6 +36,9 @@ function stableStringify(value: unknown): string {
  *
  * - systemBlock1Hash: first system message content (the long stable identity stack)
  * - systemBlock2Hash: second system message content (static identity reminder)
+ * - systemBlock3Hash: third system message content (rolling compressed history,
+ *   only emitted by `assembleContext` when compression is active — expected to
+ *   churn every 5–7 turns)
  * - toolsArrayHash: stable-stringified tools array
  * - historyTailHash: stable-stringified all non-system messages except the last
  *   (i.e. the frozen history). Mid-history mutation between turns shows up as
@@ -58,6 +61,9 @@ export function computeRequestPrefixHashes(
   }
   if (systemBlocks.length >= 2 && typeof systemBlocks[1].content === 'string') {
     result.systemBlock2Hash = hashString(systemBlocks[1].content)
+  }
+  if (systemBlocks.length >= 3 && typeof systemBlocks[2].content === 'string') {
+    result.systemBlock3Hash = hashString(systemBlocks[2].content)
   }
 
   if (tools && tools.length > 0) {

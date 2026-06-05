@@ -1,0 +1,76 @@
+{
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-z-ai",
+  "title": "Z.AI (GLM)",
+  "description": "Z.AI GLM models and CogView image generation for Quilltap",
+  "version": "1.1.10",
+  "author": {
+    "name": "Foundry-9 LLC",
+    "email": "charles.sebold@foundry-9.com",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=1.7.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": [
+    "LLM_PROVIDER",
+    "IMAGE_PROVIDER"
+  ],
+  "category": "PROVIDER",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "REACT",
+  "styling": "TAILWIND",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": [
+    "quilltap",
+    "plugin",
+    "z.ai",
+    "zai",
+    "glm",
+    "cogview",
+    "llm",
+    "chat",
+    "image-generation"
+  ],
+  "providerConfig": {
+    "providerName": "Z_AI",
+    "displayName": "Z.AI (GLM)",
+    "description": "Z.AI GLM models including GLM-4.6, GLM-4.5 series, vision models, and CogView image generation",
+    "abbreviation": "ZAI",
+    "colors": {
+      "bg": "bg-emerald-100",
+      "text": "text-emerald-800",
+      "icon": "text-emerald-600"
+    },
+    "requiresApiKey": true,
+    "requiresBaseUrl": false,
+    "apiKeyLabel": "Z.AI API Key",
+    "capabilities": {
+      "chat": true,
+      "imageGeneration": true,
+      "embeddings": false,
+      "webSearch": true
+    },
+    "attachmentSupport": {
+      "supported": true,
+      "mimeTypes": [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp"
+      ],
+      "description": "Images only (JPEG, PNG, GIF, WebP) — vision-capable models required"
+    }
+  },
+  "permissions": {
+    "network": [
+      "api.z.ai"
+    ],
+    "userData": false,
+    "database": false
+  }
+}

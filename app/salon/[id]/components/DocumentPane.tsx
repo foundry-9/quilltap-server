@@ -12,6 +12,7 @@
  */
 
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react'
+import useSWR from 'swr'
 import DocumentGutter, { type LinePosition } from './DocumentGutter'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
@@ -31,6 +32,7 @@ import { TableNode, TableCellNode, TableRowNode } from '@lexical/table'
 import { composerTheme } from '@/components/chat/lexical/theme'
 import { MarkdownBridgePlugin, COMPOSER_TRANSFORMERS } from '@/components/chat/lexical/plugins/MarkdownBridgePlugin'
 import { FormattingCommandPlugin } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
+import { TextReplacementPlugin } from '@/components/chat/lexical/plugins/TextReplacementPlugin'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import DocumentChangeTracker from './DocumentChangeTracker'
 import DocumentFocusPlugin from './DocumentFocusPlugin'
@@ -116,6 +118,8 @@ function DocumentEditorPlugins({
   onFocusProcessed?: () => void
 }) {
   const [editor] = useLexicalComposerContext()
+  const { data: chatSettings } = useSWR<{ composerSpellcheck?: boolean }>('/api/v1/settings/chat')
+  const spellCheck = chatSettings?.composerSpellcheck ?? true
 
   // Sync editable state
   useEffect(() => {
@@ -130,6 +134,7 @@ function DocumentEditorPlugins({
             className="qt-doc-editor-area qt-lexical-contenteditable"
             aria-label="Document editor"
             style={{ lineHeight: '1.6', minHeight: '100%' }}
+            spellCheck={spellCheck}
           />
         }
         ErrorBoundary={LexicalErrorBoundary}
@@ -146,6 +151,7 @@ function DocumentEditorPlugins({
         preserveAsterisks
       />
       <FormattingCommandPlugin />
+      <TextReplacementPlugin />
       <DocumentChangeTracker
         baselineContent={baselineContent}
         onChangedLines={onChangedLines}

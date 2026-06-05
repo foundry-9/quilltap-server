@@ -10,6 +10,9 @@
  * and any other persistent information needed during roleplay.
  */
 
+import { z } from 'zod'
+import { zodToOpenAISchema } from './zod-to-openai-schema'
+
 /**
  * Operation types for state management
  */
@@ -24,18 +27,41 @@ export type StateOperation = 'fetch' | 'set' | 'delete';
 export type StateContext = 'chat' | 'project';
 
 /**
+ * Zod schema for the state tool's input.
+ */
+export const stateToolInputSchema = z.object({
+  operation: z
+    .enum(['fetch', 'set', 'delete'])
+    .describe(
+      'Operation to perform: "fetch" reads state, "set" updates a value, "delete" removes a value.'
+    ),
+  context: z
+    .enum(['chat', 'project'])
+    .describe(
+      'Where to operate: "chat" for chat-specific state, "project" for project state. ' +
+      'For fetch without context, returns merged state (chat values override project values).'
+    )
+    .optional(),
+  path: z
+    .string()
+    .describe(
+      'Path to the state value using dot notation and array indexing. ' +
+      'Examples: "player.health", "inventory[0].name", "gameState.turn". ' +
+      'Omit or use empty string to access root state object.'
+    )
+    .optional(),
+  value: z
+    .unknown()
+    .describe(
+      'Value to set at the path (required for "set" operation). Can be any JSON value.'
+    )
+    .optional(),
+})
+
+/**
  * Input parameters for the state tool
  */
-export interface StateToolInput {
-  /** Operation to perform */
-  operation: StateOperation;
-  /** Context for the operation (chat or project). For fetch without context, returns merged state. */
-  context?: StateContext;
-  /** Path to the state value (e.g., "player.health", "inventory[0]"). Empty/omitted for root. */
-  path?: string;
-  /** Value to set (required for 'set' operation) */
-  value?: unknown;
-}
+export type StateToolInput = z.infer<typeof stateToolInputSchema>;
 
 /**
  * Output from the state tool
@@ -67,36 +93,7 @@ export const stateToolDefinition = {
       'Use "fetch" to read state, "set" to update values, "delete" to remove values. ' +
       'Paths support dot notation (player.health) and array indexing (inventory[0]). ' +
       'Keys starting with underscore (_) are user-only and should not be modified by AI.',
-    parameters: {
-      type: 'object',
-      properties: {
-        operation: {
-          type: 'string',
-          enum: ['fetch', 'set', 'delete'],
-          description:
-            'Operation to perform: "fetch" reads state, "set" updates a value, "delete" removes a value.',
-        },
-        context: {
-          type: 'string',
-          enum: ['chat', 'project'],
-          description:
-            'Where to operate: "chat" for chat-specific state, "project" for project state. ' +
-            'For fetch without context, returns merged state (chat values override project values).',
-        },
-        path: {
-          type: 'string',
-          description:
-            'Path to the state value using dot notation and array indexing. ' +
-            'Examples: "player.health", "inventory[0].name", "gameState.turn". ' +
-            'Omit or use empty string to access root state object.',
-        },
-        value: {
-          description:
-            'Value to set at the path (required for "set" operation). Can be any JSON value.',
-        },
-      },
-      required: ['operation'],
-    },
+    parameters: zodToOpenAISchema(stateToolInputSchema),
   },
 };
 
@@ -104,41 +101,5 @@ export const stateToolDefinition = {
  * Helper to validate tool input parameters
  */
 export function validateStateInput(input: unknown): input is StateToolInput {
-  if (typeof input !== 'object' || input === null) {
-    return false;
-  }
-
-  const obj = input as Record<string, unknown>;
-
-  // operation is required
-  if (obj.operation === undefined) {
-    return false;
-  }
-
-  // Validate operation
-  if (typeof obj.operation !== 'string') {
-    return false;
-  }
-  if (!['fetch', 'set', 'delete'].includes(obj.operation)) {
-    return false;
-  }
-
-  // Validate context if provided
-  if (obj.context !== undefined) {
-    if (typeof obj.context !== 'string') {
-      return false;
-    }
-    if (!['chat', 'project'].includes(obj.context)) {
-      return false;
-    }
-  }
-
-  // Validate path if provided
-  if (obj.path !== undefined && typeof obj.path !== 'string') {
-    return false;
-  }
-
-  // value can be any type, no validation needed
-
-  return true;
+  return stateToolInputSchema.safeParse(input).success;
 }

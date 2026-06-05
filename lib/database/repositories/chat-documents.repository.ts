@@ -104,6 +104,26 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
   }
 
   /**
+   * Find the most recently updated documents across ALL chats, newest first.
+   * Used by the Open-Document picker so recent files persist beyond the
+   * current chat. Callers over-fetch and then dedupe by file identity and
+   * re-rank current-chat-first before capping.
+   */
+  async findRecentAcrossChats(limit: number): Promise<ChatDocument[]> {
+    return this.safeQuery(
+      async () => {
+        const all = await this.findAll();
+        return all
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+          .slice(0, limit);
+      },
+      'Error finding recent documents across chats',
+      { limit },
+      []
+    );
+  }
+
+  /**
    * Open a document for a chat. If a document is already open,
    * the existing one is deactivated (kept for history).
    * If the requested document was previously opened, reactivates it.
@@ -187,6 +207,86 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
       },
       'Error renaming chat document filePath',
       { oldPath, newPath },
+      0,
+    );
+  }
+
+  /**
+   * Rewrite chat_documents rows in a specific (scope, mountPoint) whose
+   * filePath exactly matches `oldPath`. Used after `doc_move_file` succeeds
+   * so any chat with the moved file open in Document Mode keeps tracking it
+   * at the new path instead of 404'ing on the next reload. The displayTitle
+   * is refreshed to the new basename, matching the convention used by both
+   * `openDocument` and the UI-initiated rename.
+   */
+  async renameFilePathInStore(
+    scope: string,
+    mountPoint: string | null | undefined,
+    oldPath: string,
+    newPath: string,
+    newDisplayTitle: string,
+  ): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const normalizedMount = mountPoint ?? null;
+        const stale = await this.findByFilter({
+          scope,
+          filePath: oldPath,
+        } as TypedQueryFilter<ChatDocument>);
+        const matching = stale.filter(r => (r.mountPoint ?? null) === normalizedMount);
+        let count = 0;
+        for (const row of matching) {
+          const updated = await this.update(row.id, {
+            filePath: newPath,
+            displayTitle: newDisplayTitle,
+          });
+          if (updated) count++;
+        }
+        return count;
+      },
+      'Error renaming chat document filePath in store',
+      { scope, mountPoint, oldPath, newPath },
+      0,
+    );
+  }
+
+  /**
+   * Rewrite chat_documents rows in a specific (scope, mountPoint) whose
+   * filePath sits under `oldFolderPath` after a folder is moved/renamed.
+   * Rewrites the prefix to `newFolderPath` and refreshes displayTitle to
+   * the new basename. Used after `doc_move_folder` succeeds.
+   */
+  async renameFolderPathInStore(
+    scope: string,
+    mountPoint: string | null | undefined,
+    oldFolderPath: string,
+    newFolderPath: string,
+  ): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const normalizedMount = mountPoint ?? null;
+        const oldPrefix = oldFolderPath.endsWith('/') ? oldFolderPath : `${oldFolderPath}/`;
+        const newPrefix = newFolderPath.endsWith('/') ? newFolderPath : `${newFolderPath}/`;
+        const all = await this.findByFilter({ scope } as TypedQueryFilter<ChatDocument>);
+        const matching = all.filter(r =>
+          (r.mountPoint ?? null) === normalizedMount &&
+          r.filePath.startsWith(oldPrefix)
+        );
+        let count = 0;
+        for (const row of matching) {
+          const newFilePath = newPrefix + row.filePath.slice(oldPrefix.length);
+          const slash = newFilePath.lastIndexOf('/');
+          const newDisplayTitle = slash >= 0 ? newFilePath.slice(slash + 1) : newFilePath;
+          const updated = await this.update(row.id, {
+            filePath: newFilePath,
+            displayTitle: newDisplayTitle,
+          });
+          if (updated) count++;
+        }
+        return count;
+      },
+      'Error renaming chat document folder path in store',
+      { scope, mountPoint, oldFolderPath, newFolderPath },
       0,
     );
   }

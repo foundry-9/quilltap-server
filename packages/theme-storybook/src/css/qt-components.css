@@ -68,6 +68,21 @@
   --qt-input-focus-ring: var(--color-ring);
   --qt-input-transition: colors 150ms cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* Select dropdown arrow — a full data URI so themes can swap the glyph. */
+  --qt-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+
+  /* Checkbox & radio variables (accent-color is the fill/check hook) */
+  --qt-checkbox-size: 1rem;
+  --qt-checkbox-radius: var(--radius-sm);
+  --qt-checkbox-border: var(--color-border);
+  --qt-checkbox-accent: var(--color-primary);
+  --qt-checkbox-focus-ring: var(--color-ring);
+
+  --qt-radio-size: 1rem;
+  --qt-radio-border: var(--color-border);
+  --qt-radio-accent: var(--color-primary);
+  --qt-radio-focus-ring: var(--color-ring);
+
   /* Navbar variables */
   --qt-navbar-height: 3.5rem;
   --qt-navbar-bg: var(--color-background);
@@ -573,20 +588,29 @@
   background-color: var(--qt-button-warning-hover-bg);
 }
 
+/* Success is used standalone (without .qt-button), so it carries the full
+   base — but token-driven, matching the other variants' metrics. */
 .qt-button-success {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  transition: all 150ms;
+  padding: var(--qt-button-padding-y) var(--qt-button-padding-x);
+  border-radius: var(--qt-button-radius);
+  font-size: var(--qt-button-font-size);
+  font-weight: var(--qt-button-font-weight);
+  line-height: 1.25;
+  border: 1px solid transparent;
+  box-shadow: var(--qt-button-primary-shadow);
+  transition: var(--qt-button-transition);
   cursor: pointer;
   background-color: var(--qt-button-success-bg);
   color: var(--qt-button-success-fg);
+}
+
+.qt-button-success:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .qt-button-success:hover:not(:disabled) {
@@ -752,11 +776,45 @@
 
 .qt-select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: var(--qt-select-arrow);
   background-repeat: no-repeat;
   background-position: right 0.75rem center;
   background-size: 1rem;
   padding-right: 2.5rem;
+}
+
+/* ==========================================================================
+   CHECKBOX & RADIO COMPONENTS
+   accent-color recolors the native fill/check; size/border/radius tokens
+   take effect for appearance:none themes.
+   ========================================================================== */
+
+.qt-checkbox {
+  width: var(--qt-checkbox-size);
+  height: var(--qt-checkbox-size);
+  border-radius: var(--qt-checkbox-radius);
+  border: 1px solid var(--qt-checkbox-border);
+  accent-color: var(--qt-checkbox-accent);
+  cursor: pointer;
+}
+
+.qt-checkbox:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--qt-checkbox-focus-ring) 35%, transparent);
+}
+
+.qt-radio {
+  width: var(--qt-radio-size);
+  height: var(--qt-radio-size);
+  border-radius: 9999px;
+  border: 1px solid var(--qt-radio-border);
+  accent-color: var(--qt-radio-accent);
+  cursor: pointer;
+}
+
+.qt-radio:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--qt-radio-focus-ring) 35%, transparent);
 }
 
 /* ==========================================================================

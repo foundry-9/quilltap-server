@@ -9,6 +9,11 @@ import { logger } from '@/lib/logger';
 import { WardrobeItem, WardrobeItemSchema, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { getOverlaidWardrobeItems, syncCharacterVaultWardrobe } from './character-properties-overlay';
+import {
+  createVaultWardrobeItem,
+  updateVaultWardrobeItem,
+  deleteVaultWardrobeItem,
+} from './vault-overlay/wardrobe-writes';
 import { TypedQueryFilter } from '../interfaces';
 import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
 
@@ -40,10 +45,9 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Find all wardrobe items belonging to a specific character. Honours the
-   * per-character document-store overlay: when the character's
-   * `readPropertiesFromDocumentStore` flag is on, items are sourced from the
-   * vault's `Wardrobe/*.md` files instead of the DB.
+   * Find all wardrobe items belonging to a specific character. Sources items
+   * from the character's vault `Wardrobe/*.md` files when present, falling
+   * back to DB rows.
    *
    * @param characterId The character ID
    * @param includeArchived When false (default), excludes items where archivedAt is not null
@@ -94,6 +98,8 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
         const items = await this.findByCharacterId(characterId, true);
         const owned = items.find((item) => item.id === id);
         if (owned) return owned;
+        const archetype = await this.findArchetypeById(id);
+        if (archetype) return archetype;
         const raw = await this._findById(id);
         if (raw && raw.characterId == null) return raw;
         return null;
@@ -114,7 +120,15 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
       async () => {
         const items = await this.findByCharacterId(characterId, true);
         const found = new Map(items.filter((i) => ids.includes(i.id)).map((i) => [i.id, i]));
-        const missing = ids.filter((id) => !found.has(id));
+        let missing = ids.filter((id) => !found.has(id));
+        if (missing.length > 0) {
+          // Shared archetypes live in Quilltap General; seed any missing ids from there.
+          const archetypes = await this.findArchetypes(true);
+          for (const a of archetypes) {
+            if (missing.includes(a.id)) found.set(a.id, a);
+          }
+          missing = missing.filter((id) => !found.has(id));
+        }
         if (missing.length > 0) {
           const raw = await this.findByFilter({ id: { $in: missing } } as TypedQueryFilter<WardrobeItem>);
           for (const item of raw) {
@@ -172,6 +186,11 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   async findArchetypes(includeArchived = false): Promise<WardrobeItem[]> {
     return this.safeQuery(
       async () => {
+        // Vault-first: shared archetypes live in Quilltap General/Wardrobe.
+        const { readGeneralWardrobe } = await import('@/lib/mount-index/general-wardrobe');
+        const general = await readGeneralWardrobe(includeArchived);
+        if (general.length > 0) return general;
+        // Fallback to DB rows (pre-migration instances, or General unprovisioned).
         const items = await this.findByFilter(this.createNullableFilter('characterId', null));
         if (includeArchived) {
           return items;
@@ -184,46 +203,46 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
+   * Find a single shared archetype by id. Reads Quilltap General/Wardrobe
+   * first, falling back to a raw DB lookup for pre-migration instances.
+   */
+  async findArchetypeById(id: string): Promise<WardrobeItem | null> {
+    return this.safeQuery(
+      async () => {
+        const archetypes = await this.findArchetypes(true);
+        const found = archetypes.find((a) => a.id === id);
+        if (found) return found;
+        const raw = await this._findById(id);
+        return raw && raw.characterId == null ? raw : null;
+      },
+      'Error finding archetype wardrobe item by id',
+      { wardrobeItemId: id }
+    );
+  }
+
+  /**
    * Archive a wardrobe item (soft delete)
    * Sets archivedAt to the current timestamp.
    */
-  async archive(id: string): Promise<WardrobeItem | null> {
-    return this.safeQuery(
-      async () => {
-        const now = this.getCurrentTimestamp();
-        const item = await this._update(id, { archivedAt: now } as Partial<WardrobeItem>);
-
-        if (item) {
-          logger.info('Wardrobe item archived', { wardrobeItemId: id, archivedAt: now });
-          await syncCharacterVaultWardrobe(item.characterId);
-        }
-
-        return item;
-      },
-      'Error archiving wardrobe item',
-      { wardrobeItemId: id }
-    );
+  async archive(id: string, ownerCharacterId?: string | null): Promise<WardrobeItem | null> {
+    const now = this.getCurrentTimestamp();
+    const item = await this.update(id, { archivedAt: now }, ownerCharacterId);
+    if (item) {
+      logger.info('Wardrobe item archived', { wardrobeItemId: id, archivedAt: now });
+    }
+    return item;
   }
 
   /**
    * Unarchive a wardrobe item (restore from archive)
    * Sets archivedAt to null.
    */
-  async unarchive(id: string): Promise<WardrobeItem | null> {
-    return this.safeQuery(
-      async () => {
-        const item = await this._update(id, { archivedAt: null } as Partial<WardrobeItem>);
-
-        if (item) {
-          logger.info('Wardrobe item unarchived', { wardrobeItemId: id });
-          await syncCharacterVaultWardrobe(item.characterId);
-        }
-
-        return item;
-      },
-      'Error unarchiving wardrobe item',
-      { wardrobeItemId: id }
-    );
+  async unarchive(id: string, ownerCharacterId?: string | null): Promise<WardrobeItem | null> {
+    const item = await this.update(id, { archivedAt: null }, ownerCharacterId);
+    if (item) {
+      logger.info('Wardrobe item unarchived', { wardrobeItemId: id });
+    }
+    return item;
   }
 
   /**
@@ -271,22 +290,42 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
     return this.safeQuery(
       async () => {
         const candidateId = options?.id ?? this.generateId();
+        const now = this.getCurrentTimestamp();
+        const newItem: WardrobeItem = {
+          ...data,
+          id: candidateId,
+          characterId: data.characterId ?? null,
+          createdAt: options?.createdAt ?? now,
+          updatedAt: options?.updatedAt ?? now,
+        };
+
+        // Vault-first: write the item straight into the owning character's
+        // vault, or Quilltap General for shared archetypes (characterId null).
+        // Cycle detection happens inside against the folder's current items.
+        const vault = await createVaultWardrobeItem(newItem);
+        if (vault.handled) {
+          logger.info('Wardrobe item created in vault', {
+            wardrobeItemId: newItem.id,
+            characterId: newItem.characterId,
+            title: newItem.title,
+          });
+          return vault.value;
+        }
+
+        // Fallback — no vault mount resolved (e.g. Quilltap General not yet
+        // provisioned on a freshly-cloned instance). Legacy DB row + sync-out.
         await this.assertNoComponentCycles(
           candidateId,
           data.componentItemIds ?? [],
           data.characterId ?? null,
         );
-
         const item = await this._create(data, { ...options, id: candidateId });
-
-        logger.info('Wardrobe item created successfully', {
+        logger.info('Wardrobe item created (DB fallback)', {
           wardrobeItemId: item.id,
           characterId: data.characterId ?? null,
           title: data.title,
         });
-
         await syncCharacterVaultWardrobe(item.characterId);
-
         return item;
       },
       'Error creating wardrobe item',
@@ -323,6 +362,7 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
             componentItemIds: item.componentItemIds ?? [],
             appropriateness: item.appropriateness ?? null,
             isDefault: item.isDefault,
+            replace: item.replace ?? false,
             migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
             archivedAt: item.archivedAt ?? null,
           } as Omit<WardrobeItem, 'id' | 'createdAt' | 'updatedAt'>,
@@ -339,30 +379,59 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Update a wardrobe item
+   * Update a wardrobe item.
+   *
+   * `ownerCharacterId` (the owning character, or `null` for a shared archetype)
+   * locates the vault mount. Callers that know it — the wardrobe routes — should
+   * pass it; without it we derive a best-effort hint from the patch or a
+   * (possibly stale) DB row, which only works for pre-cutover items.
    */
-  async update(id: string, data: Partial<WardrobeItem>): Promise<WardrobeItem | null> {
+  async update(
+    id: string,
+    data: Partial<WardrobeItem>,
+    ownerCharacterId?: string | null,
+  ): Promise<WardrobeItem | null> {
     return this.safeQuery(
       async () => {
         const updateData = { ...data };
 
-        // Remove id and createdAt to prevent accidental overwrites
+        // Remove immutable fields to prevent accidental overwrites
         delete updateData.id;
         delete updateData.createdAt;
+        delete updateData.updatedAt;
 
+        // Resolve the owning character for mount resolution.
+        let hint: string | null | undefined = ownerCharacterId;
+        if (hint === undefined) {
+          if ('characterId' in updateData) {
+            hint = updateData.characterId ?? null;
+          } else {
+            const existing = await this._findById(id);
+            hint = existing ? existing.characterId ?? null : undefined;
+          }
+        }
+
+        if (hint !== undefined) {
+          const vault = await updateVaultWardrobeItem(id, updateData, hint);
+          if (vault.handled) {
+            if (vault.value) {
+              logger.info('Wardrobe item updated in vault', { wardrobeItemId: id });
+            }
+            return vault.value;
+          }
+        }
+
+        // Fallback — legacy DB update + sync-out.
         if (updateData.componentItemIds !== undefined) {
           const existing = await this._findById(id);
           const characterId = updateData.characterId ?? existing?.characterId ?? null;
           await this.assertNoComponentCycles(id, updateData.componentItemIds, characterId);
         }
-
         const item = await this._update(id, updateData);
-
         if (item) {
-          logger.info('Wardrobe item updated successfully', { wardrobeItemId: id });
+          logger.info('Wardrobe item updated (DB fallback)', { wardrobeItemId: id });
           await syncCharacterVaultWardrobe(item.characterId);
         }
-
         return item;
       },
       'Error updating wardrobe item',
@@ -371,28 +440,42 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Delete a wardrobe item
+   * Delete a wardrobe item.
+   *
+   * `ownerCharacterId` (or `null` for a shared archetype) locates the vault
+   * mount; the wardrobe routes pass it. Without it we derive a best-effort hint
+   * from a (possibly stale) DB row.
    */
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, ownerCharacterId?: string | null): Promise<boolean> {
     return this.safeQuery(
       async () => {
-        // Fetch first so we know whose vault to sync — once the row is gone
-        // there's nothing to look up.
-        const existing = await this._findById(id);
-        const result = await this._delete(id);
+        let hint: string | null | undefined = ownerCharacterId;
+        let existing: WardrobeItem | null = null;
+        if (hint === undefined) {
+          existing = await this._findById(id);
+          hint = existing ? existing.characterId ?? null : undefined;
+        }
 
-        if (result) {
-          logger.info('Wardrobe item deleted successfully', { wardrobeItemId: id });
-          if (existing?.characterId) {
-            // Pass the deleted id as a tombstone so the sync's vault-only
-            // ingestion step doesn't re-promote the still-on-disk Wardrobe/
-            // file (preserving the same id) and resurrect the row we just
-            // deleted. With the id excluded, the projection sweep treats
-            // the file as unmanaged and removes it.
-            await syncCharacterVaultWardrobe(existing.characterId, new Set([id]));
+        if (hint !== undefined) {
+          const vault = await deleteVaultWardrobeItem(id, hint);
+          if (vault.handled) {
+            if (vault.value) {
+              logger.info('Wardrobe item deleted from vault', { wardrobeItemId: id });
+            }
+            return vault.value;
           }
         }
 
+        // Fallback — legacy DB delete + sync-out (tombstone the id so the
+        // sync's ingestion step doesn't re-promote the still-on-disk file).
+        if (!existing) existing = await this._findById(id);
+        const result = await this._delete(id);
+        if (result) {
+          logger.info('Wardrobe item deleted (DB fallback)', { wardrobeItemId: id });
+          if (existing?.characterId) {
+            await syncCharacterVaultWardrobe(existing.characterId, new Set([id]));
+          }
+        }
         return result;
       },
       'Error deleting wardrobe item',
@@ -400,20 +483,4 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
     );
   }
 
-  /**
-   * Delete a wardrobe item without firing `syncCharacterVaultWardrobe`.
-   * Symmetric with `createFromVault`: used by the vault-to-DB sync path
-   * (`sync-properties-from-vault`) which rebuilds the row set in a tight
-   * delete-then-recreate loop. The standard `delete` would let each
-   * iteration's post-write sync re-promote the just-deleted vault file
-   * back into the DB, leaving the table populated and causing the
-   * subsequent recreate to hit a UNIQUE constraint on `id`.
-   */
-  async deleteRaw(id: string): Promise<boolean> {
-    return this.safeQuery(
-      () => this._delete(id),
-      'Error deleting wardrobe item (raw)',
-      { wardrobeItemId: id }
-    );
-  }
 }

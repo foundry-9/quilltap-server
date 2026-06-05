@@ -47,12 +47,23 @@ interface JobScope {
    * when a handler does many reads against the same repo after a write.
    */
   warnedReads: Set<string>;
+  /**
+   * Count of write args down-converted by {@link sanitizeForIpc} this job.
+   * Surfaced once per job in {@link flushPendingWrites} for observability.
+   */
+  sanitizedArgs: number;
 }
 
 const jobScopeStore = new AsyncLocalStorage<JobScope>();
 
 export function runWithJobScope<T>(jobId: string, fn: () => Promise<T>): Promise<T> {
-  const scope: JobScope = { jobId, writes: [], recentlyWrittenKeys: new Set(), warnedReads: new Set() };
+  const scope: JobScope = {
+    jobId,
+    writes: [],
+    recentlyWrittenKeys: new Set(),
+    warnedReads: new Set(),
+    sanitizedArgs: 0,
+  };
   return jobScopeStore.run(scope, fn);
 }
 
@@ -60,8 +71,70 @@ export function flushPendingWrites(): ChildWritePayload[] {
   const scope = jobScopeStore.getStore();
   if (!scope) return [];
   const writes = scope.writes.slice();
+  if (scope.sanitizedArgs > 0) {
+    log.debug('Down-converted Float32Array write args for IPC transport', {
+      jobId: scope.jobId,
+      writeCount: writes.length,
+      sanitizedArgs: scope.sanitizedArgs,
+    });
+  }
   scope.writes.length = 0;
   return writes;
+}
+
+/**
+ * Convert IPC-hostile values in a buffered write's args into structured-clone-
+ * and JSON-safe equivalents before they cross the child→parent boundary.
+ *
+ * Embeddings are produced as `Float32Array` (see `applyEmbeddingProfile`). The
+ * job-runner child ships buffered writes to the parent over the fork IPC
+ * channel; if that channel's effective serialization is not `'advanced'`
+ * (V8 structured-clone), a `Float32Array` arrives at the parent as a plain
+ * object and fails the repository embedding schemas. Every embedding schema
+ * also accepts a plain `number[]` and transforms it back into a `Float32Array`
+ * on validation, so down-converting here is lossless and independent of the
+ * channel's serialization mode.
+ *
+ * Only `Float32Array` is rewritten. `Buffer`/other typed-array views are left
+ * intact (reinterpreting their bytes as numbers would corrupt them), and class
+ * instances / Maps / etc. are left for the IPC layer to handle. Objects and
+ * arrays are rebuilt only when they actually contain a `Float32Array`, so the
+ * common no-embedding write incurs no copy and the caller's in-memory args are
+ * never mutated.
+ */
+function sanitizeForIpc(value: unknown, depth = 0): unknown {
+  if (value instanceof Float32Array) {
+    return Array.from(value);
+  }
+  if (value === null || typeof value !== 'object' || depth > 8) {
+    return value;
+  }
+  // Buffers and other typed-array views (Uint8Array, etc.) are left as-is.
+  if (ArrayBuffer.isView(value)) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    let changed = false;
+    const out = value.map((v) => {
+      const s = sanitizeForIpc(v, depth + 1);
+      if (s !== v) changed = true;
+      return s;
+    });
+    return changed ? out : value;
+  }
+  // Only descend into plain objects; leave class instances / Maps untouched.
+  const proto = Object.getPrototypeOf(value);
+  if (proto === Object.prototype || proto === null) {
+    let changed = false;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const s = sanitizeForIpc(v, depth + 1);
+      if (s !== v) changed = true;
+      out[k] = s;
+    }
+    return changed ? out : value;
+  }
+  return value;
 }
 
 export function appendWrite(method: string, args: unknown[]): void {
@@ -69,7 +142,12 @@ export function appendWrite(method: string, args: unknown[]): void {
   if (!scope) {
     throw new Error(`Cannot append write "${method}" outside of a job scope`);
   }
-  scope.writes.push({ method, args });
+  const safeArgs = args.map((a) => {
+    const sanitized = sanitizeForIpc(a);
+    if (sanitized !== a) scope.sanitizedArgs++;
+    return sanitized;
+  });
+  scope.writes.push({ method, args: safeArgs });
   scope.recentlyWrittenKeys.add(method);
 }
 

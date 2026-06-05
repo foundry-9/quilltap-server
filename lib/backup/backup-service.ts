@@ -271,6 +271,12 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   // tells the background queue not to redo work that was already complete.
   const embeddingStatus = await globalRepos.embeddingStatus.findAll();
 
+  // Global text replacement rules (no userId). Ordinary user content — the
+  // master switch (chat_settings.textReplacementsEnabled) is already backed
+  // up, so the rules must come along too or a restore re-enables the feature
+  // with zero rules.
+  const textReplacementRules = await globalRepos.textReplacementRules.list();
+
   // Scriptorium / document store tables live in a separate mount-index
   // database. We dump them with raw SELECTs because most repositories don't
   // expose a "give me everything" helper, and bulk export wants the latter.
@@ -366,6 +372,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     docMountDocuments,
     docMountBlobs,
     projectDocMountLinks,
+    textReplacementRules,
   };
 }
 
@@ -459,6 +466,7 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       docMountDocuments: data.docMountDocuments?.length || 0,
       docMountBlobs: data.docMountBlobs?.length || 0,
       projectDocMountLinks: data.projectDocMountLinks?.length || 0,
+      textReplacementRules: data.textReplacementRules?.length || 0,
     },
   };
 }
@@ -605,6 +613,7 @@ export async function createBackup(userId: string): Promise<{
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-documents.json'), data.docMountDocuments || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-blobs.json'), data.docMountBlobs || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'project-doc-mount-links.json'), data.projectDocMountLinks || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'text-replacement-rules.json'), data.textReplacementRules || []);
 
     moduleLogger.debug('Wrote all JSON data files to staging directory');
 

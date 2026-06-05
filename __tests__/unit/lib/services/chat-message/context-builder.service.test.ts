@@ -6,6 +6,7 @@
 import {
   buildConversationMessages,
   collectLanternImageFileIdsForCharacter,
+  normalizeWhisperRoles,
 } from '@/lib/services/chat-message/context-builder.service'
 
 jest.mock('@/lib/logging/create-logger', () => ({
@@ -724,6 +725,112 @@ describe('context-builder.service', () => {
         { type: 'message', role: 'ASSISTANT', content: 'Lantern', participantId: null, attachments: ['file-kept'] },
       ]
       expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', true, null, LOOKBACK)).toEqual(['file-kept'])
+    })
+  })
+
+  describe('normalizeWhisperRoles', () => {
+    // Minimal message shape the helper actually reads. Mirrors the slice of
+    // the buildMessageContext message type that touches the re-role map.
+    type Msg = {
+      type: string
+      role?: string
+      content?: string
+      opaqueContent?: string | null
+      attachments?: string[] | null
+      systemSender?: string | null
+      id?: string
+    }
+
+    it('flips an attachment-less Staff whisper from ASSISTANT to USER', () => {
+      const msgs: Msg[] = [
+        { type: 'message', role: 'USER', content: 'Hello', systemSender: null },
+        { type: 'message', role: 'ASSISTANT', content: 'The Host notes the hour', systemSender: 'host' },
+      ]
+      const out = normalizeWhisperRoles(msgs, false)
+      expect(out[1].role).toBe('USER')
+      expect(out[1].systemSender).toBeNull()
+      expect(out[1].content).toBe('The Host notes the hour')
+    })
+
+    it('leaves non-whisper messages untouched (same reference)', () => {
+      const user: Msg = { type: 'message', role: 'USER', content: 'Hi', systemSender: null }
+      const assistant: Msg = { type: 'message', role: 'ASSISTANT', content: 'A real reply', systemSender: undefined }
+      const out = normalizeWhisperRoles([user, assistant], false)
+      // Non-whispers pass through by identity — no needless cloning.
+      expect(out[0]).toBe(user)
+      expect(out[1]).toBe(assistant)
+    })
+
+    it('re-roles a tail of consecutive whispers so the last message is USER (no assistant prefill)', () => {
+      // This is the exact shape that 400s on Sonnet 4.6: a failed character
+      // turn followed by accumulated synthetic whispers at the tail.
+      const msgs: Msg[] = [
+        { type: 'message', role: 'USER', content: 'Question', systemSender: null },
+        { type: 'message', role: 'ASSISTANT', content: 'memory recap', systemSender: 'commonplaceBook' },
+        { type: 'message', role: 'ASSISTANT', content: 'host event', systemSender: 'host' },
+        { type: 'message', role: 'ASSISTANT', content: 'prospero summary', systemSender: 'prospero' },
+      ]
+      const out = normalizeWhisperRoles(msgs, false)
+      expect(out.every(m => (m.systemSender ? false : true))).toBe(true)
+      expect(out.slice(1).every(m => m.role === 'USER')).toBe(true)
+      // The tail — the thing Anthropic rejects when it is ASSISTANT — is USER.
+      expect(out[out.length - 1].role).toBe('USER')
+    })
+
+    it('keeps an attachment-bearing Lantern whisper as ASSISTANT so the image walker still finds it', () => {
+      const msgs: Msg[] = [
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern background', systemSender: 'lantern', attachments: ['file-img'] },
+      ]
+      const out = normalizeWhisperRoles(msgs, false)
+      expect(out[0].role).toBe('ASSISTANT')
+      // systemSender is still cleared even though the role is preserved.
+      expect(out[0].systemSender).toBeNull()
+      expect(out[0].attachments).toEqual(['file-img'])
+      // The re-roled message is still discoverable as an assistant+attachments
+      // Lantern image by the collector.
+      expect(collectLanternImageFileIdsForCharacter(out, 'char-1', true, null, 6)).toEqual(['file-img'])
+    })
+
+    it('treats an empty attachments array as no attachments and flips to USER', () => {
+      const msgs: Msg[] = [
+        { type: 'message', role: 'ASSISTANT', content: 'librarian filed a doc', systemSender: 'librarian', attachments: [] },
+      ]
+      const out = normalizeWhisperRoles(msgs, false)
+      expect(out[0].role).toBe('USER')
+    })
+
+    it('swaps in opaqueContent when isOpaqueAnywhere is true', () => {
+      const msgs: Msg[] = [
+        { type: 'message', role: 'ASSISTANT', content: 'The Host (named) speaks', opaqueContent: 'A voice notes the hour', systemSender: 'host' },
+      ]
+      const out = normalizeWhisperRoles(msgs, true)
+      expect(out[0].content).toBe('A voice notes the hour')
+      expect(out[0].role).toBe('USER')
+    })
+
+    it('falls back to content when opaque mode is on but opaqueContent is missing', () => {
+      const msgs: Msg[] = [
+        { type: 'message', role: 'ASSISTANT', content: 'fallback body', opaqueContent: null, systemSender: 'host' },
+      ]
+      const out = normalizeWhisperRoles(msgs, true)
+      expect(out[0].content).toBe('fallback body')
+    })
+
+    it('keeps the persona-voiced content when opaque mode is off', () => {
+      const msgs: Msg[] = [
+        { type: 'message', role: 'ASSISTANT', content: 'The Host (named) speaks', opaqueContent: 'A voice notes the hour', systemSender: 'host' },
+      ]
+      const out = normalizeWhisperRoles(msgs, false)
+      expect(out[0].content).toBe('The Host (named) speaks')
+    })
+
+    it('preserves attachment role even in opaque mode (carve-out is independent of body swap)', () => {
+      const msgs: Msg[] = [
+        { type: 'message', role: 'ASSISTANT', content: 'named Lantern', opaqueContent: 'opaque Lantern', systemSender: 'lantern', attachments: ['file-img'] },
+      ]
+      const out = normalizeWhisperRoles(msgs, true)
+      expect(out[0].role).toBe('ASSISTANT')
+      expect(out[0].content).toBe('opaque Lantern')
     })
   })
 })

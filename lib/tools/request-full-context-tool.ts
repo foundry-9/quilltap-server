@@ -7,13 +7,19 @@
  * a complex question requires the complete conversation history.
  */
 
+import { z } from 'zod'
+import { zodToOpenAISchema } from './zod-to-openai-schema'
+
+/**
+ * Zod schema for the request full context tool's input.
+ */
+export const requestFullContextToolInputSchema = z.object({})
+
 /**
  * Input parameters for the request full context tool
  * This tool takes no parameters - it simply signals intent
  */
-export interface RequestFullContextToolInput {
-  // No input parameters required
-}
+export type RequestFullContextToolInput = z.infer<typeof requestFullContextToolInputSchema>
 
 /**
  * Output from the request full context tool
@@ -32,14 +38,9 @@ export const requestFullContextToolDefinition = {
     name: 'request_full_context',
     description:
       'Request a full, uncompressed context reload for the next message. Use this when you realize the compressed context is missing important details, when the conversation has shifted significantly and you need the complete picture, or when handling a complex question that requires full historical understanding. This tool takes no parameters - it simply signals that the next message should bypass compression and provide complete context.',
-    parameters: {
-      type: 'object',
-      properties: {},
-      required: [],
-    },
+    parameters: zodToOpenAISchema(requestFullContextToolInputSchema),
   },
 }
-
 
 /**
  * Helper to validate tool input parameters
@@ -48,6 +49,5 @@ export const requestFullContextToolDefinition = {
 export function validateRequestFullContextInput(
   input: unknown
 ): input is RequestFullContextToolInput {
-  // Any object (including empty) is valid since this tool takes no parameters
-  return typeof input === 'object'
+  return requestFullContextToolInputSchema.safeParse(input).success
 }

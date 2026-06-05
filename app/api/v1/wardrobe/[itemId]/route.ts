@@ -21,13 +21,15 @@ const updateArchetypeSchema = z.object({
   isDefault: z.boolean().optional(),
   /** Replace this item's composite components (use `[]` to demote to a leaf). */
   componentItemIds: z.array(z.string()).optional(),
+  /** Composite-only: clear the designated slots on equip instead of layering. */
+  replace: z.boolean().optional(),
 });
 
 // GET /api/v1/wardrobe/[itemId]
 export const GET = createAuthenticatedParamsHandler<{ itemId: string }>(
   async (req, { repos }, { itemId }) => {
     try {
-      const item = await repos.wardrobe.findById(itemId);
+      const item = await repos.wardrobe.findArchetypeById(itemId);
 
       if (!item || item.characterId !== null) {
         return notFound('Archetype wardrobe item');
@@ -48,7 +50,7 @@ export const GET = createAuthenticatedParamsHandler<{ itemId: string }>(
 // PUT /api/v1/wardrobe/[itemId]
 export const PUT = createAuthenticatedParamsHandler<{ itemId: string }>(
   async (req, { repos }, { itemId }) => {
-    const existing = await repos.wardrobe.findById(itemId);
+    const existing = await repos.wardrobe.findArchetypeById(itemId);
     if (!existing || existing.characterId !== null) {
       return notFound('Archetype wardrobe item');
     }
@@ -56,7 +58,7 @@ export const PUT = createAuthenticatedParamsHandler<{ itemId: string }>(
     const body = await req.json();
     const validatedData = updateArchetypeSchema.parse(body);
 
-    const item = await repos.wardrobe.update(itemId, validatedData);
+    const item = await repos.wardrobe.update(itemId, validatedData, null);
 
     if (!item) {
       return notFound('Archetype wardrobe item');
@@ -72,7 +74,7 @@ export const PUT = createAuthenticatedParamsHandler<{ itemId: string }>(
 export const DELETE = createAuthenticatedParamsHandler<{ itemId: string }>(
   async (req, { repos }, { itemId }) => {
     try {
-      const existing = await repos.wardrobe.findById(itemId);
+      const existing = await repos.wardrobe.findArchetypeById(itemId);
       if (!existing || existing.characterId !== null) {
         return notFound('Archetype wardrobe item');
       }
@@ -91,7 +93,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ itemId: string }>(
         });
       }
 
-      const success = await repos.wardrobe.delete(itemId);
+      const success = await repos.wardrobe.delete(itemId, null);
 
       if (!success) {
         return notFound('Archetype wardrobe item');

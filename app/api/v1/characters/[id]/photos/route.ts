@@ -18,6 +18,8 @@ import { logger } from '@/lib/logger';
 import { successResponse, created, badRequest, notFound, serverError } from '@/lib/api/responses';
 import {
   saveToCharacterGallery,
+  saveFileToCharacterGallery,
+  saveLinkToCharacterGallery,
   listCharacterGallery,
 } from '@/lib/photos/character-gallery-service';
 
@@ -63,14 +65,54 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   }
 );
 
+const saveByIdSchema = z
+  .object({
+    fileId: z.string().min(1).optional(),
+    linkId: z.string().min(1).optional(),
+    caption: z.string().nullable().optional(),
+    tags: z.array(z.string()).optional(),
+  })
+  .refine(
+    v => (v.fileId ? 1 : 0) + (v.linkId ? 1 : 0) === 1,
+    { message: 'Provide exactly one of fileId or linkId' }
+  );
+
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     try {
       if (!id) return badRequest('Missing character id');
 
+      const contentType = req.headers.get('content-type') ?? '';
+
+      if (contentType.includes('application/json')) {
+        const body = await req.json();
+        const parsed = saveByIdSchema.safeParse(body);
+        if (!parsed.success) {
+          return badRequest(parsed.error.issues.map(i => i.message).join('; '));
+        }
+
+        const result = parsed.data.linkId
+          ? await saveLinkToCharacterGallery({
+              characterId: id,
+              sourceLinkId: parsed.data.linkId,
+              caption: parsed.data.caption ?? null,
+              tags: parsed.data.tags,
+              repos,
+            })
+          : await saveFileToCharacterGallery({
+              characterId: id,
+              fileId: parsed.data.fileId!,
+              caption: parsed.data.caption ?? null,
+              tags: parsed.data.tags,
+              repos,
+            });
+
+        return created(result);
+      }
+
       const formData = await req.formData().catch(() => null);
       if (!formData) {
-        return badRequest('Request body must be multipart/form-data');
+        return badRequest('Request body must be multipart/form-data or JSON with fileId');
       }
 
       const fileField = formData.get('file');
@@ -103,7 +145,10 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         message.includes('already in') ||
         message.includes('no linked database-backed vault') ||
         message.includes('Unsupported MIME type') ||
-        message.includes('Uploaded image is empty')
+        message.includes('Uploaded image is empty') ||
+        message.includes('not an image') ||
+        message.includes('not found') ||
+        message.includes('empty bytes')
       ) {
         return badRequest(message);
       }

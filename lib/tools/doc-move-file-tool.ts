@@ -5,76 +5,53 @@
  * Scriptorium Phase 3.4
  */
 
-export const docMoveFileTool = {
-  type: 'function',
-  function: {
-    name: 'doc_move_file',
-    description:
-      'Move or rename a file in a document store, project files, or general files. If new_path is in a different directory, moves the file. If in the same directory, renames it. Will not overwrite an existing file at the destination.',
-    parameters: {
-      type: 'object',
-      properties: {
-        scope: {
-          type: 'string',
-          enum: ['document_store', 'project', 'general'],
-          default: 'document_store',
-          description:
-            'The file scope. "document_store" for mounted document stores, "project" for project files, "general" for general files.',
-        },
-        mount_point: {
-          type: 'string',
-          description: 'Mount point name. Required when scope is "document_store".',
-        },
-        path: {
-          type: 'string',
-          description: 'Current relative path to the file within the selected scope.',
-        },
-        new_path: {
-          type: 'string',
-          description: 'Destination relative path for the file. Parent directories are created automatically.',
-        },
-      },
-      required: ['path', 'new_path'],
-    },
-  },
-};
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/**
+ * Zod schema for the doc_move_file tool's input.
+ */
+export const docMoveFileToolInputSchema = z.object({
+  scope: z
+    .enum(['document_store', 'project', 'general'])
+    .default('document_store')
+    .describe(
+      'The file scope. "document_store" for mounted document stores, "project" for project files, "general" for general files.'
+    )
+    .optional(),
+  mount_point: z
+    .string()
+    .describe('Mount point name. Required when scope is "document_store".')
+    .optional(),
+  path: z
+    .string()
+    .describe('Current relative path to the file within the selected scope.'),
+  new_path: z
+    .string()
+    .describe('Destination relative path for the file. Parent directories are created automatically.'),
+});
+
+/**
+ * Input parameters for the doc_move_file tool
+ */
+export type DocMoveFileInput = z.infer<typeof docMoveFileToolInputSchema>;
 
 /**
  * Validates input for doc_move_file tool.
  */
 export function validateDocMoveFileInput(input: unknown): input is DocMoveFileInput {
-  if (typeof input !== 'object' || input === null) {
-    return false;
-  }
-
-  const obj = input as Record<string, unknown>;
-
-  // path and new_path are required
-  if (typeof obj.path !== 'string' || typeof obj.new_path !== 'string') {
-    return false;
-  }
-
-  // scope must be valid enum if provided
-  if (obj.scope !== undefined) {
-    if (typeof obj.scope !== 'string' || !['document_store', 'project', 'general'].includes(obj.scope)) {
-      return false;
-    }
-  }
-
-  // mount_point must be string if provided
-  if (obj.mount_point !== undefined && typeof obj.mount_point !== 'string') {
-    return false;
-  }
-
-  return true;
+  return docMoveFileToolInputSchema.safeParse(input).success;
 }
 
-export interface DocMoveFileInput {
-  scope?: 'document_store' | 'project' | 'general';
-  mount_point?: string;
-  path: string;
-  new_path: string;
-}
+export const docMoveFileToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'doc_move_file',
+    description:
+      'Move or rename a file in a document store, project files, or general files. If new_path is in a different directory, moves the file. If in the same directory, renames it. Will not overwrite an existing file at the destination.',
+    parameters: zodToOpenAISchema(docMoveFileToolInputSchema),
+  },
+};
 
 export interface DocMoveFileOutput {
   success: boolean;

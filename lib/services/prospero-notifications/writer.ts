@@ -30,9 +30,9 @@ export function buildConnectionProfileChangeContent(
   oldProfileLabel: string | null,
   newProfileLabel: string | null,
 ): string {
-  const newPhrase = newProfileLabel ?? 'no connection profile';
-  const oldPhrase = oldProfileLabel ?? 'no connection profile';
-  return `Prospero notes that ${characterName} has been reassigned to ${newPhrase} (previously ${oldPhrase}).`;
+  const newPhrase = newProfileLabel ?? 'unassigned';
+  const oldPhrase = oldProfileLabel ?? 'unassigned';
+  return `${characterName}'s current response model is now ${newPhrase}; previous model was ${oldPhrase}.`;
 }
 
 export function buildConnectionProfileChangeOpaqueContent(
@@ -40,9 +40,9 @@ export function buildConnectionProfileChangeOpaqueContent(
   oldProfileLabel: string | null,
   newProfileLabel: string | null,
 ): string {
-  const newPhrase = newProfileLabel ?? 'no connection profile';
-  const oldPhrase = oldProfileLabel ?? 'no connection profile';
-  return `${characterName}'s assigned model has changed to ${newPhrase} (previously ${oldPhrase}).`;
+  const newPhrase = newProfileLabel ?? 'unassigned';
+  const oldPhrase = oldProfileLabel ?? 'unassigned';
+  return `${characterName}'s current response model is now ${newPhrase}; previous model was ${oldPhrase}.`;
 }
 
 async function postProsperoMessage(

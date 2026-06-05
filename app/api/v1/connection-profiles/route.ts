@@ -159,6 +159,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       allowWebSearch = false,
       useNativeWebSearch = false,
       allowToolUse = true,
+      pseudoToolMode = 'auto',
       modelClass = null,
       maxContext = null,
       supportsImageUpload,
@@ -257,6 +258,11 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       allowWebSearch: isCourier ? false : allowWebSearch,
       useNativeWebSearch: isCourier ? false : useNativeWebSearch,
       allowToolUse: isCourier ? false : allowToolUse,
+      pseudoToolMode: isCourier ? 'auto' : (
+        pseudoToolMode === 'native' || pseudoToolMode === 'simple-json' || pseudoToolMode === 'text-block'
+          ? pseudoToolMode
+          : 'auto'
+      ),
       modelClass: modelClass || null,
       maxContext: maxContext ? (typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext) : null,
       supportsImageUpload: isCourier ? false : resolvedSupportsImageUpload,

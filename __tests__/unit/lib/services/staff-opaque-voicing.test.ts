@@ -251,11 +251,20 @@ describe('Aurora opaque builders', () => {
 
 describe('Prospero opaque builders', () => {
   it('connection-profile change', () => {
-    expect(buildConnectionProfileChangeContent('Beatrice', 'old', 'new')).toContain('Prospero notes')
+    const visible = buildConnectionProfileChangeContent('Beatrice', 'old', 'new')
+    expect(visible).toContain("Beatrice's current response model is now new")
+    expect(visible).toContain('previous model was old')
     const opaque = buildConnectionProfileChangeOpaqueContent('Beatrice', 'old', 'new')
-    expect(opaque).toContain("Beatrice's assigned model has changed to new")
-    expect(opaque).toContain('previously old')
+    expect(opaque).toContain("Beatrice's current response model is now new")
+    expect(opaque).toContain('previous model was old')
     expectNoPersonaNames(opaque)
+  })
+
+  it('connection-profile change — null fallback reads as "unassigned"', () => {
+    expect(buildConnectionProfileChangeContent('Beatrice', null, 'new'))
+      .toBe("Beatrice's current response model is now new; previous model was unassigned.")
+    expect(buildConnectionProfileChangeContent('Beatrice', 'old', null))
+      .toBe("Beatrice's current response model is now unassigned; previous model was old.")
   })
 
   it('project context', () => {
@@ -444,6 +453,62 @@ describe('Concierge opaque builder', () => {
     expect(buildDangerContent()).toContain('The Concierge')
     const opaque = buildDangerOpaqueContent()
     expect(opaque).toContain('Content advisory')
+    expectNoPersonaNames(opaque)
+  })
+
+  it('danger advisory with specifics names categories, scores, and threshold', () => {
+    const details = {
+      score: 0.83,
+      threshold: 0.7,
+      categories: [
+        { category: 'nsfw', score: 0.83, label: 'whatever the LLM said' },
+        { category: 'violence', score: 0.72, label: 'free-text label' },
+        { category: 'disturbing', score: 0.10, label: 'low' },
+      ],
+      source: 'moderation' as const,
+      providerName: 'OPENAI',
+    }
+
+    const narrative = buildDangerContent(details)
+    expect(narrative).toContain('The Concierge')
+    expect(narrative).toContain('Sexual/NSFW content')
+    expect(narrative).toContain('Violence or graphic content')
+    expect(narrative).toContain('0.83')
+    expect(narrative).toContain('0.72')
+    expect(narrative).toContain('0.70')
+    expect(narrative).toContain('OPENAI')
+    // Below-threshold category should be filtered out
+    expect(narrative).not.toContain('Disturbing content')
+
+    const opaque = buildDangerOpaqueContent(details)
+    expect(opaque).toContain('Content advisory')
+    expect(opaque).toContain('Triggers:')
+    expect(opaque).toContain('Sexual/NSFW content')
+    expect(opaque).toContain('0.83')
+    expect(opaque).toContain('0.70')
+    expect(opaque).toContain('OPENAI')
+    expectNoPersonaNames(opaque)
+  })
+
+  it('danger advisory falls back to top scores when nothing crosses threshold', () => {
+    const details = {
+      score: 0.65,
+      threshold: 0.7,
+      categories: [
+        { category: 'nsfw', score: 0.65, label: '' },
+        { category: 'violence', score: 0.40, label: '' },
+      ],
+      source: 'llm' as const,
+      providerName: 'OLLAMA',
+    }
+
+    const narrative = buildDangerContent(details)
+    expect(narrative).toContain('Sexual/NSFW content')
+    expect(narrative).toContain('0.65')
+    expect(narrative).toContain('cheap-LLM')
+
+    const opaque = buildDangerOpaqueContent(details)
+    expect(opaque).toContain('cheap-LLM fallback')
     expectNoPersonaNames(opaque)
   })
 })

@@ -49,7 +49,13 @@ export interface TurnSelectionResult {
 }
 
 /**
- * Options for calculating initial turn state from message history
+ * Options for calculating initial turn state from message history.
+ *
+ * Note: `spokenSinceUserTurn` (renamed conceptually to "spoken this cycle") is
+ * sourced from the chat row's persisted `spokenThisCycleParticipantIds` field,
+ * not from message walking. USER and ASSISTANT messages count symmetrically
+ * for `lastSpeakerId` — user-controlled characters take turns in the rotation
+ * via the user typing as them.
  */
 export interface CalculateTurnStateOptions {
   /** All messages in the chat (or recent subset) */
@@ -60,4 +66,11 @@ export interface CalculateTurnStateOptions {
 
   /** User's participant ID (user-controlled character participant, if exists) */
   userParticipantId: string | null;
+
+  /**
+   * Persisted JSON-encoded list of participantIds that have spoken in the
+   * current rotation cycle. Comes from `chat.spokenThisCycleParticipantIds`.
+   * Defaults to `'[]'` when omitted (fresh cycle).
+   */
+  spokenThisCycleParticipantIds?: string;
 }

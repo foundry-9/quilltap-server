@@ -22,6 +22,13 @@ jest.mock('@/lib/services/chat-message/streaming.service', () => ({
   encodeStatusEvent: (encoder: TextEncoder, payload: unknown) => mockEncodeStatusEvent(encoder, payload),
   safeEnqueue: (controller: { enqueue: (chunk: unknown) => void }, chunk: unknown) => mockSafeEnqueue(controller, chunk),
   encodeContentChunk: (encoder: TextEncoder, chunk: string) => mockEncodeContentChunk(encoder, chunk),
+  applyReasoningChunk: jest.fn(),
+  flushReasoningSegment: jest.fn(),
+  nextTurnSeq: (s: { nextTurnSeq?: number }) => {
+    const n = s.nextTurnSeq ?? 0
+    s.nextTurnSeq = n + 1
+    return n
+  },
 }))
 
 jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({

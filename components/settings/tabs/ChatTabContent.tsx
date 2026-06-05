@@ -4,13 +4,19 @@ import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import { useChatSettingsContext } from '@/components/settings/chat-settings/ChatSettingsProvider'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { CompositionModeDefaultSettings } from '@/components/settings/chat-settings/CompositionModeDefaultSettings'
+import { ComposerSpellcheckSettings } from '@/components/settings/chat-settings/ComposerSpellcheckSettings'
+import { AutoScrollSettings } from '@/components/settings/chat-settings/AutoScrollSettings'
+import { TextReplacementSettings } from '@/components/settings/chat-settings/TextReplacementSettings'
 import { TokenDisplaySettingsComponent } from '@/components/settings/chat-settings/TokenDisplaySettings'
 import { ContextCompressionSettingsComponent } from '@/components/settings/chat-settings/ContextCompressionSettings'
 import { MemoryCascadeSettings } from '@/components/settings/chat-settings/MemoryCascadeSettings'
 import { ImageDescriptionSettings } from '@/components/settings/chat-settings/ImageDescriptionSettings'
 import { AutomationSettings } from '@/components/settings/chat-settings/AutomationSettings'
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
+import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/ThinkingDisplaySettings'
 import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
+import { AutonomousRoomSettingsComponent } from '@/components/settings/chat-settings/AutonomousRoomSettings'
+import { AutonomousRoomsCard } from '@/components/tools/autonomous-rooms-card'
 import { useSettingsSection } from './useSettingsSection'
 
 export function ChatTabContent() {
@@ -25,6 +31,9 @@ export function ChatTabContent() {
     loadingProfiles,
     handleTokenDisplayChange,
     handleCompositionModeDefaultChange,
+    handleComposerSpellcheckChange,
+    handleAutoScrollOnResponseCompleteChange,
+    handleTextReplacementsEnabledChange,
     handleContextCompressionUpdate,
     handleMemoryCascadeUpdate,
     handleImageDescriptionProfileChange,
@@ -34,6 +43,8 @@ export function ChatTabContent() {
     handleAgentModeMaxTurnsChange,
     handleDangerousContentUpdate,
     handleCheapLLMUpdate,
+    handleAutonomousRoomSettingsUpdate,
+    handleThinkingDisplayUpdate,
   } = useChatSettingsContext()
 
   if (loading) {
@@ -58,6 +69,30 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onChange={handleCompositionModeDefaultChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Composer" description="Composer behavior and input aids" sectionId="composer-spellcheck" forceOpen={activeSection === 'composer-spellcheck'}>
+          <ComposerSpellcheckSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleComposerSpellcheckChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Auto-Scroll" description="Whether the Salon follows new messages to the bottom" sectionId="auto-scroll" forceOpen={activeSection === 'auto-scroll'}>
+          <AutoScrollSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleAutoScrollOnResponseCompleteChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Text Replacement" description="Replace literal triggers with replacement text on word boundaries" sectionId="text-replacements" forceOpen={activeSection === 'text-replacements'}>
+          <TextReplacementSettings
+            settings={settings}
+            saving={saving}
+            onMasterToggleChange={handleTextReplacementsEnabledChange}
           />
         </CollapsibleCard>
 
@@ -113,6 +148,14 @@ export function ChatTabContent() {
           />
         </CollapsibleCard>
 
+        <CollapsibleCard title="Thinking / Reasoning" description="Show reasoning models' chain-of-thought in chat (display only)" sectionId="thinking-display" forceOpen={activeSection === 'thinking-display'}>
+          <ThinkingDisplaySettings
+            settings={settings}
+            saving={saving}
+            onUpdate={handleThinkingDisplayUpdate}
+          />
+        </CollapsibleCard>
+
         <CollapsibleCard title="Dangerous Content" description="Configure content detection, routing, and display behavior" sectionId="dangerous-content" forceOpen={activeSection === 'dangerous-content'}>
           <DangerousContentSettings
             settings={settings}
@@ -124,6 +167,18 @@ export function ChatTabContent() {
             imagePromptProfileId={settings.cheapLLMSettings.imagePromptProfileId}
             onImagePromptProfileChange={(id) => handleCheapLLMUpdate({ imagePromptProfileId: id })}
           />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Autonomous Rooms" description="Defaults for private character-to-character rooms" sectionId="autonomous-rooms" forceOpen={activeSection === 'autonomous-rooms'}>
+          <AutonomousRoomSettingsComponent
+            settings={settings}
+            saving={saving}
+            onUpdate={handleAutonomousRoomSettingsUpdate}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Scheduled Autonomous Rooms" description="Pause, resume, or stop scheduled rooms (and any ad-hoc room currently running)" sectionId="autonomous-room-schedules" forceOpen={activeSection === 'autonomous-room-schedules'}>
+          <AutonomousRoomsCard />
         </CollapsibleCard>
       </div>
     </div>

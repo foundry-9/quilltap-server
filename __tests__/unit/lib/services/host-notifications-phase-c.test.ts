@@ -398,6 +398,33 @@ describe('buildOffSceneCharactersContent', () => {
     expect(result).not.toMatch(/### Mystery\n\n\n/)
   })
 
+  it('prefers identity over description when both are present', () => {
+    const result = buildOffSceneCharactersContent([
+      {
+        id: 'c-1',
+        name: 'Reginald',
+        identity: 'A barrister of the Kings Bench.',
+        description: 'Speaks in long, looping clauses.',
+      },
+    ])
+    expect(result).toContain('A barrister of the Kings Bench.')
+    expect(result).not.toContain('Speaks in long, looping clauses.')
+  })
+
+  it('falls back to description when identity is absent', () => {
+    const result = buildOffSceneCharactersContent([
+      { id: 'c-1', name: 'Gary', description: 'Gardener.' },
+    ])
+    expect(result).toContain('Gardener.')
+  })
+
+  it('falls back to description when identity is only whitespace', () => {
+    const result = buildOffSceneCharactersContent([
+      { id: 'c-1', name: 'Gary', identity: '   ', description: 'Gardener.' },
+    ])
+    expect(result).toContain('Gardener.')
+  })
+
   it('produces byte-identical output across calls for the same character set (cache stability)', () => {
     const chars = [
       { id: 'c-1', name: 'Gary', description: 'Gardener.' },

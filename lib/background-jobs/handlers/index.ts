@@ -23,6 +23,8 @@ import { handleMemoryHousekeeping } from './memory-housekeeping';
 import { handleMemoryRegenerateChat } from './memory-regenerate-chat';
 import { handleMemoryRegenerateAll } from './memory-regenerate-all';
 import { handleWardrobeOutfitAnnouncement } from './wardrobe-announcement';
+import { handleAutonomousRoomTurn } from './autonomous-room-turn';
+import { handleAutonomousRoomScheduleTick } from './autonomous-room-schedule-tick';
 
 /**
  * Job handler function type
@@ -51,6 +53,8 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   MEMORY_REGENERATE_CHAT: handleMemoryRegenerateChat,
   MEMORY_REGENERATE_ALL: handleMemoryRegenerateAll,
   WARDROBE_OUTFIT_ANNOUNCEMENT: handleWardrobeOutfitAnnouncement,
+  AUTONOMOUS_ROOM_TURN: handleAutonomousRoomTurn,
+  AUTONOMOUS_ROOM_SCHEDULE_TICK: handleAutonomousRoomScheduleTick,
 };
 
 /**
@@ -83,3 +87,5 @@ export { handleMemoryHousekeeping };
 export { handleMemoryRegenerateChat };
 export { handleMemoryRegenerateAll };
 export { handleWardrobeOutfitAnnouncement };
+export { handleAutonomousRoomTurn };
+export { handleAutonomousRoomScheduleTick };

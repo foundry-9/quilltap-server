@@ -101,7 +101,7 @@ The selection formula considers all eligible characters' weights. A character wi
 
 **How to use:**
 
-1. Find the character in the Participants Sidebar
+1. Find the character in the Participants drawer of the Chat Sidebar
 2. Click the **Nudge** button
 3. They respond immediately, regardless of the normal queue
 
@@ -230,20 +230,19 @@ When only one character is active:
 
 ### All Characters Have Spoken
 
-When everyone has responded:
+When everyone in the rotation (including any user-controlled characters) has taken a turn this cycle, the cycle wraps and the next round starts fresh with a new weighted-random pick — the previous speaker can't go twice in a row.
 
-- Turn manager signals your turn
-- Characters wait for your next message
-- Sending a message starts a new cycle
+- For chats with at least one user-controlled character, your turn typically comes up via the rotation banner rather than after every cycle wrap
+- The cycle is persisted per chat so reloads and reopened sessions keep the same rotation state
 
 ### User-Controlled Characters
 
-Characters you're impersonating:
+Characters you're impersonating sit in the same weighted rotation as the LLM characters. When the rotation lands on one of them, the chat pauses with a banner above the composer that names them — "Alice's turn — type as them, or skip…" — and offers a Skip button.
 
-- Wait for your input on their turn
-- Input field shows which character you're typing as
-- Other LLM characters continue their turns normally
-- You can queue impersonated characters for specific timing
+- Type your character's response in the composer and send normally
+- Or hit **Skip** to record their turn as taken (no message) and let the next character respond
+- Talkativeness applies to user characters too — a chatty user character will come up more often than a quiet one
+- Other LLM characters continue their turns normally; you can still queue an impersonated character with the sidebar's Queue button if you want them up sooner
 
 ### All-LLM Chats
 
@@ -306,7 +305,7 @@ You'll see a notification with options:
 
 ### Adjusting Talkativeness
 
-1. Expand Participants Sidebar
+1. Expand the Chat Sidebar (and, if needed, open the Participants drawer)
 2. Find character's card
 3. Use the slider to adjust:
    - Drag left for quieter (speaks less)
@@ -437,5 +436,5 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Chats Overview](chats.md) — Basic chat functionality
 - [Multi-Character Chats](chat-multi-character.md) — Setting up group conversations
-- [Participants Sidebar](chat-participants.md) — Managing participants
+- [Chat Sidebar](chat-participants.md) — Managing participants and per-chat settings
 - [Message Actions](chat-message-actions.md) — Editing and managing messages

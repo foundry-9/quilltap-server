@@ -31,6 +31,15 @@ interface QuilltapElectronBridge {
 
   // --- File system ---
   openPath: (dirPath: string) => Promise<void>;
+
+  // --- Spellcheck (optional — present only when the shell ships the bridge) ---
+  setDictionaryWords?: (words: string[]) => Promise<void>;
+  setSpellCheckerLanguages?: (codes: string[]) => Promise<void>;
+  getSpellCheckerStatus?: () => Promise<{
+    enabled: boolean;
+    languages: string[];
+    availableLanguages: string[];
+  }>;
 }
 
 declare global {

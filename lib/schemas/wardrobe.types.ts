@@ -17,8 +17,6 @@ import {
   UUIDSchema,
   TimestampSchema,
 } from './common.types';
-import { describeOutfit } from '@/lib/wardrobe/outfit-description';
-
 // ============================================================================
 // WARDROBE ITEM TYPES
 // ============================================================================
@@ -52,6 +50,15 @@ export const WardrobeItemSchema = z.object({
   appropriateness: z.string().nullable().optional(),
   /** Whether this item is part of the character's default outfit */
   isDefault: z.boolean().default(false),
+  /**
+   * Composite behaviour on equip. `false`/absent (the default) = additive:
+   * the composite's components layer onto whatever already occupies the slots
+   * it designates, clearing nothing. `true` = the composite clears every slot
+   * it designates (its `types`) and then places only its own components — used
+   * for full-outfit swaps and "clear everything" composites like Naked. Has no
+   * effect on leaf (non-composite) items, which always replace their slots.
+   */
+  replace: z.boolean().default(false),
   /** Provenance tracking for items migrated from legacy clothingRecords */
   migratedFromClothingRecordId: UUIDSchema.nullable().optional(),
   /** When the item was archived (null = active) */
@@ -111,19 +118,3 @@ export const EMPTY_EQUIPPED_SLOTS: EquippedSlots = {
   accessories: [],
 };
 
-/**
- * Build a human-readable coverage summary from equipped slots and the
- * per-slot wardrobe items occupying them. Callers must expand composites
- * to leaves before passing them in.
- */
-export function buildCoverageSummary(
-  _slots: EquippedSlots,
-  items: Record<keyof EquippedSlots, WardrobeItem[]>,
-): string {
-  return describeOutfit({
-    top: items.top.map((i) => i.title),
-    bottom: items.bottom.map((i) => i.title),
-    footwear: items.footwear.map((i) => i.title),
-    accessories: items.accessories.map((i) => i.title),
-  });
-}

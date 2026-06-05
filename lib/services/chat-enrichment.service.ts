@@ -46,6 +46,13 @@ export interface ChatListPreloaded {
    */
   docMountFileLinks: Map<string, DocMountFileLinkWithContent>
   projects: Map<string, Project>
+  /** Memory counts per chatId (zero when absent). */
+  memoryCounts: Map<string, number>
+  /**
+   * Conversation-chunk totals per chatId (absent when no chunks exist).
+   * Used together with `chat.renderedMarkdown` to derive `scriptoriumStatus`.
+   */
+  conversationChunkCounts: Map<string, { total: number; embedded: number }>
 }
 
 // ============================================================================
@@ -71,6 +78,7 @@ export interface EnrichedCharacterBase {
   avatarUrl: string | null
   defaultImageId: string | null
   defaultImage: EnrichedImage | null
+  talkativeness: number
 }
 
 /**
@@ -152,6 +160,8 @@ export interface EnrichedParticipantDetail {
   connectionProfile: EnrichedConnectionProfile | null
   imageProfile: EnrichedImageProfile | null
   selectedSystemPromptId: string | null
+  /** Per-chat talkativeness override (0.1–1.0). Null/undefined → inherit from character. */
+  talkativeness?: number | null
   createdAt: string
   updatedAt: string
 }
@@ -198,7 +208,11 @@ export interface EnrichedChatSummary {
   project: EnrichedProject | null
   storyBackground: EnrichedStoryBackground | null
   isDangerousChat: boolean
-  _count: { messages: number }
+  conciergeOverride: 'OFF' | null
+  chatType: 'salon' | 'help' | 'autonomous'
+  /** Scriptorium rendering status, derived from renderedMarkdown + chunk embeddings. */
+  scriptoriumStatus: 'none' | 'rendered' | 'embedded'
+  _count: { messages: number; memories: number }
   _allTagIds: string[] // Internal field for filtering
 }
 
@@ -250,10 +264,7 @@ export async function getCharacterSummary(
     }
   }
 
-  let avatarUrl: string | null = character.avatarUrl || null
-  if (!avatarUrl && defaultImage) {
-    avatarUrl = defaultImage.filepath
-  }
+  const avatarUrl: string | null = defaultImage ? defaultImage.filepath : null
 
   return {
     id: character.id,
@@ -262,6 +273,7 @@ export async function getCharacterSummary(
     avatarUrl,
     defaultImageId: character.defaultImageId ?? null,
     defaultImage,
+    talkativeness: character.talkativeness ?? 0.5,
     tags: character.tags || [],
   }
 }
@@ -301,6 +313,7 @@ export async function getCharacterDetail(
           avatarUrl: resolved.url,
           defaultImageId: override.imageId,
           defaultImage: overrideImage,
+          talkativeness: character.talkativeness ?? 0.5,
           systemPrompts,
         }
       }
@@ -315,11 +328,8 @@ export async function getCharacterDetail(
     }
   }
 
-  // Build avatar URL: use explicit avatarUrl if non-empty, else fall back to defaultImage
-  let avatarUrl: string | null = character.avatarUrl || null
-  if (!avatarUrl && defaultImage) {
-    avatarUrl = defaultImage.filepath
-  }
+  // Build avatar URL from defaultImage; the avatarUrl column has been retired.
+  const avatarUrl: string | null = defaultImage ? defaultImage.filepath : null
 
   return {
     id: character.id,
@@ -328,6 +338,7 @@ export async function getCharacterDetail(
     avatarUrl,
     defaultImageId: character.defaultImageId ?? null,
     defaultImage,
+    talkativeness: character.talkativeness ?? 0.5,
     systemPrompts,
   }
 }
@@ -447,6 +458,7 @@ export async function enrichParticipantDetail(
     connectionProfile,
     imageProfile,
     selectedSystemPromptId: participant.selectedSystemPromptId ?? null,
+    talkativeness: participant.talkativeness ?? null,
     createdAt: participant.createdAt,
     updatedAt: participant.updatedAt,
   }
@@ -540,6 +552,29 @@ export async function enrichChatForList(
     }
   }
 
+  // Memory + Scriptorium status. Prefer bulk-preloaded values; fall back to
+  // per-chat reads when the single-chat path calls in without preload.
+  const memoryCount = preloaded
+    ? preloaded.memoryCounts.get(chat.id) ?? 0
+    : await repos.memories.countByChatId(chat.id)
+
+  const hasRenderedMarkdown = !!chat.renderedMarkdown
+  let chunkStats: { total: number; embedded: number } | undefined
+  if (preloaded) {
+    chunkStats = preloaded.conversationChunkCounts.get(chat.id)
+  } else if (hasRenderedMarkdown) {
+    const chunks = await repos.conversationChunks.findByChatId(chat.id)
+    chunkStats = {
+      total: chunks.length,
+      embedded: chunks.filter((c) => c.embedding !== null && c.embedding !== undefined).length,
+    }
+  }
+  const scriptoriumStatus: 'none' | 'rendered' | 'embedded' = hasRenderedMarkdown
+    ? chunkStats && chunkStats.total > 0 && chunkStats.embedded >= chunkStats.total
+      ? 'embedded'
+      : 'rendered'
+    : 'none'
+
   return {
     id: chat.id,
     title: chat.title,
@@ -552,7 +587,10 @@ export async function enrichChatForList(
     project,
     storyBackground,
     isDangerousChat: chat.isDangerousChat === true,
-    _count: { messages: messageCount },
+    conciergeOverride: chat.conciergeOverride ?? null,
+    chatType: (chat.chatType ?? 'salon') as 'salon' | 'help' | 'autonomous',
+    scriptoriumStatus,
+    _count: { messages: messageCount, memories: memoryCount },
     _allTagIds: allTagIds,
   }
 }
@@ -601,12 +639,27 @@ export async function enrichChatsForList(
     if (character.defaultImageId) characterAvatarIds.add(character.defaultImageId)
   }
 
-  const [files, links, projects] = await Promise.all([
+  const chatIds = sortedChats.map((c) => c.id)
+  // Restrict the chunk-count query to chats that actually have rendered
+  // markdown — every other chat is unambiguously 'none' and querying for it
+  // is wasted work. Memory counts run over every chat ID since a chat can
+  // accrue memories without ever being rendered.
+  const renderedChatIds = sortedChats
+    .filter((c) => !!c.renderedMarkdown)
+    .map((c) => c.id)
+
+  const [files, links, projects, memoryCounts, conversationChunkCounts] = await Promise.all([
     fileIds.size > 0 ? repos.files.findByIds(Array.from(fileIds)) : Promise.resolve([] as FileEntry[]),
     characterAvatarIds.size > 0
       ? repos.docMountFileLinks.findByIdsWithContent(Array.from(characterAvatarIds))
       : Promise.resolve([] as DocMountFileLinkWithContent[]),
     projectIds.size > 0 ? repos.projects.findByIds(Array.from(projectIds)) : Promise.resolve([] as Project[]),
+    chatIds.length > 0
+      ? repos.memories.countByChatIds(chatIds)
+      : Promise.resolve(new Map<string, number>()),
+    renderedChatIds.length > 0
+      ? repos.conversationChunks.countByChatIds(renderedChatIds)
+      : Promise.resolve(new Map<string, { total: number; embedded: number }>()),
   ])
 
   const preloaded: ChatListPreloaded = {
@@ -614,6 +667,8 @@ export async function enrichChatsForList(
     files: new Map(files.map(f => [f.id, f])),
     docMountFileLinks: new Map(links.map(l => [l.id, l])),
     projects: new Map(projects.map(p => [p.id, p])),
+    memoryCounts,
+    conversationChunkCounts,
   }
 
   return Promise.all(sortedChats.map(chat => enrichChatForList(chat, repos, preloaded)))

@@ -68,13 +68,6 @@ export interface ModelInfo {
   error?: string;
 }
 
-export interface DatabaseStats {
-  characters: number;
-  chats: number;
-  memories: number;
-  tags: number;
-}
-
 export interface EnhancedDatabaseStats {
   characters: number;
   favoriteCharacters: number;

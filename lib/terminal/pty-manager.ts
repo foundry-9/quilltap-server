@@ -12,7 +12,7 @@ import type { IPty } from 'node-pty';
 import { createWriteStream, mkdirSync } from 'fs';
 import { randomUUID } from 'crypto';
 import type { WebSocket } from 'ws';
-import { getFilesDir, getLogsDir } from '@/lib/paths';
+import { getBaseDataDir, getFilesDir, getLogsDir } from '@/lib/paths';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
@@ -20,6 +20,7 @@ import {
   postArielTerminalOutputAnnouncement,
 } from '@/lib/services/ariel-notifications';
 import { cleanTerminalOutput } from './clean-output';
+import { prepareShellInit } from './shell-init';
 import type { PtySession, PtySessionMeta, WsServerMsg } from './types';
 import type { TerminalSession } from '@/lib/schemas/terminal.types';
 
@@ -153,9 +154,14 @@ class PtyManager {
     const cwd = opts.cwd || getFilesDir();
     const cols = opts.cols ?? 80;
     const rows = opts.rows ?? 24;
+    // Every terminal carries QUILLTAP_DATA_DIR for the current instance (set authoritatively,
+    // after any caller-provided env) so the in-shell `quilltap` CLI targets the same instance
+    // the server is using — e.g. /app/quilltap under Docker.
+    const dataDir = getBaseDataDir();
     const env = {
       ...process.env,
       ...(opts.env ?? {}),
+      QUILLTAP_DATA_DIR: dataDir,
     };
 
     // Transcripts live under logs/, not files/, so the user-content file watcher doesn't try
@@ -163,6 +169,20 @@ class PtyManager {
     // per-session transcripts here are safe from auto-rotation.
     const transcriptsDir = `${getLogsDir()}/terminals`;
     const transcriptPath = `${transcriptsDir}/${id}.log`;
+
+    // Per-session shell bootstrap: QUILLTAP_DATA_DIR (above), a version-matched `quilltap`
+    // alias, and (bash) completions + a cwd-aware prompt. Failures degrade gracefully to a
+    // plain shell; init artifacts are removed by `cleanupInit` on exit.
+    const shellInit = prepareShellInit({ shell, sessionId: id, dir: transcriptsDir, dataDir });
+    Object.assign(env, shellInit.envOverrides);
+    const shellArgs = shellInit.args;
+    ptyLogger.debug('[PTY] Shell bootstrap prepared', {
+      sessionId: id,
+      shell,
+      dataDir,
+      shellArgs,
+      envOverrideKeys: Object.keys(shellInit.envOverrides),
+    });
 
     let transcriptStream: any = null;
     let pty: IPty | undefined;
@@ -191,7 +211,7 @@ class PtyManager {
       }
 
       // Spawn PTY (throws on failure; caught by outer try/catch)
-      pty = ptySpawn(shell, [], {
+      pty = ptySpawn(shell, shellArgs, {
         name: 'xterm-256color',
         cols,
         rows,
@@ -221,6 +241,7 @@ class PtyManager {
         arielFlushBuffer: '',
         arielIdleTimer: null,
         arielMaxAgeTimer: null,
+        cleanupInit: shellInit.cleanup ?? null,
       };
 
       // Wire data handler
@@ -309,6 +330,19 @@ class PtyManager {
             }
           }
 
+          // Remove per-session shell-init artifacts (bash rcfile / zsh ZDOTDIR).
+          if (session.cleanupInit) {
+            try {
+              session.cleanupInit();
+              ptyLogger.debug('[PTY] Cleaned up shell-init artifacts', { sessionId: id });
+            } catch (cleanupErr) {
+              ptyLogger.debug('[PTY] Failed to clean up shell-init artifacts', {
+                sessionId: id,
+                error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
+              });
+            }
+          }
+
           const repos = getRepositories() as any;
           repos.terminalSessions.update(id, {
             exitedAt: session.meta.exitedAt,
@@ -390,6 +424,14 @@ class PtyManager {
       if (transcriptStream && (transcriptStream as any).writable !== false) {
         try {
           transcriptStream.end();
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+      // The onExit handler never runs when spawning itself fails, so drop the init artifact here.
+      if (shellInit.cleanup) {
+        try {
+          shellInit.cleanup();
         } catch {
           // Ignore cleanup errors
         }

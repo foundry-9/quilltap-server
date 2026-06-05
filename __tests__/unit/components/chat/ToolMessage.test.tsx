@@ -66,6 +66,33 @@ describe('ToolMessage', () => {
     expect(screen.getByText('Riya ran')).toBeInTheDocument()
   })
 
+  it('renders a compact embedded card without the standalone row/avatar wrapper', () => {
+    const { container } = render(
+      <ToolMessage
+        embedded
+        character={{ id: 'char-1', name: 'Riya' }}
+        message={{
+          id: 'msg-embedded',
+          createdAt: '2026-04-09T00:00:00.000Z',
+          content: JSON.stringify({
+            tool: 'rng',
+            success: true,
+            initiatedBy: 'character',
+            result: '17',
+          }),
+        }}
+      />
+    )
+
+    // Embedded wrapper present; standalone tool row absent
+    expect(container.querySelector('.qt-chat-tool-embedded')).toBeInTheDocument()
+    expect(container.querySelector('.qt-chat-message-row-tool')).not.toBeInTheDocument()
+    // Compact header omits the redundant "<character> ran" attribution
+    expect(screen.queryByText('Riya ran')).not.toBeInTheDocument()
+    expect(screen.getByText('Random Number Generator')).toBeInTheDocument()
+    expect(screen.getByText('Success')).toBeInTheDocument()
+  })
+
   it('copies generated images using a normalized leading-slash path', async () => {
     mockCopyImageToClipboard.mockResolvedValue(true)
 

@@ -18,6 +18,7 @@ import { serverError, notFound, badRequest } from '@/lib/api/responses';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import {
   equipItem,
+  replaceItem,
   addToSlot,
   removeFromSlot,
 } from '@/lib/wardrobe/outfit-displacement';
@@ -30,7 +31,9 @@ import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-s
 const equipBodySchema = z
   .object({
     characterId: z.string().min(1, 'characterId is required'),
-    mode: z.enum(['equip', 'add_to_slot', 'remove_from_slot', 'clear_slot', 'set_all']),
+    // `wear` honors the item's `replace` flag; `replace` force-swaps the slots
+    // it covers. `equip` is a deprecated alias for `wear`.
+    mode: z.enum(['wear', 'replace', 'equip', 'add_to_slot', 'remove_from_slot', 'clear_slot', 'set_all']),
     slot: z.enum(['top', 'bottom', 'footwear', 'accessories']).optional(),
     itemId: z.string().nullable().optional(),
     /** Required when mode === 'set_all'. Replaces every slot atomically. */
@@ -49,7 +52,13 @@ const equipBodySchema = z
         message: `slot is required for mode "${value.mode}"`,
       });
     }
-    if ((value.mode === 'equip' || value.mode === 'add_to_slot') && !value.itemId) {
+    if (
+      (value.mode === 'wear' ||
+        value.mode === 'replace' ||
+        value.mode === 'equip' ||
+        value.mode === 'add_to_slot') &&
+      !value.itemId
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['itemId'],
@@ -116,8 +125,17 @@ export async function handleGetOutfitSummary(
 
     const itemsById = new Map<string, WardrobeItem>();
     if (allItemIds.size > 0) {
-      const fetched = await repos.wardrobe.findByIds(Array.from(allItemIds));
-      for (const item of fetched) itemsById.set(item.id, item);
+      // No global wardrobe table post-cutover: seed shared archetypes (Quilltap
+      // General) so composite components that are shared items resolve, then
+      // layer each participant character's own vault wardrobe on top.
+      for (const arche of await repos.wardrobe.findArchetypes(true)) {
+        itemsById.set(arche.id, arche);
+      }
+      for (const characterId of Object.keys(equippedOutfit)) {
+        for (const item of await repos.wardrobe.findByCharacterId(characterId, true)) {
+          itemsById.set(item.id, item);
+        }
+      }
     }
 
     type SummaryEntry = { itemId: string; title: string };
@@ -199,7 +217,7 @@ export async function handleEquipSlot(
       logger.info('[Chats v1] Equipped outfit replaced (set_all)', {
         chatId, characterId, context: 'wardrobe',
       });
-    } else if (mode === 'equip') {
+    } else if (mode === 'wear' || mode === 'equip') {
       // itemId guaranteed by schema. Validate the item resolves and covers
       // at least one slot we recognize.
       const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!);
@@ -207,8 +225,20 @@ export async function handleEquipSlot(
         return notFound('Wardrobe item');
       }
       updatedSlots = await equipItem(repos, chatId, characterId, item);
-      logger.info('[Chats v1] Wardrobe item equipped (replace)', {
+      logger.info('[Chats v1] Wardrobe item worn', {
         chatId, characterId, itemId: item.id, slotsAffected: item.types,
+        effect: item.replace ? 'replaced' : 'layered',
+        context: 'wardrobe',
+      });
+    } else if (mode === 'replace') {
+      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!);
+      if (!item) {
+        return notFound('Wardrobe item');
+      }
+      updatedSlots = await replaceItem(repos, chatId, characterId, item);
+      logger.info('[Chats v1] Wardrobe item force-replaced', {
+        chatId, characterId, itemId: item.id, slotsAffected: item.types,
+        effect: 'replaced',
         context: 'wardrobe',
       });
     } else if (mode === 'add_to_slot') {

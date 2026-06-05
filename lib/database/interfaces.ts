@@ -496,10 +496,3 @@ export interface TaggableEntity extends UserOwnedEntity {
  * Factory function type for creating database backends
  */
 export type DatabaseBackendFactory = () => Promise<DatabaseBackend>;
-
-/**
- * Registry of available backend factories
- */
-export interface BackendRegistry {
-  sqlite?: DatabaseBackendFactory;
-}

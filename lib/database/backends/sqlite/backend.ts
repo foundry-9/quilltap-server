@@ -39,6 +39,7 @@ import { getInstanceLockPath } from '@/lib/paths';
 import { generateDDL, extractSchemaMetadata } from '../../schema-translator';
 import { buildSelectQuery, buildCountQuery, buildUpdateQuery, buildDeleteQuery, translateFilter } from './query-translator';
 import { documentToRow, rowToDocument, toJson, fromJson, fromJsonSafe, blobToEmbedding } from './json-columns';
+import { parseLegacyEmbeddingText } from '@/lib/embedding/float32-conversion';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -380,13 +381,11 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
         } else if (value === null) {
           result[key] = undefined;
         } else {
-          // Legacy: might still be JSON text during migration transition
+          // Legacy: might still be JSON text during migration transition.
+          // Handles both the JSON-array shape and the index-keyed object shape
+          // left by JSON.stringify(Float32Array) on very old rows.
           if (typeof value === 'string') {
-            try {
-              result[key] = JSON.parse(value);
-            } catch {
-              result[key] = undefined;
-            }
+            result[key] = parseLegacyEmbeddingText(value);
           } else {
             result[key] = value;
           }

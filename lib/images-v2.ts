@@ -3,7 +3,6 @@
  * Version 2: Uses repository pattern for metadata storage and file storage manager for file storage
  */
 
-import { createHash } from 'node:crypto';
 import { extname } from 'node:path';
 import fetch from 'node-fetch';
 import { getRepositories } from './repositories/factory';
@@ -11,6 +10,7 @@ import { fileStorageManager } from './file-storage/manager';
 import { writeUserUploadToMountStore } from './file-storage/user-uploads-bridge';
 import type { FileEntry, FileSource, FileCategory } from './schemas/types';
 import { logger } from './logger';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { getInheritedTags, mergeTags } from './files/tag-inheritance';
 import { convertToWebP } from './files/webp-conversion';
 
@@ -113,7 +113,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
     }
   }
 
-  const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+  const sha256 = sha256OfBuffer(buffer);
 
   // Check for duplicate by hash
   const existingFiles = await repos.files.findBySha256(sha256);
@@ -150,7 +150,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   // images-v2 covers paste/drag-drop image uploads and URL imports — neither
   // ever carries a projectId, so route directly into the Quilltap Uploads
   // mount under images/ rather than the catch-all _general/.
-  const { storageKey } = await writeUserUploadToMountStore({
+  const written = await writeUserUploadToMountStore({
     filename: originalFilename,
     content: buffer,
     contentType: mimeType,
@@ -159,14 +159,16 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   // Inherit tags from linked entities and merge with any explicitly provided tags
   const inheritedTags = await getInheritedTags(linkedTo, userId);
   const finalTags = mergeTags(tags, inheritedTags);
-  // Create metadata in repository
+  // Create metadata in repository. The bridge may transcode bitmap uploads
+  // to WebP; record the stored mime/size, not the input — vision providers
+  // reject "media_type X but bytes are Y" mismatches.
   // IMPORTANT: Pass the fileId to ensure metadata matches storage path
   const fileEntry = await repos.files.create({
     userId,
     sha256,
     originalFilename,
-    mimeType,
-    size: buffer.length,
+    mimeType: written.storedMimeType,
+    size: written.sizeBytes,
     width: width || null,
     height: height || null,
     linkedTo,
@@ -177,34 +179,9 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
     generationRevisedPrompt: generationRevisedPrompt || null,
     description: description || null,
     tags: finalTags,
-    storageKey,
+    storageKey: written.storageKey,
   }, { id: fileId });
   return fileEntry;
-}
-
-/**
- * Delete a file - removes bytes from storage and metadata from repository
- */
-async function deleteFile(fileId: string): Promise<boolean> {
-  const repos = getRepositories();
-  const entry = await repos.files.findById(fileId);
-
-  if (!entry) {
-    return false;
-  }
-
-  // Delete the file bytes from storage
-  if (entry.storageKey) {
-    try {
-      await fileStorageManager.deleteFile(entry);
-    } catch (error) {
-      logger.error('Failed to delete file from storage', { fileId, storageKey: entry.storageKey }, error instanceof Error ? error : undefined);
-    }
-  }
-
-  // Delete metadata from repository
-  const deleted = await repos.files.delete(fileId);
-  return deleted;
 }
 
 /**
@@ -344,10 +321,32 @@ export async function importImageFromUrl(url: string, userId: string, linkedTo: 
 }
 
 /**
- * Delete an image file from the server
+ * Ingest an in-memory image buffer as a FileEntry. Used by recovery paths that
+ * have raw bytes from a non-images-v2 source (e.g. a mount-file blob whose
+ * original images-v2 sister was reaped) and need a synthesized FileEntry to
+ * carry on with downstream flows.
  */
-export async function deleteImageById(fileId: string): Promise<void> {
-  await deleteFile(fileId);
+export async function ingestImageBuffer(params: {
+  buffer: Buffer;
+  originalFilename: string;
+  mimeType: string;
+  userId: string;
+  linkedTo?: string[];
+  source?: FileSource;
+  description?: string;
+}): Promise<FileEntry> {
+  const dimensions = await getImageDimensions(params.buffer, params.mimeType);
+  return createFile({
+    buffer: params.buffer,
+    originalFilename: params.originalFilename,
+    mimeType: params.mimeType,
+    source: params.source ?? 'IMPORTED',
+    category: 'IMAGE',
+    userId: params.userId,
+    linkedTo: params.linkedTo ?? [],
+    description: params.description,
+    ...dimensions,
+  });
 }
 
 /**
@@ -368,5 +367,5 @@ export async function readImageBuffer(fileId: string): Promise<Buffer> {
  * Calculate SHA256 hash of buffer
  */
 export function calculateSha256(buffer: Buffer): string {
-  return createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+  return sha256OfBuffer(buffer);
 }

@@ -6,13 +6,38 @@
  * current information beyond its training data.
  */
 
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/**
+ * Zod schema for the web-search tool's input. The single source of truth for both
+ * runtime validation and the derived OpenAI-format `parameters` JSON Schema.
+ */
+export const webSearchToolInputSchema = z.object({
+  query: z
+    .string()
+    .min(1)
+    .max(500)
+    .refine((val) => val.trim().length > 0, {
+      message: 'query cannot be empty or whitespace-only',
+    })
+    .describe(
+      'The search query to execute. Be specific and use keywords that will help find relevant information. Examples: "latest news about AI", "current weather in Tokyo", "recent developments in quantum computing"'
+    ),
+  maxResults: z
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .default(5)
+    .describe('Maximum number of search results to retrieve. Default is 5.')
+    .optional(),
+});
+
 /**
  * Input parameters for the web search tool
  */
-export interface WebSearchToolInput {
-  query: string
-  maxResults?: number
-}
+export type WebSearchToolInput = z.infer<typeof webSearchToolInputSchema>;
 
 /**
  * Result of a single web search
@@ -44,29 +69,9 @@ export const webSearchToolDefinition = {
     name: 'search_web',
     description:
       'Search the web for current information, recent events, real-time data, or facts beyond your training data. Use this when you need up-to-date information about news, current events, recent developments, or when the user asks about something that requires real-time or recent data. This tool provides access to current web search results.',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description:
-            'The search query to execute. Be specific and use keywords that will help find relevant information. Examples: "latest news about AI", "current weather in Tokyo", "recent developments in quantum computing"',
-          minLength: 1,
-          maxLength: 500,
-        },
-        maxResults: {
-          type: 'integer',
-          minimum: 1,
-          maximum: 10,
-          description: 'Maximum number of search results to retrieve. Default is 5.',
-          default: 5,
-        },
-      },
-      required: ['query'],
-    },
+    parameters: zodToOpenAISchema(webSearchToolInputSchema),
   },
 }
-
 
 /**
  * Helper to validate tool input parameters
@@ -74,24 +79,5 @@ export const webSearchToolDefinition = {
 export function validateWebSearchInput(
   input: unknown
 ): input is WebSearchToolInput {
-  if (typeof input !== 'object' || input === null) {
-    return false
-  }
-
-  const obj = input as Record<string, unknown>
-
-  // query is required
-  if (typeof obj.query !== 'string' || obj.query.trim().length === 0) {
-    return false
-  }
-
-  // Optional maxResults
-  if (obj.maxResults !== undefined) {
-    const maxResults = Number(obj.maxResults)
-    if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > 10) {
-      return false
-    }
-  }
-
-  return true
+  return webSearchToolInputSchema.safeParse(input).success;
 }

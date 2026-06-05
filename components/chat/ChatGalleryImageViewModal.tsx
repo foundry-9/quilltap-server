@@ -45,43 +45,48 @@ export default function ChatGalleryImageViewModal({
   userCharacterId,
   userCharacterName,
 }: ChatGalleryImageViewModalProps) {
-  const [isTaggedToCharacter, setIsTaggedToCharacter] = useState(false)
-  const [isTaggedToUserCharacter, setIsTaggedToUserCharacter] = useState(false)
-  const [isTagging, setIsTagging] = useState(false)
-  const [checkingTags, setCheckingTags] = useState(true)
+  const [isInCharacterGallery, setIsInCharacterGallery] = useState(false)
+  const [isInUserCharacterGallery, setIsInUserCharacterGallery] = useState(false)
+  const [characterLinkId, setCharacterLinkId] = useState<string | null>(null)
+  const [userCharacterLinkId, setUserCharacterLinkId] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [checkingGallery, setCheckingGallery] = useState(true)
   const [imageMissing, setImageMissing] = useState(false)
 
-  // Check existing tags when file changes
+  // Check whether the image is already in each character's gallery
   useEffect(() => {
-    const checkTags = async () => {
+    const checkGalleryStatus = async () => {
       if (!file.id) return
-      setCheckingTags(true)
+      setCheckingGallery(true)
       try {
-        // Check if image exists in gallery with these tags
+        const imageRes = await fetch(`/api/v1/images/${file.id}`)
+        if (!imageRes.ok) {
+          setCheckingGallery(false)
+          return
+        }
+        const imageData = await safeJsonParse<{
+          data?: { characterGalleryLinks?: Array<{ characterId: string; linkId: string }> }
+        }>(imageRes)
+        const links = imageData?.data?.characterGalleryLinks ?? []
+
         if (characterId) {
-          const charRes = await fetch(`/api/v1/images?tagType=CHARACTER&tagId=${characterId}`)
-          if (charRes.ok) {
-            const charData = await safeJsonParse<{ data?: Array<{ filepath: string }> }>(charRes)
-            const found = (charData.data || []).some((img) => img.filepath === file.filepath)
-            setIsTaggedToCharacter(found)
-          }
+          const match = links.find((l) => l.characterId === characterId)
+          setIsInCharacterGallery(!!match)
+          setCharacterLinkId(match?.linkId ?? null)
         }
         if (userCharacterId) {
-          const userCharRes = await fetch(`/api/v1/images?tagType=CHARACTER&tagId=${userCharacterId}`)
-          if (userCharRes.ok) {
-            const userCharData = await safeJsonParse<{ data?: Array<{ filepath: string }> }>(userCharRes)
-            const found = (userCharData.data || []).some((img) => img.filepath === file.filepath)
-            setIsTaggedToUserCharacter(found)
-          }
+          const match = links.find((l) => l.characterId === userCharacterId)
+          setIsInUserCharacterGallery(!!match)
+          setUserCharacterLinkId(match?.linkId ?? null)
         }
       } catch (error) {
-        console.error('Failed to check tags:', { error: error instanceof Error ? error.message : String(error) })
+        console.error('Failed to check gallery status:', { error: error instanceof Error ? error.message : String(error) })
       } finally {
-        setCheckingTags(false)
+        setCheckingGallery(false)
       }
     }
-    checkTags()
-  }, [file.id, file.filepath, characterId, userCharacterId])
+    checkGalleryStatus()
+  }, [file.id, characterId, userCharacterId])
 
   // Keyboard navigation (Escape, arrow keys)
   useImageNavigation({
@@ -111,113 +116,81 @@ export default function ChatGalleryImageViewModal({
     }
   }
 
-  const handleToggleCharacterTag = async () => {
-    if (!characterId || isTagging) return
+  const handleToggleCharacterGallery = async () => {
+    if (!characterId || isSaving) return
 
-    setIsTagging(true)
+    setIsSaving(true)
     try {
-      if (isTaggedToCharacter) {
-        // Find the image in gallery first
-        const imagesRes = await fetch(`/api/v1/images?tagType=CHARACTER&tagId=${characterId}`)
-        const imagesData = await safeJsonParse<{ data?: Array<{ id: string; filepath: string }>; error?: string }>(imagesRes)
-        if (!imagesRes.ok) throw new Error(imagesData.error || 'Failed to find image')
-        const galleryImage = (imagesData.data || []).find((img) => img.filepath === file.filepath)
-
-        if (galleryImage) {
-          // Remove tag
-          const res = await fetch(`/api/v1/images/${galleryImage.id}?action=remove-tag`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'CHARACTER',
-              tagId: characterId,
-            }),
-          })
-          if (!res.ok) {
-            const data = await safeJsonParse<{ error?: string }>(res)
-            throw new Error(data.error || 'Failed to remove tag')
-          }
-          setIsTaggedToCharacter(false)
-          showSuccessToast(`Removed from ${characterName || 'character'}'s gallery`)
-        }
-      } else {
-        // Add tag - both generated images and chat files use the same endpoint
-        // Both need to be copied to gallery first if not already there
-        const res = await fetch(`/api/v1/chat-files/${file.id}?action=tag`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tagType: 'CHARACTER',
-            tagId: characterId,
-          }),
+      if (isInCharacterGallery && characterLinkId) {
+        const res = await fetch(`/api/v1/characters/${characterId}/photos/${characterLinkId}`, {
+          method: 'DELETE',
         })
         if (!res.ok) {
           const data = await safeJsonParse<{ error?: string }>(res)
-          throw new Error(data.error || 'Failed to tag image')
+          throw new Error(data.error || 'Failed to remove from photo album')
         }
-        setIsTaggedToCharacter(true)
-        showSuccessToast(`Added to ${characterName || 'character'}'s gallery`)
+        setIsInCharacterGallery(false)
+        setCharacterLinkId(null)
+        showSuccessToast(`Removed from ${characterName || 'character'}'s photo album`)
+      } else {
+        const res = await fetch(`/api/v1/characters/${characterId}/photos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileId: file.id }),
+        })
+        if (!res.ok) {
+          const data = await safeJsonParse<{ error?: string }>(res)
+          throw new Error(data.error || 'Failed to save to photo album')
+        }
+        const data = await safeJsonParse<{ linkId?: string }>(res)
+        setIsInCharacterGallery(true)
+        setCharacterLinkId(data.linkId ?? null)
+        showSuccessToast(`Saved to ${characterName || 'character'}'s photo album`)
       }
     } catch (error) {
-      console.error('Failed to toggle character tag:', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast(error instanceof Error ? error.message : 'Failed to update tag')
+      console.error('Failed to toggle character gallery:', { error: error instanceof Error ? error.message : String(error) })
+      showErrorToast(error instanceof Error ? error.message : 'Failed to update photo album')
     } finally {
-      setIsTagging(false)
+      setIsSaving(false)
     }
   }
 
-  const handleToggleUserCharacterTag = async () => {
-    if (!userCharacterId || isTagging) return
+  const handleToggleUserCharacterGallery = async () => {
+    if (!userCharacterId || isSaving) return
 
-    setIsTagging(true)
+    setIsSaving(true)
     try {
-      if (isTaggedToUserCharacter) {
-        // Find the image in gallery first
-        const imagesRes = await fetch(`/api/v1/images?tagType=CHARACTER&tagId=${userCharacterId}`)
-        const imagesData = await safeJsonParse<{ data?: Array<{ id: string; filepath: string }>; error?: string }>(imagesRes)
-        if (!imagesRes.ok) throw new Error(imagesData.error || 'Failed to find image')
-        const galleryImage = (imagesData.data || []).find((img) => img.filepath === file.filepath)
-
-        if (galleryImage) {
-          // Remove tag
-          const res = await fetch(`/api/v1/images/${galleryImage.id}?action=remove-tag`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'CHARACTER',
-              tagId: userCharacterId,
-            }),
-          })
-          if (!res.ok) {
-            const data = await safeJsonParse<{ error?: string }>(res)
-            throw new Error(data.error || 'Failed to remove tag')
-          }
-          setIsTaggedToUserCharacter(false)
-          showSuccessToast(`Removed from ${userCharacterName || 'user character'}'s gallery`)
-        }
-      } else {
-        // Add tag - both generated images and chat files use the same endpoint
-        // Both need to be copied to gallery first if not already there
-        const res = await fetch(`/api/v1/chat-files/${file.id}?action=tag`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tagType: 'CHARACTER',
-            tagId: userCharacterId,
-          }),
+      if (isInUserCharacterGallery && userCharacterLinkId) {
+        const res = await fetch(`/api/v1/characters/${userCharacterId}/photos/${userCharacterLinkId}`, {
+          method: 'DELETE',
         })
         if (!res.ok) {
           const data = await safeJsonParse<{ error?: string }>(res)
-          throw new Error(data.error || 'Failed to tag image')
+          throw new Error(data.error || 'Failed to remove from photo album')
         }
-        setIsTaggedToUserCharacter(true)
-        showSuccessToast(`Added to ${userCharacterName || 'user character'}'s gallery`)
+        setIsInUserCharacterGallery(false)
+        setUserCharacterLinkId(null)
+        showSuccessToast(`Removed from ${userCharacterName || 'user character'}'s photo album`)
+      } else {
+        const res = await fetch(`/api/v1/characters/${userCharacterId}/photos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileId: file.id }),
+        })
+        if (!res.ok) {
+          const data = await safeJsonParse<{ error?: string }>(res)
+          throw new Error(data.error || 'Failed to save to photo album')
+        }
+        const data = await safeJsonParse<{ linkId?: string }>(res)
+        setIsInUserCharacterGallery(true)
+        setUserCharacterLinkId(data.linkId ?? null)
+        showSuccessToast(`Saved to ${userCharacterName || 'user character'}'s photo album`)
       }
     } catch (error) {
-      console.error('Failed to toggle user character tag:', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast(error instanceof Error ? error.message : 'Failed to update tag')
+      console.error('Failed to toggle user character gallery:', { error: error instanceof Error ? error.message : String(error) })
+      showErrorToast(error instanceof Error ? error.message : 'Failed to update photo album')
     } finally {
-      setIsTagging(false)
+      setIsSaving(false)
     }
   }
 
@@ -270,40 +243,40 @@ export default function ChatGalleryImageViewModal({
       {/* Top right control buttons */}
       {!imageMissing && (
       <div className="absolute top-4 right-4 flex gap-2 z-10">
-        {/* Tag to Character button */}
+        {/* Save to / remove from character photo album */}
         {characterId && (
           <button
             onClick={(e) => {
               e.stopPropagation()
-              handleToggleCharacterTag()
+              handleToggleCharacterGallery()
             }}
-            disabled={isTagging || checkingTags}
+            disabled={isSaving || checkingGallery}
             className={`p-2 rounded-full qt-text-overlay transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
-              isTaggedToCharacter
+              isInCharacterGallery
                 ? 'bg-primary hover:qt-bg-primary/90'
                 : 'qt-bg-overlay-btn hover:qt-bg-overlay-btn'
             }`}
-            title={isTaggedToCharacter ? `Remove from ${characterName || 'character'}'s gallery` : `Add to ${characterName || 'character'}'s gallery`}
+            title={isInCharacterGallery ? `Remove from ${characterName || 'character'}'s photo album` : `Save to ${characterName || 'character'}'s photo album`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
           </button>
         )}
-        {/* Tag to user character button */}
+        {/* Save to / remove from user character photo album */}
         {userCharacterId && (
           <button
             onClick={(e) => {
               e.stopPropagation()
-              handleToggleUserCharacterTag()
+              handleToggleUserCharacterGallery()
             }}
-            disabled={isTagging || checkingTags}
+            disabled={isSaving || checkingGallery}
             className={`p-2 rounded-full qt-text-overlay transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
-              isTaggedToUserCharacter
+              isInUserCharacterGallery
                 ? 'bg-primary hover:qt-bg-primary/90'
                 : 'qt-bg-overlay-btn hover:qt-bg-overlay-btn'
             }`}
-            title={isTaggedToUserCharacter ? `Remove from ${userCharacterName || 'user character'}'s gallery` : `Add to ${userCharacterName || 'user character'}'s gallery`}
+            title={isInUserCharacterGallery ? `Remove from ${userCharacterName || 'user character'}'s photo album` : `Save to ${userCharacterName || 'user character'}'s photo album`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -365,7 +338,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             handleDeleteClick()
           }}
-          className="p-2 qt-bg-destructive/80 hover:bg-destructive rounded-full qt-text-overlay transition-colors cursor-pointer"
+          className="p-2 qt-bg-destructive/80 hover:qt-bg-destructive rounded-full qt-text-overlay transition-colors cursor-pointer"
           title="Delete image permanently"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -394,7 +367,7 @@ export default function ChatGalleryImageViewModal({
             height={400}
           />
         ) : (
-           
+
           <img
             src={file.url}
             alt={file.filename}

@@ -5,7 +5,6 @@
  * atmospheric landscape images based on chat context and characters.
  */
 
-import { createHash } from 'node:crypto';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -31,31 +30,21 @@ import {
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
+import {
+  isImageModerationError as isImageModerationErrorShared,
+  resolveUncensoredImageProfileForReroute,
+} from '@/lib/services/dangerous-content/provider-routing.service';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { convertToWebP } from '@/lib/files/webp-conversion';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import type { Character } from '@/lib/schemas/types';
 
-/**
- * Detect post-hoc content-moderation rejections from image providers.
- * OpenAI DALL-E returns "Your request was rejected as a result of our safety
- * system."; Grok returns "Generated image rejected by content moderation.";
- * other providers use similar phrasings. Matching on a handful of keywords
- * covers the common shapes without tying us to any single provider's error
- * type.
- */
-function isImageModerationError(error: unknown): boolean {
-  const message = getErrorMessage(error).toLowerCase();
-  return (
-    message.includes('content moderation') ||
-    message.includes('content_policy') ||
-    message.includes('content policy') ||
-    message.includes('safety system') ||
-    message.includes('rejected by content') ||
-    message.includes('moderation_blocked')
-  );
-}
+// Detection helper lives in the shared dangerous-content service so the
+// character-avatar and inline `generate_image` handlers can reuse it.
+const isImageModerationError = isImageModerationErrorShared;
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -70,7 +59,7 @@ function deriveGenderPrefix(char: Character): string {
 }
 
 function buildBasicEnumeration(char: Character): string {
-  const primary = char.physicalDescriptions?.[0];
+  const primary = char.physicalDescription;
   const desc =
     primary?.mediumPrompt ||
     primary?.shortPrompt ||
@@ -87,17 +76,17 @@ function buildBasicEnumeration(char: Character): string {
  * appearances for characters named in the scene description but not enumerated
  * — typically off-scene-state characters who never made the participant list.
  *
- * The pre-built `resolvedDescriptionsByCharacterId` map covers participants
- * whose enumeration was resolved earlier (including equipped wardrobe); other
- * characters fall back to a basic enumeration drawn from their default
- * physical description.
+ * Always uses the compact `buildBasicEnumeration` form (gender prefix +
+ * mediumPrompt/shortPrompt). The richer participant-resolved description
+ * carries the equipped wardrobe with full prose, which dwarfs the image
+ * prompt and confuses providers; a back-fill on a name the crafter dropped
+ * doesn't earn the wardrobe injection.
  */
 function appendMissingCharacterEnumerations(
   prompt: string,
   userCharacters: Character[],
-  resolvedDescriptionsByCharacterId: Map<string, string>,
-): { prompt: string; added: Array<{ name: string; usedResolved: boolean }> } {
-  const added: Array<{ name: string; usedResolved: boolean }> = [];
+): { prompt: string; added: Array<{ name: string }> } {
+  const added: Array<{ name: string }> = [];
   // Process longest names first so "Lady Catherine" wins over "Catherine"
   const ordered = [...userCharacters].sort((a, b) => b.name.length - a.name.length);
 
@@ -111,12 +100,11 @@ function appendMissingCharacterEnumerations(
     const enumRe = new RegExp(`(?:^|[.!?]\\s+)${escaped}\\s*:\\s`, 'i');
     if (enumRe.test(result)) continue;
 
-    const resolved = resolvedDescriptionsByCharacterId.get(char.id);
-    const desc = resolved ?? buildBasicEnumeration(char);
+    const desc = buildBasicEnumeration(char);
     if (!desc) continue;
     const trailing = /[.!?]\s*$/.test(result) ? ' ' : '. ';
     result = `${result.trimEnd()}${trailing}${char.name}: ${desc.replace(/\s*\.?\s*$/, '')}.`;
-    added.push({ name: char.name, usedResolved: !!resolved });
+    added.push({ name: char.name });
   }
   return { prompt: result, added };
 }
@@ -232,9 +220,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   }
 
   // Resolve the Concierge settings early (needed for uncensored routing and appearance sanitization)
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
+  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
   const dangerSettings = dangerousContentResolved.settings;
-  const isDangerousChat = chat.isDangerousChat === true;
+  const isDangerousChat = isChatActiveDangerous(chat);
   const hasUncensoredImageProvider = Boolean(dangerSettings.uncensoredImageProfileId);
 
   // For dangerous chats, use uncensored provider for all cheap LLM tasks
@@ -285,7 +273,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     appearanceInputs.push({
       characterId: char!.id,
       characterName: char!.name,
-      physicalDescriptions: char!.physicalDescriptions || [],
+      physicalDescription: char!.physicalDescription ?? null,
       equippedWardrobeItems,
     });
   }
@@ -474,7 +462,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     }
 
     // Fallback: simple first-description logic
-    const primary = char!.physicalDescriptions?.[0];
+    const primary = char!.physicalDescription;
     const descParts = [genderPrefix + (primary?.mediumPrompt || primary?.shortPrompt || char!.name)];
     return {
       name: char!.name,
@@ -562,18 +550,19 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // title, derived scene, or SceneState character actions) can name additional
   // characters who aren't current participants. Without a matching
   // `Name: appearance` entry the image provider invents an appearance for them.
+  //
+  // Participants are excluded: the crafter already received their full
+  // descriptions and wove them into the scene (e.g. "On the left, Friday, a
+  // woman with…"). Re-appending canonical `Friday: A woman. …` portraits on
+  // top of that produces a divided/triptych image as the provider tries to
+  // render both the integrated scene AND the portrait sidecards.
   try {
+    const participantIdSet = new Set(payload.characterIds);
     const userCharacters = await repos.characters.findByUserId(job.userId);
-    const resolvedDescriptionsByCharacterId = new Map<string, string>();
-    for (let i = 0; i < validCharacters.length; i++) {
-      const id = validCharacters[i]!.id;
-      const desc = characterDescriptions[i]?.description;
-      if (desc) resolvedDescriptionsByCharacterId.set(id, desc);
-    }
+    const nonParticipantCharacters = userCharacters.filter(c => !participantIdSet.has(c.id));
     const enrichResult = appendMissingCharacterEnumerations(
       finalPrompt!,
-      userCharacters,
-      resolvedDescriptionsByCharacterId,
+      nonParticipantCharacters,
     );
     if (enrichResult.added.length > 0) {
       logger.info('[StoryBackground] Appended missing character enumerations to prompt', {
@@ -667,13 +656,11 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     // moderation, the Concierge has a second door: retry with the configured
     // uncensored image profile. Mirrors the appearance-resolution and
     // prompt-crafting fallbacks above.
-    const uncensoredImageProfileId = dangerSettings.uncensoredImageProfileId ?? null;
-    const canRerouteViaConcierge =
-      isImageModerationError(error)
-      && uncensoredImageProfileId
-      && uncensoredImageProfileId !== imageProfile.id;
+    const reroute = isImageModerationError(error)
+      ? await resolveUncensoredImageProfileForReroute(imageProfile.id, dangerSettings, job.userId)
+      : null;
 
-    if (!canRerouteViaConcierge) {
+    if (!reroute) {
       logger.error('[StoryBackground] Image generation failed', {
         context: 'background-jobs.story-background',
         jobId: job.id,
@@ -689,51 +676,22 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       jobId: job.id,
       originalProfileId: imageProfile.id,
       originalProvider: imageProfile.provider,
-      fallbackProfileId: uncensoredImageProfileId,
+      fallbackProfileId: reroute.profile.id,
+      fallbackProvider: reroute.profile.provider,
       originalError: errorMessage,
     });
 
-    const uncensoredProfile = await repos.imageProfiles.findById(uncensoredImageProfileId);
-    if (!uncensoredProfile) {
-      logger.error('[StoryBackground] Concierge uncensored image profile not found', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        fallbackProfileId: uncensoredImageProfileId,
-      });
-      throw new Error(`Image generation failed: ${errorMessage}`);
-    }
-    if (!uncensoredProfile.apiKeyId) {
-      logger.error('[StoryBackground] Concierge uncensored image profile has no API key', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        fallbackProfileId: uncensoredImageProfileId,
-      });
-      throw new Error(`Image generation failed: ${errorMessage}`);
-    }
-    const uncensoredKey = await repos.connections.findApiKeyByIdAndUserId(
-      uncensoredProfile.apiKeyId,
-      job.userId
-    );
-    if (!uncensoredKey?.key_value) {
-      logger.error('[StoryBackground] Concierge uncensored image profile API key missing or invalid', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        fallbackProfileId: uncensoredImageProfileId,
-      });
-      throw new Error(`Image generation failed: ${errorMessage}`);
-    }
-
-    const rerouteProvider = createImageProvider(uncensoredProfile.provider);
+    const rerouteProvider = createImageProvider(reroute.profile.provider);
     const rerouteStartTime = Date.now();
     try {
       generationResponse = await rerouteProvider.generateImage({
         prompt: finalPrompt,
-        model: uncensoredProfile.modelName,
+        model: reroute.profile.modelName,
         n: 1,
         size: '1792x1024',
-        quality: (uncensoredProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
+        quality: (reroute.profile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
         style: 'natural',
-      }, uncensoredKey.key_value);
+      }, reroute.apiKey);
 
       const rerouteDurationMs = Date.now() - rerouteStartTime;
       const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
@@ -742,8 +700,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         userId: job.userId,
         type: 'IMAGE_GENERATION',
         chatId: payload.chatId,
-        provider: uncensoredProfile.provider,
-        modelName: uncensoredProfile.modelName,
+        provider: reroute.profile.provider,
+        modelName: reroute.profile.modelName,
         request: {
           messages: [{ role: 'user', content: finalPrompt }],
         },
@@ -753,13 +711,13 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         durationMs: rerouteDurationMs,
       });
 
-      activeImageProfile = uncensoredProfile;
+      activeImageProfile = reroute.profile;
 
       logger.info('[StoryBackground] Concierge uncensored reroute succeeded', {
         context: 'background-jobs.story-background',
         jobId: job.id,
-        fallbackProvider: uncensoredProfile.provider,
-        fallbackModel: uncensoredProfile.modelName,
+        fallbackProvider: reroute.profile.provider,
+        fallbackModel: reroute.profile.modelName,
         rerouteDurationMs,
       });
     } catch (rerouteError) {
@@ -770,8 +728,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         userId: job.userId,
         type: 'IMAGE_GENERATION',
         chatId: payload.chatId,
-        provider: uncensoredProfile.provider,
-        modelName: uncensoredProfile.modelName,
+        provider: reroute.profile.provider,
+        modelName: reroute.profile.modelName,
         request: {
           messages: [{ role: 'user', content: finalPrompt }],
         },
@@ -821,7 +779,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const mimeType = converted.mimeType;
   const originalFilename = converted.filename;
 
-  const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+  const sha256 = sha256OfBuffer(buffer);
   const fileId = crypto.randomUUID();
 
   // Build linkedTo array with chat and character IDs
@@ -837,6 +795,10 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     let storageKey: string;
     let fileFolderPath: string | null;
     let usedLantern = false;
+    // The bridges transcode bitmap uploads to WebP; the FileEntry must
+    // record the post-transcode mime/size, not the input.
+    let storedMimeType: string;
+    let storedSize: number;
 
     if (folderProjectId) {
       const uploadResult = await fileStorageManager.uploadFile({
@@ -847,6 +809,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         folderPath: '/story-backgrounds/',
       });
       storageKey = uploadResult.storageKey;
+      storedMimeType = uploadResult.storedMimeType;
+      storedSize = uploadResult.sizeBytes;
       fileFolderPath = '/story-backgrounds/';
     } else {
       const lantern = await getLanternBackgroundsStore();
@@ -863,6 +827,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         description: `Story background for: ${payload.sceneContext || chat.title}`,
       });
       storageKey = written.storageKey;
+      storedMimeType = written.storedMimeType;
+      storedSize = written.sizeBytes;
       fileFolderPath = null;
       usedLantern = true;
     }
@@ -893,8 +859,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       userId: job.userId,
       sha256,
       originalFilename,
-      mimeType,
-      size: buffer.length,
+      mimeType: storedMimeType,
+      size: storedSize,
       width: 1792,
       height: 1024,
       linkedTo,

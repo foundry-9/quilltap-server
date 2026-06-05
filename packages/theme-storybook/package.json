@@ -1,6 +1,6 @@
 {
   "name": "@quilltap/theme-storybook",
-  "version": "1.0.36",
+  "version": "1.0.39",
   "description": "Storybook preset and stories for developing Quilltap theme plugins",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -43,10 +43,10 @@
     "storybook": ">=8.0.0"
   },
   "devDependencies": {
-    "@storybook/react": "^10.4.0",
-    "@types/react": "^19.2.15",
-    "react": "^19.2.6",
-    "storybook": "^10.4.0",
+    "@storybook/react": "^10.4.2",
+    "@types/react": "^19.2.16",
+    "react": "^19.2.7",
+    "storybook": "^10.4.2",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   },

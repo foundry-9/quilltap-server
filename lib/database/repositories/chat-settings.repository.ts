@@ -189,6 +189,12 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               softStartFraction: 0.7,
               softFloor: 0.7,
             },
+            autonomousRoomSettings: {
+              dailyTokenBudget: null,
+              defaultFreshnessWindowMs: 12 * 60 * 60 * 1000,
+              visibilityDefault: 'owner_only',
+              destructiveToolPolicy: 'opt_in_per_room',
+            },
             tokenDisplaySettings: {
               showPerMessageTokens: false,
               showPerMessageCost: false,
@@ -209,6 +215,9 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             },
             autoDetectRng: true,
             compositionModeDefault: false,
+            composerSpellcheck: true,
+            textReplacementsEnabled: true,
+            autoScrollOnResponseComplete: false,
             agentModeSettings: {
               maxTurns: 10,
               defaultEnabled: false,
@@ -229,6 +238,17 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             autoLockSettings: {
               enabled: false,
               idleMinutes: 15,
+            },
+            coreWhisper: {
+              enabled: true,
+              interval: 12,
+              silenceThreshold: 3,
+              packetTokenBudget: 4096,
+              fireOnContextTransition: true,
+            },
+            thinkingDisplay: {
+              defaultVisible: true,
+              defaultCollapsed: true,
             },
             defaultRoleplayTemplateId,
             ...data,

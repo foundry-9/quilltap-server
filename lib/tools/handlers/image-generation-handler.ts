@@ -3,8 +3,8 @@
  * Handles execution of image generation tool calls from LLMs
  */
 
-import { createHash } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
   getLanternBackgroundsStore,
   writeLanternBackgroundToMountStore,
@@ -38,11 +38,14 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import {
   classifyContent as classifyDangerousContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service';
 import {
   resolveImageProviderForDangerousContent,
+  isImageModerationError,
+  resolveUncensoredImageProfileForReroute,
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
@@ -122,7 +125,7 @@ async function saveGeneratedImage(
     const finalMimeType = converted.mimeType;
     const originalFilename = converted.filename;
 
-    const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+    const sha256 = sha256OfBuffer(buffer);
 
     // Build linkedTo array
     const linkedTo = chatId ? [chatId] : [];
@@ -148,18 +151,19 @@ async function saveGeneratedImage(
       contentType: finalMimeType,
       subfolder: 'tool',
     });
-    const uploadResult: { storageKey: string } = { storageKey: written.storageKey };
     // Inherit tags from linked entities (e.g., the chat)
     const inheritedTags = await getInheritedTags(linkedTo, userId);
 
-    // Create metadata in repository
+    // Create metadata in repository. The bridge may have transcoded the
+    // bytes (bitmaps → WebP), so the FileEntry's mime/size must reflect
+    // what's on disk, not the input contentType/buffer length.
     // IMPORTANT: Pass the fileId to ensure metadata matches storage path
     const fileEntry = await repos.files.create({
       userId,
       sha256,
       originalFilename,
-      mimeType: finalMimeType,
-      size: buffer.length,
+      mimeType: written.storedMimeType,
+      size: written.sizeBytes,
       width: null,
       height: null,
       linkedTo,
@@ -170,7 +174,7 @@ async function saveGeneratedImage(
       generationRevisedPrompt: metadata.revisedPrompt || null,
       description: null,
       tags: inheritedTags,
-      storageKey: uploadResult.storageKey,
+      storageKey: written.storageKey,
     }, { id: fileId });
 
     // Always use API route for S3-backed files
@@ -299,6 +303,7 @@ async function generateImagesWithProvider(
   toolInput: ImageGenerationToolInput,
   imageProfile: any,
   userId: string,
+  dangerSettings: DangerousContentSettings,
   chatId?: string,
   callingParticipantId?: string
 ): Promise<GeneratedImageResult[]> {
@@ -314,7 +319,11 @@ async function generateImagesWithProvider(
     imageProfile.modelName
   );
 
-  // Generate images
+  // Generate images. Tracks the profile that actually produced the final
+  // response — updated if the Concierge swaps in the uncensored profile
+  // after a post-hoc moderation rejection. Drives the saved-file metadata.
+  let activeProvider = imageProfile.provider as string;
+  let activeModel = imageProfile.modelName as string;
   let generationResponse;
   const genStartTime = Date.now();
   try {
@@ -361,12 +370,101 @@ async function generateImagesWithProvider(
       durationMs: genDurationMs,
     }).catch(() => { /* never block on logging */ });
 
-    logger.error('Image generation failed:', { errorMessage }, error as Error);
-    throw new ImageGenerationError(
-      'PROVIDER_ERROR',
-      `Image generation failed: ${errorMessage}`,
-      error
+    // Post-hoc Concierge reroute: if the provider rejected for content
+    // moderation and the user has AUTO_ROUTE on with a configured uncensored
+    // profile, take the second door. Pre-flight prompt expansion may already
+    // have routed us to the uncensored profile — the helper detects that and
+    // declines, so we won't loop.
+    const reroute = isImageModerationError(error)
+      ? await resolveUncensoredImageProfileForReroute(imageProfile.id, dangerSettings, userId)
+      : null;
+
+    if (!reroute) {
+      logger.error('Image generation failed:', {
+        errorMessage,
+        moderationRejection: isImageModerationError(error),
+      }, error as Error);
+      throw new ImageGenerationError(
+        'PROVIDER_ERROR',
+        `Image generation failed: ${errorMessage}`,
+        error
+      );
+    }
+
+    logger.info('[Image Generation] Image provider rejected for content moderation, rerouting through Concierge uncensored profile', {
+      originalProfileId: imageProfile.id,
+      originalProvider: imageProfile.provider,
+      fallbackProfileId: reroute.profile.id,
+      fallbackProvider: reroute.profile.provider,
+      originalError: errorMessage,
+    });
+
+    const rerouteProvider = createImageProvider(reroute.profile.provider);
+    const rerouteMergedParams = mergeParameters(
+      toolInput,
+      reroute.profile.parameters as Record<string, unknown>,
+      reroute.profile.modelName
     );
+    const rerouteStartTime = Date.now();
+    try {
+      generationResponse = await rerouteProvider.generateImage(rerouteMergedParams, reroute.apiKey);
+
+      const rerouteDurationMs = Date.now() - rerouteStartTime;
+      const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
+
+      logLLMCall({
+        userId,
+        type: 'IMAGE_GENERATION',
+        chatId,
+        provider: reroute.profile.provider,
+        modelName: reroute.profile.modelName,
+        request: {
+          messages: [{ role: 'user', content: toolInput.prompt }],
+        },
+        response: {
+          content: rerouteRevisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s) (Concierge reroute)`,
+        },
+        durationMs: rerouteDurationMs,
+      }).catch(() => { /* never block on logging */ });
+
+      activeProvider = reroute.profile.provider;
+      activeModel = reroute.profile.modelName;
+
+      logger.info('[Image Generation] Concierge uncensored reroute succeeded', {
+        fallbackProvider: reroute.profile.provider,
+        fallbackModel: reroute.profile.modelName,
+        rerouteDurationMs,
+      });
+    } catch (rerouteError) {
+      const rerouteErrorMessage = getErrorMessage(rerouteError);
+      const rerouteDurationMs = Date.now() - rerouteStartTime;
+
+      logLLMCall({
+        userId,
+        type: 'IMAGE_GENERATION',
+        chatId,
+        provider: reroute.profile.provider,
+        modelName: reroute.profile.modelName,
+        request: {
+          messages: [{ role: 'user', content: toolInput.prompt }],
+        },
+        response: {
+          content: '',
+          error: rerouteErrorMessage,
+        },
+        durationMs: rerouteDurationMs,
+      }).catch(() => { /* never block on logging */ });
+
+      logger.error('Image generation failed (Concierge reroute also failed):', {
+        originalError: errorMessage,
+        rerouteError: rerouteErrorMessage,
+      }, rerouteError as Error);
+      throw new ImageGenerationError(
+        'PROVIDER_ERROR',
+        `Image generation failed after Concierge reroute: ${rerouteErrorMessage}`,
+        rerouteError
+      );
+    }
   }
 
   // Save images and create database records
@@ -376,8 +474,8 @@ async function generateImagesWithProvider(
         saveGeneratedImage(img.data || img.b64Json || '', img.mimeType || 'image/png', userId, chatId, callingParticipantId, {
           prompt: toolInput.prompt,
           revisedPrompt: img.revisedPrompt,
-          model: imageProfile.modelName,
-          provider: imageProfile.provider,
+          model: activeModel,
+          provider: activeProvider,
         })
       )
     );
@@ -719,7 +817,7 @@ async function resolveAppearances(
   if (context.chatId) {
     try {
       const chat = await repos.chats.findById(context.chatId);
-      isDangerousChat = chat?.isDangerousChat === true;
+      isDangerousChat = isChatActiveDangerous(chat);
 
       const chatEvents = await repos.chats.getMessages(context.chatId);
       recentChatMessages = chatEvents
@@ -820,7 +918,7 @@ async function resolveAppearances(
           appearanceInputs.push({
             characterId: p.entityId!,
             characterName: p.name,
-            physicalDescriptions: p.descriptions || [],
+            physicalDescription: (p.descriptions && p.descriptions[0]) || null,
             equippedWardrobeItems,
           });
         }
@@ -964,13 +1062,14 @@ async function expandPromptWithContext(
  */
 async function loadSettingsAndBuildCheapLLM(
   userId: string,
-  chatSettings: ChatSettings | undefined
+  chatSettings: ChatSettings | undefined,
+  chat?: { conciergeOverride?: 'OFF' | null } | null
 ): Promise<{
   dangerSettings: DangerousContentSettings;
   cheapLLMSelection: CheapLLMSelection | null;
 }> {
-  // 4b. Resolve dangerous content settings
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
+  // 4b. Resolve dangerous content settings (chat may be Off-duty)
+  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
   const dangerSettings = dangerousContentResolved.settings;
 
   // 4c. Build cheap LLM selection for dangerous content classification
@@ -1034,10 +1133,25 @@ export async function executeImageGenerationTool(
       });
     }
 
+    // Fetch chat once so the Concierge off-duty override is honored everywhere downstream.
+    let chatForOverride: { conciergeOverride?: 'OFF' | null } | null = null;
+    if (context.chatId) {
+      try {
+        const fetched = await repos.chats.findById(context.chatId);
+        if (fetched) chatForOverride = fetched;
+      } catch (err) {
+        logger.warn('[Image Generation] Could not load chat for Concierge override check', {
+          chatId: context.chatId,
+          errorMessage: getErrorMessage(err),
+        });
+      }
+    }
+
     // 4b-4c. Resolve dangerous content settings and build cheap LLM selection
     const { dangerSettings, cheapLLMSelection } = await loadSettingsAndBuildCheapLLM(
       context.userId,
-      chatSettings
+      chatSettings,
+      chatForOverride
     );
 
     // 5-5b. Classify content, resolve style options, and reroute if needed
@@ -1093,6 +1207,7 @@ export async function executeImageGenerationTool(
       finalInput,
       finalProfile,
       context.userId,
+      dangerSettings,
       context.chatId,
       context.callingParticipantId
     );

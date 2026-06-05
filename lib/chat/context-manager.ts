@@ -86,6 +86,15 @@ import {
   postCommonplaceWhisper,
 } from '@/lib/services/commonplace-notifications/writer'
 import {
+  assembleCorePacket,
+  buildCoreWhisperContent,
+  buildCoreWhisperLLMContext,
+  buildCoreWhisperOpaqueContent,
+  postCoreWhisper,
+  resolveCoreWhisperConfig,
+} from '@/lib/services/aurora-notifications/core-whisper'
+import { shouldFireCoreWhisper } from '@/lib/chat/context/core-whisper-trigger'
+import {
   postHostTimestampAnnouncement,
   buildTimestampContent,
   postHostOffSceneCharactersAnnouncement,
@@ -345,6 +354,13 @@ export interface BuildContextOptions {
   /** Uncensored fallback options for memory recap in dangerous chats */
   uncensoredFallbackOptions?: UncensoredFallbackOptions
 
+  /**
+   * Continue mode (also covers nudges and chained autonomous turns) — a
+   * continuation of an existing response rather than a fresh turn. Used by
+   * the Aurora Core whisper to skip re-firing on a continuation.
+   */
+  isContinueMode?: boolean
+
   // ============================================================================
   // Status Callback (for streaming status events to client)
   // ============================================================================
@@ -399,6 +415,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     messagesWithParticipants,
     // Tool instructions (native tool rules or text-block tool instructions)
     toolInstructions,
+    // Continue / nudge / chained autonomous-turn signal (Aurora Core whisper)
+    isContinueMode = false,
   } = options
 
   const warnings: string[] = []
@@ -569,6 +587,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
               name: c.name,
               aliases: c.aliases ?? undefined,
               pronouns: c.pronouns ?? undefined,
+              identity: c.identity ?? undefined,
               description: c.description ?? undefined,
             })),
           })
@@ -1442,8 +1461,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // surfaced to THIS turn's LLM context here so the responding character
   // sees the intro without a one-turn lag.
   if (pendingOffSceneAnnouncement) {
+    // Push as 'user' rather than 'assistant': this is a Host voice (external
+    // annotation to the responding character), and Anthropic Sonnet 4.6+
+    // rejects requests whose final message is role=assistant ("does not
+    // support assistant message prefill"). In continue/nudge mode there's
+    // no trailing user message to bury this behind, so role mismatch here
+    // becomes the prefill 400. Matches the systemSender role-flip in
+    // buildMessageContext for the same reason.
     contextMessages.push({
-      role: 'assistant',
+      role: 'user',
       content: pendingOffSceneAnnouncement.content,
     })
   }
@@ -1463,10 +1489,96 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       chatId: chat.id,
       formatted: timestamp.formatted,
     })
+    // Push as 'user' rather than 'assistant': Host timestamps are external
+    // annotations, not the character's own speech. Anthropic Sonnet 4.6+
+    // rejects role=assistant tails (no prefill), and in continue/nudge mode
+    // there is no trailing user message to follow this one. Matches the
+    // systemSender role-flip in buildMessageContext.
     contextMessages.push({
-      role: 'assistant',
+      role: 'user',
       content: buildTimestampContent(timestamp.formatted),
     })
+  }
+
+  // ORDERING: Core whisper precedes the Commonplace Book whisper, intentionally.
+  // You need to know who you are before you can correctly interpret what you
+  // remember. If memory arrives first, it can flood identity — the character
+  // starts performing the person who had those experiences rather than being
+  // the person who grew from them. Identity grounds the speaker; memory then
+  // situates them in the moment. Do not reorder these two blocks without
+  // re-reading docs/feature-requests/aurora-core-whisper.md first.
+  let coreWhisperLLMContext = ''
+  if (respondingParticipant && !isContinueMode) {
+    try {
+      const userChatSettings = await getRepositories().chatSettings.findByUserId(userId)
+      const coreCfg = resolveCoreWhisperConfig(
+        chat,
+        character,
+        userChatSettings?.coreWhisper ?? null,
+      )
+      if (coreCfg.enabled) {
+        const eventsForTrigger = await getRepositories().chats.getMessages(chat.id)
+        const decision = shouldFireCoreWhisper({
+          events: eventsForTrigger,
+          respondingParticipantId: respondingParticipant.id,
+          isContinue: isContinueMode,
+          isNudge: false,
+          interval: coreCfg.interval,
+          silenceThreshold: coreCfg.silenceThreshold,
+          fireOnContextTransition: coreCfg.fireOnContextTransition,
+        })
+        if (decision.fire) {
+          const packet = await assembleCorePacket(character.id, coreCfg.packetTokenBudget)
+          if (packet) {
+            const personaContent = buildCoreWhisperContent(packet)
+            const opaqueContent = buildCoreWhisperOpaqueContent(packet)
+            coreWhisperLLMContext = buildCoreWhisperLLMContext(packet)
+            const posted = await postCoreWhisper({
+              chatId: chat.id,
+              targetParticipantId: respondingParticipant.id,
+              content: personaContent,
+              opaqueContent,
+            })
+            if (posted) {
+              try {
+                const refreshed = await getRepositories().chats.getMessages(chat.id)
+                const stale = refreshed
+                  .filter((m): m is MessageEvent => m.type === 'message')
+                  .filter(m =>
+                    m.systemSender === 'aurora'
+                    && m.systemKind === 'core-whisper'
+                    && m.id !== posted.id
+                    && Array.isArray(m.targetParticipantIds)
+                    && m.targetParticipantIds.includes(respondingParticipant.id)
+                  )
+                  .map(m => m.id)
+                if (stale.length > 0) {
+                  const removed = await getRepositories().chats.deleteMessagesByIds(chat.id, stale)
+                  logger.info('[CoreWhisper] Swept stale whispers', {
+                    chatId: chat.id,
+                    messageId: posted.id,
+                    targetParticipantId: respondingParticipant.id,
+                    deletedCount: removed,
+                  })
+                }
+              } catch (sweepError) {
+                logger.error('[CoreWhisper] Failed to sweep stale whispers', {
+                  chatId: chat.id,
+                  targetParticipantId: respondingParticipant.id,
+                  error: getErrorMessage(sweepError),
+                }, sweepError as Error)
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      logger.error('[CoreWhisper] Failed to offer Core packet', {
+        chatId: chat.id,
+        respondingParticipantId: respondingParticipant.id,
+        error: getErrorMessage(error),
+      }, error as Error)
+    }
   }
 
   // Memory tail: persist a single consolidated Commonplace Book whisper to the
@@ -1569,8 +1681,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       newUserMsgName = findUserParticipantName(allParticipants, participantCharacters)
     }
 
-    const composedUserContent = llmRecallText
-      ? `${newUserMessage}\n\n---\n\n${llmRecallText}`
+    const trailingContextSections: string[] = []
+    if (coreWhisperLLMContext) trailingContextSections.push(coreWhisperLLMContext)
+    if (llmRecallText) trailingContextSections.push(llmRecallText)
+    const composedUserContent = trailingContextSections.length > 0
+      ? `${newUserMessage}\n\n---\n\n${trailingContextSections.join('\n\n---\n\n')}`
       : newUserMessage
 
     contextMessages.push({

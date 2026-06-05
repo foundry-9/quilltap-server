@@ -29,9 +29,21 @@ export function isParticipantsTurn(
 
 /**
  * Checks if it's the user's turn (no AI character should speak).
+ *
+ * Two shapes mean "the turn has closed":
+ *   - `nextSpeakerId === null` — classic case, no character was picked at all
+ *     (e.g. only LLM-controlled chats where the cycle completed).
+ *   - `reason === 'user_turn'` — the rotation landed on a user-controlled
+ *     CHARACTER participant, whose `nextSpeakerId` is the participant's own
+ *     id (not null). This is the path introduced when user characters
+ *     joined the talkativeness rotation.
+ *
+ * Both branches must be recognized; downstream code (memory extraction,
+ * orchestrator chain control, UI banners) keys off this to decide whether
+ * the human now has the floor.
  */
 export function isUsersTurn(selectionResult: TurnSelectionResult): boolean {
-  return selectionResult.nextSpeakerId === null;
+  return selectionResult.nextSpeakerId === null || selectionResult.reason === 'user_turn';
 }
 
 /**

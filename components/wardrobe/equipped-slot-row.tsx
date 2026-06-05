@@ -105,7 +105,7 @@ export function EquippedSlotRow({
             type="button"
             onClick={() => setPickerOpen((v) => !v)}
             className="qt-button-ghost qt-button-sm"
-            title={`Add to ${SLOT_LABEL[slot].toLowerCase()}`}
+            title={`Wear something in ${SLOT_LABEL[slot].toLowerCase()} (fills every slot it covers)`}
           >
             +
           </button>

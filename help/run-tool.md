@@ -11,8 +11,9 @@ Much as a gentleman inventor might wish to test each spring and gear of a newly 
 ## Accessing the Run Tool
 
 1. Open any chat in **The Salon**
-2. Click the **tool palette** button (the hamburger menu in the composer area)
-3. Select **Run Tool** from the CHAT section
+2. Look to the right-hand **Chat Sidebar** (the panel of accordion drawers your eye naturally falls to when the conversation pauses for breath)
+3. Open the **Chat** drawer
+4. Press **Run Tool…**
 
 ## How It Works
 

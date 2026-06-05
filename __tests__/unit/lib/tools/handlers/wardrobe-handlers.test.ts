@@ -27,6 +27,7 @@ jest.mock('@/lib/background-jobs/queue-service', () => ({
 // `current_state` returned by the handler (it's read after the mutation).
 jest.mock('@/lib/wardrobe/outfit-displacement', () => ({
   equipItem: jest.fn(),
+  replaceItem: jest.fn(),
   addToSlot: jest.fn(),
   removeFromSlot: jest.fn(),
 }))
@@ -43,6 +44,7 @@ const outfitDisplacement = require('@/lib/wardrobe/outfit-displacement')
 
 const mockGetRepositories = getRepositories as jest.Mock
 const mockEquipItem = outfitDisplacement.equipItem as jest.Mock
+const mockReplaceItem = outfitDisplacement.replaceItem as jest.Mock
 const mockAddToSlot = outfitDisplacement.addToSlot as jest.Mock
 const mockRemoveFromSlot = outfitDisplacement.removeFromSlot as jest.Mock
 
@@ -57,6 +59,7 @@ const makeWardrobeItem = (overrides: Record<string, unknown> = {}) => ({
   componentItemIds: [],
   appropriateness: 'formal evening',
   isDefault: false,
+  replace: false,
   archivedAt: null,
   migratedFromClothingRecordId: null,
   createdAt: now,
@@ -85,8 +88,16 @@ describe('wardrobe tool handlers', () => {
         // coverage_summary text still get a valid resolver path.
         findByCharacterId: jest.fn().mockResolvedValue([]),
         findById: jest.fn(),
-        // Fallback bulk lookup for items not in findByCharacterId.
+        // Fallback bulk lookup for items not in findByCharacterId. Post-cutover
+        // the production code calls findByIdsForCharacter; the alias below routes
+        // it through findByIds so existing per-test `findByIds.mockResolvedValue`
+        // setups keep working.
         findByIds: jest.fn().mockResolvedValue([]),
+        findByIdsForCharacter: jest.fn((_charId: string, ids: string[]) =>
+          repos.wardrobe.findByIds(ids)
+        ),
+        // Shared-archetype lookup (reads Quilltap General post-cutover).
+        findArchetypeById: jest.fn().mockResolvedValue(null),
         // Overlay-aware single-item lookup used by the equip primitives.
         findByIdForCharacter: jest.fn((_charId: string, id: string) =>
           repos.wardrobe.findById(id)
@@ -107,6 +118,7 @@ describe('wardrobe tool handlers', () => {
     // Default the displacement primitives to resolved no-ops; tests that need to
     // observe state changes drive `getEquippedOutfitForCharacter` directly.
     mockEquipItem.mockResolvedValue({ top: [], bottom: [], footwear: [], accessories: [] })
+    mockReplaceItem.mockResolvedValue({ top: [], bottom: [], footwear: [], accessories: [] })
     mockAddToSlot.mockResolvedValue({ top: [], bottom: [], footwear: [], accessories: [] })
     mockRemoveFromSlot.mockResolvedValue({ top: [], bottom: [], footwear: [], accessories: [] })
   })
@@ -260,7 +272,7 @@ describe('wardrobe tool handlers', () => {
   })
 
   describe('executeWardrobeUpdateOutfitTool — composite items only', () => {
-    it('mode: wear — equips a composite, replacing every slot it covers', async () => {
+    it('mode: wear — equips a composite (additive bundle layers; reports layered effect)', async () => {
       const raincoat = makeWardrobeItem({
         id: 'raincoat-1',
         title: 'Raincoat',
@@ -303,14 +315,16 @@ describe('wardrobe tool handlers', () => {
         context
       )
 
-      // The composite is dressed via equipItem, which replaces every slot in
-      // its types with [composite.id].
+      // The composite is dressed via equipItem, which honors the bundle's
+      // replace flag (this additive bundle layers; replace:false → 'layered').
       expect(mockEquipItem).toHaveBeenCalledTimes(1)
       expect(mockEquipItem).toHaveBeenCalledWith(repos, 'chat-1', 'char-1', rainOutfit)
+      expect(mockReplaceItem).not.toHaveBeenCalled()
       expect(mockRemoveFromSlot).not.toHaveBeenCalled()
 
       expect(result.success).toBe(true)
       expect(result.action).toBe('worn')
+      expect(result.effect).toBe('layered')
       expect(result.slots_affected).toEqual(['top', 'bottom', 'footwear'])
       expect(result.item).toEqual({ item_id: 'rain-outfit', title: 'Rain Outfit' })
       expect(result.current_state).toEqual({
@@ -319,6 +333,38 @@ describe('wardrobe tool handlers', () => {
         footwear: ['rain-outfit'],
         accessories: [],
       })
+    })
+
+    it('mode: replace — force-swaps a composite via replaceItem and reports replaced', async () => {
+      const rainOutfit = makeWardrobeItem({
+        id: 'rain-outfit',
+        title: 'Rain Outfit',
+        types: ['top', 'bottom', 'footwear'],
+        componentItemIds: ['raincoat-1', 'jeans-1', 'wellies-1'],
+      })
+      repos.wardrobe.findById.mockImplementation(async (id: unknown) => {
+        if (id === 'rain-outfit') return rainOutfit
+        return null
+      })
+      repos.wardrobe.findByIds.mockResolvedValue([rainOutfit])
+      repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+        top: ['rain-outfit'],
+        bottom: ['rain-outfit'],
+        footwear: ['rain-outfit'],
+        accessories: [],
+      })
+
+      const result = await executeWardrobeUpdateOutfitTool(
+        { mode: 'replace', item_id: 'rain-outfit' },
+        context
+      )
+
+      expect(mockReplaceItem).toHaveBeenCalledTimes(1)
+      expect(mockReplaceItem).toHaveBeenCalledWith(repos, 'chat-1', 'char-1', rainOutfit)
+      expect(mockEquipItem).not.toHaveBeenCalled()
+      expect(result.success).toBe(true)
+      expect(result.action).toBe('worn')
+      expect(result.effect).toBe('replaced')
     })
 
     it('mode: remove — calls removeFromSlot once per slot in the composite', async () => {
@@ -495,7 +541,7 @@ describe('wardrobe tool handlers', () => {
   })
 
   describe('executeWardrobeChangeItemTool — atomic items only', () => {
-    it('mode: equip — equips a leaf item, replacing every slot it covers', async () => {
+    it('mode: wear — wears a leaf item, layering it across the slots it covers', async () => {
       const dress = makeWardrobeItem({
         id: 'dress-1',
         title: 'Midnight Dress',
@@ -516,7 +562,7 @@ describe('wardrobe tool handlers', () => {
       })
 
       const result = await executeWardrobeChangeItemTool(
-        { mode: 'equip', item_id: 'dress-1' },
+        { mode: 'wear', item_id: 'dress-1' },
         context
       )
 
@@ -525,7 +571,9 @@ describe('wardrobe tool handlers', () => {
       expect(result).toMatchObject({
         success: true,
         action: 'equipped',
-        // Multi-slot equip uses the 'inferred' marker because more than one
+        // replace:false leaf → layered.
+        effect: 'layered',
+        // Multi-slot wear uses the 'inferred' marker because more than one
         // slot was touched in a single call.
         slot: 'inferred',
         item: { item_id: 'dress-1', title: 'Midnight Dress' },
@@ -536,9 +584,40 @@ describe('wardrobe tool handlers', () => {
           accessories: [],
         },
       })
+      expect(result.effect_summary).toMatch(/[Ll]ayered/)
     })
 
-    it('mode: equip — single-slot leaf reports its concrete slot', async () => {
+    it('mode: replace — force-swaps via replaceItem and reports a replaced effect', async () => {
+      const dress = makeWardrobeItem({
+        id: 'dress-1',
+        title: 'Midnight Dress',
+        types: ['top', 'bottom'],
+        componentItemIds: [],
+      })
+      repos.wardrobe.findById.mockImplementation(async (id: unknown) => {
+        if (id === 'dress-1') return dress
+        return null
+      })
+      repos.wardrobe.findByIds.mockResolvedValue([dress])
+      repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+        top: ['dress-1'],
+        bottom: ['dress-1'],
+        footwear: [],
+        accessories: [],
+      })
+
+      const result = await executeWardrobeChangeItemTool(
+        { mode: 'replace', item_id: 'dress-1' },
+        context
+      )
+
+      expect(mockReplaceItem).toHaveBeenCalledTimes(1)
+      expect(mockReplaceItem).toHaveBeenCalledWith(repos, 'chat-1', 'char-1', dress)
+      expect(mockEquipItem).not.toHaveBeenCalled()
+      expect(result).toMatchObject({ success: true, action: 'equipped', effect: 'replaced' })
+    })
+
+    it('mode: equip (deprecated alias) still works and routes through wear', async () => {
       const shoes = makeWardrobeItem({
         id: 'shoes-1',
         title: 'Oxford Shoes',
@@ -563,6 +642,34 @@ describe('wardrobe tool handlers', () => {
       )
 
       expect(mockEquipItem).toHaveBeenCalledWith(repos, 'chat-1', 'char-1', shoes)
+      expect(result).toMatchObject({ success: true, action: 'equipped', effect: 'layered' })
+    })
+
+    it('mode: wear — single-slot leaf reports its concrete slot', async () => {
+      const shoes = makeWardrobeItem({
+        id: 'shoes-1',
+        title: 'Oxford Shoes',
+        types: ['footwear'],
+        componentItemIds: [],
+      })
+      repos.wardrobe.findById.mockImplementation(async (id: unknown) => {
+        if (id === 'shoes-1') return shoes
+        return null
+      })
+      repos.wardrobe.findByIds.mockResolvedValue([shoes])
+      repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+        top: [],
+        bottom: [],
+        footwear: ['shoes-1'],
+        accessories: [],
+      })
+
+      const result = await executeWardrobeChangeItemTool(
+        { mode: 'wear', item_id: 'shoes-1' },
+        context
+      )
+
+      expect(mockEquipItem).toHaveBeenCalledWith(repos, 'chat-1', 'char-1', shoes)
       expect(result).toMatchObject({
         success: true,
         action: 'equipped',
@@ -571,7 +678,7 @@ describe('wardrobe tool handlers', () => {
       })
     })
 
-    it('mode: equip — rejects a composite item and points at wardrobe_set_outfit', async () => {
+    it('mode: wear — rejects a composite item and points at wardrobe_set_outfit', async () => {
       const composite = makeWardrobeItem({
         id: 'rain-outfit',
         title: 'Rain Outfit',
@@ -584,7 +691,7 @@ describe('wardrobe tool handlers', () => {
       })
 
       const result = await executeWardrobeChangeItemTool(
-        { mode: 'equip', item_id: 'rain-outfit' },
+        { mode: 'wear', item_id: 'rain-outfit' },
         context
       )
 
@@ -792,7 +899,7 @@ describe('wardrobe tool handlers', () => {
       repos.wardrobe.findByCharacterId.mockResolvedValue([])
 
       const result = await executeWardrobeChangeItemTool(
-        { mode: 'equip', item_title: 'Phantom Hat' },
+        { mode: 'wear', item_title: 'Phantom Hat' },
         context
       )
 
@@ -844,6 +951,7 @@ describe('wardrobe tool handlers', () => {
         componentItemIds: [],
         appropriateness: 'casual',
         isDefault: false,
+        replace: false,
       })
       // equipItem persists the new item in every slot it covers.
       expect(mockEquipItem).toHaveBeenCalledWith(repos, 'chat-1', 'char-1', newItem)
@@ -908,6 +1016,7 @@ describe('wardrobe tool handlers', () => {
         componentItemIds: ['raincoat-1', 'jeans-1'],
         appropriateness: 'rainy weather',
         isDefault: false,
+        replace: false,
       })
       expect(result).toMatchObject({
         success: true,
@@ -968,10 +1077,11 @@ describe('wardrobe tool handlers', () => {
       })
     })
 
-    it('overrides LLM-supplied types with the union derived from components', async () => {
-      // The LLM sends `types: ['accessories']`, which is wrong for the
-      // components. The handler should ignore that and use the union of the
-      // components' types instead.
+    it('widens the component union with caller-supplied types (slot designation)', async () => {
+      // The component union is the floor; any `types` the caller lists are
+      // ADDED to it, letting a composite designate slots its components don't
+      // fill (so a replace composite can clear them). Here components cover
+      // top+bottom and the caller designates accessories too.
       const raincoat = makeWardrobeItem({
         id: 'raincoat-1',
         title: 'Raincoat',
@@ -987,7 +1097,7 @@ describe('wardrobe tool handlers', () => {
       const newComposite = makeWardrobeItem({
         id: 'rain-outfit',
         title: 'Rain Outfit',
-        types: ['top', 'bottom'],
+        types: ['top', 'bottom', 'accessories'],
         componentItemIds: ['raincoat-1', 'jeans-1'],
       })
 
@@ -1003,13 +1113,13 @@ describe('wardrobe tool handlers', () => {
         context
       )
 
-      // The persisted types reflect the component union, not the LLM input.
+      // Persisted types = union of components ∪ caller-designated slots, in
+      // canonical slot order.
       expect(repos.wardrobe.create).toHaveBeenCalledWith(
-        expect.objectContaining({ types: ['top', 'bottom'] })
+        expect.objectContaining({ types: ['top', 'bottom', 'accessories'] })
       )
       expect(result.success).toBe(true)
-      expect(result.resolved_types).toEqual(['top', 'bottom'])
-      expect(result.resolved_types).not.toContain('accessories')
+      expect(result.resolved_types).toEqual(['top', 'bottom', 'accessories'])
     })
 
     it('rejects a leaf create that supplies neither types nor components', async () => {

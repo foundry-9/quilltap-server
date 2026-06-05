@@ -19,6 +19,7 @@ import { enqueueMemoryExtractionBatch, ensureProcessorRunning } from '@/lib/back
 import { processTurnForMemory } from '@/lib/memory/memory-processor';
 import { buildTurnTranscript } from '@/lib/services/chat-message/turn-transcript';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type {
@@ -95,48 +96,72 @@ export async function handleQueueMemories(
     return badRequest('No valid cheap LLM configured. Please set a cheap LLM profile in settings.');
   }
 
-  // Walk chat history forward and enqueue one job per non-system USER message.
-  // Each job covers the turn that opens at that user message (the handler
-  // walks forward from there until the next USER to assemble the transcript).
+  // Salon chats: walk forward and enqueue one job per non-system USER
+  // message. Each job covers the turn that opens at that user message —
+  // the handler walks forward from there until the next USER to assemble
+  // the transcript.
+  //
+  // Autonomous chats: there is no USER role in history, so we enqueue one
+  // job per non-system, non-silent ASSISTANT message and pass that message
+  // ID as the dedupe anchor. Each job's transcript walks from the start of
+  // history through that anchor (matching the live autonomous trigger),
+  // and the anchor keeps each job's dedupe key distinct.
   const messages = await repos.chats.getMessages(chatId);
-  const turnOpenerIds: string[] = [];
-  for (const m of messages) {
-    if (m.type !== 'message') continue;
-    const event = m as unknown as MessageEvent;
-    if (event.role !== 'USER') continue;
-    if (event.systemSender) continue;
-    turnOpenerIds.push(event.id);
+  const isAutonomous = chat.chatType === 'autonomous';
+  const batchEntries: Array<{ turnOpenerMessageId: string | null; extractionAnchorMessageId?: string | null }> = [];
+
+  if (isAutonomous) {
+    for (const m of messages) {
+      if (m.type !== 'message') continue;
+      const event = m as unknown as MessageEvent;
+      if (event.role !== 'ASSISTANT') continue;
+      if (event.systemSender) continue;
+      if (event.isSilentMessage) continue;
+      if (!event.participantId) continue;
+      batchEntries.push({
+        turnOpenerMessageId: null,
+        extractionAnchorMessageId: event.id,
+      });
+    }
+  } else {
+    for (const m of messages) {
+      if (m.type !== 'message') continue;
+      const event = m as unknown as MessageEvent;
+      if (event.role !== 'USER') continue;
+      if (event.systemSender) continue;
+      batchEntries.push({ turnOpenerMessageId: event.id });
+    }
   }
 
-  if (turnOpenerIds.length === 0) {
-    return badRequest('No user messages found in this chat — nothing to extract memories from.');
+  if (batchEntries.length === 0) {
+    return badRequest(
+      isAutonomous
+        ? 'No assistant messages found in this chat — nothing to extract memories from.'
+        : 'No user messages found in this chat — nothing to extract memories from.',
+    );
   }
 
   logger.info('[Chats v1] Queueing per-turn memory extraction jobs', {
     chatId,
-    turnCount: turnOpenerIds.length,
+    chatType: chat.chatType ?? null,
+    turnCount: batchEntries.length,
   });
 
   const jobIds = await enqueueMemoryExtractionBatch(
     user.id,
     chatId,
     connectionProfileId,
-    turnOpenerIds,
+    batchEntries,
     { priority: 0 },
   );
 
   ensureProcessorRunning();
 
-  // Reference `chat` so the linter doesn't flag the unused param —
-  // the chat metadata isn't needed under the per-turn model but the route
-  // signature still receives it.
-  void chat;
-
   return NextResponse.json({
     success: true,
     jobCount: jobIds.length,
     chatId,
-    turnCount: turnOpenerIds.length,
+    turnCount: batchEntries.length,
   });
 }
 
@@ -221,8 +246,12 @@ export async function handleExtractMemoriesDryRun(
   }
 
   const availableProfiles = await repos.connections.findByUserId(user.id);
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
-  const isDangerousChat = chat.isDangerousChat === true;
+  // Pass the chat so an Off-duty override collapses dangerSettings to OFF, and
+  // derive the dangerous flag through the canonical accessor — otherwise an
+  // off-duty flagged chat would still reroute memory extraction to the
+  // uncensored provider, ignoring the operator's opt-out.
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
+  const isDangerousChat = isChatActiveDangerous(chat);
   const memoryExtractionLimits = await getMemoryExtractionLimits();
 
   logger.info('[Chats v1] Streaming dry-run memory extraction', {

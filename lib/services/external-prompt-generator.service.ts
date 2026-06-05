@@ -8,6 +8,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
+import { buildCharacterCacheKey } from '@/lib/llm/cache-key';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { getSafeInputLimit } from '@/lib/llm/model-context-data';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
@@ -24,8 +25,6 @@ export interface ExternalPromptRequest {
   connectionProfileId: string;
   systemPromptId: string;
   scenarioId?: string;
-  descriptionId?: string;
-  clothingRecordId?: string;
   maxTokens: number;
 }
 
@@ -71,8 +70,6 @@ export async function generateExternalPrompt(
     connectionProfileId: request.connectionProfileId,
     systemPromptId: request.systemPromptId,
     scenarioId: request.scenarioId || '(none)',
-    descriptionId: request.descriptionId || '(none)',
-    clothingRecordId: request.clothingRecordId || '(none)',
     maxTokens: request.maxTokens,
   });
 
@@ -120,26 +117,14 @@ export async function generateExternalPrompt(
   }
 
   let descriptionContent: string | undefined;
-  if (request.descriptionId) {
-    const descriptions = await repos.characters.getDescriptions(characterId);
-    const desc = descriptions.find((d: any) => d.id === request.descriptionId);
-    if (desc) {
-      // Use the most detailed available description
-      descriptionContent = desc.fullDescription || desc.completePrompt || desc.longPrompt || desc.mediumPrompt || desc.shortPrompt || undefined;
-    }
-  }
-
-  let clothingContent: string | undefined;
-  if (request.clothingRecordId) {
-    const clothingRecords = await repos.characters.getClothingRecords(characterId);
-    const clothing = clothingRecords.find((c: any) => c.id === request.clothingRecordId);
-    if (clothing) {
-      clothingContent = clothing.description ?? undefined;
-    }
+  const desc = character.physicalDescription;
+  if (desc) {
+    // Use the most detailed available description
+    descriptionContent = desc.fullDescription || desc.completePrompt || desc.longPrompt || desc.mediumPrompt || desc.shortPrompt || undefined;
   }
 
   // Build the user message with all character data
-  const userMessage = buildUserMessage(character, systemPrompt, scenarioContent, descriptionContent, clothingContent, request.maxTokens);
+  const userMessage = buildUserMessage(character, systemPrompt, scenarioContent, descriptionContent, undefined, request.maxTokens);
 
   // Estimate input tokens (rough: 1 token ≈ 4 characters)
   const estimatedInputTokens = Math.ceil((META_SYSTEM_PROMPT.length + userMessage.length) / 4);
@@ -172,6 +157,7 @@ export async function generateExternalPrompt(
         messages,
         maxTokens: request.maxTokens,
         temperature: 0.7,
+        cacheKey: buildCharacterCacheKey(characterId),
       },
       apiKey
     );

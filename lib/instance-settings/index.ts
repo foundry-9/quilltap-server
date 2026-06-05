@@ -112,10 +112,6 @@ export async function getLanternBackgroundsMountPointId(): Promise<string | null
   return readSetting(KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID);
 }
 
-export async function setLanternBackgroundsMountPointId(value: string): Promise<void> {
-  if (!value) throw new Error('lanternBackgroundsMountPointId must be a non-empty id');
-  await writeSetting(KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID, value);
-}
 
 /**
  * Read the Quilltap Uploads mount-point id. The provisioning migration writes
@@ -127,10 +123,6 @@ export async function getUserUploadsMountPointId(): Promise<string | null> {
   return readSetting(KEY_USER_UPLOADS_MOUNT_POINT_ID);
 }
 
-export async function setUserUploadsMountPointId(value: string): Promise<void> {
-  if (!value) throw new Error('userUploadsMountPointId must be a non-empty id');
-  await writeSetting(KEY_USER_UPLOADS_MOUNT_POINT_ID, value);
-}
 
 /**
  * Read the Quilltap General mount-point id. The provisioning migration writes
@@ -142,18 +134,6 @@ export async function getGeneralMountPointId(): Promise<string | null> {
   return readSetting(KEY_GENERAL_MOUNT_POINT_ID);
 }
 
-export async function setGeneralMountPointId(value: string): Promise<void> {
-  if (!value) throw new Error('generalMountPointId must be a non-empty id');
-  await writeSetting(KEY_GENERAL_MOUNT_POINT_ID, value);
-}
-
-export const InstanceSettingsKeys = {
-  memoryExtractionConcurrency: KEY_MEMORY_EXTRACTION_CONCURRENCY,
-  memoryExtractionLimits: KEY_MEMORY_EXTRACTION_LIMITS,
-  lanternBackgroundsMountPointId: KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID,
-  userUploadsMountPointId: KEY_USER_UPLOADS_MOUNT_POINT_ID,
-  generalMountPointId: KEY_GENERAL_MOUNT_POINT_ID,
-} as const;
 
 // Re-export the schema for callers that want to validate independently.
 export { MemoryExtractionLimitsSchema };

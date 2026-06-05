@@ -11,6 +11,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
+import { buildCharacterCacheKey } from '@/lib/llm/cache-key';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
@@ -182,26 +183,16 @@ export function buildCharacterContext(character: Character): string {
     }
   }
 
-  if (character.physicalDescriptions && character.physicalDescriptions.length > 0) {
-    parts.push('=== Physical Descriptions ===');
-    for (const pd of character.physicalDescriptions) {
-      parts.push(`[Physical Description: "${pd.name}" (ID: ${pd.id})]`);
-      parts.push(`Short: ${pd.shortPrompt || '(empty)'}`);
-      parts.push(`Medium: ${pd.mediumPrompt || '(empty)'}`);
-      parts.push(`Long: ${pd.longPrompt || '(empty)'}`);
-      parts.push(`Complete: ${pd.completePrompt || '(empty)'}`);
-      parts.push(`Full: ${pd.fullDescription || '(empty)'}`);
-      parts.push('');
-    }
-  }
-
-  if (character.clothingRecords && character.clothingRecords.length > 0) {
-    parts.push('=== Clothing Records ===');
-    for (const cr of character.clothingRecords) {
-      parts.push(`[Clothing Record: "${cr.name}" (ID: ${cr.id})]`);
-      parts.push(cr.description || '(empty)');
-      parts.push('');
-    }
+  if (character.physicalDescription) {
+    const pd = character.physicalDescription;
+    parts.push('=== Physical Description ===');
+    parts.push(`[Physical Description: "${pd.name}" (ID: ${pd.id})]`);
+    parts.push(`Short: ${pd.shortPrompt || '(empty)'}`);
+    parts.push(`Medium: ${pd.mediumPrompt || '(empty)'}`);
+    parts.push(`Long: ${pd.longPrompt || '(empty)'}`);
+    parts.push(`Complete: ${pd.completePrompt || '(empty)'}`);
+    parts.push(`Full: ${pd.fullDescription || '(empty)'}`);
+    parts.push('');
   }
 
   return parts.join('\n');
@@ -415,7 +406,8 @@ async function callOptimizerLLM(
   options: {
     temperature: number;
     maxTokens: number;
-  }
+  },
+  characterId?: string
 ): Promise<string> {
   const messages = [
     { role: 'system' as const, content: SYSTEM_MESSAGE },
@@ -430,6 +422,7 @@ async function callOptimizerLLM(
       messages,
       maxTokens: options.maxTokens,
       temperature: options.temperature,
+      cacheKey: buildCharacterCacheKey(characterId),
     },
     apiKey
   );
@@ -614,7 +607,8 @@ export async function runCharacterOptimizer(
       characterContext,
       memoryContext,
       getAnalysisPrompt(),
-      { temperature: 0.5, maxTokens: 8000 }
+      { temperature: 0.5, maxTokens: 8000 },
+      characterId
     );
 
     let analysis: OptimizerAnalysis;
@@ -707,6 +701,7 @@ export async function runCharacterOptimizer(
           memoryContext,
           instruction,
           { temperature: 0.7, maxTokens: 6000 },
+          characterId,
         );
       } catch (callError) {
         logger.warn('[CharacterOptimizer] Sub-step LLM call failed; continuing', {

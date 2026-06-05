@@ -78,6 +78,12 @@ export interface ChatSettings {
   autoDetectRng?: boolean
   /** Whether new chats start in composition mode by default */
   compositionModeDefault?: boolean
+  /** Whether browser spellcheck is enabled in the composer and rich-text Document Mode editor */
+  composerSpellcheck?: boolean
+  /** Master switch for user-defined word-boundary text replacements in the composer and Document Mode editor */
+  textReplacementsEnabled?: boolean
+  /** Whether the Salon auto-scrolls to the newest message when a response completes (only when already near the bottom) */
+  autoScrollOnResponseComplete?: boolean
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings?: AgentModeSettings
   /** Story backgrounds settings for AI-generated chat backgrounds */
@@ -86,8 +92,66 @@ export interface ChatSettings {
   dangerousContentSettings?: DangerousContentSettings
   /** Default IANA timezone for timestamp formatting */
   timezone?: string | null
+  /** 4.6 Private Character Rooms — user-level defaults */
+  autonomousRoomSettings?: AutonomousRoomSettings
+  /** Aurora's Core whisper — global defaults */
+  coreWhisper?: CoreWhisperSettings
+  /** Thinking / reasoning display — global defaults. DISPLAY ONLY. */
+  thinkingDisplay?: ThinkingDisplaySettings
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * Thinking / reasoning display — global defaults for showing reasoning models'
+ * chain-of-thought in the Salon. Per-chat override (`showThinking`, tri-state)
+ * lives on the chat row. DISPLAY ONLY.
+ */
+export interface ThinkingDisplaySettings {
+  /** Whether new chats show captured thinking by default. */
+  defaultVisible?: boolean
+  /** Whether the thinking block starts collapsed when shown. */
+  defaultCollapsed?: boolean
+}
+
+export const DEFAULT_THINKING_DISPLAY_SETTINGS: ThinkingDisplaySettings = {
+  defaultVisible: true,
+  defaultCollapsed: true,
+}
+
+/**
+ * Aurora's Core whisper — global defaults. Per-chat and per-character overrides
+ * live on chat / character rows. Precedence: chat → character → global.
+ */
+export interface CoreWhisperSettings {
+  enabled?: boolean
+  interval?: number
+  silenceThreshold?: number
+  packetTokenBudget?: number
+  fireOnContextTransition?: boolean
+}
+
+export const DEFAULT_CORE_WHISPER_SETTINGS: CoreWhisperSettings = {
+  enabled: true,
+  interval: 12,
+  silenceThreshold: 3,
+  packetTokenBudget: 4096,
+  fireOnContextTransition: true,
+}
+
+/**
+ * 4.6 Private Character Rooms — user-level defaults applied across the
+ * householder's autonomous rooms. Per-room overrides live on the chat row.
+ */
+export interface AutonomousRoomSettings {
+  /** Daily cumulative-token cap for all autonomous-room turns (instance-local-midnight rollover). null = no cap. */
+  dailyTokenBudget?: number | null
+  /** Default catch-up freshness window for scheduled runs (ms). */
+  defaultFreshnessWindowMs?: number
+  /** Default visibility for new autonomous rooms in the Salon chat list. */
+  visibilityDefault?: 'owner_only' | 'household' | 'open'
+  /** User-level ceiling for destructive-tool exposure in autonomous rooms. */
+  destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
 }
 
 export interface ApiKey {

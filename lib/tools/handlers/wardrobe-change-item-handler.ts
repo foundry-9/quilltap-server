@@ -4,14 +4,18 @@
  * Dispatches on `mode` to the equip primitives in
  * `lib/wardrobe/outfit-displacement.ts`:
  *
- *   - `equip`            → `equipItem(item)`
+ *   - `wear`             → `equipItem(item)`   (honors the item's replace flag)
+ *   - `replace`          → `replaceItem(item)` (force-swap the covered slots)
  *   - `add_to_slot`      → `addToSlot(slot, item)`
  *   - `remove_from_slot` → `removeFromSlot(slot, item_id?)`
  *   - `clear_slot`       → `removeFromSlot(slot)`  (no itemId)
  *
- * Composite items (`componentItemIds` non-empty) are rejected with a pointer
- * to `wardrobe_set_outfit`. For `clear_slot` and item-less
- * `remove_from_slot`, no item is named so the composite check is skipped.
+ * Each result reports an `effect` (`layered` / `replaced` / `removed` /
+ * `cleared`) plus an `effect_summary` sentence so the model knows whether
+ * existing items survived. Composite items (`componentItemIds` non-empty) are
+ * rejected with a pointer to `wardrobe_set_outfit`. For `clear_slot` and
+ * item-less `remove_from_slot`, no item is named so the composite check is
+ * skipped.
  */
 
 import { logger } from '@/lib/logger';
@@ -20,13 +24,15 @@ import type { WardrobeChangeItemToolInput, WardrobeChangeItemToolOutput } from '
 import { validateWardrobeChangeItemInput } from '../wardrobe-change-item-tool';
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { equipItem, addToSlot, removeFromSlot } from '@/lib/wardrobe/outfit-displacement';
+import { equipItem, replaceItem, addToSlot, removeFromSlot } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import {
   buildWardrobeCoverageSummaryFromState,
+  describeWardrobeEffect,
   emptyEquippedState,
   loadCurrentWardrobeState,
   recordPendingWardrobeAnnouncement,
+  type WardrobeEffect,
 } from './wardrobe-handler-shared';
 
 export interface WardrobeChangeItemToolContext {
@@ -66,6 +72,8 @@ function buildFailureResponse(input: unknown, error: string): WardrobeChangeItem
   return {
     success: false,
     action: 'removed',
+    effect: 'removed',
+    effect_summary: '',
     slot,
     item: null,
     current_state: emptyState(),
@@ -112,6 +120,17 @@ export async function executeWardrobeChangeItemTool(
 ): Promise<WardrobeChangeItemToolOutput> {
   const repos = getRepositories();
 
+  // Back-compat: the `equip` mode was renamed to `wear` (which now honors the
+  // item's replace flag). Accept the old name silently from any caller still
+  // emitting it.
+  if (
+    input &&
+    typeof input === 'object' &&
+    (input as Record<string, unknown>).mode === 'equip'
+  ) {
+    (input as Record<string, unknown>).mode = 'wear';
+  }
+
   try {
     if (!validateWardrobeChangeItemInput(input)) {
       logger.warn('Wardrobe change item tool validation failed', {
@@ -123,9 +142,9 @@ export async function executeWardrobeChangeItemTool(
       });
       return buildFailureResponse(
         input,
-        'Invalid input: mode is required (equip / add_to_slot / remove_from_slot / clear_slot). ' +
+        'Invalid input: mode is required (wear / replace / add_to_slot / remove_from_slot / clear_slot). ' +
           'add_to_slot/remove_from_slot/clear_slot also require a valid slot. ' +
-          'equip and add_to_slot require an item_id or item_title.',
+          'wear, replace, and add_to_slot require an item_id or item_title.',
       );
     }
 
@@ -138,10 +157,12 @@ export async function executeWardrobeChangeItemTool(
     }
 
     let action: 'equipped' | 'removed';
+    let effect: WardrobeEffect;
+    let effectSlots: string[];
     let summarySlot: string;
     let summaryItem: { item_id: string; title: string } | null = null;
 
-    if (mode === 'equip') {
+    if (mode === 'wear' || mode === 'replace') {
       const item = await resolveWardrobeItem(repos, context.characterId, item_id, item_title);
       if (!item) {
         throw new WardrobeChangeItemError(
@@ -151,15 +172,24 @@ export async function executeWardrobeChangeItemTool(
       }
       if (item.archivedAt) {
         throw new WardrobeChangeItemError(
-          `Item "${item.title}" is archived and cannot be equipped`,
+          `Item "${item.title}" is archived and cannot be worn`,
           'VALIDATION_ERROR',
         );
       }
       assertLeafItem(item);
 
-      await equipItem(repos, context.chatId, context.characterId, item);
+      // `wear` honors the item's replace flag (leaf garments are stored
+      // replace:false, so wearing them layers); `replace` forces a swap.
+      if (mode === 'replace') {
+        await replaceItem(repos, context.chatId, context.characterId, item);
+        effect = 'replaced';
+      } else {
+        await equipItem(repos, context.chatId, context.characterId, item);
+        effect = item.replace ? 'replaced' : 'layered';
+      }
+      effectSlots = item.types;
 
-      logger.info('Wardrobe item equipped (replace)', {
+      logger.info('Wardrobe item worn', {
         context: 'wardrobe-change-item-handler',
         userId: context.userId,
         chatId: context.chatId,
@@ -167,6 +197,8 @@ export async function executeWardrobeChangeItemTool(
         itemId: item.id,
         itemTitle: item.title,
         slotsAffected: item.types,
+        mode,
+        effect,
       });
 
       action = 'equipped';
@@ -213,6 +245,8 @@ export async function executeWardrobeChangeItemTool(
       });
 
       action = 'equipped';
+      effect = 'layered';
+      effectSlots = [slot];
       summarySlot = slot;
       summaryItem = { item_id: item.id, title: item.title };
     } else if (mode === 'remove_from_slot') {
@@ -250,6 +284,8 @@ export async function executeWardrobeChangeItemTool(
       });
 
       action = 'removed';
+      effect = item ? 'removed' : 'cleared';
+      effectSlots = [slot];
       summarySlot = slot;
       summaryItem = item ? { item_id: item.id, title: item.title } : null;
     } else {
@@ -272,8 +308,12 @@ export async function executeWardrobeChangeItemTool(
       });
 
       action = 'removed';
+      effect = 'cleared';
+      effectSlots = [slot];
       summarySlot = slot;
     }
+
+    const effectSummary = describeWardrobeEffect(effect, effectSlots, summaryItem?.title);
 
     const currentState = await loadCurrentWardrobeState(repos, context.chatId, context.characterId);
     const coverageSummary = await buildWardrobeCoverageSummaryFromState(repos, context.characterId, currentState);
@@ -301,6 +341,8 @@ export async function executeWardrobeChangeItemTool(
     return {
       success: true,
       action,
+      effect,
+      effect_summary: effectSummary,
       slot: summarySlot,
       item: summaryItem,
       current_state: currentState,
@@ -343,11 +385,13 @@ export function formatWardrobeChangeItemResults(output: WardrobeChangeItemToolOu
 
   const lines: string[] = [];
 
-  if (output.action === 'equipped' && output.item) {
+  if (output.effect_summary) {
+    lines.push(output.effect_summary);
+  } else if (output.action === 'equipped' && output.item) {
     if (output.slot === 'inferred') {
-      lines.push(`Equipped "${output.item.title}".`);
+      lines.push(`Wore "${output.item.title}".`);
     } else {
-      lines.push(`Equipped "${output.item.title}" in ${output.slot} slot.`);
+      lines.push(`Wore "${output.item.title}" in ${output.slot} slot.`);
     }
   } else if (output.action === 'removed' && output.item) {
     lines.push(`Removed "${output.item.title}" from ${output.slot} slot.`);

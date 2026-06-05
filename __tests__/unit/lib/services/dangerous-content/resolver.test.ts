@@ -4,6 +4,7 @@
 
 import {
   DEFAULT_DANGEROUS_CONTENT_SETTINGS,
+  OFF_DUTY_DANGEROUS_CONTENT_SETTINGS,
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service'
 import type { ChatSettings } from '@/lib/schemas/types'
@@ -127,6 +128,58 @@ describe('resolveDangerousContentSettings', () => {
       expect(result).toHaveProperty('settings')
       expect(result).toHaveProperty('source')
       expect(Object.keys(result).length).toBe(2)
+    })
+  })
+
+  describe('per-chat off-duty override', () => {
+    const customSettings: DangerousContentSettings = {
+      mode: 'AUTO_ROUTE',
+      threshold: 0.7,
+      scanTextChat: true,
+      scanImagePrompts: true,
+      scanImageGeneration: true,
+      displayMode: 'SHOW',
+      showWarningBadges: true,
+    }
+    const globalSettings: ChatSettings = {
+      id: 'test',
+      tokenDisplay: 'minimal',
+      contextCompression: false,
+      memoryCascade: false,
+      showTimestamps: false,
+      agentMode: false,
+      dangerousContentSettings: customSettings,
+    }
+
+    it('returns OFF_DUTY settings and source="chat-off-duty" when chat is Off-duty', () => {
+      const result = resolveDangerousContentSettings(globalSettings, { conciergeOverride: 'OFF' })
+      expect(result.settings).toEqual(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS)
+      expect(result.source).toBe('chat-off-duty')
+    })
+
+    it('respects global settings when chat override is null', () => {
+      const result = resolveDangerousContentSettings(globalSettings, { conciergeOverride: null })
+      expect(result.settings).toEqual(customSettings)
+      expect(result.source).toBe('global')
+    })
+
+    it('respects global settings when chat is undefined', () => {
+      const result = resolveDangerousContentSettings(globalSettings, undefined)
+      expect(result.settings).toEqual(customSettings)
+      expect(result.source).toBe('global')
+    })
+
+    it('still returns Off-duty even if no global settings were configured', () => {
+      const result = resolveDangerousContentSettings(null, { conciergeOverride: 'OFF' })
+      expect(result.settings).toEqual(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS)
+      expect(result.source).toBe('chat-off-duty')
+    })
+
+    it('OFF_DUTY settings have mode OFF and all scans disabled', () => {
+      expect(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS.mode).toBe('OFF')
+      expect(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS.scanTextChat).toBe(false)
+      expect(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS.scanImagePrompts).toBe(false)
+      expect(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS.scanImageGeneration).toBe(false)
     })
   })
 })

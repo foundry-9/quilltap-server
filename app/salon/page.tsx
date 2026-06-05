@@ -6,6 +6,9 @@ import useSWR from 'swr'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
 import { ChatCard } from '@/components/chat/ChatCard'
+import { showConfirmation } from '@/lib/alert'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import {
   confirmAndDeleteChat,
   transformSalonChatToCardData,
@@ -14,15 +17,39 @@ import {
 
 type Chat = SalonChatShape
 
+interface ChatSettingsResponse {
+  autonomousRoomSettings?: {
+    visibilityDefault?: 'owner_only' | 'household' | 'open'
+  }
+}
+
+interface AutonomousRoomsListResponse {
+  rooms: Array<{ id: string }>
+}
+
 export default function ChatsPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
-  const { shouldHideByIds, hideDangerousChats } = useQuickHide()
+  const { shouldHideByIds, hideDangerousChats, includeAutonomousRooms } = useQuickHide()
 
-  const { data: chatsData, isLoading: chatsLoading, error: chatsError, mutate: mutateChats } = useSWR<{ chats: Chat[] }>('/api/v1/chats')
+  const { data: chatSettings } = useSWR<ChatSettingsResponse>('/api/v1/settings/chat')
+  const visibilityDefault = chatSettings?.autonomousRoomSettings?.visibilityDefault ?? 'owner_only'
+  const wantsAutonomousByDefault = visibilityDefault !== 'owner_only'
+  const effectiveIncludeAutonomous = wantsAutonomousByDefault || includeAutonomousRooms
+  const chatsKey = effectiveIncludeAutonomous ? '/api/v1/chats?includeAutonomous=true' : '/api/v1/chats'
+
+  const { data: chatsData, isLoading: chatsLoading, error: chatsError, mutate: mutateChats } = useSWR<{ chats: Chat[] }>(chatsKey)
   const { data: charactersData, isLoading: charactersLoading } = useSWR<{ characters: Array<{ id: string; name: string; title?: string | null }> }>('/api/v1/characters')
   const { data: profilesData, isLoading: profilesLoading } = useSWR<{ profiles: Array<{ id: string; name: string }> }>('/api/v1/connection-profiles')
+
+  // Whether the user actually owns any autonomous rooms — used to decide
+  // whether to surface the "hidden" hint when the toggle is off. Cheap GET;
+  // the management endpoint is already user-scoped.
+  const { data: autonomousRoomsData } = useSWR<AutonomousRoomsListResponse>(
+    effectiveIncludeAutonomous ? null : '/api/v1/system/autonomous-rooms'
+  )
+  const hasHiddenAutonomous = !effectiveIncludeAutonomous && (autonomousRoomsData?.rooms?.length ?? 0) > 0
 
   const chats = useMemo(() => chatsData?.chats ?? [], [chatsData])
   const characters = useMemo(
@@ -81,6 +108,53 @@ export default function ChatsPage() {
     }
   }
 
+  const handleReextractMemories = useCallback(async (chatId: string) => {
+    const confirmed = await showConfirmation(
+      'This will delete all existing memories from this chat and re-extract them from the conversation. Are you sure?'
+    )
+    if (!confirmed) return
+
+    try {
+      await fetch(`/api/v1/memories?chatId=${chatId}`, { method: 'DELETE' })
+
+      const res = await fetch(`/api/v1/chats/${chatId}?action=queue-memories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        showSuccessToast(`Queued ${data.jobCount} memory extraction jobs`)
+        notifyQueueChange()
+        await mutateChats()
+      } else {
+        showErrorToast(data.error || 'Failed to queue memory extraction')
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to re-extract memories')
+    }
+  }, [mutateChats])
+
+  const handleRenderConversation = useCallback(async (chatId: string) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=render-conversation`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        showSuccessToast('Conversation rendering queued')
+        notifyQueueChange()
+        await mutateChats()
+      } else {
+        showErrorToast(data.error || 'Failed to queue conversation rendering')
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to render conversation')
+    }
+  }, [mutateChats])
+
   /**
    * Handle import completion from the new wizard
    */
@@ -130,6 +204,13 @@ export default function ChatsPage() {
             Import SillyTavern Chat
           </button>
           <Link
+            href="/salon/new?autonomous=1"
+            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Create an autonomous character-to-character room"
+          >
+            New Autonomous Room
+          </Link>
+          <Link
             href="/salon/new"
             className="qt-button chat-toolbar__button chat-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -137,6 +218,12 @@ export default function ChatsPage() {
           </Link>
         </div>
       </div>
+
+      {hasHiddenAutonomous && (
+        <div className="mb-6 rounded-lg border qt-border-default qt-bg-muted/40 px-4 py-3 qt-text-secondary qt-body-sm">
+          You have autonomous rooms hidden by your visibility default. Toggle <em>Show Autonomous Rooms</em> in the user menu to include them.
+        </div>
+      )}
 
       {visibleChats.length === 0 ? (
         <div className="chat-empty-state mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">
@@ -158,6 +245,8 @@ export default function ChatsPage() {
               showProject={true}
               actionType="delete"
               onDelete={deleteChat}
+              onReextractMemories={handleReextractMemories}
+              onRenderConversation={handleRenderConversation}
               highlighted={highlightedChatId === chat.id}
               cardRef={highlightedChatId === chat.id ? importedChatRef : undefined}
             />

@@ -166,12 +166,26 @@ jest.mock('@/lib/database/repositories', () => ({
   getRepositories: jest.fn(() => mockRepos),
 }));
 
+// The handler imports `getRepositories` from the factory, not the raw module.
+// Mock the factory directly so the proxy-routing branch can't sneak past the
+// raw-module mock and hit a real repository.
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: jest.fn(() => mockRepos),
+}));
+
 import { executeDocEditTool, DOC_EDIT_TOOL_NAMES } from '@/lib/tools/handlers/doc-edit-handler';
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
 import { getImageById, readImageBuffer } from '@/lib/images-v2';
 import { chunkAndInsertExtractedText } from '@/lib/photos/chunk-extracted-text';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import { searchDocumentChunks } from '@/lib/mount-index/document-search';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
+
+// The stored image bytes saveImageToAlbum reads back. Their real hash differs
+// from the FileEntry's upload-time input sha ('a'.repeat(64)) — dedup and the
+// recorded sha key off the bytes hash, not the input hash.
+const IMAGE_BYTES = Buffer.from('imagebytes');
+const IMAGE_BYTES_SHA = sha256OfBuffer(IMAGE_BYTES);
 
 const mockGetCharacterVaultStore = getCharacterVaultStore as jest.MockedFunction<typeof getCharacterVaultStore>;
 const mockGetImageById = getImageById as jest.MockedFunction<typeof getImageById>;
@@ -269,7 +283,7 @@ describe('photo album handlers', () => {
       file: { id: 'file-row-1', sha256: 'a'.repeat(64), fileSizeBytes: 1234, fileType: 'blob', source: 'database' },
       blobId: 'blob-1',
     });
-    mockReadImageBuffer.mockResolvedValue(Buffer.from('imagebytes'));
+    mockReadImageBuffer.mockResolvedValue(IMAGE_BYTES);
   });
 
   it('registers keep_image, list_images, attach_image in DOC_EDIT_TOOL_NAMES', () => {
@@ -293,7 +307,7 @@ describe('photo album handlers', () => {
       const linkArgs = mockRepos.docMountFileLinks.linkBlobContent.mock.calls[0][0];
       expect(linkArgs.mountPointId).toBe('mp-friday');
       expect(linkArgs.relativePath).toMatch(/^photos\//);
-      expect(linkArgs.sha256).toBe('a'.repeat(64));
+      expect(linkArgs.sha256).toBe(IMAGE_BYTES_SHA);
       expect(linkArgs.extractedText).toContain('## Original prompt');
       expect(linkArgs.extractedText).toContain('Friday saved this image at');
       expect(linkArgs.extractedText).toContain('the night we built the sunroom');
@@ -333,7 +347,7 @@ describe('photo album handlers', () => {
       mockRepos.docMountFileLinks.findByMountPointId.mockResolvedValue([
         buildLink({
           relativePath: 'photos/old.webp',
-          sha256: 'a'.repeat(64),
+          sha256: IMAGE_BYTES_SHA,
           createdAt: '2026-05-13T00:00:00.000Z',
         }),
       ]);

@@ -2,6 +2,11 @@
 
 All notable changes to this package will be documented in this file.
 
+## [2.0.10] - 2026-06-04
+
+### Added
+- Component variable reference and bundle `styles.css` template now document the newly tokenized controls: `--qt-select-arrow` (full `url()` chevron), `--qt-checkbox-*`, and `--qt-radio-*`, plus the previously-omitted `--qt-input-bg/fg/placeholder/focus-ring`. Scaffolded themes now learn that checkboxes, radios, and the select chevron are overridable.
+
 ## [2.0.0] - 2026-03-06
 
 ### Changed

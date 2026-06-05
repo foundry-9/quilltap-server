@@ -44,6 +44,8 @@ jest.mock('@/lib/services/llm-logging.service', () => ({
 jest.mock('@/lib/plugins/moderation-provider-registry', () => ({
   moderationProviderRegistry: {
     getDefaultProvider: jest.fn().mockReturnValue(null),
+    isInitialized: jest.fn().mockReturnValue(true),
+    getAllProviders: jest.fn().mockReturnValue([]),
   },
 }))
 

@@ -168,6 +168,35 @@ export const MemoryExtractionLimitsSchema = z.object({
 export type MemoryExtractionLimits = z.infer<typeof MemoryExtractionLimitsSchema>;
 
 // ============================================================================
+// AUTONOMOUS ROOM SETTINGS (4.6 Private Character Rooms)
+// ============================================================================
+
+export const AutonomousRoomVisibilityDefaultEnum = z.enum(['owner_only', 'household', 'open']);
+export type AutonomousRoomVisibilityDefault = z.infer<typeof AutonomousRoomVisibilityDefaultEnum>;
+
+export const AutonomousRoomDestructiveToolPolicyEnum = z.enum(['always_refuse', 'opt_in_per_room']);
+export type AutonomousRoomDestructiveToolPolicy = z.infer<typeof AutonomousRoomDestructiveToolPolicyEnum>;
+
+/**
+ * User-level defaults that govern every autonomous room owned by the user.
+ *  - dailyTokenBudget: daily cap on cumulative tokens spent by autonomous-room
+ *    turns for this user, evaluated at instance-local midnight (pilot: 1,000,000).
+ *    null = no daily cap.
+ *  - defaultFreshnessWindowMs: per-room override falls back to this. 12h default.
+ *  - visibilityDefault: applied at room creation; per-room override on chats.runVisibility.
+ *  - destructiveToolPolicy: 'always_refuse' is a ceiling — overrides any permissive
+ *    per-room runDestructiveToolsAllowed flag. 'opt_in_per_room' honors the per-room flag.
+ */
+export const AutonomousRoomSettingsSchema = z.object({
+  dailyTokenBudget: z.number().int().positive().nullable().default(null),
+  defaultFreshnessWindowMs: z.number().int().positive().default(12 * 60 * 60 * 1000),
+  visibilityDefault: AutonomousRoomVisibilityDefaultEnum.default('owner_only'),
+  destructiveToolPolicy: AutonomousRoomDestructiveToolPolicyEnum.default('opt_in_per_room'),
+});
+
+export type AutonomousRoomSettings = z.infer<typeof AutonomousRoomSettingsSchema>;
+
+// ============================================================================
 // TOKEN DISPLAY SETTINGS
 // ============================================================================
 
@@ -261,6 +290,50 @@ export const AgentModeSettingsSchema = z.object({
 export type AgentModeSettings = z.infer<typeof AgentModeSettingsSchema>;
 
 // ============================================================================
+// CORE WHISPER SETTINGS (Aurora)
+// ============================================================================
+
+/**
+ * Aurora's Core whisper — global defaults for the periodic re-offering of each
+ * character's own `Core/` vault folder. Per-chat and per-character overrides
+ * live on the `chats` and `characters` tables respectively; resolution
+ * precedence is chat → character → global.
+ */
+export const CoreWhisperSettingsSchema = z.object({
+  /** Master switch. When false, no Core whispers fire anywhere. Default: true. */
+  enabled: z.boolean().default(true),
+  /** Assistant turns between periodic whispers for the same character. Default: 12. */
+  interval: z.number().int().min(3).max(50).default(12),
+  /** Whisper fires when this many consecutive visible turns by others precede the character's next turn. Default: 3. */
+  silenceThreshold: z.number().int().min(1).max(20).default(3),
+  /** Soft warning threshold (token estimate) on assembled Core packets. No truncation; an oversized packet logs a refactoring hint. Default: 4096. */
+  packetTokenBudget: z.number().int().positive().default(4096),
+  /** Fire the whisper after major context transitions (rolling-summary fold, transparency-affecting setting change). Default: true. */
+  fireOnContextTransition: z.boolean().default(true),
+});
+
+export type CoreWhisperSettings = z.infer<typeof CoreWhisperSettingsSchema>;
+
+// ============================================================================
+// THINKING / REASONING DISPLAY SETTINGS
+// ============================================================================
+
+/**
+ * Global defaults for displaying reasoning models' chain-of-thought ("thinking")
+ * in the Salon. Per-chat overrides live on the `chats` table as the tri-state
+ * `showThinking` (NULL = inherit `defaultVisible`). DISPLAY ONLY — these settings
+ * never affect whether reasoning is captured or stored, only whether it is shown.
+ */
+export const ThinkingDisplaySettingsSchema = z.object({
+  /** Whether new chats show captured thinking by default. Default: true. */
+  defaultVisible: z.boolean().default(true),
+  /** Whether the thinking block starts collapsed when shown. Default: true. */
+  defaultCollapsed: z.boolean().default(true),
+});
+
+export type ThinkingDisplaySettings = z.infer<typeof ThinkingDisplaySettingsSchema>;
+
+// ============================================================================
 // STORY BACKGROUNDS SETTINGS
 // ============================================================================
 
@@ -335,6 +408,13 @@ export const ChatSettingsSchema = z.object({
     softStartFraction: 0.7,
     softFloor: 0.7,
   }),
+  /** 4.6 Private Character Rooms — user-level defaults for autonomous rooms */
+  autonomousRoomSettings: AutonomousRoomSettingsSchema.default({
+    dailyTokenBudget: null,
+    defaultFreshnessWindowMs: 12 * 60 * 60 * 1000,
+    visibilityDefault: 'owner_only',
+    destructiveToolPolicy: 'opt_in_per_room',
+  }),
   /** Token display settings for showing usage and costs */
   tokenDisplaySettings: TokenDisplaySettingsSchema.default({
     showPerMessageTokens: false,
@@ -360,10 +440,29 @@ export const ChatSettingsSchema = z.object({
   autoDetectRng: z.boolean().default(true),
   /** Whether new chats start in composition mode (Enter = newline, Ctrl/Cmd+Enter = submit) by default */
   compositionModeDefault: z.boolean().default(false),
+  /** Whether browser spellcheck is enabled in the Salon composer and Document Mode rich editor (default: true) */
+  composerSpellcheck: z.boolean().default(true),
+  /** Master switch for user-defined word-boundary text replacements in the Salon composer and Document Mode rich editor (default: true). Rule list lives in the text_replacement_rules table. */
+  textReplacementsEnabled: z.boolean().default(true),
+  /** Whether the Salon scrolls to the newest message when an assistant reply finishes streaming or a new message arrives. Only scrolls when the reader is already near the bottom. Default off so long replies don't yank the reader away from where they're reading. */
+  autoScrollOnResponseComplete: z.boolean().default(false),
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings: AgentModeSettingsSchema.default({
     maxTurns: 10,
     defaultEnabled: false,
+  }),
+  /** Aurora's Core whisper — global defaults for re-offering each character's own `Core/` vault folder before their next turn. */
+  coreWhisper: CoreWhisperSettingsSchema.default({
+    enabled: true,
+    interval: 12,
+    silenceThreshold: 3,
+    packetTokenBudget: 4096,
+    fireOnContextTransition: true,
+  }),
+  /** Thinking / reasoning display — global defaults for showing thinking models' chain-of-thought in the Salon. */
+  thinkingDisplay: ThinkingDisplaySettingsSchema.default({
+    defaultVisible: true,
+    defaultCollapsed: true,
   }),
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings: StoryBackgroundsSettingsSchema.default({

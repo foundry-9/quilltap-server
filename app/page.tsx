@@ -81,7 +81,6 @@ export default async function Home() {
       character: p.character ? {
         id: p.character.id,
         name: p.character.name,
-        avatarUrl: p.character.avatarUrl || undefined,
         defaultImageId: p.character.defaultImageId || undefined,
         defaultImage: p.character.defaultImage ? {
           id: p.character.defaultImage.id,
@@ -218,7 +217,6 @@ export default async function Home() {
         id: char.id,
         name: char.name,
         title: char.title || null,
-        avatarUrl: char.avatarUrl || null,
         defaultImageId: defaultImage?.id ?? null,
         defaultImage,
         tags: char.tags || [],

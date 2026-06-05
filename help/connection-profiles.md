@@ -208,6 +208,21 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - Excellent long-context support
 - Temperature: 0-1
 - Strong at reasoning and complex tasks
+- **Enable Prompt Caching** — invites Anthropic to mark the steady portions of your prompt as a cache breakpoint. On the next call within the cache's lifetime, those portions are charged at a steep discount instead of full freight. Worth the indulgence on long-running chats where the system prompt and tools repeat verbatim turn after turn.
+- **Cache Strategy** *(visible only when Prompt Caching is enabled)* — *System message only* caches just the persona/tools header; *System + tools + conversation* (recommended) extends the breakpoint deeper into the conversation so the savings compound across turns.
+- **Cache Duration** *(visible only when Prompt Caching is enabled)* — five minutes is the default and the cheapest to write; one hour costs more upfront but pays off when a chat sprawls past the five-minute window. Pick the longer setting for slow-and-deliberate writing sessions; leave it at five minutes for everyday chatting.
+
+### DeepSeek
+
+- DeepSeek's V4 family with native function calling and a 1M-token context window
+- Temperature: 0-2 (default 1)
+- **Thinking Mode** — toggles DeepSeek's extended reasoning. *Enabled* lets the model deliberate before answering, at the cost of latency; *Disabled* forces a direct reply. While thinking is enabled DeepSeek ignores `temperature`, `top_p`, and the frequency/presence penalties, so Quilltap quietly omits them from the wire to keep the logs tidy.
+- **Reasoning Effort** — DeepSeek's reasoning scale, *High* or *Max*. Only effective with thinking enabled; the lower OpenAI-style values (minimal / low / medium) fold up to *High* on DeepSeek's side.
+
+### Z.AI (GLM)
+
+- The GLM family — `glm-4.6`, the `glm-4.5` series, the vision-capable `glm-4.6v`/`glm-4.5v` models, and the newer `glm-5.x` line — with native function calling, web search, and CogView image generation
+- **Thinking Mode** — the GLM hybrid-reasoning models deliberate by default, so their chain-of-thought streams into the Salon's thinking fold (display only — it is never fed back to any model) with no prompting at all. Set this to *Disabled* should you want a plain reply and no fold; *Enabled* keeps the working on; and *(model default)* defers to Z.AI, which at present means enabled. With thinking off, the fold simply never appears, however hard the model may be working behind the curtain.
 
 ### Google (Gemini)
 
@@ -215,6 +230,13 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - Good for vision tasks
 - Competitive pricing
 - Supports real-time APIs
+
+### OpenRouter
+
+- Single account, hundreds of models — useful as a backstop when first-party access lapses
+- **Enable Zero Data Retention (ZDR)** — instructs OpenRouter to route only through providers that promise not to store or log your prompts. Worth ticking for sensitive writing.
+- **Use Custom Model ID** — when ticked, the *Model* field becomes a free-text input so you can supply an obscure model identifier that hasn't yet appeared in OpenRouter's fetched list. Untick it to return to the model selector.
+- **Fallback Models** — pick up to two models OpenRouter will fall back to if the primary fails (rate-limited, down for maintenance, etc.). Available only after *Fetch Models* has populated the list.
 
 ### Local Providers (Ollama)
 
@@ -281,6 +303,21 @@ This is rather like flipping the main breaker in a fine manor house: it matters 
 Profiles with tool use disabled display a **No Tools** badge on their profile card. When you open the Tool Settings dialog in a chat using such a profile, a notice appears explaining that tools are overridden at the profile level.
 
 To re-enable tools, simply check the box again. Per-chat and per-project tool settings will resume their normal effect immediately.
+
+## Tool Format
+
+When tool use is allowed, the **Tool format** selector beneath the checkbox decides *how* a tool call travels between Quilltap and your model. Different models, you see, have been raised in different households and each has its own customs for the dinner table.
+
+There are four settings:
+
+- **Auto** (recommended) — Quilltap glances at the model's pedigree and selects accordingly: native function-calling for the well-bred services (OpenAI, recent Anthropic and Gemini), and the Simple JSON dialect for the more rustic establishments.
+- **Native function calling** — force the provider's own structured tool protocol. Excellent when supported; rather a disaster when not, in which case Quilltap politely falls back to Simple JSON anyway.
+- **Simple JSON** — emit tool calls inside a `<tool_call>{…}</tool_call>` block, paired with a provider-level stop sequence that hard-cuts the model after the closing tag. This is the modern pseudo-tool surface and the post-flip default for non-native models.
+- **Text-block (legacy)** — the older `[[TOOL ...]]content[[/TOOL]]` dialect. Kept for compatibility while the household migrates; you should rarely need to choose it on purpose.
+
+The Simple JSON surface was designed for smaller and local models that lack native function calling but still need to use Quilltap's tools (search, image generation, the wardrobe, and so on). Pairing the familiar JSON shape with a hard stop sequence prevents the most embarrassing failure mode of pseudo-tooling — the model emitting a perfectly valid tool call and then continuing on to invent the result it imagines the tool would have produced.
+
+When in doubt, leave the setting on **Auto**. The keeper of the keys can always rearrange the silverware later.
 
 ## Supports Image Attachments
 

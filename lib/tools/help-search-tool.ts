@@ -6,13 +6,37 @@
  * configuration help, and usage instructions to better assist users.
  */
 
+import { z } from 'zod'
+import { zodToOpenAISchema } from './zod-to-openai-schema'
+
+/**
+ * Zod schema for the help search tool's input.
+ */
+export const helpSearchToolInputSchema = z.object({
+  query: z
+    .string()
+    .min(1)
+    .max(500)
+    .refine((val) => val.trim().length > 0, {
+      message: 'query cannot be empty or whitespace-only',
+    })
+    .describe(
+      'What to search for in the help documentation. Be specific about the feature, setting, or topic. Examples: "how to configure embedding profiles", "image generation settings", "memory search", "project files"'
+    ),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .default(3)
+    .describe('Maximum number of help documents to retrieve. Default is 3.')
+    .optional(),
+})
+
 /**
  * Input parameters for the help search tool
  */
-export interface HelpSearchToolInput {
-  query: string
-  limit?: number
-}
+export type HelpSearchToolInput = z.infer<typeof helpSearchToolInputSchema>
 
 /**
  * A single help search result
@@ -46,26 +70,7 @@ export const helpSearchToolDefinition = {
     name: 'help_search',
     description:
       'Search Quilltap help documentation for features, settings, configuration, or usage guidance. Use this when the user asks about how to use Quilltap, configure settings, troubleshoot issues, or understand features. This helps you provide accurate documentation-based answers.',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description:
-            'What to search for in the help documentation. Be specific about the feature, setting, or topic. Examples: "how to configure embedding profiles", "image generation settings", "memory search", "project files"',
-          minLength: 1,
-          maxLength: 500,
-        },
-        limit: {
-          type: 'integer',
-          minimum: 1,
-          maximum: 10,
-          description: 'Maximum number of help documents to retrieve. Default is 3.',
-          default: 3,
-        },
-      },
-      required: ['query'],
-    },
+    parameters: zodToOpenAISchema(helpSearchToolInputSchema),
   },
 }
 
@@ -75,29 +80,5 @@ export const helpSearchToolDefinition = {
 export function validateHelpSearchInput(
   input: unknown
 ): input is HelpSearchToolInput {
-  if (typeof input !== 'object' || input === null) {
-    return false
-  }
-
-  const obj = input as Record<string, unknown>
-
-  // query is required
-  if (typeof obj.query !== 'string' || obj.query.trim().length === 0) {
-    return false
-  }
-
-  // query max length
-  if (obj.query.length > 500) {
-    return false
-  }
-
-  // Optional limit
-  if (obj.limit !== undefined) {
-    const limit = Number(obj.limit)
-    if (!Number.isInteger(limit) || limit < 1 || limit > 10) {
-      return false
-    }
-  }
-
-  return true
+  return helpSearchToolInputSchema.safeParse(input).success
 }

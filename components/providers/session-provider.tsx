@@ -52,13 +52,6 @@ export function useSession(): SessionContextValue {
   return context;
 }
 
-/**
- * Optional hook that returns undefined if not in provider
- */
-export function useSessionOptional(): SessionContextValue | undefined {
-  return useContext(SessionContext);
-}
-
 // ============================================================================
 // SESSION PROVIDER
 // ============================================================================

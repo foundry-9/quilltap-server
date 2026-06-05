@@ -52,6 +52,7 @@ export interface LogLLMCallParams {
   response: {
     content: string;
     error?: string;
+    finishReason?: string | null;
     toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
   };
   usage?: {
@@ -63,6 +64,7 @@ export interface LogLLMCallParams {
     cacheCreationInputTokens?: number;
     cacheReadInputTokens?: number;
   };
+  rawProviderUsage?: Record<string, unknown> | null;
   requestHashes?: LLMLogRequestHashes;
   durationMs?: number;
 }
@@ -129,6 +131,7 @@ function summarizeResponse(
     content: response.content || '',
     contentLength: response.content?.length || 0,
     error: response.error ?? null,
+    finishReason: response.finishReason ?? null,
   };
 
   if (response.toolCalls && response.toolCalls.length > 0) {
@@ -188,11 +191,15 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
     if (
       params.requestHashes?.systemBlock1Hash !== undefined ||
       params.requestHashes?.systemBlock2Hash !== undefined ||
+      params.requestHashes?.systemBlock3Hash !== undefined ||
       params.requestHashes?.toolsArrayHash !== undefined ||
       params.requestHashes?.historyTailHash !== undefined
     ) {
       requestHashes = { ...params.requestHashes };
     }
+
+    const rawProviderUsage =
+      params.rawProviderUsage !== undefined ? params.rawProviderUsage : null;
 
     // Create the log entry
     const repos = getRepositories();
@@ -208,6 +215,7 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
       response: responseSummary,
       usage,
       cacheUsage,
+      rawProviderUsage,
       requestHashes,
       durationMs: params.durationMs ?? null,
     });
@@ -222,57 +230,6 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
     });
     // Don't throw - logging failures shouldn't break the main flow
     return null;
-  }
-}
-
-/**
- * Get logs for a specific message
- */
-export async function getLogsForMessage(messageId: string): Promise<LLMLog[]> {
-  try {
-    const repos = getRepositories();
-    const logs = await repos.llmLogs.findByMessageId(messageId);
-    return logs;
-  } catch (error) {
-    logger.error('Failed to get logs for message', {
-      messageId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
-}
-
-/**
- * Get logs for a specific chat
- */
-export async function getLogsForChat(chatId: string): Promise<LLMLog[]> {
-  try {
-    const repos = getRepositories();
-    const logs = await repos.llmLogs.findByChatId(chatId);
-    return logs;
-  } catch (error) {
-    logger.error('Failed to get logs for chat', {
-      chatId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
-}
-
-/**
- * Get logs for a specific character
- */
-export async function getLogsForCharacter(characterId: string): Promise<LLMLog[]> {
-  try {
-    const repos = getRepositories();
-    const logs = await repos.llmLogs.findByCharacterId(characterId);
-    return logs;
-  } catch (error) {
-    logger.error('Failed to get logs for character', {
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
   }
 }
 
@@ -319,41 +276,6 @@ export async function getLogsForUser(
 }
 
 /**
- * Get recent logs for a user
- */
-export async function getRecentLogs(userId: string, limit: number = 20): Promise<LLMLog[]> {
-  try {
-    const repos = getRepositories();
-    const logs = await repos.llmLogs.findRecent(userId, limit);
-    return logs;
-  } catch (error) {
-    logger.error('Failed to get recent logs for user', {
-      userId,
-      limit,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
-}
-
-/**
- * Count logs for a user
- */
-export async function countLogsForUser(userId: string): Promise<number> {
-  try {
-    const repos = getRepositories();
-    const count = await repos.llmLogs.countByUserId(userId);
-    return count;
-  } catch (error) {
-    logger.error('Failed to count logs for user', {
-      userId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return 0;
-  }
-}
-
-/**
  * Get total token usage for a user
  */
 export async function getTotalTokenUsage(
@@ -369,29 +291,6 @@ export async function getTotalTokenUsage(
       error: error instanceof Error ? error.message : String(error),
     });
     return { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-  }
-}
-
-/**
- * Get logs by type for a user
- */
-export async function getLogsByType(
-  userId: string,
-  type: LLMLogType,
-  limit: number = 50
-): Promise<LLMLog[]> {
-  try {
-    const repos = getRepositories();
-    const logs = await repos.llmLogs.findByType(userId, type, limit);
-    return logs;
-  } catch (error) {
-    logger.error('Failed to get logs by type for user', {
-      userId,
-      type,
-      limit,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
   }
 }
 
@@ -434,20 +333,3 @@ export async function deleteAllLogsForUser(userId: string): Promise<number> {
   }
 }
 
-/**
- * Get standalone logs (not associated with a message, chat, or character)
- */
-export async function getStandaloneLogs(userId: string, limit: number = 50): Promise<LLMLog[]> {
-  try {
-    const repos = getRepositories();
-    const logs = await repos.llmLogs.findStandalone(userId, limit);
-    return logs;
-  } catch (error) {
-    logger.error('Failed to get standalone logs for user', {
-      userId,
-      limit,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
-}

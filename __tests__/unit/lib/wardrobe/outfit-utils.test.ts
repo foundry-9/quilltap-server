@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 
 import {
   computeDisplacedSlots,
+  wearItemIntoSlots,
+  replaceItemIntoSlots,
   equipItem,
+  replaceItem,
   addToSlot,
   removeFromSlot,
 } from '@/lib/wardrobe/outfit-displacement'
@@ -100,25 +103,116 @@ describe('wardrobe outfit utilities', () => {
       accessories: [],
     }
 
-    it("equip mode replaces every slot covered by the new item's types", () => {
-      const next = computeDisplacedSlots(baseSlots, {
-        mode: 'equip',
-        item: { id: 'shirt-1', types: ['top'] },
-      })
+    it('wear mode layers a leaf garment into its slot when the replace flag is off', () => {
+      const next = computeDisplacedSlots(
+        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+        {
+          mode: 'wear',
+          item: { id: 'cardigan-1', types: ['top'] },
+        },
+      )
 
       expect(next).toEqual({
-        top: ['shirt-1'],
-        bottom: ['dress-1'],
-        footwear: ['boots-1'],
+        top: ['shirt-1', 'cardigan-1'],
+        bottom: ['jeans-1'],
+        footwear: [],
         accessories: [],
       })
     })
 
-    it('equip mode replaces both top and bottom for a multi-slot dress', () => {
+    it('wear mode layers a multi-slot dress into both top and bottom (replace flag off)', () => {
       const next = computeDisplacedSlots(
         { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
         {
-          mode: 'equip',
+          mode: 'wear',
+          item: { id: 'dress-1', types: ['top', 'bottom'] },
+        },
+      )
+
+      expect(next).toEqual({
+        top: ['shirt-1', 'dress-1'],
+        bottom: ['jeans-1', 'dress-1'],
+        footwear: [],
+        accessories: [],
+      })
+    })
+
+    it('wear mode replaces every covered slot when the item replace flag is on', () => {
+      const next = computeDisplacedSlots(
+        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+        {
+          mode: 'wear',
+          item: { id: 'dress-1', types: ['top', 'bottom'], replace: true },
+        },
+      )
+
+      expect(next).toEqual({
+        top: ['dress-1'],
+        bottom: ['dress-1'],
+        footwear: [],
+        accessories: [],
+      })
+    })
+
+    it('wear mode layers an additive composite onto existing slots (replace=false)', () => {
+      const next = computeDisplacedSlots(
+        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+        {
+          mode: 'wear',
+          item: { id: 'outfit-1', types: ['top', 'bottom'], componentItemIds: ['a', 'b'] },
+        },
+      )
+
+      expect(next).toEqual({
+        top: ['shirt-1', 'outfit-1'],
+        bottom: ['jeans-1', 'outfit-1'],
+        footwear: [],
+        accessories: [],
+      })
+    })
+
+    it('wear mode does not duplicate an item already in a slot', () => {
+      const next = computeDisplacedSlots(
+        { top: ['outfit-1'], bottom: ['outfit-1'], footwear: [], accessories: [] },
+        {
+          mode: 'wear',
+          item: { id: 'outfit-1', types: ['top', 'bottom'], componentItemIds: ['a'] },
+        },
+      )
+
+      expect(next.top).toEqual(['outfit-1'])
+      expect(next.bottom).toEqual(['outfit-1'])
+    })
+
+    it('wear mode clears every designated slot for a replace composite (Naked)', () => {
+      const next = computeDisplacedSlots(
+        { top: ['shirt-1'], bottom: ['jeans-1'], footwear: ['boots-1'], accessories: ['watch-1'] },
+        {
+          mode: 'wear',
+          item: {
+            id: 'naked-1',
+            types: ['top', 'bottom', 'footwear', 'accessories'],
+            componentItemIds: ['ring-1'],
+            replace: true,
+          },
+        },
+      )
+
+      // Every designated slot is cleared and holds only the composite id; the
+      // ring leaf is routed to accessories at read time, leaving the rest bare.
+      expect(next).toEqual({
+        top: ['naked-1'],
+        bottom: ['naked-1'],
+        footwear: ['naked-1'],
+        accessories: ['naked-1'],
+      })
+    })
+
+    it('replace mode force-swaps every covered slot regardless of the flag', () => {
+      const next = computeDisplacedSlots(
+        { top: ['shirt-1', 'cardigan-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+        {
+          mode: 'replace',
           item: { id: 'dress-1', types: ['top', 'bottom'] },
         },
       )
@@ -202,6 +296,50 @@ describe('wardrobe outfit utilities', () => {
     })
   })
 
+  describe('wearItemIntoSlots / replaceItemIntoSlots (pure)', () => {
+    const worn = { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [] }
+
+    it('wearItemIntoSlots layers when the flag is off and replaces when on', () => {
+      expect(
+        wearItemIntoSlots(worn, { id: 'dress-1', types: ['top', 'bottom'] }),
+      ).toEqual({
+        top: ['shirt-1', 'dress-1'],
+        bottom: ['jeans-1', 'dress-1'],
+        footwear: [],
+        accessories: [],
+      })
+
+      expect(
+        wearItemIntoSlots(worn, { id: 'dress-1', types: ['top', 'bottom'], replace: true }),
+      ).toEqual({
+        top: ['dress-1'],
+        bottom: ['dress-1'],
+        footwear: [],
+        accessories: [],
+      })
+    })
+
+    it('replaceItemIntoSlots always clears and sets the covered slots', () => {
+      expect(
+        replaceItemIntoSlots(
+          { top: ['shirt-1', 'cardigan-1'], bottom: ['jeans-1'], footwear: [], accessories: [] },
+          { id: 'dress-1', types: ['top', 'bottom'] },
+        ),
+      ).toEqual({
+        top: ['dress-1'],
+        bottom: ['dress-1'],
+        footwear: [],
+        accessories: [],
+      })
+    })
+
+    it('does not mutate the input slots', () => {
+      const input = { top: ['shirt-1'], bottom: [], footwear: [], accessories: [] }
+      wearItemIntoSlots(input, { id: 'cardigan-1', types: ['top'] })
+      expect(input.top).toEqual(['shirt-1'])
+    })
+  })
+
   describe('repo-backed equip primitives', () => {
     let repos: {
       chats: {
@@ -219,7 +357,7 @@ describe('wardrobe outfit utilities', () => {
       }
     })
 
-    it('equipItem replaces every slot the item covers (multi-slot dress)', async () => {
+    it('equipItem layers a multi-slot leaf garment when the replace flag is off', async () => {
       repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
         top: ['shirt-1'],
         bottom: ['jeans-1'],
@@ -233,17 +371,62 @@ describe('wardrobe outfit utilities', () => {
       })
 
       expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith('chat-1', 'char-1', {
-        top: ['dress-1'],
-        bottom: ['dress-1'],
+        top: ['shirt-1', 'dress-1'],
+        bottom: ['jeans-1', 'dress-1'],
         footwear: ['boots-1'],
         accessories: [],
       })
+      expect(result).toEqual({
+        top: ['shirt-1', 'dress-1'],
+        bottom: ['jeans-1', 'dress-1'],
+        footwear: ['boots-1'],
+        accessories: [],
+      })
+    })
+
+    it('equipItem replaces every covered slot when the item replace flag is on', async () => {
+      repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+        top: ['shirt-1'],
+        bottom: ['jeans-1'],
+        footwear: ['boots-1'],
+        accessories: [],
+      })
+
+      const result = await equipItem(repos, 'chat-1', 'char-1', {
+        id: 'dress-1',
+        types: ['top', 'bottom'],
+        replace: true,
+      })
+
       expect(result).toEqual({
         top: ['dress-1'],
         bottom: ['dress-1'],
         footwear: ['boots-1'],
         accessories: [],
       })
+    })
+
+    it('replaceItem force-swaps every covered slot regardless of the flag', async () => {
+      repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+        top: ['shirt-1', 'cardigan-1'],
+        bottom: ['jeans-1'],
+        footwear: ['boots-1'],
+        accessories: [],
+      })
+
+      const result = await replaceItem(repos, 'chat-1', 'char-1', {
+        id: 'dress-1',
+        types: ['top', 'bottom'],
+      })
+
+      expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith('chat-1', 'char-1', {
+        top: ['dress-1'],
+        bottom: ['dress-1'],
+        footwear: ['boots-1'],
+        accessories: [],
+      })
+      expect(result.top).toEqual(['dress-1'])
+      expect(result.bottom).toEqual(['dress-1'])
     })
 
     it('equipItem starts from empty slots when nothing is equipped yet', async () => {

@@ -218,8 +218,12 @@ export function useMessageActions(
     }
   }
 
-  // Check if a user message can be resent
-  const canResendMessage = (messageId: string, messageIndex: number): boolean => {
+  // Check if a user message can be resent. Resolves the message by id (not by
+  // a positional index), since the rendered list is whisper-filtered and has
+  // tool rows folded into assistant bubbles, so render indices diverge from
+  // this full `messages` array.
+  const canResendMessage = (messageId: string): boolean => {
+    const messageIndex = messages.findIndex(m => m.id === messageId)
     const message = messages[messageIndex]
     if (!message || message.role !== 'USER') return false
 

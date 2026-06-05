@@ -248,3 +248,103 @@ describe('child repository proxy — pending-writes buffer', () => {
     ]);
   });
 });
+
+describe('child repository proxy — Float32Array IPC sanitization', () => {
+  function makeReposWithEmbeddingWrites() {
+    return {
+      ...makeFakeRepos(),
+      helpDocs: {
+        findById: jest.fn().mockResolvedValue({ id: 'doc-1' }),
+        updateEmbedding: jest.fn().mockResolvedValue(undefined),
+      },
+    };
+  }
+
+  it('down-converts a top-level Float32Array arg to a plain number[]', async () => {
+    const repos = makeReposWithEmbeddingWrites();
+    mockedFactory.mockReturnValue(repos as never);
+    const proxied = getChildRepositoriesProxy();
+
+    const writes = await runWithJobScope('job-f32-top', async () => {
+      await (proxied.helpDocs as unknown as typeof repos.helpDocs).updateEmbedding(
+        'doc-1' as never,
+        new Float32Array([0.5, 0.25, 0.125]) as never,
+      );
+      return flushPendingWrites();
+    });
+
+    expect(writes).toHaveLength(1);
+    const embeddingArg = writes[0].args[1];
+    expect(embeddingArg).toBeInstanceOf(Array);
+    expect(embeddingArg).not.toBeInstanceOf(Float32Array);
+    // Float32 rounds the literals; assert closeness rather than exact equality.
+    expect(embeddingArg as number[]).toHaveLength(3);
+    expect((embeddingArg as number[])[0]).toBeCloseTo(0.5, 5);
+    expect((embeddingArg as number[])[2]).toBeCloseTo(0.125, 5);
+  });
+
+  it('down-converts a Float32Array nested inside an object arg', async () => {
+    const repos = makeReposWithEmbeddingWrites();
+    mockedFactory.mockReturnValue(repos as never);
+    const proxied = getChildRepositoriesProxy();
+
+    const writes = await runWithJobScope('job-f32-nested', async () => {
+      await (proxied.memories as unknown as typeof repos.memories).create({
+        characterId: 'char-1',
+        content: 'hello',
+        embedding: new Float32Array([1, 2, 3, 4]),
+      } as never);
+      return flushPendingWrites();
+    });
+
+    const data = writes[0].args[0] as { embedding: unknown };
+    expect(data.embedding).toBeInstanceOf(Array);
+    expect(data.embedding).not.toBeInstanceOf(Float32Array);
+    expect(data.embedding as number[]).toEqual([1, 2, 3, 4]);
+  });
+
+  it('does not mutate the caller\'s in-memory Float32Array', async () => {
+    const repos = makeReposWithEmbeddingWrites();
+    mockedFactory.mockReturnValue(repos as never);
+    const proxied = getChildRepositoriesProxy();
+
+    const original = new Float32Array([1, 2, 3]);
+    await runWithJobScope('job-f32-nomutate', async () => {
+      await (proxied.helpDocs as unknown as typeof repos.helpDocs).updateEmbedding(
+        'doc-1' as never,
+        original as never,
+      );
+      flushPendingWrites();
+    });
+
+    // The caller's reference is untouched — still a Float32Array.
+    expect(original).toBeInstanceOf(Float32Array);
+    expect(Array.from(original)).toEqual([1, 2, 3]);
+  });
+
+  it('leaves Buffers intact and does not copy embedding-free args', async () => {
+    const repos = makeReposWithEmbeddingWrites();
+    mockedFactory.mockReturnValue(repos as never);
+    const proxied = getChildRepositoriesProxy();
+
+    const blob = Buffer.from([1, 2, 3, 4]);
+    const plainArg = { content: 'x', blob };
+    const numberArg = [0.1, 0.2, 0.3];
+
+    const writes = await runWithJobScope('job-buffer', async () => {
+      // helpDocs.updateEmbedding with a Buffer + a plain number[] arg.
+      await (proxied.helpDocs as unknown as typeof repos.helpDocs).updateEmbedding(
+        plainArg as never,
+        numberArg as never,
+      );
+      return flushPendingWrites();
+    });
+
+    // Buffer preserved inside the object…
+    const arg0 = writes[0].args[0] as { blob: unknown };
+    expect(Buffer.isBuffer(arg0.blob)).toBe(true);
+    // …and embedding-free args are passed by reference (no needless copy).
+    expect(writes[0].args[0]).toBe(plainArg);
+    expect(writes[0].args[1]).toBe(numberArg);
+  });
+});

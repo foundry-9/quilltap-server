@@ -31,6 +31,16 @@ function ContinueIcon({ className }: { className?: string }) {
   )
 }
 
+// Autonomous-room icon (clock)
+function AutonomousIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15 14" />
+    </svg>
+  )
+}
+
 // Folder plus icon
 function FolderPlusIcon({ className }: { className?: string }) {
   return (
@@ -83,6 +93,17 @@ export function QuickActionsRow({ lastChatId }: QuickActionsRowProps) {
           <ChatIcon className="w-4 h-4" />
           <span className="hidden sm:inline">Start a Chat</span>
           <span className="sm:hidden">Chat</span>
+        </Link>
+
+        {/* Start an Autonomous Room */}
+        <Link
+          href="/salon/new?autonomous=1"
+          className="qt-button qt-button-secondary gap-2"
+          title="Create a character-to-character room that runs on a schedule or on demand"
+        >
+          <AutonomousIcon className="w-4 h-4" />
+          <span className="hidden sm:inline">Start Autonomous Room</span>
+          <span className="sm:hidden">Auto Room</span>
         </Link>
 
         {/* Continue Last Chat */}

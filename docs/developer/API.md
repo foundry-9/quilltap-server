@@ -32,7 +32,6 @@ API reference for Quilltap v4.3 and later.
   - [Models](#models)
   - [Model Classes](#model-classes)
   - [Characters](#characters)
-  - [Character Descriptions](#character-descriptions)
   - [Character System Prompts](#character-system-prompts)
   - [Character Scenarios](#character-scenarios)
   - [Character Plugin Data](#character-plugin-data)
@@ -1071,68 +1070,6 @@ Remove a tag from a character.
 
 ---
 
-#### Character Clothing Records
-
-Clothing records describe what a character wears in different contexts. They are embedded in the character document as a JSON array and used for system prompts and image generation.
-
-##### `GET /api/v1/characters/[id]/clothing`
-
-Returns all clothing records for a character.
-
-**Response:**
-```json
-{
-  "clothingRecords": [
-    {
-      "id": "uuid",
-      "name": "Battle Armor",
-      "usageContext": "in combat situations",
-      "description": "Heavy plate armor with dragon motifs...",
-      "createdAt": "ISO timestamp",
-      "updatedAt": "ISO timestamp"
-    }
-  ]
-}
-```
-
-##### `POST /api/v1/characters/[id]/clothing`
-
-Creates a new clothing record.
-
-**Body:**
-```json
-{
-  "name": "Battle Armor",
-  "usageContext": "in combat situations",
-  "description": "Heavy plate armor with dragon motifs..."
-}
-```
-
-**Response:** `201 Created` with `{ clothingRecord: {...} }`
-
-##### `GET /api/v1/characters/[id]/clothing/[recordId]`
-
-Returns a single clothing record.
-
-##### `PUT /api/v1/characters/[id]/clothing/[recordId]`
-
-Updates a clothing record. All fields are optional.
-
-**Body:**
-```json
-{
-  "name": "Updated Name",
-  "usageContext": "updated context",
-  "description": "Updated description..."
-}
-```
-
-##### `DELETE /api/v1/characters/[id]/clothing/[recordId]`
-
-Deletes a clothing record. Returns `{ success: true }`.
-
----
-
 #### Character Plugin Data
 
 Per-character per-plugin JSON metadata storage. Plugins can store arbitrary JSON data scoped to individual characters.
@@ -1206,105 +1143,6 @@ Replace entire plugin data object.
 ##### `DELETE /api/v1/characters/[id]/plugin-data/[pluginName]`
 
 Delete plugin data for a specific plugin.
-
-**Response**: `200 OK`
-
-```json
-{
-  "success": true
-}
-```
-
----
-
-### Character Descriptions
-
-Multi-tiered description records for characters, providing varying levels of detail for different context window sizes.
-
-#### `GET /api/v1/characters/[id]/descriptions`
-
-Get all descriptions for a character.
-
-**Response**: `200 OK`
-
-```json
-{
-  "descriptions": [...]
-}
-```
-
-#### `POST /api/v1/characters/[id]/descriptions`
-
-Create a new description.
-
-**Request Body**:
-
-```json
-{
-  "name": "Default Description",
-  "usageContext": "General usage",
-  "shortPrompt": "Brief description (max 350 chars)",
-  "mediumPrompt": "Medium description (max 500 chars)",
-  "longPrompt": "Longer description (max 750 chars)",
-  "completePrompt": "Complete description (max 1000 chars)",
-  "fullDescription": "Full unrestricted description"
-}
-```
-
-**Validation**:
-- `name`: Required, min 1 character
-- `usageContext`: Optional, max 200 characters
-- `shortPrompt`: Optional, max 350 characters
-- `mediumPrompt`: Optional, max 500 characters
-- `longPrompt`: Optional, max 750 characters
-- `completePrompt`: Optional, max 1000 characters
-- `fullDescription`: Optional, no max length
-
-**Response**: `201 Created`
-
-```json
-{
-  "description": { ... }
-}
-```
-
-#### `GET /api/v1/characters/[id]/descriptions/[descId]`
-
-Get a specific description.
-
-**Response**: `200 OK`
-
-```json
-{
-  "description": { ... }
-}
-```
-
-#### `PUT /api/v1/characters/[id]/descriptions/[descId]`
-
-Update a description. All fields are optional.
-
-**Request Body**:
-
-```json
-{
-  "name": "Updated Name",
-  "usageContext": "Updated context",
-  "shortPrompt": "Updated short prompt"
-}
-```
-
-**Response**: `200 OK`
-
-```json
-{
-  "description": { ... }
-}
-```
-
-#### `DELETE /api/v1/characters/[id]/descriptions/[descId]`
-
-Delete a description.
 
 **Response**: `200 OK`
 
@@ -2060,7 +1898,7 @@ Set the active speaker when impersonating multiple characters.
 
 ### Chat Avatars
 
-#### `POST /api/v1/chats/[id]?action=get-avatars`
+#### `GET /api/v1/chats/[id]?action=get-avatars`
 
 Get all avatar overrides for characters in this chat.
 
@@ -2142,7 +1980,7 @@ Queue avatar regeneration for a specific character in this chat.
 
 ### Chat State
 
-#### `POST /api/v1/chats/[id]?action=get-state`
+#### `GET /api/v1/chats/[id]?action=get-state`
 
 Get chat state (merged with project state if chat belongs to a project).
 
@@ -2178,7 +2016,7 @@ Reset chat state to empty object. Returns previous state.
 
 ### Chat Wardrobe & Outfits
 
-#### `POST /api/v1/chats/[id]?action=outfit`
+#### `GET /api/v1/chats/[id]?action=outfit`
 
 Get full equipped outfit state for all characters in this chat.
 
@@ -2195,14 +2033,23 @@ Get full equipped outfit state for all characters in this chat.
 
 #### `POST /api/v1/chats/[id]?action=equip`
 
-Equip or unequip a wardrobe item in a slot. Set `itemId` to `null` to unequip.
+Mutate a character's equipped outfit. Dispatches on `mode`:
 
-**Request Body**:
+- `wear` — wear `itemId` across every slot it covers, honoring the item's `replace` flag (layer when off, replace when on).
+- `replace` — force-swap: clear every slot `itemId` covers, then wear it (ignores the flag).
+- `add_to_slot` — append `itemId` to a single `slot` (layering).
+- `remove_from_slot` — remove `itemId` from `slot` (omit `itemId` to clear the slot).
+- `clear_slot` — empty `slot`.
+- `set_all` — replace the whole equipped state atomically with a `slots` object.
+
+`equip` is accepted as a deprecated alias for `wear`.
+
+**Request Body** (wear / replace):
 
 ```json
 {
   "characterId": "char-uuid",
-  "slot": "top",
+  "mode": "wear",
   "itemId": "item-uuid"
 }
 ```
@@ -2296,7 +2143,7 @@ Set `enabled` to `null` to inherit from project or character settings.
 
 Clear danger classification and re-queue classification job for messages in this chat.
 
-#### `POST /api/v1/chats/[id]?action=get-background`
+#### `GET /api/v1/chats/[id]?action=get-background`
 
 Get the current story background for the chat.
 

@@ -2,20 +2,23 @@
 url: /salon/:id
 ---
 
-# Participants Sidebar
+# Chat Sidebar
 
 > **[Open this page in Quilltap](/salon)**
 
-The Participants Sidebar is your control center for managing characters in multi-character chats. It shows who's in the conversation, whose turn it is, and provides controls for managing participation.
+The Chat Sidebar is your right-hand control room for any conversation in The Salon — a single tasteful cabinet of drawers from which the entire chat may be conducted, tuned, and tidied. Where once there were three separate apparatus (a Participants Sidebar, a Tools palette popover, and a Chat Settings modal) you now have one cabinet with five drawers: **Participants**, **Chat**, **Visibility**, **Organize**, and **Edit Content**.
 
-## What Is the Participants Sidebar?
+## What the Chat Sidebar Holds
 
-The Participants Sidebar is a panel on the right side of the chat interface that:
+Each drawer attends to a different aspect of running the conversation:
 
-- **Shows All Participants** — Lists every character in the chat
-- **Displays Turn Status** — Shows whose turn it is and who's queued
-- **Provides Controls** — Manage talkativeness, turns, and impersonation
-- **Indicates Activity** — Shows who's speaking, waiting, or inactive
+- **Participants** — the cast of characters, who's speaking, who's queued, and every dial for tuning their behaviour. (This page treats that drawer in considerable detail; the rest are sketched briefly below with cross-references.)
+- **Chat** — the per-chat dials. Agent Mode, Roleplay Template, Project assignment, Image Provider, Lantern announcements, automatic avatar generation, and the gateways to the Tools and Run Tool modals. Regenerate Background lives here too, when story backgrounds are switched on.
+- **Visibility** — only present in multi-character chats. Two toggles: **All Whispers** (show or hide private asides) and **Shared Vaults** (whether characters may read one another's vaults).
+- **Organize** — the chat as an object. Rename, State editor, Continue Elsewhere, Export, and Gallery (when there are photos to display).
+- **Edit Content** — the heavier instruments. Replace, Bulk Replace, Re-extract Memories, and Delete Memories.
+
+Only one drawer stands open at a time, in the manner of a well-mannered campaign desk; opening another closes the previous. Participants is open by default whenever the sidebar is expanded.
 
 ## Accessing the Sidebar
 
@@ -26,15 +29,31 @@ The sidebar appears automatically in multi-character chats. If collapsed:
 1. Look for the sidebar strip on the right edge of the chat
 2. Click the **expand button** (left-facing arrow)
 3. Or click any mini avatar in the collapsed strip
-4. Sidebar expands to full width
+4. Sidebar expands to full width and reveals the five drawers
 
 ### Closing the Sidebar
 
 To collapse and save space:
 
 1. Click the **collapse button** (right-facing arrow) in the sidebar header
-2. Sidebar minimizes to a thin strip with mini avatars
-3. Click expand or any avatar to open again
+2. Sidebar minimizes to a thin strip with mini avatars (always the Participants view, in miniature)
+3. Click expand or any avatar to open the cabinet again
+
+### Resizing the Sidebar
+
+Should the cabinet feel too narrow for your cast — or too greedy with the page — you may take it by the handle and let it out a notch:
+
+1. Hover the **inner edge** of the expanded sidebar (the seam where it meets the conversation). A slim grip of three dots reveals itself and the cursor turns to the resize arrows.
+2. **Drag toward the chat** to widen the cabinet, or **back toward the wall** to slim it. The conversation reflows to make room as you go.
+3. Release wherever it suits you. The width is held within sensible bounds so neither the cabinet nor the conversation is ever crushed to a sliver.
+
+Prefer the keyboard? Give the grip focus (Tab to it) and use **← / →** to nudge the width, or **Home / End** to leap to the narrowest and widest settings.
+
+Your chosen width is **remembered across reloads** (saved in your browser), so the cabinet opens to the size you left it. The slim collapsed strip keeps its own fixed, modest footprint regardless.
+
+### Moving Between Drawers
+
+Each drawer is a clickable header within the expanded sidebar. Click the header to open the drawer; click it again, or open any other drawer, to close it. Which drawer is open is **session-only** — every reload returns you to Participants, by design.
 
 ## Sidebar Views
 
@@ -61,22 +80,17 @@ When collapsed, the sidebar shows:
 
 ### Expanded View
 
-Full sidebar showing complete participant information:
+Full sidebar showing the five accordion drawers. The slim header at the top is now nothing more than the word **Chat** and a collapse arrow; the participant count moved into the **Participants** drawer's own header line, and the turn status, queue indicator, pause button, participant cards, and Add Character button all live inside that drawer's body.
 
-**Header:**
-- Participant count ("3 characters")
+**Participants drawer (open by default):**
+- Participant count in the drawer header ("3 characters")
 - Turn status message
 - Queue count if applicable
 - Pause/Resume button
+- Full participant cards (talkativeness sliders, action buttons, status dropdowns, impersonation controls)
+- Add Character button at the bottom
 
-**Participant Cards:**
-- Full character information
-- All control options
-- Talkativeness sliders
-- Action buttons
-
-**Footer:**
-- Add Character button
+**Other drawers** sit closed beneath Participants until summoned — see the brief tours below.
 
 **When to use:**
 - Managing participants
@@ -84,6 +98,8 @@ Full sidebar showing complete participant information:
 - Multi-character scene orchestration
 
 ## Participant Cards
+
+The following sections describe what appears inside the **Participants** drawer when it is open. The pause/resume button sits above the list; the participant cards form the bulk of the drawer; the **Add Character** button sits at the bottom.
 
 Each character in the sidebar has a card with:
 
@@ -182,13 +198,13 @@ Reach for it whenever you've revised a character's prompt content elsewhere and 
 - Remove this character from the chat
 - Only available if more than one character present
 
-## Header Information
+## Participants Drawer Header
 
-The sidebar header shows:
+These items appear at the top of the **Participants** drawer body, above the participant cards:
 
 ### Participant Count
 
-"3 characters" or "2 characters"
+"3 characters" or "2 characters" appears in the drawer's own header line, beside the word *Participants*.
 
 - Counts only LLM-controlled characters
 - Helps track chat complexity
@@ -230,6 +246,18 @@ The Host also issues a one-time advisory whisper when a chat has no user-control
 ### Announcements from Prospero
 
 When you reassign a participant to a different connection profile from the sidebar — swapping the LLM that drives a particular character — Prospero, master of the agentic and tool-using systems, steps forward and announces the change so the rest of the room is in on the news. The note records the participant's name, the new profile, and the one it replaced. Like the Host's announcements, Prospero's messages are filtered out of the conversation handed to characters whose **System Transparency** is off; you always see them.
+
+### How Staff Announcements Appear
+
+All of the Staff — the Host, Prospero, the Lantern, Aurora, the Librarian, the Concierge, the Commonplace Book, and Ariel — make their remarks not as full-throated bubbles but as slim, foldable **chips** set into the flow of conversation. When several arrive in quick succession (the opening flurry of a chat, say, or a busy spell of document tidying), they pack themselves cheek by jowl across a row, flowing left to right and wrapping to the next line as needed, so that a whole parade of notices occupies but a sliver of vertical space.
+
+Each chip wears a small coloured dot before the speaker's name, a quiet signal of how much it ought to command your attention:
+
+- A **red dot** marks the consequential — files saved, renamed, or struck from the catalogue; characters arriving, taking their leave, or changing their bearing between active, silent, and absent; the Concierge's warnings about delicate content.
+- An **amber dot** marks the noteworthy — a fresh backdrop from the Lantern, a refreshed portrait or change of attire from Aurora, a terminal opened or closed by Ariel, a character's driving LLM swapped by Prospero.
+- A **hollow grey dot** marks the merely ambient — Prospero's periodic notes on the project and its papers, the Host's calls of the hour, the Commonplace Book's quiet recollections.
+
+Click any chip to unfold it into its full announcement; click it again — or the chevron at its end — to fold it back into the row. Unfolding one chip in the middle of a packed run simply lifts that single notice out for a closer look, leaving its neighbours snug in their row.
 
 ### Adding Characters
 
@@ -394,6 +422,50 @@ In all-LLM chats (no user-controlled characters):
 - Click Resume or Pause to respond
 - Prevents infinite conversation loops
 
+## The Other Four Drawers
+
+Opening any of these closes whichever drawer is presently open. None of them is open by default.
+
+### Chat
+
+The per-chat dials, formerly scattered across a Tools palette popover and a Chat Settings modal, now in one place:
+
+- **Agent Mode toggle** — flick on for iterative tool use; see [Agent Mode](agent-mode.md)
+- **Roleplay Template** — pick the prose style; see [Templates in Chats](templates-in-chats.md)
+- **Project** — assign this chat to a project (or none)
+- **Image Provider** — which image profile generates pictures for this chat
+- **Announce Generated Images** — whether the Lantern announces fresh images in-chat; see [The Lantern](lantern.md)
+- **Auto-generate Character Avatars** — when on, characters receive a fresh portrait each time their wardrobe shifts
+- **Tools…** — opens the per-chat tool allowlist modal
+- **Run Tool…** — opens the manual tool-invocation modal; see [Run Tool](run-tool.md)
+- **Regenerate Background** — only appears when story backgrounds are enabled; queues a fresh background; see [Story Backgrounds](story-backgrounds.md)
+
+### Visibility
+
+Only present in chats with two or more characters. Two toggles:
+
+- **All Whispers** — show or hide the private asides characters send to one another, plus the various Staff whispers the system itself drops
+- **Shared Vaults** — let characters in this chat peek at one another's vaults (read-only) via the `doc_*` tools; off by default, in which case vault reads remain whispered to the caller
+
+### Organize
+
+The chat as an object, rather than a conversation:
+
+- **Rename** — give it a different title
+- **State…** — open the chat state editor; see [Chat State](chat-state.md)
+- **Continue Elsewhere** — fork this conversation into a new chat with a different scenario or project
+- **Export** — download a SillyTavern-compatible export of the chat
+- **Gallery** — opens the photo gallery; appears only when there are pictures to display
+
+### Edit Content
+
+The heavier instruments — best wielded with deliberation:
+
+- **Replace** — find and replace text across the conversation
+- **Bulk Replace** — re-attribute messages between characters in bulk
+- **Re-extract Memories** — re-run the Commonplace Book extractor across the chat
+- **Delete Memories** — remove this chat's memories from the Commonplace Book (with a count of how many would go)
+
 ## Sidebar Behavior
 
 ### Responsiveness
@@ -406,11 +478,13 @@ The sidebar adapts to screen size:
 
 ### Persistence
 
-Your sidebar state is remembered:
+Your sidebar state is remembered with measured discretion:
 
-- Collapsed/expanded preference saved
-- Talkativeness settings persist per chat
-- Queue clears when processed
+- **Collapsed/expanded preference** — saved across reloads (the mini-avatar strip remembers it has retired into its cubby)
+- **Sidebar width** — the size you drag it to is saved in your browser and restored on the next visit
+- **Which drawer was open** — session-only; every reload returns to Participants
+- **Talkativeness settings** persist per chat
+- **Queue clears** when processed
 
 ### Updates
 

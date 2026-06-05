@@ -4,6 +4,7 @@ import { useMemo, useState, useCallback, ReactNode } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import type { Components } from 'react-markdown'
@@ -517,7 +518,12 @@ export default function MessageContent({
     <>
       <div className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto message-content ${className}`}>
         <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
+          // remark-breaks turns a single newline into a hard <br>. In chat, an
+          // author who hits Enter means a line break (the way Slack/Discord/GitHub
+          // comments behave), so soft breaks should be preserved rather than
+          // collapsed to a space the way CommonMark does by default. Blank-line
+          // paragraph separation still works as before.
+          remarkPlugins={[remarkGfm, remarkBreaks]}
           components={components}
         >
           {processedContent}

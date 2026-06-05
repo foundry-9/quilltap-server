@@ -26,8 +26,8 @@ const INITIAL_FORM_DATA: CharacterFormData = {
   systemPrompt: '',
   avatarUrl: '',
   defaultConnectionProfileId: '',
-  readPropertiesFromDocumentStore: false,
   systemTransparency: false,
+  coreWhisperEnabled: null,
 }
 
 /**
@@ -83,8 +83,11 @@ export function useCharacterEdit(id: string) {
           systemPrompt: char.systemPrompt || '',
           avatarUrl: char.avatarUrl || '',
           defaultConnectionProfileId: char.defaultConnectionProfileId || '',
-          readPropertiesFromDocumentStore: char.readPropertiesFromDocumentStore === true,
           systemTransparency: char.systemTransparency === true,
+          coreWhisperEnabled:
+            char.coreWhisperEnabled === true || char.coreWhisperEnabled === false
+              ? char.coreWhisperEnabled
+              : null,
         }
 
         return {
@@ -185,84 +188,16 @@ export function useCharacterEdit(id: string) {
   }
 
   /**
-   * Toggle the Scriptorium-overlay switch. Persists immediately so subsequent
-   * reads reflect the choice even if the user navigates away without saving
-   * other form edits.
+   * Handle per-character Core whisper override. Tri-state:
+   *   null  = inherit from global (default)
+   *   true  = always offer the Core packet
+   *   false = always skip the Core packet
    */
-  const handleReadFromDocStoreToggle = async (enabled: boolean) => {
+  const handleCoreWhisperEnabledChange = (value: boolean | null) => {
     setState((prev) => ({
       ...prev,
-      formData: { ...prev.formData, readPropertiesFromDocumentStore: enabled },
+      formData: { ...prev.formData, coreWhisperEnabled: value },
     }))
-    try {
-      const res = await fetch(`/api/v1/characters/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ readPropertiesFromDocumentStore: enabled }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to update switch')
-      }
-      showSuccessToast(enabled
-        ? 'Reading character properties from Scriptorium vault.'
-        : 'Reading character properties from the database.')
-      await fetchCharacter()
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update switch'
-      showErrorToast(errorMsg)
-      // Revert local state on failure
-      setState((prev) => ({
-        ...prev,
-        formData: { ...prev.formData, readPropertiesFromDocumentStore: !enabled },
-      }))
-    }
-  }
-
-  /**
-   * Copy the character's vault properties.json values into the DB row.
-   * Only meaningful when the overlay switch is on and a vault is linked.
-   */
-  const handleSyncPropertiesFromVault = async () => {
-    try {
-      const res = await fetch(`/api/v1/characters/${id}?action=sync-properties-from-vault`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to sync properties from vault')
-      }
-      showSuccessToast('Synced properties from the vault into the character record.')
-      await fetchCharacter()
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to sync properties from vault'
-      showErrorToast(errorMsg)
-    }
-  }
-
-  /**
-   * Copy the character's DB values out into the linked vault's files. The
-   * reverse of handleSyncPropertiesFromVault; useful after turning the overlay
-   * off and making DB-only edits that the vault hasn't seen, or for seeding a
-   * newly linked vault from the existing DB row.
-   */
-  const handleSyncPropertiesToVault = async () => {
-    try {
-      const res = await fetch(`/api/v1/characters/${id}?action=sync-properties-to-vault`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to sync properties to vault')
-      }
-      showSuccessToast('Synced properties from the character record into the vault.')
-      await fetchCharacter()
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to sync properties to vault'
-      showErrorToast(errorMsg)
-    }
   }
 
   /**
@@ -273,9 +208,6 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({ ...prev, saving: true, error: null }))
 
     try {
-      // Vault-managed fields are routed to vault files by the repository when
-      // the overlay is on, so the same payload works whether overlay is on or
-      // off. The repository's write overlay handles the routing.
       const res = await fetch(`/api/v1/characters/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -439,11 +371,9 @@ export function useCharacterEdit(id: string) {
     handlePronounsChange,
     handleScenariosChange,
     handleSystemTransparencyChange,
+    handleCoreWhisperEnabledChange,
     handleSubmit,
     handleCancel,
-    handleReadFromDocStoreToggle,
-    handleSyncPropertiesFromVault,
-    handleSyncPropertiesToVault,
     setCharacterAvatar,
     getAvatarSrc,
     toggleUploadDialog,

@@ -43,12 +43,11 @@ export async function buildCharacterAvatarPrompt(
 
   const leafCounts = { top: 0, bottom: 0, footwear: 0, accessories: 0 };
 
-  // Physical descriptions — use the first available variant, falling back
-  // through the canonical fields the avatar handler has always favored.
+  // Physical description — fall back through the canonical fields the avatar
+  // handler has always favored.
   let physicalText = '';
-  const physicalDescriptions = character.physicalDescriptions || [];
-  if (physicalDescriptions.length > 0) {
-    const desc = physicalDescriptions[0];
+  const desc = character.physicalDescription;
+  if (desc) {
     physicalText = (
       desc.mediumPrompt ||
       desc.shortPrompt ||
@@ -69,10 +68,10 @@ export async function buildCharacterAvatarPrompt(
     const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, equippedSlots);
 
     outfitText = describeOutfit({
-      top: decorateOutfitItems(resolved.leafItemsBySlot.top),
-      bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom),
-      footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear),
-      accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories),
+      top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
+      bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
+      footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
+      accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true }),
     }, { omit: ['bottom', 'footwear'] }).trimEnd();
 
     leafCounts.top = resolved.leafItemsBySlot.top.length;

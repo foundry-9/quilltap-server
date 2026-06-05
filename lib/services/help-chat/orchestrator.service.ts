@@ -245,8 +245,13 @@ async function processHelpResponse(
   )
 
 
-  // Determine tool mode (native vs text-block)
-  const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools)
+  // Determine tool mode (native vs pseudo-tool). Help-chat does not yet
+  // implement the simple-json continuation loop, so anything that would
+  // resolve to simple-json is downgraded to text-block here.
+  const profilePseudoToolMode = (connectionProfile as { pseudoToolMode?: 'auto' | 'native' | 'simple-json' | 'text-block' }).pseudoToolMode
+  const effectivePseudoToolMode: 'auto' | 'native' | 'text-block' =
+    profilePseudoToolMode === 'simple-json' ? 'text-block' : (profilePseudoToolMode ?? 'auto')
+  const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools, effectivePseudoToolMode)
 
   // Build tool instructions
   let toolInstructions = ''

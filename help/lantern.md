@@ -21,7 +21,7 @@ Each announcement carries the generated file as an attachment. Click the thumbna
 The toggle exists at two levels, and they work the way project defaults always do:
 
 - **Project default** — `/prospero/{id}`, Image Generation card, *Announce Lantern Images to Characters*. Choose **Announce to characters**, **Keep silent**, or **Inherit from global** (the global default is silent).
-- **Per-chat override** — inside any chat, open the Chat Settings modal and pick *Announce to characters*, *Keep silent*, or *Inherit from project*.
+- **Per-chat override** — inside any chat, open the **Chat Sidebar** on the right, expand the **Chat** drawer, and pick *Announce to characters*, *Keep silent*, or *Inherit from project* from the **Announce Generated Images** dropdown.
 
 A chat-level override always wins. If both the chat and the project defer to inheritance, the global default applies, which is silent.
 

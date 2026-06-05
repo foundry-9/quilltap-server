@@ -28,7 +28,18 @@ Think of them as spectators in the control room, able to read the instruments bu
 
 Ariel operates under Quilltap's own user account and working directory. When you open a terminal, you inherit whatever shell environment the server runs under. Treat this as you would any terminal on your own machine: it can execute any command your user can execute, access any file your user can access, and alter any data your user can alter. An errant `rm -rf` here is as catastrophic as it would be anywhere else.
 
-Similarly, environment variables, shell aliases, and PATH configuration are inherited from the server process. If you have questions about what is accessible from within a terminal session, apply the same caution and verification you would apply to any shell on your system.
+Similarly, environment variables, shell aliases, and PATH configuration are inherited from the server process — save for a few amenities Ariel lays out in advance, described below. If you have questions about what is accessible from within a terminal session, apply the same caution and verification you would apply to any shell on your system.
+
+## A few amenities laid out in advance
+
+Ariel is not content merely to fling open a shell and abscond. Before surrendering the keyboard, the good fellow tidies the parlour with several small courtesies:
+
+- **A signpost to your instance.** Every terminal is furnished with the environment variable `QUILLTAP_DATA_DIR`, set to the very instance directory the running server is tending. This means a bare `quilltap` command — querying the database, browsing your document mounts, tailing logs — addresses *this* establishment by default, with no need to wave `--data-dir` about. (Aboard the good ship Docker, this is the container's own `/app/quilltap`.)
+- **The right `quilltap`, every time.** Should a `quilltap` already loiter upon your `PATH` whose vintage differs from the server's, Ariel quietly aliases the name to the matching command bundled with this very installation — so the CLI in your terminal always speaks the same dialect as the server it serves. (When the two already agree, or when no companion command can be found, Ariel leaves your `PATH` entirely undisturbed.) This courtesy is extended to both **bash** and **zsh**.
+- **Completions, for the bash-inclined.** In a bash terminal, Ariel loads the `quilltap` command-completions, so a press of the Tab key conjures subcommands and flags rather than mute indifference.
+- **A prompt that knows where it stands.** Also in bash, the prompt is dressed to display your present working directory before the customary `$`, lest you lose your bearings whilst wandering the filesystem.
+
+Your own shell configuration is loaded first in every case; these amenities are merely laid atop it, never in place of it.
 
 ## Terminal Mode — promoting Ariel from the chat thread to a dedicated pane
 

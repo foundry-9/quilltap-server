@@ -92,6 +92,15 @@ export function WardrobeItemEditor({
   const [componentItemIds, setComponentItemIds] = useState<string[]>(
     initialComponentItemIds ?? item?.componentItemIds ?? [],
   )
+  // Composite equip behaviour. `replace: false` (default) = additive layering;
+  // `true` = clear the designated slots first. `bundleDesignatedTypes` lets a
+  // replace-composite designate slots beyond its components' union (e.g. Naked
+  // covering every slot but only containing a ring); seeded from the stored
+  // types, with the component union always forced in at save time.
+  const [replace, setReplace] = useState<boolean>(item?.replace ?? false)
+  const [bundleDesignatedTypes, setBundleDesignatedTypes] = useState<WardrobeItemType[]>(
+    item?.types ?? [],
+  )
   // Editor mode is independent of `componentItemIds` so the user can switch
   // between single garment and outfit bundle without immediately mutating
   // the data. The toggle handler enforces consistency on transitions.
@@ -222,7 +231,6 @@ export function WardrobeItemEditor({
   }, [eligibleCandidates])
 
   const isBundle = editorMode === 'bundle'
-  const hasComponents = componentItemIds.length > 0
 
   // Auto-compute types from components when in bundle mode with components.
   // The server runs the exact same union; we mirror it here so the UI always
@@ -233,17 +241,28 @@ export function WardrobeItemEditor({
     return unionTypes(components)
   }, [candidates, componentItemIds])
 
-  // In bundle mode, show computed types once any component is added; otherwise
-  // preserve the previously-selected types as a hint of what coverage is
-  // intended. In single mode, types are always user-selected.
+  // Bundle coverage = the component union, optionally widened (for a replace
+  // composite) by the slots the user designates. Additive composites only ever
+  // cover their union. In single mode, types are always user-selected.
   const effectiveTypes = isBundle
-    ? hasComponents
-      ? computedTypes
-      : selectedTypes
+    ? replace
+      ? WARDROBE_SLOT_TYPES.filter(
+          (s) => computedTypes.includes(s) || bundleDesignatedTypes.includes(s),
+        )
+      : computedTypes
     : selectedTypes
 
   const handleTypeToggle = (type: WardrobeItemType): void => {
-    if (isBundle) return
+    if (isBundle) {
+      // Only a replace composite designates slots, and only beyond the
+      // component union — union slots are always covered (locked on).
+      if (!replace) return
+      if (computedTypes.includes(type)) return
+      setBundleDesignatedTypes((prev) =>
+        prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
+      )
+      return
+    }
     setSelectedTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
     )
@@ -329,7 +348,7 @@ export function WardrobeItemEditor({
     clearError()
 
     await executeSave(async () => {
-      const typesToSave = isBundle ? computedTypes : selectedTypes
+      const typesToSave = isBundle ? effectiveTypes : selectedTypes
       const componentsToSave = isBundle ? componentItemIds : []
 
       const payload: Record<string, unknown> = {
@@ -339,6 +358,8 @@ export function WardrobeItemEditor({
         appropriateness: formData.appropriateness || null,
         isDefault: formData.isDefault,
         componentItemIds: componentsToSave,
+        // `replace` is composite-only; leaf items always replace their slots.
+        replace: isBundle ? replace : false,
       }
 
       // Route to the correct API endpoint based on shared status
@@ -651,6 +672,60 @@ export function WardrobeItemEditor({
                     Add at least one component
                   </p>
                 )}
+
+                {/* Composite equip behaviour: additive (default) vs replace. */}
+                <div className="mt-3 border-t qt-border-default pt-3">
+                  <label
+                    className="inline-flex items-start gap-2 cursor-pointer"
+                    title="Check this if the outfit should replace everything in its designated slots."
+                  >
+                    <input
+                      type="checkbox"
+                      className="qt-checkbox mt-0.5"
+                      checked={replace}
+                      onChange={(e) => setReplace(e.target.checked)}
+                    />
+                    <span className="text-sm text-foreground">
+                      Replace everything in its designated slots
+                      <span className="block qt-text-xs qt-text-muted">
+                        Off by default this outfit layers onto whatever&apos;s already worn.
+                        Check it to clear its designated slots first.
+                      </span>
+                    </span>
+                  </label>
+
+                  {replace && (
+                    <div className="mt-2">
+                      <p className="qt-text-xs qt-text-secondary mb-1">
+                        Slots this outfit clears (its components&apos; slots are always included):
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        {WARDROBE_SLOT_TYPES.map((slot) => {
+                          const locked = computedTypes.includes(slot)
+                          const checked = effectiveTypes.includes(slot)
+                          return (
+                            <label
+                              key={slot}
+                              className={`inline-flex items-center gap-1.5 ${
+                                locked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                              }`}
+                              title={locked ? 'Covered by a component — always cleared' : undefined}
+                            >
+                              <input
+                                type="checkbox"
+                                className="qt-checkbox"
+                                checked={checked}
+                                disabled={locked}
+                                onChange={() => handleTypeToggle(slot)}
+                              />
+                              <span className="text-sm capitalize text-foreground">{slot}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

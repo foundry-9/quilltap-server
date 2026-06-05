@@ -2,6 +2,7 @@
 // Generates a first message for a chat when no scripted greeting exists
 
 import { createLLMProvider } from '@/lib/llm'
+import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { logger } from '@/lib/logger'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 
@@ -149,6 +150,7 @@ export async function generateGreetingMessage({
         temperature,
         maxTokens,
         topP,
+        cacheKey: buildCharacterCacheKey(characterId),
       },
       apiKey ?? ''
     )) {

@@ -20,7 +20,7 @@ import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
-import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums } from '../actions';
+import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleAccessibleStores } from '../actions';
 import {
   getPhotoLinkSummaryBySha256,
   type PhotoLinkSummary,
@@ -120,6 +120,14 @@ export async function handleGet(
   // Handle photo-albums action - resolve candidate save targets for an image
   if (action === 'photo-albums') {
     return handleGetPhotoAlbums(chatId, ctx);
+  }
+
+  // Handle accessible-stores action - document stores for the Open-Document
+  // picker's right-column accordions. `?all=true` is the picker's "look
+  // everywhere" mode (every enabled store, not just this chat's reach).
+  if (action === 'accessible-stores') {
+    const all = req.nextUrl.searchParams.get('all') === 'true';
+    return handleAccessibleStores(chatId, ctx, { all });
   }
 
   // Handle get-background action - returns story background URL for the chat
@@ -362,6 +370,10 @@ export async function handleGet(
             pendingExternalPrompt: event.pendingExternalPrompt || null,
             pendingExternalPromptFull: event.pendingExternalPromptFull || null,
             pendingExternalAttachments: event.pendingExternalAttachments || null,
+            // Reasoning ("thinking") for DISPLAY ONLY — surfaced so the Salon can
+            // render the collapsible thinking block on reload. Never re-fed to a model.
+            reasoningContent: event.reasoningContent || null,
+            reasoningSegments: event.reasoningSegments || null,
           };
         })
     ).then((results) => results.filter(Boolean));
@@ -450,12 +462,15 @@ export async function handleGet(
       disabledTools: chatMetadata.disabledTools || [],
       disabledToolGroups: chatMetadata.disabledToolGroups || [],
       allowCrossCharacterVaultReads: chatMetadata.allowCrossCharacterVaultReads ?? false,
+      coreWhisperEnabled: chatMetadata.coreWhisperEnabled ?? null,
+      coreWhisperInterval: chatMetadata.coreWhisperInterval ?? null,
       agentModeEnabled: chatMetadata.agentModeEnabled ?? false,
       resolvedAgentModeEnabled: resolvedAgentMode.enabled,
       agentModeSource: resolvedAgentMode.enabledSource,
       avatarGenerationEnabled: chatMetadata.avatarGenerationEnabled ?? null,
       isDangerousChat: chatMetadata.isDangerousChat ?? null,
       dangerCategories: chatMetadata.dangerCategories || [],
+      conciergeOverride: chatMetadata.conciergeOverride ?? null,
       documentEditingMode: chatMetadata.documentEditingMode ?? false,
       documentMode: chatMetadata.documentMode || 'normal',
       dividerPosition: chatMetadata.dividerPosition ?? 45,

@@ -39,13 +39,24 @@ export interface ChainDecision {
 
 const logger = createServiceLogger('TurnOrchestrator')
 
+export interface ChainGuards {
+  /**
+   * Autonomous-room flag: when true, the all-LLM pause threshold
+   * (`shouldPauseForAllLLM`) is bypassed and the chat is not marked
+   * `isPaused`. The autonomous-room runner enforces its own budget caps
+   * and lifecycle transitions; the in-chain pause would short-circuit it.
+   */
+  neverPauseForUser?: boolean
+}
+
 export async function shouldChainNext(
   repos: ReturnType<typeof getRepositories>,
   chatId: string,
   userParticipantId: string | null,
   chainDepth: number,
   chainStartTime: number,
-  config: ChainConfig = DEFAULT_CHAIN_CONFIG
+  config: ChainConfig = DEFAULT_CHAIN_CONFIG,
+  guards: ChainGuards = {}
 ): Promise<ChainDecision> {
   // Re-read chat for fresh state (isPaused may have been set by stop button)
   const freshChat = await repos.chats.findById(chatId)
@@ -83,6 +94,7 @@ export async function shouldChainNext(
     messages: messageEvents,
     participants: freshChat.participants,
     userParticipantId,
+    spokenThisCycleParticipantIds: freshChat.spokenThisCycleParticipantIds,
   })
 
   // Check all-LLM pause thresholds
@@ -100,7 +112,7 @@ export async function shouldChainNext(
       if (messageEvents[i].role === 'ASSISTANT') turnCount++
     }
 
-    if (shouldPauseForAllLLM(turnCount) && turnCount > 0) {
+    if (shouldPauseForAllLLM(turnCount) && turnCount > 0 && !guards.neverPauseForUser) {
       logger.info('[TurnOrchestrator] All-LLM pause threshold reached', { chatId, turnCount, chainDepth })
       // Pause the chat
       await repos.chats.update(chatId, { isPaused: true })
@@ -178,7 +190,19 @@ export async function shouldChainNext(
   }
 
   if (nextParticipant.controlledBy === 'user') {
-    return { chain: false, reason: 'user_turn' }
+    // Surface which user character is "up" so the salon UI can label the
+    // pause and offer a Skip button targeted at that participant.
+    let characterName: string | undefined
+    if (nextParticipant.characterId) {
+      const char = await repos.characters.findById(nextParticipant.characterId)
+      if (char) characterName = char.name
+    }
+    return {
+      chain: false,
+      reason: 'user_turn',
+      participantId: nextParticipantId,
+      characterName,
+    }
   }
 
   // Find character name for logging/events
@@ -237,6 +261,21 @@ export interface ExecuteTurnChainOptions {
   }) => Promise<ProcessMessageResult>
   decideNextTurn?: typeof shouldChainNext
   persistTurnParticipant?: typeof persistTurnParticipantId
+  /**
+   * Autonomous-room flag passed through to `shouldChainNext` so the all-LLM
+   * pause threshold is bypassed for the duration of the chain. The autonomous-
+   * room runner is responsible for its own budget caps and lifecycle.
+   */
+  neverPauseForUser?: boolean
+  /**
+   * When true, skip the chain loop entirely — the caller will enqueue the
+   * next character turn as a separate job. Used by the autonomous-room
+   * handler so each turn is one job (buffered writes flush at job end →
+   * `shouldChainNext` would otherwise see stale history and re-pick the
+   * same speaker; per-turn budget checks would otherwise be bypassed for
+   * up to 20 chain iterations).
+   */
+  singleTurn?: boolean
 }
 
 /**
@@ -253,8 +292,23 @@ export async function executeTurnChain({
   processChainedMessage,
   decideNextTurn = shouldChainNext,
   persistTurnParticipant = persistTurnParticipantId,
+  neverPauseForUser = false,
+  singleTurn = false,
 }: ExecuteTurnChainOptions): Promise<void> {
   if (!initialResult.isMultiCharacter || !initialResult.hasContent || initialResult.isPaused) {
+    return
+  }
+
+  // Single-turn callers (currently the autonomous-room handler) are
+  // responsible for enqueueing the next turn themselves. Skip the chain loop
+  // entirely so the buffered writes from this turn flush at job end before
+  // the next speaker is picked. See `SendMessageOptions.singleTurn` for
+  // background.
+  if (singleTurn) {
+    logger.info('[TurnOrchestrator] singleTurn: skipping chain loop', {
+      chatId,
+      userId,
+    })
     return
   }
 
@@ -271,7 +325,8 @@ export async function executeTurnChain({
       effectiveUserParticipantId,
       chainDepth,
       chainStartTime,
-      DEFAULT_CHAIN_CONFIG
+      DEFAULT_CHAIN_CONFIG,
+      { neverPauseForUser }
     )
 
     if (!decision.chain || !decision.participantId) {

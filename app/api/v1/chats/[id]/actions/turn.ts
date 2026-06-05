@@ -17,6 +17,8 @@ import {
   getActiveCharacterParticipants,
   findUserParticipant,
   getSelectionExplanation,
+  computeSpokenThisCycleAfterSkip,
+  isUsersTurn,
 } from '@/lib/chat/turn-manager';
 import { turnActionSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
@@ -46,6 +48,9 @@ export async function handleTurnAction(
     if (!isParticipantPresent(participant.status)) {
       return badRequest('Participant is not active');
     }
+    if (turnAction === 'skipUserTurn' && participant.controlledBy !== 'user') {
+      return badRequest('Only user-controlled participants can be skipped');
+    }
   }
 
   const userParticipant = findUserParticipant(chat.participants);
@@ -60,7 +65,12 @@ export async function handleTurnAction(
     messages: messageEvents,
     participants: chat.participants,
     userParticipantId,
+    spokenThisCycleParticipantIds: chat.spokenThisCycleParticipantIds,
   });
+
+  // Pre-computed cycle update for skipUserTurn — written below alongside
+  // the turn queue.
+  let skipCycleUpdate: string | null | undefined = undefined;
 
   switch (turnAction) {
     case 'nudge':
@@ -75,6 +85,36 @@ export async function handleTurnAction(
     case 'query':
       // Read-only: just compute next speaker from current state
       break;
+    case 'skipUserTurn': {
+      // Record the user-controlled participant as having "taken" their turn,
+      // and treat them as the last speaker so the next pick excludes them.
+      skipCycleUpdate = computeSpokenThisCycleAfterSkip(
+        participantId!,
+        chat.participants,
+        chat.spokenThisCycleParticipantIds,
+      );
+      if (skipCycleUpdate !== null) {
+        try {
+          const parsed = JSON.parse(skipCycleUpdate);
+          if (Array.isArray(parsed)) {
+            turnState = {
+              ...turnState,
+              spokenSinceUserTurn: parsed.filter((id): id is string => typeof id === 'string'),
+            };
+          }
+        } catch {
+          // Fall back to manual append; cycle wrap won't be observed locally.
+          if (!turnState.spokenSinceUserTurn.includes(participantId!)) {
+            turnState = {
+              ...turnState,
+              spokenSinceUserTurn: [...turnState.spokenSinceUserTurn, participantId!],
+            };
+          }
+        }
+      }
+      turnState = { ...turnState, lastSpeakerId: participantId! };
+      break;
+    }
   }
 
   const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants);
@@ -92,10 +132,14 @@ export async function handleTurnAction(
 
   // Persist turn queue and last turn participant for state-modifying actions
   if (turnAction !== 'query') {
-    await repos.chats.update(chatId, {
+    const updatePayload: Record<string, unknown> = {
       turnQueue: JSON.stringify(turnState.queue),
       lastTurnParticipantId: nextSpeakerResult.nextSpeakerId ?? null,
-    });
+    };
+    if (turnAction === 'skipUserTurn' && skipCycleUpdate !== null && skipCycleUpdate !== undefined) {
+      updatePayload.spokenThisCycleParticipantIds = skipCycleUpdate;
+    }
+    await repos.chats.update(chatId, updatePayload);
   }
 
   // Determine the next speaker's character info
@@ -116,7 +160,7 @@ export async function handleTurnAction(
       reason: nextSpeakerResult.reason,
       explanation: getSelectionExplanation(nextSpeakerResult),
       cycleComplete: nextSpeakerResult.cycleComplete,
-      isUsersTurn: nextSpeakerResult.nextSpeakerId === null,
+      isUsersTurn: isUsersTurn(nextSpeakerResult),
     },
     state: {
       queue: turnState.queue,

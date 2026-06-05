@@ -21,6 +21,8 @@ const updateWardrobeItemSchema = z.object({
   isDefault: z.boolean().optional(),
   /** Replace this item's composite components (use `[]` to demote to a leaf). */
   componentItemIds: z.array(z.string()).optional(),
+  /** Composite-only: clear the designated slots on equip instead of layering. */
+  replace: z.boolean().optional(),
 });
 
 // GET /api/v1/characters/[id]/wardrobe/[itemId]
@@ -33,7 +35,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; itemId: string
         return notFound('Character');
       }
 
-      const item = await repos.wardrobe.findById(itemId);
+      const item = await repos.wardrobe.findByIdForCharacter(id, itemId);
 
       if (!item || item.characterId !== id) {
         return notFound('Wardrobe item');
@@ -56,7 +58,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; itemId: string
       return notFound('Character');
     }
 
-    const existing = await repos.wardrobe.findById(itemId);
+    const existing = await repos.wardrobe.findByIdForCharacter(id, itemId);
     if (!existing || existing.characterId !== id) {
       return notFound('Wardrobe item');
     }
@@ -64,7 +66,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; itemId: string
     const body = await req.json();
     const validatedData = updateWardrobeItemSchema.parse(body);
 
-    const item = await repos.wardrobe.update(itemId, validatedData);
+    const item = await repos.wardrobe.update(itemId, validatedData, id);
 
     if (!item) {
       return notFound('Wardrobe item');
@@ -107,7 +109,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; itemId: str
         });
       }
 
-      const success = await repos.wardrobe.delete(itemId);
+      const success = await repos.wardrobe.delete(itemId, id);
 
       if (!success) {
         return notFound('Wardrobe item');

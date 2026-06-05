@@ -59,6 +59,10 @@ export function useChatControls({
   const [agentModeEnabled, setAgentModeEnabled] = useState<boolean | null>(null)
   const [storyBackgroundsEnabled, setStoryBackgroundsEnabled] = useState(false)
   const [allowCrossCharacterVaultReads, setAllowCrossCharacterVaultReads] = useState(false)
+  const [coreWhisperEnabled, setCoreWhisperEnabled] = useState<boolean | null>(null)
+  const [coreWhisperInterval, setCoreWhisperInterval] = useState<number | null>(null)
+  // Per-chat thinking visibility override (tri-state: null = inherit global). DISPLAY ONLY.
+  const [showThinking, setShowThinking] = useState<boolean | null>(null)
 
   // Refs
   const userStoppedStreamRef = useRef<boolean>(false)
@@ -100,6 +104,27 @@ export function useChatControls({
       setAllowCrossCharacterVaultReads(chat.allowCrossCharacterVaultReads)
     }
   }, [chat?.allowCrossCharacterVaultReads])
+
+  // Initialize coreWhisperEnabled / coreWhisperInterval from chat data
+  useEffect(() => {
+    if (chat?.coreWhisperEnabled !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      setCoreWhisperEnabled(chat.coreWhisperEnabled ?? null)
+    }
+  }, [chat?.coreWhisperEnabled])
+  useEffect(() => {
+    if (chat?.coreWhisperInterval !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      setCoreWhisperInterval(chat.coreWhisperInterval ?? null)
+    }
+  }, [chat?.coreWhisperInterval])
+  // Initialize showThinking from chat data (tri-state: null = inherit global)
+  useEffect(() => {
+    if (chat?.showThinking !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      setShowThinking(chat.showThinking ?? null)
+    }
+  }, [chat?.showThinking])
 
   // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
   useEffect(() => {
@@ -183,6 +208,74 @@ export function useChatControls({
       showErrorToast('Could not update shared-vault setting')
     }
   }, [chatId, allowCrossCharacterVaultReads])
+
+  // Per-chat Core whisper enabled override. Tri-state: null = inherit, true/false = explicit.
+  const handleSetCoreWhisperEnabled = useCallback(async (value: boolean | null) => {
+    const previous = coreWhisperEnabled
+    setCoreWhisperEnabled(value)
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { coreWhisperEnabled: value } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist coreWhisperEnabled', response.status)
+        setCoreWhisperEnabled(previous)
+        showErrorToast('Could not update Core whisper setting')
+      }
+    } catch (error) {
+      console.error('[Chat] Error persisting coreWhisperEnabled', error)
+      setCoreWhisperEnabled(previous)
+      showErrorToast('Could not update Core whisper setting')
+    }
+  }, [chatId, coreWhisperEnabled])
+
+  // Per-chat Core whisper cadence override. null = inherit, positive integer = explicit.
+  const handleSetCoreWhisperInterval = useCallback(async (value: number | null) => {
+    const previous = coreWhisperInterval
+    setCoreWhisperInterval(value)
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { coreWhisperInterval: value } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist coreWhisperInterval', response.status)
+        setCoreWhisperInterval(previous)
+        showErrorToast('Could not update Core whisper cadence')
+      }
+    } catch (error) {
+      console.error('[Chat] Error persisting coreWhisperInterval', error)
+      setCoreWhisperInterval(previous)
+      showErrorToast('Could not update Core whisper cadence')
+    }
+  }, [chatId, coreWhisperInterval])
+
+  // Per-chat thinking-visibility override. Tri-state: null = inherit global,
+  // true/false = explicit. DISPLAY ONLY — only governs whether captured
+  // reasoning is shown, never whether it is stored or fed to a model.
+  const handleSetShowThinking = useCallback(async (value: boolean | null) => {
+    const previous = showThinking
+    setShowThinking(value)
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { showThinking: value } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist showThinking', response.status)
+        setShowThinking(previous)
+        showErrorToast('Could not update Thinking visibility')
+      }
+    } catch (error) {
+      console.error('[Chat] Error persisting showThinking', error)
+      setShowThinking(previous)
+      showErrorToast('Could not update Thinking visibility')
+    }
+  }, [chatId, showThinking])
 
   // Toggle document editing mode and persist to database
   const handleToggleDocumentEditingMode = useCallback(async () => {
@@ -447,6 +540,38 @@ export function useChatControls({
     }
   }, [chatId, fetchChat])
 
+  // Handle per-chat talkativeness override. Debounced so a slider drag fires
+  // one request when the user releases, not on every value change.
+  const talkativenessTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const handleTalkativenessChange = useCallback((participantId: string, value: number) => {
+    // Clear any pending request for this participant.
+    const pending = talkativenessTimerRef.current[participantId]
+    if (pending) clearTimeout(pending)
+
+    talkativenessTimerRef.current[participantId] = setTimeout(async () => {
+      delete talkativenessTimerRef.current[participantId]
+      try {
+        const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            updateParticipant: {
+              participantId,
+              talkativeness: value,
+            },
+          }),
+        })
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}))
+          throw new Error(errorData.error || 'Failed to update talkativeness')
+        }
+        await fetchChat()
+      } catch (err) {
+        showErrorToast(err instanceof Error ? err.message : 'Failed to update talkativeness')
+      }
+    }, 400)
+  }, [chatId, fetchChat])
+
   // All-LLM pause handlers
   const handleAllLLMContinue = useCallback(() => {
     // The caller should close the modal
@@ -462,6 +587,12 @@ export function useChatControls({
     storyBackgroundsEnabled, setStoryBackgroundsEnabled,
     allowCrossCharacterVaultReads,
     handleToggleCrossCharacterVaultReads,
+    coreWhisperEnabled,
+    coreWhisperInterval,
+    handleSetCoreWhisperEnabled,
+    handleSetCoreWhisperInterval,
+    showThinking,
+    handleSetShowThinking,
     connectionProfiles,
     userStoppedStreamRef,
     setPauseState,
@@ -477,6 +608,7 @@ export function useChatControls({
     handleSystemPromptChange,
     handleRebuildSystemPrompt,
     handleParticipantSettingsChange,
+    handleTalkativenessChange,
     handleAllLLMContinue,
     handleAllLLMStop,
   }

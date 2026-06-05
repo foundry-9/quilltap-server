@@ -227,6 +227,8 @@ import { reabsorbLeftoverProjectFilesMigration } from './reabsorb-leftover-proje
 import { relinkFilesToMountBlobsMigration } from './relink-files-to-mount-blobs';
 // Add requestHashes column to llm_logs (cache-stability instrumentation)
 import { addLLMLogsRequestHashesColumnMigration } from './add-llm-logs-request-hashes-column';
+// Add rawProviderUsage column to llm_logs (Layer-1 raw-usage snapshot)
+import { addLLMLogsRawProviderUsageColumnMigration } from './add-llm-logs-raw-provider-usage-column';
 // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
 import { addSummarizationGateFieldsMigration } from './add-summarization-gate-fields';
 // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
@@ -283,6 +285,42 @@ import { repairDocMountFileLinkFolderIdsMigration } from './repair-doc-mount-fil
 import { addMemoriesReinforcedImportanceIndexMigration } from './add-memories-reinforced-importance-index-v1';
 // Scrub dangling relatedMemoryIds left by historical deletion paths
 import { repairDanglingRelatedMemoryEdgesV1Migration } from './repair-dangling-related-memory-edges-v1';
+// Add pseudoToolMode column to connection_profiles (selects native/simple-json/text-block pseudo-tool surface)
+import { addPseudoToolModeFieldMigration } from './add-pseudo-tool-mode-field';
+// Reconcile files.mimeType/size with the mount blob (bridges transcode bitmaps to WebP; the FileEntry must reflect what is on disk)
+import { repairFilesMimeAndSizeFromMountBlobMigration } from './repair-files-mime-and-size-from-mount-blob';
+// Recompute doc_mount_blobs.sha256 from stored bytes; upload paths recorded input-bytes hash instead of stored-bytes hash
+import { repairMountBlobSha256FromBytesMigration } from './repair-mount-blob-sha256-from-bytes';
+// Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
+import { addChatConciergeOverrideMigration } from './add-chat-concierge-override';
+// Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
+import { addComposerSpellcheckFieldMigration } from './add-composer-spellcheck-field';
+// Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
+import { addTextReplacementRulesTableMigration } from './add-text-replacement-rules-table';
+// Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
+import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
+// 4.6 character vault cutover: move every content field into the vault and drop the DB columns
+import { cutoverCharactersToVaultMigration } from './cutover-characters-to-vault';
+// 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
+import { addAutonomousRoomsFieldsMigration } from './add-autonomous-rooms-fields';
+// 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
+import { addSpokenThisCycleFieldMigration } from './add-spoken-this-cycle-field';
+// Aurora Core whisper: per-chat + per-character override columns
+import { addCoreWhisperFieldsMigration } from './add-core-whisper-fields';
+// Aurora Core whisper: global-default column on chat_settings (companion to the override columns above)
+import { addCoreWhisperSettingsFieldMigration } from './add-core-whisper-settings-field';
+// 4.6 private character rooms: runPausedAt for resume-excludes-paused-time wall-clock accounting
+import { addAutonomousRunPausedAtMigration } from './add-autonomous-run-paused-at';
+// 4.6 private character rooms: runPausedAccumMs so wall-clock excludes paused time without shifting runStartedAt
+import { addAutonomousRunPausedAccumMigration } from './add-autonomous-run-paused-accum';
+// Drop the dead singular scenario column from characters (legacy of the scenarios[] array)
+import { dropCharacterScenarioColumnMigration } from './drop-character-scenario-column';
+// Thinking display: reasoningContent + reasoningSegments columns on chat_messages
+import { addChatMessageReasoningColumnsMigration } from './add-chat-message-reasoning-columns';
+// Thinking display: showThinking column on chats + thinkingDisplay column on chat_settings
+import { addThinkingDisplayFieldsMigration } from './add-thinking-display-fields';
+// Add autoScrollOnResponseComplete column to chat_settings (Salon auto-scroll toggle)
+import { addAutoScrollOnResponseCompleteFieldMigration } from './add-auto-scroll-on-response-complete-field';
 
 /**
  * All available migrations.
@@ -505,6 +543,8 @@ export const migrations: Migration[] = [
   relinkFilesToMountBlobsMigration,
   // Add requestHashes column to llm_logs (cache-stability instrumentation)
   addLLMLogsRequestHashesColumnMigration,
+  // Add rawProviderUsage column to llm_logs (Layer-1 raw-usage snapshot)
+  addLLMLogsRawProviderUsageColumnMigration,
   // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
   addSummarizationGateFieldsMigration,
   // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
@@ -561,6 +601,42 @@ export const migrations: Migration[] = [
   addMemoriesReinforcedImportanceIndexMigration,
   // Scrub dangling relatedMemoryIds left by historical deletion paths
   repairDanglingRelatedMemoryEdgesV1Migration,
+  // Add pseudoToolMode column to connection_profiles
+  addPseudoToolModeFieldMigration,
+  // Reconcile files.mimeType/size with the mount blob (post-transcode metadata was dropped on the floor)
+  repairFilesMimeAndSizeFromMountBlobMigration,
+  // Recompute doc_mount_blobs.sha256 from stored bytes; correct paired doc_mount_files.sha256
+  repairMountBlobSha256FromBytesMigration,
+  // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
+  addChatConciergeOverrideMigration,
+  // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
+  addComposerSpellcheckFieldMigration,
+  // Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
+  addTextReplacementRulesTableMigration,
+  // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
+  addTextReplacementsEnabledFieldMigration,
+  // 4.6 character vault cutover: settle every character into its vault and drop the legacy content columns
+  cutoverCharactersToVaultMigration,
+  // 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
+  addAutonomousRoomsFieldsMigration,
+  // 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
+  addSpokenThisCycleFieldMigration,
+  // Aurora Core whisper: per-chat + per-character override columns
+  addCoreWhisperFieldsMigration,
+  // Aurora Core whisper: global-default column on chat_settings
+  addCoreWhisperSettingsFieldMigration,
+  // 4.6 private character rooms: runPausedAt for resume-excludes-paused-time wall-clock accounting
+  addAutonomousRunPausedAtMigration,
+  // 4.6 private character rooms: runPausedAccumMs so wall-clock excludes paused time without shifting runStartedAt
+  addAutonomousRunPausedAccumMigration,
+  // Drop the dead singular scenario column from characters (legacy of the scenarios[] array)
+  dropCharacterScenarioColumnMigration,
+  // Thinking display: reasoningContent + reasoningSegments columns on chat_messages
+  addChatMessageReasoningColumnsMigration,
+  // Thinking display: showThinking (chats) + thinkingDisplay (chat_settings) columns
+  addThinkingDisplayFieldsMigration,
+  // Salon auto-scroll: autoScrollOnResponseComplete column on chat_settings
+  addAutoScrollOnResponseCompleteFieldMigration,
 ];
 
 export {
@@ -768,6 +844,8 @@ export {
   relinkFilesToMountBlobsMigration,
   // Add requestHashes column to llm_logs (cache-stability instrumentation)
   addLLMLogsRequestHashesColumnMigration,
+  // Add rawProviderUsage column to llm_logs (Layer-1 raw-usage snapshot)
+  addLLMLogsRawProviderUsageColumnMigration,
   // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
   addSummarizationGateFieldsMigration,
   // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
@@ -824,5 +902,37 @@ export {
   addMemoriesReinforcedImportanceIndexMigration,
   // Scrub dangling relatedMemoryIds left by historical deletion paths
   repairDanglingRelatedMemoryEdgesV1Migration,
+  // Add pseudoToolMode column to connection_profiles
+  addPseudoToolModeFieldMigration,
+  // Reconcile files.mimeType/size with the mount blob
+  repairFilesMimeAndSizeFromMountBlobMigration,
+  // Recompute doc_mount_blobs.sha256 from stored bytes; correct paired doc_mount_files.sha256
+  repairMountBlobSha256FromBytesMigration,
+  // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
+  addChatConciergeOverrideMigration,
+  // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
+  addComposerSpellcheckFieldMigration,
+  // Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
+  addTextReplacementRulesTableMigration,
+  // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
+  addTextReplacementsEnabledFieldMigration,
+  // 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
+  addAutonomousRoomsFieldsMigration,
+  // 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
+  addSpokenThisCycleFieldMigration,
+  // Aurora Core whisper: per-chat + per-character override columns
+  addCoreWhisperFieldsMigration,
+  // Aurora Core whisper: global-default column on chat_settings
+  addCoreWhisperSettingsFieldMigration,
+  // 4.6 private character rooms: runPausedAt for resume-excludes-paused-time wall-clock accounting
+  addAutonomousRunPausedAtMigration,
+  // 4.6 private character rooms: runPausedAccumMs so wall-clock excludes paused time without shifting runStartedAt
+  addAutonomousRunPausedAccumMigration,
+  // Thinking display: reasoningContent + reasoningSegments columns on chat_messages
+  addChatMessageReasoningColumnsMigration,
+  // Thinking display: showThinking (chats) + thinkingDisplay (chat_settings) columns
+  addThinkingDisplayFieldsMigration,
+  // Salon auto-scroll: autoScrollOnResponseComplete column on chat_settings
+  addAutoScrollOnResponseCompleteFieldMigration,
 };
 

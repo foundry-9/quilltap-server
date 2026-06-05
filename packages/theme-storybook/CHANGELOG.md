@@ -2,6 +2,15 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.38] - 2026-06-04
+
+### Added
+- `.qt-checkbox` and `.qt-radio` component classes (previously referenced by the Inputs story but undefined here, so they rendered as bare native controls). Token-driven via new `--qt-checkbox-*` / `--qt-radio-*` variables; `accent-color` recolors the native fill/check.
+- `--qt-select-arrow` variable holding the full `url()` data URI for the `<select>` chevron; `.qt-select` now references it so themes can swap the glyph wholesale.
+
+### Changed
+- `.qt-button-success` now uses the token-driven button base (`--qt-button-radius`/padding/font) and gains the standard disabled handling, matching the other variants instead of hardcoding `0.5rem 1rem` / `font-weight: 600`.
+
 ## [1.0.35] - 2026-05-17
 
 ### Added

@@ -49,6 +49,7 @@ export function useParticipants({
           status: (p.status as 'active' | 'silent' | 'absent' | 'removed') || (p.isActive ? 'active' : (p.removedAt ? 'removed' : 'absent')),
           hasHistoryAccess: p.hasHistoryAccess ?? false,
           joinScenario: p.joinScenario ?? null,
+          talkativeness: p.talkativeness ?? null,
           createdAt: p.createdAt ?? new Date().toISOString(),
           updatedAt: p.updatedAt ?? new Date().toISOString(),
         }
@@ -104,26 +105,33 @@ export function useParticipants({
 
   const participantData: ParticipantData[] = useMemo(() => {
     if (!chatParticipants) return []
-    return chatParticipants.map(p => ({
-      id: p.id,
-      type: p.type,
-      controlledBy: p.controlledBy ?? 'llm',
-      displayOrder: p.displayOrder,
-      isActive: p.isActive,
-      status: (p.status as 'active' | 'silent' | 'absent' | 'removed') || (p.isActive ? 'active' : 'absent'),
-      character: p.character ? {
-        id: p.character.id,
-        name: p.character.name,
-        title: p.character.title,
-        avatarUrl: p.character.avatarUrl,
-        talkativeness: p.character.talkativeness ?? 0.5,
-        defaultImage: p.character.defaultImage,
-        systemPrompts: p.character.systemPrompts,
-      } : null,
-      // User-controlled characters use the same .character field as LLM characters
-      connectionProfile: p.connectionProfile,
-      selectedSystemPromptId: p.selectedSystemPromptId ?? null,
-    }))
+    return chatParticipants.map(p => {
+      // The per-chat override wins; fall back to the character's value, then 0.5.
+      // We surface the resolved value as `character.talkativeness` so existing
+      // consumers (sidebar ordering, slider initial value) Just Work without
+      // having to know about the override field.
+      const resolvedTalkativeness = p.talkativeness ?? p.character?.talkativeness ?? 0.5
+      return {
+        id: p.id,
+        type: p.type,
+        controlledBy: p.controlledBy ?? 'llm',
+        displayOrder: p.displayOrder,
+        isActive: p.isActive,
+        status: (p.status as 'active' | 'silent' | 'absent' | 'removed') || (p.isActive ? 'active' : 'absent'),
+        character: p.character ? {
+          id: p.character.id,
+          name: p.character.name,
+          title: p.character.title,
+          avatarUrl: p.character.avatarUrl,
+          talkativeness: resolvedTalkativeness,
+          defaultImage: p.character.defaultImage,
+          systemPrompts: p.character.systemPrompts,
+        } : null,
+        // User-controlled characters use the same .character field as LLM characters
+        connectionProfile: p.connectionProfile,
+        selectedSystemPromptId: p.selectedSystemPromptId ?? null,
+      }
+    })
   }, [chatParticipants])
 
   // Characters the user can speak as (for SpeakerSelector)

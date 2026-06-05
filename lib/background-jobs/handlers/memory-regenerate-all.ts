@@ -26,6 +26,7 @@ import {
   type MemoryRegenerateChatPayload,
 } from '../queue-service';
 import { logger } from '@/lib/logger';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 
 export async function handleMemoryRegenerateAll(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as MemoryRegenerateAllPayload;
@@ -54,9 +55,12 @@ export async function handleMemoryRegenerateAll(job: BackgroundJob): Promise<voi
       chatsSkippedDuplicate++;
       continue;
     }
+    // Off-duty chats forfeit the dangerous profile — the operator has
+    // explicitly opted them out of any uncensored routing for the chat.
+    const effectivelyDangerous = isChatActiveDangerous(chat);
     const profileId =
-      chat.isDangerousChat === true ? payload.dangerousProfileId : payload.standardProfileId;
-    if (chat.isDangerousChat === true && profileId !== payload.standardProfileId) {
+      effectivelyDangerous ? payload.dangerousProfileId : payload.standardProfileId;
+    if (effectivelyDangerous && profileId !== payload.standardProfileId) {
       dangerousRouted++;
     }
     try {

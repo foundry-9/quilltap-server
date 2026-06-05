@@ -231,17 +231,17 @@ const APPEARANCE_RESOLUTION_PROMPT = `You are analyzing a conversation to determ
 You will receive:
 - Recent conversation messages
 - An image prompt that is about to be used for image generation
-- For each character: their available physical descriptions (with usage contexts) and stored clothing/outfit records
+- For each character: their available physical descriptions (with usage contexts) and the items they currently have equipped in their wardrobe
 
 Your task is to determine for each character:
 1. Which physical description best matches the current scene context (by usage context)
 2. What the character is currently wearing
 
 CLOTHING PRIORITY (highest to lowest):
-1. NARRATIVE: If the conversation explicitly describes what a character changed into or is currently wearing, use that description verbatim. This overrides everything.
+1. NARRATIVE: If the conversation explicitly describes what a character changed into or is currently wearing, use the conversation's wording — paraphrased into a single concise visual sentence (not copied verbatim).
 2. IMAGE PROMPT: If the image prompt specifies clothing for a character, use that.
-3. STORED: If neither narrative nor prompt specifies clothing, select the best matching stored clothing record based on its usage context and the current scene.
-4. DEFAULT: If no stored records match, use the first stored clothing record. If none exist, respond with an empty string.
+3. STORED: Otherwise, summarize the character's equipped wardrobe items into a single concise visual sentence.
+4. DEFAULT: If none of the above apply, respond with an empty string.
 
 Respond with a JSON array, one entry per character:
 [
@@ -255,8 +255,8 @@ Respond with a JSON array, one entry per character:
 
 IMPORTANT:
 - For selectedDescriptionId, pick the description whose usageContext best fits the current scene. Use null to indicate the first/default.
-- For clothingDescription, write a concise visual description suitable for image generation.
-- clothingSource must be "narrative" if from conversation, "stored" if from a stored record, "default" if using first/fallback.
+- clothingDescription MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visible (garment + color/material + any standout detail). No markdown, no bullet lists, no parentheticals, no commentary about purpose or feel, no quoted item names.
+- clothingSource must be "narrative" if from conversation, "stored" if from equipped wardrobe, "default" if using first/fallback.
 
 JSON only - no other text.`
 
@@ -754,20 +754,20 @@ export async function resolveAppearance(
 
     // Build equipped wardrobe items section using canonical describeOutfit.
     // Multiple entries per slot represent layering; we feed describeOutfit
-    // the per-slot title arrays in the order callers supplied them.
+    // the per-slot title arrays in the order callers supplied them. Titles
+    // only — the prose `description` field is for human readers and would
+    // otherwise be echoed verbatim into the image prompt.
     let wardrobeSection = ''
     if (char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0) {
       const valuesFor = (slot: string): string[] =>
-        char.equippedWardrobeItems!
-          .filter(i => i.slot === slot)
-          .map(i => i.description ? `${i.title} (${i.description})` : i.title)
+        char.equippedWardrobeItems!.filter(i => i.slot === slot).map(i => i.title)
       const outfitDescription = describeOutfit({
         top: valuesFor('top'),
         bottom: valuesFor('bottom'),
         footwear: valuesFor('footwear'),
         accessories: valuesFor('accessories'),
       })
-      wardrobeSection = `\n  Current Outfit (equipped wardrobe — takes precedence over stored clothing records):\n${outfitDescription}`
+      wardrobeSection = `\n  Equipped Wardrobe (stored items the character currently has on — summarize as a brief visual sentence):\n${outfitDescription}`
     }
 
     return `  Character: ${char.characterName} (ID: ${char.characterId})

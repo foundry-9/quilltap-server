@@ -150,6 +150,23 @@ interface LegacyStorageKeyParams {
 interface UploadResult {
   /** Storage key where file was stored */
   storageKey: string;
+  /**
+   * MIME type of the bytes actually persisted. May differ from the caller's
+   * input `contentType` when the storage bridge transcoded the bytes (e.g.
+   * `transcodeToWebP` re-encodes bitmaps to `image/webp`). Callers creating a
+   * `files` row must record this rather than the input mimeType, otherwise
+   * downstream readers (vision providers, HTTP Content-Type) will lie about
+   * what's on disk.
+   */
+  storedMimeType: string;
+  /** Length in bytes of the bytes actually persisted (post-transcode). */
+  sizeBytes: number;
+  /**
+   * SHA-256 of the bytes actually persisted. Callers that dedupe by input
+   * hash should keep using their own pre-upload digest; this value reflects
+   * the stored bytes, which may have been transcoded.
+   */
+  sha256: string;
 }
 
 // ============================================================================
@@ -330,8 +347,14 @@ class FileStorageManager {
         blobId: result.blobId,
         relativePath: result.relativePath,
         size: result.sizeBytes,
+        storedMimeType: result.storedMimeType,
       });
-      return { storageKey: result.storageKey };
+      return {
+        storageKey: result.storageKey,
+        storedMimeType: result.storedMimeType,
+        sizeBytes: result.sizeBytes,
+        sha256: result.sha256,
+      };
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown upload error';

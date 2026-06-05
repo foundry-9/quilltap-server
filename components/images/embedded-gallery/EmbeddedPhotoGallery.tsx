@@ -173,6 +173,7 @@ export function EmbeddedPhotoGallery({
           onClose={() => setSelectedIndex(-1)}
           image={{
             id: selectedImage.id,
+            linkId: selectedImage.id,
             filename: selectedImage.filename,
             filepath: selectedImage.filepath,
             url: selectedImage.url,

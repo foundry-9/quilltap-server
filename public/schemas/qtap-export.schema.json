@@ -296,7 +296,14 @@
         },
         "firstMessage": { "type": "string" },
         "exampleDialogues": { "type": "string" },
-        "avatarUrl": { "type": ["string", "null"] },
+        "physicalDescription": {
+          "oneOf": [{ "type": "object" }, { "type": "null" }],
+          "description": "Singular physical description with full text plus token-sized prompt variants (short/medium/long/complete). Pre-4.6 exports carried a `physicalDescriptions` array instead; importers fold legacy index 0 into this field."
+        },
+        "avatarUrl": {
+          "type": ["string", "null"],
+          "description": "DEPRECATED in 4.6: avatar URLs now flow through defaultImageId and the per-vault images/avatar.webp. Retained on the schema so older `.qtap` files still validate; importers ignore it."
+        },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
         "_linkedPersonaNames": {
@@ -317,13 +324,13 @@
           "type": ["boolean", "null"],
           "description": "Whether this character can create new wardrobe items mid-conversation (null = enabled by default)"
         },
-        "readPropertiesFromDocumentStore": {
-          "type": ["boolean", "null"],
-          "description": "When true, pronouns/aliases/title/firstMessage/talkativeness are read live from the linked vault's properties.json instead of this row"
-        },
         "systemTransparency": {
           "type": ["boolean", "null"],
           "description": "When true, the character may inspect 'the Staff' (self_inventory, Staff messages from Lantern/Aurora/Librarian/Prospero/Host, and character vaults) subject to chat/project settings. When null or false, those three are hidden from this character regardless of any chat/project toggle — a hard character-level override. Default null (opaque)."
+        },
+        "coreWhisperEnabled": {
+          "type": ["boolean", "null"],
+          "description": "Per-character override of the global coreWhisper.enabled setting (Aurora's Core whisper). Null = inherit from global. Default null."
         },
         "wardrobeItems": {
           "type": "array",
@@ -379,6 +386,19 @@
         "scenarioText": {
           "type": ["string", "null"],
           "description": "The resolved scenario content persisted on this chat at creation time"
+        },
+        "coreWhisperEnabled": {
+          "type": ["boolean", "null"],
+          "description": "Per-chat override of the global coreWhisper.enabled setting (Aurora's Core whisper). Null = inherit. Resolution: chat > character > global."
+        },
+        "coreWhisperInterval": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Per-chat override of the global coreWhisper.interval setting (assistant turns between periodic whispers). Null = inherit."
+        },
+        "showThinking": {
+          "type": ["boolean", "null"],
+          "description": "Per-chat override for showing reasoning models' thinking (tri-state). Null = inherit global chat.thinkingDisplay.defaultVisible; true = show; false = hide. DISPLAY ONLY."
         },
         "_tagNames": {
           "type": "array",
@@ -445,6 +465,116 @@
           "minimum": 20,
           "maximum": 80,
           "description": "Vertical divider position (%) for the right pane when both Document and Terminal Modes are active"
+        },
+        "isDangerousChat": {
+          "type": ["boolean", "null"],
+          "description": "Whether the Concierge has classified this chat as dangerous. NULL = not yet classified."
+        },
+        "dangerScore": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Overall danger score for this chat (0-1), null = not yet classified."
+        },
+        "dangerCategories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Categories of dangerous content detected at chat level."
+        },
+        "dangerClassifiedAt": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp of the last chat-level classification."
+        },
+        "dangerClassifiedAtMessageCount": {
+          "type": ["integer", "null"],
+          "description": "messageCount at classification time, used to detect changes for re-check."
+        },
+        "conciergeOverride": {
+          "enum": ["OFF", null],
+          "description": "Per-chat Concierge mode override. NULL = follow the global Concierge setting; 'OFF' = the Concierge is off-duty for this chat and no moderation effects apply."
+        },
+
+        "chatType": {
+          "enum": ["salon", "help", "autonomous"],
+          "description": "Chat type discriminator. 'salon' = regular human-driven chat; 'help' = help-assistant chat; 'autonomous' = private character-to-character room (4.6 Private Character Rooms)."
+        },
+
+        "budgetMaxTurns": {
+          "type": ["integer", "null"],
+          "description": "Autonomous-room cap on character turns per run. NULL = unlimited."
+        },
+        "budgetMaxTokens": {
+          "type": ["integer", "null"],
+          "description": "Autonomous-room cap on cumulative prompt + completion tokens per run."
+        },
+        "budgetMaxWallClockMs": {
+          "type": ["integer", "null"],
+          "description": "Autonomous-room wall-clock cap per run, in milliseconds."
+        },
+        "budgetEstimatedSpendCapUSD": {
+          "type": ["number", "null"],
+          "description": "Optional autonomous-room spend cap in USD, evaluated against llm_logs."
+        },
+        "scheduleCron": {
+          "type": ["string", "null"],
+          "description": "Cron expression governing autonomous-room runs. NULL = manual-only."
+        },
+        "scheduleFreshnessWindowMs": {
+          "type": ["integer", "null"],
+          "description": "Catch-up freshness window in ms; NULL = inherit user default."
+        },
+        "scheduleNextRunAt": {
+          "type": ["string", "null"],
+          "description": "ISO timestamp of the next scheduled autonomous-room run."
+        },
+        "scheduleLastRunAt": {
+          "type": ["string", "null"],
+          "description": "ISO timestamp of the most recent autonomous-room run start."
+        },
+        "runState": {
+          "enum": ["idle", "running", "paused", "stopped", "budgetExhausted", "error", null],
+          "description": "Lifecycle state of the current/most-recent autonomous-room run. NULL on non-autonomous chats."
+        },
+        "currentRunId": {
+          "type": ["string", "null"],
+          "description": "UUID of the authoritative autonomous-room run. Stale-run guard target."
+        },
+        "runStateMessage": {
+          "type": ["string", "null"],
+          "description": "Human-readable detail for paused/error states."
+        },
+        "runStartedAt": {
+          "type": ["string", "null"],
+          "description": "ISO timestamp of the current/most-recent run start."
+        },
+        "runEndedAt": {
+          "type": ["string", "null"],
+          "description": "ISO timestamp of the current/most-recent run end."
+        },
+        "runPausedAt": {
+          "type": ["string", "null"],
+          "description": "ISO timestamp the current paused interval began; cleared on resume."
+        },
+        "runPausedAccumMs": {
+          "type": ["integer", "null"],
+          "description": "Cumulative milliseconds the current run has spent paused. The wall-clock budget subtracts this from elapsed time so paused intervals are excluded without disturbing runStartedAt."
+        },
+        "runTurnsConsumed": {
+          "type": ["integer", "null"],
+          "description": "Turns consumed in the current/most-recent autonomous-room run."
+        },
+        "runTokensConsumed": {
+          "type": ["integer", "null"],
+          "description": "Tokens consumed in the current/most-recent autonomous-room run."
+        },
+        "runDestructiveToolsAllowed": {
+          "type": "integer",
+          "enum": [0, 1],
+          "description": "1 = destructive tools pre-authorized for this autonomous room; 0 = disabled."
+        },
+        "runVisibility": {
+          "enum": ["owner_only", "household", "open", null],
+          "description": "Per-room visibility override for autonomous rooms; NULL = inherit user default."
         }
       }
     },
@@ -460,6 +590,12 @@
         "status": {
           "enum": ["active", "silent", "absent", "removed"],
           "description": "Participation status: active (normal), silent (inner thoughts only), absent (away), removed (left chat)"
+        },
+        "talkativeness": {
+          "type": ["number", "null"],
+          "minimum": 0.1,
+          "maximum": 1.0,
+          "description": "Per-chat talkativeness override (0.1–1.0). Null/omitted means inherit from the character record."
         }
       }
     },
@@ -488,6 +624,20 @@
         "systemSender": { "type": ["string", "null"], "enum": ["lantern", "aurora", "librarian", "concierge", "prospero", "host", "commonplaceBook", "ariel", null], "description": "Personified feature ('the Staff') that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close)." },
         "systemKind": { "type": ["string", "null"], "description": "Sub-classification of a Staff-authored message — used by the Salon UI to label collapsed system-message bars (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender." },
         "opaqueContent": { "type": ["string", "null"], "description": "Neutral, persona-free rewrite of `content` for Staff-authored messages. Swapped into every character's LLM context when the chat has any non-user-character participant with systemTransparency !== true (the user character does not count). NULL on participant-authored messages and on legacy Staff messages from before the dual-body migration (swap falls through to `content`)." },
+        "reasoningContent": { "type": ["string", "null"], "description": "Reasoning models' full chain-of-thought ('thinking') for this turn. DISPLAY ONLY — surfaced in the Salon but never re-fed to any model as history, summary, or memory." },
+        "reasoningSegments": {
+          "type": ["array", "null"],
+          "description": "Positioned reasoning blocks (DISPLAY ONLY) used to splice thinking into the prose at the point it fired, the same way tool calls are anchored.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "anchorOffset": { "type": "number", "description": "Character offset into the message prose at which this reasoning block fired." },
+              "content": { "type": "string", "description": "Raw reasoning text for this block." },
+              "seq": { "type": "number", "description": "Turn-monotonic sequence shared with tool anchors so same-offset items render in true emission order." }
+            },
+            "required": ["anchorOffset", "content", "seq"]
+          }
+        },
         "hostEvent": {
           "type": ["object", "null"],
           "description": "Structured payload on Host announcements (systemSender = 'host'). Two shapes share this field: (a) presence transitions — { participantId, toStatus } — for add / remove / status-change; (b) off-scene character introductions — { introducedCharacterIds } — stamped by the off-scene Host announcer so the context builder can detect already-introduced characters. All fields optional; one or the other is set per announcement.",
@@ -627,6 +777,11 @@
         "useNativeWebSearch": { "type": "boolean" },
         "isDangerousCompatible": { "type": "boolean" },
         "allowToolUse": { "type": "boolean" },
+        "pseudoToolMode": {
+          "type": "string",
+          "enum": ["auto", "native", "simple-json", "text-block"],
+          "description": "How tool calls are framed on the wire. auto picks by model capability; simple-json is the modern <tool_call> JSON-in-XML format; text-block is the legacy [[TOOL ...]] format."
+        },
         "sortIndex": { "type": "integer", "minimum": 0 },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
         "totalTokens": { "type": "integer", "minimum": 0 },
@@ -794,6 +949,10 @@
         "isDefault": {
           "type": "boolean",
           "description": "Whether this item is part of the character's default outfit"
+        },
+        "replace": {
+          "type": "boolean",
+          "description": "Composite items only: if true, equipping clears the slots the composite designates before placing its components; if false/absent, equipping is additive (layers without clearing). Ignored for leaf items."
         },
         "migratedFromClothingRecordId": {
           "oneOf": [

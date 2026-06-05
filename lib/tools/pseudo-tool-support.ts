@@ -11,9 +11,22 @@ import { getPricingCache } from '@/lib/llm/pricing-fetcher'
 import { logger } from '@/lib/logger'
 
 /**
- * Options for tool mode override on connection profiles
+ * Options for tool mode override on connection profiles.
+ *
+ * - 'auto'        — pick by model capability. Native function-calling models
+ *                   get the native protocol; non-native models get
+ *                   simple-json.
+ * - 'native'      — force native function calling. Ignored for models that
+ *                   don't support it (falls back to simple-json).
+ * - 'simple-json' — `<tool_call>{...}</tool_call>` JSON-in-XML pseudo-tool
+ *                   format with provider stop-sequence enforcement.
+ * - 'text-block'  — legacy `[[TOOL_NAME ...]]content[[/TOOL_NAME]]`
+ *                   pseudo-tool format. Kept for compatibility.
  */
-export type ToolMode = 'auto' | 'native' | 'text-block'
+export type ToolMode = 'auto' | 'native' | 'simple-json' | 'text-block'
+
+/** The concrete strategy a request resolves to. */
+export type ResolvedToolMode = 'native' | 'simple-json' | 'text-block'
 
 /**
  * Check if a model supports native tool/function calling
@@ -82,14 +95,38 @@ export function shouldUseTextBlockTools(
   supportsNativeTools: boolean,
   profileOverride?: ToolMode
 ): boolean {
-  // Explicit overrides take precedence
+  // Any pseudo-tool surface (simple-json OR text-block) means "not native",
+  // i.e. the same downstream gating (`continuationTools: []`) applies. The
+  // legacy boolean name persists for back-compat.
+  const resolved = resolveToolMode(supportsNativeTools, profileOverride)
+  return resolved !== 'native'
+}
+
+/**
+ * Resolve the concrete strategy to use for a request.
+ *
+ * Precedence:
+ *   1. Explicit `profileOverride` (other than 'auto') always wins. `'native'`
+ *      on a non-native model falls back to 'simple-json' so the request
+ *      doesn't break silently.
+ *   2. 'auto' on a native model → 'native'.
+ *   3. 'auto' on a non-native model → 'simple-json' (the post-flip default;
+ *      see `docs/developer/features/simple-json-tool-calls.md`).
+ */
+export function resolveToolMode(
+  supportsNativeTools: boolean,
+  profileOverride?: ToolMode
+): ResolvedToolMode {
   if (profileOverride === 'text-block') {
-    return true
+    return 'text-block'
+  }
+  if (profileOverride === 'simple-json') {
+    return 'simple-json'
   }
   if (profileOverride === 'native') {
-    return false
+    // Honour the override unless the model truly can't do it.
+    return supportsNativeTools ? 'native' : 'simple-json'
   }
-
-  // Auto mode: prefer text-block when model lacks native tools
-  return !supportsNativeTools
+  // 'auto' or undefined
+  return supportsNativeTools ? 'native' : 'simple-json'
 }

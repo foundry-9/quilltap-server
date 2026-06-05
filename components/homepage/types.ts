@@ -24,7 +24,6 @@ export interface RecentChat {
     character?: {
       id: string
       name: string
-      avatarUrl?: string
       defaultImageId?: string
       defaultImage?: {
         id: string
@@ -55,7 +54,6 @@ export interface HomepageCharacter {
   id: string
   name: string
   title?: string | null
-  avatarUrl?: string | null
   defaultImageId: string | null
   defaultImage: {
     id: string

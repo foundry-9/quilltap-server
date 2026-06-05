@@ -20,6 +20,20 @@ import {
 export const MemorySourceEnum = z.enum(['AUTO', 'MANUAL']);
 export type MemorySource = z.infer<typeof MemorySourceEnum>;
 
+/**
+ * Provenance of the conversational moment that produced the memory.
+ *  - 'user_present': extracted from a chat where the user took at least one turn.
+ *  - 'autonomous_room': extracted from an autonomous character-to-character room
+ *    (no user composer in the room — see 4.6 Private Character Rooms). Memories
+ *    here MUST NOT imply the user witnessed, agreed to, or was informed of the
+ *    exchange.
+ *  - 'manual': record was created outside the chat-extraction path entirely.
+ *
+ * NULL on legacy rows written before this column existed.
+ */
+export const WitnessedContextEnum = z.enum(['user_present', 'autonomous_room', 'manual']);
+export type WitnessedContext = z.infer<typeof WitnessedContextEnum>;
+
 // ============================================================================
 // MEMORY
 // ============================================================================
@@ -57,6 +71,8 @@ export const MemorySchema = z.object({
     }),
   ]).nullable().optional(),
   source: MemorySourceEnum.default('MANUAL'),       // How it was created
+  /** Provenance of the conversational moment that produced this memory. Null on legacy rows. */
+  witnessedContext: WitnessedContextEnum.nullable().optional(),
   sourceMessageId: UUIDSchema.nullable().optional(), // If auto-created, which message triggered it
   lastAccessedAt: TimestampSchema.nullable().optional(), // For housekeeping decisions
   // Memory Gate fields — reinforcement tracking

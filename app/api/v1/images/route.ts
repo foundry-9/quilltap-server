@@ -19,7 +19,7 @@ import {
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { z } from 'zod';
 import { successResponse, badRequest, serverError } from '@/lib/api/responses';
-import { createHash } from 'crypto';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { classifyContent as classifyDangerousContent } from '@/lib/services/dangerous-content/gatekeeper.service';
@@ -310,7 +310,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       const imageMimeType = converted.mimeType;
 
       // Generate unique filename and hash
-      const sha256 = createHash('sha256').update(new Uint8Array(imageBuffer)).digest('hex');
+      const sha256 = sha256OfBuffer(imageBuffer);
       const shortHash = sha256.substring(0, 8);
       const filename = `generated_${Date.now()}_${index}_${shortHash}.webp`;
 
@@ -340,13 +340,15 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       // Inherit tags from linked entities
       const inheritedTags = await getInheritedTags(linkedTo, user.id);
 
-      // Create database record
+      // Create database record. The Lantern bridge transcodes bitmaps to
+      // WebP; record the stored mime/size so vision providers don't reject
+      // "media_type X but bytes are Y" mismatches.
       const file = await repos.files.create({
         sha256,
         userId: user.id,
         originalFilename: filename,
-        mimeType: imageMimeType,
-        size: imageBuffer.length,
+        mimeType: written.storedMimeType,
+        size: written.sizeBytes,
         source,
         category,
         linkedTo,

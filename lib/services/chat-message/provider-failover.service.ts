@@ -16,6 +16,8 @@ import {
   encodeStatusEvent,
   safeEnqueue,
   encodeContentChunk,
+  applyReasoningChunk,
+  flushReasoningSegment,
 } from './streaming.service'
 import type { StreamingState } from './types'
 
@@ -33,6 +35,7 @@ export interface AttemptEmptyResponseRecoveryOptions {
     attachments?: unknown[]
     name?: string
     thoughtSignature?: string
+    reasoningContent?: string
     toolCallId?: string
     toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
   }>
@@ -271,6 +274,7 @@ async function restreamInto(
     messageId: opts.preGeneratedAssistantMessageId,
     chatId: opts.chatId,
   })) {
+    applyReasoningChunk(state, chunk, opts.controller, opts.encoder)
     if (chunk.content) {
       if (!state.hasStartedStreaming) {
         safeEnqueue(opts.controller, encodeStatusEvent(opts.encoder, {
@@ -281,6 +285,7 @@ async function restreamInto(
         }))
         state.hasStartedStreaming = true
       }
+      flushReasoningSegment(state)
       state.fullResponse += chunk.content
       opts.controller.enqueue(encodeContentChunk(opts.encoder, chunk.content))
     }
@@ -293,6 +298,7 @@ async function restreamInto(
       if (chunk.thoughtSignature) {
         state.thoughtSignature = chunk.thoughtSignature
       }
+      flushReasoningSegment(state)
     }
   }
 }

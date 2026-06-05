@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "app/**/*.{ts,tsx}",
     "scripts/*.ts",
@@ -24,7 +24,8 @@
     "ts-node",
     "@vitest/mocker",
     "create-quilltap-theme",
-    "esbuild"
+    "esbuild",
+    "better-sqlite3-multiple-ciphers"
   ],
   "ignoreBinaries": []
 }

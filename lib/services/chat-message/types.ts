@@ -90,6 +90,39 @@ export interface SendMessageOptions {
   targetParticipantIds?: string[] | null
   /** Browser User-Agent string from the originating request (scrubbed of Electron/Quilltap tokens) */
   browserUserAgent?: string
+  /**
+   * Autonomous-room turn flag: when true, the turn-chain pause threshold for
+   * all-LLM chats (shouldPauseForAllLLM) is bypassed so the loop continues
+   * indefinitely until budget caps or stop conditions fire. Set by the
+   * autonomous-room turn handler in `lib/background-jobs/handlers/autonomous-room-turn.ts`.
+   */
+  neverPauseForUser?: boolean
+  /**
+   * Autonomous-room turn flag: when true, automatic image pipelines (the
+   * Lantern story-background trigger and the wardrobe-driven avatar refresh)
+   * are skipped for this turn. Character-invoked image-generation tool calls
+   * are unaffected. Set by the autonomous-room turn handler.
+   */
+  suppressAutomaticImages?: boolean
+  /**
+   * Autonomous-room turn flag: when true, `executeTurnChain` returns
+   * immediately after the initial turn instead of looping to depth-20. The
+   * caller (currently the autonomous-room handler) is responsible for
+   * enqueueing the next turn as a separate job — that's what gives us:
+   *
+   *   1. Per-turn flush of buffered writes from the forked job child, so the
+   *      next turn's speaker selection sees the messages just written. Without
+   *      this, `shouldChainNext` re-reads stale chat history (writes are
+   *      buffered in AsyncLocalStorage until job end) and re-picks the same
+   *      character every iteration — producing 20× "Friday → Friday → Friday"
+   *      chains where Amy is never seen as having spoken.
+   *   2. Per-turn budget enforcement. The autonomous-room handler's pre-turn
+   *      budget check only fires between jobs, so a 20-deep chain can blow
+   *      through caps before anyone notices.
+   *
+   * Set by `lib/background-jobs/handlers/autonomous-room-turn.ts`.
+   */
+  singleTurn?: boolean
 }
 
 /**
@@ -113,11 +146,50 @@ export interface ToolMessage {
   arguments?: Record<string, unknown>
   /** Provider-assigned call ID for native tool result formatting */
   callId?: string
+  /**
+   * Character offset into the assistant turn's prose at which this tool call
+   * fired — i.e. the length of the accumulated response text emitted before
+   * the model paused to call the tool. Lets the Salon UI splice the tool block
+   * back into the prose at the point it was invoked instead of dumping every
+   * call at the bottom of the bubble. Captured in the tool loops against the
+   * running `streaming.fullResponse`, then re-based into final stored-content
+   * coordinates by the finalizer. Undefined when the position can't be tracked
+   * (e.g. agent-mode `submit_final_response` overwrites the whole response).
+   */
+  anchorOffset?: number
+  /**
+   * Turn-monotonic sequence number, shared with reasoning segments, that
+   * disambiguates ordering when a tool call and a reasoning block land at the
+   * same `anchorOffset` (e.g. Anthropic interleaved thinking: thinking → tool →
+   * thinking, all before the first prose). The renderer sorts anchored items by
+   * `(anchorOffset, seq)` so they appear in true emission order. Undefined on
+   * legacy rows, in which case the renderer falls back to array order.
+   */
+  seq?: number
   metadata?: {
     provider?: string
     model?: string
     expandedPrompt?: string
   }
+}
+
+/**
+ * One captured reasoning / chain-of-thought block, positioned in the assistant
+ * turn's prose the same way tool calls are (see `ToolMessage.anchorOffset`).
+ * `content` is the raw reasoning text for this block; `anchorOffset` is the
+ * length of the accumulated prose emitted before the block fired; `seq` is the
+ * turn-monotonic counter shared with tool anchors for stable interleaving.
+ *
+ * IMPORTANT: reasoning segments are DISPLAY-ONLY. They are persisted solely so
+ * the Salon can show the model's thinking; they are never re-fed to any model
+ * as history, summary, or memory. The only place reasoning re-enters a provider
+ * request is the in-turn tool round-trip, which uses the in-memory flat
+ * `reasoningContent`, never these stored segments.
+ */
+export interface ReasoningSegment {
+  anchorOffset: number
+  content: string
+  seq: number
 }
 
 /**
@@ -152,6 +224,19 @@ export interface StreamingResult {
   attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
   rawResponse: unknown
   thoughtSignature?: string
+  /**
+   * Reasoning / chain-of-thought content captured from the stream (DeepSeek
+   * `reasoning_content`, etc.). Carried through the in-turn native-tool loop
+   * so providers that require it on tool-call round-trips don't 400 on the
+   * next request.
+   */
+  reasoningContent?: string
+  /**
+   * Positioned reasoning blocks for DISPLAY ONLY (see {@link ReasoningSegment}).
+   * Persisted on the assistant message so the Salon can splice thinking into
+   * the prose; never re-fed to any model.
+   */
+  reasoningSegments?: ReasoningSegment[]
 }
 
 /**
@@ -210,6 +295,25 @@ export interface StreamingState {
   attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
   rawResponse: unknown
   thoughtSignature?: string
+  /** Reasoning / chain-of-thought content (DeepSeek thinking mode, etc.). */
+  reasoningContent?: string
+  /**
+   * Positioned reasoning blocks accumulated during the turn, for DISPLAY ONLY
+   * (see {@link ReasoningSegment}). Built by the streaming helper as reasoning
+   * runs close at prose-resume / tool-call / done boundaries.
+   */
+  reasoningSegments?: ReasoningSegment[]
+  /**
+   * How many characters of the cumulative `reasoningContent` have already been
+   * flushed into a `reasoningSegments` entry. The un-flushed buffer for the next
+   * segment is `reasoningContent.slice(reasoningFlushedLen)`.
+   */
+  reasoningFlushedLen?: number
+  /**
+   * Turn-monotonic counter handed out to both reasoning segments and tool
+   * anchors so same-offset items keep their true emission order.
+   */
+  nextTurnSeq?: number
   hasStartedStreaming: boolean
 }
 
@@ -272,6 +376,12 @@ export interface ChainCompleteEvent {
  */
 export interface StreamChunkData {
   content?: string
+  /**
+   * Cumulative reasoning / chain-of-thought text so far this turn (DISPLAY
+   * ONLY). Sent live so the Salon can show the model thinking before/while it
+   * answers. The client replaces (not appends) its buffer with each value.
+   */
+  reasoning?: string
   done?: boolean
   messageId?: string | null
   usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null

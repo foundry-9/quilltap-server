@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.5.2--bugfix.0-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.6.1--bugfix.0-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/6enCeQxY)
@@ -274,7 +274,7 @@ Themes are distributed as `.qtap-theme` bundles — declarative archives contain
 
 ## For Developers
 
-Quilltap was built to be extended. The plugin system supports seven extension points, all delivered as npm packages:
+Quilltap was built to be extended. The plugin system supports eight extension points, all delivered as npm packages:
 
 | Plugin Type | What It Does |
 | ----------- | ------------ |
@@ -340,9 +340,8 @@ See the [Development Guide](docs/developer/DEVELOPMENT.md) for local setup, test
 - [Deployment Guide](docs/DEPLOYMENT.md) — Production setup with SSL and reverse proxies
 - [API Reference](docs/developer/API.md) — REST endpoints
 - [Image Generation](docs/developer/IMAGE_GENERATION.md) — Provider configuration
-- [File LLM Access](docs/developer/FILE_LLM_ACCESS.md) — How AI reads your files
 - [Database Architecture](docs/developer/DATABASE_ABSTRACTION.md) — SQLite backend and protection
-- [Memory Management](docs/developer/features/memory_management.md) — How the Commonplace Book actually works end-to-end
+- [Memory Management](docs/developer/features/complete/memory_management.md) — How the Commonplace Book actually works end-to-end
 - [Prompt Architecture](docs/developer/PROMPT_ARCHITECTURE.md) — How system prompts are assembled
 - [Changelog](docs/CHANGELOG.md) — Release history
 - [Roadmap](docs/developer/features/ROADMAP.md) — What's coming

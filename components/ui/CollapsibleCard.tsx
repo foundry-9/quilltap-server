@@ -23,6 +23,14 @@ interface CollapsibleCardProps {
   sectionId?: string
   /** When true, forces the card open and scrolls it into view (one-shot per transition) */
   forceOpen?: boolean
+  /**
+   * Controlled-mode open state. When provided, the card uses this as the source
+   * of truth and ignores its internal store. Pair with `onOpenChange` so the
+   * parent can drive single-open accordion behavior.
+   */
+  isOpen?: boolean
+  /** Controlled-mode setter. Called with the next desired open state. */
+  onOpenChange?: (open: boolean) => void
   children: ReactNode
 }
 
@@ -66,16 +74,34 @@ export function CollapsibleCard({
   defaultOpen = false,
   sectionId,
   forceOpen = false,
+  isOpen: controlledIsOpen,
+  onOpenChange,
   children,
 }: CollapsibleCardProps) {
-  const { isOpen, setOpen, toggle } = useOpenState(defaultOpen || forceOpen)
+  const { isOpen: uncontrolledIsOpen, setOpen, toggle } = useOpenState(defaultOpen || forceOpen)
   const cardRef = useRef<HTMLDivElement>(null)
   const hasScrolledRef = useRef(false)
 
-  // When forceOpen activates, open the card and scroll to it
+  const isControlled = controlledIsOpen !== undefined
+  const isOpen = isControlled ? controlledIsOpen : uncontrolledIsOpen
+
+  const handleHeaderClick = useCallback(() => {
+    if (isControlled) {
+      onOpenChange?.(!controlledIsOpen)
+    } else {
+      toggle()
+    }
+  }, [isControlled, controlledIsOpen, onOpenChange, toggle])
+
+  // When forceOpen activates, open the card and scroll to it. In controlled
+  // mode the parent owns open state, so we only notify via onOpenChange.
   useEffect(() => {
     if (forceOpen) {
-      setOpen(true)
+      if (isControlled) {
+        if (!controlledIsOpen) onOpenChange?.(true)
+      } else {
+        setOpen(true)
+      }
       if (!hasScrolledRef.current) {
         hasScrolledRef.current = true
         requestAnimationFrame(() => {
@@ -85,14 +111,14 @@ export function CollapsibleCard({
     } else {
       hasScrolledRef.current = false
     }
-  }, [forceOpen, setOpen])
+  }, [forceOpen, isControlled, controlledIsOpen, onOpenChange, setOpen])
 
   return (
     <div className="qt-collapsible-card" id={sectionId} ref={cardRef}>
       <button
         type="button"
         className="qt-collapsible-card-header"
-        onClick={toggle}
+        onClick={handleHeaderClick}
         aria-expanded={isOpen}
       >
         <div className="flex items-center gap-3 min-w-0">

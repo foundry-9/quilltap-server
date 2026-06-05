@@ -44,6 +44,47 @@ export const DYNAMIC_HEAD_TOKEN_BUDGET = 200
 export const DYNAMIC_HEAD_DEFAULT_SIZE = 5
 
 /**
+ * Build the trailing metadata tag appended to a delivered memory line so the
+ * receiving model (and the human reading the Commonplace Book whisper in the
+ * salon) can see *why* a particular entry surfaced — what the LLM judged at
+ * extraction time (`importance`), how well it matched this turn's recall query
+ * (`relevance`, when available), how the ranker weighed it (`weight`, when
+ * computed), and what the keywords are.
+ *
+ * Returns `''` when no fields are provided so callers can append unconditionally.
+ *
+ * Format: ` _(importance 0.98 · relevance 0.87 · weight 0.92 · keywords: a, b)_`
+ * — leading space, italicised parenthetical, middle-dot separators, trailing
+ * keywords list when non-empty. Numbers are rounded to 2 decimals to match the
+ * `db memories show` style.
+ */
+export function formatMemoryMetadataTag(opts: {
+  importance?: number | null
+  relevance?: number | null
+  weight?: number | null
+  keywords?: readonly string[] | null
+}): string {
+  const parts: string[] = []
+  if (typeof opts.importance === 'number' && Number.isFinite(opts.importance)) {
+    parts.push(`importance ${opts.importance.toFixed(2)}`)
+  }
+  if (typeof opts.relevance === 'number' && Number.isFinite(opts.relevance)) {
+    parts.push(`relevance ${opts.relevance.toFixed(2)}`)
+  }
+  if (typeof opts.weight === 'number' && Number.isFinite(opts.weight)) {
+    parts.push(`weight ${opts.weight.toFixed(2)}`)
+  }
+  if (opts.keywords && opts.keywords.length > 0) {
+    const trimmed = opts.keywords.map(k => k.trim()).filter(k => k.length > 0)
+    if (trimmed.length > 0) {
+      parts.push(`keywords: ${trimmed.join(', ')}`)
+    }
+  }
+  if (parts.length === 0) return ''
+  return ` _(${parts.join(' · ')})_`
+}
+
+/**
  * Debug info for included memories
  */
 export interface DebugMemoryInfo {
@@ -218,7 +259,13 @@ export function formatMemoriesForContext(
     // recap LLM inputs, but the per-line whisper has the budget for the body.
     const age = formatRelativeAge(memory, now)
     const body = memory.content?.trim() || memory.summary
-    const memoryLine = `- [${age}] ${body}`
+    const meta = formatMemoryMetadataTag({
+      importance: memory.importance,
+      relevance: score,
+      weight,
+      keywords: memory.keywords,
+    })
+    const memoryLine = `- [${age}] ${body}${meta}`
     const lineTokens = estimateTokens(memoryLine + '\n', provider)
 
     if (currentTokens + lineTokens > maxTokens) {
@@ -285,10 +332,18 @@ export function formatInterCharacterMemoriesForContext(
       .sort((a, b) => b.weight - a.weight)
 
     const now = new Date()
-    for (const { memory } of sortedMemories) {
+    for (const { memory, weight } of sortedMemories) {
       const age = formatRelativeAge(memory, now)
       const body = memory.content?.trim() || memory.summary
-      const memoryLine = `- About ${characterName}: [${age}] ${body}`
+      // Inter-character memories come from a direct DB query (not semantic
+      // search), so there is no per-turn relevance score — only importance,
+      // effective weight, and keywords.
+      const meta = formatMemoryMetadataTag({
+        importance: memory.importance,
+        weight,
+        keywords: memory.keywords,
+      })
+      const memoryLine = `- About ${characterName}: [${age}] ${body}${meta}`
       const lineTokens = estimateTokens(memoryLine + '\n', provider)
 
       if (currentTokens + lineTokens > maxTokens) {
@@ -347,7 +402,15 @@ export function formatFrozenMemoryArchive(
     const summary = memory.summary?.trim() || memory.content?.trim() || ''
     if (!summary) continue
 
-    const memoryLine = `- ${summary}`
+    // The frozen archive is byte-stable across turns within a generation, so
+    // only static per-memory fields belong here. `weight` (decayed by now()) and
+    // `relevance` (per-turn query similarity) would both break the prefix-cache
+    // invariant — keep them off these lines.
+    const meta = formatMemoryMetadataTag({
+      importance: memory.importance,
+      keywords: memory.keywords,
+    })
+    const memoryLine = `- ${summary}${meta}`
     const lineTokens = estimateTokens(`${memoryLine}\n`, provider)
     if (currentTokens + lineTokens > maxTokens) {
       break
@@ -418,7 +481,13 @@ export function formatDynamicMemoryHead(
     const summary = memory.summary?.trim() || memory.content?.trim() || ''
     if (!summary) continue
     const idTag = `[m_${memory.id.slice(0, 4)}]`
-    const entry = `${idTag} ${summary}`
+    const meta = formatMemoryMetadataTag({
+      importance: memory.importance,
+      relevance: score,
+      weight,
+      keywords: memory.keywords,
+    })
+    const entry = `${idTag} ${summary}${meta}`
     const candidateTokens = estimateTokens(`${entry}\n`, provider)
     if (currentTokens + candidateTokens > maxTokens) {
       break

@@ -3,8 +3,8 @@
  * Version 2: Uses repository pattern for metadata storage and centralized file storage manager
  */
 
-import { createHash } from 'node:crypto';
 import { extname } from 'node:path';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
 import { fileStorageManager } from './file-storage/manager';
@@ -132,7 +132,7 @@ export async function uploadChatFile(
 
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
-  const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+  const sha256 = sha256OfBuffer(buffer);
 
   // Detect text content and infer better MIME type if needed
   const textDetection = detectTextContent(buffer, file.name, file.type);
@@ -332,6 +332,11 @@ async function uploadFileToProject(
   let storageKey: string;
   let fileFolderPath: string | null;
   let fileProjectId: string | null;
+  // The bridges may transcode bitmap uploads to WebP; the FileEntry must
+  // record the stored mimeType/size, not the input, or vision providers will
+  // be handed "you said JPEG, bytes are WebP" rejections.
+  let storedMimeType: string;
+  let storedSize: number;
   if (projectId) {
     const uploaded = await fileStorageManager.uploadFile({
       filename,
@@ -341,6 +346,8 @@ async function uploadFileToProject(
       folderPath: '/',
     });
     storageKey = uploaded.storageKey;
+    storedMimeType = uploaded.storedMimeType;
+    storedSize = uploaded.sizeBytes;
     fileFolderPath = '/';
     fileProjectId = projectId;
   } else {
@@ -351,6 +358,8 @@ async function uploadFileToProject(
       subfolder: 'chat',
     });
     storageKey = written.storageKey;
+    storedMimeType = written.storedMimeType;
+    storedSize = written.sizeBytes;
     fileFolderPath = null;
     fileProjectId = null;
   }
@@ -362,8 +371,8 @@ async function uploadFileToProject(
     userId,
     sha256,
     originalFilename: filename,
-    mimeType,
-    size: buffer.length,
+    mimeType: storedMimeType,
+    size: storedSize,
     width: null,
     height: null,
     isPlainText,

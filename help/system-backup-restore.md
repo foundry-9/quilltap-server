@@ -28,6 +28,7 @@ A complete backup includes everything needed to recreate your Quilltap environme
 - Image generation profiles
 - Embedding profiles
 - Chat display and behavior settings
+- Text replacement rules — your private lexicon of find-and-replace substitutions, packed up whole. (Time was, only the switch that governs them made the journey, leaving you to restore a tidy ledger of *nothing*; that small injustice has been put right, and the rules themselves now travel alongside.)
 - File write permissions (LLM file access grants)
 - Plugin configurations (per-plugin settings)
 

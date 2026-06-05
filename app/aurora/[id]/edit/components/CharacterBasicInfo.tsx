@@ -8,7 +8,6 @@ import { CharacterFormData, CharacterScenario } from '../types'
 interface CharacterBasicInfoProps {
   characterId: string
   formData: CharacterFormData
-  hasLinkedVault: boolean
   /** Bumped when formData is replaced externally; forces editor remount. */
   externalUpdateCount: number
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
@@ -16,9 +15,7 @@ interface CharacterBasicInfoProps {
   onPronounsChange: (pronouns: { subject: string; object: string; possessive: string } | null) => void
   onScenariosChange: (scenarios: CharacterScenario[]) => void
   onSystemTransparencyChange: (enabled: boolean) => void
-  onReadFromDocStoreToggle: (enabled: boolean) => void
-  onSyncPropertiesFromVault: () => void
-  onSyncPropertiesToVault: () => void
+  onCoreWhisperEnabledChange: (value: boolean | null) => void
 }
 
 /**
@@ -45,7 +42,7 @@ function AliasInput({ onAdd }: { onAdd: (alias: string) => void }) {
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={handleKeyDown}
-      className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      className="qt-input"
       placeholder="Type an alias and press Enter"
     />
   )
@@ -76,23 +73,14 @@ function getPronounPreset(pronouns: { subject: string; object: string; possessiv
 export function CharacterBasicInfo({
   characterId,
   formData,
-  hasLinkedVault,
   externalUpdateCount,
   onChange,
   onAliasesChange,
   onPronounsChange,
   onScenariosChange,
   onSystemTransparencyChange,
-  onReadFromDocStoreToggle,
-  onSyncPropertiesFromVault,
-  onSyncPropertiesToVault,
+  onCoreWhisperEnabledChange,
 }: CharacterBasicInfoProps) {
-  const overlayOn = formData.readPropertiesFromDocumentStore === true
-  // When the overlay is on, all vault-managed fields remain editable; the
-  // repository's write overlay routes those edits to vault files instead of
-  // the database row, keeping the form and vault in step automatically.
-  const toggleDisabled = !hasLinkedVault && !overlayOn
-
   // Adapter so MarkdownLexicalEditor's (value: string) => void onChange feeds
   // the parent's event-based handleChange (same synthetic-event shape used by
   // the AI wizard's apply flow).
@@ -150,90 +138,37 @@ export function CharacterBasicInfo({
         </div>
       </div>
 
-      {/* Scriptorium Overlay Switch */}
+      {/* Aurora's Core Whisper — per-character override */}
       <div className="qt-card">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <label
-              htmlFor="readPropertiesFromDocumentStore"
-              className="block qt-text-label"
-            >
-              Read this character&rsquo;s core fields from the Scriptorium vault
+            <label htmlFor="coreWhisperEnabled" className="block qt-text-label">
+              Aurora&apos;s Core whisper
             </label>
             <p className="text-xs qt-text-secondary mt-1">
-              When on, the character&rsquo;s basic properties (aliases, pronouns, title, first
-              message, talkativeness), description, manifesto, personality, example dialogues, first physical
-              description plus its prompts, named system prompt variants, named scenarios, and
-              wardrobe items plus outfit presets are all read live from files inside the linked
-              Scriptorium vault
-              (<code className="mx-1">properties.json</code>,
-              <code className="mx-1">description.md</code>,
-              <code className="mx-1">manifesto.md</code>,
-              <code className="mx-1">personality.md</code>,
-              <code className="mx-1">example-dialogues.md</code>,
-              <code className="mx-1">physical-description.md</code>,
-              <code className="mx-1">physical-prompts.json</code>,
-              <code className="mx-1">Prompts/*.md</code>,
-              <code className="mx-1">Scenarios/*.md</code>,
-              <code className="mx-1">Wardrobe/*.md</code>,
-              <code className="mx-1">Outfits/*.md</code>).
-              Edits made here are saved straight to the vault files, so the form
-              and the vault stay in step. Use &ldquo;Snapshot to database&rdquo;
-              before turning the switch off if you want the database row to
-              carry the vault&rsquo;s current values; otherwise toggling off
-              reverts those fields to the values they held when the switch was
-              first turned on.
+              Whether Aurora periodically re-offers this character their own <code>Core/</code> vault folder before they next take the floor. <em>Inherit</em> defers to the per-chat and global settings; explicit values override both.
             </p>
-            {!hasLinkedVault && (
-              <p className="text-xs qt-text-destructive mt-2">
-                No Scriptorium vault is linked to this character, so the overlay cannot be enabled.
-              </p>
-            )}
           </div>
-          <label className="inline-flex items-center cursor-pointer select-none">
-            <input
-              id="readPropertiesFromDocumentStore"
-              type="checkbox"
-              checked={overlayOn}
-              disabled={toggleDisabled}
-              onChange={(e) => onReadFromDocStoreToggle(e.target.checked)}
-              className="h-5 w-5 qt-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
-            />
-          </label>
+          <select
+            id="coreWhisperEnabled"
+            value={
+              formData.coreWhisperEnabled === true
+                ? 'on'
+                : formData.coreWhisperEnabled === false
+                  ? 'off'
+                  : 'inherit'
+            }
+            onChange={(e) => {
+              const v = e.target.value
+              onCoreWhisperEnabledChange(v === 'on' ? true : v === 'off' ? false : null)
+            }}
+            className="qt-select"
+          >
+            <option value="inherit">Inherit (default)</option>
+            <option value="on">Always offered</option>
+            <option value="off">Never offered</option>
+          </select>
         </div>
-        {hasLinkedVault && (
-          <div className="mt-3 rounded-md qt-bg-muted px-3 py-2 space-y-2">
-            {overlayOn ? (
-              <p className="text-xs qt-text-secondary">
-                Values below reflect the vault. Edits save to the vault files;
-                the database row stays frozen at its pre-overlay state.
-              </p>
-            ) : (
-              <p className="text-xs qt-text-secondary">
-                Values below reflect the database row. Use the buttons to copy
-                state between the database and the linked vault.
-              </p>
-            )}
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={onSyncPropertiesFromVault}
-                className="qt-button-secondary qt-button-sm whitespace-nowrap"
-                title="Copy the current vault values into the database record so the row matches the vault"
-              >
-                Copy vault &rarr; database
-              </button>
-              <button
-                type="button"
-                onClick={onSyncPropertiesToVault}
-                className="qt-button-secondary qt-button-sm whitespace-nowrap"
-                title="Copy the current database values into the vault files so the vault matches the database"
-              >
-                Copy database &rarr; vault
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Name Field */}
@@ -248,7 +183,7 @@ export function CharacterBasicInfo({
           value={formData.name}
           onChange={onChange}
           required
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="qt-input"
         />
       </div>
 
@@ -305,7 +240,7 @@ export function CharacterBasicInfo({
               onPronounsChange({ ...selected.value })
             }
           }}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          className="qt-select"
         >
           {PRONOUN_PRESETS.map((preset) => (
             <option key={preset.label} value={preset.label}>
@@ -322,7 +257,7 @@ export function CharacterBasicInfo({
                 value={formData.pronouns.subject}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, subject: e.target.value })}
                 placeholder="e.g., they"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                className="qt-input"
               />
             </div>
             <div>
@@ -332,7 +267,7 @@ export function CharacterBasicInfo({
                 value={formData.pronouns.object}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, object: e.target.value })}
                 placeholder="e.g., them"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                className="qt-input"
               />
             </div>
             <div>
@@ -342,7 +277,7 @@ export function CharacterBasicInfo({
                 value={formData.pronouns.possessive}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, possessive: e.target.value })}
                 placeholder="e.g., their"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                className="qt-input"
               />
             </div>
           </div>
@@ -360,7 +295,7 @@ export function CharacterBasicInfo({
           name="title"
           value={formData.title}
           onChange={onChange}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          className="qt-input"
           placeholder="Your private label for this character — e.g., the protagonist, the rival, the love interest. Not how strangers refer to them."
         />
       </div>
@@ -462,16 +397,12 @@ export function CharacterBasicInfo({
           </button>
         </div>
         <p className="text-xs qt-text-secondary mb-3">
-          {overlayOn
-            ? 'Scenarios live in the vault\u2019s Scenarios/ folder. Edits here save straight to those files.'
-            : 'Named settings and contexts for conversations. Each scenario can be selected when starting a chat.'}
+          Named settings and contexts for conversations. Each scenario can be selected when starting a chat. Stored in the vault&rsquo;s Scenarios/ folder.
         </p>
         {formData.scenarios.length === 0 ? (
           <div className="qt-card text-center py-6">
             <p className="qt-text-small mb-3">
-              {!overlayOn
-                ? 'No scenarios yet. Add one to give this character distinct roleplay contexts.'
-                : 'No scenario files in the vault\u2019s Scenarios/ folder yet. Add one and it\u2019ll be written there.'}
+              No scenarios yet. Add one to give this character distinct roleplay contexts.
             </p>
             <button
               type="button"
@@ -508,7 +439,7 @@ export function CharacterBasicInfo({
                       onScenariosChange(updated)
                     }}
                     placeholder="Scenario title"
-                    className="flex-1 rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                    className="qt-input flex-1 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                   <button
                     type="button"

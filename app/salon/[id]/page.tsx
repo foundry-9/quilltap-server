@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
+import ChatSidebar from '@/components/chat/ChatSidebar'
 import SpeakerSelector from '@/components/chat/SpeakerSelector'
 import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
@@ -15,6 +15,7 @@ import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 import {
   type TurnState,
   type TurnSelectionResult,
@@ -43,6 +44,8 @@ import {
   type SwipeState,
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
+import { groupToolMessagesIntoAssistants } from './group-tool-messages'
+import { buildRenderItems } from './announcement-render-items'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import {
   ChatComposer,
@@ -88,7 +91,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   )
 
   // --- UI state that stays in page ---
-  const [input, setInput] = useState('')
+  // `input` is the EXTERNAL composer value (draft restore / resend / post-send
+  // clear / source-mode textarea), NOT a per-keystroke mirror — the Lexical
+  // editor owns the live text. `hasComposerContent` is the lightweight Send-
+  // button signal. Decoupling these is what stops every keystroke from
+  // re-rendering the whole Salon page. See setInput / handleComposerContentChange.
+  const [input, setInputState] = useState('')
+  const [hasComposerContent, setHasComposerContent] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [viewSourceMessageIds, setViewSourceMessageIds] = useState<Set<string>>(new Set())
@@ -126,6 +135,24 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
   const wasGeneratingRef = useRef(false)
   const streamingRef = useRef(false)
+
+  // --- Composer input decoupling ---
+  // `setInput` is the external/seed writer (draft restore, resend, source-mode,
+  // clear); it updates the content-presence flag too. It is NOT called on every
+  // keystroke — the editor reports presence via handleComposerContentChange.
+  const setInput = useCallback((value: string) => {
+    setInputState(value)
+    setHasComposerContent(!!value.trim())
+  }, [])
+  const handleComposerContentChange = useCallback((has: boolean) => {
+    setHasComposerContent(has)
+  }, [])
+  // Passed to sendMessage so its internal setInput('') also clears the editor —
+  // an already-empty → empty value transition can't drive the controlled sync.
+  const clearComposerInput = useCallback((value: string) => {
+    setInput(value)
+    if (value === '') inputRef.current?.setMarkdown('')
+  }, [setInput])
 
   // --- Whisper support ---
   const participantNames = useMemo(() => {
@@ -246,6 +273,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     })
   }, [messages, showAllWhispers, userParticipantIdSet])
 
+  // Fold character-initiated tool results into the assistant message that
+  // called them, so they render inside the character's bubble rather than as
+  // standalone rows in the flow. User/Prospero-initiated runs stay standalone.
+  // This grouped list drives virtualization and rendering downstream.
+  const renderMessages = useMemo(
+    () => groupToolMessagesIntoAssistants(visibleMessages),
+    [visibleMessages],
+  )
+
+  // Layer render-items on top of renderMessages: runs of consecutive collapsed
+  // announcements coalesce into one flex-wrapping chip row, so they pack
+  // horizontally instead of each taking a full-width virtualized row. Depends on
+  // expandedSystemMessageIds because expanding one announcement breaks it out of
+  // its group. This is what the virtualizer indexes over.
+  const renderItems = useMemo(
+    () => buildRenderItems(renderMessages, expandedSystemMessageIds),
+    [renderMessages, expandedSystemMessageIds],
+  )
+
   // --- Modal state hook ---
   const modals = useModalState()
 
@@ -316,7 +362,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   })
 
   // --- Draft persistence hook ---
-  useDraftPersistence({ chatId: id, input, setInput })
+  const { persistDraft } = useDraftPersistence({ chatId: id, setInput })
   const clearDraft = useCallback(() => {
     try {
       localStorage.removeItem(`quilltap-draft-${id}`)
@@ -389,11 +435,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (success && (name === 'doc_open_document' || name === 'doc_close_document')) {
         documentModeHook.reloadFromServer()
       }
-      // React to LLM writing/moving/deleting files — any of these can invalidate
-      // the editor's cached content or mtime. reloadFromServer re-reads the
-      // active document (if still open) and refreshes state, keeping the next
-      // autosave from racing on a stale mtime or missing path.
-      if (success && (name === 'doc_write_file' || name === 'doc_move_file' || name === 'doc_delete_file')) {
+      // React to LLM writing/moving/deleting files or folders — any of these can
+      // invalidate the editor's cached content, mtime, or path. The server-side
+      // move handlers sync chat_documents.filePath so the reload picks up the
+      // new path automatically; folder-level renames likewise rewrite the
+      // prefix. reloadFromServer re-reads the active document (if still open)
+      // and refreshes state, keeping the next autosave from racing on a stale
+      // mtime or missing path.
+      if (
+        success &&
+        (name === 'doc_write_file' ||
+          name === 'doc_move_file' ||
+          name === 'doc_move_folder' ||
+          name === 'doc_delete_file' ||
+          name === 'doc_delete_folder')
+      ) {
         documentModeHook.reloadFromServer()
       }
       // React to LLM focusing on document location
@@ -412,12 +468,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // (including user-controlled characters that may not have equipped outfits yet)
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
-    return visibleMessages[index]?.id ?? index
-  }, [visibleMessages])
+    return renderItems[index]?.id ?? index
+  }, [renderItems])
 
   // eslint-disable-next-line react-hooks/incompatible-library -- @tanstack/react-virtual exposes hooks the React Compiler can't analyse; safe to opt out of compiler optimisation here
   const virtualizer = useVirtualizer({
-    count: visibleMessages.length,
+    count: renderItems.length,
     getScrollElement: () => messagesContainerRef.current,
     estimateSize: () => 150,
     overscan: 5,
@@ -430,15 +486,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     scrollOnStreamComplete,
     isAutoScrollEnabled,
     isSettled,
+    isAtBottom,
+    scrollToBottom,
   } = useAutoScroll({
     containerRef: messagesContainerRef,
     endRef: messagesEndRef,
     virtualizer,
-    messageCount: visibleMessages.length,
+    messageCount: renderMessages.length,
+    itemCount: renderItems.length,
     isStreaming: sseStreaming.streaming,
     isWaitingForResponse: sseStreaming.waitingForResponse,
     streamingContent: sseStreaming.streamingContent,
     isLoading: loading,
+    autoScrollOnComplete: chatSettings?.autoScrollOnResponseComplete ?? false,
   })
 
   // --- Message actions hook ---
@@ -546,6 +606,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       messages: messageEvents,
       participants: participantsWithImpersonation.participantsAsBase,
       userParticipantId: participantsWithImpersonation.userParticipantId,
+      spokenThisCycleParticipantIds: chat?.spokenThisCycleParticipantIds,
     })
 
     setTurnState(newTurnState)
@@ -577,7 +638,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
 
     setTurnSelectionResult(result)
-  }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId])
+  }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId, chat?.spokenThisCycleParticipantIds])
 
   // --- Handle scroll-to-message from memory provenance navigation ---
   useEffect(() => {
@@ -867,7 +928,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               />
             </button>
           )}
-          {chat.isDangerousChat && (
+          {chat.conciergeOverride === 'OFF' ? (
+            <span
+              className="qt-danger-badge flex-shrink-0"
+              title="The Concierge is off-duty for this chat. No moderation, no rerouting — set from the sidebar's Chat section."
+            >
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+              </svg>
+              Off-duty
+            </span>
+          ) : chat.isDangerousChat ? (
             <span
               className="qt-danger-badge flex-shrink-0"
               title={`The Concierge has flagged this chat${chat.dangerCategories?.length ? `: ${chat.dangerCategories.join(', ')}` : ''}`}
@@ -877,7 +948,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               </svg>
               Flagged
             </span>
-          )}
+          ) : null}
           <span className="qt-text-primary truncate" title={chat.title}>
             {chat.title}
           </span>
@@ -888,7 +959,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
     return () => setLeftContent(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- llmCharacterKey is a stable string proxy for the llmCharacters array
-  }, [chat?.projectId, chat?.projectName, chat?.title, chat?.isDangerousChat, chat?.dangerCategories, llmCharacterKey, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
+  }, [chat?.projectId, chat?.projectName, chat?.title, chat?.isDangerousChat, chat?.dangerCategories, chat?.conciergeOverride, llmCharacterKey, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
 
   // Set cost summary and inspector button in toolbar right section
   useEffect(() => {
@@ -1146,54 +1217,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onRightPaneVerticalSplitChange={terminalModeHook.setRightPaneVerticalSplit}
           chatContent={
             <>
-              {/* Chat toggles - shown in multi-character chats */}
-              {participantsWithImpersonation.isMultiChar && (
-                <div className="flex items-center justify-end gap-4 px-4 py-1">
-                  <div className="flex items-center gap-2">
-                    <span className="qt-text-secondary text-xs">Shared Vaults</span>
-                    <button
-                      onClick={chatControls.handleToggleCrossCharacterVaultReads}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        chatControls.allowCrossCharacterVaultReads ? 'bg-primary' : 'qt-bg-muted'
-                      }`}
-                      role="switch"
-                      aria-checked={chatControls.allowCrossCharacterVaultReads}
-                      title={
-                        chatControls.allowCrossCharacterVaultReads
-                          ? 'Characters may read each other’s vaults (read-only) and the results are public to the chat. Click to lock.'
-                          : 'Each character’s vault is private; results from doc_* reads are whispered to the caller. Click to let them peek at each other’s dossiers.'
-                      }
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                          chatControls.allowCrossCharacterVaultReads ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="qt-text-secondary text-xs">All Whispers</span>
-                    <button
-                      onClick={() => setShowAllWhispers(!showAllWhispers)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
-                      }`}
-                      role="switch"
-                      aria-checked={showAllWhispers}
-                      title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                          showAllWhispers ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              )}
-
         <VirtualizedMessageList
-          messages={visibleMessages}
+          messages={renderMessages}
+          renderItems={renderItems}
           virtualizer={virtualizer}
           messagesContainerRef={messagesContainerRef}
           messagesEndRef={messagesEndRef}
@@ -1233,7 +1259,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           fetchChat={fetchChat}
           messagesWithLogs={llmLogs.messagesWithLogs}
           onViewLLMLogs={llmLogs.handleViewLLMLogs}
-          pendingToolCalls={sseStreaming.pendingToolCalls}
+          streamingToolBatches={sseStreaming.streamingToolBatches}
           ephemeralMessages={ephemeralMessages}
           getRespondingCharacter={getRespondingCharacter}
           shouldShowAvatars={shouldShowAvatars}
@@ -1241,7 +1267,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           getMessageAvatar={getMessageAvatar}
           participantNames={participantNames}
           userParticipantIdSet={userParticipantIdSet}
-          isDangerousChat={chat?.isDangerousChat === true}
+          isDangerousChat={isChatActiveDangerous(chat)}
+          showThinking={chat?.showThinking ?? chatSettings?.thinkingDisplay?.defaultVisible ?? true}
+          thinkingCollapsedByDefault={chatSettings?.thinkingDisplay?.defaultCollapsed ?? true}
+          streamingReasoning={sseStreaming.streamingReasoning}
+          showScrollToBottom={isSettled && !isAtBottom}
+          onScrollToBottom={scrollToBottom}
         />
 
         {/* Speaker Selector - shown when controlling multiple characters */}
@@ -1256,11 +1287,40 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </div>
         )}
 
+        {/* User-turn indicator: shown when the rotation has landed on a
+            user-controlled character. The human can type as them, or Skip to
+            let the rotation move on to the next LLM character. */}
+        {(() => {
+          if (sseStreaming.streaming || sseStreaming.waitingForResponse) return null
+          const nextId = turnSelectionResult?.nextSpeakerId
+          if (!nextId) return null
+          const next = participantsWithImpersonation.participantData.find(p => p.id === nextId)
+          if (!next || next.controlledBy !== 'user') return null
+          const name = next.character?.name ?? 'this character'
+          return (
+            <div className="qt-chat-user-turn-banner flex items-center justify-between px-4 py-2 border-t qt-border-default text-sm">
+              <span className="qt-text-secondary">
+                {name}&apos;s turn — type as them, or skip to let someone else respond.
+              </span>
+              <button
+                type="button"
+                onClick={() => turnManagement.handleSkipUserTurn(next.id)}
+                className="qt-button-secondary px-3 py-1 rounded text-sm"
+              >
+                Skip
+              </button>
+            </div>
+          )
+        })()}
+
         {/* Chat Composer */}
         <ChatComposer
           id={id}
           input={input}
           setInput={setInput}
+          hasContent={hasComposerContent}
+          onContentChange={handleComposerContentChange}
+          onPersistDraft={persistDraft}
           attachedFiles={attachedFiles}
           onRemoveAttachedFile={removeAttachedFile}
           pendingToolResults={pendingToolResults}
@@ -1272,32 +1332,23 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           streaming={sseStreaming.streaming}
           waitingForResponse={sseStreaming.waitingForResponse}
           responseStatus={sseStreaming.responseStatus}
-          toolPaletteOpen={modals.toolPaletteOpen}
-          setToolPaletteOpen={modals.setToolPaletteOpen}
           showSource={modals.showPreview}
           setShowSource={modals.setShowPreview}
           uploadingFile={uploadingFile}
           toolExecutionStatus={sseStreaming.toolExecutionStatus}
           renderingPatterns={roleplayRenderingPatterns}
           dialogueDetection={roleplayDialogueDetection}
-          chatPhotoCount={chatPhotoCount}
-          chatMemoryCount={chatMemoryCount}
-          hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
-          isSingleCharacterChat={participantsWithImpersonation.isSingleCharacterChat}
           roleplayTemplateId={chat?.roleplayTemplateId}
           documentEditingMode={chatControls.documentEditingMode}
           onToggleDocumentEditingMode={chatControls.handleToggleDocumentEditingMode}
           onOpenDocumentClick={() => setShowDocumentPicker(true)}
           isDocumentModeActive={documentModeHook.documentMode !== 'normal'}
-          agentModeEnabled={chatControls.agentModeEnabled}
-          onAgentModeToggle={chatControls.handleToggleAgentMode}
-          storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}
-          onRegenerateBackgroundClick={chatControls.handleRegenerateBackground}
-          onRoleplayTemplateChange={fetchChat}
           onSubmit={(e) => sseStreaming.sendMessage(
             e,
-            input,
-            setInput,
+            // Read the live text straight from the editor handle — page `input`
+            // intentionally lags while typing (that's the decoupling).
+            inputRef.current?.getMarkdown() ?? input,
+            clearComposerInput,
             attachedFiles,
             pendingToolResults,
             setPendingToolResults,
@@ -1316,24 +1367,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               showErrorToast(err instanceof Error ? err.message : 'Failed to upload pasted image')
             }
           }}
-          onGalleryClick={modals.openGallery}
-          onGenerateImageClick={modals.openGenerateImage}
           onLibraryFileClick={modals.openLibraryFilePicker}
           onStandaloneGenerateImageClick={modals.openStandaloneGenerateImage}
           onInsertAnnouncementClick={modals.openInsertAnnouncement}
-          onAddCharacterClick={modals.openAddCharacter}
-          onSettingsClick={modals.openChatSettings}
-          onRenameClick={modals.openRename}
-          onProjectClick={modals.openChatProject}
-          projectName={chat?.projectName}
-          onContinueChatClick={modals.openContinueChat}
-          onDeleteChatMemoriesClick={memoryActions.handleDeleteChatMemories}
-          onReextractMemoriesClick={memoryActions.handleReextractMemories}
-          onSearchReplaceClick={modals.openSearchReplace}
-          onBulkCharacterReplaceClick={modals.openBulkReplace}
-          onToolSettingsClick={modals.openToolSettings}
-          onRunToolClick={modals.openRunTool}
-          onStateClick={modals.openStateEditor}
           onStopStreaming={sseStreaming.stopStreaming}
           hideStopButton={modals.showParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
@@ -1450,8 +1486,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           setModalImage={modals.setModalImage}
           galleryOpen={modals.galleryOpen}
           closeGallery={modals.closeGallery}
-          chatSettingsModalOpen={modals.chatSettingsModalOpen}
-          closeChatSettings={modals.closeChatSettings}
           chatProjectModalOpen={modals.chatProjectModalOpen}
           closeChatProject={modals.closeChatProject}
           renameModalOpen={modals.renameModalOpen}
@@ -1534,7 +1568,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       />
 
       {modals.showParticipantSidebar && (
-        <ParticipantSidebar
+        <ChatSidebar
           participants={participantsWithImpersonation.participantData}
           turnState={turnState}
           turnSelectionResult={turnSelectionResult}
@@ -1549,7 +1583,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onDequeue={turnManagement.handleDequeue}
           onSkip={turnManagement.handleContinue}
           onStopStreaming={sseStreaming.stopStreaming}
-          onTalkativenessChange={() => {}}
+          onTalkativenessChange={chatControls.handleTalkativenessChange}
           onAddCharacter={modals.openAddCharacter}
           onRemoveCharacter={chatControls.handleRemoveCharacter}
           impersonatingParticipantIds={impersonation.impersonatingParticipantIds}
@@ -1565,6 +1599,45 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           chatId={id}
           onRegenerateAvatar={handleRegenerateAvatar}
           isDangerousChat={chat?.isDangerousChat === true}
+          // Chat section
+          agentModeEnabled={chatControls.agentModeEnabled}
+          onAgentModeToggle={chatControls.handleToggleAgentMode}
+          roleplayTemplateId={chat?.roleplayTemplateId}
+          onChatUpdated={fetchChat}
+          projectName={chat?.projectName}
+          onProjectClick={modals.openChatProject}
+          imageProfileId={chat?.imageProfileId}
+          alertCharactersOfLanternImages={chat?.alertCharactersOfLanternImages}
+          avatarGenerationEnabled={chat?.avatarGenerationEnabled}
+          conciergeOverride={chat?.conciergeOverride}
+          onToolSettingsClick={modals.openToolSettings}
+          onRunToolClick={modals.openRunTool}
+          storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}
+          onRegenerateBackgroundClick={chatControls.handleRegenerateBackground}
+          // Visibility section
+          isMultiChar={participantsWithImpersonation.isMultiChar}
+          showAllWhispers={showAllWhispers}
+          onToggleAllWhispers={() => setShowAllWhispers(!showAllWhispers)}
+          allowCrossCharacterVaultReads={chatControls.allowCrossCharacterVaultReads}
+          onToggleCrossCharacterVaultReads={chatControls.handleToggleCrossCharacterVaultReads}
+          coreWhisperEnabled={chatControls.coreWhisperEnabled}
+          onSetCoreWhisperEnabled={chatControls.handleSetCoreWhisperEnabled}
+          coreWhisperInterval={chatControls.coreWhisperInterval}
+          onSetCoreWhisperInterval={chatControls.handleSetCoreWhisperInterval}
+          showThinking={chatControls.showThinking}
+          onSetShowThinking={chatControls.handleSetShowThinking}
+          // Organize section
+          onRenameClick={modals.openRename}
+          onStateClick={modals.openStateEditor}
+          onContinueChatClick={modals.openContinueChat}
+          chatPhotoCount={chatPhotoCount}
+          onGalleryClick={modals.openGallery}
+          // Edit Content section
+          onSearchReplaceClick={modals.openSearchReplace}
+          onBulkCharacterReplaceClick={modals.openBulkReplace}
+          onReextractMemoriesClick={memoryActions.handleReextractMemories}
+          onDeleteChatMemoriesClick={memoryActions.handleDeleteChatMemories}
+          chatMemoryCount={chatMemoryCount}
         />
       )}
 

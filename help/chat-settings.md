@@ -14,6 +14,10 @@ Chat Settings control global behavior for all your chats in Quilltap, including 
 2. Click the **Chat Settings** tab
 3. You'll see multiple setting cards for different aspects of chat behavior
 
+## Global vs. Per-Chat
+
+The Chat Settings page is where you set *defaults* — the standing instructions that apply to every chat unless one of them politely asks to do otherwise. The per-chat overrides (Image Provider, Announce Generated Images, Auto-generate Avatars, Roleplay Template, Project, Agent Mode, and the like) used to live in a Chat Settings modal, but now hold court in the **Chat** drawer of the right-hand **Chat Sidebar** inside any open conversation. See [Chat Sidebar](chat-participants.md) for the full tour of that cabinet.
+
 ## Understanding Chat Settings Sections
 
 ### Composition Mode
@@ -34,6 +38,100 @@ Decides whether each new chat is delivered to your blotter pre-poised for prose.
 
 - You favor multi-paragraph messages and would rather not bump Shift each time
 - You're using Quilltap chiefly for long-form roleplay or co-writing rather than rapid-fire chat
+
+### Composer
+
+A small but civilising amenity: red-pencil underlines beneath any word the dictionary fails to recognise, kept switched on by default for the saving of one's dignity. The toggle governs both the Salon composer (where one's daily correspondence is conducted) and the Document Mode rich editor (where longer compositions are mustered into shape). It does **not** disturb the raw-Markdown or plain-text source views, which are left blissfully unsquiggled so that one's punctuation and tagging are not mistaken for misspellings.
+
+In the Quilltap desktop application — that more dignified vessel than the bare browser — a right-click upon any flagged word produces a small menu of suggestions in the manner of an attentive sub-editor, together with the option to add the offending coinage to your personal dictionary. The browser, alas, offers no such courtesy.
+
+When running inside the desktop application, Quilltap also discreetly feeds the names of all characters in your Aurora into the spellchecker's custom dictionary, so that the invented appellations of your cast (Aristarchus, Theophilus, Penwallow, &c.) do not appear unjustly accused. New characters are added on the next reload; deletions remove them in turn.
+
+**Setting Options:**
+
+- **Spellcheck in the composer** — A single toggle. On: red squiggles appear beneath misspelled words in the rich-text composer and the Document Mode editor. Off: silence prevails.
+
+**How to configure:**
+
+1. Open the **Composer** card on the Chat tab in Settings
+2. Tick or untick the box
+3. The change applies at once to all open composers; no reload required
+
+**When useful:**
+
+- You suffer the occasional typographical lapse and would rather be told than not
+- You are drafting fiction in Document Mode and want a steady second pair of eyes
+- (Desktop only) You have a cast of invented names and would rather not see them all flagged as misspellings
+
+**When to turn it off:**
+
+- The squiggles distract you in flow
+- You are writing in a language Chromium does not recognise (you may also configure additional languages in the desktop app's developer console — a refinement we will dress up in a proper picker in a later issue)
+
+### Auto-Scroll
+
+A question of etiquette: when a character at last lays down the pen at the close of a long reply, should the page hurry you down to the final flourish, or leave you precisely where you were reading? This toggle decides.
+
+Left unchecked — and the factory leaves it so — the Salon is a patient host. As a reply streams in and a new message takes its place in the conversation, the page holds its station; a windy three-page soliloquy can no longer spirit your place off the bottom of the screen mid-sentence. Whenever you have wandered up the page to revisit earlier remarks, a discreet **jump to latest** button presents itself in the lower corner, ready to whisk you back down at a single tap.
+
+Switch it on, and the Salon resumes the eager old manners: each time a reply concludes (or a fresh message arrives), it glides to the newest line — but only when you were already loitering near the bottom. Should you have scrolled up to read, it has the courtesy to stay put regardless.
+
+Two courtesies are constant in either mode: dispatching a message of your own settles you at the foot of the conversation, and first opening a chat deposits you at its end.
+
+**Setting Options:**
+
+- **Chase each reply to its end** — A single toggle. On: the Salon scrolls to the newest message when a reply completes, provided you were near the bottom. Off (default): the page stays where you left it, and a *jump to latest* button appears when you're scrolled up.
+
+**How to configure:**
+
+1. Open the **Auto-Scroll** card on the Chat tab in Settings
+2. Tick or untick the box
+3. The change applies at once to open chats; no reload required
+
+**When useful:**
+
+- You read replies as they stream and resent being yanked to the bottom the instant they finished — leave it off
+- You prefer the conversation to always present its freshest line without lifting a finger — switch it on
+
+### Text Replacement
+
+A scribe's tireless apprentice for the rich-text surfaces: when you type a registered trigger word and then strike a word-boundary character (a space, a comma, a full stop, what have you), Quilltap quietly swaps the trigger for its appointed replacement. `teh` becomes `the`; `Aris` blossoms into `Aristarchus the Wise`; `omw` rises into `on my way`. The transformation is wrought as a single editorial gesture, so one tap of Cmd/Ctrl+Z restores the literal letters you typed (a second tap then walks back the typing itself, in the customary manner).
+
+Replacements fire only on **typed** input — pasted prose passes through unmolested, the better to preserve what you have copied from elsewhere. Triggers are matched as whole words against the *end* of a text node, so mid-word edits are politely declined. Source-mode surfaces (the raw Markdown view, the plain-text view) are left untouched, lest a perfectly good `#heading` find itself rewritten en route.
+
+The feature is, at present, deliberately modest: literal triggers, literal replacements, no regex, no multi-line snippets, no cursor-positioning conjuring tricks. The aim is the cross-platform substitute for OS autocorrect that the browser otherwise withholds — and to do that one task well before reaching for more.
+
+**Setting Options:**
+
+- **Master toggle** — *Text replacement (autocorrect)*. On: rules fire. Off: rules sit quietly while preserving the list, so you may A/B the feature without losing your work.
+- **Add a rule** — A small form for the trigger, the replacement, and a per-rule **Case-sensitive** flag. When case-sensitive, only the exact casing matches (`URL` is honoured; `url` is not). When case-insensitive (the default), any casing matches and the replacement is written verbatim.
+- **Rules** — The full ledger of registered replacements. Each row may be edited in place (changes save on blur or Enter), temporarily disabled with the **On** checkbox, or struck out entirely with **Delete**.
+- **Try it** — A scratch textarea at the bottom of the card. Type a trigger plus a space to confirm a rule fires as intended. Nothing typed here is saved.
+
+**How to configure:**
+
+1. Open the **Text Replacement** card on the Chat tab in Settings
+2. Tick the master toggle on (it is on by default)
+3. Add rules one at a time, or edit the rows already present
+4. Test in the **Try it** box, or stroll over to the Salon composer or Document Mode
+
+**When useful:**
+
+- Frequent typographic stumbles you'd like silently corrected (`teh → the`, `recieve → receive`)
+- Long invented names you'd prefer to invoke by a short pet form (`Aris → Aristarchus the Wise`)
+- Shorthand for stock phrases you write daily (`omw → on my way`, `eta → estimated time of arrival`)
+
+**When to turn it off:**
+
+- You're drafting in a context where literal triggers must remain literal (technical notes, code comments inside prose)
+- A particular replacement is firing where you didn't intend it — switch its **On** checkbox off, or refine the trigger
+- You'd like to compare a session with and without the feature engaged — that's exactly what the master toggle is for
+
+**Notes for the careful:**
+
+- Newline (Enter) is **not** a word-boundary trigger in this version. Type a space before pressing Enter if you want a replacement to fire on the last word of your message.
+- A rule's order in the list is presentational, not load-bearing: case-sensitive rules always win over case-insensitive rules with the same trigger.
+- You cannot register two case-insensitive rules with the same trigger (the system politely declines with a conflict notice). Two rules with the same trigger but different case-sensitivity flags are perfectly legal.
 
 ### Avatar Settings
 
@@ -284,15 +382,15 @@ Controls whether Quilltap generates unique AI portraits for each character in a 
 
 **Setting Options:**
 
-- **Enable Avatar Generation** — Toggle per-conversation avatar generation on or off. Available both when creating a new chat and as a toggle during active conversations.
-- **Regenerate Avatar** — In the participant sidebar, click the refresh button on any character's portrait to queue a new avatar. Useful after outfit changes or when the muse simply failed to capture the right likeness the first time.
+- **Enable Avatar Generation** — Toggle per-conversation avatar generation on or off. Available both when creating a new chat and (as **Auto-generate Character Avatars**) in the Chat Sidebar's **Chat** drawer during active conversations.
+- **Regenerate Avatar** — In the Chat Sidebar's **Participants** drawer, click the refresh button on any character's portrait to queue a new avatar. Useful after outfit changes or when the muse simply failed to capture the right likeness the first time.
 
 **How it works:**
 
 1. When enabled on chat creation, avatars are generated for all LLM-controlled characters as soon as the chat begins
 2. When toggled on during an active chat, generation is queued for all LLM characters
 3. Avatars update automatically when outfit changes occur (if enabled)
-4. Generated avatars appear in the participant sidebar and are specific to that conversation
+4. Generated avatars appear in the Chat Sidebar's **Participants** drawer and are specific to that conversation
 
 **Prerequisites:**
 
@@ -327,7 +425,7 @@ Controls automatic behavior during chat interactions.
 **When to disable:**
 
 - When discussing dice or probability without wanting actual rolls
-- When you prefer to use the manual RNG tool in the tool palette
+- When you prefer to use the manual RNG tool via **Run Tool…** in the Chat Sidebar's Chat drawer
 - When writing content that mentions dice notation without wanting it executed
 
 **Example patterns detected:**

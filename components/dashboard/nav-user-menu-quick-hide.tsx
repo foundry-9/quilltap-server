@@ -21,7 +21,16 @@ interface NavUserMenuQuickHideContentProps {
  * Quick-hide tag selection content for the user menu submenu flyout.
  */
 export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenuQuickHideContentProps) {
-  const { quickHideTags, hiddenTagIds, hideDangerousChats, toggleTag, toggleHideDangerousChats, loading } = useQuickHide()
+  const {
+    quickHideTags,
+    hiddenTagIds,
+    hideDangerousChats,
+    includeAutonomousRooms,
+    toggleTag,
+    toggleHideDangerousChats,
+    toggleIncludeAutonomousRooms,
+    loading,
+  } = useQuickHide()
 
   if (loading) {
     return (
@@ -38,6 +47,11 @@ export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenu
 
   const handleDangerToggle = () => {
     toggleHideDangerousChats()
+    onVisibilityChanged?.()
+  }
+
+  const handleAutonomousToggle = () => {
+    toggleIncludeAutonomousRooms()
     onVisibilityChanged?.()
   }
 
@@ -98,6 +112,27 @@ export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenu
             <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
               <circle cx="12" cy="12" r="3" />
+            </svg>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleAutonomousToggle}
+          className={`qt-navbar-dropdown-item ${includeAutonomousRooms ? 'qt-navbar-dropdown-item-active' : ''}`}
+          title="Show autonomous character-to-character rooms in the Salon chat list"
+        >
+          <span className="text-sm">Show Autonomous Rooms</span>
+          {includeAutonomousRooms ? (
+            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+              <path d="M1 1l22 22" />
             </svg>
           )}
         </button>

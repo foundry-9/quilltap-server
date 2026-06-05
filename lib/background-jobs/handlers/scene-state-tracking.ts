@@ -13,6 +13,7 @@ import { getCheapLLMProvider, CheapLLMConfig, type CheapLLMSelection, resolveUnc
 import { updateSceneState, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
 import { createSystemEvent } from '@/lib/services/system-events.service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { SceneStateTrackingPayload } from '../queue-service';
@@ -64,11 +65,12 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     fallbackToLocal: chatSettings?.cheapLLMSettings?.fallbackToLocal ?? true,
   };
 
-  const isDangerousChat = chat.isDangerousChat === true;
+  const isDangerousChat = isChatActiveDangerous(chat);
   let cheapLLMSelection = getCheapLLMProvider(connectionProfile, cheapLLMConfig, availableProfiles, false);
 
-  // For dangerous chats, use uncensored provider to avoid content refusals
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+  // For dangerous chats, use uncensored provider to avoid content refusals.
+  // Pass the chat so an Off-duty override collapses dangerSettings to mode='OFF'.
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
   if (isDangerousChat) {
     cheapLLMSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection,
@@ -182,10 +184,10 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
       if (equippedSlots) {
         const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots);
         clothingDescription = describeOutfit({
-          top: decorateOutfitItems(resolved.leafItemsBySlot.top),
-          bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom),
-          footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear),
-          accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories),
+          top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
+          bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
+          footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
+          accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true }),
         });
       }
     } catch (error) {
@@ -199,7 +201,7 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     return {
       characterId: char!.id,
       characterName: char!.name,
-      physicalDescription: char!.physicalDescriptions?.[0]?.mediumPrompt || char!.physicalDescriptions?.[0]?.shortPrompt || '',
+      physicalDescription: char!.physicalDescription?.mediumPrompt || char!.physicalDescription?.shortPrompt || '',
       clothingDescription,
       scenario: chat.scenarioText || char!.scenarios?.[0]?.content || undefined,
     };

@@ -30,6 +30,7 @@ import {
 import { extractMemorySearchKeywords, extractVisibleConversation, stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import { resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
@@ -194,8 +195,10 @@ async function proactiveRecallTask(
   }))
 
   // For dangerous chats, use uncensored provider for keyword extraction.
+  // Gate on the canonical accessor so an Off-duty chat never reroutes here,
+  // independent of how `dangerSettings` was resolved upstream.
   let recallSelection = cheapLLMSelection
-  if (chat.isDangerousChat) {
+  if (isChatActiveDangerous(chat)) {
     recallSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection,
       true,

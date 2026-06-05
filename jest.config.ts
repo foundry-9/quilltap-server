@@ -10,6 +10,15 @@ const createJestConfig = nextJest({
 const config: Config = {
   coverageProvider: 'v8',
   testEnvironment: 'jsdom',
+  // Recycle a worker once it crosses this resident-memory threshold. Over the
+  // full ~350-file suite a worker keeps the same process alive across dozens of
+  // test files; without recycling, memory accumulates and GC timing grows
+  // aggressive, which is one of the conditions that makes the native SQLCipher
+  // binding (loaded by the real-binding DB suites) flaky-segfault under parallel
+  // load. The DB suites also opt into the `node` environment via a per-file
+  // `@jest-environment node` docblock so their native Buffers never cross a
+  // jsdom realm boundary — the other half of that fix.
+  workerIdleMemoryLimit: '512MB',
   // Add more setup options before each test is run
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {

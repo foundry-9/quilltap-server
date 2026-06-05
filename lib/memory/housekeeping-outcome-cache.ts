@@ -64,7 +64,3 @@ export function shouldSkipWatermarkSweep(characterId: string): boolean {
   return last.deleted < minEffective
 }
 
-/** Exposed for tests. */
-export function _clearHousekeepingOutcomesForTest(): void {
-  outcomes.clear()
-}

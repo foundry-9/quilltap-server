@@ -16,6 +16,7 @@ import {
   type TurnTranscript,
 } from '@/lib/services/chat-message/turn-transcript';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import type { Character, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types';
@@ -93,6 +94,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
     participantCharacters,
     {
       turnOpenerMessageId: payload.turnOpenerMessageId,
+      extractionAnchorMessageId: payload.extractionAnchorMessageId ?? null,
       userCharacterId: userCharacter?.id,
       userCharacterName: userCharacter?.name,
       userCharacterPronouns: userCharacter?.pronouns ?? null,
@@ -109,7 +111,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   }
 
   const availableProfiles = await repos.connections.findByUserId(job.userId);
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
   const memoryExtractionLimits = await getMemoryExtractionLimits();
 
   // Anchor derived memories to the historical chat timestamp rather than
@@ -143,9 +145,13 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
     cheapLLMSettings: chatSettings.cheapLLMSettings,
     availableProfiles,
     dangerSettings,
-    isDangerousChat: chat.isDangerousChat === true,
+    isDangerousChat: isChatActiveDangerous(chat),
     memoryExtractionLimits,
     sourceMessageTimestamp,
+    // 4.6 Private Character Rooms: autonomous-source attribution for the
+    // extractor — the prompts get the user-absence clause and the resulting
+    // memory rows carry witnessedContext = 'autonomous_room'.
+    inAutonomousRoom: chat.chatType === 'autonomous',
   });
 
   if (!result.success) {
@@ -159,6 +165,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
       jobId: job.id,
       chatId: payload.chatId,
       turnOpenerMessageId: payload.turnOpenerMessageId,
+      extractionAnchorMessageId: payload.extractionAnchorMessageId ?? null,
       created: result.memoriesCreatedCount,
       reinforced: result.memoriesReinforcedCount,
     });

@@ -50,6 +50,10 @@
   --estate-gold: hsl(43 75% 55%);
   --estate-gold-light: hsl(43 65% 70%);
   --estate-gold-dark: hsl(43 70% 40%);
+  /* Select dropdown chevron — burnished gold to match the estate accent, deep
+     enough to read on the cream inputs. Data URIs can't take a CSS var, so the
+     stroke mirrors --estate-gold-dark hsl(43 70% 40%) ≈ #AD851F. */
+  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23AD851F' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
   --estate-brown: hsl(20 45% 25%);
   --estate-brown-mid: hsl(20 30% 35%);
   --estate-cream: hsl(38 25% 95%);
@@ -441,6 +445,9 @@
   --estate-gold: hsl(43 80% 58%);
   --estate-gold-light: hsl(43 72% 66%);
   --estate-gold-dark: hsl(43 68% 38%);
+  /* Candlelit gold chevron so it reads on the dark walnut inputs. Mirrors
+     --estate-gold hsl(43 80% 58%) ≈ #EAB93E. */
+  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23EAB93E' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
   --estate-brown: hsl(20 30% 8%);
   --estate-brown-mid: hsl(20 22% 18%);
   --estate-cream: hsl(38 18% 88%);

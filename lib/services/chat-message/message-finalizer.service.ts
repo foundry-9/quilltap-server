@@ -11,16 +11,18 @@ import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
   getActiveCharacterParticipants,
+  isUsersTurn,
 } from '@/lib/chat/turn-manager'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
+import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
-import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage } from './types'
+import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage, ReasoningSegment } from './types'
 import { saveToolMessages, type ToolWhisperContext } from './tool-execution.service'
 import { encodeDoneEvent } from './streaming.service'
 import {
@@ -78,11 +80,69 @@ export async function finalizeMessageResponse({
   compression,
   triggers,
 }: FinalizeMessageResponseOptions): Promise<ProcessMessageResult> {
-  const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature } = streaming
+  const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature, reasoningContent, reasoningSegments } = streaming
   const { existingMessages, content, builtContext, compressionEnabled, cheapLLMSelection, contextCompressionSettings, allProfiles } = compression
   const { dangerSettings, chatSettings, participantCharacters, resolvedIdentity, userCharacterId } = triggers
   const normalizedResponse = normalizeContentBlockFormat(fullResponse)
   const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
+
+  // Re-base captured tool-call prose anchors from streamed-response coordinates
+  // into final stored-content coordinates. The only position-shifting transform
+  // is stripCharacterNamePrefix, which only ever removes a leading prefix
+  // (cleanedResponse is a suffix of normalizedResponse), so a single delta
+  // covers every offset. If normalizeContentBlockFormat rewrote the body (rare
+  // content-block extraction), offsets no longer map — drop them and the tool
+  // blocks fall back to bottom-of-bubble rendering.
+  const normalizeRewroteBody = normalizedResponse !== fullResponse
+  const leadingStripDelta = normalizedResponse.length - cleanedResponse.length
+  let rebasedAnchorCount = 0
+  for (const tm of toolMessages) {
+    if (typeof tm.anchorOffset !== 'number') continue
+    if (normalizeRewroteBody) {
+      tm.anchorOffset = undefined
+      continue
+    }
+    tm.anchorOffset = Math.max(0, Math.min(cleanedResponse.length, tm.anchorOffset - leadingStripDelta))
+    rebasedAnchorCount++
+  }
+  if (rebasedAnchorCount > 0) {
+    logger.debug('Re-based tool-call prose anchors into stored-content coordinates', {
+      chatId,
+      characterName: character.name,
+      anchored: rebasedAnchorCount,
+      leadingStripDelta,
+    })
+  }
+
+  // Re-base reasoning ("thinking") segment offsets into stored-content
+  // coordinates using the SAME transform as the tool anchors above — both were
+  // captured against the streamed `streaming.fullResponse`. If the body was
+  // rewritten (content-block extraction), the offsets no longer map: drop them
+  // to a single offset-0 block so the thinking still renders (just un-spliced).
+  // DISPLAY ONLY — this only affects where the block appears, never the model.
+  let rebasedReasoning: ReasoningSegment[] | null = null
+  if (reasoningSegments && reasoningSegments.length > 0) {
+    if (normalizeRewroteBody) {
+      // Collapse to one leading block: positions are invalid, content still good.
+      rebasedReasoning = [{
+        anchorOffset: 0,
+        content: reasoningSegments.map(s => s.content).join(''),
+        seq: reasoningSegments[0].seq,
+      }]
+    } else {
+      rebasedReasoning = reasoningSegments.map(s => ({
+        ...s,
+        anchorOffset: Math.max(0, Math.min(cleanedResponse.length, s.anchorOffset - leadingStripDelta)),
+      }))
+    }
+    logger.debug('Re-based reasoning segments into stored-content coordinates', {
+      chatId,
+      characterName: character.name,
+      segments: rebasedReasoning.length,
+      collapsed: normalizeRewroteBody,
+      leadingStripDelta,
+    })
+  }
 
   const whisperContext: ToolWhisperContext = {
     userParticipantId,
@@ -103,10 +163,19 @@ export async function finalizeMessageResponse({
     preGeneratedAssistantMessageId,
     effectiveProfile.provider,
     effectiveProfile.modelName,
-    whisperContext
+    whisperContext,
+    reasoningContent,
+    rebasedReasoning
   )
 
-  if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
+  // Async pre-compression exists to make the *next human message* feel fast.
+  // Autonomous-room chains never wait on a human, and each chain step appends
+  // enough messages (character + host + commonplace whispers) to trip the
+  // staleness threshold within ~2 iterations — so the trigger re-fires the
+  // cheap-LLM compression call dozens of times per turn for a cache that no
+  // one inside the turn ever reads. Skip it; the next turn's first chain step
+  // will fall back to sync compression on demand if no cache is available.
+  if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt && chat.chatType !== 'autonomous') {
     const updatedMessages = [
       ...extractVisibleConversation(existingMessages),
       ...(content && !isContinueMode ? [{
@@ -153,10 +222,21 @@ export async function finalizeMessageResponse({
         patterns: rngPatternsInResponse.map(p => ({ type: p.type, rolls: p.rolls, matchText: p.matchText })),
       })
 
+      // Walk the response left-to-right so repeated dice notations anchor to
+      // successive occurrences rather than all snapping to the first.
+      let rngAnchorSearchFrom = 0
       for (const pattern of rngPatternsInResponse) {
         const rngContext = { userId, chatId }
         const result = await executeRngTool({ type: pattern.type, rolls: pattern.rolls }, rngContext)
         const formattedResult = formatRngResults(result)
+
+        // Place the result block right after the dice notation that triggered it.
+        const matchIdx = cleanedResponse.indexOf(pattern.matchText, rngAnchorSearchFrom)
+        let rngAnchor: number | undefined
+        if (matchIdx >= 0) {
+          rngAnchor = matchIdx + pattern.matchText.length
+          rngAnchorSearchFrom = rngAnchor
+        }
 
         const toolMessageId = crypto.randomUUID()
         const toolMessage = {
@@ -170,6 +250,7 @@ export async function finalizeMessageResponse({
             result: formattedResult,
             prompt: pattern.matchText,
             arguments: { type: pattern.type, rolls: pattern.rolls },
+            ...(typeof rngAnchor === 'number' ? { anchorOffset: rngAnchor } : {}),
           }),
           createdAt: new Date().toISOString(),
           attachments: [],
@@ -208,6 +289,9 @@ export async function finalizeMessageResponse({
     provider: effectiveProfile.provider,
     modelName: effectiveProfile.modelName,
     isSilentMessage: characterParticipant.status === 'silent' || undefined,
+    // Reasoning ("thinking") for the optimistic client push — DISPLAY ONLY.
+    reasoningContent: reasoningContent || null,
+    reasoningSegments: rebasedReasoning,
   }))
 
   // Cost estimation + token tracking are intentionally fire-and-forget so a
@@ -236,16 +320,23 @@ export async function finalizeMessageResponse({
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings.cheapLLMSettings,
       dangerSettings,
-      isDangerousChat: chat.isDangerousChat === true,
+      isDangerousChat: isChatActiveDangerous(chat),
     }
 
-    // Per-turn memory extraction: fire only when the turn closes (control
-    // returns to the user). On earlier characters' finalize calls in a
-    // multi-character turn, `turnInfo.isUsersTurn` is false and we leave
-    // extraction for the last speaker. Tool / continuation cycles inside
-    // a single character's response don't toggle isUsersTurn either, so
-    // those won't trigger spurious extractions.
-    if (turnInfo.isUsersTurn) {
+    // Per-turn memory extraction.
+    //
+    // - Normal chats: fire only when the turn closes (control returns to the
+    //   user). On earlier characters' finalize calls in a multi-character
+    //   turn, `turnInfo.isUsersTurn` is false and we leave extraction for
+    //   the last speaker. Tool / continuation cycles inside a single
+    //   character's response don't toggle isUsersTurn either, so those
+    //   won't trigger spurious extractions.
+    // - Autonomous rooms: there's no user, so `isUsersTurn` is permanently
+    //   false. Without this branch, autonomous chats would *never* extract
+    //   memories. Fire on every character turn instead — each speaker is
+    //   the natural extraction point.
+    const isAutonomous = chat.chatType === 'autonomous'
+    if (turnInfo.isUsersTurn || isAutonomous) {
       await triggerTurnMemoryExtraction(repos, {
         chatId,
         userId,
@@ -283,7 +374,7 @@ export async function finalizeMessageResponse({
       memoryChatSettings: {
         cheapLLMSettings: chatSettings.cheapLLMSettings,
         dangerSettings,
-        isDangerousChat: chat.isDangerousChat === true,
+        isDangerousChat: isChatActiveDangerous(chat),
       },
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),
     } : undefined,
@@ -307,7 +398,11 @@ export async function saveAssistantMessage(
   preGeneratedMessageId?: string,
   provider?: string,
   modelName?: string,
-  whisperContext?: ToolWhisperContext
+  whisperContext?: ToolWhisperContext,
+  // Reasoning ("thinking") for DISPLAY ONLY — persisted so the Salon can show
+  // it; never re-fed to any model. See ReasoningSegment.
+  reasoningContent?: string | null,
+  reasoningSegments?: ReasoningSegment[] | null
 ): Promise<string> {
   const assistantMessageId = preGeneratedMessageId || crypto.randomUUID()
   const assistantAttachments = generatedImagePaths.map(img => img.id)
@@ -324,6 +419,8 @@ export async function saveAssistantMessage(
     rawResponse: (rawResponse as Record<string, unknown>) || null,
     attachments: assistantAttachments,
     thoughtSignature: thoughtSignature || null,
+    reasoningContent: reasoningContent || null,
+    reasoningSegments: reasoningSegments && reasoningSegments.length > 0 ? reasoningSegments : null,
     participantId: characterParticipant.id,
     provider: provider || null,
     modelName: modelName || null,
@@ -375,10 +472,14 @@ export async function calculateNextSpeaker(
     (m): m is typeof m & { type: 'message' } => m.type === 'message'
   ) as unknown as MessageEvent[]
 
+  // Re-read the chat so spokenThisCycleParticipantIds reflects the most
+  // recent persistence (the orchestrator updates this field after each save).
+  const freshChat = await repos.chats.findById(chatId)
   const turnState = calculateTurnStateFromHistory({
     messages: messageEvents,
     participants: chat.participants,
     userParticipantId,
+    spokenThisCycleParticipantIds: freshChat?.spokenThisCycleParticipantIds ?? chat.spokenThisCycleParticipantIds,
   })
 
   const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants)
@@ -406,6 +507,6 @@ export async function calculateNextSpeaker(
     nextSpeakerId: nextSpeakerResult.nextSpeakerId,
     reason: nextSpeakerResult.reason,
     cycleComplete: nextSpeakerResult.cycleComplete,
-    isUsersTurn: nextSpeakerResult.nextSpeakerId === null,
+    isUsersTurn: isUsersTurn(nextSpeakerResult),
   }
 }

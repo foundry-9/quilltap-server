@@ -26,6 +26,9 @@ import {
   DEFAULT_STORY_BACKGROUNDS_SETTINGS,
   DangerousContentSettings,
   DEFAULT_DANGEROUS_CONTENT_SETTINGS,
+  AutonomousRoomSettings,
+  ThinkingDisplaySettings,
+  DEFAULT_THINKING_DISPLAY_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -50,12 +53,17 @@ interface UseChatSettingsReturn {
   handleLLMLoggingChange: (key: keyof LLMLoggingSettings, value: boolean | number) => Promise<void>
   handleAutoDetectRngChange: (value: boolean) => Promise<void>
   handleCompositionModeDefaultChange: (value: boolean) => Promise<void>
+  handleComposerSpellcheckChange: (value: boolean) => Promise<void>
+  handleAutoScrollOnResponseCompleteChange: (value: boolean) => Promise<void>
+  handleTextReplacementsEnabledChange: (value: boolean) => Promise<void>
   handleAgentModeDefaultEnabledChange: (value: boolean) => Promise<void>
   handleAgentModeMaxTurnsChange: (value: number) => Promise<void>
   handleStoryBackgroundsEnabledChange: (value: boolean) => Promise<void>
   handleStoryBackgroundsProfileChange: (profileId: string | null) => Promise<void>
   handleDangerousContentUpdate: (updates: Partial<DangerousContentSettings>) => Promise<void>
   handleTimezoneChange: (timezone: string | null) => Promise<void>
+  handleAutonomousRoomSettingsUpdate: (updates: Partial<AutonomousRoomSettings>) => Promise<void>
+  handleThinkingDisplayUpdate: (updates: Partial<ThinkingDisplaySettings>) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -492,6 +500,184 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Update composer-spellcheck setting
+   */
+  const handleComposerSpellcheckChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ composerSpellcheck: value }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update composer spellcheck setting')
+        }
+
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update composer spellcheck setting', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
+   * Update Salon auto-scroll-on-response-complete setting
+   */
+  const handleAutoScrollOnResponseCompleteChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ autoScrollOnResponseComplete: value }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update auto-scroll setting')
+        }
+
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update auto-scroll setting', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
+   * Update text-replacements master toggle
+   */
+  const handleTextReplacementsEnabledChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ textReplacementsEnabled: value }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update text-replacements setting')
+        }
+
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update text-replacements setting', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
+   * 4.6 Private Character Rooms — update user-level autonomous-room defaults.
+   * Merges the partial onto the current value so the form can fire one field
+   * at a time without clobbering siblings.
+   */
+  const handleAutonomousRoomSettingsUpdate = useCallback(
+    async (updates: Partial<AutonomousRoomSettings>) => {
+      if (!settings) return
+
+      const merged: AutonomousRoomSettings = {
+        ...(settings.autonomousRoomSettings ?? {}),
+        ...updates,
+      }
+
+      try {
+        setSaving(true)
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ autonomousRoomSettings: merged }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update autonomous-room settings')
+        }
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update autonomous-room settings', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
+   * Update thinking / reasoning display global defaults. DISPLAY ONLY — never
+   * affects whether reasoning is captured or stored, only whether it is shown.
+   */
+  const handleThinkingDisplayUpdate = useCallback(
+    async (updates: Partial<ThinkingDisplaySettings>) => {
+      if (!settings) return
+
+      const merged: ThinkingDisplaySettings = {
+        ...DEFAULT_THINKING_DISPLAY_SETTINGS,
+        ...(settings.thinkingDisplay ?? {}),
+        ...updates,
+      }
+
+      try {
+        setSaving(true)
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ thinkingDisplay: merged }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update thinking-display settings')
+        }
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update thinking-display settings', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
    * Update agent mode default enabled setting
    */
   const handleAgentModeDefaultEnabledChange = useCallback(
@@ -741,11 +927,16 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleLLMLoggingChange,
     handleAutoDetectRngChange,
     handleCompositionModeDefaultChange,
+    handleComposerSpellcheckChange,
+    handleAutoScrollOnResponseCompleteChange,
+    handleTextReplacementsEnabledChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
     handleStoryBackgroundsEnabledChange,
     handleStoryBackgroundsProfileChange,
     handleDangerousContentUpdate,
     handleTimezoneChange,
+    handleAutonomousRoomSettingsUpdate,
+    handleThinkingDisplayUpdate,
   }
 }

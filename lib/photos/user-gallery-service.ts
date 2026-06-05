@@ -18,6 +18,7 @@
  */
 
 import { logger } from '@/lib/logger';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { getUserUploadsStore } from '@/lib/file-storage/user-uploads-bridge';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { emitDocumentWritten } from '@/lib/mount-index/db-store-events';
@@ -128,9 +129,23 @@ export async function saveToUserGallery(
     throw new Error(`File ${fileId} is not owned by the calling user`);
   }
 
+  // Read the bytes via the file storage manager (handles mount-blob / disk /
+  // legacy storage all the same). Done lazy-import to keep sharp/webp out of
+  // the gallery service module load. Hash the actual bytes once and reuse the
+  // value for both the re-save guard and the link write — the FileEntry's
+  // sha256 is an upload-time input hash that can diverge from the stored bytes
+  // across a transcode, which would let the guard miss duplicates and record a
+  // hash that won't match what we store.
+  const { fileStorageManager } = await import('@/lib/file-storage/manager');
+  const buffer = await fileStorageManager.downloadFile(fileEntry);
+  if (!buffer || buffer.length === 0) {
+    throw new Error(`Image ${fileId} has empty bytes`);
+  }
+  const sha256 = sha256OfBuffer(buffer);
+
   // Re-save guard: refuse a second save for the same sha256 in the user's
   // photos/ folder. Use the link summary helper to find any existing entry.
-  const summary = await getPhotoLinkSummaryBySha256(fileEntry.sha256, repos);
+  const summary = await getPhotoLinkSummaryBySha256(sha256, repos);
   const existingInGallery = summary.linkers.find(
     l => l.mountPointId === target.mountPointId && isPhotosRelativePath(l.relativePath)
   );
@@ -138,15 +153,6 @@ export async function saveToUserGallery(
     throw new Error(
       `Image already saved to your gallery at ${existingInGallery.relativePath} on ${existingInGallery.linkedAt}`
     );
-  }
-
-  // Read the bytes via the file storage manager (handles mount-blob / disk /
-  // legacy storage all the same). Done lazy-import to keep sharp/webp out of
-  // the gallery service module load.
-  const { fileStorageManager } = await import('@/lib/file-storage/manager');
-  const buffer = await fileStorageManager.downloadFile(fileEntry);
-  if (!buffer || buffer.length === 0) {
-    throw new Error(`Image ${fileId} has empty bytes`);
   }
 
   // Capture scene state (if chatId was supplied) for the same provenance
@@ -200,7 +206,7 @@ export async function saveToUserGallery(
     originalFileName: fileEntry.originalFilename,
     originalMimeType: fileEntry.mimeType,
     storedMimeType: fileEntry.mimeType,
-    sha256: fileEntry.sha256,
+    sha256,
     data: buffer,
     description: caption ?? '',
     extractedText: markdown,
@@ -227,7 +233,7 @@ export async function saveToUserGallery(
 
   logger.info('Saved image to user gallery', {
     fileEntryId: fileEntry.id,
-    sha256: fileEntry.sha256,
+    sha256,
     linkId: link.id,
     mountPointId: target.mountPointId,
     relativePath,
@@ -242,7 +248,7 @@ export async function saveToUserGallery(
     relativePath,
     keptAt,
     fileId: fileEntry.id,
-    sha256: fileEntry.sha256,
+    sha256,
   };
 }
 

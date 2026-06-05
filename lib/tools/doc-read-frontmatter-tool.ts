@@ -4,40 +4,43 @@
  * Returns parsed frontmatter with the file path for reference.
  */
 
-export const docReadFrontmatterTool = {
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/**
+ * Zod schema for the doc-read-frontmatter tool's input.
+ */
+export const docReadFrontmatterToolInputSchema = z.object({
+  scope: z
+    .enum(['document_store', 'project', 'general'])
+    .default('document_store')
+    .describe('The file source scope. "document_store" reads from mounted document stores, "project" reads from project files, "general" reads from general files.')
+    .optional(),
+  mount_point: z
+    .string()
+    .describe('Mount point name. Required when scope is "document_store".')
+    .optional(),
+  path: z
+    .string()
+    .describe('Relative path to the markdown file within the selected scope.'),
+  keys: z
+    .array(z.string())
+    .describe('Specific frontmatter keys to retrieve. If omitted, returns all keys.')
+    .optional(),
+});
+
+/**
+ * Input parameters for the doc-read-frontmatter tool
+ */
+export type DocReadFrontmatterInput = z.infer<typeof docReadFrontmatterToolInputSchema>;
+
+export const docReadFrontmatterToolDefinition = {
   type: 'function',
   function: {
     name: 'doc_read_frontmatter',
     description:
       'Read YAML frontmatter from a markdown file. Returns the frontmatter as structured data. Optionally specify keys to retrieve only specific properties. If no frontmatter block exists, returns null.',
-    parameters: {
-      type: 'object',
-      properties: {
-        scope: {
-          type: 'string',
-          enum: ['document_store', 'project', 'general'],
-          default: 'document_store',
-          description:
-            'The file source scope. "document_store" reads from mounted document stores, "project" reads from project files, "general" reads from general files.',
-        },
-        mount_point: {
-          type: 'string',
-          description: 'Mount point name. Required when scope is "document_store".',
-        },
-        path: {
-          type: 'string',
-          description: 'Relative path to the markdown file within the selected scope.',
-        },
-        keys: {
-          type: 'array',
-          items: {
-            type: 'string',
-          },
-          description: 'Specific frontmatter keys to retrieve. If omitted, returns all keys.',
-        },
-      },
-      required: ['path'],
-    },
+    parameters: zodToOpenAISchema(docReadFrontmatterToolInputSchema),
   },
 };
 
@@ -45,45 +48,9 @@ export const docReadFrontmatterTool = {
  * Validates input for doc_read_frontmatter tool.
  */
 export function validateDocReadFrontmatterInput(input: unknown): input is DocReadFrontmatterInput {
-  if (typeof input !== 'object' || input === null) {
-    return false;
-  }
-
-  const obj = input as Record<string, unknown>;
-
-  // path is required
-  if (typeof obj.path !== 'string') {
-    return false;
-  }
-
-  // scope must be valid enum if provided
-  if (obj.scope !== undefined) {
-    if (typeof obj.scope !== 'string' || !['document_store', 'project', 'general'].includes(obj.scope)) {
-      return false;
-    }
-  }
-
-  // mount_point must be string if provided
-  if (obj.mount_point !== undefined && typeof obj.mount_point !== 'string') {
-    return false;
-  }
-
-  // keys must be array of strings if provided
-  if (obj.keys !== undefined) {
-    if (!Array.isArray(obj.keys) || !obj.keys.every((key) => typeof key === 'string')) {
-      return false;
-    }
-  }
-
-  return true;
+  return docReadFrontmatterToolInputSchema.safeParse(input).success;
 }
 
-export interface DocReadFrontmatterInput {
-  scope?: 'document_store' | 'project' | 'general';
-  mount_point?: string;
-  path: string;
-  keys?: string[];
-}
 
 export interface DocReadFrontmatterOutput {
   frontmatter: Record<string, unknown> | null;

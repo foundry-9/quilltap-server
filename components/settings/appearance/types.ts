@@ -83,9 +83,3 @@ export interface ColorModeSelectorProps {
   disabled?: boolean
 }
 
-/**
- * Theme Preview Swatches component props
- */
-export interface ThemePreviewSwatchesProps {
-  previewColors?: PreviewColors
-}

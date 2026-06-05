@@ -392,27 +392,60 @@ interface ToolPlugin {
 }
 ```
 
-### Tool Definition (OpenAI Function Format)
+### Tool Definition (Zod schema as source of truth)
 
-Define your tool using the OpenAI function calling format:
+Quilltap's internal tools and all bundled plugins declare a **Zod input schema** as the single source of truth for each tool. The OpenAI-shape `parameters` JSON Schema (served to native function-calling providers) is *derived* from that Zod schema, and `validateInput` delegates to the same schema's `safeParse`. This eliminates a long-standing drift hazard: hand-writing both a JSON Schema and a separate validator means the two can — and historically did — disagree about what the tool actually accepts. New plugins should follow the same pattern.
+
+You'll need a tiny helper that converts a Zod schema to the inline JSON Schema shape providers expect. Drop this into your plugin (or wait for a future `@quilltap/plugin-utils` release that exports it):
 
 ```typescript
-// types.ts
-export interface CalculatorInput {
-  expression: string;
-  precision?: number;
+// zod-to-openai-schema.ts
+import { z } from 'zod';
+
+/**
+ * Convert a Zod schema to an OpenAI-compatible inline JSON Schema object,
+ * stripping top-level metadata that providers don't expect.
+ */
+export function zodToOpenAISchema(schema: z.ZodType): Record<string, unknown> {
+  const raw = z.toJSONSchema(schema, { target: 'draft-7' }) as Record<string, unknown>;
+  delete raw.$schema;
+  delete raw.$id;
+  delete raw.definitions;
+  delete raw.$defs;
+  return raw;
 }
+```
+
+Now define the tool. The Zod schema is the contract; the OpenAI-format definition is derived from it:
+
+```typescript
+// calculator-tool.ts
+import { z } from 'zod';
+import type { UniversalTool } from '@quilltap/plugin-types';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+/** Single source of truth for the calculator tool's input. */
+export const calculatorToolInputSchema = z.object({
+  expression: z
+    .string()
+    .min(1)
+    .describe('The mathematical expression to evaluate (e.g., "2 + 2", "sqrt(16)", "sin(pi/2)")'),
+  precision: z
+    .number()
+    .min(0)
+    .max(15)
+    .describe('Number of decimal places for the result. Default is 10.')
+    .optional(),
+});
+
+/** Input type — inferred from the Zod schema so it can never drift. */
+export type CalculatorInput = z.infer<typeof calculatorToolInputSchema>;
 
 export interface CalculatorOutput {
   result: number | string;
   expression: string;
   error?: string;
 }
-```
-
-```typescript
-// calculator-tool.ts
-import type { UniversalTool } from '@quilltap/plugin-types';
 
 export const calculatorToolDefinition: UniversalTool = {
   type: 'function',
@@ -421,52 +454,39 @@ export const calculatorToolDefinition: UniversalTool = {
     description: `Evaluate mathematical expressions and perform calculations.
 Supports: arithmetic (+, -, *, /, ^), functions (sin, cos, sqrt, log), constants (pi, e).
 Returns the numerical result or an error message.`,
-    parameters: {
-      type: 'object',
-      properties: {
-        expression: {
-          type: 'string',
-          description: 'The mathematical expression to evaluate (e.g., "2 + 2", "sqrt(16)", "sin(pi/2)")',
-        },
-        precision: {
-          type: 'number',
-          minimum: 0,
-          maximum: 15,
-          description: 'Number of decimal places for the result. Default is 10.',
-        },
-      },
-      required: ['expression'],
-    },
+    parameters: zodToOpenAISchema(calculatorToolInputSchema) as UniversalTool['function']['parameters'],
   },
 };
 ```
 
 ### Input Validation
 
-Validate input before execution:
+`validateInput` becomes a one-line delegate — the same Zod schema enforces the same rules at runtime that the JSON Schema advertises to the LLM:
 
 ```typescript
 export function validateCalculatorInput(input: unknown): input is CalculatorInput {
-  if (typeof input !== 'object' || input === null) {
-    return false;
-  }
-
-  const obj = input as Record<string, unknown>;
-
-  // expression is required and must be a string
-  if (typeof obj.expression !== 'string' || obj.expression.length === 0) {
-    return false;
-  }
-
-  // precision must be a valid number if provided
-  if (obj.precision !== undefined) {
-    if (typeof obj.precision !== 'number' || obj.precision < 0 || obj.precision > 15) {
-      return false;
-    }
-  }
-
-  return true;
+  return calculatorToolInputSchema.safeParse(input).success;
 }
+```
+
+For checks JSON Schema can't express (trim-non-empty, allowlists, cross-field "either A or B must be supplied" constraints), use Zod's `.refine()` on the field or on the object. Those refinements run at `safeParse` time but won't appear in the derived JSON, which is the right trade — the LLM gets a clean signature, runtime still rejects bad input. Example:
+
+```typescript
+export const myToolInputSchema = z
+  .object({
+    url: z
+      .string()
+      .min(1)
+      .refine((v) => v.trim().length > 0, { message: 'URL cannot be whitespace-only' })
+      .refine((v) => v.startsWith('/'), { message: 'URL must start with /' })
+      .describe('The internal URL to navigate to. Must start with /.'),
+    types: z.array(z.string()).optional(),
+    component_ids: z.array(z.string()).optional(),
+  })
+  .refine(
+    (obj) => obj.types !== undefined || (obj.component_ids?.length ?? 0) > 0,
+    { message: 'either types or component_ids must be supplied' }
+  );
 ```
 
 ### Execution Handler
@@ -612,7 +632,7 @@ export default { plugin };
 ### Critical Security Rules
 
 1. **Never use `eval()`**: For code execution, use sandboxed environments
-2. **Validate all inputs**: Check types, ranges, and formats before processing
+2. **Validate all inputs**: Declare a Zod input schema (the source of truth for both the derived `parameters` JSON and `validateInput`). Use `.refine()` for trim-non-empty checks, allowlists, and cross-field constraints that JSON Schema cannot express on its own.
 3. **Sanitize user data**: Escape special characters, validate URLs, check paths
 4. **Limit resource usage**: Set timeouts, max response sizes, rate limits
 5. **Block dangerous operations**: Prevent file system access, network abuse
@@ -991,7 +1011,7 @@ function formatCurlOutput(output: CurlToolOutput): string {
 
 ### Execution Errors
 
-1. Check your `validateInput` function
+1. Check your `validateInput` function — if it delegates to a Zod schema, log `safeParse(input).error.format()` to see exactly which field failed and why.
 2. Verify error handling in `execute` method
 3. Look at Quilltap server logs for stack traces
 4. Test the execution logic independently

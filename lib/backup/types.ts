@@ -33,6 +33,7 @@ import type {
 } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
+import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type {
   DocMountPoint,
   DocMountFolder,
@@ -210,6 +211,8 @@ export interface BackupManifest {
     docMountBlobs?: number;
     /** Number of ProjectDocMountLink entities */
     projectDocMountLinks?: number;
+    /** Number of TextReplacementRule entities (global find→replace rules) */
+    textReplacementRules?: number;
   };
 }
 
@@ -349,6 +352,14 @@ export interface BackupData {
 
   /** Project ↔ document store associations. */
   projectDocMountLinks?: ProjectDocMountLink[];
+
+  /**
+   * Global find→replace rules (no userId). Ordinary user content, not a
+   * secret. Backed up so a restore doesn't bring the feature back enabled
+   * with zero rules — the master switch (chat_settings.textReplacementsEnabled)
+   * is already backed up.
+   */
+  textReplacementRules?: TextReplacementRule[];
 }
 
 // ============================================================================
@@ -513,6 +524,9 @@ export interface RestoreSummary {
 
   /** Number of ProjectDocMountLink entities restored */
   projectDocMountLinks?: number;
+
+  /** Number of TextReplacementRule entities restored */
+  textReplacementRules?: number;
 
   /**
    * Array of warning messages for issues that occurred during restore

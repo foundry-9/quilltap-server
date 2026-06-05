@@ -12,7 +12,7 @@ interface ImageModalProps {
   onClose: () => void
   src: string
   filename: string
-  // Optional props for tagging/deletion functionality
+  // Optional props for gallery/deletion functionality
   fileId?: string
   characterId?: string
   characterName?: string
@@ -73,57 +73,51 @@ export default function ImageModal({
     }
   }
 
-  const handleTagCharacter = async () => {
+  const handleSaveToCharacterGallery = async () => {
     if (!fileId || !characterId) return
 
     setIsTagging(true)
     try {
-      const res = await fetch(`/api/v1/chat-files/${fileId}?action=tag`, {
+      const res = await fetch(`/api/v1/characters/${characterId}/photos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tagType: 'CHARACTER',
-          tagId: characterId,
-        }),
+        body: JSON.stringify({ fileId }),
       })
 
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || 'Failed to tag image')
+        throw new Error(data.error || 'Failed to save to photo album')
       }
 
-      showSuccessToast(`Image added to ${characterName || 'character'}'s gallery`)
+      showSuccessToast(`Saved to ${characterName || 'character'}'s photo album`)
     } catch (error) {
-      console.error('Failed to tag image:', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast(error instanceof Error ? error.message : 'Failed to tag image')
+      console.error('Failed to save to character gallery:', { error: error instanceof Error ? error.message : String(error) })
+      showErrorToast(error instanceof Error ? error.message : 'Failed to save to photo album')
     } finally {
       setIsTagging(false)
     }
   }
 
-  const handleTagUserCharacter = async () => {
+  const handleSaveToUserCharacterGallery = async () => {
     if (!fileId || !userCharacterId) return
 
     setIsTagging(true)
     try {
-      const res = await fetch(`/api/v1/chat-files/${fileId}?action=tag`, {
+      const res = await fetch(`/api/v1/characters/${userCharacterId}/photos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tagType: 'CHARACTER',
-          tagId: userCharacterId,
-        }),
+        body: JSON.stringify({ fileId }),
       })
 
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || 'Failed to tag image')
+        throw new Error(data.error || 'Failed to save to photo album')
       }
 
-      showSuccessToast(`Image added to ${userCharacterName || 'user character'}'s gallery`)
+      showSuccessToast(`Saved to ${userCharacterName || 'user character'}'s photo album`)
     } catch (error) {
-      console.error('Failed to tag image:', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast(error instanceof Error ? error.message : 'Failed to tag image')
+      console.error('Failed to save to user character gallery:', { error: error instanceof Error ? error.message : String(error) })
+      showErrorToast(error instanceof Error ? error.message : 'Failed to save to photo album')
     } finally {
       setIsTagging(false)
     }
@@ -160,7 +154,7 @@ export default function ImageModal({
 
   if (!isOpen) return null
 
-  const canTag = fileId && (characterId || userCharacterId)
+  const canSaveToGallery = fileId && (characterId || userCharacterId)
   const canDelete = fileId
 
   // Use portal to render at document body level, avoiding stacking context issues
@@ -173,32 +167,32 @@ export default function ImageModal({
     >
       {/* Control buttons - top right */}
       <div className="absolute top-4 right-4 flex gap-2 z-10">
-        {/* Tag to character button */}
-        {canTag && characterId && (
+        {/* Save to character photo album */}
+        {canSaveToGallery && characterId && (
           <button
             onClick={(e) => {
               e.stopPropagation()
-              handleTagCharacter()
+              handleSaveToCharacterGallery()
             }}
             disabled={isTagging}
             className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors disabled:opacity-50"
-            title={`Add to ${characterName || 'character'}'s gallery`}
+            title={`Save to ${characterName || 'character'}'s photo album`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
           </button>
         )}
-        {/* Tag to user character button */}
-        {canTag && userCharacterId && (
+        {/* Save to user character photo album */}
+        {canSaveToGallery && userCharacterId && (
           <button
             onClick={(e) => {
               e.stopPropagation()
-              handleTagUserCharacter()
+              handleSaveToUserCharacterGallery()
             }}
             disabled={isTagging}
             className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors disabled:opacity-50"
-            title={`Add to ${userCharacterName || 'user character'}'s gallery`}
+            title={`Save to ${userCharacterName || 'user character'}'s photo album`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -255,7 +249,7 @@ export default function ImageModal({
               handleDelete()
             }}
             disabled={isDeleting}
-            className="p-2 qt-bg-destructive/80 hover:bg-destructive rounded-full qt-text-overlay transition-colors disabled:opacity-50"
+            className="p-2 qt-bg-destructive/80 hover:qt-bg-destructive rounded-full qt-text-overlay transition-colors disabled:opacity-50"
             title="Delete image"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

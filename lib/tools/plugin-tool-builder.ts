@@ -54,27 +54,27 @@ import {
 import {
   wardrobeCreateItemToolDefinition,
 } from '@/lib/tools/wardrobe-create-item-tool';
-import { docReadFileTool } from '@/lib/tools/doc-read-file-tool';
-import { docWriteFileTool } from '@/lib/tools/doc-write-file-tool';
-import { docStrReplaceTool } from '@/lib/tools/doc-str-replace-tool';
-import { docInsertTextTool } from '@/lib/tools/doc-insert-text-tool';
-import { docGrepTool } from '@/lib/tools/doc-grep-tool';
-import { docListFilesTool } from '@/lib/tools/doc-list-files-tool';
-import { docReadFrontmatterTool } from '@/lib/tools/doc-read-frontmatter-tool';
-import { docUpdateFrontmatterTool } from '@/lib/tools/doc-update-frontmatter-tool';
-import { docReadHeadingTool } from '@/lib/tools/doc-read-heading-tool';
-import { docUpdateHeadingTool } from '@/lib/tools/doc-update-heading-tool';
-import { docMoveFileTool } from '@/lib/tools/doc-move-file-tool';
-import { docCopyFileTool } from '@/lib/tools/doc-copy-file-tool';
-import { docDeleteFileTool } from '@/lib/tools/doc-delete-file-tool';
-import { docCreateFolderTool } from '@/lib/tools/doc-create-folder-tool';
-import { docDeleteFolderTool } from '@/lib/tools/doc-delete-folder-tool';
-import { docOpenDocumentTool } from '@/lib/tools/doc-open-document-tool';
-import { docCloseDocumentTool } from '@/lib/tools/doc-close-document-tool';
-import { docFocusTool } from '@/lib/tools/doc-focus-tool';
-import { keepImageTool } from '@/lib/tools/keep-image-tool';
-import { listImagesTool } from '@/lib/tools/list-images-tool';
-import { attachImageTool } from '@/lib/tools/attach-image-tool';
+import { docReadFileToolDefinition as docReadFileTool } from '@/lib/tools/doc-read-file-tool';
+import { docWriteFileToolDefinition as docWriteFileTool } from '@/lib/tools/doc-write-file-tool';
+import { docStrReplaceToolDefinition as docStrReplaceTool } from '@/lib/tools/doc-str-replace-tool';
+import { docInsertTextToolDefinition as docInsertTextTool } from '@/lib/tools/doc-insert-text-tool';
+import { docGrepToolDefinition as docGrepTool } from '@/lib/tools/doc-grep-tool';
+import { docListFilesToolDefinition as docListFilesTool } from '@/lib/tools/doc-list-files-tool';
+import { docReadFrontmatterToolDefinition as docReadFrontmatterTool } from '@/lib/tools/doc-read-frontmatter-tool';
+import { docUpdateFrontmatterToolDefinition as docUpdateFrontmatterTool } from '@/lib/tools/doc-update-frontmatter-tool';
+import { docReadHeadingToolDefinition as docReadHeadingTool } from '@/lib/tools/doc-read-heading-tool';
+import { docUpdateHeadingToolDefinition as docUpdateHeadingTool } from '@/lib/tools/doc-update-heading-tool';
+import { docMoveFileToolDefinition as docMoveFileTool } from '@/lib/tools/doc-move-file-tool';
+import { docCopyFileToolDefinition as docCopyFileTool } from '@/lib/tools/doc-copy-file-tool';
+import { docDeleteFileToolDefinition as docDeleteFileTool } from '@/lib/tools/doc-delete-file-tool';
+import { docCreateFolderToolDefinition as docCreateFolderTool } from '@/lib/tools/doc-create-folder-tool';
+import { docDeleteFolderToolDefinition as docDeleteFolderTool } from '@/lib/tools/doc-delete-folder-tool';
+import { docOpenDocumentToolDefinition as docOpenDocumentTool } from '@/lib/tools/doc-open-document-tool';
+import { docCloseDocumentToolDefinition as docCloseDocumentTool } from '@/lib/tools/doc-close-document-tool';
+import { docFocusToolDefinition as docFocusTool } from '@/lib/tools/doc-focus-tool';
+import { keepImageToolDefinition as keepImageTool } from '@/lib/tools/keep-image-tool';
+import { listImagesToolDefinition as listImagesTool } from '@/lib/tools/list-images-tool';
+import { attachImageToolDefinition as attachImageTool } from '@/lib/tools/attach-image-tool';
 import {
   terminalReadToolDefinition,
 } from '@/lib/tools/terminal-read-tool';

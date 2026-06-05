@@ -138,26 +138,30 @@ export default function NewCharacterPage() {
         pendingScenarios.current = null
       }
 
-      // Save pending physical description if any
+      // Save pending physical description if any. The cutover collapsed the
+      // multi-record array to a single record on the character row; PATCH the
+      // character directly and the repository routes it into the vault.
       if (pendingPhysicalDescription.current) {
         try {
-          const descResponse = await fetch(`/api/v1/characters/${characterId}/descriptions`, {
-            method: 'POST',
+          const descResponse = await fetch(`/api/v1/characters/${characterId}`, {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              name: pendingPhysicalDescription.current.name,
-              shortPrompt: pendingPhysicalDescription.current.shortPrompt,
-              mediumPrompt: pendingPhysicalDescription.current.mediumPrompt,
-              longPrompt: pendingPhysicalDescription.current.longPrompt,
-              completePrompt: pendingPhysicalDescription.current.completePrompt,
-              fullDescription: pendingPhysicalDescription.current.fullDescription,
+              physicalDescription: {
+                name: pendingPhysicalDescription.current.name,
+                shortPrompt: pendingPhysicalDescription.current.shortPrompt,
+                mediumPrompt: pendingPhysicalDescription.current.mediumPrompt,
+                longPrompt: pendingPhysicalDescription.current.longPrompt,
+                completePrompt: pendingPhysicalDescription.current.completePrompt,
+                fullDescription: pendingPhysicalDescription.current.fullDescription,
+              },
             }),
           })
 
           if (descResponse.ok) {
-            showSuccessToast('Physical description created')
+            showSuccessToast('Physical description saved')
           } else {
-            const errorData = await descResponse.json()
+            const errorData = await descResponse.json().catch(() => ({}))
             console.error('Failed to save physical description', errorData.error || 'Unknown error')
             showErrorToast('Character created, but physical description failed to save')
           }
