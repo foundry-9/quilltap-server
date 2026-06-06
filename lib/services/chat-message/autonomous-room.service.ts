@@ -244,6 +244,177 @@ export async function resumeAutonomousRoom(
 }
 
 /**
+ * Editable per-room settings, as accepted from the Edit Enclave modal. All
+ * fields are optional so the caller can send a partial patch; the values speak
+ * the same units as the DB and the create payload (milliseconds for the
+ * windows/caps), so the modal converts hours/minutes → ms before calling.
+ *
+ * Tri-state semantics, field by field:
+ *   - `undefined` → leave the stored value untouched.
+ *   - `null`      → clear the stored value back to NULL (for the nullable
+ *                   columns: scheduleCron, the freshness window, every budget
+ *                   cap, and runVisibility's "inherit default").
+ *   - a value     → write it.
+ *
+ * `title` is special: when a non-empty string is supplied we also stamp
+ * `isManuallyRenamed = true` so the cheap-LLM auto-titler stops overwriting the
+ * household's chosen name. We never *clear* a title here.
+ */
+export interface AutonomousRoomSettingsPatch {
+  title?: string;
+  scheduleCron?: string | null;
+  scheduleFreshnessWindowMs?: number | null;
+  budgetMaxTurns?: number | null;
+  budgetMaxTokens?: number | null;
+  budgetMaxWallClockMs?: number | null;
+  budgetEstimatedSpendCapUSD?: number | null;
+  runVisibility?: 'owner_only' | 'household' | 'open' | null;
+  runDestructiveToolsAllowed?: boolean;
+  budgetExcludeCacheHits?: boolean;
+}
+
+export type UpdateAutonomousRoomSettingsResult =
+  | { ok: true; clampedDestructive: boolean }
+  | {
+      ok: false;
+      reason: 'not_autonomous' | 'chat_not_found' | 'invalid_cron';
+      message: string;
+    };
+
+/**
+ * Apply an edit to an autonomous room's settings.
+ *
+ * Edits land on the live chat row and take effect on the *next* turn of any
+ * in-flight run — the turn handler re-reads the budget caps, the cache-counting
+ * mode, and the destructive-tool flag fresh every turn, and the Salon list
+ * reads `runVisibility` fresh on every fetch. Run-state and counters
+ * (`runState`, `currentRunId`, `runStartedAt`, the turn/token tallies) are
+ * deliberately left untouched, so editing never restarts or resets a run.
+ *
+ * Cron is the one field needing a follow-on write: changing the expression
+ * recomputes `scheduleNextRunAt` (so the scheduler tick honours the new
+ * cadence), and clearing it drops the room back to manual-only. We validate the
+ * expression here and reject the whole edit on a bad cron rather than silently
+ * dropping the schedule — the private `recomputeNextRun` in the turn handler
+ * can't be reused because it collapses "missing" and "invalid" to the same
+ * null.
+ *
+ * The user-level destructive-tool ceiling is enforced at write time: if the
+ * household's policy is `always_refuse`, the per-room flag is forced off no
+ * matter what the form sent.
+ */
+export async function updateAutonomousRoomSettings(
+  chatId: string,
+  userId: string,
+  patch: AutonomousRoomSettingsPatch,
+): Promise<UpdateAutonomousRoomSettingsResult> {
+  const repos = getRepositories();
+
+  const chat = await repos.chats.findById(chatId);
+  if (!chat) {
+    return { ok: false, reason: 'chat_not_found', message: 'Chat not found.' };
+  }
+  if (chat.chatType !== 'autonomous') {
+    return {
+      ok: false,
+      reason: 'not_autonomous',
+      message: 'This chat is not an autonomous room.',
+    };
+  }
+
+  const update: Record<string, unknown> = {};
+
+  // --- Title (also pins isManuallyRenamed so the auto-titler backs off) ---
+  if (patch.title !== undefined) {
+    const trimmed = patch.title.trim();
+    if (trimmed.length > 0) {
+      update.title = trimmed;
+      update.isManuallyRenamed = true;
+    }
+  }
+
+  // --- Schedule (three-way: set+recompute / clear / reject-on-invalid) ---
+  if (patch.scheduleCron !== undefined) {
+    const cron = patch.scheduleCron?.trim() ?? '';
+    if (cron.length === 0) {
+      update.scheduleCron = null;
+      update.scheduleNextRunAt = null;
+    } else {
+      let nextRunIso: string | null;
+      try {
+        nextRunIso = new Cron(cron).nextRun(new Date())?.toISOString() ?? null;
+      } catch (error) {
+        logger.warn('Autonomous-room edit: rejected invalid cron', {
+          context: HANDLER,
+          chatId,
+          cron,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return {
+          ok: false,
+          reason: 'invalid_cron',
+          message: `Invalid cron expression: ${cron}`,
+        };
+      }
+      update.scheduleCron = cron;
+      update.scheduleNextRunAt = nextRunIso;
+    }
+  }
+
+  // --- Catch-up freshness window ---
+  if (patch.scheduleFreshnessWindowMs !== undefined) {
+    update.scheduleFreshnessWindowMs = patch.scheduleFreshnessWindowMs;
+  }
+
+  // --- Budget caps (each nullable: null clears the cap) ---
+  if (patch.budgetMaxTurns !== undefined) update.budgetMaxTurns = patch.budgetMaxTurns;
+  if (patch.budgetMaxTokens !== undefined) update.budgetMaxTokens = patch.budgetMaxTokens;
+  if (patch.budgetMaxWallClockMs !== undefined) update.budgetMaxWallClockMs = patch.budgetMaxWallClockMs;
+  if (patch.budgetEstimatedSpendCapUSD !== undefined) {
+    update.budgetEstimatedSpendCapUSD = patch.budgetEstimatedSpendCapUSD;
+  }
+
+  // --- Token-budget counting mode (default: exclude cache hits) ---
+  if (patch.budgetExcludeCacheHits !== undefined) {
+    update.budgetExcludeCacheHits = patch.budgetExcludeCacheHits === false ? 0 : 1;
+  }
+
+  // --- Visibility (null = inherit the user default) ---
+  if (patch.runVisibility !== undefined) {
+    update.runVisibility = patch.runVisibility;
+  }
+
+  // --- Destructive-tool authorization, clamped by the user-level ceiling ---
+  let clampedDestructive = false;
+  if (patch.runDestructiveToolsAllowed !== undefined) {
+    const chatSettings = await repos.chatSettings.findByUserId(userId);
+    const policyRefuse =
+      chatSettings?.autonomousRoomSettings?.destructiveToolPolicy === 'always_refuse';
+    const allowed = policyRefuse ? false : patch.runDestructiveToolsAllowed;
+    clampedDestructive = policyRefuse && patch.runDestructiveToolsAllowed;
+    update.runDestructiveToolsAllowed = allowed ? 1 : 0;
+  }
+
+  if (Object.keys(update).length === 0) {
+    logger.debug('Autonomous-room edit: no-op (empty patch)', { context: HANDLER, chatId });
+    return { ok: true, clampedDestructive };
+  }
+
+  await repos.chats.update(chatId, update as unknown as Partial<ChatMetadataBase>);
+
+  logger.info('Autonomous-room: settings edited', {
+    context: HANDLER,
+    chatId,
+    changedFields: Object.keys(update),
+    cronChanged: 'scheduleCron' in update,
+    nextRunAt: update.scheduleNextRunAt,
+    clampedDestructive,
+  });
+
+  return { ok: true, clampedDestructive };
+}
+
+/**
  * Startup reconcile for autonomous-room runs interrupted by a server crash
  * or restart. Any chat with `chatType = 'autonomous'` and `runState =
  * 'running'` had its turn-worker killed mid-execution; without this sweep

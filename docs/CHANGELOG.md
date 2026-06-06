@@ -4,6 +4,25 @@
 
 ### 4.6.1
 
+#### Autonomous rooms ("enclaves") can now be edited after creation
+
+The autonomous-settings form from the New Room flow can now be reused to edit an existing autonomous room. Editable: title, schedule cron, catch-up freshness window, the four budget caps (turns/tokens/wall-clock/spend), the "count only the dear tokens" cache-hit toggle, visibility, and destructive-tool authorization. The participant roster and per-character connection profiles/system prompts are not edited here — those stay on the Participants sidebar card.
+
+Two entry points open the same **Edit Enclave** modal:
+
+- An **Edit** button per room in the *Scheduled Autonomous Rooms* card at `/settings?tab=chat`.
+- An **Edit Enclave** button in the *Organize* card of the Salon chat sidebar, shown only when the open chat is an autonomous room.
+
+Edits apply instantly: a running run honors new budget caps / cache mode / destructive flag on its next turn (the turn handler reads them fresh each turn), and visibility applies on the next Salon list fetch — no run restart. Changing the cron recomputes `scheduleNextRunAt`; clearing it returns the room to manual-only; an invalid cron is rejected (400) and leaves the schedule untouched. Lowering a cap below current consumption ends a running run on its next turn (intended). Setting a title also pins `isManuallyRenamed` so the auto-titler leaves it alone.
+
+Implementation:
+
+- New `updateAutonomousRoomSettings(chatId, userId, patch)` in `lib/services/chat-message/autonomous-room.service.ts`: guards `chatType === 'autonomous'`, recomputes the cron next-run, clamps `runDestructiveToolsAllowed` to 0 when the user-level policy is `always_refuse`, writes via `repos.chats.update` (never touches run-state/counters), debug-logs the change. Tri-state patch semantics: `undefined` = leave, `null` = clear, value = set.
+- New `?action=update-settings` POST on `app/api/v1/chats/[id]/autonomous-room/route.ts` with a Zod schema mirroring the autonomous block of `createChatSchema` (caps/cron/visibility made `.nullish()` so they can be cleared). Values are in milliseconds, like the create payload.
+- `chatType` added to the `GET /api/v1/chats/[id]` response (and the Salon `Chat` type) to gate the sidebar button.
+- `AutonomousRoomCard` extracted from `NewChatForm.tsx` into `components/new-chat/AutonomousRoomCard.tsx` and reused by the new `components/new-chat/EditEnclaveModal.tsx`. The modal converts ms ⇄ hours/minutes at its API boundary.
+- Settings card (`components/tools/autonomous-rooms-card.tsx`) refreshes its SWR list after a save; the Salon page refetches the chat so the header title updates.
+
 #### Autonomous rooms now get Host pacing announcements at the halfway and near-end marks
 
 An autonomous-room run now posts two Host announcements as it approaches its budget, so the characters can pace themselves and wrap up before the run stops:

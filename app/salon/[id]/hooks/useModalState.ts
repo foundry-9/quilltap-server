@@ -37,6 +37,7 @@ export function useModalState() {
   const [libraryFilePickerOpen, setLibraryFilePickerOpen] = useState(false)
   const [standaloneGenerateImageOpen, setStandaloneGenerateImageOpen] = useState(false)
   const [insertAnnouncementOpen, setInsertAnnouncementOpen] = useState(false)
+  const [editEnclaveModalOpen, setEditEnclaveModalOpen] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showParticipantSidebar, setShowParticipantSidebar] = useState(true)
 
@@ -75,6 +76,8 @@ export function useModalState() {
   const closeStandaloneGenerateImage = useCallback(() => setStandaloneGenerateImageOpen(false), [])
   const openInsertAnnouncement = useCallback(() => setInsertAnnouncementOpen(true), [])
   const closeInsertAnnouncement = useCallback(() => setInsertAnnouncementOpen(false), [])
+  const openEditEnclave = useCallback(() => setEditEnclaveModalOpen(true), [])
+  const closeEditEnclave = useCallback(() => setEditEnclaveModalOpen(false), [])
 
   return {
     // Simple boolean modals
@@ -116,5 +119,7 @@ export function useModalState() {
     openStandaloneGenerateImage, closeStandaloneGenerateImage,
     insertAnnouncementOpen,
     openInsertAnnouncement, closeInsertAnnouncement,
+    editEnclaveModalOpen,
+    openEditEnclave, closeEditEnclave,
   }
 }

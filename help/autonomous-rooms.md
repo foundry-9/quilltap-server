@@ -66,6 +66,24 @@ Two distinctions follow from that flip:
 
 Selection rules: at least two LLM-controlled characters, no user-controlled participants, every LLM character must have a connection profile. On submit, an **ad-hoc room** (one without a cron expression) takes itself in hand at once: the first run begins immediately, in the spirit of the householder who set it on its way and then turned to other matters. A **scheduled room** (one with a cron expression) waits, idle, for its first scheduled tick. Either kind of room appears in the **Autonomous Rooms** management list under the Chat tab, where **Pause**, **Resume**, and **Stop** are at one's disposal at all hours.
 
+## Editing a room — the same dials, turned after the fact
+
+A room's standing arrangements need not be fixed at its christening. The very card that sets a room's schedule, budgets, visibility, and tool authorizations may be summoned again at any hour to **revise** them, by way of the **Edit Enclave** dialog. ("Enclave" is the Estate's fond name for an autonomous room; the dialog wears it on its brass plate.) Two bell-pulls ring for the same butler:
+
+- From **Data & System → Chat → Scheduled Autonomous Rooms**, each room in the management list now carries an **Edit** button beside its Pause and Stop.
+- From within a room's own transcript, the chat sidebar's **Organize** card offers an **Edit Enclave** button — shown only when the chat at hand is, in fact, an autonomous room.
+
+The dialog presents the familiar settings — the room's title, the cron expression and freshness window, the four budget caps, the dear-tokens tickbox, the visibility, and the destructive-tool authorization — filled in with the room's present arrangements. Adjust whichever you please and click **Save Changes**.
+
+Two courtesies are worth noting:
+
+- **Edits take effect at once.** A revision lands on the room directly, and a run *already in motion* honors the new budget caps, the new dear-tokens reckoning, and the new tool authorization on its very next turn — there is no need to stop and restart the gathering. Visibility likewise updates the moment the Salon list is next consulted. The one caveat the thrifty householder should keep in mind: should you tighten a cap *below what the present run has already spent*, that run will conclude itself, with all due grace, on its next turn — exactly as it would had the cap been set so from the first.
+- **A title set here is a title kept.** Naming a room through this dialog pins the name; the Estate's automatic titler, which otherwise renames a room as its conversation finds its subject, will thereafter leave your chosen title undisturbed.
+
+Revising the cron expression recomputes the next appointment straightaway; clearing it altogether returns the room to manual-only, to be started by hand. An expression the clockwork cannot parse is refused outright, and the room's standing schedule is left exactly as it was.
+
+Note that the dialog governs a room's *settings* — its schedule, its purse, its visibility, its tools. To change *who* is in the room, or which model each character speaks through, attend instead to the **Participants** card in the same chat sidebar.
+
 ## Tools — what characters may, and may not, deliberately undo
 
 In an autonomous room, characters may invoke any tool they would ordinarily be permitted to invoke, with one narrowing: tools that **mutate** or **destroy** files on disk — at present, vault-file deletion — are disabled unless the room's owner has pre-authorized them at room creation. The rationale is straightforward: the householder is not present to confirm; the conservative default is to refuse.
@@ -111,7 +129,7 @@ This dual safeguard (a prompt-level instruction *and* a structural provenance fl
   - **Destructive-tool policy** (Always refuse / Opt in per room)
 - `/settings?tab=chat&section=autonomous-room-schedules` — autonomous-room management list:
   - Per-room run-state badge, last run, next run, run budgets consumed
-  - **Pause**, **Resume**, **Stop** controls
+  - **Pause**, **Resume**, **Stop**, and **Edit** controls
   - Direct link to the chat transcript and `.qtap` export
   - Cron-scheduled rooms always appear here; ad-hoc rooms appear while they are idle, running, or paused, and fall off the list once stopped, errored, or budget-exhausted
 

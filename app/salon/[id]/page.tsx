@@ -54,6 +54,7 @@ import {
 } from './components'
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
 import { NewChatModal } from '@/components/new-chat/NewChatModal'
+import { EditEnclaveModal } from '@/components/new-chat/EditEnclaveModal'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
 import SplitLayout from './components/SplitLayout'
 import DocumentPane from './components/DocumentPane'
@@ -1632,6 +1633,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onContinueChatClick={modals.openContinueChat}
           chatPhotoCount={chatPhotoCount}
           onGalleryClick={modals.openGallery}
+          isAutonomousRoom={chat?.chatType === 'autonomous'}
+          onEditEnclaveClick={modals.openEditEnclave}
           // Edit Content section
           onSearchReplaceClick={modals.openSearchReplace}
           onBulkCharacterReplaceClick={modals.openBulkReplace}
@@ -1640,6 +1643,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           chatMemoryCount={chatMemoryCount}
         />
       )}
+
+      <EditEnclaveModal
+        isOpen={modals.editEnclaveModalOpen}
+        onClose={modals.closeEditEnclave}
+        chatId={id}
+        currentTitle={chat?.title ?? ''}
+        onSaved={async () => {
+          modals.closeEditEnclave()
+          await fetchChat()
+        }}
+      />
 
       {whisperTarget && (
         <WhisperDialog

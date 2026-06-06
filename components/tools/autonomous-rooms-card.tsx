@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
+import { EditEnclaveModal } from '@/components/new-chat/EditEnclaveModal'
 
 interface AutonomousRoom {
   id: string
@@ -78,6 +79,7 @@ export function AutonomousRoomsCard() {
     { refreshInterval: 5_000 },
   )
   const [busyChatId, setBusyChatId] = useState<string | null>(null)
+  const [editRoom, setEditRoom] = useState<{ id: string; title: string } | null>(null)
 
   const action = async (chatId: string, verb: 'start' | 'pause' | 'stop' | 'resume') => {
     setBusyChatId(chatId)
@@ -117,6 +119,7 @@ export function AutonomousRoomsCard() {
   }
 
   return (
+    <>
     <div className="space-y-3">
       {rooms.map((room) => {
         const state = room.runState ?? 'idle'
@@ -177,11 +180,32 @@ export function AutonomousRoomsCard() {
                 >
                   Stop
                 </button>
+                <button
+                  className="qt-button-secondary text-xs px-2 py-1"
+                  onClick={() => setEditRoom({ id: room.id, title: room.title })}
+                  disabled={busyChatId === room.id}
+                  title="Edit this enclave’s schedule, budget, and visibility"
+                >
+                  Edit
+                </button>
               </div>
             </div>
           </div>
         )
       })}
     </div>
+    {editRoom && (
+      <EditEnclaveModal
+        isOpen={true}
+        onClose={() => setEditRoom(null)}
+        chatId={editRoom.id}
+        currentTitle={editRoom.title}
+        onSaved={() => {
+          setEditRoom(null)
+          mutate()
+        }}
+      />
+    )}
+    </>
   )
 }
