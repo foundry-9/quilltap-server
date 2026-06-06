@@ -433,9 +433,12 @@ export class OpenAIProvider implements TextProvider {
       content: response.output_text,
       finishReason: this.getFinishReason(response),
       usage: {
-        promptTokens: response.usage?.input_tokens ?? 0,
+        // Exclude cache-read tokens from prompt/total so cached input is not
+        // charged against budgets or cost; cacheUsage still reports them for
+        // display. (OpenAI folds cached_tokens into input_tokens.)
+        promptTokens: Math.max(0, (response.usage?.input_tokens ?? 0) - (cachedTokens ?? 0)),
         completionTokens: response.usage?.output_tokens ?? 0,
-        totalTokens: response.usage?.total_tokens ?? 0,
+        totalTokens: Math.max(0, (response.usage?.total_tokens ?? 0) - (cachedTokens ?? 0)),
       },
       raw: this.buildRawResponse(response),
       attachmentResults,
@@ -576,9 +579,10 @@ export class OpenAIProvider implements TextProvider {
         content: '',
         done: true,
         usage: {
-          promptTokens: finalResponse.usage?.input_tokens ?? 0,
+          // Cache-read tokens excluded from prompt/total (see buildLLMResponse).
+          promptTokens: Math.max(0, (finalResponse.usage?.input_tokens ?? 0) - (cachedTokens ?? 0)),
           completionTokens: finalResponse.usage?.output_tokens ?? 0,
-          totalTokens: finalResponse.usage?.total_tokens ?? 0,
+          totalTokens: Math.max(0, (finalResponse.usage?.total_tokens ?? 0) - (cachedTokens ?? 0)),
         },
         attachmentResults,
         rawResponse: raw,

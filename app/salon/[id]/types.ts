@@ -151,6 +151,8 @@ export interface Participant {
 export interface Chat {
   id: string
   title: string
+  /** Discriminates salon chats from autonomous rooms ("enclaves"). Gates the Edit Enclave control. */
+  chatType?: 'salon' | 'autonomous' | 'help'
   roleplayTemplateId?: string | null
   participants: Participant[]
   user: {

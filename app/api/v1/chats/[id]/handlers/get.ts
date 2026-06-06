@@ -446,6 +446,9 @@ export async function handleGet(
     const chat = {
       id: chatMetadata.id,
       title: chatMetadata.title,
+      // Surfaced so the Salon sidebar can gate the "Edit Enclave" control to
+      // autonomous rooms. Defaults to 'salon' for legacy rows without the column.
+      chatType: chatMetadata.chatType ?? 'salon',
       contextSummary: chatMetadata.contextSummary,
       roleplayTemplateId: chatMetadata.roleplayTemplateId,
       imageProfileId: chatMetadata.imageProfileId ?? null,

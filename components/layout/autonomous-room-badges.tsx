@@ -203,16 +203,36 @@ export function AutonomousRoomBadges() {
       : room.runState === 'paused'
       ? 'resume'
       : 'start'
+    // The server flips the run state synchronously (start/resume → running,
+    // pause → paused), so we can reflect it optimistically the instant the
+    // button is clicked instead of waiting for the POST + revalidation
+    // round-trip — which can lag when the server is busy running a turn.
+    const optimisticState: RunState = verb === 'pause' ? 'paused' : 'running'
+    const applyOptimistic = (cur?: { rooms: AutonomousRoom[] }) => ({
+      rooms: (cur?.rooms ?? []).map((r) =>
+        r.id === room.id ? { ...r, runState: optimisticState } : r,
+      ),
+    })
     setBusyChatId(room.id)
     try {
-      const res = await fetch(`/api/v1/chats/${room.id}/autonomous-room?action=${verb}`, {
-        method: 'POST',
+      const post = (async (): Promise<{ rooms: AutonomousRoom[] } | undefined> => {
+        const res = await fetch(`/api/v1/chats/${room.id}/autonomous-room?action=${verb}`, {
+          method: 'POST',
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => null)
+          throw new Error(body?.error || `Failed to ${verb}`)
+        }
+        // Resolve to undefined so SWR falls through to the revalidation fetch
+        // (populateCache: false, revalidate: true) for the authoritative state.
+        return undefined
+      })()
+      await mutate(post, {
+        optimisticData: applyOptimistic,
+        rollbackOnError: true,
+        populateCache: false,
+        revalidate: true,
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        throw new Error(body?.error || `Failed to ${verb}`)
-      }
-      await mutate()
     } catch (err) {
       console.error('Autonomous-room badge action failed', err)
     } finally {

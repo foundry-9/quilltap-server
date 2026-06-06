@@ -633,6 +633,96 @@ describe('LLMLogsRepository', () => {
     });
   });
 
+  describe('getTotalTokenUsageForRun', () => {
+    const RUN_ID = '55555555-5555-4555-8555-555555555555';
+
+    it('sums usage.totalTokens and excludes cache hits by default', async () => {
+      const logs = [
+        createMockLog({
+          autonomousRunId: RUN_ID,
+          usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+          cacheUsage: { cacheReadInputTokens: 900 },
+        }),
+        createMockLog({
+          autonomousRunId: RUN_ID,
+          usage: { promptTokens: 200, completionTokens: 100, totalTokens: 300 },
+          cacheUsage: { cacheReadInputTokens: 400 },
+        }),
+      ];
+      mockCollection.find.mockResolvedValue(logs);
+
+      const result = await repo.getTotalTokenUsageForRun(RUN_ID);
+
+      // Cache reads (900 + 400) must NOT be added in the default mode.
+      expect(result).toEqual({
+        promptTokens: 300,
+        completionTokens: 150,
+        totalTokens: 450,
+      });
+    });
+
+    it('adds cache-read tokens back to prompt + total when includeCacheHits is true', async () => {
+      const logs = [
+        createMockLog({
+          autonomousRunId: RUN_ID,
+          usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+          cacheUsage: { cacheReadInputTokens: 900 },
+        }),
+        createMockLog({
+          autonomousRunId: RUN_ID,
+          usage: { promptTokens: 200, completionTokens: 100, totalTokens: 300 },
+          cacheUsage: { cacheReadInputTokens: 400 },
+        }),
+      ];
+      mockCollection.find.mockResolvedValue(logs);
+
+      const result = await repo.getTotalTokenUsageForRun(RUN_ID, { includeCacheHits: true });
+
+      // Cache reads (900 + 400 = 1300) added to prompt + total; completion untouched.
+      expect(result).toEqual({
+        promptTokens: 300 + 1300,
+        completionTokens: 150,
+        totalTokens: 450 + 1300,
+      });
+    });
+
+    it('tolerates rows with no cacheUsage when including cache hits', async () => {
+      const logs = [
+        createMockLog({
+          autonomousRunId: RUN_ID,
+          usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+          cacheUsage: null,
+        }),
+        createMockLog({
+          autonomousRunId: RUN_ID,
+          usage: { promptTokens: 200, completionTokens: 100, totalTokens: 300 },
+          cacheUsage: { cacheReadInputTokens: 400 },
+        }),
+      ];
+      mockCollection.find.mockResolvedValue(logs);
+
+      const result = await repo.getTotalTokenUsageForRun(RUN_ID, { includeCacheHits: true });
+
+      expect(result).toEqual({
+        promptTokens: 300 + 400,
+        completionTokens: 150,
+        totalTokens: 450 + 400,
+      });
+    });
+
+    it('returns zeros on error', async () => {
+      mockCollection.find.mockRejectedValue(new Error('DB error'));
+
+      const result = await repo.getTotalTokenUsageForRun(RUN_ID, { includeCacheHits: true });
+
+      expect(result).toEqual({
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      });
+    });
+  });
+
   describe('degraded mode', () => {
     it('returns empty array for find operations when degraded', async () => {
       mockIsLLMLogsDegraded.mockReturnValue(true);

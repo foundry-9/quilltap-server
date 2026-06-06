@@ -211,6 +211,12 @@ Multi-character chats let you put more than one collaborator in the room at once
 
 The Estate's Staff narrates the room as it changes — the Host announces participants joining, leaving, or shifting between active and silent states; Prospero announces when a participant's connection profile changes; Aurora announces wardrobe changes; the Lantern announces image generation with the prompt that was actually used; the Librarian announces document operations; the Concierge speaks up exactly once when a chat is flagged for routing to a different provider. Each announcement is filtered out of the LLM context for opaque characters, so adding voices to the room doesn't leak the system to characters who shouldn't see it.
 
+### Autonomous Rooms (Enclaves)
+
+Autonomous rooms are private character-to-character salons that run without a human in the loop. Set a budget (turns, tokens, wall-clock time, estimated spend, or a cross-room daily token cap), optionally attach a cron schedule, and let the characters converse among themselves — on demand or overnight while you sleep. The full apparatus is present: memories, project context, document stores, wardrobes, the Concierge. Characters produce a transcript, file memories (tagged with `autonomous_room` provenance so you know what was witnessed in person vs. overheard), and conclude cleanly when the budget runs dry.
+
+Every run is bounded and inspectable. The Host marks two pacing milestones aloud — halfway and near-end — so the characters can bring matters to a graceful close. A run that overshoots the near-end window gets a single grace turn to wrap up. Per-room settings (schedule, budgets, visibility, destructive-tool authorization, and whether prompt-cache hits count against the token cap) can be edited after creation via the Edit Enclave dialog, and changes take effect on the very next turn of a running conversation. Toolbar badges show each room's status and remaining budget at a glance, with inline play/pause controls.
+
 ### Gaming & Interactivity
 
 Persistent chat state for inventories, stats, scores, and any structured data. Project-level state shared across chats with per-chat overrides. Cryptographically secure dice rolls (d4 to d1000), coin flips, and random participant selection with auto-detection — "I roll 2d6" actually rolls.

@@ -136,6 +136,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-autonomous-rooms-fields-v1': 'Preparing the autonomous salon quarters',
   'add-autonomous-run-paused-at-v1': 'Noting when the salon paused for breath',
   'add-autonomous-run-paused-accum-v1': 'Tallying the salon’s quiet interludes',
+  'add-autonomous-budget-cache-mode-v1': 'Reckoning which tokens the salon’s purse shall count',
+  'add-autonomous-run-milestones-v1': 'Teaching the Host to call the hour as the salon winds down',
   'add-spoken-this-cycle-field-v1': 'Tallying who has held forth in this rotation',
   'add-auto-housekeeping-settings-field-v1': 'Adding auto-housekeeping settings to chats',
   'add-auto-lock-settings-field-v1': 'Adding auto-lock settings to chats',
@@ -222,6 +224,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'move-llm-logs-to-separate-db-v1': 'Relocating LLM logs to their own dossier',
   'add-llm-logs-request-hashes-column-v1': 'Adding request hashes to the LLM logbook',
   'add-llm-logs-raw-provider-usage-column-v1': 'Snapshotting raw provider usage in the LLM logbook',
+  'add-llm-logs-autonomous-run-id-column-v1': 'Tagging the LLM logbook with autonomous-run marks',
 
   // Templates + dangerous content
   'add-narration-delimiters-field-v1': 'Adding narration delimiters to templates',

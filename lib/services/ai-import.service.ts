@@ -348,6 +348,57 @@ export function repairTruncatedJson(text: string): string {
 }
 
 /**
+ * Escape raw control characters (newlines, tabs, etc.) that appear *inside* a
+ * JSON string literal. LLMs routinely emit a literal newline within a string
+ * value instead of the `\n` escape sequence, which makes JSON.parse throw
+ * "Bad control character in string literal". This walks the text with a small
+ * string-aware state machine and escapes only the control characters that fall
+ * inside a string, leaving structural whitespace between tokens untouched.
+ */
+export function escapeControlCharsInStrings(text: string): string {
+  let result = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      result += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+
+    const code = text.charCodeAt(i);
+    if (inString && code <= 0x1f) {
+      switch (ch) {
+        case '\n': result += '\\n'; break;
+        case '\r': result += '\\r'; break;
+        case '\t': result += '\\t'; break;
+        case '\b': result += '\\b'; break;
+        case '\f': result += '\\f'; break;
+        default: result += '\\u' + code.toString(16).padStart(4, '0'); break;
+      }
+      continue;
+    }
+
+    result += ch;
+  }
+
+  return result;
+}
+
+/**
  * Parse JSON from LLM output, handling code fences, truncated output,
  * and common formatting issues from LLM responses.
  */
@@ -356,9 +407,16 @@ export function parseLLMJson<T>(text: string): T {
   try {
     return JSON.parse(cleaned) as T;
   } catch {
-    // Attempt to repair truncated JSON (e.g. from maxTokens cutoff)
-    const repaired = repairTruncatedJson(cleaned);
-    return JSON.parse(repaired) as T;
+    // LLMs commonly emit raw control characters inside string literals and/or
+    // truncate output at the maxTokens boundary. Escape control chars first,
+    // then repair any truncation before a final parse attempt.
+    const escaped = escapeControlCharsInStrings(cleaned);
+    try {
+      return JSON.parse(escaped) as T;
+    } catch {
+      const repaired = repairTruncatedJson(escaped);
+      return JSON.parse(repaired) as T;
+    }
   }
 }
 
@@ -548,11 +606,6 @@ export function assembleQtapExport(
     id: characterId,
     userId,
     name: basics.name,
-    title: basics.title || null,
-    identity: basics.identity || null,
-    description: basics.description || null,
-    manifesto: basics.manifesto || null,
-    personality: basics.personality || null,
     scenarios: basics.scenario ? [{
       id: crypto.randomUUID(),
       title: 'Default',
@@ -560,8 +613,6 @@ export function assembleQtapExport(
       createdAt: now,
       updatedAt: now,
     }] : [],
-    firstMessage: stepResults.first_message?.firstMessage || null,
-    exampleDialogues: stepResults.first_message?.exampleDialogues || null,
     systemPrompts: (stepResults.system_prompts || []).map((sp) => ({
       id: crypto.randomUUID(),
       name: sp.name,
@@ -607,8 +658,10 @@ export function assembleQtapExport(
           title: item.title,
           description: item.description || null,
           types: item.types,
+          componentItemIds: [],
           appropriateness: item.appropriateness || null,
           isDefault: false,
+          replace: false,
           migratedFromClothingRecordId: null,
           archivedAt: null,
           createdAt: now,
@@ -618,6 +671,27 @@ export function assembleQtapExport(
     createdAt: now,
     updatedAt: now,
   };
+
+  // Optional text fields are typed as `string` (not nullable) in the qtap export
+  // schema, so emitting an explicit null for a field a step omitted (or failed to
+  // produce — e.g. a first_message step that returned malformed JSON) fails
+  // validation and needlessly trips the LLM repair loop. Include each only when
+  // there is a usable string; the DB character schema treats these as
+  // `.nullable().optional()`, so omission is equivalent to null at import time.
+  const optionalTextFields: Record<string, unknown> = {
+    title: basics.title,
+    identity: basics.identity,
+    description: basics.description,
+    manifesto: basics.manifesto,
+    personality: basics.personality,
+    firstMessage: stepResults.first_message?.firstMessage,
+    exampleDialogues: stepResults.first_message?.exampleDialogues,
+  };
+  for (const [key, value] of Object.entries(optionalTextFields)) {
+    if (typeof value === 'string' && value.trim()) {
+      character[key] = value;
+    }
+  }
 
   // Build memories array
   const memories: Record<string, unknown>[] = [];
@@ -723,6 +797,111 @@ export function assembleQtapExport(
   };
 
   return exportData;
+}
+
+// ============================================================================
+// Structural normalization
+// ============================================================================
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_RE.test(value);
+}
+
+function isNonEmptyTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/**
+ * Re-apply the structural scaffolding — ids and createdAt/updatedAt — that the
+ * assembler owns on the character's nested collections (systemPrompts,
+ * scenarios, physicalDescription, wardrobeItems) and on memories.
+ *
+ * The LLM repair step rewrites whole `data` sections wholesale, and models
+ * routinely drop these nested fields. The qtap export schema does not enforce
+ * them (so repair revalidation passes), but the character/memory DB schemas
+ * require them — meaning a "valid" but repaired export would still be rejected
+ * by `repos.characters.create` at import time. Top-level character id/timestamps
+ * are intentionally left alone: the qtap schema *does* require those, so repair
+ * validation already guards them, and regenerating a character id here would
+ * orphan its memories' `characterId` references.
+ *
+ * Idempotent: when the export came straight from the assembler (no repair),
+ * every field is already present and this is a no-op. Returns the number of
+ * fields it had to fix, for logging.
+ */
+export function restampStructuralFields(data: QuilltapExport['data'], now: string): number {
+  let fixes = 0;
+
+  const ensureEntryScaffolding = (entry: Record<string, unknown>) => {
+    if (!isValidUuid(entry.id)) {
+      entry.id = crypto.randomUUID();
+      fixes++;
+    }
+    if (!isNonEmptyTimestamp(entry.createdAt)) {
+      entry.createdAt = now;
+      fixes++;
+    }
+    if (!isNonEmptyTimestamp(entry.updatedAt)) {
+      entry.updatedAt = now;
+      fixes++;
+    }
+  };
+
+  const dataObj = data as unknown as Record<string, unknown>;
+
+  const characters = dataObj.characters;
+  if (Array.isArray(characters)) {
+    for (const rawCharacter of characters) {
+      if (!rawCharacter || typeof rawCharacter !== 'object') continue;
+      const character = rawCharacter as Record<string, unknown>;
+
+      for (const key of ['systemPrompts', 'scenarios'] as const) {
+        const collection = character[key];
+        if (!Array.isArray(collection)) continue;
+        for (const entry of collection) {
+          if (entry && typeof entry === 'object') {
+            ensureEntryScaffolding(entry as Record<string, unknown>);
+          }
+        }
+      }
+
+      const physicalDescription = character.physicalDescription;
+      if (physicalDescription && typeof physicalDescription === 'object') {
+        const pd = physicalDescription as Record<string, unknown>;
+        ensureEntryScaffolding(pd);
+        if (typeof pd.name !== 'string' || !pd.name.trim()) {
+          pd.name = 'AI Generated';
+          fixes++;
+        }
+      }
+
+      const wardrobeItems = character.wardrobeItems;
+      if (Array.isArray(wardrobeItems)) {
+        for (const rawItem of wardrobeItems) {
+          if (!rawItem || typeof rawItem !== 'object') continue;
+          const item = rawItem as Record<string, unknown>;
+          ensureEntryScaffolding(item);
+          if (!isValidUuid(item.characterId) && isValidUuid(character.id)) {
+            item.characterId = character.id;
+            fixes++;
+          }
+        }
+      }
+    }
+  }
+
+  const memories = dataObj.memories;
+  if (Array.isArray(memories)) {
+    for (const rawMemory of memories) {
+      if (rawMemory && typeof rawMemory === 'object') {
+        ensureEntryScaffolding(rawMemory as Record<string, unknown>);
+      }
+    }
+  }
+
+  return fixes;
 }
 
 // ============================================================================
@@ -1187,6 +1366,12 @@ Return ONLY a JSON object with the same section keys (${Object.keys(sectionsToRe
         });
       }
     }
+
+    // Guarantee the structural scaffolding the import path requires survived
+    // assembly and any LLM repair. Repair rewrites whole sections and models
+    // strip nested ids/timestamps that the qtap schema doesn't enforce but the
+    // DB schemas do; without this re-stamp those exports fail at create time.
+    restampStructuralFields(exportData.data, new Date().toISOString());
 
     // Done
     logger.info('[AIImport] AI character import complete', {

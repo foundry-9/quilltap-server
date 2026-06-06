@@ -10,6 +10,7 @@
  */
 
 import {
+  startAutonomousRoomManually,
   pauseAutonomousRoom,
   resumeAutonomousRoom,
   reconcileAutonomousRunsAtStartup,
@@ -54,23 +55,92 @@ const baseChat = (overrides: Record<string, unknown> = {}) => ({
 
 const makeRepos = (chat: Record<string, unknown> | null) => {
   const updates: Array<Record<string, unknown>> = []
+  const messages: Array<{ chatId: string; message: Record<string, unknown> }> = []
   const repos = {
     chats: {
       findById: jest.fn(async () => (chat ? { ...chat } : null)),
       update: jest.fn(async (_id: string, patch: Record<string, unknown>) => {
         updates.push({ ...patch })
       }),
+      // The run-start contract posts a Host "run begun" banner via
+      // postRunStartAnnouncement → repos.chats.addMessage.
+      addMessage: jest.fn(async (chatId: string, message: Record<string, unknown>) => {
+        messages.push({ chatId, message })
+      }),
+    },
+    characters: {
+      findById: jest.fn(async () => null),
     },
     chatSettings: {
       findByUserId: jest.fn(async () => null),
     },
   }
-  return { repos, updates }
+  return { repos, updates, messages }
 }
 
 beforeEach(() => {
   jest.clearAllMocks()
   mockEnqueue.mockResolvedValue('job-next')
+})
+
+describe('startAutonomousRoomManually', () => {
+  it('flips the row straight to running (counters zeroed) and posts the run-begun banner before enqueueing', async () => {
+    const { repos, updates, messages } = makeRepos(
+      baseChat({ runState: 'idle', currentRunId: null, runPausedAt: null }),
+    )
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    const result = await startAutonomousRoomManually('chat-1', 'user-1')
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    // The badge/header should be correct the instant this returns: the row is
+    // 'running', not parked at 'idle' for the turn job to promote.
+    const patch = updates[0]
+    expect(patch.runState).toBe('running')
+    expect(typeof patch.runStartedAt).toBe('string')
+    expect(patch.runEndedAt).toBeNull()
+    expect(patch.runPausedAt).toBeNull()
+    expect(patch.runPausedAccumMs).toBe(0)
+    expect(patch.runTurnsConsumed).toBe(0)
+    expect(patch.runTokensConsumed).toBe(0)
+    expect(patch.runMilestonesAnnounced).toBe(0)
+    expect(patch.currentRunId).toBe(result.runId)
+
+    // The turn job is enqueued with the freshly minted run id.
+    expect(mockEnqueue).toHaveBeenCalledWith('user-1', { chatId: 'chat-1', runId: result.runId })
+
+    // A Host "run begun" banner is posted.
+    expect(messages).toHaveLength(1)
+    expect(messages[0].message.systemSender).toBe('host')
+    expect(messages[0].message.systemKind).toBe('autonomous-room-start')
+  })
+
+  it('rejects when a run is already in progress', async () => {
+    const { repos, updates } = makeRepos(baseChat({ runState: 'running' }))
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    const result = await startAutonomousRoomManually('chat-1', 'user-1')
+
+    expect(result).toMatchObject({ ok: false, reason: 'already_running' })
+    expect(updates).toHaveLength(0)
+    expect(mockEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('rolls the row to error when the turn enqueue fails', async () => {
+    const { repos, updates } = makeRepos(baseChat({ runState: 'idle', currentRunId: null }))
+    mockGetRepositories.mockReturnValue(repos as never)
+    mockEnqueue.mockRejectedValueOnce(new Error('queue down'))
+
+    await expect(startAutonomousRoomManually('chat-1', 'user-1')).rejects.toThrow('queue down')
+
+    // First write flipped to running; the rollback write parks it at error so
+    // the badge doesn't lie about a run that never queued a turn.
+    expect(updates[0].runState).toBe('running')
+    expect(updates[updates.length - 1].runState).toBe('error')
+    expect(updates[updates.length - 1].runStateMessage).toBe('start:enqueue_failed')
+  })
 })
 
 describe('pauseAutonomousRoom', () => {
@@ -149,7 +219,7 @@ describe('resumeAutonomousRoom — continuing a paused run', () => {
 
 describe('resumeAutonomousRoom — falling back to a fresh start', () => {
   it.each(['idle', 'stopped', 'budgetExhausted', 'error'])(
-    'starts a fresh run (new runId, idle transition) when state is %s',
+    'starts a fresh run (new runId, running transition) when state is %s',
     async (state) => {
       const { repos, updates } = makeRepos(baseChat({ runState: state }))
       mockGetRepositories.mockReturnValue(repos as never)
@@ -157,10 +227,12 @@ describe('resumeAutonomousRoom — falling back to a fresh start', () => {
       const result = await resumeAutonomousRoom('chat-1', 'user-1')
 
       expect(result.ok).toBe(true)
-      // Fresh start mints a brand-new run id and parks the row at 'idle' for
-      // the turn handler to pick up and reset.
+      // Fresh start mints a brand-new run id and flips the row straight to
+      // 'running' (counters zeroed) so the badge/header reflect it immediately.
       const patch = updates[0]
-      expect(patch.runState).toBe('idle')
+      expect(patch.runState).toBe('running')
+      expect(patch.runTurnsConsumed).toBe(0)
+      expect(patch.runTokensConsumed).toBe(0)
       expect(patch.currentRunId).toBeDefined()
       expect(patch.currentRunId).not.toBe(RUN_ID)
       expect(patch.runPausedAt).toBeNull()
@@ -178,7 +250,7 @@ describe('resumeAutonomousRoom — falling back to a fresh start', () => {
     const result = await resumeAutonomousRoom('chat-1', 'user-1')
 
     expect(result.ok).toBe(true)
-    expect(updates[0].runState).toBe('idle')
+    expect(updates[0].runState).toBe('running')
     expect(updates[0].currentRunId).toBeTruthy()
   })
 })

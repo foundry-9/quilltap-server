@@ -567,10 +567,19 @@
           "type": ["integer", "null"],
           "description": "Tokens consumed in the current/most-recent autonomous-room run."
         },
+        "runMilestonesAnnounced": {
+          "type": "integer",
+          "description": "Bitmask of per-run pacing nudges the Host has already posted for the current/most-recent autonomous-room run (bit 0 = halfway, bit 1 = near-end / 10% remaining). Reset to 0 at each run start."
+        },
         "runDestructiveToolsAllowed": {
           "type": "integer",
           "enum": [0, 1],
           "description": "1 = destructive tools pre-authorized for this autonomous room; 0 = disabled."
+        },
+        "budgetExcludeCacheHits": {
+          "type": "integer",
+          "enum": [0, 1],
+          "description": "Autonomous-room per-run token-budget counting mode. 1 (default) = exclude prompt-cache hit tokens from the budget, counting only billable cache-miss input + output; 0 = count every token, including cache reads (added back from cacheUsage at accounting time)."
         },
         "runVisibility": {
           "enum": ["owner_only", "household", "open", null],

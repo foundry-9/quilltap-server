@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
+import { EditEnclaveModal } from '@/components/new-chat/EditEnclaveModal'
 
 interface AutonomousRoom {
   id: string
@@ -78,18 +79,39 @@ export function AutonomousRoomsCard() {
     { refreshInterval: 5_000 },
   )
   const [busyChatId, setBusyChatId] = useState<string | null>(null)
+  const [editRoom, setEditRoom] = useState<{ id: string; title: string } | null>(null)
 
   const action = async (chatId: string, verb: 'start' | 'pause' | 'stop' | 'resume') => {
+    // The server flips the run state synchronously, so reflect it
+    // optimistically the instant the button is clicked rather than waiting for
+    // the POST + revalidation round-trip (which can lag while a turn is running).
+    const optimisticState: AutonomousRoom['runState'] =
+      verb === 'pause' ? 'paused' : verb === 'stop' ? 'stopped' : 'running'
+    const applyOptimistic = (cur?: { rooms: AutonomousRoom[] }) => ({
+      rooms: (cur?.rooms ?? []).map((r) =>
+        r.id === chatId ? { ...r, runState: optimisticState } : r,
+      ),
+    })
     setBusyChatId(chatId)
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}/autonomous-room?action=${verb}`, {
-        method: 'POST',
+      const post = (async (): Promise<{ rooms: AutonomousRoom[] } | undefined> => {
+        const res = await fetch(`/api/v1/chats/${chatId}/autonomous-room?action=${verb}`, {
+          method: 'POST',
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => null)
+          throw new Error(body?.error || `Failed to ${verb}`)
+        }
+        // Resolve to undefined so SWR falls through to the revalidation fetch
+        // (populateCache: false, revalidate: true) for the authoritative state.
+        return undefined
+      })()
+      await mutate(post, {
+        optimisticData: applyOptimistic,
+        rollbackOnError: true,
+        populateCache: false,
+        revalidate: true,
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        throw new Error(body?.error || `Failed to ${verb}`)
-      }
-      await mutate()
     } catch (err) {
       console.error('Autonomous-room action failed', err)
     } finally {
@@ -117,6 +139,7 @@ export function AutonomousRoomsCard() {
   }
 
   return (
+    <>
     <div className="space-y-3">
       {rooms.map((room) => {
         const state = room.runState ?? 'idle'
@@ -177,11 +200,32 @@ export function AutonomousRoomsCard() {
                 >
                   Stop
                 </button>
+                <button
+                  className="qt-button-secondary text-xs px-2 py-1"
+                  onClick={() => setEditRoom({ id: room.id, title: room.title })}
+                  disabled={busyChatId === room.id}
+                  title="Edit this enclave’s schedule, budget, and visibility"
+                >
+                  Edit
+                </button>
               </div>
             </div>
           </div>
         )
       })}
     </div>
+    {editRoom && (
+      <EditEnclaveModal
+        isOpen={true}
+        onClose={() => setEditRoom(null)}
+        chatId={editRoom.id}
+        currentTitle={editRoom.title}
+        onSaved={() => {
+          setEditRoom(null)
+          mutate()
+        }}
+      />
+    )}
+    </>
   )
 }

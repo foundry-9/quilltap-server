@@ -139,6 +139,12 @@ export const LLMLogSchema = z.object({
   chatId: UUIDSchema.nullable().optional(), // For chat-level operations (title, compression)
   characterId: UUIDSchema.nullable().optional(), // For character wizard
 
+  // Autonomous-room run linkage. Set on every LLM call made within the scope
+  // of an autonomous-room turn (via the autonomous-run AsyncLocalStorage), so
+  // per-run token spend can be summed by run instead of by a fragile
+  // timestamp window. Null for all non-autonomous calls.
+  autonomousRunId: UUIDSchema.nullable().optional(),
+
   // Provider info
   provider: z.string(),
   modelName: z.string(),

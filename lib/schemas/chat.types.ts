@@ -700,7 +700,11 @@ export const ChatMetadataSchema = z.object({
 
   /** Hard cap on character turns per run. NULL = unlimited (use other caps). */
   budgetMaxTurns: z.number().int().positive().nullable().optional(),
-  /** Cap on cumulative `promptTokens + completionTokens` per run. */
+  /**
+   * Cap on cumulative `promptTokens + completionTokens` per run. Cache-read
+   * (prompt-cache hit) tokens are excluded by the provider plugins before they
+   * reach token accounting, so cached input never counts toward this cap.
+   */
   budgetMaxTokens: z.number().int().positive().nullable().optional(),
   /** Cap on wall-clock duration per run, in milliseconds. */
   budgetMaxWallClockMs: z.number().int().positive().nullable().optional(),
@@ -732,11 +736,31 @@ export const ChatMetadataSchema = z.object({
   runPausedAccumMs: z.number().int().nonnegative().nullable().optional(),
   /** Turns consumed in the current/most-recent run. */
   runTurnsConsumed: z.number().int().nonnegative().nullable().optional(),
-  /** Tokens consumed in the current/most-recent run. */
+  /** Tokens consumed in the current/most-recent run (cache-read tokens excluded — see `budgetMaxTokens`). */
   runTokensConsumed: z.number().int().nonnegative().nullable().optional(),
+  /**
+   * Bitmask of the per-run pacing milestones the Host has already announced
+   * (bit 0 = halfway, bit 1 = near-end / 10% remaining). Reset to 0 at each
+   * run start so a fresh run announces its milestones anew. The milestones
+   * track the *binding* room budget — the turns / tokens / wall-clock cap
+   * closest to exhaustion (whichever ends the run first). Only meaningful on
+   * autonomous chats.
+   */
+  runMilestonesAnnounced: z.number().int().nonnegative().default(0),
 
   /** 1 = owner pre-authorized destructive tools (DESTRUCTIVE_TOOL_NAMES); 0 = disabled. */
   runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),
+  /**
+   * Per-run token-budget counting mode. 1 (default) = exclude prompt-cache
+   * hit (cache-read) tokens from `budgetMaxTokens` / `runTokensConsumed`, so
+   * only the billable cache-miss input + output tokens count (the expensive
+   * ones). 0 = count every token, including cache reads, the way budgets
+   * behaved before cache-read normalization; the cache-read tokens that the
+   * provider plugins strip from `usage.totalTokens` are added back from
+   * `cacheUsage.cacheReadInputTokens` at accounting time. Only meaningful on
+   * autonomous chats.
+   */
+  budgetExcludeCacheHits: z.number().int().min(0).max(1).default(1),
   /** Per-room override of user-default visibility; NULL = inherit user default. */
   runVisibility: AutonomousRunVisibilityEnum.nullable().optional(),
 
@@ -973,7 +997,10 @@ export const ChatMetadataBaseSchema = z.object({
   runPausedAccumMs: z.number().int().nonnegative().nullable().optional(),
   runTurnsConsumed: z.number().int().nonnegative().nullable().optional(),
   runTokensConsumed: z.number().int().nonnegative().nullable().optional(),
+  /** Per-run pacing-milestone bitmask (bit 0 = halfway, bit 1 = near-end). Reset to 0 at run start. See ChatMetadataSchema. */
+  runMilestonesAnnounced: z.number().int().nonnegative().default(0),
   runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),
+  budgetExcludeCacheHits: z.number().int().min(0).max(1).default(1),
   runVisibility: AutonomousRunVisibilityEnum.nullable().optional(),
 
   /** Aurora Core whisper — per-chat override of the global `coreWhisper.enabled` setting. NULL = inherit. */

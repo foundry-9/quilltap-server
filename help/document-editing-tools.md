@@ -28,7 +28,7 @@ Every `doc_*` tool accepts a `scope` parameter that determines where it operates
 ### Reading & Searching
 
 - **`doc_read_file`** — Read file contents with optional line-range pagination
-- **`doc_list_files`** — List files across stores, with optional folder, glob pattern, and scope filters
+- **`doc_list_files`** — List files across stores, with optional folder, glob pattern, and scope filters. By courtesy it omits the housekeeping clutter — hidden operating-system files (`.DS_Store` and its ilk) and the Estate's own auto-generated portraits and backdrops (anything resting in a `character-avatars` or `story-backgrounds` folder). Should one genuinely wish to see those incidental images, pass `includeAutomaticImages: true`; images a character has deliberately saved to an album live elsewhere and are always shown.
 - **`doc_grep`** — Search for text across files using literal or regex patterns, with context lines
 - **`doc_read_frontmatter`** — Read YAML frontmatter from a markdown file
 - **`doc_read_heading`** — Read all content under a specific heading in a markdown file

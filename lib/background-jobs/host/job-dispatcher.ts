@@ -18,9 +18,19 @@ import type { Database } from 'better-sqlite3';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
+import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
+import { getRawLLMLogsDatabase } from '@/lib/database/backends/sqlite/llm-logs-client';
 import type { BackgroundJob } from '@/lib/schemas/types';
 import type { ChildJobResultMessage, ChildWritePayload } from '../ipc-types';
 import { sendToChild, notifyChild } from './processor-host';
+import {
+  partitionWrites,
+  isMainPrimaryJobType,
+  rewriteFolderRefs,
+  isUniqueConstraintError,
+  DOC_MOUNT_FOLDER_CREATE,
+  type WriteDbTarget,
+} from './write-partition';
 import fs from 'fs';
 import path from 'path';
 
@@ -191,12 +201,13 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
     // Best-effort cleanup of staged files left behind by the failed handler.
     cleanupStagingDirs(msg.writes, msg.jobId);
     await repos.backgroundJobs.markFailed(msg.jobId, errorMessage);
+    await reconcileFailedAutonomousTurnIfNeeded(job, errorMessage);
     pumpClaim().catch(err => log.error('Post-fail claim error', { error: getErrorMessage(err) }));
     return;
   }
 
   try {
-    await applyWritesAtomically(msg.jobId, msg.writes);
+    await applyWritesAtomically(msg.jobId, msg.writes, job?.type);
     await repos.backgroundJobs.markCompleted(msg.jobId);
     log.info('Job completed', { jobId: msg.jobId, type: job?.type, writeCount: msg.writes.length });
   } catch (err) {
@@ -208,9 +219,43 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
     });
     cleanupStagingDirs(msg.writes, msg.jobId);
     await repos.backgroundJobs.markFailed(msg.jobId, errorMessage);
+    await reconcileFailedAutonomousTurnIfNeeded(job, errorMessage);
   }
 
   pumpClaim().catch(e => log.error('Post-complete claim error', { error: getErrorMessage(e) }));
+}
+
+/**
+ * On terminal failure of an AUTONOMOUS_ROOM_TURN job, nudge its room out of a
+ * silent `running` wedge. When a turn's buffered write-batch is rejected at
+ * apply time (a tool write hits a constraint), the whole batch rolls back —
+ * including the run-state transition the handler tried to write — and the
+ * single-attempt job is marked DEAD, leaving the chat `running` with no turn
+ * in flight. The autonomous-room service flips it to a resumable `paused`.
+ *
+ * Dynamic import keeps the autonomous-room service (and the queue-service it
+ * pulls in) out of the dispatcher's static import graph, avoiding a cycle.
+ * Best-effort and self-contained — never throws back into result handling.
+ */
+async function reconcileFailedAutonomousTurnIfNeeded(
+  job: BackgroundJob | undefined,
+  failureReason: string,
+): Promise<void> {
+  if (job?.type !== 'AUTONOMOUS_ROOM_TURN') return;
+  try {
+    const { reconcileFailedAutonomousTurn } = await import(
+      '@/lib/services/chat-message/autonomous-room.service'
+    );
+    await reconcileFailedAutonomousTurn(
+      job.payload as unknown as { chatId?: string; runId?: string } | undefined,
+      failureReason,
+    );
+  } catch (err) {
+    log.error('Autonomous-room failure reconcile failed', {
+      jobId: job.id,
+      error: getErrorMessage(err),
+    });
+  }
 }
 
 // Serialize apply calls. With concurrency=4, multiple jobs finish around
@@ -222,49 +267,128 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
 // child execution, but the parent's transaction boundary is single-file.
 let applyChain: Promise<unknown> = Promise.resolve();
 
-async function applyWritesAtomically(jobId: string, writes: ChildWritePayload[]): Promise<void> {
+async function applyWritesAtomically(
+  jobId: string,
+  writes: ChildWritePayload[],
+  jobType: string | undefined,
+): Promise<void> {
   if (writes.length === 0) return;
 
   // Wait for any in-progress apply to finish before we begin our own
-  // transaction. Failures in the previous apply must not poison this one,
-  // so swallow them — the dispatcher already marks each job's outcome.
+  // transactions. Serializing the whole multi-partition apply is what makes
+  // the cross-job folder reconcile race-free: the conflicting folder another
+  // job created is fully committed and visible before this job's mount-index
+  // transaction begins. Failures in the previous apply must not poison this
+  // one, so swallow them — the dispatcher already marks each job's outcome.
   const prev = applyChain;
   let release: () => void = () => {};
   applyChain = new Promise<void>(resolve => { release = resolve; });
   try { await prev; } catch { /* previous apply's error was already handled */ }
 
   try {
-    await applyWritesUnsafe(jobId, writes);
+    await applyWritesUnsafe(jobId, writes, jobType);
   } finally {
     release();
   }
 }
 
-async function applyWritesUnsafe(jobId: string, writes: ChildWritePayload[]): Promise<void> {
-  const db = getRawDatabase();
-  if (!db) {
-    throw new Error('Cannot apply child writes: parent SQLite connection is not initialized');
+/**
+ * Apply a job's buffered writes, partitioned by target database so a failure
+ * in one database can neither roll back nor leak into another.
+ *
+ * Each partition (main / mount-index / llm-logs) commits in its OWN
+ * transaction on its OWN connection. The ordering and failure policy depends on
+ * whether the job's main-DB writes are primary (see {@link isMainPrimaryJobType}
+ * and the AUTONOMOUS_ROOM_TURN rationale in `write-partition.ts`):
+ *
+ *   - **main-primary** (autonomous turn): commit main first and authoritatively;
+ *     a main failure aborts before any secondary write runs. Once main commits,
+ *     secondary partitions are best-effort — a failure is rolled back, logged,
+ *     and swallowed so the non-idempotent chat turn survives a dropped doc-store
+ *     effect rather than being retried into a duplicate message.
+ *   - **all-or-nothing** (every other, idempotent, handler): apply secondary
+ *     partitions first so a secondary failure prevents the main commit (e.g.
+ *     don't mark a chunk embedded if its mount-index embedding write failed),
+ *     then main. Any partition failure throws → the job is marked FAILED and the
+ *     existing retry path re-runs the handler.
+ *
+ * Exported for unit testing (`__tests__/job-dispatcher-apply.test.ts`).
+ */
+export async function applyWritesUnsafe(
+  jobId: string,
+  writes: ChildWritePayload[],
+  jobType?: string,
+): Promise<void> {
+  const parts = partitionWrites(writes);
+
+  if (isMainPrimaryJobType(jobType)) {
+    await applyPartition('main', getRawDatabase(), parts.main, jobId);
+    await applySecondaryBestEffort('mountIndex', getRawMountIndexDatabase(), parts.mountIndex, jobId);
+    await applySecondaryBestEffort('llmLogs', getRawLLMLogsDatabase(), parts.llmLogs, jobId);
+  } else {
+    await applyPartition('mountIndex', getRawMountIndexDatabase(), parts.mountIndex, jobId);
+    await applyPartition('llmLogs', getRawLLMLogsDatabase(), parts.llmLogs, jobId);
+    await applyPartition('main', getRawDatabase(), parts.main, jobId);
   }
 
+  // After every partition commits, drop the per-job staging directory so we
+  // don't accumulate empty `<dataDir>/files/.staging/<jobId>/` shells, then
+  // fire cache invalidations across the whole batch. Both are idempotent and
+  // safe even when a best-effort secondary partition was dropped.
+  cleanupStagingDirs(writes, jobId);
+  dispatchInvalidations(writes);
+}
+
+/**
+ * Apply one partition's writes inside a single hand-driven transaction on the
+ * given connection. Throws on any failure (after rolling the partition back and
+ * undoing file renames). A no-op for an empty partition.
+ *
+ * We drive BEGIN/COMMIT/ROLLBACK by hand rather than using better-sqlite3's
+ * `db.transaction(fn)` wrapper because the repository methods are async (the
+ * database abstraction is async-first even though the underlying SQL is sync),
+ * and `db.transaction` requires a synchronous body. BEGIN IMMEDIATE takes the
+ * reserved lock up front so lock contention surfaces early, not mid-batch.
+ */
+async function applyPartition(
+  partition: WriteDbTarget,
+  db: Database | null,
+  writes: ChildWritePayload[],
+  jobId: string,
+): Promise<void> {
+  if (writes.length === 0) return;
+  if (!db) {
+    throw new Error(
+      `Cannot apply ${partition} writes for job ${jobId}: database connection is not initialized`,
+    );
+  }
+
+  const isMount = partition === 'mountIndex';
+  // bufferedFolderId → existing folderId, populated when a concurrent folder
+  // create is reconciled to an already-committed row (mount-index only).
+  const folderRemap = new Map<string, string>();
   const stagedRenames: Array<{ from: string; to: string }> = [];
 
-  // We can't use better-sqlite3's `db.transaction(fn)` wrapper because the
-  // repository methods are async (the database abstraction is async-first
-  // even though the underlying SQL is sync) — `db.transaction` requires
-  // its body to return synchronously. Drive BEGIN/COMMIT/ROLLBACK by hand
-  // so we can `await` each write while still getting all-or-nothing
-  // semantics. BEGIN IMMEDIATE acquires the reserved lock up front so we
-  // surface lock contention early instead of mid-batch.
   db.exec('BEGIN IMMEDIATE');
   try {
-    for (const w of writes) {
-      if (w.method === '__finalizeFile') {
-        const args = w.args[0] as { stagingPath: string; finalPath: string };
+    for (const raw of writes) {
+      if (raw.method === '__finalizeFile') {
+        const args = raw.args[0] as { stagingPath: string; finalPath: string };
         ensureDirSync(path.dirname(args.finalPath));
         fs.renameSync(args.stagingPath, args.finalPath);
         stagedRenames.push({ from: args.stagingPath, to: args.finalPath });
         continue;
       }
+
+      // Redirect any folder reference an earlier same-batch create reconciled
+      // to an existing folder row (no-op when nothing has been remapped).
+      const w = isMount ? rewriteFolderRefs(raw, folderRemap) : raw;
+
+      if (isMount && w.method === DOC_MOUNT_FOLDER_CREATE) {
+        await applyFolderCreateIdempotent(w, folderRemap, jobId);
+        continue;
+      }
+
       const result = applyRepositoryWrite(w);
       if (result && typeof (result as { then?: unknown }).then === 'function') {
         await result;
@@ -279,15 +403,79 @@ async function applyWritesUnsafe(jobId: string, writes: ChildWritePayload[]): Pr
     }
     throw err;
   }
+}
 
-  // After commit, drop the per-job staging directory so we don't accumulate
-  // empty `<dataDir>/files/.staging/<jobId>/` shells.
-  cleanupStagingDirs(writes, jobId);
+/**
+ * Apply a secondary (non-main) partition best-effort: a failure is rolled back
+ * inside {@link applyPartition}, logged, and swallowed so the already-committed
+ * main partition (the chat turn) survives. Only reached for main-primary jobs.
+ */
+async function applySecondaryBestEffort(
+  partition: WriteDbTarget,
+  db: Database | null,
+  writes: ChildWritePayload[],
+  jobId: string,
+): Promise<void> {
+  if (writes.length === 0) return;
+  try {
+    await applyPartition(partition, db, writes, jobId);
+  } catch (err) {
+    log.error('Secondary partition failed after main commit; effect dropped, chat preserved', {
+      jobId,
+      partition,
+      writeCount: writes.length,
+      error: getErrorMessage(err),
+    });
+  }
+}
 
-  // After commit, scan for cache-invalidating writes and notify both the
-  // parent's local caches and the child. This keeps cache coherence in one
-  // place rather than scattered across every repository.
-  dispatchInvalidations(writes);
+/**
+ * Apply a `docMountFolders.create` write, tolerating the rare cross-job
+ * concurrent create: if another job committed the same folder path first the
+ * INSERT hits the `(mountPointId, parentId, name)` unique index. Because applies
+ * are serialized (see {@link applyWritesAtomically}), that row is fully
+ * committed and visible on this connection, so we resolve to it and remap the
+ * discarded buffered folder id for the rest of this batch's writes. SQLite's
+ * default ABORT conflict resolution rolls back only the offending statement, so
+ * the surrounding transaction stays usable.
+ */
+async function applyFolderCreateIdempotent(
+  write: ChildWritePayload,
+  folderRemap: Map<string, string>,
+  jobId: string,
+): Promise<void> {
+  try {
+    const result = applyRepositoryWrite(write);
+    if (result && typeof (result as { then?: unknown }).then === 'function') {
+      await result;
+    }
+    return; // created fresh
+  } catch (err) {
+    if (!isUniqueConstraintError(err)) throw err;
+
+    const data = (write.args[0] ?? {}) as { mountPointId?: unknown; path?: unknown };
+    const options = (write.args[1] ?? {}) as { id?: unknown };
+    const bufferedId = typeof options.id === 'string' ? options.id : undefined;
+
+    if (typeof data.mountPointId !== 'string' || typeof data.path !== 'string') {
+      throw err; // can't reconcile without the identifying (mountPointId, path)
+    }
+
+    const repos = getRepositories();
+    const existing = await repos.docMountFolders.findByMountPointAndPath(data.mountPointId, data.path);
+    if (!existing) throw err; // unique conflict but no matching row — surface it
+
+    if (bufferedId && bufferedId !== existing.id) {
+      folderRemap.set(bufferedId, existing.id);
+    }
+    log.warn('Reconciled concurrent doc-store folder create to existing folder', {
+      jobId,
+      mountPointId: data.mountPointId,
+      path: data.path,
+      bufferedId,
+      existingId: existing.id,
+    });
+  }
 }
 
 function dispatchInvalidations(writes: ChildWritePayload[]): void {
@@ -459,7 +647,3 @@ export async function resetStuckJobs(timeoutMinutes: number = 10): Promise<numbe
   }
   return count;
 }
-
-// Avoid an unused-import warning when the Database type is referenced only
-// via the inferred return of getRawDatabase.
-type _DBRef = Database;

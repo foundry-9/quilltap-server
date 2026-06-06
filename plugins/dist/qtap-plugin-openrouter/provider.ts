@@ -270,9 +270,12 @@ export class OpenRouterProvider implements TextProvider {
       content: contentStr,
       finishReason: choice.finishReason || 'stop',
       usage: {
-        promptTokens: response.usage?.promptTokens ?? 0,
+        // Exclude cache-read tokens from prompt/total so cached input is not
+        // charged against budgets or cost; cacheUsage still reports them for
+        // display. (OpenRouter normalizes cached tokens into promptTokens.)
+        promptTokens: Math.max(0, (response.usage?.promptTokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? cacheUsage?.cachedTokens ?? 0)),
         completionTokens: response.usage?.completionTokens ?? 0,
-        totalTokens: response.usage?.totalTokens ?? 0,
+        totalTokens: Math.max(0, (response.usage?.totalTokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? cacheUsage?.cachedTokens ?? 0)),
       },
       raw: response,
       attachmentResults,
@@ -431,11 +434,14 @@ export class OpenRouterProvider implements TextProvider {
       return;
     }
 
-    // Extract usage from response
+    // Extract usage from response. Exclude cache-read tokens from prompt/total
+    // so cached input is not charged against budgets or cost; cacheUsage below
+    // still reports them for display.
+    const responseCacheRead = (response.usage as any)?.cacheReadInputTokens ?? (response.usage as any)?.cachedTokens ?? 0;
     const usage = response.usage ? {
-      promptTokens: response.usage.inputTokens ?? 0,
+      promptTokens: Math.max(0, (response.usage.inputTokens ?? 0) - responseCacheRead),
       completionTokens: response.usage.outputTokens ?? 0,
-      totalTokens: (response.usage.inputTokens ?? 0) + (response.usage.outputTokens ?? 0),
+      totalTokens: Math.max(0, ((response.usage.inputTokens ?? 0) + (response.usage.outputTokens ?? 0)) - responseCacheRead),
     } : undefined;
 
     // Extract reasoning from the response output (reasoning items contain summary text)
@@ -610,6 +616,7 @@ export class OpenRouterProvider implements TextProvider {
       const decoder = new TextDecoder();
       let buffer = '';
       let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined;
+      let cacheUsage: { cacheReadInputTokens: number; cachedTokens: number } | undefined;
       let toolCalls: any[] = [];
       let fetchReasoning = '';
 
@@ -661,12 +668,19 @@ export class OpenRouterProvider implements TextProvider {
               }
             }
 
-            // Extract usage from final chunk
+            // Extract usage from final chunk. Exclude cache-read tokens from
+            // prompt/total so cached input is not charged against budgets or
+            // cost; cacheUsage still reports them for display.
             if (chunk.usage) {
+              const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens;
+              cacheUsage = cachedTokens !== undefined && cachedTokens > 0
+                ? { cacheReadInputTokens: cachedTokens, cachedTokens }
+                : undefined;
+              const cacheRead = cachedTokens ?? 0;
               usage = {
-                promptTokens: chunk.usage.prompt_tokens ?? 0,
+                promptTokens: Math.max(0, (chunk.usage.prompt_tokens ?? 0) - cacheRead),
                 completionTokens: chunk.usage.completion_tokens ?? 0,
-                totalTokens: chunk.usage.total_tokens ?? 0,
+                totalTokens: Math.max(0, (chunk.usage.total_tokens ?? 0) - cacheRead),
               };
             }
           } catch (e) {
@@ -692,6 +706,7 @@ export class OpenRouterProvider implements TextProvider {
         usage,
         attachmentResults,
         rawResponse,
+        ...(cacheUsage ? { cacheUsage } : {}),
         ...(fetchReasoning ? { reasoningContent: fetchReasoning } : {}),
       };
 

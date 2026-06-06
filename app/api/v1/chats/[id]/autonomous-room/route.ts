@@ -14,12 +14,18 @@
  *     exits via the stale-run guard.
  * POST /api/v1/chats/[id]/autonomous-room?action=resume
  *   - Equivalent to start; convenience for paused / budgetExhausted rooms.
+ * POST /api/v1/chats/[id]/autonomous-room?action=update-settings
+ *   - Edit the room's schedule / budget caps / visibility / destructive-tool
+ *     authorization / title. Applies to the live run on its next turn and
+ *     becomes the settings for future runs. Recomputes scheduleNextRunAt when
+ *     the cron changes; rejects an invalid cron with 400.
  *
  * GET  /api/v1/chats/[id]/autonomous-room
  *   - Read run status snapshot for the management UI.
  */
 
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import {
   createAuthenticatedParamsHandler,
   type AuthenticatedContext,
@@ -30,6 +36,7 @@ import {
   notFound,
   successResponse,
   serverError,
+  validationError,
 } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import {
@@ -37,9 +44,31 @@ import {
   pauseAutonomousRoom,
   resumeAutonomousRoom,
   stopAutonomousRoom,
+  updateAutonomousRoomSettings,
 } from '@/lib/services/chat-message/autonomous-room.service';
 
 const HANDLER = 'api.v1.chats.autonomous-room';
+
+/**
+ * Editable room settings. Mirrors the autonomous block of `createChatSchema`
+ * (app/api/v1/chats/route.ts) for field names/types/ranges, but every cap and
+ * the cron/visibility are `.nullish()` so the Edit Enclave modal can *clear* a
+ * previously-set value (null), not just set or omit it. Values are in the same
+ * units as the DB (milliseconds for the windows/caps); the modal converts
+ * hours/minutes → ms before posting.
+ */
+const updateSettingsSchema = z.object({
+  title: z.string().max(300).optional(),
+  scheduleCron: z.string().max(120).nullish(),
+  scheduleFreshnessWindowMs: z.number().int().positive().nullish(),
+  budgetMaxTurns: z.number().int().positive().nullish(),
+  budgetMaxTokens: z.number().int().positive().nullish(),
+  budgetMaxWallClockMs: z.number().int().positive().nullish(),
+  budgetEstimatedSpendCapUSD: z.number().positive().nullish(),
+  runVisibility: z.enum(['owner_only', 'household', 'open']).nullish(),
+  runDestructiveToolsAllowed: z.boolean().optional(),
+  budgetExcludeCacheHits: z.boolean().optional(),
+});
 
 async function ensureAutonomousChat(
   ctx: AuthenticatedContext,
@@ -138,6 +167,39 @@ async function handleResume(
   }
 }
 
+async function handleUpdateSettings(
+  req: NextRequest,
+  ctx: AuthenticatedContext,
+  { id }: { id: string },
+) {
+  const guard = await ensureAutonomousChat(ctx, id);
+  if (!guard.ok) return guard.response;
+
+  let parsed: z.infer<typeof updateSettingsSchema>;
+  try {
+    parsed = updateSettingsSchema.parse(await req.json());
+  } catch (error) {
+    if (error instanceof z.ZodError) return validationError(error);
+    return badRequest('Invalid request body');
+  }
+
+  try {
+    const result = await updateAutonomousRoomSettings(id, ctx.user.id, parsed);
+    if (!result.ok) {
+      if (result.reason === 'chat_not_found') return notFound('Chat');
+      return badRequest(result.message);
+    }
+    return successResponse({ updated: true, clampedDestructive: result.clampedDestructive });
+  } catch (error) {
+    logger.error('Autonomous-room settings update failed', {
+      context: HANDLER,
+      chatId: id,
+      error: error instanceof Error ? error.message : String(error),
+    }, error instanceof Error ? error : undefined);
+    return serverError('Failed to update autonomous-room settings');
+  }
+}
+
 async function handleStatus(
   _req: NextRequest,
   ctx: AuthenticatedContext,
@@ -165,6 +227,7 @@ async function handleStatus(
     budgetMaxTokens: c.budgetMaxTokens ?? null,
     budgetMaxWallClockMs: c.budgetMaxWallClockMs ?? null,
     budgetEstimatedSpendCapUSD: c.budgetEstimatedSpendCapUSD ?? null,
+    budgetExcludeCacheHits: c.budgetExcludeCacheHits ?? 1,
     runDestructiveToolsAllowed: c.runDestructiveToolsAllowed ?? 0,
     runVisibility: c.runVisibility ?? null,
   });
@@ -176,6 +239,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     pause: handlePause,
     stop: handleStop,
     resume: handleResume,
+    'update-settings': handleUpdateSettings,
   }),
 );
 

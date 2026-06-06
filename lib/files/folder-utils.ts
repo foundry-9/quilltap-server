@@ -237,6 +237,46 @@ export function joinFolderPath(...segments: string[]): string {
 }
 
 /**
+ * Folder segments that contain auto-generated images (avatars, story backgrounds).
+ * Used by doc_list_files to suppress noise by default.
+ */
+export const GENERATED_IMAGE_FOLDER_SEGMENTS = ['character-avatars', 'story-backgrounds'] as const;
+
+/**
+ * Common image file extensions (lowercase, with leading dot).
+ */
+export const IMAGE_FILE_EXTENSIONS = [
+  '.webp', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.bmp', '.tiff', '.avif',
+] as const;
+
+/**
+ * Returns true when `relativePath` is an image file located inside one of the
+ * auto-generated image folders.  Uses segment matching (not substring) to
+ * avoid false positives on names like "my-character-avatars-notes".
+ *
+ * @param relativePath - Relative path from the scope root (uses `/` separators)
+ */
+export function isAutomaticImagePath(relativePath: string): boolean {
+  const segments = relativePath.split('/');
+  const basename = segments[segments.length - 1] ?? '';
+  const ext = basename.includes('.') ? basename.slice(basename.lastIndexOf('.')).toLowerCase() : '';
+  if (!(IMAGE_FILE_EXTENSIONS as readonly string[]).includes(ext)) return false;
+  return segments.some(seg => (GENERATED_IMAGE_FOLDER_SEGMENTS as readonly string[]).includes(seg));
+}
+
+/**
+ * OS-generated cruft that should never be shown to an LLM or user.
+ * Covers dot-files/dot-folders, Windows thumbnail DBs, and macOS artifacts.
+ *
+ * @param basename - The file or folder name (last path segment, no slashes)
+ */
+export function isOsCruftName(basename: string): boolean {
+  if (basename.startsWith('.')) return true;
+  const EXPLICIT_CRUFT = ['thumbs.db', 'desktop.ini', '__macosx'];
+  return EXPLICIT_CRUFT.includes(basename.toLowerCase());
+}
+
+/**
  * Validate a folder path.
  *
  * Checks for:

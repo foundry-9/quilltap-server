@@ -34,6 +34,13 @@ export const docListFilesToolInputSchema = z.object({
     .default(true)
     .describe('Include files in subfolders. Default is true.')
     .optional(),
+  includeAutomaticImages: z
+    .boolean()
+    .default(false)
+    .describe(
+      'Include auto-generated avatar/background images (from character-avatars/story-backgrounds). Default false.'
+    )
+    .optional(),
 });
 
 /**

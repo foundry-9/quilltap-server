@@ -181,7 +181,8 @@ export type AutonomousRoomDestructiveToolPolicy = z.infer<typeof AutonomousRoomD
  * User-level defaults that govern every autonomous room owned by the user.
  *  - dailyTokenBudget: daily cap on cumulative tokens spent by autonomous-room
  *    turns for this user, evaluated at instance-local midnight (pilot: 1,000,000).
- *    null = no daily cap.
+ *    null = no daily cap. Cache-read (prompt-cache hit) tokens are excluded by
+ *    the provider plugins, so cached input does not count toward this cap.
  *  - defaultFreshnessWindowMs: per-room override falls back to this. 12h default.
  *  - visibilityDefault: applied at room creation; per-room override on chats.runVisibility.
  *  - destructiveToolPolicy: 'always_refuse' is a ceiling — overrides any permissive

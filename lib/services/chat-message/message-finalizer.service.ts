@@ -345,14 +345,22 @@ export async function finalizeMessageResponse({
       })
     }
 
-    await triggerContextSummaryCheck(repos, {
-      chatId,
-      provider: connectionProfile.provider,
-      modelName: connectionProfile.modelName,
-      userId,
-      connectionProfile,
-      chatSettings: memoryChatSettings,
-    })
+    // Autonomous rooms drive the context-summary fold themselves, from the
+    // turn handler AFTER the autonomous-run-id scope closes — so the fold is
+    // awaited (its writes survive the forked-child write-buffer flush instead
+    // of being lost fire-and-forget) and untagged (its cheap-LLM tokens don't
+    // count against the per-run budget). Running it here too would re-introduce
+    // the lost fire-and-forget write, so skip it for autonomous chats.
+    if (!isAutonomous) {
+      await triggerContextSummaryCheck(repos, {
+        chatId,
+        provider: connectionProfile.provider,
+        modelName: connectionProfile.modelName,
+        userId,
+        connectionProfile,
+        chatSettings: memoryChatSettings,
+      })
+    }
 
     await triggerChatDangerClassification(repos, {
       chatId,

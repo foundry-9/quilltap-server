@@ -15931,6 +15931,10 @@ var AnthropicProvider = class {
       content: textContent,
       finishReason: response.stop_reason ?? "stop",
       usage: {
+        // Anthropic reports input_tokens SEPARATELY from cache_read_input_tokens
+        // (and cache_creation_input_tokens), so prompt/total already exclude
+        // cache reads — no subtraction needed here, unlike the OpenAI-family
+        // plugins. cacheUsage below still reports cache reads for display.
         promptTokens: response.usage.input_tokens,
         completionTokens: response.usage.output_tokens,
         totalTokens: response.usage.input_tokens + response.usage.output_tokens
@@ -16149,6 +16153,9 @@ var AnthropicProvider = class {
           content: "",
           done: true,
           usage: {
+            // input_tokens already excludes cache reads (Anthropic reports them
+            // separately), so prompt/total exclude cache reads with no
+            // subtraction — see sendMessage. cacheUsage reports them for display.
             promptTokens: totalInputTokens,
             completionTokens: totalOutputTokens,
             totalTokens: totalInputTokens + totalOutputTokens

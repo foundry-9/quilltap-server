@@ -26,6 +26,7 @@ import { getRepositories as getRealRepositories } from '@/lib/database/repositor
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ChildWritePayload } from '../ipc-types';
 import { logger } from '@/lib/logger';
+import { runWithJobFolderCache } from './job-folder-cache';
 
 const log = logger.child({ module: 'jobs:child:proxy' });
 
@@ -64,7 +65,11 @@ export function runWithJobScope<T>(jobId: string, fn: () => Promise<T>): Promise
     warnedReads: new Set(),
     sanitizedArgs: 0,
   };
-  return jobScopeStore.run(scope, fn);
+  // Nest a fresh per-job folder-ensure memo. It lives in its own
+  // dependency-free module so lib/mount-index/folder-paths can read it via
+  // getJobFolderEnsureCache without importing this heavy proxy (and the
+  // repositories barrel it pulls in). See job-folder-cache.ts.
+  return jobScopeStore.run(scope, () => runWithJobFolderCache(fn));
 }
 
 export function flushPendingWrites(): ChildWritePayload[] {
