@@ -777,9 +777,6 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
         ?? availableProfiles.find((p) => p.isDefault)
         ?? availableProfiles[0];
       if (foldProfile) {
-        logger.debug('Autonomous-room turn: running awaited context-summary fold (untagged)', {
-          context: HANDLER, chatId, runId,
-        });
         await checkAndGenerateSummaryIfNeeded(
           chatId,
           foldProfile.provider,
@@ -790,10 +787,6 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
           availableProfiles,
           { awaitFold: true },
         );
-      } else {
-        logger.debug('Autonomous-room turn: no connection profile for fold, skipping', {
-          context: HANDLER, chatId, runId,
-        });
       }
     } catch (error) {
       logger.warn('Autonomous-room turn: context-summary fold failed (continuing)', {

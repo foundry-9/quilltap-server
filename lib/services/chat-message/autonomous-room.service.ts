@@ -92,9 +92,6 @@ export async function startAutonomousRoomManually(
   // Flip straight to `running` (counters zeroed, pause state cleared) so the
   // badge/header reflect the live status the instant this returns — we don't
   // wait for the turn job to come around and promote `idle → running`.
-  logger.debug('Manual autonomous-room start: flipping row to running', {
-    context: HANDLER, chatId, runId, previousState: chat.runState ?? null,
-  });
   await repos.chats.update(chatId, {
     ...runStartPatch(nowIso, runId),
     scheduleLastRunAt: nowIso,
@@ -428,7 +425,6 @@ export async function updateAutonomousRoomSettings(
   }
 
   if (Object.keys(update).length === 0) {
-    logger.debug('Autonomous-room edit: no-op (empty patch)', { context: HANDLER, chatId });
     return { ok: true, clampedDestructive };
   }
 

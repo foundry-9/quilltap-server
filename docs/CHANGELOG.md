@@ -4,6 +4,18 @@
 
 ### 4.6.1
 
+#### Removed development debug logging from the autonomous-room work
+
+Stripped the seven `logger.debug` tracing statements added during the autonomous-room debugging push, plus the small bits of scaffolding that existed only to feed them. No behavior change.
+
+- `context-builder.service.ts`: removed the "Tool result elision summary" log (fired on every context build) and its dead `elided`/`kept` counters.
+- `autonomous-room-turn.ts`: removed the two context-summary fold trace logs (and the now-empty `else` branch).
+- `autonomous-room.service.ts`: removed the "flipping row to running" and "edit no-op (empty patch)" logs.
+- `text-handlers.ts`: removed the `doc_list_files` "filtered entries from results" log and its `cruftDropped`/`autoImageDropped` counters; the filtering itself is unchanged.
+- `ai-import.service.ts`: removed the "Re-stamped structural fields" log; kept the in-place `restampStructuralFields` call, dropped the unused return capture.
+
+Operational `info`/`warn`/`error` logging and client-side error handling are left intact.
+
 #### Autonomous rooms grant a final "grace" turn when the budget is hit without warning
 
 The near-end (90%) Host nudge is only sampled at turn boundaries, so a single turn whose spend exceeds 10% of a small budget vaults the entire [90%, 100%) band — the run exhausts with the company never having been told to wrap up. (This is exactly what happened on a 100k-token room: turns of ~25k stepped the budget 75% → 100% in one go, so `nearing-end` never fired.) Now, when a run reaches its budget and the near-end nudge never fired, the Host announces a grace round and the run is allowed exactly **one** more turn (over budget) so the scene can close gracefully. If the near-end nudge *did* fire earlier in the run, it ends with no grace turn — the company was already warned.

@@ -831,24 +831,17 @@ export async function handleListFiles(
   }
 
   // Post-collection filter: always strip OS cruft; strip auto-images unless opted in.
-  let cruftDropped = 0;
-  let autoImageDropped = 0;
   const filteredFiles = files.filter(entry => {
     const segments = entry.path.split('/');
     const basename = segments[segments.length - 1] ?? '';
     if (isOsCruftName(basename)) {
-      cruftDropped++;
       return false;
     }
     if (!input.includeAutomaticImages && isAutomaticImagePath(entry.path)) {
-      autoImageDropped++;
       return false;
     }
     return true;
   });
-  if (cruftDropped > 0 || autoImageDropped > 0) {
-    logger.debug('doc_list_files: filtered entries from results', { cruftDropped, autoImageDropped });
-  }
 
   const result: DocListFilesOutput = {
     files: filteredFiles,

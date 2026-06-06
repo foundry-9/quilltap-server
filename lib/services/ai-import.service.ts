@@ -1371,13 +1371,7 @@ Return ONLY a JSON object with the same section keys (${Object.keys(sectionsToRe
     // assembly and any LLM repair. Repair rewrites whole sections and models
     // strip nested ids/timestamps that the qtap schema doesn't enforce but the
     // DB schemas do; without this re-stamp those exports fail at create time.
-    const restampedFields = restampStructuralFields(exportData.data, new Date().toISOString());
-    if (restampedFields > 0) {
-      logger.debug('[AIImport] Re-stamped structural fields after assembly/repair', {
-        characterName: charName,
-        restampedFields,
-      });
-    }
+    restampStructuralFields(exportData.data, new Date().toISOString());
 
     // Done
     logger.info('[AIImport] AI character import complete', {

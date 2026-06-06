@@ -328,16 +328,11 @@ export function buildConversationMessages(
   }
 
   // Map to output shape, using renderToolResultContent for TOOL messages.
-  let elided = 0
-  let kept = 0
-
   const conversationMessages = filtered
     .map((msg, i) => {
       if (msg.role === 'TOOL') {
         try {
           const toolData = JSON.parse(msg.content || '{}')
-          const isElided = assistantAfter[i] >= TOOL_RESULT_VERBATIM_TURNS
-          if (isElided) { elided++ } else { kept++ }
           return {
             role: 'USER' as const,
             content: renderToolResultContent(toolData, assistantAfter[i]),
@@ -356,12 +351,6 @@ export function buildConversationMessages(
       }
     })
     .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
-
-  logger.debug('Tool result elision summary', {
-    context: 'context-builder',
-    elided,
-    kept,
-  })
 
   // Build messages with participant info for multi-character context
   let messagesWithParticipants: MessageWithParticipant[] | undefined
