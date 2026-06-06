@@ -185,7 +185,11 @@ export function AutonomousRoomCard({ value, onChange, settingsHint, disabled }: 
           </div>
         </div>
         <p className="mt-1 qt-text-xs qt-text-muted">
-          The first cap to hit ends the run. Leave any blank to skip that cap.
+          The first cap to be reached draws the run toward its close; leave any blank to skip that cap.
+          A cap is a courteous boundary, mind, and not a brick wall: should a run spend its allowance so
+          abruptly that the near-end warning never sounds, the company are granted one last turn — a single
+          grace round, a touch over budget — to bring the scene to a graceful rest rather than be cut off
+          mid-sentence.
         </p>
         <label className="flex items-start gap-2 cursor-pointer mt-3">
           <input

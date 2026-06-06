@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import type { ChatMetadataBase } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { enqueueAutonomousRoomTurn } from '../queue-service';
+import { runStartPatch, postRunStartAnnouncement } from './autonomous-room-announce';
 
 const HANDLER = 'background-jobs.autonomous-room-schedule-tick';
 const DEFAULT_FRESHNESS_WINDOW_MS = 12 * 60 * 60 * 1000; // 12h
@@ -108,23 +109,19 @@ export async function handleAutonomousRoomScheduleTick(job: BackgroundJob): Prom
       continue;
     }
 
-    // Within freshness window — start a new run. Generate a fresh runId,
-    // transition to 'idle' (the turn handler picks up from there and runs
-    // the model-availability precondition + counter reset on its first
-    // tick), set scheduleLastRunAt = now, and advance scheduleNextRunAt
-    // past the consumed slot.
+    // Within freshness window — start a new run. Generate a fresh runId, flip
+    // the row straight to 'running' with counters zeroed (the shared run-start
+    // contract — same one the manual start uses), set scheduleLastRunAt = now,
+    // and advance scheduleNextRunAt past the consumed slot. Going to 'running'
+    // immediately keeps the management list / badges honest the moment the slot
+    // fires; the turn handler runs the model-availability precondition and the
+    // turns from there.
     const runId = randomUUID();
+    const nowIso = new Date(now).toISOString();
     const nextNext = nextCronFireFrom(chat.scheduleCron, nowDate);
     const updates: Partial<ChatMetadataBase> = {
-      currentRunId: runId,
-      runState: 'idle',
-      runStateMessage: null,
-      // Fresh scheduled run — drop any pause state left from a prior
-      // (e.g. crash-reconciled) paused state so it can't bleed into this
-      // run's wall-clock accounting.
-      runPausedAt: null,
-      runPausedAccumMs: 0,
-      scheduleLastRunAt: new Date(now).toISOString(),
+      ...runStartPatch(nowIso, runId),
+      scheduleLastRunAt: nowIso,
       scheduleNextRunAt: nextNext ? nextNext.toISOString() : null,
     } as unknown as Partial<ChatMetadataBase>;
     await repos.chats.update(chat.id, updates);
@@ -132,6 +129,8 @@ export async function handleAutonomousRoomScheduleTick(job: BackgroundJob): Prom
     try {
       await enqueueAutonomousRoomTurn(userId, { chatId: chat.id, runId });
       enqueuedCount++;
+      // Run is live and a turn is queued — post the "run begun" banner.
+      await postRunStartAnnouncement(chat.id, runId, chat);
       logger.info('Autonomous-room scheduler: enqueued run', {
         context: HANDLER,
         chatId: chat.id,
@@ -139,14 +138,21 @@ export async function handleAutonomousRoomScheduleTick(job: BackgroundJob): Prom
         nextRunAt: nextNext?.toISOString() ?? null,
       });
     } catch (error) {
-      // Couldn't enqueue — roll the run-state back to whatever it was so the
-      // next tick has a chance to retry.
-      logger.error('Autonomous-room scheduler: failed to enqueue run', {
+      // Couldn't enqueue — the row already flipped to 'running', which the
+      // scheduler filter excludes, so leaving it there would wedge the room out
+      // of all future ticks. Roll it back to 'idle' (eligible again) so the
+      // next due slot can retry; scheduleNextRunAt has already advanced.
+      logger.error('Autonomous-room scheduler: failed to enqueue run, rolling run state back to idle', {
         context: HANDLER,
         chatId: chat.id,
         runId,
         error: error instanceof Error ? error.message : String(error),
       });
+      await repos.chats.update(chat.id, {
+        runState: 'idle',
+        runStateMessage: 'schedule:enqueue_failed',
+        runEndedAt: nowIso,
+      } as unknown as Partial<ChatMetadataBase>);
     }
   }
 

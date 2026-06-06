@@ -602,7 +602,8 @@ export async function checkAndGenerateSummaryIfNeeded(
   userId: string,
   connectionProfile: ConnectionProfile,
   cheapLLMSettings: CheapLLMSettings,
-  availableProfiles: ConnectionProfile[]
+  availableProfiles: ConnectionProfile[],
+  options: { awaitFold?: boolean } = {}
 ): Promise<void> {
   const repos = getRepositories()
   const chat = await repos.chats.findById(chatId)
@@ -657,14 +658,26 @@ export async function checkAndGenerateSummaryIfNeeded(
       lastFoldedTurn: chat.lastSummaryTurn ?? 0,
       lastFullRebuildTurn: chat.lastFullRebuildTurn ?? 0,
     })
-    generateContextSummaryAsync({
+    const summaryOptions = {
       userId,
       chatId,
       connectionProfile,
       cheapLLMSettings,
       availableProfiles,
       forceRegenerate: decision === 'hard',
-    })
+    }
+    if (options.awaitFold) {
+      // Autonomous rooms call this from the forked job child, where a
+      // fire-and-forget fold settles *after* the job's write-buffer flush and
+      // its writes are silently dropped (the fold anchor then never advances).
+      // Awaiting the fold keeps `repos.chats.update`/`addMessage`/`delete...`
+      // inside the buffer so they reach the parent. The caller invokes this
+      // OUTSIDE the autonomous-run-id scope, so the fold's cheap-LLM tokens are
+      // not billed against the per-run budget.
+      await generateContextSummary(summaryOptions)
+    } else {
+      generateContextSummaryAsync(summaryOptions)
+    }
   } else {
   }
 }

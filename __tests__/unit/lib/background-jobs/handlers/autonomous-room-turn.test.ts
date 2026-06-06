@@ -7,6 +7,7 @@ import {
   getActiveCharacterParticipants,
 } from '@/lib/chat/turn-manager'
 import { enqueueAutonomousRoomTurn } from '@/lib/background-jobs/queue-service'
+import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
 
 jest.mock('@/lib/logger', () => ({
   logger: {
@@ -27,6 +28,9 @@ jest.mock('@/lib/chat/turn-manager', () => ({
 jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueAutonomousRoomTurn: jest.fn(),
 }))
+jest.mock('@/lib/chat/context-summary', () => ({
+  checkAndGenerateSummaryIfNeeded: jest.fn(),
+}))
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
 const mockHandleSendMessage = handleSendMessage as jest.MockedFunction<typeof handleSendMessage>
@@ -34,6 +38,7 @@ const mockSelectNextSpeaker = selectNextSpeaker as jest.MockedFunction<typeof se
 const mockCalculateTurnStateFromHistory = calculateTurnStateFromHistory as jest.MockedFunction<typeof calculateTurnStateFromHistory>
 const mockGetActiveCharacterParticipants = getActiveCharacterParticipants as jest.MockedFunction<typeof getActiveCharacterParticipants>
 const mockEnqueueAutonomousRoomTurn = enqueueAutonomousRoomTurn as jest.MockedFunction<typeof enqueueAutonomousRoomTurn>
+const mockCheckAndGenerateSummaryIfNeeded = checkAndGenerateSummaryIfNeeded as jest.MockedFunction<typeof checkAndGenerateSummaryIfNeeded>
 
 /**
  * Build a child-style repository proxy that simulates the readonly-DB +
@@ -362,9 +367,11 @@ describe('handleAutonomousRoomTurn — counter bookkeeping', () => {
   it('uses the freshly-computed counter for the post-turn budget check', async () => {
     // Counter reaches the cap exactly on this turn (running, 7 → 8 with
     // cap=8). The post-turn budget check must see the just-computed value
-    // (8), not the stale re-read (7), and trip the run.
+    // (8), not the stale re-read (7), and trip the run. The near-end warning
+    // is pre-marked (bit 2) so the run ends immediately rather than taking a
+    // grace turn — this test is about the counter, not the grace path.
     const { state, repos } = createBufferedRepos({
-      chat: baseChat({ runState: 'running', runTurnsConsumed: 7, budgetMaxTurns: 8 }),
+      chat: baseChat({ runState: 'running', runTurnsConsumed: 7, budgetMaxTurns: 8, runMilestonesAnnounced: 2 }),
       jobId: 'job-1',
       chatId: 'chat-1',
     })
@@ -580,5 +587,111 @@ describe('handleAutonomousRoomTurn — wall-clock anchor on a fresh run', () => 
     )
     expect(wallClockExhaustion).toHaveLength(0)
     expect(mockEnqueueAutonomousRoomTurn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('handleAutonomousRoomTurn — context-summary fold', () => {
+  it('runs the fold awaited+untagged from the handler when a cheap-LLM is configured', async () => {
+    const { repos } = createBufferedRepos({ chat: baseChat(), jobId: 'job-1', chatId: 'chat-1' })
+    // A cheap-LLM is configured → the fold should run.
+    repos.chatSettings.findByUserId = jest.fn(async () => ({ cheapLLMSettings: { provider: 'anthropic' } })) as never
+    // The responding participant (p1) has no profile of its own → falls back to the default.
+    ;(repos as Record<string, unknown>).connections = {
+      findByUserId: jest.fn(async () => ([
+        { id: 'cp-default', provider: 'anthropic', modelName: 'claude', isDefault: true },
+      ])),
+    }
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    expect(mockCheckAndGenerateSummaryIfNeeded).toHaveBeenCalledTimes(1)
+    const args = mockCheckAndGenerateSummaryIfNeeded.mock.calls[0]
+    // Signature: (chatId, provider, modelName, userId, connectionProfile, cheapLLMSettings, availableProfiles, options)
+    expect(args[4]).toMatchObject({ id: 'cp-default' }) // resolved fold profile
+    expect(args[7]).toEqual({ awaitFold: true })        // awaited so the forked-child write survives
+    // The fold runs after the turn but before the next turn is enqueued.
+    expect(mockEnqueueAutonomousRoomTurn).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips the fold when no cheap-LLM is configured', async () => {
+    const { repos } = createBufferedRepos({ chat: baseChat(), jobId: 'job-1', chatId: 'chat-1' })
+    // Default chatSettings.findByUserId returns null → no cheapLLMSettings → no fold.
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    expect(mockCheckAndGenerateSummaryIfNeeded).not.toHaveBeenCalled()
+    expect(mockEnqueueAutonomousRoomTurn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('handleAutonomousRoomTurn — grace turn on budget exhaustion', () => {
+  const graceMessages = (adds: Array<{ systemKind?: string }>) =>
+    adds.filter((m) => m.systemKind === 'autonomous-room-grace')
+
+  it('grants one grace turn (no end) when the budget is reached without a near-end warning', async () => {
+    // 8-turn cap, 7 done → this turn makes 8 (exhausts). 7/8 = 87.5% → 8/8 =
+    // 100%: the [90%,100%) band was vaulted, so near-end never fired (mask 0).
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', runTurnsConsumed: 7, budgetMaxTurns: 8, runMilestonesAnnounced: 0 }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    // The Host invites a final word...
+    const grace = graceMessages(state.messageAdds as never)
+    expect(grace).toHaveLength(1)
+    expect((grace[0] as { content?: string }).content).toContain('The Host')
+    expect((grace[0] as { opaqueContent?: string }).opaqueContent).toContain('one final turn')
+    // ...the grace bit is recorded...
+    const maskWrites = state.chatUpdates.filter((u) => 'runMilestonesAnnounced' in u)
+    expect(maskWrites[maskWrites.length - 1].runMilestonesAnnounced).toBe(4) // MILESTONE_GRACE
+    // ...the run does NOT end yet...
+    expect(state.chatUpdates.filter((u) => u.runState === 'budgetExhausted')).toHaveLength(0)
+    // ...and one more turn is enqueued.
+    expect(mockEnqueueAutonomousRoomTurn).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs the granted grace turn over budget, then ends the run', async () => {
+    // Grace already granted (bit 4 set) and the counter is at the cap, so the
+    // pre-turn check is over budget. The grace turn must still run, then end.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', runTurnsConsumed: 8, budgetMaxTurns: 8, runMilestonesAnnounced: 4 }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    // The grace turn actually ran (pre-turn budget check let it through).
+    expect(mockHandleSendMessage).toHaveBeenCalledTimes(1)
+    // No second grace announcement.
+    expect(graceMessages(state.messageAdds as never)).toHaveLength(0)
+    // The run ends after the grace turn.
+    const ends = state.chatUpdates.filter((u) => u.runState === 'budgetExhausted')
+    expect(ends).toHaveLength(1)
+    expect(state.messageAdds.filter((m) => (m as { systemKind?: string }).systemKind === 'autonomous-room-end')).toHaveLength(1)
+    expect(mockEnqueueAutonomousRoomTurn).not.toHaveBeenCalled()
+  })
+
+  it('ends directly (no grace turn) when the near-end warning already fired', async () => {
+    // Near-end bit (2) already set; reaching the cap ends the run at once.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', runTurnsConsumed: 7, budgetMaxTurns: 8, runMilestonesAnnounced: 2 }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    expect(graceMessages(state.messageAdds as never)).toHaveLength(0)
+    expect(state.chatUpdates.filter((u) => u.runState === 'budgetExhausted')).toHaveLength(1)
+    expect(mockEnqueueAutonomousRoomTurn).not.toHaveBeenCalled()
   })
 })

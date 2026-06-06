@@ -258,6 +258,48 @@ export function collectLanternImageFileIdsForCharacter(
 }
 
 /**
+ * Number of ASSISTANT messages that must appear *after* a TOOL message before
+ * its result body is elided from the outgoing LLM context. At 3 turns the raw
+ * payload is replaced with a compact stub; within the last 3 turns it is sent
+ * verbatim. Counting ASSISTANT messages is the turn proxy agreed for both
+ * interactive (≈1 per turn) and autonomous (all-ASSISTANT) rooms.
+ */
+const TOOL_RESULT_VERBATIM_TURNS = 3
+
+/**
+ * Render the content string for a single TOOL message in the outgoing context.
+ *
+ * @param toolData   Parsed tool payload ({ toolName|tool, result, arguments, … })
+ * @param assistantAfter  Number of ASSISTANT messages that follow this TOOL msg
+ *                         in the filtered sequence. When ≥ TOOL_RESULT_VERBATIM_TURNS
+ *                         the result body is replaced with a compact stub.
+ * @returns          Formatted content string, role will be USER in the output.
+ */
+function renderToolResultContent(
+  toolData: { toolName?: string; tool?: string; result?: unknown; arguments?: unknown },
+  assistantAfter: number,
+): string {
+  const toolName = toolData.toolName || toolData.tool || 'Unknown'
+  if (assistantAfter >= TOOL_RESULT_VERBATIM_TURNS) {
+    // Elide: include compact argument summary so context is not opaque.
+    let compactArgs = ''
+    if (toolData.arguments !== undefined && toolData.arguments !== null) {
+      try {
+        const raw = JSON.stringify(toolData.arguments)
+        compactArgs = raw.length > 200 ? raw.slice(0, 200) + '…' : raw
+      } catch {
+        compactArgs = String(toolData.arguments).slice(0, 200)
+      }
+    }
+    return `[Tool Result: ${toolName}] (args: ${compactArgs}) — result elided (>3 turns old); call again to re-read.`
+  }
+  const resultText = toolData.result !== undefined && toolData.result !== null && toolData.result !== ''
+    ? String(toolData.result)
+    : 'No result'
+  return `[Tool Result: ${toolName}]\n${resultText}`
+}
+
+/**
  * Build conversation messages for context
  */
 export function buildConversationMessages(
@@ -267,25 +309,38 @@ export function buildConversationMessages(
   conversationMessages: Array<{ role: string; content: string; id?: string; thoughtSignature?: string | null }>
   messagesWithParticipants?: MessageWithParticipant[]
 } {
-  // Filter existing messages to include USER, ASSISTANT, and TOOL messages (exclude SYSTEM)
-  const conversationMessages = existingMessages
-    .filter(msg => msg.type === 'message')
-    .filter(msg => {
-      const role = msg.role
-      return role === 'USER' || role === 'ASSISTANT' || role === 'TOOL'
-    })
-    .map(msg => {
-      // For TOOL messages, parse the content and format as a user message
+  // Filtered sequence: only type=message, roles USER/ASSISTANT/TOOL.
+  const filtered = existingMessages.filter(msg => {
+    if (msg.type !== 'message') return false
+    const role = msg.role
+    return role === 'USER' || role === 'ASSISTANT' || role === 'TOOL'
+  })
+
+  // Compute assistantAfter[i] — the number of ASSISTANT-role messages that
+  // appear after filtered[i]. One O(n) reverse pass; TOOL messages are NOT in
+  // the turn partition so counting ASSISTANT-after is the agreed turn proxy
+  // for both interactive (≈1 per turn) and autonomous (all-ASSISTANT) rooms.
+  const assistantAfter: number[] = new Array(filtered.length).fill(0)
+  let trailingAssistants = 0
+  for (let i = filtered.length - 1; i >= 0; i--) {
+    assistantAfter[i] = trailingAssistants
+    if (filtered[i].role === 'ASSISTANT') trailingAssistants++
+  }
+
+  // Map to output shape, using renderToolResultContent for TOOL messages.
+  let elided = 0
+  let kept = 0
+
+  const conversationMessages = filtered
+    .map((msg, i) => {
       if (msg.role === 'TOOL') {
         try {
           const toolData = JSON.parse(msg.content || '{}')
-          const resultText = toolData.result || 'No result'
-          // Handle both LLM-initiated (toolName) and user-initiated (tool) field names
-          const toolName = toolData.toolName || toolData.tool || 'Unknown'
-
+          const isElided = assistantAfter[i] >= TOOL_RESULT_VERBATIM_TURNS
+          if (isElided) { elided++ } else { kept++ }
           return {
             role: 'USER' as const,
-            content: `[Tool Result: ${toolName}]\n${resultText}`,
+            content: renderToolResultContent(toolData, assistantAfter[i]),
             id: msg.id,
           }
         } catch {
@@ -302,27 +357,24 @@ export function buildConversationMessages(
     })
     .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
 
+  logger.debug('Tool result elision summary', {
+    context: 'context-builder',
+    elided,
+    kept,
+  })
+
   // Build messages with participant info for multi-character context
   let messagesWithParticipants: MessageWithParticipant[] | undefined
 
   if (isMultiCharacter) {
-    messagesWithParticipants = existingMessages
-      .filter(msg => msg.type === 'message')
-      .filter(msg => {
-        const role = msg.role
-        return role === 'USER' || role === 'ASSISTANT' || role === 'TOOL'
-      })
-      .map(msg => {
+    messagesWithParticipants = filtered
+      .map((msg, i) => {
         if (msg.role === 'TOOL') {
           try {
             const toolData = JSON.parse(msg.content || '{}')
-            const resultText = toolData.result || 'No result'
-            // Handle both LLM-initiated (toolName) and user-initiated (tool) field names
-            const toolName = toolData.toolName || toolData.tool || 'Unknown'
-
             return {
               role: 'USER' as const,
-              content: `[Tool Result: ${toolName}]\n${resultText}`,
+              content: renderToolResultContent(toolData, assistantAfter[i]),
               id: msg.id,
               createdAt: msg.createdAt,
               participantId: null,

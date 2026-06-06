@@ -3,16 +3,25 @@
  *
  * Manual-start entry point. The scheduled-run path lives in
  * `lib/background-jobs/handlers/autonomous-room-schedule-tick.ts`; both
- * funnel into the same run-start contract — generate a fresh runId, write
- * it atomically alongside `runState = 'idle'`, advance any consumed cron
- * slot, then enqueue the first `AUTONOMOUS_ROOM_TURN`. The turn handler
- * picks up from there.
+ * funnel into the same run-start contract (`runStartPatch` /
+ * `postRunStartAnnouncement` in `autonomous-room-announce.ts`): generate a
+ * fresh runId, flip the row straight to `runState = 'running'` with the
+ * per-run counters zeroed, advance any consumed cron slot, enqueue the first
+ * `AUTONOMOUS_ROOM_TURN`, and post the "run begun" banner. Flipping to
+ * `running` at request time (rather than parking at `idle` for the turn job to
+ * promote) is what lets the Salon header badges reflect the live status the
+ * instant the household hits start/resume, instead of lagging until the first
+ * turn comes around. The turn handler runs the turns from there.
  */
 
 import { Cron } from 'croner';
 import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueAutonomousRoomTurn } from '@/lib/background-jobs/queue-service';
+import {
+  runStartPatch,
+  postRunStartAnnouncement,
+} from '@/lib/background-jobs/handlers/autonomous-room-announce';
 import { logger } from '@/lib/logger';
 import type { ChatMetadataBase } from '@/lib/schemas/types';
 
@@ -80,21 +89,44 @@ export async function startAutonomousRoomManually(
     }
   }
 
+  // Flip straight to `running` (counters zeroed, pause state cleared) so the
+  // badge/header reflect the live status the instant this returns — we don't
+  // wait for the turn job to come around and promote `idle → running`.
+  logger.debug('Manual autonomous-room start: flipping row to running', {
+    context: HANDLER, chatId, runId, previousState: chat.runState ?? null,
+  });
   await repos.chats.update(chatId, {
-    currentRunId: runId,
-    runState: 'idle',
-    runStateMessage: null,
-    // Fresh run — drop any pause state left over from a prior run so it can't
-    // bleed into this run's wall-clock accounting.
-    runPausedAt: null,
-    runPausedAccumMs: 0,
+    ...runStartPatch(nowIso, runId),
     scheduleLastRunAt: nowIso,
     ...(nextScheduledRunAt !== chat.scheduleNextRunAt
       ? { scheduleNextRunAt: nextScheduledRunAt }
       : {}),
   } as unknown as Partial<ChatMetadataBase>);
 
-  const jobId = await enqueueAutonomousRoomTurn(userId, { chatId, runId });
+  let jobId: string;
+  try {
+    jobId = await enqueueAutonomousRoomTurn(userId, { chatId, runId });
+  } catch (error) {
+    // The row already flipped to `running`, so the badge updated immediately;
+    // but no turn job made it onto the queue. Roll the row to `error` rather
+    // than leave it falsely `running` with nothing in flight (which the startup
+    // reconcile would otherwise have to clean up on the next restart).
+    logger.error('Manual autonomous-room start: enqueue failed, rolling run state to error', {
+      context: HANDLER, chatId, runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await repos.chats.update(chatId, {
+      runState: 'error',
+      runStateMessage: 'start:enqueue_failed',
+      runEndedAt: new Date().toISOString(),
+    } as unknown as Partial<ChatMetadataBase>);
+    throw error;
+  }
+
+  // Run is live and a turn is queued — post the "run begun" banner. Best-effort
+  // (the helper swallows its own write failures); `chat` is the pre-update
+  // snapshot, whose participants and budget caps are unchanged by the flip.
+  await postRunStartAnnouncement(chatId, runId, chat);
 
   logger.info('Manual autonomous-room run started', {
     context: HANDLER,

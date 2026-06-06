@@ -35,6 +35,7 @@ import type { DocStrReplaceInput, DocStrReplaceOutput } from '../../doc-str-repl
 import type { DocInsertTextInput, DocInsertTextOutput } from '../../doc-insert-text-tool';
 import type { DocGrepInput, DocGrepOutput, DocGrepMatch } from '../../doc-grep-tool';
 import type { DocListFilesInput, DocListFilesOutput, DocFileInfo } from '../../doc-list-files-tool';
+import { isAutomaticImagePath, isOsCruftName } from '@/lib/files/folder-utils';
 import { getRepositories } from '@/lib/repositories/factory';
 import { listDatabaseFiles } from '@/lib/mount-index/database-store';
 import {
@@ -829,13 +830,33 @@ export async function handleListFiles(
     await collectFiles(generalDir, 'general', undefined, input.folder);
   }
 
+  // Post-collection filter: always strip OS cruft; strip auto-images unless opted in.
+  let cruftDropped = 0;
+  let autoImageDropped = 0;
+  const filteredFiles = files.filter(entry => {
+    const segments = entry.path.split('/');
+    const basename = segments[segments.length - 1] ?? '';
+    if (isOsCruftName(basename)) {
+      cruftDropped++;
+      return false;
+    }
+    if (!input.includeAutomaticImages && isAutomaticImagePath(entry.path)) {
+      autoImageDropped++;
+      return false;
+    }
+    return true;
+  });
+  if (cruftDropped > 0 || autoImageDropped > 0) {
+    logger.debug('doc_list_files: filtered entries from results', { cruftDropped, autoImageDropped });
+  }
+
   const result: DocListFilesOutput = {
-    files,
-    total: files.length,
+    files: filteredFiles,
+    total: filteredFiles.length,
   };
 
   // Format for LLM
-  if (files.length === 0) {
+  if (filteredFiles.length === 0) {
     return {
       success: true,
       result,
@@ -843,7 +864,7 @@ export async function handleListFiles(
     };
   }
 
-  const formatted = files.map(f => {
+  const formatted = filteredFiles.map(f => {
     const prefix = f.mount_point ? `[${f.mount_point}] ` : `[${f.scope}] `;
     if (f.kind === 'folder') {
       return `${prefix}[folder] ${f.path}`;
@@ -855,6 +876,6 @@ export async function handleListFiles(
   return {
     success: true,
     result,
-    formattedText: `${files.length} files:\n\n${formatted}`,
+    formattedText: `${filteredFiles.length} files:\n\n${formatted}`,
   };
 }

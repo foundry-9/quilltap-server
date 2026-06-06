@@ -4,6 +4,44 @@
 
 ### 4.6.1
 
+#### Autonomous rooms grant a final "grace" turn when the budget is hit without warning
+
+The near-end (90%) Host nudge is only sampled at turn boundaries, so a single turn whose spend exceeds 10% of a small budget vaults the entire [90%, 100%) band — the run exhausts with the company never having been told to wrap up. (This is exactly what happened on a 100k-token room: turns of ~25k stepped the budget 75% → 100% in one go, so `nearing-end` never fired.) Now, when a run reaches its budget and the near-end nudge never fired, the Host announces a grace round and the run is allowed exactly **one** more turn (over budget) so the scene can close gracefully. If the near-end nudge *did* fire earlier in the run, it ends with no grace turn — the company was already warned.
+
+Implemented in `autonomous-room-turn.ts` with a new `MILESTONE_GRACE` bit on the existing `runMilestonesAnnounced` bitmask (no schema change). On budget exhaustion at either the pre-turn or post-turn checkpoint: if neither the near-end nor grace bit is set, the handler sets the grace bit, posts an `autonomous-room-grace` Host announcement, and re-enqueues one turn instead of ending. That turn runs over budget (the pre-turn check lets it through because the grace bit is set) and ends the run at its own post-turn check. Exactly one grace turn per run.
+
+The budget-caps form (`AutonomousRoomCard`, shown in both the New Room flow and the Edit Enclave modal) now explains that a cap is a soft boundary, not a hard wall: a run that overruns its allowance without a near-end warning is granted one last grace turn to close gracefully.
+
+#### Fix: autonomous-room conversation summaries now actually persist
+
+Autonomous rooms run their turns in the forked job child, where repository writes are buffered and flushed only at the end of the job. The rolling-window context-summary fold was fired fire-and-forget, so its writes settled after the flush and were silently dropped — the fold anchor (`lastSummaryTurn`) never advanced past its first value, and a long room re-sent nearly its entire history on every turn. (Observed: a room at 429 character turns still pinned to `lastSummaryTurn=5`, `compactionGeneration=1`.)
+
+- The finalizer (`message-finalizer.service.ts`) now skips the fire-and-forget summary check for `chatType: 'autonomous'`.
+- The turn handler (`autonomous-room-turn.ts`) instead runs the fold inline and **awaited**, after the `runWithAutonomousRunId` scope closes and before enqueuing the next turn. Awaiting keeps the fold's writes inside the job's write buffer so they reach the parent; running it outside the run-id scope means the fold's cheap-LLM tokens are **not** billed against the per-run token budget (housekeeping, not turn spend). The next turn then sees the freshly compacted room.
+- `checkAndGenerateSummaryIfNeeded` gains an `{ awaitFold }` option; interactive chats keep the fire-and-forget path unchanged.
+
+#### Long chats no longer re-bill stale tool results every turn
+
+Persisted tool-result messages (e.g. `read_conversation`, `doc_list_files`) were re-injected into the LLM context verbatim on every turn, and the rolling summary never folded them out (the fold anchors only USER/character messages). A single large result — a 587 KB conversation dump, a 1,100-file listing — was re-sent and re-billed indefinitely, which is what blew an autonomous room's per-run token budget in one turn.
+
+`buildConversationMessages` (`context-builder.service.ts`) now stubs any tool result older than 3 turns (counted by ASSISTANT messages after it), keeping the tool name and a short arguments preview: `[Tool Result: <tool>] (args: …) — result elided (>3 turns old); call again to re-read.` The most recent 3 turns stay verbatim. This is a context-assembly transform only: the stored message is untouched, the Salon UI still shows the full result, and summary/memory inputs (which skip tool rows) are unaffected. Applies to all chat types.
+
+#### doc_list_files now hides auto-generated images and OS cruft
+
+`doc_list_files` listings filtered nothing, so they surfaced `.DS_Store` and similar, plus every auto-generated avatar/background image — bloating the tool result (and, re-billed every turn, the budget).
+
+- Hidden OS files (`.`-prefixed names, plus `Thumbs.db` / `desktop.ini` / `__MACOSX`) are now always filtered out.
+- Auto-generated images (image files under a `character-avatars` or `story-backgrounds` path segment) are filtered out by default. A new `includeAutomaticImages` flag (default `false`) on the tool brings them back. Saved images live elsewhere (character photo albums) and are unaffected.
+- The filter is a shared post-collection pass covering both filesystem- and database-backed stores (`text-handlers.ts`); the helpers and folder/extension constants live in `lib/files/folder-utils.ts`. The Projects file API has its own image categorization and is unchanged.
+
+#### Autonomous-room start/resume now reflect "running" immediately
+
+Starting or resuming an autonomous room ("enclave") now flips the room to **running** the instant you click the control, instead of lagging until the first turn job comes around. Previously a manual or scheduled start parked the room at `idle` and let the turn handler promote it to `running` on the first turn — so if a turn for another room was already in flight, the badge/header could sit on the play icon (looking like nothing happened) for up to a minute.
+
+- Server: `startAutonomousRoomManually` and the schedule tick now write `runState: 'running'` (counters zeroed, `runStartedAt` stamped) synchronously at request time and post the Host "run begun" banner, via a shared run-start contract in the new `lib/background-jobs/handlers/autonomous-room-announce.ts` (`runStartPatch` + `postRunStartAnnouncement`). The turn handler keeps a defensive `idle → running` fallback for any pre-upgrade turn job still carrying an `idle` row. `runStartedAt` now anchors the wall-clock budget from the button press (including any brief queue wait before the first turn).
+- If the turn enqueue fails after the row has flipped, the manual path rolls the row to `error` and the scheduled path rolls it back to `idle`, so the badge never falsely shows `running` with nothing in flight.
+- Client: the global autonomous-room badges and the Settings → Chat management card now update optimistically (SWR `optimisticData` + `rollbackOnError`), so the icon/label flip on click rather than after the POST + revalidation round-trip.
+
 #### Fix: autonomous-room token counter now resets on a fresh run
 
 A manually-started or scheduled autonomous-room run now starts its per-run token tally from zero, instead of carrying over the previous run's total. A *resumed* (paused → running) run still keeps the count it had, as intended.

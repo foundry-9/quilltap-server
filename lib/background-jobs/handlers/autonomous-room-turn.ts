@@ -28,6 +28,7 @@ import {
   calculateTurnStateFromHistory,
   getActiveCharacterParticipants,
 } from '@/lib/chat/turn-manager';
+import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary';
 import type {
   AutonomousRunState,
   Character,
@@ -36,10 +37,14 @@ import type {
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { Cron } from 'croner';
-import { randomUUID } from 'node:crypto';
 import type { AutonomousRoomTurnPayload } from '../queue-service';
 import { enqueueAutonomousRoomTurn } from '../queue-service';
 import { runWithAutonomousRunId } from '../autonomous-run-context';
+import {
+  postAutonomousRoomAnnouncement,
+  postRunStartAnnouncement,
+  type AutonomousRoomKind,
+} from './autonomous-room-announce';
 
 const HANDLER = 'background-jobs.autonomous-room-turn';
 
@@ -113,8 +118,21 @@ function checkBudget(
 
 const MILESTONE_HALFWAY = 1; // bit 0
 const MILESTONE_NEAR_END = 2; // bit 1
+const MILESTONE_GRACE = 4; // bit 2 — a one-turn grace round was granted (budget reached without a near-end warning)
 const HALFWAY_THRESHOLD = 0.5;
 const NEAR_END_THRESHOLD = 0.9; // 10% of the budget remaining
+
+// Host-voiced + persona-free bodies for the grace round. When a run reaches its
+// budget WITHOUT the near-end (90%) nudge ever having fired — a single turn can
+// vault the entire [90%, 100%) band when per-turn spend exceeds 10% of a small
+// budget — the company never got their "wrap up" warning. Rather than cut them
+// off mid-thought, the Host grants one last turn over budget so the scene can
+// close gracefully. If the near-end nudge DID fire, they were already warned and
+// no grace turn is given.
+const GRACE_CONTENT =
+  'The Host rises with a rueful smile: we have, in candour, run past the allowance set aside for this gathering — yet it would be the height of rudeness to cut a guest off mid-thought. Let there be one last word, and then we shall close.';
+const GRACE_OPAQUE =
+  'This conversation has reached its budget limit. You have one final turn to speak before it ends — say what most needs saying and bring the present scene to a graceful close.';
 
 type MilestoneBinding = 'time' | 'turns' | 'tokens' | 'daily';
 
@@ -275,61 +293,6 @@ async function transitionRunState(
   } as unknown as Partial<ChatMetadataBase>);
 }
 
-function formatNameList(names: string[]): string {
-  if (names.length === 0) return '';
-  if (names.length === 1) return names[0];
-  if (names.length === 2) return `${names[0]} and ${names[1]}`;
-  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
-}
-
-type AutonomousRoomKind =
-  | 'autonomous-room-start'
-  | 'autonomous-room-end'
-  | 'autonomous-room-paused'
-  | 'autonomous-room-halfway'
-  | 'autonomous-room-nearing-end';
-
-/**
- * Post a Host-authored `autonomous-room-*` system message. The Host owns the
- * announcement surface for autonomous rooms (start / end / paused / pacing).
- * Uses `host-avatar.webp` via the existing chat-UI lookup keyed on
- * `systemSender`.
- *
- * `opaqueContent` is the persona-free body swapped into every character's LLM
- * context when the room is opaque-anywhere (any participant lacks
- * `systemTransparency`). Pass it for messages that the characters should read
- * and act on — the pacing nudges in particular — so the steering survives the
- * opaque swap; the human always sees the Host-voiced `content` in the Salon.
- */
-async function postAutonomousRoomAnnouncement(
-  chatId: string,
-  systemKind: AutonomousRoomKind,
-  content: string,
-  opaqueContent: string | null = null,
-): Promise<void> {
-  const repos = getRepositories();
-  const message: MessageEvent = {
-    type: 'message',
-    id: randomUUID(),
-    role: 'ASSISTANT',
-    content,
-    opaqueContent,
-    attachments: [],
-    createdAt: new Date().toISOString(),
-    participantId: null,
-    systemSender: 'host',
-    systemKind,
-  };
-  try {
-    await repos.chats.addMessage(chatId, message);
-  } catch (error) {
-    logger.warn('Autonomous-room: failed to post announcement', {
-      context: HANDLER, chatId, systemKind,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
 /**
  * Compute the next cron occurrence strictly after the given anchor time.
  * Returns null if the cron is missing or invalid — the caller treats null as
@@ -349,6 +312,32 @@ function recomputeNextRun(cronExpr: string | null | undefined, anchor: Date): st
     });
     return null;
   }
+}
+
+/**
+ * Grant a single grace turn: record the grace bit, have the Host invite a final
+ * word, and re-enqueue one more turn — without ending the run. Used at either
+ * budget checkpoint when the run has reached its budget but the near-end nudge
+ * never fired. The granted turn runs over budget (the pre-turn check lets it
+ * through because the grace bit is set) and then ends cleanly at its own
+ * post-turn check. Exactly one grace turn is ever granted per run, since the
+ * bit is checked before granting.
+ */
+async function grantGraceTurn(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  userId: string,
+  runId: string,
+  currentMask: number,
+): Promise<void> {
+  logger.info('Autonomous-room turn: budget reached without a near-end warning; granting one grace turn', {
+    context: HANDLER, chatId, runId,
+  });
+  await repos.chats.update(chatId, {
+    runMilestonesAnnounced: currentMask | MILESTONE_GRACE,
+  } as unknown as Partial<ChatMetadataBase>);
+  await postAutonomousRoomAnnouncement(chatId, 'autonomous-room-grace', GRACE_CONTENT, GRACE_OPAQUE);
+  await enqueueAutonomousRoomTurn(userId, { chatId, runId });
 }
 
 export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void> {
@@ -430,12 +419,19 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   const nowIso = new Date(now).toISOString();
 
   if (chat.runState == null || chat.runState === 'idle') {
-    // Run start. The model-availability precondition for individual
-    // participants is enforced by the connection-profile resolution path that
-    // runs inside handleSendMessage; if a participant's model isn't
-    // available the orchestrator will surface that as a turn error which
-    // this handler classifies as 'error'. (A pre-flight check that names
-    // the missing model and refuses earlier is a future refinement.)
+    // Defensive idle→running fallback. The run-start contract now flips the row
+    // straight to `running` at request time — synchronously in the parent for a
+    // manual start (startAutonomousRoomManually), in the schedule-tick batch for
+    // a scheduled run — so the badge/header reflect the live status the moment
+    // the run is requested. A turn job therefore normally finds the row already
+    // `running` and skips this block. We keep the fallback for the only paths
+    // that can still hand us an `idle` row: a turn job enqueued by a pre-upgrade
+    // build that wrote `idle`, or any future caller that forgets the contract.
+    //
+    // The model-availability precondition for individual participants is
+    // enforced by the connection-profile resolution path inside
+    // handleSendMessage; an unavailable model surfaces as a turn error this
+    // handler classifies as 'error'.
     await transitionRunState(chatId, 'running', {
       runStartedAt: nowIso,
       runEndedAt: null,
@@ -450,29 +446,7 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     chat.runTokensConsumed = 0;
     chat.runMilestonesAnnounced = 0;
 
-    // Post the run-start announcement.
-    const caps: string[] = [];
-    if (chat.budgetMaxTurns != null) caps.push(`${chat.budgetMaxTurns} turn(s)`);
-    if (chat.budgetMaxTokens != null) caps.push(`${chat.budgetMaxTokens.toLocaleString()} token(s)`);
-    if (chat.budgetMaxWallClockMs != null) caps.push(`${Math.round(chat.budgetMaxWallClockMs / 60000)} min`);
-    const capSummary = caps.length > 0 ? `Caps: ${caps.join(', ')}.` : 'No caps configured.';
-
-    const startParticipants = getActiveCharacterParticipants(chat.participants);
-    const startNames: string[] = [];
-    for (const p of startParticipants) {
-      if (!p.characterId) continue;
-      const c = await repos.characters.findById(p.characterId);
-      if (c?.name) startNames.push(c.name);
-    }
-    const participantsSummary = formatNameList(startNames);
-    const prefix = participantsSummary
-      ? `Autonomous room run begun with ${participantsSummary}.`
-      : `Autonomous room run begun.`;
-    await postAutonomousRoomAnnouncement(
-      chatId,
-      'autonomous-room-start',
-      `${prefix} ${capSummary} Run id: ${runId}.`,
-    );
+    await postRunStartAnnouncement(chatId, runId, chat);
   }
 
   // 4. Pre-turn budget check
@@ -487,25 +461,42 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
 
   const budget = checkBudget(chat, now, { dailyTokenBudget, dailyTokensSpent });
   if (budget.exhausted) {
-    logger.info('Autonomous-room turn: budget exhausted before turn', {
-      context: HANDLER, chatId, reason: budget.reason, dailyTokensSpent, dailyTokenBudget,
-    });
-    const nextRunIso = recomputeNextRun(chat.scheduleCron, new Date(now));
-    await transitionRunState(chatId, budget.nextState, {
-      runEndedAt: nowIso,
-      runStateMessage: `budget:${budget.reason}`,
-      // A daily-cap pause may be manually resumed before the cap rolls over;
-      // stamp runPausedAt so that resume can exclude the paused interval from
-      // the wall-clock budget the same way a manual pause does.
-      ...(budget.nextState === 'paused' ? { runPausedAt: nowIso } : {}),
-      ...(nextRunIso ? { scheduleNextRunAt: nextRunIso } : {}),
-    });
-    const kind = budget.nextState === 'paused' ? 'autonomous-room-paused' : 'autonomous-room-end';
-    const reasonText = budget.reason === 'tokens_user_daily'
-      ? `Daily user-token budget reached. The room will resume when the budget rolls over (instance-local midnight).`
-      : `Budget exhausted (reason: ${budget.reason}).`;
-    await postAutonomousRoomAnnouncement(chatId, kind, reasonText);
-    return;
+    const mask = chat.runMilestonesAnnounced ?? 0;
+    if ((mask & MILESTONE_GRACE) !== 0) {
+      // This is the granted grace turn: let it run one last time even though
+      // the budget is spent. The post-turn check (step 9) sees the grace bit
+      // and ends the run cleanly once this final word is delivered.
+      logger.info('Autonomous-room turn: proceeding with grace turn (over budget, one last word)', {
+        context: HANDLER, chatId, runId, reason: budget.reason,
+      });
+      // fall through — do NOT end here
+    } else if ((mask & MILESTONE_NEAR_END) !== 0) {
+      // The company already had their near-end warning, so end now.
+      logger.info('Autonomous-room turn: budget exhausted before turn', {
+        context: HANDLER, chatId, reason: budget.reason, dailyTokensSpent, dailyTokenBudget,
+      });
+      const nextRunIso = recomputeNextRun(chat.scheduleCron, new Date(now));
+      await transitionRunState(chatId, budget.nextState, {
+        runEndedAt: nowIso,
+        runStateMessage: `budget:${budget.reason}`,
+        // A daily-cap pause may be manually resumed before the cap rolls over;
+        // stamp runPausedAt so that resume can exclude the paused interval from
+        // the wall-clock budget the same way a manual pause does.
+        ...(budget.nextState === 'paused' ? { runPausedAt: nowIso } : {}),
+        ...(nextRunIso ? { scheduleNextRunAt: nextRunIso } : {}),
+      });
+      const kind = budget.nextState === 'paused' ? 'autonomous-room-paused' : 'autonomous-room-end';
+      const reasonText = budget.reason === 'tokens_user_daily'
+        ? `Daily user-token budget reached. The room will resume when the budget rolls over (instance-local midnight).`
+        : `Budget exhausted (reason: ${budget.reason}).`;
+      await postAutonomousRoomAnnouncement(chatId, kind, reasonText);
+      return;
+    } else {
+      // Budget reached without a near-end warning ever firing — grant one
+      // grace turn so the company gets a final word before the run closes.
+      await grantGraceTurn(repos, chatId, userId, runId, mask);
+      return;
+    }
   }
 
   // 5. Speaker selection
@@ -587,18 +578,26 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
 
   // 8. Post-turn bookkeeping. Re-read the chat to run the stale-run guard
   //    against fresh DB state; for the actual counter values we deliberately
-  //    do NOT use `post.run{Turns,Tokens}Consumed`, because the forked-job
-  //    child's repo proxy buffers writes in AsyncLocalStorage and serves
-  //    reads from a readonly DB connection. On the first turn of every new
-  //    run, the `runTurnsConsumed: 0` reset issued at the idle→running
-  //    transition (line 283-289) is still pending in the buffer when we get
-  //    here, so a read-modify-write off `post.runTurnsConsumed` would pick
-  //    up the *previous* run's stale value; the write we then queue lands
-  //    after the reset at flush time and clobbers it ("last write wins"),
-  //    so the counter accumulates across every run forever and a room with
-  //    `budgetMaxTurns` set trips `budgetExhausted` after a single message
-  //    on its second-or-later run. The local `chat` object is the only
-  //    post-reset view of the counter that's available before writes flush.
+  //    do NOT use `post.run{Turns,Tokens}Consumed`, but the local `chat`
+  //    snapshot. The reason is the forked-job child's repo proxy buffers writes
+  //    in AsyncLocalStorage and serves reads from a readonly DB connection.
+  //    The local `chat` is the only reliable post-reset view of the counter in
+  //    every case:
+  //      - Fresh run (the normal path): the run-start contract committed
+  //        `runTurnsConsumed: 0` upstream (the parent for a manual start, the
+  //        schedule-tick batch for a scheduled run) BEFORE this turn job ran,
+  //        so the initial `findById` above already read 0 into `chat`.
+  //      - Legacy idle→running fallback: the `runTurnsConsumed: 0` reset is
+  //        issued by THIS child via transitionRunState and is still pending in
+  //        the write buffer, so `post` reads the *previous* run's stale value
+  //        off the readonly DB while the locally-mutated `chat` reads 0.
+  //      - Resumed run: the contract left the counters untouched, so `chat`
+  //        carries the genuine pre-pause count.
+  //    A read-modify-write off `post` would, in the fallback case, pick up the
+  //    previous run's stale value; the write we then queue lands after the
+  //    reset at flush time and clobbers it ("last write wins"), so the counter
+  //    would accumulate across runs forever and a room with `budgetMaxTurns`
+  //    set would trip `budgetExhausted` after a single message on a later run.
   const post = await repos.chats.findById(chatId);
   if (!post || post.currentRunId !== runId) {
     logger.info('Autonomous-room turn: superseded during turn, not re-enqueueing', {
@@ -627,23 +626,17 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   // repository adds the stripped cache reads back from `cacheUsage`.
   const includeCacheHits = (chat.budgetExcludeCacheHits ?? 1) === 0;
   const runUsage = await repos.llmLogs.getTotalTokenUsageForRun(runId, { includeCacheHits });
-  // The monotonic floor is the local `chat` snapshot — mutated to 0 on the
-  // idle→running transition for a fresh manual/scheduled run, or carrying the
-  // preserved count for a resumed run — NOT the re-read `post`. For the same
-  // buffered-write reason the turn counter is pinned below (see the long
-  // comment above): on the first turn of a fresh run the idle→running
-  // `runTokensConsumed: 0` reset is still pending in the job child's write
-  // buffer, so `post.runTokensConsumed` reads the *previous* run's stale total
-  // off the readonly DB. Flooring against it would carry the old run's tokens
-  // into the new one — a room with `budgetMaxTokens` set would then trip
-  // `budgetExhausted` on the first turn of its second-or-later run. A resumed
-  // run leaves the idle→running block untouched, so its `chat.runTokensConsumed`
-  // is the genuine pre-pause count and the run keeps accumulating from there.
+  // The monotonic floor is the local `chat` snapshot — 0 for a fresh run
+  // (committed upstream by the run-start contract, or mutated to 0 in the
+  // legacy idle→running fallback) or the preserved count for a resumed run —
+  // NOT the re-read `post`. See the long comment above for why `post` is unsafe
+  // in the fallback case (its `runTokensConsumed` reads the previous run's
+  // stale total off the readonly DB while the reset is still buffered).
   const newTokensConsumed = Math.max(runUsage.totalTokens, chat.runTokensConsumed ?? 0);
 
-  // Turn accounting: increment off the local `chat` snapshot (already
-  // mutated to 0 on the idle→running transition when applicable), not the
-  // re-read `post`. See the long comment above.
+  // Turn accounting: increment off the local `chat` snapshot (0 for a fresh
+  // run, preserved count for a resumed run), not the re-read `post`. See the
+  // long comment above.
   const newTurnsConsumed = (chat.runTurnsConsumed ?? 0) + 1;
 
   await repos.chats.update(chatId, {
@@ -687,6 +680,17 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     { dailyTokenBudget, dailyTokensSpent: postDailySpent },
   );
   if (verdict.exhausted) {
+    const mask = chat.runMilestonesAnnounced ?? 0;
+    if ((mask & MILESTONE_GRACE) === 0 && (mask & MILESTONE_NEAR_END) === 0) {
+      // Reached budget this turn without a near-end warning ever firing (a
+      // single turn vaulted the [90%, 100%) band). Grant one grace turn so the
+      // company gets a final word; this turn's own post-turn check will end the
+      // run once the grace bit is set.
+      await grantGraceTurn(repos, chatId, userId, runId, mask);
+      return;
+    }
+    // Either the grace turn just completed (grace bit set), or the near-end
+    // warning already fired earlier in the run — end now.
     logger.info('Autonomous-room turn: run exhausted post-turn', {
       context: HANDLER, chatId, reason: verdict.reason, turns: newTurnsConsumed, tokens: newTokensConsumed,
     });
@@ -747,6 +751,55 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
       chat.runMilestonesAnnounced = fire.nextMask;
       const { content, opaqueContent, systemKind } = buildMilestoneMessage(progress.binding, fire.milestone);
       await postAutonomousRoomAnnouncement(chatId, systemKind, content, opaqueContent);
+    }
+  }
+
+  // 9c. Context-summary fold. Run it HERE — outside the runWithAutonomousRunId
+  //     scope (which exited when the generation block above returned) and
+  //     before re-enqueueing the next turn. Two reasons this can't live in the
+  //     ordinary finalize path for autonomous rooms:
+  //       - Awaited (not fire-and-forget): the finalizer's fire-and-forget fold
+  //         settles after the forked-child write-buffer flush, so its writes
+  //         (the advancing fold anchor + summary whisper) are silently dropped.
+  //         Awaiting it inline keeps those writes in the buffer that ships to
+  //         the parent at job end.
+  //       - Untagged: because the autonomous-run-id scope has already exited,
+  //         getAutonomousRunId() is null here, so the fold's cheap-LLM call is
+  //         NOT billed against the per-run token budget (housekeeping, not turn
+  //         spend). The next turn then sees the freshly compacted room.
+  //     Best-effort: a fold failure must never wedge the run, so it's caught.
+  if (chatSettings?.cheapLLMSettings) {
+    try {
+      const availableProfiles = await repos.connections.findByUserId(userId);
+      const respondingParticipant = chat.participants.find((p) => p.id === respondingParticipantId);
+      const foldProfile =
+        availableProfiles.find((p) => p.id === respondingParticipant?.connectionProfileId)
+        ?? availableProfiles.find((p) => p.isDefault)
+        ?? availableProfiles[0];
+      if (foldProfile) {
+        logger.debug('Autonomous-room turn: running awaited context-summary fold (untagged)', {
+          context: HANDLER, chatId, runId,
+        });
+        await checkAndGenerateSummaryIfNeeded(
+          chatId,
+          foldProfile.provider,
+          foldProfile.modelName,
+          userId,
+          foldProfile,
+          chatSettings.cheapLLMSettings,
+          availableProfiles,
+          { awaitFold: true },
+        );
+      } else {
+        logger.debug('Autonomous-room turn: no connection profile for fold, skipping', {
+          context: HANDLER, chatId, runId,
+        });
+      }
+    } catch (error) {
+      logger.warn('Autonomous-room turn: context-summary fold failed (continuing)', {
+        context: HANDLER, chatId, runId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
