@@ -65,7 +65,7 @@ quilltap/
 │   ├── api/                  # Middleware + response helpers (createContextHandler, withActionDispatch, etc.)
 │   ├── api-keys/             # Pepper Vault API-key storage (Saquel)
 │   ├── auth/                 # Single-user session
-│   ├── background-jobs/      # Job queue + worker
+│   ├── background-jobs/      # Job queue + forked child worker (see BACKGROUND_JOBS_CHILD.md)
 │   ├── backup/               # Backup / restore logic
 │   ├── chat/                 # Salon: context-manager, turn-manager, tool execution
 │   ├── database/             # SQLite/SQLCipher connection management
@@ -508,4 +508,5 @@ git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
 - [Backup & Restore Guide](../BACKUP-RESTORE.md) - Data backup procedures
 - [Plugin Developer Guide](../../plugins/README.md) - Creating plugins
 - [Database Encryption](DATABASE_ENCRYPTION.md) - SQLCipher encryption architecture, .dbkey file management, and passphrase handling
+- [Background Jobs Child Process](BACKGROUND_JOBS_CHILD.md) - Child process architecture, IPC protocol, per-database write partitioning, and handler audit
 - [Roadmap](features/ROADMAP.md) - Planned features

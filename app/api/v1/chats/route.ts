@@ -127,6 +127,12 @@ const createChatSchema = z.object({
   budgetEstimatedSpendCapUSD: z.number().positive().optional(),
   runVisibility: z.enum(['owner_only', 'household', 'open']).optional(),
   runDestructiveToolsAllowed: z.boolean().optional(),
+  /**
+   * Per-run token-budget counting mode. true (default) = exclude prompt-cache
+   * hits from the budget (count only the billable cache-miss + output tokens);
+   * false = count every token, including cache reads.
+   */
+  budgetExcludeCacheHits: z.boolean().optional(),
 });
 
 // ============================================================================
@@ -1039,6 +1045,9 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       budgetEstimatedSpendCapUSD: validatedData.budgetEstimatedSpendCapUSD ?? null,
       runVisibility: validatedData.runVisibility ?? null,
       runDestructiveToolsAllowed: validatedData.runDestructiveToolsAllowed ? 1 : 0,
+      // Default to excluding cache hits (1); only an explicit `false` opts into
+      // counting every token (0).
+      budgetExcludeCacheHits: validatedData.budgetExcludeCacheHits === false ? 0 : 1,
       runState: 'idle' as const,
       currentRunId: null,
       runTurnsConsumed: 0,

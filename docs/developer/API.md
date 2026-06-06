@@ -1626,6 +1626,25 @@ Create a new chat.
 
 **Note**: `userCharacterId` is optional - provide a user-controlled character ID to "play as" that character in the chat.
 
+To create an autonomous room, include `chatType: "autonomous"` and autonomous-room fields:
+
+```json
+{
+  "characterId": "char-uuid",
+  "connectionProfileId": "profile-uuid",
+  "chatType": "autonomous",
+  "scheduleCron": "0 2 * * *",
+  "scheduleFreshnessWindowMs": 43200000,
+  "budgetMaxTurns": 50,
+  "budgetMaxTokens": 500000,
+  "budgetMaxWallClockMs": null,
+  "budgetEstimatedSpendCapUSD": null,
+  "budgetExcludeCacheHits": true,
+  "runVisibility": "owner_only",
+  "runDestructiveToolsAllowed": false
+}
+```
+
 #### `POST /api/v1/chats?action=import`
 
 Import a SillyTavern chat (JSONL format).
@@ -1650,7 +1669,7 @@ Import a SillyTavern chat (JSONL format).
 
 #### `GET /api/v1/chats/[id]`
 
-Get a chat with full message history.
+Get a chat with full message history. The response includes `chatType` (e.g. `"standard"`, `"autonomous"`).
 
 #### `PUT /api/v1/chats/[id]`
 
@@ -2160,6 +2179,91 @@ Queue a story background regeneration job.
   "jobId": "job-uuid"
 }
 ```
+
+---
+
+### Autonomous Room Control
+
+Run-control and settings surface for `chatType: 'autonomous'` chats (autonomous rooms / enclaves). All endpoints require the chat to have `chatType === 'autonomous'`; non-autonomous chats return `400`.
+
+#### `GET /api/v1/chats/[id]/autonomous-room`
+
+Read the run status snapshot for the management UI.
+
+**Response**: `200 OK`
+
+```json
+{
+  "chatId": "chat-uuid",
+  "chatType": "autonomous",
+  "runState": "running",
+  "currentRunId": "run-uuid",
+  "runStateMessage": null,
+  "runStartedAt": "2026-06-05T02:00:00.000Z",
+  "runEndedAt": null,
+  "runPausedAccumMs": 0,
+  "runTurnsConsumed": 12,
+  "runTokensConsumed": 45000,
+  "scheduleCron": "0 2 * * *",
+  "scheduleNextRunAt": "2026-06-06T02:00:00.000Z",
+  "scheduleLastRunAt": "2026-06-05T02:00:00.000Z",
+  "scheduleFreshnessWindowMs": 43200000,
+  "budgetMaxTurns": 50,
+  "budgetMaxTokens": 500000,
+  "budgetMaxWallClockMs": null,
+  "budgetEstimatedSpendCapUSD": null,
+  "budgetExcludeCacheHits": 1,
+  "runDestructiveToolsAllowed": 0,
+  "runVisibility": "owner_only"
+}
+```
+
+#### `POST /api/v1/chats/[id]/autonomous-room?action=start`
+
+Manually start a new run. Refuses when `runState === 'running'`.
+
+**Response**: `200 OK` with `{ runId, jobId }`.
+
+#### `POST /api/v1/chats/[id]/autonomous-room?action=pause`
+
+Pause the current run. The next scheduled tick re-evaluates.
+
+**Response**: `200 OK` with `{ paused: true }`.
+
+#### `POST /api/v1/chats/[id]/autonomous-room?action=stop`
+
+Stop the current run. Bumps `currentRunId` so any queued turn job exits via the stale-run guard.
+
+**Response**: `200 OK` with `{ stopped: true }`.
+
+#### `POST /api/v1/chats/[id]/autonomous-room?action=resume`
+
+Resume a paused run, preserving turn/token counters and the existing `currentRunId`.
+
+**Response**: `200 OK` with `{ runId, jobId }`.
+
+#### `POST /api/v1/chats/[id]/autonomous-room?action=update-settings`
+
+Edit the room's schedule, budget caps, visibility, destructive-tool authorization, title, and cache-hit counting toggle. Changes apply to a running run on its next turn. Recomputes `scheduleNextRunAt` when the cron changes; rejects an invalid cron with `400`.
+
+**Request Body** (all fields optional; `null` clears a previously-set value):
+
+```json
+{
+  "title": "Evening Salon",
+  "scheduleCron": "0 22 * * *",
+  "scheduleFreshnessWindowMs": 43200000,
+  "budgetMaxTurns": 100,
+  "budgetMaxTokens": 1000000,
+  "budgetMaxWallClockMs": 3600000,
+  "budgetEstimatedSpendCapUSD": 2.50,
+  "runVisibility": "owner_only",
+  "runDestructiveToolsAllowed": false,
+  "budgetExcludeCacheHits": true
+}
+```
+
+**Response**: `200 OK` with `{ updated: true, clampedDestructive: false }`. `clampedDestructive` is `true` when the user-level destructive-tool policy forced the per-room flag to `false`.
 
 ---
 

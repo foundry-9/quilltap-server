@@ -229,6 +229,7 @@ import { relinkFilesToMountBlobsMigration } from './relink-files-to-mount-blobs'
 import { addLLMLogsRequestHashesColumnMigration } from './add-llm-logs-request-hashes-column';
 // Add rawProviderUsage column to llm_logs (Layer-1 raw-usage snapshot)
 import { addLLMLogsRawProviderUsageColumnMigration } from './add-llm-logs-raw-provider-usage-column';
+import { addLLMLogsAutonomousRunIdColumnMigration } from './add-llm-logs-autonomous-run-id-column';
 // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
 import { addSummarizationGateFieldsMigration } from './add-summarization-gate-fields';
 // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
@@ -321,6 +322,10 @@ import { addChatMessageReasoningColumnsMigration } from './add-chat-message-reas
 import { addThinkingDisplayFieldsMigration } from './add-thinking-display-fields';
 // Add autoScrollOnResponseComplete column to chat_settings (Salon auto-scroll toggle)
 import { addAutoScrollOnResponseCompleteFieldMigration } from './add-auto-scroll-on-response-complete-field';
+// 4.6 private character rooms: budgetExcludeCacheHits column on chats (optional all-tokens budget mode)
+import { addAutonomousBudgetCacheModeMigration } from './add-autonomous-budget-cache-mode';
+// 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
+import { addAutonomousRunMilestonesMigration } from './add-autonomous-run-milestones';
 
 /**
  * All available migrations.
@@ -545,6 +550,8 @@ export const migrations: Migration[] = [
   addLLMLogsRequestHashesColumnMigration,
   // Add rawProviderUsage column to llm_logs (Layer-1 raw-usage snapshot)
   addLLMLogsRawProviderUsageColumnMigration,
+  // Add autonomousRunId column to llm_logs (per-run budget accounting)
+  addLLMLogsAutonomousRunIdColumnMigration,
   // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
   addSummarizationGateFieldsMigration,
   // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
@@ -637,6 +644,10 @@ export const migrations: Migration[] = [
   addThinkingDisplayFieldsMigration,
   // Salon auto-scroll: autoScrollOnResponseComplete column on chat_settings
   addAutoScrollOnResponseCompleteFieldMigration,
+  // 4.6 private character rooms: budgetExcludeCacheHits column on chats (optional all-tokens budget mode)
+  addAutonomousBudgetCacheModeMigration,
+  // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
+  addAutonomousRunMilestonesMigration,
 ];
 
 export {
@@ -846,6 +857,8 @@ export {
   addLLMLogsRequestHashesColumnMigration,
   // Add rawProviderUsage column to llm_logs (Layer-1 raw-usage snapshot)
   addLLMLogsRawProviderUsageColumnMigration,
+  // Add autonomousRunId column to llm_logs (per-run budget accounting)
+  addLLMLogsAutonomousRunIdColumnMigration,
   // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
   addSummarizationGateFieldsMigration,
   // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
@@ -934,5 +947,9 @@ export {
   addThinkingDisplayFieldsMigration,
   // Salon auto-scroll: autoScrollOnResponseComplete column on chat_settings
   addAutoScrollOnResponseCompleteFieldMigration,
+  // 4.6 private character rooms: budgetExcludeCacheHits column on chats (optional all-tokens budget mode)
+  addAutonomousBudgetCacheModeMigration,
+  // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
+  addAutonomousRunMilestonesMigration,
 };
 

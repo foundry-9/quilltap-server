@@ -3,16 +3,25 @@
  *
  * Manual-start entry point. The scheduled-run path lives in
  * `lib/background-jobs/handlers/autonomous-room-schedule-tick.ts`; both
- * funnel into the same run-start contract — generate a fresh runId, write
- * it atomically alongside `runState = 'idle'`, advance any consumed cron
- * slot, then enqueue the first `AUTONOMOUS_ROOM_TURN`. The turn handler
- * picks up from there.
+ * funnel into the same run-start contract (`runStartPatch` /
+ * `postRunStartAnnouncement` in `autonomous-room-announce.ts`): generate a
+ * fresh runId, flip the row straight to `runState = 'running'` with the
+ * per-run counters zeroed, advance any consumed cron slot, enqueue the first
+ * `AUTONOMOUS_ROOM_TURN`, and post the "run begun" banner. Flipping to
+ * `running` at request time (rather than parking at `idle` for the turn job to
+ * promote) is what lets the Salon header badges reflect the live status the
+ * instant the household hits start/resume, instead of lagging until the first
+ * turn comes around. The turn handler runs the turns from there.
  */
 
 import { Cron } from 'croner';
 import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueAutonomousRoomTurn } from '@/lib/background-jobs/queue-service';
+import {
+  runStartPatch,
+  postRunStartAnnouncement,
+} from '@/lib/background-jobs/handlers/autonomous-room-announce';
 import { logger } from '@/lib/logger';
 import type { ChatMetadataBase } from '@/lib/schemas/types';
 
@@ -80,21 +89,41 @@ export async function startAutonomousRoomManually(
     }
   }
 
+  // Flip straight to `running` (counters zeroed, pause state cleared) so the
+  // badge/header reflect the live status the instant this returns — we don't
+  // wait for the turn job to come around and promote `idle → running`.
   await repos.chats.update(chatId, {
-    currentRunId: runId,
-    runState: 'idle',
-    runStateMessage: null,
-    // Fresh run — drop any pause state left over from a prior run so it can't
-    // bleed into this run's wall-clock accounting.
-    runPausedAt: null,
-    runPausedAccumMs: 0,
+    ...runStartPatch(nowIso, runId),
     scheduleLastRunAt: nowIso,
     ...(nextScheduledRunAt !== chat.scheduleNextRunAt
       ? { scheduleNextRunAt: nextScheduledRunAt }
       : {}),
   } as unknown as Partial<ChatMetadataBase>);
 
-  const jobId = await enqueueAutonomousRoomTurn(userId, { chatId, runId });
+  let jobId: string;
+  try {
+    jobId = await enqueueAutonomousRoomTurn(userId, { chatId, runId });
+  } catch (error) {
+    // The row already flipped to `running`, so the badge updated immediately;
+    // but no turn job made it onto the queue. Roll the row to `error` rather
+    // than leave it falsely `running` with nothing in flight (which the startup
+    // reconcile would otherwise have to clean up on the next restart).
+    logger.error('Manual autonomous-room start: enqueue failed, rolling run state to error', {
+      context: HANDLER, chatId, runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await repos.chats.update(chatId, {
+      runState: 'error',
+      runStateMessage: 'start:enqueue_failed',
+      runEndedAt: new Date().toISOString(),
+    } as unknown as Partial<ChatMetadataBase>);
+    throw error;
+  }
+
+  // Run is live and a turn is queued — post the "run begun" banner. Best-effort
+  // (the helper swallows its own write failures); `chat` is the pre-update
+  // snapshot, whose participants and budget caps are unchanged by the flip.
+  await postRunStartAnnouncement(chatId, runId, chat);
 
   logger.info('Manual autonomous-room run started', {
     context: HANDLER,
@@ -244,6 +273,176 @@ export async function resumeAutonomousRoom(
 }
 
 /**
+ * Editable per-room settings, as accepted from the Edit Enclave modal. All
+ * fields are optional so the caller can send a partial patch; the values speak
+ * the same units as the DB and the create payload (milliseconds for the
+ * windows/caps), so the modal converts hours/minutes → ms before calling.
+ *
+ * Tri-state semantics, field by field:
+ *   - `undefined` → leave the stored value untouched.
+ *   - `null`      → clear the stored value back to NULL (for the nullable
+ *                   columns: scheduleCron, the freshness window, every budget
+ *                   cap, and runVisibility's "inherit default").
+ *   - a value     → write it.
+ *
+ * `title` is special: when a non-empty string is supplied we also stamp
+ * `isManuallyRenamed = true` so the cheap-LLM auto-titler stops overwriting the
+ * household's chosen name. We never *clear* a title here.
+ */
+export interface AutonomousRoomSettingsPatch {
+  title?: string;
+  scheduleCron?: string | null;
+  scheduleFreshnessWindowMs?: number | null;
+  budgetMaxTurns?: number | null;
+  budgetMaxTokens?: number | null;
+  budgetMaxWallClockMs?: number | null;
+  budgetEstimatedSpendCapUSD?: number | null;
+  runVisibility?: 'owner_only' | 'household' | 'open' | null;
+  runDestructiveToolsAllowed?: boolean;
+  budgetExcludeCacheHits?: boolean;
+}
+
+export type UpdateAutonomousRoomSettingsResult =
+  | { ok: true; clampedDestructive: boolean }
+  | {
+      ok: false;
+      reason: 'not_autonomous' | 'chat_not_found' | 'invalid_cron';
+      message: string;
+    };
+
+/**
+ * Apply an edit to an autonomous room's settings.
+ *
+ * Edits land on the live chat row and take effect on the *next* turn of any
+ * in-flight run — the turn handler re-reads the budget caps, the cache-counting
+ * mode, and the destructive-tool flag fresh every turn, and the Salon list
+ * reads `runVisibility` fresh on every fetch. Run-state and counters
+ * (`runState`, `currentRunId`, `runStartedAt`, the turn/token tallies) are
+ * deliberately left untouched, so editing never restarts or resets a run.
+ *
+ * Cron is the one field needing a follow-on write: changing the expression
+ * recomputes `scheduleNextRunAt` (so the scheduler tick honours the new
+ * cadence), and clearing it drops the room back to manual-only. We validate the
+ * expression here and reject the whole edit on a bad cron rather than silently
+ * dropping the schedule — the private `recomputeNextRun` in the turn handler
+ * can't be reused because it collapses "missing" and "invalid" to the same
+ * null.
+ *
+ * The user-level destructive-tool ceiling is enforced at write time: if the
+ * household's policy is `always_refuse`, the per-room flag is forced off no
+ * matter what the form sent.
+ */
+export async function updateAutonomousRoomSettings(
+  chatId: string,
+  userId: string,
+  patch: AutonomousRoomSettingsPatch,
+): Promise<UpdateAutonomousRoomSettingsResult> {
+  const repos = getRepositories();
+
+  const chat = await repos.chats.findById(chatId);
+  if (!chat) {
+    return { ok: false, reason: 'chat_not_found', message: 'Chat not found.' };
+  }
+  if (chat.chatType !== 'autonomous') {
+    return {
+      ok: false,
+      reason: 'not_autonomous',
+      message: 'This chat is not an autonomous room.',
+    };
+  }
+
+  const update: Record<string, unknown> = {};
+
+  // --- Title (also pins isManuallyRenamed so the auto-titler backs off) ---
+  if (patch.title !== undefined) {
+    const trimmed = patch.title.trim();
+    if (trimmed.length > 0) {
+      update.title = trimmed;
+      update.isManuallyRenamed = true;
+    }
+  }
+
+  // --- Schedule (three-way: set+recompute / clear / reject-on-invalid) ---
+  if (patch.scheduleCron !== undefined) {
+    const cron = patch.scheduleCron?.trim() ?? '';
+    if (cron.length === 0) {
+      update.scheduleCron = null;
+      update.scheduleNextRunAt = null;
+    } else {
+      let nextRunIso: string | null;
+      try {
+        nextRunIso = new Cron(cron).nextRun(new Date())?.toISOString() ?? null;
+      } catch (error) {
+        logger.warn('Autonomous-room edit: rejected invalid cron', {
+          context: HANDLER,
+          chatId,
+          cron,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return {
+          ok: false,
+          reason: 'invalid_cron',
+          message: `Invalid cron expression: ${cron}`,
+        };
+      }
+      update.scheduleCron = cron;
+      update.scheduleNextRunAt = nextRunIso;
+    }
+  }
+
+  // --- Catch-up freshness window ---
+  if (patch.scheduleFreshnessWindowMs !== undefined) {
+    update.scheduleFreshnessWindowMs = patch.scheduleFreshnessWindowMs;
+  }
+
+  // --- Budget caps (each nullable: null clears the cap) ---
+  if (patch.budgetMaxTurns !== undefined) update.budgetMaxTurns = patch.budgetMaxTurns;
+  if (patch.budgetMaxTokens !== undefined) update.budgetMaxTokens = patch.budgetMaxTokens;
+  if (patch.budgetMaxWallClockMs !== undefined) update.budgetMaxWallClockMs = patch.budgetMaxWallClockMs;
+  if (patch.budgetEstimatedSpendCapUSD !== undefined) {
+    update.budgetEstimatedSpendCapUSD = patch.budgetEstimatedSpendCapUSD;
+  }
+
+  // --- Token-budget counting mode (default: exclude cache hits) ---
+  if (patch.budgetExcludeCacheHits !== undefined) {
+    update.budgetExcludeCacheHits = patch.budgetExcludeCacheHits === false ? 0 : 1;
+  }
+
+  // --- Visibility (null = inherit the user default) ---
+  if (patch.runVisibility !== undefined) {
+    update.runVisibility = patch.runVisibility;
+  }
+
+  // --- Destructive-tool authorization, clamped by the user-level ceiling ---
+  let clampedDestructive = false;
+  if (patch.runDestructiveToolsAllowed !== undefined) {
+    const chatSettings = await repos.chatSettings.findByUserId(userId);
+    const policyRefuse =
+      chatSettings?.autonomousRoomSettings?.destructiveToolPolicy === 'always_refuse';
+    const allowed = policyRefuse ? false : patch.runDestructiveToolsAllowed;
+    clampedDestructive = policyRefuse && patch.runDestructiveToolsAllowed;
+    update.runDestructiveToolsAllowed = allowed ? 1 : 0;
+  }
+
+  if (Object.keys(update).length === 0) {
+    return { ok: true, clampedDestructive };
+  }
+
+  await repos.chats.update(chatId, update as unknown as Partial<ChatMetadataBase>);
+
+  logger.info('Autonomous-room: settings edited', {
+    context: HANDLER,
+    chatId,
+    changedFields: Object.keys(update),
+    cronChanged: 'scheduleCron' in update,
+    nextRunAt: update.scheduleNextRunAt,
+    clampedDestructive,
+  });
+
+  return { ok: true, clampedDestructive };
+}
+
+/**
  * Startup reconcile for autonomous-room runs interrupted by a server crash
  * or restart. Any chat with `chatType = 'autonomous'` and `runState =
  * 'running'` had its turn-worker killed mid-execution; without this sweep
@@ -302,4 +501,71 @@ export async function reconcileAutonomousRunsAtStartup(): Promise<{ reconciledCo
     reconciledCount: stuck.length,
   });
   return { reconciledCount: stuck.length };
+}
+
+/**
+ * Recover an autonomous room whose turn job failed *terminally*.
+ *
+ * An AUTONOMOUS_ROOM_TURN job runs in the forked child and buffers all of its
+ * writes — the assistant message, the turn/token counters, and the run-state
+ * transition — into one batch that the parent applies atomically. If any write
+ * in that batch is rejected at apply time (e.g. a tool's `docMountFolders`
+ * insert hits a unique constraint), the WHOLE batch rolls back, including the
+ * handler's own run-state write, and the single-attempt job is marked DEAD.
+ * Left alone the chat stays `runState: 'running'` with no turn in flight — a
+ * silent wedge that {@link startAutonomousRoomManually} refuses to re-engage.
+ *
+ * The dispatcher calls this on terminal failure of a turn job. We mirror the
+ * startup reconcile: transition to `paused` (resumable in place, and the
+ * scheduler treats paused as eligible for the next cron slot), bump
+ * `currentRunId` so any zombie/retry turn job exits via the stale-run guard,
+ * preserve the counters, and record the cause in `runStateMessage` so the room
+ * status surfaces *why* it stopped instead of freezing mid-run.
+ *
+ * Parent-process only (the sole DB writer), so this write applies immediately
+ * and is not part of the failed batch. Fully guarded — a failure here must
+ * never throw back into the dispatcher's result handling.
+ */
+export async function reconcileFailedAutonomousTurn(
+  payload: { chatId?: string; runId?: string } | null | undefined,
+  failureReason: string,
+): Promise<void> {
+  try {
+    const chatId = payload?.chatId;
+    const runId = payload?.runId;
+    if (!chatId || !runId) return;
+
+    const repos = getRepositories();
+    const chat = await repos.chats.findById(chatId);
+    if (!chat || chat.chatType !== 'autonomous') return;
+
+    // Only act on the live run, and only while it still looks active. A newer
+    // run (currentRunId moved on) or an already-terminal state means something
+    // else has already taken over; leave it alone.
+    if (chat.currentRunId !== runId) return;
+    if (chat.runState !== 'running' && chat.runState !== 'idle') return;
+
+    const nowIso = new Date().toISOString();
+    await repos.chats.update(chatId, {
+      runState: 'paused',
+      runStateMessage: `turn_failed:${failureReason}`.slice(0, 500),
+      currentRunId: randomUUID(),
+      runEndedAt: null,
+      runPausedAt: chat.lastMessageAt ?? chat.runStartedAt ?? nowIso,
+    } as unknown as Partial<ChatMetadataBase>);
+
+    logger.warn('Autonomous-room: turn job failed terminally; run paused (resumable)', {
+      context: HANDLER,
+      chatId,
+      previousRunId: runId,
+      failureReason,
+      runTurnsConsumed: chat.runTurnsConsumed,
+      runTokensConsumed: chat.runTokensConsumed,
+    });
+  } catch (err) {
+    logger.error('Autonomous-room: reconcile-after-failure threw', {
+      context: HANDLER,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }

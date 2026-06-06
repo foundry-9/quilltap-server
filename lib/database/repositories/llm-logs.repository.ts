@@ -561,6 +561,69 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   }
 
   /**
+   * Get total token usage for a single autonomous-room run, summed across
+   * every llm_logs row tagged with this `autonomousRunId` — the run's
+   * conversational turns plus their agent-mode tool sub-calls.
+   *
+   * This supersedes the timestamp-window {@link getTotalTokenUsageForChatSince}
+   * for per-run budget accounting. Summing by run id isolates exactly this
+   * run's spend regardless of any overlapping chat activity, and is robust to
+   * the forked-job child's buffered-write timing. As with the timestamp
+   * variant, the current turn's own log row is still buffered when the handler
+   * reads this, so the sum converges one turn behind — acceptable for a budget
+   * gate that only needs to trip within a turn of crossing the cap.
+   *
+   * Cache-read (prompt-cache hit) tokens are excluded from `usage.totalTokens`
+   * by the provider plugins at the source, so by default this sum counts only
+   * the billable cache-miss input + output tokens. Pass
+   * `{ includeCacheHits: true }` to add those stripped cache reads back from
+   * each row's `cacheUsage.cacheReadInputTokens` — the "count every token"
+   * budget mode (per-room `budgetExcludeCacheHits = 0`).
+   */
+  async getTotalTokenUsageForRun(
+    autonomousRunId: string,
+    options: { includeCacheHits?: boolean } = {},
+  ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
+    const { includeCacheHits = false } = options;
+    return this.safeQuery(
+      async () => {
+        // `$exists: true` only — see getTotalTokenUsageForChatSince for why
+        // `$ne: null` must not be added (the translator emits `usage != NULL`,
+        // which is unknown for every row and zeroes the sum).
+        const filter: TypedQueryFilter<LLMLog> = {
+          autonomousRunId,
+          usage: { $exists: true },
+        };
+
+        const logs = await this.findByFilter(filter);
+
+        let totalPromptTokens = 0;
+        let totalCompletionTokens = 0;
+        let totalTokens = 0;
+
+        for (const log of logs) {
+          if (log.usage) {
+            totalPromptTokens += log.usage.promptTokens || 0;
+            totalCompletionTokens += log.usage.completionTokens || 0;
+            totalTokens += log.usage.totalTokens || 0;
+          }
+          // Add the cache-read tokens the provider plugins stripped from
+          // `usage` back into the prompt/total when counting every token.
+          if (includeCacheHits && log.cacheUsage?.cacheReadInputTokens) {
+            const cacheReads = log.cacheUsage.cacheReadInputTokens;
+            totalPromptTokens += cacheReads;
+            totalTokens += cacheReads;
+          }
+        }
+        return { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens, totalTokens };
+      },
+      'Error getting total token usage for autonomous run',
+      { autonomousRunId, includeCacheHits },
+      { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+    );
+  }
+
+  /**
    * Count logs associated with a message ID
    * @param messageId The message ID
    * @returns Promise<number> Number of logs for the message

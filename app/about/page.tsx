@@ -159,6 +159,10 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Autonomous Rooms (Enclaves)</strong> &ndash; private character-to-character salons that run without a human in the loop, bounded by configurable budgets, with cron scheduling, pacing milestones, and post-creation editing</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
             <span><strong>Saquel Ytzama &ndash; Keeper of Secrets</strong> &ndash; SQLCipher-encrypted databases, the Pepper Vault for API keys, instance locking, the <code>.dbkey</code> covenant, and the auto-lock idle timer</span>
           </li>
           <li className="flex items-start gap-2">

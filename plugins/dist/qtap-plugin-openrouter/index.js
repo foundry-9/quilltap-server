@@ -34006,9 +34006,12 @@ var OpenRouterProvider = class {
       content: contentStr,
       finishReason: choice.finishReason || "stop",
       usage: {
-        promptTokens: response.usage?.promptTokens ?? 0,
+        // Exclude cache-read tokens from prompt/total so cached input is not
+        // charged against budgets or cost; cacheUsage still reports them for
+        // display. (OpenRouter normalizes cached tokens into promptTokens.)
+        promptTokens: Math.max(0, (response.usage?.promptTokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? cacheUsage?.cachedTokens ?? 0)),
         completionTokens: response.usage?.completionTokens ?? 0,
-        totalTokens: response.usage?.totalTokens ?? 0
+        totalTokens: Math.max(0, (response.usage?.totalTokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? cacheUsage?.cachedTokens ?? 0))
       },
       raw: response,
       attachmentResults,
@@ -34121,10 +34124,11 @@ var OpenRouterProvider = class {
       };
       return;
     }
+    const responseCacheRead = response.usage?.cacheReadInputTokens ?? response.usage?.cachedTokens ?? 0;
     const usage = response.usage ? {
-      promptTokens: response.usage.inputTokens ?? 0,
+      promptTokens: Math.max(0, (response.usage.inputTokens ?? 0) - responseCacheRead),
       completionTokens: response.usage.outputTokens ?? 0,
-      totalTokens: (response.usage.inputTokens ?? 0) + (response.usage.outputTokens ?? 0)
+      totalTokens: Math.max(0, (response.usage.inputTokens ?? 0) + (response.usage.outputTokens ?? 0) - responseCacheRead)
     } : void 0;
     let sdkReasoning = "";
     if (response.output && Array.isArray(response.output)) {
@@ -34261,6 +34265,7 @@ var OpenRouterProvider = class {
       const decoder = new TextDecoder();
       let buffer = "";
       let usage;
+      let cacheUsage;
       let toolCalls = [];
       let fetchReasoning = "";
       while (true) {
@@ -34303,10 +34308,13 @@ var OpenRouterProvider = class {
               }
             }
             if (chunk.usage) {
+              const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens;
+              cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
+              const cacheRead = cachedTokens ?? 0;
               usage = {
-                promptTokens: chunk.usage.prompt_tokens ?? 0,
+                promptTokens: Math.max(0, (chunk.usage.prompt_tokens ?? 0) - cacheRead),
                 completionTokens: chunk.usage.completion_tokens ?? 0,
-                totalTokens: chunk.usage.total_tokens ?? 0
+                totalTokens: Math.max(0, (chunk.usage.total_tokens ?? 0) - cacheRead)
               };
             }
           } catch (e) {
@@ -34328,6 +34336,7 @@ var OpenRouterProvider = class {
         usage,
         attachmentResults,
         rawResponse,
+        ...cacheUsage ? { cacheUsage } : {},
         ...fetchReasoning ? { reasoningContent: fetchReasoning } : {}
       };
     } catch (error) {

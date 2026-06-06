@@ -5,8 +5,9 @@
  * handlers. The parent owns the only RW SQLCipher connection and the
  * instance lock; the child opens a readonly SQLCipher connection and
  * accumulates write payloads in a per-job buffer that ships back in the
- * `job-result` message. The parent then applies the batch in a single
- * `db.transaction(...)`.
+ * `job-result` message. The parent then applies the batch, partitioned by
+ * target database (main / mount-index / llm-logs), each partition in its own
+ * transaction — see `host/write-partition.ts` and `host/job-dispatcher.ts`.
  */
 
 import type { BackgroundJob } from '@/lib/schemas/types';
@@ -78,9 +79,10 @@ export interface ChildWritePayload {
 }
 
 /**
- * Job finished on the child side. The parent applies `writes` in a single
- * transaction, then marks the job COMPLETED (or FAILED if the transaction
- * threw, or if `ok` is false).
+ * Job finished on the child side. The parent applies `writes` partitioned by
+ * target database (each partition in its own transaction), then marks the job
+ * COMPLETED (or FAILED if a partition the job depends on threw, or if `ok` is
+ * false).
  */
 export interface ChildJobResultMessage {
   type: 'job-result';

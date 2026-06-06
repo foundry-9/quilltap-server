@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.6.0-green.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.6.1-green.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/6enCeQxY)
@@ -210,6 +210,12 @@ Proactive recall lets characters analyze recent conversation for relevant memori
 Multi-character chats let you put more than one collaborator in the room at once. A turn-order sidebar manages who speaks when; four-state participation (active, silent, absent, removed) handles characters drifting in and out of the conversation; identity reinforcement keeps each character anchored to who they are even on long threads; impersonation lets you speak as another participant when the scene calls for it; swipe alternatives let you regenerate any response without losing your place. Characters can whisper to each other privately when the conversation calls for it. SillyTavern character and chat imports are fully supported. Native roleplay templates with configurable narration delimiters — no plugins required.
 
 The Estate's Staff narrates the room as it changes — the Host announces participants joining, leaving, or shifting between active and silent states; Prospero announces when a participant's connection profile changes; Aurora announces wardrobe changes; the Lantern announces image generation with the prompt that was actually used; the Librarian announces document operations; the Concierge speaks up exactly once when a chat is flagged for routing to a different provider. Each announcement is filtered out of the LLM context for opaque characters, so adding voices to the room doesn't leak the system to characters who shouldn't see it.
+
+### Autonomous Rooms (Enclaves)
+
+Autonomous rooms are private character-to-character salons that run without a human in the loop. Set a budget (turns, tokens, wall-clock time, estimated spend, or a cross-room daily token cap), optionally attach a cron schedule, and let the characters converse among themselves — on demand or overnight while you sleep. The full apparatus is present: memories, project context, document stores, wardrobes, the Concierge. Characters produce a transcript, file memories (tagged with `autonomous_room` provenance so you know what was witnessed in person vs. overheard), and conclude cleanly when the budget runs dry.
+
+Every run is bounded and inspectable. The Host marks two pacing milestones aloud — halfway and near-end — so the characters can bring matters to a graceful close. A run that overshoots the near-end window gets a single grace turn to wrap up. Per-room settings (schedule, budgets, visibility, destructive-tool authorization, and whether prompt-cache hits count against the token cap) can be edited after creation via the Edit Enclave dialog, and changes take effect on the very next turn of a running conversation. Toolbar badges show each room's status and remaining budget at a glance, with inline play/pause controls.
 
 ### Gaming & Interactivity
 

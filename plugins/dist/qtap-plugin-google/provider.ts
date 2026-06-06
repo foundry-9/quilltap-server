@@ -618,9 +618,12 @@ export class GoogleProvider implements TextProvider {
         content: text,
         finishReason,
         usage: {
-          promptTokens: usage?.promptTokenCount ?? 0,
+          // Exclude cache-read tokens from prompt/total so cached input is not
+          // charged against budgets or cost; cacheUsage still reports them for
+          // display. (Gemini folds cachedContentTokenCount into promptTokenCount.)
+          promptTokens: Math.max(0, (usage?.promptTokenCount ?? 0) - (cachedTokens ?? 0)),
           completionTokens: usage?.candidatesTokenCount ?? 0,
-          totalTokens: usage?.totalTokenCount ?? 0,
+          totalTokens: Math.max(0, (usage?.totalTokenCount ?? 0) - (cachedTokens ?? 0)),
         },
         // Convert SDK response class to plain object for Zod validation
         raw: {
@@ -797,9 +800,10 @@ export class GoogleProvider implements TextProvider {
         content: finalContent,
         done: true,
         usage: {
-          promptTokens: usage?.promptTokenCount ?? 0,
+          // Cache-read tokens excluded from prompt/total (see sendMessage).
+          promptTokens: Math.max(0, (usage?.promptTokenCount ?? 0) - (cachedTokens ?? 0)),
           completionTokens: usage?.candidatesTokenCount ?? 0,
-          totalTokens: usage?.totalTokenCount ?? 0,
+          totalTokens: Math.max(0, (usage?.totalTokenCount ?? 0) - (cachedTokens ?? 0)),
         },
         attachmentResults,
         // Convert SDK response class to plain object for Zod validation

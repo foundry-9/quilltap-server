@@ -363,6 +363,11 @@ exports[`tool definitions: derived OpenAI parameters docListFiles: parameters sn
       "description": "Optional: list files within a specific subfolder path. Allows exploring directory structure.",
       "type": "string",
     },
+    "includeAutomaticImages": {
+      "default": false,
+      "description": "Include auto-generated avatar/background images (from character-avatars/story-backgrounds). Default false.",
+      "type": "boolean",
+    },
     "mount_point": {
       "description": "Optional: restrict listing to a specific mount point. Without this, lists all mount points.",
       "type": "string",

@@ -324,6 +324,28 @@ describe('POST /api/v1/chats — continuation into autonomous room', () => {
     const createArg = (mockRepos.chats.create as jest.Mock).mock.calls[0][0] as any
     expect(createArg.chatType).toBe('autonomous')
     expect(createArg.runState).toBe('idle')
+    // Budget counting mode defaults to excluding cache hits (1) when unset.
+    expect(createArg.budgetExcludeCacheHits).toBe(1)
+  })
+
+  it('persists budgetExcludeCacheHits=0 when the room opts into counting all tokens', async () => {
+    const body = {
+      title: 'Count every token',
+      chatType: 'autonomous',
+      budgetExcludeCacheHits: false,
+      participants: [
+        { type: 'CHARACTER', characterId: CHAR_A_ID, connectionProfileId: PROFILE_ID, controlledBy: 'llm' },
+        { type: 'CHARACTER', characterId: CHAR_B_ID, connectionProfileId: PROFILE_ID, controlledBy: 'llm' },
+      ],
+    }
+
+    const res = await POST(createMockRequest(body))
+    expect(res.status).toBe(201)
+
+    expect(mockRepos.chats.create).toHaveBeenCalledTimes(1)
+    const createArg = (mockRepos.chats.create as jest.Mock).mock.calls[0][0] as any
+    expect(createArg.chatType).toBe('autonomous')
+    expect(createArg.budgetExcludeCacheHits).toBe(0)
   })
 
   it('still rejects autonomous rooms without at least two LLM characters even with continuation', async () => {

@@ -2,7 +2,15 @@
  * Tests for the AI Import Service helpers
  */
 
-import { stripCodeFences, parseLLMJson, repairTruncatedJson } from '@/lib/services/ai-import.service';
+import {
+  stripCodeFences,
+  parseLLMJson,
+  repairTruncatedJson,
+  escapeControlCharsInStrings,
+  assembleQtapExport,
+  restampStructuralFields,
+} from '@/lib/services/ai-import.service';
+import { validateQtapExport } from '@/lib/validation/qtap-schema-validator';
 
 describe('ai-import.service', () => {
   describe('stripCodeFences', () => {
@@ -70,6 +78,43 @@ describe('ai-import.service', () => {
     it('handles JSON with unicode characters', () => {
       const result = parseLLMJson<{ name: string }>('{"name": "Ren\\u00e9e"}');
       expect(result.name).toBe('Ren\u00e9e');
+    });
+
+    it('parses JSON with a raw newline inside a string literal (regression: first_message step)', () => {
+      // The LLM emitted a literal newline inside the value instead of \\n \u2014
+      // JSON.parse would throw "Bad control character in string literal".
+      const input = '{"firstMessage": "Hello there.\nHow do you do?"}';
+      const result = parseLLMJson<{ firstMessage: string }>(input);
+      expect(result.firstMessage).toBe('Hello there.\nHow do you do?');
+    });
+
+    it('parses JSON with raw tabs and carriage returns inside strings', () => {
+      const input = '{"a": "x\ty", "b": "line1\r\nline2"}';
+      const result = parseLLMJson<{ a: string; b: string }>(input);
+      expect(result.a).toBe('x\ty');
+      expect(result.b).toBe('line1\r\nline2');
+    });
+
+    it('leaves structural whitespace between tokens untouched', () => {
+      const input = '{\n  "name": "Maya",\n  "age": 30\n}';
+      const result = parseLLMJson<{ name: string; age: number }>(input);
+      expect(result).toEqual({ name: 'Maya', age: 30 });
+    });
+  });
+
+  describe('escapeControlCharsInStrings', () => {
+    it('escapes a raw newline only when inside a string', () => {
+      expect(escapeControlCharsInStrings('{"a": "x\ny"}')).toBe('{"a": "x\\ny"}');
+    });
+
+    it('does not touch newlines outside of strings', () => {
+      const input = '{\n"a": 1\n}';
+      expect(escapeControlCharsInStrings(input)).toBe(input);
+    });
+
+    it('respects escaped quotes when tracking string boundaries', () => {
+      const input = '{"a": "she said \\"hi\\"\nthen left"}';
+      expect(escapeControlCharsInStrings(input)).toBe('{"a": "she said \\"hi\\"\\nthen left"}');
     });
   });
 
@@ -167,6 +212,139 @@ describe('ai-import.service', () => {
       const input = '```json\n{"patterns": [{"name": "verbose"';
       const result = parseLLMJson<{ patterns: Array<{ name: string }> }>(input);
       expect(result.patterns[0].name).toBe('verbose');
+    });
+  });
+
+  describe('assembleQtapExport', () => {
+    it('omits optional text fields a step did not produce instead of writing null', () => {
+      const exportData = assembleQtapExport(
+        {
+          // first_message intentionally absent (the step failed for Maya Kapoor)
+          character_basics: { name: 'Maya Kapoor', identity: 'A botanist of repute.' },
+          system_prompts: [{ name: 'Main', content: 'You are Maya.', isDefault: true }],
+        },
+        false,
+        false,
+        '4.6.0'
+      );
+      const character = (exportData.data as { characters: Record<string, unknown>[] }).characters[0];
+      expect('personality' in character).toBe(false);
+      expect('firstMessage' in character).toBe(false);
+      expect('exampleDialogues' in character).toBe(false);
+      expect('manifesto' in character).toBe(false);
+      // Fields that were produced are kept.
+      expect(character.name).toBe('Maya Kapoor');
+      expect(character.identity).toBe('A botanist of repute.');
+    });
+
+    it('produces a qtap-schema-valid export when a content step failed (regression: Maya Kapoor)', () => {
+      const exportData = assembleQtapExport(
+        {
+          character_basics: { name: 'Maya Kapoor', identity: 'A botanist of repute.' },
+          system_prompts: [{ name: 'Main', content: 'You are Maya.', isDefault: true }],
+        },
+        false,
+        false,
+        '4.6.0'
+      );
+      const result = validateQtapExport(exportData);
+      expect(result.errors).toEqual([]);
+      expect(result.valid).toBe(true);
+    });
+
+    it('emits schema-complete wardrobe items (componentItemIds + replace) so import does not crash', () => {
+      // Regression: wardrobe.create reads componentItemIds.length in the vault
+      // writer; an assembled item that omitted it threw
+      // "Cannot read properties of undefined (reading 'length')" at import time.
+      const exportData = assembleQtapExport(
+        {
+          character_basics: { name: 'Maya Kapoor' },
+          wardrobe_items: [{ title: 'Wedding Guest Sari', description: 'A teal silk sari.', types: ['top', 'bottom'] }],
+        },
+        false,
+        false,
+        '4.6.0'
+      );
+      const item = (exportData.data as { characters: Array<{ wardrobeItems: Record<string, unknown>[] }> })
+        .characters[0].wardrobeItems[0];
+      expect(item.componentItemIds).toEqual([]);
+      expect(item.replace).toBe(false);
+      expect(item.title).toBe('Wedding Guest Sari');
+    });
+
+    it('stamps id/createdAt/updatedAt on every system prompt', () => {
+      const exportData = assembleQtapExport(
+        {
+          character_basics: { name: 'Maya Kapoor' },
+          system_prompts: [{ name: 'Main', content: 'You are Maya.', isDefault: true }],
+        },
+        false,
+        false,
+        '4.6.0'
+      );
+      const sp = (exportData.data as { characters: Array<{ systemPrompts: Record<string, unknown>[] }> })
+        .characters[0].systemPrompts[0];
+      expect(typeof sp.id).toBe('string');
+      expect(typeof sp.createdAt).toBe('string');
+      expect(typeof sp.updatedAt).toBe('string');
+    });
+  });
+
+  describe('restampStructuralFields', () => {
+    const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const now = '2026-01-01T00:00:00.000Z';
+
+    it('restores nested ids and timestamps an LLM repair step stripped', () => {
+      // Shape a repair model might return — content kept, scaffolding dropped.
+      const data = {
+        characters: [
+          {
+            id: '11111111-1111-4111-8111-111111111111',
+            name: 'Maya Kapoor',
+            systemPrompts: [{ name: 'Main', content: 'You are Maya.', isDefault: true }],
+            scenarios: [{ title: 'Default', content: 'A glasshouse at dawn.' }],
+            physicalDescription: { shortPrompt: 'green eyes' },
+            wardrobeItems: [{ title: 'Linen apron', types: ['top'] }],
+          },
+        ],
+        memories: [{ content: 'x', summary: 'x', keywords: [], importance: 0.5 }],
+      };
+
+      const fixes = restampStructuralFields(data as never, now);
+      expect(fixes).toBeGreaterThan(0);
+
+      const character = data.characters[0] as Record<string, any>;
+      expect(character.systemPrompts[0].id).toMatch(UUID_LIKE);
+      expect(character.systemPrompts[0].createdAt).toBe(now);
+      expect(character.systemPrompts[0].updatedAt).toBe(now);
+      expect(character.scenarios[0].id).toMatch(UUID_LIKE);
+      expect(character.physicalDescription.id).toMatch(UUID_LIKE);
+      expect(character.physicalDescription.name).toBe('AI Generated');
+      expect(character.wardrobeItems[0].id).toMatch(UUID_LIKE);
+      expect(character.wardrobeItems[0].characterId).toBe(character.id);
+      expect((data.memories[0] as Record<string, unknown>).id).toMatch(UUID_LIKE);
+    });
+
+    it('is a no-op when the scaffolding is already present', () => {
+      const data = {
+        characters: [
+          {
+            id: '11111111-1111-4111-8111-111111111111',
+            name: 'Maya Kapoor',
+            systemPrompts: [
+              {
+                id: '22222222-2222-4222-8222-222222222222',
+                name: 'Main',
+                content: 'You are Maya.',
+                isDefault: true,
+                createdAt: now,
+                updatedAt: now,
+              },
+            ],
+          },
+        ],
+      };
+      expect(restampStructuralFields(data as never, now)).toBe(0);
     });
   });
 });

@@ -443,7 +443,7 @@ CREATE TABLE "chats" (
   -- 4.6 Private Character Rooms: budget caps, schedule, run lifecycle, and visibility
   -- (populated only when chatType = 'autonomous'; NULL on other chats)
   "budgetMaxTurns" INTEGER DEFAULT NULL,
-  "budgetMaxTokens" INTEGER DEFAULT NULL,
+  "budgetMaxTokens" INTEGER DEFAULT NULL,   -- per-run token cap; counts cache-miss + output by default (see budgetExcludeCacheHits)
   "budgetMaxWallClockMs" INTEGER DEFAULT NULL,
   "budgetEstimatedSpendCapUSD" REAL DEFAULT NULL,
   "scheduleCron" TEXT DEFAULT NULL,
@@ -459,7 +459,9 @@ CREATE TABLE "chats" (
   "runPausedAccumMs" INTEGER DEFAULT 0,    -- cumulative ms spent paused; wall-clock budget = (now - runStartedAt) - runPausedAccumMs (keeps runStartedAt as the token-window anchor)
   "runTurnsConsumed" INTEGER DEFAULT NULL,
   "runTokensConsumed" INTEGER DEFAULT NULL,
+  "runMilestonesAnnounced" INTEGER DEFAULT 0, -- added in 4.6.1 (add-autonomous-run-milestones-v1): per-run bitmask of pacing nudges the Host has posted (bit 0 = halfway, bit 1 = near-end/10% remaining); reset to 0 at each run start
   "runDestructiveToolsAllowed" INTEGER DEFAULT 0,
+  "budgetExcludeCacheHits" INTEGER DEFAULT 1, -- 1 = budget counts only billable cache-miss + output tokens; 0 = count every token incl. prompt-cache hits (added back from cacheUsage)
   "runVisibility" TEXT DEFAULT NULL,       -- 'owner_only' | 'household' | 'open'; NULL = inherit user default
   -- Aurora Core whisper per-chat overrides (NULL = inherit from character → global)
   "coreWhisperEnabled" INTEGER DEFAULT NULL,
@@ -1247,6 +1249,7 @@ CREATE TABLE "llm_logs" (
   "rawProviderUsage" TEXT,
   "requestHashes" TEXT,
   "durationMs" INTEGER,
+  "autonomousRunId" TEXT,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
@@ -1255,7 +1258,10 @@ CREATE INDEX "idx_llm_logs_chatId" ON "llm_logs" ("chatId");
 CREATE INDEX "idx_llm_logs_createdAt" ON "llm_logs" ("createdAt" DESC);
 CREATE INDEX "idx_llm_logs_type" ON "llm_logs" ("type");
 CREATE INDEX "idx_llm_logs_userId" ON "llm_logs" ("userId");
+CREATE INDEX "idx_llm_logs_autonomousRunId" ON "llm_logs" ("autonomousRunId");
 ```
+
+`autonomousRunId` is stamped on every LLM call made within an autonomous-room turn (the turn plus its agent-mode tool sub-calls), via an `AsyncLocalStorage` context the turn handler establishes. It is `NULL` for all non-autonomous calls. The autonomous-room turn handler sums `usage.totalTokens` for a run by this column to enforce the per-run token budget — superseding the older timestamp-window sum, which double-counted overlapping chat activity and background housekeeping. Added by migration `add-llm-logs-autonomous-run-id-column-v1`.
 
 ### SQLite statistics tables (auto-managed)
 

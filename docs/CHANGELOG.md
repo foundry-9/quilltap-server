@@ -2,6 +2,172 @@
 
 ## Recent Changes
 
+### 4.6.1
+
+#### Removed development debug logging from the autonomous-room work
+
+Stripped the seven `logger.debug` tracing statements added during the autonomous-room debugging push, plus the small bits of scaffolding that existed only to feed them. No behavior change.
+
+- `context-builder.service.ts`: removed the "Tool result elision summary" log (fired on every context build) and its dead `elided`/`kept` counters.
+- `autonomous-room-turn.ts`: removed the two context-summary fold trace logs (and the now-empty `else` branch).
+- `autonomous-room.service.ts`: removed the "flipping row to running" and "edit no-op (empty patch)" logs.
+- `text-handlers.ts`: removed the `doc_list_files` "filtered entries from results" log and its `cruftDropped`/`autoImageDropped` counters; the filtering itself is unchanged.
+- `ai-import.service.ts`: removed the "Re-stamped structural fields" log; kept the in-place `restampStructuralFields` call, dropped the unused return capture.
+
+Operational `info`/`warn`/`error` logging and client-side error handling are left intact.
+
+#### Autonomous rooms grant a final "grace" turn when the budget is hit without warning
+
+The near-end (90%) Host nudge is only sampled at turn boundaries, so a single turn whose spend exceeds 10% of a small budget vaults the entire [90%, 100%) band — the run exhausts with the company never having been told to wrap up. (This is exactly what happened on a 100k-token room: turns of ~25k stepped the budget 75% → 100% in one go, so `nearing-end` never fired.) Now, when a run reaches its budget and the near-end nudge never fired, the Host announces a grace round and the run is allowed exactly **one** more turn (over budget) so the scene can close gracefully. If the near-end nudge *did* fire earlier in the run, it ends with no grace turn — the company was already warned.
+
+Implemented in `autonomous-room-turn.ts` with a new `MILESTONE_GRACE` bit on the existing `runMilestonesAnnounced` bitmask (no schema change). On budget exhaustion at either the pre-turn or post-turn checkpoint: if neither the near-end nor grace bit is set, the handler sets the grace bit, posts an `autonomous-room-grace` Host announcement, and re-enqueues one turn instead of ending. That turn runs over budget (the pre-turn check lets it through because the grace bit is set) and ends the run at its own post-turn check. Exactly one grace turn per run.
+
+The budget-caps form (`AutonomousRoomCard`, shown in both the New Room flow and the Edit Enclave modal) now explains that a cap is a soft boundary, not a hard wall: a run that overruns its allowance without a near-end warning is granted one last grace turn to close gracefully.
+
+#### Fix: autonomous-room conversation summaries now actually persist
+
+Autonomous rooms run their turns in the forked job child, where repository writes are buffered and flushed only at the end of the job. The rolling-window context-summary fold was fired fire-and-forget, so its writes settled after the flush and were silently dropped — the fold anchor (`lastSummaryTurn`) never advanced past its first value, and a long room re-sent nearly its entire history on every turn. (Observed: a room at 429 character turns still pinned to `lastSummaryTurn=5`, `compactionGeneration=1`.)
+
+- The finalizer (`message-finalizer.service.ts`) now skips the fire-and-forget summary check for `chatType: 'autonomous'`.
+- The turn handler (`autonomous-room-turn.ts`) instead runs the fold inline and **awaited**, after the `runWithAutonomousRunId` scope closes and before enqueuing the next turn. Awaiting keeps the fold's writes inside the job's write buffer so they reach the parent; running it outside the run-id scope means the fold's cheap-LLM tokens are **not** billed against the per-run token budget (housekeeping, not turn spend). The next turn then sees the freshly compacted room.
+- `checkAndGenerateSummaryIfNeeded` gains an `{ awaitFold }` option; interactive chats keep the fire-and-forget path unchanged.
+
+#### Long chats no longer re-bill stale tool results every turn
+
+Persisted tool-result messages (e.g. `read_conversation`, `doc_list_files`) were re-injected into the LLM context verbatim on every turn, and the rolling summary never folded them out (the fold anchors only USER/character messages). A single large result — a 587 KB conversation dump, a 1,100-file listing — was re-sent and re-billed indefinitely, which is what blew an autonomous room's per-run token budget in one turn.
+
+`buildConversationMessages` (`context-builder.service.ts`) now stubs any tool result older than 3 turns (counted by ASSISTANT messages after it), keeping the tool name and a short arguments preview: `[Tool Result: <tool>] (args: …) — result elided (>3 turns old); call again to re-read.` The most recent 3 turns stay verbatim. This is a context-assembly transform only: the stored message is untouched, the Salon UI still shows the full result, and summary/memory inputs (which skip tool rows) are unaffected. Applies to all chat types.
+
+#### doc_list_files now hides auto-generated images and OS cruft
+
+`doc_list_files` listings filtered nothing, so they surfaced `.DS_Store` and similar, plus every auto-generated avatar/background image — bloating the tool result (and, re-billed every turn, the budget).
+
+- Hidden OS files (`.`-prefixed names, plus `Thumbs.db` / `desktop.ini` / `__MACOSX`) are now always filtered out.
+- Auto-generated images (image files under a `character-avatars` or `story-backgrounds` path segment) are filtered out by default. A new `includeAutomaticImages` flag (default `false`) on the tool brings them back. Saved images live elsewhere (character photo albums) and are unaffected.
+- The filter is a shared post-collection pass covering both filesystem- and database-backed stores (`text-handlers.ts`); the helpers and folder/extension constants live in `lib/files/folder-utils.ts`. The Projects file API has its own image categorization and is unchanged.
+
+#### Autonomous-room start/resume now reflect "running" immediately
+
+Starting or resuming an autonomous room ("enclave") now flips the room to **running** the instant you click the control, instead of lagging until the first turn job comes around. Previously a manual or scheduled start parked the room at `idle` and let the turn handler promote it to `running` on the first turn — so if a turn for another room was already in flight, the badge/header could sit on the play icon (looking like nothing happened) for up to a minute.
+
+- Server: `startAutonomousRoomManually` and the schedule tick now write `runState: 'running'` (counters zeroed, `runStartedAt` stamped) synchronously at request time and post the Host "run begun" banner, via a shared run-start contract in the new `lib/background-jobs/handlers/autonomous-room-announce.ts` (`runStartPatch` + `postRunStartAnnouncement`). The turn handler keeps a defensive `idle → running` fallback for any pre-upgrade turn job still carrying an `idle` row. `runStartedAt` now anchors the wall-clock budget from the button press (including any brief queue wait before the first turn).
+- If the turn enqueue fails after the row has flipped, the manual path rolls the row to `error` and the scheduled path rolls it back to `idle`, so the badge never falsely shows `running` with nothing in flight.
+- Client: the global autonomous-room badges and the Settings → Chat management card now update optimistically (SWR `optimisticData` + `rollbackOnError`), so the icon/label flip on click rather than after the POST + revalidation round-trip.
+
+#### Fix: autonomous-room token counter now resets on a fresh run
+
+A manually-started or scheduled autonomous-room run now starts its per-run token tally from zero, instead of carrying over the previous run's total. A *resumed* (paused → running) run still keeps the count it had, as intended.
+
+The post-turn token bookkeeping in `autonomous-room-turn.ts` floored `runTokensConsumed` against `post.runTokensConsumed` — a re-read served from the forked job child's readonly connection. On the first turn of a fresh run, the idle→running `runTokensConsumed: 0` reset is still buffered in the child, so that re-read returned the *previous* run's total; `Math.max(thisRunTokens, previousRunTokens)` then carried the stale count forward. A room with `budgetMaxTokens` set would trip `budgetExhausted` on the first turn of its second-or-later run. Fixed by flooring against the local `chat` snapshot (reset to 0 on idle→running for a fresh run, preserved for a resumed run) — the same pin the turn counter already used. No schema change; same monotonic-floor and cache-hit-counting behavior otherwise.
+
+#### Autonomous rooms ("enclaves") can now be edited after creation
+
+The autonomous-settings form from the New Room flow can now be reused to edit an existing autonomous room. Editable: title, schedule cron, catch-up freshness window, the four budget caps (turns/tokens/wall-clock/spend), the "count only the dear tokens" cache-hit toggle, visibility, and destructive-tool authorization. The participant roster and per-character connection profiles/system prompts are not edited here — those stay on the Participants sidebar card.
+
+Two entry points open the same **Edit Enclave** modal:
+
+- An **Edit** button per room in the *Scheduled Autonomous Rooms* card at `/settings?tab=chat`.
+- An **Edit Enclave** button in the *Organize* card of the Salon chat sidebar, shown only when the open chat is an autonomous room.
+
+Edits apply instantly: a running run honors new budget caps / cache mode / destructive flag on its next turn (the turn handler reads them fresh each turn), and visibility applies on the next Salon list fetch — no run restart. Changing the cron recomputes `scheduleNextRunAt`; clearing it returns the room to manual-only; an invalid cron is rejected (400) and leaves the schedule untouched. Lowering a cap below current consumption ends a running run on its next turn (intended). Setting a title also pins `isManuallyRenamed` so the auto-titler leaves it alone.
+
+Implementation:
+
+- New `updateAutonomousRoomSettings(chatId, userId, patch)` in `lib/services/chat-message/autonomous-room.service.ts`: guards `chatType === 'autonomous'`, recomputes the cron next-run, clamps `runDestructiveToolsAllowed` to 0 when the user-level policy is `always_refuse`, writes via `repos.chats.update` (never touches run-state/counters), debug-logs the change. Tri-state patch semantics: `undefined` = leave, `null` = clear, value = set.
+- New `?action=update-settings` POST on `app/api/v1/chats/[id]/autonomous-room/route.ts` with a Zod schema mirroring the autonomous block of `createChatSchema` (caps/cron/visibility made `.nullish()` so they can be cleared). Values are in milliseconds, like the create payload.
+- `chatType` added to the `GET /api/v1/chats/[id]` response (and the Salon `Chat` type) to gate the sidebar button.
+- `AutonomousRoomCard` extracted from `NewChatForm.tsx` into `components/new-chat/AutonomousRoomCard.tsx` and reused by the new `components/new-chat/EditEnclaveModal.tsx`. The modal converts ms ⇄ hours/minutes at its API boundary.
+- Settings card (`components/tools/autonomous-rooms-card.tsx`) refreshes its SWR list after a save; the Salon page refetches the chat so the header title updates.
+
+#### Autonomous rooms now get Host pacing announcements at the halfway and near-end marks
+
+An autonomous-room run now posts two Host announcements as it approaches its budget, so the characters can pace themselves and wrap up before the run stops:
+
+- **Halfway** — when the binding budget crosses 50%, the Host notes that the gathering has reached its midpoint and nudges the conversation toward what matters most.
+- **Near the end** — when 10% of the budget remains (90% consumed), the Host warns that the gathering will soon close and asks the participants to say what most needs saying.
+
+The "binding" budget is whichever configured cap is closest to exhaustion (the one that will halt the run first) — turns, tokens, wall-clock, or the cross-room daily user-token cap; the announcement phrasing adapts to it. Each milestone fires at most once per run. The daily cap *pauses* the room rather than ending the run, so its near-end nudge is framed as "finish for now — the company will reconvene" instead of a final close; the characters are still told to wrap up the present scene. The estimated-spend cap is not counted (it is not enforced in the run loop today).
+
+Each announcement carries both a Host-voiced body (shown to the operator in the Salon) and a persona-free `opaqueContent` body that is swapped into the characters' LLM context in opaque-anywhere rooms — so the steering reaches the characters whether or not they can see the Host by name.
+
+Implementation:
+
+- New `runMilestonesAnnounced` column on `chats` (`INTEGER DEFAULT 0`), a per-run bitmask (bit 0 = halfway, bit 1 = near-end), added by migration `add-autonomous-run-milestones-v1`. Reset to 0 at each run start. Added to `ChatMetadataSchema`/`ChatMetadataBaseSchema`, the qtap export schema, and DDL.
+- `autonomous-room-turn` computes the binding-budget fraction post-turn (across the per-run turns/tokens/wall-clock caps and the daily user-token cap) and fires the appropriate milestone once, recording it in the bitmask. A turn that vaults straight past 50% to ≥90% fires only the near-end nudge and marks both bits. When the daily cap is the binding budget the nudge uses pause-framed phrasing.
+- `postAutonomousRoomAnnouncement` now accepts an `opaqueContent` body; the milestone messages populate it.
+- Salon UI: display labels and importance tiers added for the `autonomous-room-*` system-message kinds (`start`, `end`, `paused`, `halfway`, `nearing-end`).
+
+#### Fix: wall-clock-budgeted autonomous rooms could falsely exhaust after one turn on a repeat run
+
+The post-turn budget check read the wall-clock anchor (`runStartedAt`) from a re-read of the chat row. On the first turn of a fresh run, the idle→running reset that stamps `runStartedAt = now` is still buffered in the forked job child, so the re-read returned the *previous* run's start — yielding a huge elapsed time that tripped `budget:wall_clock` and ended the run after a single turn. The check now pins `runStartedAt` and `runPausedAccumMs` from the local in-handler snapshot (which carries the fresh reset), mirroring how the turn/token counters are already pinned. The pre-turn check was already correct.
+
+#### Autonomous-room token budgets can now optionally count all tokens (including prompt-cache hits)
+
+The exclusion of prompt-cache hits from the autonomous-room token budget (see below) is now a per-room choice rather than a fixed rule. A new **Count only the dear tokens** checkbox in the autonomous-room creation card controls how the per-run token cap (`budgetMaxTokens` / `runTokensConsumed`) is tallied:
+
+- **Checked (default):** count only the billable cache-miss input + completion tokens — the expensive ones. This preserves the cache-excluding behavior.
+- **Unchecked:** count every token, including prompt-cache hits, the way budgets behaved before cache-read normalization.
+
+Implementation:
+
+- New `budgetExcludeCacheHits` column on `chats` (`INTEGER DEFAULT 1`), added by migration `add-autonomous-budget-cache-mode-v1`. Existing rooms default to 1 (exclude cache hits). Added to `ChatMetadataSchema`/`ChatMetadataBaseSchema`, the chat-creation API, the autonomous-room status response, the qtap export schema, and DDL.
+- `LLMLogsRepository.getTotalTokenUsageForRun` takes a new `{ includeCacheHits }` option. The provider plugins strip cache reads from `usage.totalTokens`, so when a room opts into counting all tokens the repository adds them back from each row's `cacheUsage.cacheReadInputTokens`.
+- `autonomous-room-turn` reads the per-room flag and passes `includeCacheHits` accordingly. The daily user-token cap remains cache-excluded (it is a cross-room aggregate with no single per-room flag governing it).
+- New-chat form: `budgetExcludeCacheHits` added to the autonomous form state, defaulting to checked.
+
+#### Fix: AI character import ("Summon From Lore") could fail to save the generated character
+
+A character generated by AI import would assemble and validate but then fail at import time with `systemPrompts.0.createdAt: expected string, received undefined`, leaving nothing saved. Three compounding causes in `lib/services/ai-import.service.ts`:
+
+1. **Assembly wrote `null` for optional text fields.** `personality`, `firstMessage`, `exampleDialogues`, `title`, `identity`, `description`, and `manifesto` were assigned an explicit `null` when a step omitted them (or failed). The qtap export schema types these as non-nullable strings, so a present-but-`null` value failed validation. These fields are now omitted entirely when there is no usable string (the DB schema treats them as nullable/optional, so the imported character is identical).
+2. **The LLM repair loop stripped structural scaffolding.** When validation failed, the repair step re-sent the whole `characters` section to the model and replaced it wholesale; the model dropped the `id`/`createdAt`/`updatedAt` on nested `systemPrompts` (and could do the same to `scenarios`, `physicalDescription`, `wardrobeItems`, and memories). The qtap schema does not enforce those nested fields but the DB schemas require them. A new `restampStructuralFields` pass now re-applies that scaffolding after assembly/repair so a repaired export still imports cleanly.
+3. **`parseLLMJson` rejected raw control characters.** Models routinely emit a literal newline (or tab) inside a JSON string instead of `\n`, which made the `first_message` and `chats` steps fail with "Bad control character in string literal." `parseLLMJson` now escapes in-string control characters as a repair step before re-parsing.
+
+Net effect: AI import succeeds where it previously died, and a character whose individual sub-steps fail still imports with the fields that did generate.
+
+#### Fix: AI-imported wardrobe items failed to import ("Cannot read properties of undefined (reading 'length')")
+
+Even after the character itself imported, every AI-generated wardrobe item was rejected. `assembleQtapExport` built wardrobe items without `componentItemIds`/`replace`, and `wardrobeRepository.create` spread the caller's data into the new item without applying the schema's array/flag defaults — so `undefined` reached the vault writer's `componentItemIds.length` check and threw.
+
+- `lib/database/repositories/wardrobe.repository.ts`: `create` now defaults `componentItemIds` (`[]`) and `replace` (`false`) at the construction chokepoint, so any caller handing it a partial item is safe.
+- `lib/services/ai-import.service.ts`: assembled wardrobe items now include `componentItemIds: []` and `replace: false`, matching the wardrobe schema.
+
+#### Background-job writes are now isolated per database, and concurrent doc-store folder creates reconcile instead of failing
+
+Completes the deferred hardening from the autonomous-room poison-write fix below. A background job buffers all of its repository writes into one batch the parent applies, but those writes can target three separate SQLite databases (the main DB, the dedicated mount-index/doc-store DB, and the llm-logs DB). The applier used to wrap the whole batch in a single transaction on the *main* connection, so a doc-store write failure rolled back unrelated main-DB chat/run-state writes while any doc-store rows already written leaked (they auto-committed outside that transaction).
+
+- **Per-database partitioned apply.** The parent now splits each batch by target database and commits each partition in its own transaction on its own connection (`lib/background-jobs/host/write-partition.ts` + the rewritten applier in `job-dispatcher.ts`). A failure in one database can no longer roll back or leak into another.
+- **Ordering and failure policy by job type.** Idempotent handlers apply secondary partitions (mount-index, llm-logs) before main so a secondary failure prevents the main commit (e.g. a mount-chunk embedding write that fails won't let the chunk be marked embedded), and any partition failure fails the job so the existing retry path re-runs it. Autonomous-room turns are not idempotent, so their main-DB chat/run-state partition commits first and authoritatively; secondary doc-store writes are then applied best-effort, and a genuine doc-store failure is rolled back, logged, and dropped rather than discarding the committed turn.
+- **Cross-job concurrent folder create.** When two jobs concurrently create the same doc-store folder path, the second create now hits the `(mountPointId, parentId, name)` unique index at apply time. The applier catches that, resolves to the already-committed folder, and remaps the discarded buffered folder id across the rest of that batch's writes (file links, child folders) so they point at the surviving row. Applies are serialized, so this lookup is race-free. The earlier fix only de-duplicated folder creates *within* a single job.
+
+#### Cache-read (prompt-cache hit) tokens no longer count against autonomous-room budgets
+
+Prompt-cache hits are now excluded from the normalized token usage every provider plugin reports. Cached input therefore no longer counts toward an autonomous room's per-run token cap (`budgetMaxTokens`), the daily user-token cap (`dailyTokenBudget`), or the per-chat token/cost aggregates.
+
+The reconciliation lives in the provider plugins, not the app. Each provider reports usage differently — Anthropic reports `input_tokens` separately from `cache_read_input_tokens`, while the OpenAI family folds `cached_tokens` into the prompt-token count — so each plugin subtracts cache reads at the source according to its own convention. The app's budget code is unchanged: it already sums `usage.totalTokens`, which now excludes cache reads everywhere.
+
+- `qtap-plugin-anthropic` (1.0.43): already excluded cache reads from `promptTokens`/`totalTokens` (input_tokens is reported separately from cache reads); only a clarifying comment was added so the convention isn't "fixed" away later.
+- `qtap-plugin-openai` (1.0.49), `qtap-plugin-grok` (1.0.40), `qtap-plugin-z-ai` (1.1.11): subtract `input_tokens_details.cached_tokens` / `prompt_tokens_details.cached_tokens` from prompt and total.
+- `qtap-plugin-google` (1.1.37): subtract `cachedContentTokenCount` from prompt and total.
+- `qtap-plugin-deepseek` (1.0.10): subtract `prompt_cache_hit_tokens` from prompt and total.
+- `qtap-plugin-openrouter` (1.0.45): subtract cache-read tokens across all three usage paths (non-streaming, Responses streaming, and chat-completions streaming — the last previously surfaced no cache data at all and now does).
+- `cacheUsage` (the cache-read / cache-creation token counts) and `rawProviderUsage` are reported unchanged for display and diagnostics; only `usage.promptTokens` / `usage.totalTokens` changed.
+- Caveat: the cost estimator has no cache-discount tier, so for the OpenAI-family providers the estimated cost and per-chat token totals now omit cache-read tokens entirely, rather than charging them at the full input rate as before.
+- Docs: schema doc-comments in `lib/schemas/chat.types.ts` (`budgetMaxTokens`, `runTokensConsumed`) and `lib/schemas/settings.types.ts` (`dailyTokenBudget`); user help in `help/autonomous-rooms.md`.
+
+#### Fix: autonomous rooms could freeze mid-run, and per-run token budgets over-counted
+
+Two related bugs in autonomous rooms. A scheduled room would stop advancing and sit in `running` forever, and its per-run token budget was being charged for spend that wasn't part of the run.
+
+Root causes:
+1. **Poison write wedged the room.** Each autonomous turn runs in the forked job child, which buffers all of its writes — the assistant message, the turn/token counters, and the run-state transition — into one batch the parent applies atomically. When a character created a document-store folder that already existed within the same turn, the duplicate `docMountFolders.create` hit a unique constraint at apply time and rolled back the *entire* batch, including the run-state transition. The single-attempt job was marked DEAD and the chat stayed `running` with no turn in flight. `ensureFolderPath` was already written to be idempotent, but its existence-check and conflict-catch are both defeated in the child: reads use a readonly connection (no read-your-writes) and the real INSERT (and its conflict) is deferred to the parent.
+2. **Per-run token budget counted the wrong tokens.** The post-turn budget check summed *all* `llm_logs` for the chat since the run started (a timestamp window), which folded in overlapping activity and fire-and-forget housekeeping (memory extraction, scene-state tracking, danger classification, title/summary generation) on top of the run's own turns. A long-running chat could blow past its per-run token cap after a single turn.
+
+Fixes:
+- `lib/mount-index/folder-paths.ts` + `lib/background-jobs/child/child-repositories-proxy.ts`: `ensureFolderPath` now consults a per-job memo (carried on the job scope) so a folder ensured earlier in the same job is never buffered for creation twice. Removes the poison write.
+- `lib/services/chat-message/autonomous-room.service.ts` + `lib/background-jobs/host/job-dispatcher.ts`: when an `AUTONOMOUS_ROOM_TURN` job fails terminally, the dispatcher now reconciles the room to a resumable `paused` state (mirroring the startup reconcile) with the cause recorded in `runStateMessage`, instead of leaving it silently `running`.
+- New `autonomousRunId` column + index on `llm_logs` (migration `add-llm-logs-autonomous-run-id-column-v1`). Every LLM call made within a turn is tagged with the run id via an `AsyncLocalStorage` context (`lib/background-jobs/autonomous-run-context.ts`); the turn handler now sums per-run spend by run id (`getTotalTokenUsageForRun`) instead of by timestamp window. This isolates the run's own turn spend (turns + agent-mode sub-calls) and excludes background housekeeping.
+
 ### 4.6.0
 
 #### CLI: universal flags now work before the subcommand, and `migrations` accepts `-i`
