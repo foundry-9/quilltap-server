@@ -15,7 +15,11 @@ import {
   LITERAL_BOOST_PROJECT,
   LITERAL_BOOST_GLOBAL,
 } from '@/lib/embedding/literal-boost'
-import { getGeneralMountPointId } from '@/lib/instance-settings'
+import {
+  resolveTieredMountPool,
+  flattenTierPool,
+  type TieredMountPool,
+} from '@/lib/mount-index/tiered-mount-pool'
 import { getRepositories } from '@/lib/repositories/factory'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
@@ -76,79 +80,37 @@ export async function executeSearchScriptoriumTool(
 
     const results: SearchScriptoriumResult[] = []
 
-    // Resolve the three mount-point pools up front so both the `documents`
-    // and `knowledge` branches can pick from the same set, scoped by `scope`:
-    //   - characterMountPointId: the responding character's own vault (only
-    //     when the character belongs to the calling user — character-vault
-    //     access is the one ownership-gated path)
-    //   - projectMountPointIds: every store linked to the chat's project
-    //   - globalMountPointId: the Quilltap General singleton (may be null
-    //     during the pre-provisioning window)
-    // Mount IDs are deduped so the same store never enters a pool twice.
-    let characterMountPointId: string | null = null
-    let projectMountPointIds: string[] = []
-    let globalMountPointId: string | null = null
+    // Resolve the tri-tier mount pool up front so both the `documents` and
+    // `knowledge` branches pick from the same deduped set, scoped by `scope`.
+    // Character-vault access is ownership-gated (the one path that checks the
+    // character belongs to the calling user); project/global tiers and the
+    // pre-provisioning global-null tolerance all live in the shared helper.
+    let pool: TieredMountPool = {
+      characterMountPointId: null,
+      participantMountPointIds: [],
+      projectMountPointIds: [],
+      globalMountPointId: null,
+    }
     let ownsCharacter = false
 
     if (searchDocuments || searchKnowledge) {
-      const repos = getRepositories()
-      try {
-        const character = await repos.characters.findById(context.characterId)
-        ownsCharacter = !!character && character.userId === context.userId
-        if (ownsCharacter) {
-          characterMountPointId = character?.characterDocumentMountPointId ?? null
-        }
-      } catch (error) {
-        logger.warn('Mount pool resolution: character lookup failed', {
-          context: 'search-scriptorium-handler',
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-
-      if (context.projectId) {
-        try {
-          const links = await repos.projectDocMountLinks.findByProjectId(context.projectId)
-          projectMountPointIds = links.map(l => l.mountPointId)
-        } catch (error) {
-          logger.warn('Mount pool resolution: project mount lookup failed', {
-            context: 'search-scriptorium-handler',
-            error: error instanceof Error ? error.message : String(error),
-          })
-        }
-      }
-
-      try {
-        globalMountPointId = await getGeneralMountPointId()
-      } catch {
-        /* general mount not provisioned yet */
-      }
-
-      // Dedup: a vault shouldn't enter the pool through more than one tier.
-      if (characterMountPointId) {
-        projectMountPointIds = projectMountPointIds.filter(id => id !== characterMountPointId)
-        if (globalMountPointId === characterMountPointId) globalMountPointId = null
-      }
-      if (globalMountPointId) {
-        projectMountPointIds = projectMountPointIds.filter(id => id !== globalMountPointId)
-      }
+      pool = await resolveTieredMountPool(
+        {
+          userId: context.userId,
+          characterId: context.characterId,
+          projectId: context.projectId,
+        },
+        { requireOwnership: true },
+      )
+      // With ownership gating, a character vault is present only when the
+      // calling user owns the character — mirror that for the tier filter below.
+      ownsCharacter = !!pool.characterMountPointId
     }
 
     // Pool for the `documents` source — every store the LLM can see, narrowed
     // by `scope`. `all` is the union; `project` is project-linked stores only;
     // `character` is the character's own vault only.
-    const buildDocumentsPool = (): string[] => {
-      const pool = new Set<string>()
-      if (scope === 'character') {
-        if (characterMountPointId) pool.add(characterMountPointId)
-      } else if (scope === 'project') {
-        for (const id of projectMountPointIds) pool.add(id)
-      } else {
-        if (characterMountPointId) pool.add(characterMountPointId)
-        for (const id of projectMountPointIds) pool.add(id)
-        if (globalMountPointId) pool.add(globalMountPointId)
-      }
-      return [...pool]
-    }
+    const buildDocumentsPool = (): string[] => flattenTierPool(pool, { scope })
 
     // Tiers for the `knowledge` source — same three pools, each constrained
     // to `Knowledge/` paths, with tier-specific literal-phrase boosts so a
@@ -166,14 +128,14 @@ export async function executeSearchScriptoriumTool(
       const wantCharacter = scope === 'all' || scope === 'character'
       const wantProject = scope === 'all' || scope === 'project'
       const wantGlobal = scope === 'all'
-      if (wantCharacter && characterMountPointId) {
-        tiers.push({ tier: 'character', mountPointIds: [characterMountPointId], boost: LITERAL_BOOST_CHARACTER })
+      if (wantCharacter && pool.characterMountPointId) {
+        tiers.push({ tier: 'character', mountPointIds: [pool.characterMountPointId], boost: LITERAL_BOOST_CHARACTER })
       }
-      if (wantProject && projectMountPointIds.length > 0) {
-        tiers.push({ tier: 'project', mountPointIds: projectMountPointIds, boost: LITERAL_BOOST_PROJECT })
+      if (wantProject && pool.projectMountPointIds.length > 0) {
+        tiers.push({ tier: 'project', mountPointIds: pool.projectMountPointIds, boost: LITERAL_BOOST_PROJECT })
       }
-      if (wantGlobal && globalMountPointId) {
-        tiers.push({ tier: 'global', mountPointIds: [globalMountPointId], boost: LITERAL_BOOST_GLOBAL })
+      if (wantGlobal && pool.globalMountPointId) {
+        tiers.push({ tier: 'global', mountPointIds: [pool.globalMountPointId], boost: LITERAL_BOOST_GLOBAL })
       }
       return tiers
     }

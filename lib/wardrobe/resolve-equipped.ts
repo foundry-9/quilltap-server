@@ -32,8 +32,22 @@ import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 export interface ResolveEquippedRepos {
   wardrobe: {
     findByCharacterId(characterId: string, includeArchived?: boolean): Promise<WardrobeItem[]>;
-    findByIdsForCharacter(characterId: string, ids: string[]): Promise<WardrobeItem[]>;
+    findByIdsForCharacter(
+      characterId: string,
+      ids: string[],
+      opts?: { projectMountPointIds?: string[] },
+    ): Promise<WardrobeItem[]>;
   };
+}
+
+/** Options for tri-tier equipped resolution. */
+export interface ResolveEquippedOptions {
+  /**
+   * Project document stores in scope for this chat. Equipped items not found in
+   * the character's own vault are resolved against these project stores plus
+   * Quilltap General. Omit when there is no project context (two-tier fallback).
+   */
+  projectMountPointIds?: string[];
 }
 
 export interface ResolvedEquippedOutfit {
@@ -74,6 +88,7 @@ export async function resolveEquippedOutfitForCharacter(
   repos: ResolveEquippedRepos,
   characterId: string,
   slots: EquippedSlots,
+  opts?: ResolveEquippedOptions,
 ): Promise<ResolvedEquippedOutfit> {
   const equippedItemIds = Array.from(new Set([
     ...slots.top,
@@ -110,7 +125,9 @@ export async function resolveEquippedOutfitForCharacter(
       // Resolve via the character scope so archetypes (Quilltap General) and
       // the character's own vault items both surface — there's no global
       // wardrobe table to hit post-cutover.
-      const fallback = await repos.wardrobe.findByIdsForCharacter(characterId, missing);
+      const fallback = await repos.wardrobe.findByIdsForCharacter(characterId, missing, {
+        projectMountPointIds: opts?.projectMountPointIds,
+      });
       for (const item of fallback) {
         itemsById.set(item.id, item);
       }

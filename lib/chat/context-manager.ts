@@ -50,6 +50,10 @@ import {
 import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
+import {
+  resolveTieredMountPool,
+  type TieredMountPool,
+} from '@/lib/mount-index/tiered-mount-pool'
 import type { MessageEvent } from '@/lib/schemas/types'
 import { getOrComputeFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import {
@@ -1020,6 +1024,22 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const priorEmissionByCharacter = new Map<string, SceneStateEmissionEntry>(
     Object.entries(priorCache?.[cacheTargetKey] ?? {}),
   )
+  // The tri-tier mount pool (character vault / project stores / Quilltap
+  // General) is needed by both the live-wardrobe resolution below and the
+  // knowledge retrieval further down. Resolve it at most once per turn, lazily,
+  // so turns that need neither pay nothing.
+  let _turnMountPool: TieredMountPool | null = null
+  const getTurnMountPool = async (): Promise<TieredMountPool> => {
+    if (!_turnMountPool) {
+      _turnMountPool = await resolveTieredMountPool({
+        userId,
+        characterMountPointId: character.characterDocumentMountPointId ?? null,
+        projectId: options.chat.projectId ?? null,
+      })
+    }
+    return _turnMountPool
+  }
+
   let currentStateContent = ''
   let currentStateTokens = 0
   let emittedSceneStateByCharacter: Map<string, SceneStateEmissionEntry> | null = null
@@ -1056,7 +1076,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         try {
           const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chat.id, c.characterId)
           if (!equippedSlots) return
-          const resolved = await resolveEquippedOutfitForCharacter(repos, c.characterId, equippedSlots)
+          const { projectMountPointIds } = await getTurnMountPool()
+          const resolved = await resolveEquippedOutfitForCharacter(repos, c.characterId, equippedSlots, {
+            projectMountPointIds,
+          })
           const description = describeOutfit({
             top: decorateOutfitItems(resolved.leafItemsBySlot.top),
             bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom),
@@ -1169,22 +1192,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     budget.knowledgeBudget > 0
   ) {
     try {
-      const repos = getRepositories()
-
-      const projectId = options.chat.projectId ?? null
-      const projectMountPointIds = projectId
-        ? (await repos.projectDocMountLinks.findByProjectId(projectId)).map(l => l.mountPointId)
-        : []
-
-      let globalMountPointId: string | null = null
-      try {
-        const { getGeneralMountPointId } = await import('@/lib/instance-settings')
-        globalMountPointId = await getGeneralMountPointId()
-      } catch {
-        /* general mount not provisioned yet — skip global knowledge tier */
-      }
-
-      const characterMountPointId = character.characterDocumentMountPointId ?? null
+      const { characterMountPointId, projectMountPointIds, globalMountPointId } =
+        await getTurnMountPool()
 
       if (characterMountPointId || projectMountPointIds.length > 0 || globalMountPointId) {
         const result = await retrieveKnowledgeForTurn({

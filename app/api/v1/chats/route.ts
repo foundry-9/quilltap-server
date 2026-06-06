@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
@@ -403,6 +404,9 @@ async function createInitialMessagesScenarioAndStaff(
   const allCharacterParticipants = participants.filter(
     (p) => p.type === 'CHARACTER' && p.characterId,
   );
+  // Project tier for tri-tier wardrobe resolution — shared with every
+  // participant's equipped-item lookup below.
+  const equippedProjectMountPointIds = await resolveProjectMountPointIds(projectId);
   for (const participant of allCharacterParticipants) {
     try {
       const characterId = participant.characterId as string;
@@ -421,7 +425,9 @@ async function createInitialMessagesScenarioAndStaff(
         ] as string[]
       ).filter((id) => typeof id === 'string' && id.length > 0);
       const equippedItemsData = equippedItemIds.length > 0
-        ? await repos.wardrobe.findByIdsForCharacter(characterId, equippedItemIds)
+        ? await repos.wardrobe.findByIdsForCharacter(characterId, equippedItemIds, {
+            projectMountPointIds: equippedProjectMountPointIds,
+          })
         : [];
       const equippedItemsMap = new Map(equippedItemsData.map((item) => [item.id, item]));
 

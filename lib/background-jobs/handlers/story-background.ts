@@ -40,6 +40,7 @@ import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import type { Character } from '@/lib/schemas/types';
 
 // Detection helper lives in the shared dangerous-content service so the
@@ -247,12 +248,15 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // expanded via resolveEquippedOutfitForCharacter before flattening for
   // the appearance-resolution input.
   const appearanceInputs: AppearanceResolutionInput[] = [];
+  const projectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
   for (const char of validCharacters) {
     let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
     try {
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       if (equippedSlots) {
-        const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots);
+        const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots, {
+          projectMountPointIds,
+        });
         const flat: Array<{ slot: string; title: string; description?: string | null }> = [];
         for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
           for (const item of resolved.leafItemsBySlot[slot]) {

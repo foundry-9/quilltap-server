@@ -14,11 +14,19 @@ import { charCountClass } from '@/lib/utils/char-count'
 
 type EditorMode = 'single' | 'bundle'
 
+/** Where a newly-created wardrobe item is written. */
+export type WardrobeCreateScope = 'character' | 'global' | 'project'
+
 interface WardrobeItemEditorProps {
   characterId: string
   item?: WardrobeItem | null
   /** Whether this item is being created/edited as a shared item */
   isShared?: boolean
+  /**
+   * Project context (the chat's project). When present, the create-scope
+   * selector offers a "this project" destination for new shared items.
+   */
+  projectId?: string | null
   /** Pre-populated component IDs (used by Save-as-outfit from the Outfit Builder). */
   initialComponentItemIds?: string[]
   /** Force a starting mode (used by Save-as-outfit to open in bundle mode). */
@@ -67,6 +75,7 @@ export function WardrobeItemEditor({
   characterId,
   item,
   isShared: isSharedProp = false,
+  projectId = null,
   initialComponentItemIds,
   initialMode,
   autoFocusTitle = false,
@@ -74,10 +83,18 @@ export function WardrobeItemEditor({
   onSave,
 }: WardrobeItemEditorProps) {
   const isEditing = !!item
-  // Determine if the item is shared: either explicitly passed as shared,
-  // or the existing item has no characterId (archetype)
+  // Whether the item lives in a shared tier (Quilltap General or a project
+  // store) rather than a character vault. On edit this is fixed by the item's
+  // own tier; on create the "Add to" selector (`createScope`) governs routing,
+  // and this only seeds the notice / default selector.
   const existingIsShared = isEditing && !item.characterId
-  const [isShared, setIsShared] = useState(isSharedProp || existingIsShared)
+  const isShared = isSharedProp || existingIsShared
+  // Destination for a NEW item: this character, shared-everywhere (Quilltap
+  // General), or this project's store. Only meaningful when creating; editing
+  // keeps an item in its existing tier.
+  const [createScope, setCreateScope] = useState<WardrobeCreateScope>(
+    isSharedProp ? 'global' : 'character',
+  )
 
   const { formData, handleChange } = useFormState({
     title: item?.title || '',
@@ -144,45 +161,44 @@ export function WardrobeItemEditor({
     if (autoFocusTitle) titleInputRef.current?.focus()
   }, [autoFocusTitle])
 
-  // Load candidate items (this character's wardrobe + shared archetypes) so
-  // the user can pick components for a composite. We do this once on mount;
-  // adding fresh items mid-edit is rare and a re-open will refresh.
+  // Load candidate items (this character's wardrobe + project + shared
+  // archetypes) so the user can pick components for a composite. We do this once
+  // on mount; adding fresh items mid-edit is rare and a re-open will refresh.
   useEffect(() => {
     let cancelled = false
     const load = async (): Promise<void> => {
       setCandidatesLoading(true)
       try {
-        const [personalRes, archetypeRes] = await Promise.all([
+        const [personalRes, projectRes, archetypeRes] = await Promise.all([
           fetch(`/api/v1/characters/${characterId}/wardrobe`),
+          projectId ? fetch(`/api/v1/projects/${projectId}/wardrobe`) : Promise.resolve(null),
           fetch('/api/v1/wardrobe'),
         ])
 
         const collected: CandidateItem[] = []
-        if (personalRes.ok) {
-          const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItem[] }
-          for (const w of data.wardrobeItems ?? []) {
+        const pushCandidates = (list: WardrobeItem[] | undefined, shared: boolean) => {
+          for (const w of list ?? []) {
+            if (collected.some((c) => c.id === w.id)) continue
             collected.push({
               id: w.id,
               title: w.title,
               types: w.types,
               componentItemIds: Array.isArray(w.componentItemIds) ? w.componentItemIds : [],
-              isShared: false,
+              isShared: shared,
             })
           }
         }
+        if (personalRes.ok) {
+          const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItem[] }
+          pushCandidates(data.wardrobeItems, false)
+        }
+        if (projectRes && projectRes.ok) {
+          const data = (await projectRes.json()) as { wardrobeItems?: WardrobeItem[] }
+          pushCandidates(data.wardrobeItems, true)
+        }
         if (archetypeRes.ok) {
           const data = (await archetypeRes.json()) as { wardrobeItems?: WardrobeItem[] }
-          for (const w of data.wardrobeItems ?? []) {
-            if (!collected.some((c) => c.id === w.id)) {
-              collected.push({
-                id: w.id,
-                title: w.title,
-                types: w.types,
-                componentItemIds: Array.isArray(w.componentItemIds) ? w.componentItemIds : [],
-                isShared: true,
-              })
-            }
-          }
+          pushCandidates(data.wardrobeItems, true)
         }
         if (!cancelled) setCandidates(collected)
       } catch (err) {
@@ -198,7 +214,7 @@ export function WardrobeItemEditor({
     return () => {
       cancelled = true
     }
-  }, [characterId])
+  }, [characterId, projectId])
 
   /**
    * Items the user can pick as components, excluding:
@@ -362,14 +378,20 @@ export function WardrobeItemEditor({
         replace: isBundle ? replace : false,
       }
 
-      // Route to the correct API endpoint based on shared status
+      // Route to the correct API endpoint. Editing keeps the item in its
+      // existing tier (shared → Quilltap General, else the character vault);
+      // creating honours the chosen destination scope.
       let url: string
-      if (isShared) {
-        const sharedBaseUrl = '/api/v1/wardrobe'
-        url = isEditing ? `${sharedBaseUrl}/${item.id}` : sharedBaseUrl
+      if (isEditing) {
+        url = isShared
+          ? `/api/v1/wardrobe/${item.id}`
+          : `/api/v1/characters/${characterId}/wardrobe/${item.id}`
+      } else if (createScope === 'project' && projectId) {
+        url = `/api/v1/projects/${projectId}/wardrobe`
+      } else if (createScope === 'global') {
+        url = '/api/v1/wardrobe'
       } else {
-        const charBaseUrl = `/api/v1/characters/${characterId}/wardrobe`
-        url = isEditing ? `${charBaseUrl}/${item.id}` : charBaseUrl
+        url = `/api/v1/characters/${characterId}/wardrobe`
       }
       const method = isEditing ? 'PUT' : 'POST'
 
@@ -431,6 +453,49 @@ export function WardrobeItemEditor({
           </div>
 
           <div className="qt-dialog-body space-y-4 flex-1">
+            {/* Destination scope — only when creating. Editing keeps an item in
+                its existing tier. */}
+            {!isEditing && (
+              <div>
+                <span className="qt-label mb-2 block">Add to</span>
+                <div
+                  role="radiogroup"
+                  aria-label="Where to save this item"
+                  className="inline-flex flex-wrap gap-1 qt-bg-muted/50 rounded-lg p-1"
+                >
+                  {([
+                    { scope: 'character' as const, label: 'This character' },
+                    { scope: 'global' as const, label: 'Shared — everywhere' },
+                    ...(projectId
+                      ? [{ scope: 'project' as const, label: 'Shared — this project' }]
+                      : []),
+                  ]).map(({ scope, label }) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      role="radio"
+                      aria-checked={createScope === scope}
+                      onClick={() => setCreateScope(scope)}
+                      className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                        createScope === scope
+                          ? 'qt-bg-default text-foreground shadow-sm'
+                          : 'qt-text-secondary hover:text-foreground'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="qt-text-xs qt-text-secondary mt-1">
+                  {createScope === 'character'
+                    ? 'Only this character can wear it.'
+                    : createScope === 'project'
+                      ? "Every character in this project's chats can wear it."
+                      : 'Every character, in every chat, can wear it.'}
+                </p>
+              </div>
+            )}
+
             {/* Mode toggle — Single garment vs. Outfit bundle */}
             <div
               role="tablist"
@@ -729,8 +794,10 @@ export function WardrobeItemEditor({
               </div>
             )}
 
-            {/* Default + Shared compact row — moved up so they're visible on first screen */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Default-outfit toggle. Whether an item is shared is governed by
+                the "Add to" selector at the top (create) or the item's existing
+                tier (edit) — there is no separate "shared" checkbox. */}
+            <div>
               <label className="inline-flex items-start gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -741,29 +808,6 @@ export function WardrobeItemEditor({
                 />
                 <span className="text-sm text-foreground">
                   Part of this character&apos;s default outfit
-                </span>
-              </label>
-              <label
-                className={`inline-flex items-start gap-2 ${
-                  isEditing && !existingIsShared
-                    ? 'opacity-50 cursor-not-allowed'
-                    : 'cursor-pointer'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={isShared}
-                  onChange={(e) => setIsShared(e.target.checked)}
-                  disabled={isEditing && !existingIsShared}
-                  className="qt-checkbox mt-0.5"
-                />
-                <span className="text-sm text-foreground">
-                  Available to all characters
-                  {isEditing && !existingIsShared && (
-                    <span className="block qt-text-xs qt-text-muted">
-                      personal items can&apos;t be converted to shared
-                    </span>
-                  )}
                 </span>
               </label>
             </div>

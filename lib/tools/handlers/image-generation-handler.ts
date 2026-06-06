@@ -49,6 +49,7 @@ import {
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 
 /**
  * Execution context for image generation tool
@@ -889,6 +890,7 @@ async function resolveAppearances(
         // contain composite items; resolveEquippedOutfitForCharacter expands
         // composites and returns per-slot leaf items.
         const repos = getRepositories();
+        const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
         const appearanceInputs: AppearanceResolutionInput[] = [];
         for (const p of resolvedPlaceholders.filter(p => p.entityId && p.descriptions?.length)) {
           let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
@@ -896,7 +898,9 @@ async function resolveAppearances(
             try {
               const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(context.chatId, p.entityId);
               if (equippedSlots) {
-                const resolved = await resolveEquippedOutfitForCharacter(repos, p.entityId, equippedSlots);
+                const resolved = await resolveEquippedOutfitForCharacter(repos, p.entityId, equippedSlots, {
+                  projectMountPointIds,
+                });
                 const flat: Array<{ slot: string; title: string; description?: string | null }> = [];
                 for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
                   for (const item of resolved.leafItemsBySlot[slot]) {

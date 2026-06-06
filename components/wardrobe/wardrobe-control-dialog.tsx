@@ -108,9 +108,8 @@ function WardrobeControlDialogInner({
 }: InnerProps) {
   const [characters, setCharacters] = useState<CharacterSummary[]>([])
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(initialCharacterId)
-  const { items, loading: itemsLoading, reload: reloadItems } = useCharacterWardrobeItems(
-    selectedCharacterId,
-  )
+  const { items, loading: itemsLoading, reload: reloadItems, projectId: dialogProjectId } =
+    useCharacterWardrobeItems(selectedCharacterId, { chatId })
   const [editingItem, setEditingItem] = useState<WardrobeItem | null>(null)
   /** null = no editor open; 'create-single' / 'create-bundle' = new item in that mode */
   const [creatingNew, setCreatingNew] = useState<EditorIntent | null>(null)
@@ -1144,6 +1143,7 @@ function WardrobeControlDialogInner({
           characterId={selectedCharacterId}
           item={editingItem}
           isShared={false}
+          projectId={dialogProjectId}
           initialMode={
             creatingNew === 'create-bundle'
               ? 'bundle'

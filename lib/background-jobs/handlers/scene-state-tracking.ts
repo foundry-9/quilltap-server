@@ -19,6 +19,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { SceneStateTrackingPayload } from '../queue-service';
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 
 const logger = createServiceLogger('SceneStateTrackingHandler');
 
@@ -174,6 +175,7 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
   const presentCharacters = validCharacters.filter(c => c && presentParticipantCharacterIds.has(c.id));
 
   // Build character baselines with equipped wardrobe items
+  const projectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
   const characterBaselines = await Promise.all(presentCharacters.map(async (char) => {
     let clothingDescription = '';
 
@@ -182,7 +184,9 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     try {
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       if (equippedSlots) {
-        const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots);
+        const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots, {
+          projectMountPointIds,
+        });
         clothingDescription = describeOutfit({
           top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
           bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),

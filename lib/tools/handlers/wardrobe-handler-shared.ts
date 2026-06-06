@@ -12,7 +12,11 @@ interface WardrobeReposForSummary {
   };
   wardrobe: {
     findByCharacterId(characterId: string, includeArchived?: boolean): Promise<WardrobeItem[]>;
-    findByIdsForCharacter(characterId: string, ids: string[]): Promise<WardrobeItem[]>;
+    findByIdsForCharacter(
+      characterId: string,
+      ids: string[],
+      opts?: { projectMountPointIds?: string[] },
+    ): Promise<WardrobeItem[]>;
   };
 }
 
@@ -79,8 +83,11 @@ export async function buildWardrobeCoverageSummaryFromState(
   repos: WardrobeReposForSummary,
   characterId: string,
   slots: EquippedSlots,
+  opts?: { projectMountPointIds?: string[] },
 ): Promise<string> {
-  const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots);
+  const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots, {
+    projectMountPointIds: opts?.projectMountPointIds,
+  });
   return describeOutfit(resolved.outfitValues);
 }
 

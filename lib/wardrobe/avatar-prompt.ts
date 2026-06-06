@@ -18,6 +18,12 @@ interface BuildPromptOptions {
    * appended — the prompt relies on physical descriptions alone.
    */
   equippedSlots?: EquippedSlots | null;
+  /**
+   * Project document stores in scope, so equipped items that live in a project
+   * store (not just the character vault or Quilltap General) resolve. Omit when
+   * there is no project context (two-tier fallback).
+   */
+  projectMountPointIds?: string[];
 }
 
 interface BuildPromptResult {
@@ -40,6 +46,7 @@ export async function buildCharacterAvatarPrompt(
   options: BuildPromptOptions = {},
 ): Promise<BuildPromptResult> {
   const { equippedSlots } = options;
+  const projectMountPointIds = options.projectMountPointIds;
 
   const leafCounts = { top: 0, bottom: 0, footwear: 0, accessories: 0 };
 
@@ -65,7 +72,9 @@ export async function buildCharacterAvatarPrompt(
     // sitting in slots.bottom whose types include "top" still bubbles up into
     // the rendered top. We then `omit` bottom/footwear at render time so the
     // image generator doesn't paste shoes/pants onto a cropped torso.
-    const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, equippedSlots);
+    const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, equippedSlots, {
+      projectMountPointIds,
+    });
 
     outfitText = describeOutfit({
       top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),

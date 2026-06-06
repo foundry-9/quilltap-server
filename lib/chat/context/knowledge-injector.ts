@@ -38,6 +38,7 @@ import {
   LITERAL_BOOST_PROJECT,
   LITERAL_BOOST_GLOBAL,
 } from '@/lib/embedding/literal-boost';
+import { dedupeTierTriple } from '@/lib/mount-index/tiered-mount-pool';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import { estimateTokens } from '@/lib/tokens/token-counter';
 import { getRepositories } from '@/lib/repositories/factory';
@@ -130,16 +131,14 @@ export async function retrieveKnowledgeForTurn(
 
   // Build the tier plan, dropping duplicates between tiers so the same
   // mount can't enter the pool twice if a user has somehow linked their
-  // character vault into a project, etc.
-  const characterMountPointId = params.characterMountPointId ?? null;
-  const projectMountPointIdSet = new Set(params.projectMountPointIds ?? []);
-  if (characterMountPointId) projectMountPointIdSet.delete(characterMountPointId);
-  let globalMountPointId = params.globalMountPointId ?? null;
-  if (globalMountPointId && globalMountPointId === characterMountPointId) {
-    globalMountPointId = null;
-  }
-  if (globalMountPointId) projectMountPointIdSet.delete(globalMountPointId);
-  const projectMountPointIds = Array.from(projectMountPointIdSet);
+  // character vault into a project, etc. Dedup is delegated to the shared
+  // `dedupeTierTriple` so the priority (character > project > global) stays
+  // identical to the scriptorium search / wardrobe / path resolver.
+  const { characterMountPointId, projectMountPointIds, globalMountPointId } = dedupeTierTriple({
+    characterMountPointId: params.characterMountPointId ?? null,
+    projectMountPointIds: params.projectMountPointIds ?? [],
+    globalMountPointId: params.globalMountPointId ?? null,
+  });
 
   const tiers: Array<{ tier: KnowledgeTier; mountPointIds: string[]; boost: number }> = [];
   if (characterMountPointId) {

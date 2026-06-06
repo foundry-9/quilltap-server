@@ -23,6 +23,7 @@ import {
   ChatsSection,
   DocumentStoresCard,
   ScenariosCard,
+  WardrobeCard,
 } from './components'
 
 export default function ProjectDetailPage() {
@@ -156,6 +157,11 @@ export default function ProjectDetailPage() {
           projectId={projectId}
           expanded={cardState.scenarios}
           onToggle={() => toggleCard('scenarios')}
+        />
+        <WardrobeCard
+          projectId={projectId}
+          expanded={cardState.wardrobe}
+          onToggle={() => toggleCard('wardrobe')}
         />
         <CharactersCard
           project={project}

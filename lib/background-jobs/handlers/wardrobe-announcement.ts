@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 import type { WardrobeOutfitAnnouncementPayload } from '../queue-service';
 import { postOutfitChangeWhisper } from '@/lib/services/aurora-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import {
   EquippedSlotsSchema,
   type EquippedOutfitState,
@@ -66,7 +67,10 @@ export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Prom
     return;
   }
 
-  const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots);
+  const projectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
+  const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots, {
+    projectMountPointIds,
+  });
 
   const character = await repos.characters.findById(characterId);
   const charName = character?.name ?? 'A character';

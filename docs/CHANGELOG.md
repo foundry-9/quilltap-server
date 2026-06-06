@@ -4,6 +4,20 @@
 
 ### 4.7-dev
 
+#### Tri-tier wardrobe + shared mount-tier resolver
+
+Wardrobe is now tri-tier, matching knowledge, scenarios, and document search: a character's wearable garments are drawn from the character's own vault, the active chat's project document stores, and Quilltap General — in that precedence order (nearer tier wins on id collision). Previously wardrobe was two-tier (character vault + Quilltap General archetypes only); project stores were never consulted.
+
+- **New `lib/mount-index/tiered-mount-pool.ts`** is the single source of truth for the `{character, participant, project, global}` mount-tier resolution that was previously re-derived (with subtly divergent dedup rules) in the knowledge injector, the scriptorium search tool, and the doc-edit path resolver. Exposes `resolveTieredMountPool`, `dedupeTierTriple`, `flattenTierPool`, `classifyMountTier`, and the lightweight `resolveProjectMountPointIds` / `resolveProjectMountPointIdsForChat`.
+- **Adopted the helper everywhere**: `knowledge-injector.ts` (via `context-manager.ts`), `search-scriptorium-handler.ts`, and `path-resolver.ts`'s `collectAccessibleMountPointIds` all now delegate to it. Behavior is unchanged for those features (ownership gate, participant vaults, and operator override are preserved); the duplication is gone.
+- **Wardrobe reads** (`findArchetypes`, `findArchetypeById`, `findByIdForCharacter`, `findByIdsForCharacter`) accept an optional `projectMountPointIds`, and `resolveEquippedOutfitForCharacter` threads it through. Equipped-outfit resolution in the chat context, scene-state tracking, story backgrounds, avatars, image generation, the wardrobe tool handlers, the outfit API actions, and chat creation now all pass the active project's stores. Call sites with no project context fall back to the prior two-tier behavior.
+- **New `lib/mount-index/project-wardrobe.ts`** reads/ensures a project store's `Wardrobe/` folder (reusing the generic vault reader, same as `general-wardrobe.ts`).
+- **Project wardrobe writes + CRUD**: generalized the vault writer (`wardrobe-writes.ts`) with an explicit project location and `scope` discriminator; cycle peers now include Quilltap General archetypes for project composites. New `/api/v1/projects/[id]/wardrobe` and `/api/v1/projects/[id]/wardrobe/[itemId]` routes (GET/POST/PUT/DELETE), mirroring project scenarios. New **Wardrobe** card on the Prospero project page (`WardrobeCard` + `ProjectWardrobeManager` + `useProjectWardrobe`).
+- **Wardrobe pickers surface the project tier**: `useCharacterWardrobeItems` now merges personal + project + Quilltap General (precedence personal > project > general). The in-chat Wardrobe Control dialog resolves the project from its `chatId`; the chat-start and add-participant outfit selectors pass `projectId`/`chatId`. Project items appear as wear-only in the dialog (no edit/delete there — they're managed on the project page, like project scenarios), and equipping them is validated through the tri-tier resolution.
+- **Create-destination selector in the wardrobe editor**: when adding a new item from the Wardrobe dialog, an "Add to" selector chooses where it's written — **This character** (personal, default), **Shared — everywhere** (Quilltap General), or **Shared — this project** (offered only when the dialog has a project context). The editor's composite-component picker also folds in project items so project composites can bundle project pieces. Replaces the old shared-only routing (which always wrote to Quilltap General). The redundant "Available to all characters" checkbox was removed — the "Add to" selector is now the single control for an item's tier (and editing keeps an item in its existing tier).
+- No database schema or migration change — project wardrobe items are Markdown files in an existing project document store, the same storage path as project scenarios.
+- Help: new `help/project-wardrobe.md`; `help/wardrobe.md` gains a "three tiers" section.
+
 ### 4.6.1
 
 #### Removed development debug logging from the autonomous-room work

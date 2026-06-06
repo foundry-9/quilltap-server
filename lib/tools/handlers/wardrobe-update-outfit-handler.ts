@@ -23,6 +23,7 @@ import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { equipItem, replaceItem, removeFromSlot } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 import {
   buildWardrobeCoverageSummaryFromState,
   describeWardrobeEffect,
@@ -77,9 +78,12 @@ async function resolveCompositeItem(
   characterId: string,
   itemId: string | undefined,
   itemTitle: string | undefined,
+  projectMountPointIds?: string[],
 ): Promise<WardrobeItem | null> {
   if (itemId) {
-    const found = await repos.wardrobe.findByIdForCharacter(characterId, itemId);
+    const found = await repos.wardrobe.findByIdForCharacter(characterId, itemId, {
+      projectMountPointIds,
+    });
     if (found) return found;
   }
 
@@ -115,7 +119,9 @@ export async function executeWardrobeUpdateOutfitTool(
 
     const { mode, item_id, item_title } = input;
 
-    const item = await resolveCompositeItem(repos, context.characterId, item_id, item_title);
+    const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
+
+    const item = await resolveCompositeItem(repos, context.characterId, item_id, item_title, projectMountPointIds);
     if (!item) {
       throw new WardrobeUpdateOutfitError(
         `Outfit not found${item_id ? ` with ID "${item_id}"` : ''}${item_title ? ` with title "${item_title}"` : ''}`,
@@ -180,7 +186,9 @@ export async function executeWardrobeUpdateOutfitTool(
     }
 
     const currentState = await loadCurrentWardrobeState(repos, context.chatId, context.characterId);
-    const coverageSummary = await buildWardrobeCoverageSummaryFromState(repos, context.characterId, currentState);
+    const coverageSummary = await buildWardrobeCoverageSummaryFromState(repos, context.characterId, currentState, {
+      projectMountPointIds,
+    });
 
     await triggerAvatarGenerationIfEnabled(repos, {
       userId: context.userId,

@@ -31,16 +31,15 @@ A character may have many items in each slot, and equip multiple of them at once
 
 ## Creating Wardrobe Items
 
-To furnish a character's wardrobe:
+To furnish a character's wardrobe, open the **Wardrobe** dialog — the clothes-hanger icon on the left sidebar, reachable from any page that bears the sidebar (Salon, Aurora, Prospero, and so on). Opening it from a character's Aurora page conveniently preselects that character.
 
-1. Navigate to **Aurora** (the Characters page)
-2. Open a character and look for the **Wardrobe** section
-3. Click to add a new wardrobe item
-4. Choose the **slot** (top, bottom, footwear, or accessories)
-5. Give the item a **name** (e.g., "Burgundy velvet smoking jacket")
-6. Provide a **description** --- as lavish or as terse as you please --- that the AI will use when referencing the garment
+1. Pick the character from the dropdown at the top of the dialog (if one isn't already selected)
+2. Click **+ New Item**
+3. Use the **"Add to"** selector to choose where the garment lives — **This character** (a personal item, the default), **Shared — everywhere** (a household archetype), or **Shared — this project** (offered when you've opened the dialog inside a project's chat). See [Where Wardrobe Items Come From](#where-wardrobe-items-come-from-three-tiers) for what each tier means.
+4. Choose the **slot(s)** the garment covers (top, bottom, footwear, or accessories)
+5. Give the item a **title** (e.g., "Burgundy velvet smoking jacket") and a **description** --- as lavish or as terse as you please --- that the AI will use when referencing the garment
 
-You may also edit or remove items at any time. The wardrobe is yours to curate, though your characters may have opinions about it (see below).
+You may edit or remove your personal items at any time via each row's `⋮` menu. The wardrobe is yours to curate, though your characters may have opinions about it (see below).
 
 ## The Wardrobe Control Dialog
 
@@ -66,8 +65,8 @@ For those moments when visual inspiration strikes --- a photograph discovered in
 
 To use this feature:
 
-1. Navigate to a character's **Appearance** tab
-2. In the **Personal Wardrobe** section header, click the **image icon** button (beside "Add Item")
+1. Open the **Wardrobe** dialog (the clothes-hanger icon on the left sidebar) and select the character
+2. Click **Import from image** (it sits beside **+ New Item** at the foot of the wardrobe list)
 3. Drop an image file into the upload zone, or click to browse (JPEG, PNG, WebP, or GIF, up to 10 MB)
 4. Optionally provide **guidance notes** --- free-text hints to steer the analysis (e.g., "this is a medieval fantasy setting," "focus on the woman on the left," "ignore the background characters")
 5. Click **Analyze Image**
@@ -82,11 +81,29 @@ Click **Import Selected** to add the approved items to the character's personal 
 
 **Requirements:** This feature requires at least one vision-capable provider to be configured (Anthropic Claude, OpenAI GPT-4o, Google Gemini, or xAI Grok). If you have configured an **Image Description Profile** in your Chat settings, that profile will be used; otherwise Quilltap will select any available vision-capable provider from your connection profiles.
 
+### Where Wardrobe Items Come From (Three Tiers)
+
+A character does not draw her wearable garments from a single drawer. Quilltap consults three tiers, nearest to farthest:
+
+1. **The character's own vault** — her personal armoire, hers alone.
+2. **The project's wardrobe** — shared attire belonging to whichever project the chat lives in (a household livery, a regimental coat), wearable by every character in that project's chats. See [Project Wardrobe](project-wardrobe.md).
+3. **Quilltap General** — the household-wide collection of shared items (archetypes, below), available to every character in every chat regardless of project.
+
+When the same garment appears in more than one tier, the nearer tier prevails: a character's personal item outranks a project item, which in turn outranks a household archetype. A project's garments are on offer only while a chat belongs to that project; outside it, they simply aren't shown.
+
 ### Shared Items (Archetypes)
 
 Some garments transcend the boundaries of any single wardrobe. A Roman legionary's tunic, a proper Edwardian morning suit, or a pair of sensible Wellington boots --- these are the sort of items that any character might reasonably don, regardless of their personal collection.
 
-**Shared items** (also known as archetypes) are wardrobe items not bound to any particular character. Any character may equip them directly, without the tedium of maintaining duplicate entries. To create a shared item, check the "Shared item" checkbox when adding a new garment. Shared items appear in a separate "Shared Wardrobe" section beneath each character's personal collection.
+**Shared items** (also known as archetypes) are wardrobe items not bound to any particular character — the household-wide tier, kept in Quilltap General. Any character may equip them directly, without the tedium of maintaining duplicate entries.
+
+When you add a new garment from the Wardrobe dialog, an **"Add to"** selector at the top of the editor lets you choose its destination:
+
+- **This character** — a personal item in the character's own vault (the default).
+- **Shared — everywhere** — a household archetype in Quilltap General, wearable by every character in every chat.
+- **Shared — this project** — a [Project Wardrobe](project-wardrobe.md) item (offered only when you're in a chat that belongs to a project), wearable by every character in that project's chats.
+
+Shared items appear in the dialog's list tagged "· shared" and are wear-only there; manage household archetypes from any character's wardrobe and project items from the project's [Wardrobe card](project-wardrobe.md). (Editing an existing item keeps it in whichever tier it already lives.)
 
 ### Composite Items (Bundled Outfits)
 

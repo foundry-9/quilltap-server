@@ -22,6 +22,10 @@ import {
   writeDatabaseDocument,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
+import {
+  resolveTieredMountPool,
+  flattenTierPool,
+} from '@/lib/mount-index/tiered-mount-pool';
 
 const logger = createServiceLogger('DocEdit:PathResolver');
 
@@ -228,12 +232,11 @@ function describeCharacters(context: PathResolutionContext): string {
 async function collectAccessibleMountPointIds(
   context: PathResolutionContext
 ): Promise<string[]> {
-  const repos = getRepositories();
-  const ids = new Set<string>();
-
   // Operator "look everywhere" override: every enabled store is reachable.
   // Restricted to human-operator UI document actions (see PathResolutionContext).
   if (context.operatorOverride) {
+    const repos = getRepositories();
+    const ids = new Set<string>();
     const enabled = await repos.docMountPoints.findEnabled();
     for (const mp of enabled) ids.add(mp.id);
     logger.debug('Path resolver: operator override — all enabled stores accessible', {
@@ -242,40 +245,22 @@ async function collectAccessibleMountPointIds(
     return Array.from(ids);
   }
 
-  if (context.projectId) {
-    const projectLinks = await repos.projectDocMountLinks.findByProjectId(context.projectId);
-    for (const link of projectLinks) {
-      ids.add(link.mountPointId);
-    }
-  }
-
-  const characterIds = new Set<string>();
-  if (context.characterId) characterIds.add(context.characterId);
-  if (context.characterIds) {
-    for (const id of context.characterIds) characterIds.add(id);
-  }
-
-  for (const characterId of characterIds) {
-    const character = await repos.characters.findById(characterId);
-    if (character?.characterDocumentMountPointId) {
-      ids.add(character.characterDocumentMountPointId);
-    }
-  }
-
-  // Quilltap General is always accessible to every character. Lazy-imported
-  // to keep the path resolver free of an instance-settings dependency at load
-  // time.
-  try {
-    const { getGeneralMountPointId } = await import('@/lib/instance-settings');
-    const generalMountPointId = await getGeneralMountPointId();
-    if (generalMountPointId) ids.add(generalMountPointId);
-  } catch (error) {
-    logger.warn('Failed to look up Quilltap General mount; continuing without it', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  return Array.from(ids);
+  // Standard access set: the responding character's vault, every chat
+  // participant's vault, every project-linked store, and Quilltap General.
+  // Resolved through the shared tiered-mount-pool helper so the dedup and
+  // graceful global-null behaviour stay consistent with knowledge/search/
+  // wardrobe. No ownership gate here — the document path resolver grants the
+  // LLM access to its own + participant vaults by chat membership, not user
+  // ownership.
+  const pool = await resolveTieredMountPool(
+    {
+      characterId: context.characterId,
+      characterIds: context.characterIds,
+      projectId: context.projectId,
+    },
+    { includeParticipants: true },
+  );
+  return flattenTierPool(pool, { includeParticipants: true });
 }
 
 /**

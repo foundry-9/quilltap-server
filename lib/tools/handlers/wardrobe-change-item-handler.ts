@@ -26,6 +26,7 @@ import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { equipItem, replaceItem, addToSlot, removeFromSlot } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 import {
   buildWardrobeCoverageSummaryFromState,
   describeWardrobeEffect,
@@ -87,9 +88,12 @@ async function resolveWardrobeItem(
   characterId: string,
   itemId: string | undefined,
   itemTitle: string | undefined,
+  projectMountPointIds?: string[],
 ): Promise<WardrobeItem | null> {
   if (itemId) {
-    const found = await repos.wardrobe.findByIdForCharacter(characterId, itemId);
+    const found = await repos.wardrobe.findByIdForCharacter(characterId, itemId, {
+      projectMountPointIds,
+    });
     if (found) return found;
   }
 
@@ -153,6 +157,8 @@ export async function executeWardrobeChangeItemTool(
     const item_id = normalizeNoItemSentinel(input.item_id);
     const item_title = normalizeNoItemSentinel(input.item_title);
 
+    const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
+
     if (input.item_id !== item_id || input.item_title !== item_title) {
     }
 
@@ -163,7 +169,7 @@ export async function executeWardrobeChangeItemTool(
     let summaryItem: { item_id: string; title: string } | null = null;
 
     if (mode === 'wear' || mode === 'replace') {
-      const item = await resolveWardrobeItem(repos, context.characterId, item_id, item_title);
+      const item = await resolveWardrobeItem(repos, context.characterId, item_id, item_title, projectMountPointIds);
       if (!item) {
         throw new WardrobeChangeItemError(
           `Wardrobe item not found${item_id ? ` with ID "${item_id}"` : ''}${item_title ? ` with title "${item_title}"` : ''}`,
@@ -211,7 +217,7 @@ export async function executeWardrobeChangeItemTool(
           'VALIDATION_ERROR',
         );
       }
-      const item = await resolveWardrobeItem(repos, context.characterId, item_id, item_title);
+      const item = await resolveWardrobeItem(repos, context.characterId, item_id, item_title, projectMountPointIds);
       if (!item) {
         throw new WardrobeChangeItemError(
           `Wardrobe item not found${item_id ? ` with ID "${item_id}"` : ''}${item_title ? ` with title "${item_title}"` : ''}`,
@@ -259,7 +265,7 @@ export async function executeWardrobeChangeItemTool(
 
       let item: WardrobeItem | null = null;
       if (item_id || item_title) {
-        item = await resolveWardrobeItem(repos, context.characterId, item_id, item_title);
+        item = await resolveWardrobeItem(repos, context.characterId, item_id, item_title, projectMountPointIds);
         // For named removal, also reject composites: composites should be
         // taken off via wardrobe_set_outfit so all their slots get cleared
         // together, not just one.
@@ -316,7 +322,9 @@ export async function executeWardrobeChangeItemTool(
     const effectSummary = describeWardrobeEffect(effect, effectSlots, summaryItem?.title);
 
     const currentState = await loadCurrentWardrobeState(repos, context.chatId, context.characterId);
-    const coverageSummary = await buildWardrobeCoverageSummaryFromState(repos, context.characterId, currentState);
+    const coverageSummary = await buildWardrobeCoverageSummaryFromState(repos, context.characterId, currentState, {
+      projectMountPointIds,
+    });
 
     await triggerAvatarGenerationIfEnabled(repos, {
       userId: context.userId,

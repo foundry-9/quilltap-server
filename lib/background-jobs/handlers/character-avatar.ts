@@ -37,6 +37,7 @@ import {
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 
 /**
@@ -103,7 +104,11 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   // hasn't been committed to the chat.
   const equippedSlots = payload.equippedSlotsOverride
     ?? await repos.chats.getEquippedOutfitForCharacter(payload.chatId, payload.characterId);
-  const { prompt, hasAppearance, leafCounts } = await buildCharacterAvatarPrompt(repos, character, { equippedSlots });
+  const avatarProjectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
+  const { prompt, hasAppearance, leafCounts } = await buildCharacterAvatarPrompt(repos, character, {
+    equippedSlots,
+    projectMountPointIds: avatarProjectMountPointIds,
+  });
 
   if (!hasAppearance) {
     logger.warn('[CharacterAvatar] No appearance data available, skipping', {

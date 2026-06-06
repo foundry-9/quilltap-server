@@ -540,6 +540,7 @@ export default function AddCharacterDialog({
                   characters={outfitCharacters}
                   onSelectionsChange={handleOutfitSelectionsChange}
                   disabled={isAdding}
+                  chatId={chatId}
                 />
               )}
             </div>

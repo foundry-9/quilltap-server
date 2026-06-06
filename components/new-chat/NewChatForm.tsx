@@ -518,6 +518,7 @@ export function NewChatForm({
             disabled={creating}
             sourceChatId={continuationFromChatId ?? null}
             previousOutfitSummary={previousOutfitSummary ?? null}
+            projectId={selectedProjectId ?? null}
           />
         )}
 
