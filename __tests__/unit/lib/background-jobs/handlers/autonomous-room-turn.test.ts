@@ -284,3 +284,207 @@ describe('handleAutonomousRoomTurn — counter bookkeeping', () => {
     expect(mockEnqueueAutonomousRoomTurn).not.toHaveBeenCalled()
   })
 })
+
+describe('handleAutonomousRoomTurn — pacing milestones', () => {
+  const milestoneMessages = (
+    adds: Array<{ systemKind?: string }>,
+  ) => adds.filter((m) => m.systemKind === 'autonomous-room-halfway' || m.systemKind === 'autonomous-room-nearing-end')
+
+  it('announces the halfway nudge once when the binding (turns) budget crosses 50%', async () => {
+    // 10-turn cap, 4 turns done → this turn makes 5 (exactly 50%).
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', runTurnsConsumed: 4, budgetMaxTurns: 10 }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const halfway = state.messageAdds.filter((m) => (m as { systemKind?: string }).systemKind === 'autonomous-room-halfway')
+    expect(halfway).toHaveLength(1)
+    // Carries a persona-free body so opaque-anywhere rooms steer correctly.
+    expect((halfway[0] as { opaqueContent?: string }).opaqueContent).toContain('halfway')
+    expect((halfway[0] as { content?: string }).content).toContain('The Host')
+    // The bitmask records bit 0 so it never re-fires this run.
+    const maskWrites = state.chatUpdates.filter((u) => 'runMilestonesAnnounced' in u)
+    expect(maskWrites[maskWrites.length - 1].runMilestonesAnnounced).toBe(1)
+    // Run still continues.
+    expect(mockEnqueueAutonomousRoomTurn).toHaveBeenCalledTimes(1)
+  })
+
+  it('announces the near-end nudge once when the binding (turns) budget crosses 90%', async () => {
+    // 10-turn cap, 8 done → this turn makes 9 (90%).
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', runTurnsConsumed: 8, budgetMaxTurns: 10 }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const nearEnd = state.messageAdds.filter((m) => (m as { systemKind?: string }).systemKind === 'autonomous-room-nearing-end')
+    expect(nearEnd).toHaveLength(1)
+    expect((nearEnd[0] as { opaqueContent?: string }).opaqueContent).toContain('end soon')
+    const maskWrites = state.chatUpdates.filter((u) => 'runMilestonesAnnounced' in u)
+    expect(maskWrites[maskWrites.length - 1].runMilestonesAnnounced).toBe(3)
+    expect(mockEnqueueAutonomousRoomTurn).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not re-announce a milestone already recorded in the bitmask', async () => {
+    // Halfway bit already set; this turn (5 → 6 of 10 = 60%) must stay quiet.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', runTurnsConsumed: 5, budgetMaxTurns: 10, runMilestonesAnnounced: 1 }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    expect(milestoneMessages(state.messageAdds as never)).toHaveLength(0)
+    expect(state.chatUpdates.filter((u) => 'runMilestonesAnnounced' in u)).toHaveLength(0)
+  })
+
+  it('fires only the near-end nudge (and marks both bits) when a turn vaults straight past 50%', async () => {
+    // Token budget: a single heavy turn jumps from 0% to 95% in one go.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({
+        runState: 'running',
+        runTurnsConsumed: 1,
+        runTokensConsumed: 0,
+        budgetMaxTurns: null,
+        budgetMaxTokens: 1000,
+      }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    repos.llmLogs.getTotalTokenUsageForRun = jest.fn(async () => ({ totalTokens: 950 })) as never
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const halfway = state.messageAdds.filter((m) => (m as { systemKind?: string }).systemKind === 'autonomous-room-halfway')
+    const nearEnd = state.messageAdds.filter((m) => (m as { systemKind?: string }).systemKind === 'autonomous-room-nearing-end')
+    expect(halfway).toHaveLength(0)
+    expect(nearEnd).toHaveLength(1)
+    // Phrased around the token budget.
+    expect((nearEnd[0] as { opaqueContent?: string }).opaqueContent).toContain('allotted length')
+    const maskWrites = state.chatUpdates.filter((u) => 'runMilestonesAnnounced' in u)
+    expect(maskWrites[maskWrites.length - 1].runMilestonesAnnounced).toBe(3)
+  })
+
+  it('stays silent when no room budget is configured', async () => {
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', runTurnsConsumed: 50, budgetMaxTurns: null, budgetMaxTokens: null, budgetMaxWallClockMs: null }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    expect(milestoneMessages(state.messageAdds as never)).toHaveLength(0)
+    expect(mockEnqueueAutonomousRoomTurn).toHaveBeenCalledTimes(1)
+  })
+
+  it('resets the milestone bitmask to 0 on the first turn of a fresh run', async () => {
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'idle', runMilestonesAnnounced: 3, budgetMaxTurns: 100 }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const resetWrites = state.chatUpdates.filter((u) => u.runMilestonesAnnounced === 0)
+    expect(resetWrites.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('announces the halfway nudge for a wall-clock budget, phrased around time', async () => {
+    // Continuing run, started ~31s ago with a 60s wall-clock cap → ~51% elapsed.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({
+        runState: 'running',
+        runStartedAt: new Date(Date.now() - 31_000).toISOString(),
+        runPausedAccumMs: 0,
+        budgetMaxTurns: null,
+        budgetMaxTokens: null,
+        budgetMaxWallClockMs: 60_000,
+      }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const halfway = state.messageAdds.filter((m) => (m as { systemKind?: string }).systemKind === 'autonomous-room-halfway')
+    expect(halfway).toHaveLength(1)
+    expect((halfway[0] as { opaqueContent?: string }).opaqueContent).toContain('allotted time')
+    expect(mockEnqueueAutonomousRoomTurn).toHaveBeenCalledTimes(1)
+  })
+
+  it('frames the near-end nudge as a pause (not an ending) when the daily user-token cap is binding', async () => {
+    // No per-run cap; the cross-room daily cap is at 95%. The daily cap pauses
+    // the room rather than ending it, so the nudge must tell the characters to
+    // finish for now and reconvene later — not that the gathering closes.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', budgetMaxTurns: null, budgetMaxTokens: null, budgetMaxWallClockMs: null }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    repos.chatSettings.findByUserId = jest.fn(async () => ({ autonomousRoomSettings: { dailyTokenBudget: 10_000 } })) as never
+    repos.llmLogs.getTotalTokenUsageSince = jest.fn(async () => ({ totalTokens: 9_500 })) as never
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    // Not exhausted (95% < 100%) — the run continues.
+    expect(state.chatUpdates.filter((u) => u.runState === 'paused' || u.runState === 'budgetExhausted')).toHaveLength(0)
+    expect(mockEnqueueAutonomousRoomTurn).toHaveBeenCalledTimes(1)
+
+    const nearEnd = state.messageAdds.filter((m) => (m as { systemKind?: string }).systemKind === 'autonomous-room-nearing-end')
+    expect(nearEnd).toHaveLength(1)
+    const opaque = (nearEnd[0] as { opaqueContent?: string }).opaqueContent ?? ''
+    expect(opaque).toContain('pause')
+    expect(opaque).toContain('resume')
+    expect(opaque).toContain('allowance for the day')
+    // Host body promises a reconvening rather than a close.
+    expect((nearEnd[0] as { content?: string }).content).toContain('reconvene')
+  })
+})
+
+describe('handleAutonomousRoomTurn — wall-clock anchor on a fresh run', () => {
+  it('does NOT falsely exhaust a wall-clock budget on the first turn of a 2nd run', async () => {
+    // Regression: the committed DB still shows the *previous* run's
+    // runStartedAt (the manual-start service does not reset it; the handler's
+    // idle → running reset is buffered). The post-turn budget check must use
+    // the local snapshot's fresh start, not the stale re-read — otherwise a
+    // wall-clock-budgeted room ends after a single turn on every repeat run.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({
+        runState: 'idle',
+        // A start far in the past — a previous run that ended long ago.
+        runStartedAt: '2020-01-01T00:00:00.000Z',
+        runPausedAccumMs: 0,
+        budgetMaxTurns: null,
+        budgetMaxTokens: null,
+        budgetMaxWallClockMs: 60_000,
+      }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const wallClockExhaustion = state.chatUpdates.filter(
+      (u) => u.runState === 'budgetExhausted' && u.runStateMessage === 'budget:wall_clock',
+    )
+    expect(wallClockExhaustion).toHaveLength(0)
+    expect(mockEnqueueAutonomousRoomTurn).toHaveBeenCalledTimes(1)
+  })
+})

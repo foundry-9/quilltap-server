@@ -4,6 +4,28 @@
 
 ### 4.6.1
 
+#### Autonomous rooms now get Host pacing announcements at the halfway and near-end marks
+
+An autonomous-room run now posts two Host announcements as it approaches its budget, so the characters can pace themselves and wrap up before the run stops:
+
+- **Halfway** — when the binding budget crosses 50%, the Host notes that the gathering has reached its midpoint and nudges the conversation toward what matters most.
+- **Near the end** — when 10% of the budget remains (90% consumed), the Host warns that the gathering will soon close and asks the participants to say what most needs saying.
+
+The "binding" budget is whichever configured cap is closest to exhaustion (the one that will halt the run first) — turns, tokens, wall-clock, or the cross-room daily user-token cap; the announcement phrasing adapts to it. Each milestone fires at most once per run. The daily cap *pauses* the room rather than ending the run, so its near-end nudge is framed as "finish for now — the company will reconvene" instead of a final close; the characters are still told to wrap up the present scene. The estimated-spend cap is not counted (it is not enforced in the run loop today).
+
+Each announcement carries both a Host-voiced body (shown to the operator in the Salon) and a persona-free `opaqueContent` body that is swapped into the characters' LLM context in opaque-anywhere rooms — so the steering reaches the characters whether or not they can see the Host by name.
+
+Implementation:
+
+- New `runMilestonesAnnounced` column on `chats` (`INTEGER DEFAULT 0`), a per-run bitmask (bit 0 = halfway, bit 1 = near-end), added by migration `add-autonomous-run-milestones-v1`. Reset to 0 at each run start. Added to `ChatMetadataSchema`/`ChatMetadataBaseSchema`, the qtap export schema, and DDL.
+- `autonomous-room-turn` computes the binding-budget fraction post-turn (across the per-run turns/tokens/wall-clock caps and the daily user-token cap) and fires the appropriate milestone once, recording it in the bitmask. A turn that vaults straight past 50% to ≥90% fires only the near-end nudge and marks both bits. When the daily cap is the binding budget the nudge uses pause-framed phrasing.
+- `postAutonomousRoomAnnouncement` now accepts an `opaqueContent` body; the milestone messages populate it.
+- Salon UI: display labels and importance tiers added for the `autonomous-room-*` system-message kinds (`start`, `end`, `paused`, `halfway`, `nearing-end`).
+
+#### Fix: wall-clock-budgeted autonomous rooms could falsely exhaust after one turn on a repeat run
+
+The post-turn budget check read the wall-clock anchor (`runStartedAt`) from a re-read of the chat row. On the first turn of a fresh run, the idle→running reset that stamps `runStartedAt = now` is still buffered in the forked job child, so the re-read returned the *previous* run's start — yielding a huge elapsed time that tripped `budget:wall_clock` and ended the run after a single turn. The check now pins `runStartedAt` and `runPausedAccumMs` from the local in-handler snapshot (which carries the fresh reset), mirroring how the turn/token counters are already pinned. The pre-turn check was already correct.
+
 #### Autonomous-room token budgets can now optionally count all tokens (including prompt-cache hits)
 
 The exclusion of prompt-cache hits from the autonomous-room token budget (see below) is now a per-room choice rather than a fixed rule. A new **Count only the dear tokens** checkbox in the autonomous-room creation card controls how the per-run token cap (`budgetMaxTokens` / `runTokensConsumed`) is tallied:

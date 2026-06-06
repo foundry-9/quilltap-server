@@ -102,6 +102,141 @@ function checkBudget(
   return { exhausted: false };
 }
 
+// ---------------------------------------------------------------------------
+// Pacing milestones. As a run approaches its budget the Host nudges the room
+// — once at the halfway mark, once at 10% remaining — so the characters can
+// pace themselves and wrap up gracefully before the run stops. We track which
+// milestones have fired with a bitmask on the chat row (reset at run start),
+// so each fires exactly once even though the budget is only sampled at turn
+// boundaries.
+// ---------------------------------------------------------------------------
+
+const MILESTONE_HALFWAY = 1; // bit 0
+const MILESTONE_NEAR_END = 2; // bit 1
+const HALFWAY_THRESHOLD = 0.5;
+const NEAR_END_THRESHOLD = 0.9; // 10% of the budget remaining
+
+type MilestoneBinding = 'time' | 'turns' | 'tokens' | 'daily';
+
+/**
+ * How far the current run has progressed toward its *binding* budget — the cap
+ * closest to exhaustion, which will halt the run first. Considers the three
+ * per-run room caps (turns / tokens / wall-clock) and the cross-room daily
+ * user-token cap. Returns null when none is configured (nothing to count down
+ * toward).
+ *
+ * The daily cap differs in outcome: it *pauses* the room (it resumes after the
+ * cap rolls over) rather than ending the run. `buildMilestoneMessage` phrases
+ * the nudge accordingly — the characters are still told to finish up, just
+ * that the gathering will reconvene rather than close for good. The spend cap
+ * is not counted: it is not enforced in the run loop today.
+ *
+ * On a tie the per-run caps win (they are considered first), so an "ending"
+ * nudge is preferred over a "pausing" one when both are equally close.
+ */
+function computeBudgetProgress(
+  chat: Pick<
+    ChatMetadataBase,
+    'budgetMaxTurns' | 'budgetMaxTokens' | 'budgetMaxWallClockMs' | 'runStartedAt' | 'runPausedAccumMs'
+  >,
+  turnsConsumed: number,
+  tokensConsumed: number,
+  now: number,
+  daily: { budget: number | null; spent: number },
+): { fraction: number; binding: MilestoneBinding } | null {
+  let best: { fraction: number; binding: MilestoneBinding } | null = null;
+  const consider = (fraction: number, binding: MilestoneBinding) => {
+    if (!Number.isFinite(fraction) || fraction < 0) return;
+    if (!best || fraction > best.fraction) best = { fraction, binding };
+  };
+  if (chat.budgetMaxTurns != null && chat.budgetMaxTurns > 0) {
+    consider(turnsConsumed / chat.budgetMaxTurns, 'turns');
+  }
+  if (chat.budgetMaxTokens != null && chat.budgetMaxTokens > 0) {
+    consider(tokensConsumed / chat.budgetMaxTokens, 'tokens');
+  }
+  if (chat.budgetMaxWallClockMs != null && chat.budgetMaxWallClockMs > 0 && chat.runStartedAt) {
+    const elapsed = now - Date.parse(chat.runStartedAt) - (chat.runPausedAccumMs ?? 0);
+    consider(elapsed / chat.budgetMaxWallClockMs, 'time');
+  }
+  if (daily.budget != null && daily.budget > 0) {
+    consider(daily.spent / daily.budget, 'daily');
+  }
+  return best;
+}
+
+/**
+ * Per-binding phrasing for the pacing nudges. `hostHalf` / `hostEnd` are the
+ * Host-voiced fragments (steampunk-Wodehouse register); `opaqueNoun` is the
+ * neutral noun used in the persona-free body that steers the characters in
+ * opaque-anywhere rooms. `pauses` marks budgets that *pause* the room rather
+ * than end the run — the near-end nudge tells those characters they must stop
+ * for now and will reconvene, not that the gathering closes for good.
+ */
+const MILESTONE_BINDING_PHRASE: Record<MilestoneBinding, {
+  hostHalf: string;
+  hostEnd: string;
+  opaqueNoun: string;
+  pauses: boolean;
+}> = {
+  time: {
+    hostHalf: 'the time allotted to this gathering',
+    hostEnd: 'our time together',
+    opaqueNoun: 'allotted time',
+    pauses: false,
+  },
+  turns: {
+    hostHalf: 'the exchanges allotted to this gathering',
+    hostEnd: 'the exchanges allotted to us',
+    opaqueNoun: 'allotted exchanges',
+    pauses: false,
+  },
+  tokens: {
+    hostHalf: 'the allowance set aside for this gathering',
+    hostEnd: "the gathering's allowance",
+    opaqueNoun: 'allotted length',
+    pauses: false,
+  },
+  daily: {
+    hostHalf: "the day's shared allowance",
+    hostEnd: "the day's allowance",
+    opaqueNoun: 'allowance for the day',
+    pauses: true,
+  },
+};
+
+/**
+ * Compose the Host-voiced + persona-free bodies (and the `systemKind`) for a
+ * pacing milestone, phrased around whichever budget is binding. A binding that
+ * *pauses* the room (the daily cap) is framed as "finish for now, we shall
+ * reconvene" rather than a final close.
+ */
+function buildMilestoneMessage(
+  binding: MilestoneBinding,
+  milestone: 'halfway' | 'near-end',
+): { content: string; opaqueContent: string; systemKind: AutonomousRoomKind } {
+  const phrase = MILESTONE_BINDING_PHRASE[binding];
+  if (milestone === 'halfway') {
+    return {
+      systemKind: 'autonomous-room-halfway',
+      content: `The Host raps a crystal glass for attention: we have reached the midpoint of ${phrase.hostHalf}. There is room yet — but let the conversation begin to find its way toward what matters most.`,
+      opaqueContent: `This conversation is halfway through its ${phrase.opaqueNoun}. Continue naturally, but begin steering toward what matters most before it ${phrase.pauses ? 'pauses' : 'ends'}.`,
+    };
+  }
+  if (phrase.pauses) {
+    return {
+      systemKind: 'autonomous-room-nearing-end',
+      content: `The Host consults a pocket-watch and clears their throat: ${phrase.hostEnd} is nearly spent, and this gathering must soon pause for the day. Finish now what most needs saying — the company shall reconvene when the allowance comes round again.`,
+      opaqueContent: `This conversation is almost out of its ${phrase.opaqueNoun} and will pause shortly — it will resume later, but not before stopping for now. Say what most needs to be said, and bring the present scene to a close.`,
+    };
+  }
+  return {
+    systemKind: 'autonomous-room-nearing-end',
+    content: `The Host consults a pocket-watch and clears their throat: ${phrase.hostEnd} is nearly spent, and this gathering must soon draw to a close. Say now what most needs saying, and bring your threads to a graceful rest.`,
+    opaqueContent: `This conversation is almost out of its ${phrase.opaqueNoun} and will end soon. Say what most needs to be said, and begin bringing the scene to a close.`,
+  };
+}
+
 /**
  * Drain `handleSendMessage`'s stream. Autonomous-room turns don't have a
  * client listening; the bytes are persisted via the orchestrator's internal
@@ -129,6 +264,7 @@ async function transitionRunState(
     runPausedAt: string | null;
     runTurnsConsumed: number;
     runTokensConsumed: number;
+    runMilestonesAnnounced: number;
     scheduleNextRunAt: string | null;
   }> = {},
 ): Promise<void> {
@@ -146,15 +282,30 @@ function formatNameList(names: string[]): string {
   return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
 }
 
+type AutonomousRoomKind =
+  | 'autonomous-room-start'
+  | 'autonomous-room-end'
+  | 'autonomous-room-paused'
+  | 'autonomous-room-halfway'
+  | 'autonomous-room-nearing-end';
+
 /**
  * Post a Host-authored `autonomous-room-*` system message. The Host owns the
- * announcement surface for autonomous rooms (start / end / paused). Uses
- * `host-avatar.webp` via the existing chat-UI lookup keyed on `systemSender`.
+ * announcement surface for autonomous rooms (start / end / paused / pacing).
+ * Uses `host-avatar.webp` via the existing chat-UI lookup keyed on
+ * `systemSender`.
+ *
+ * `opaqueContent` is the persona-free body swapped into every character's LLM
+ * context when the room is opaque-anywhere (any participant lacks
+ * `systemTransparency`). Pass it for messages that the characters should read
+ * and act on — the pacing nudges in particular — so the steering survives the
+ * opaque swap; the human always sees the Host-voiced `content` in the Salon.
  */
 async function postAutonomousRoomAnnouncement(
   chatId: string,
-  systemKind: 'autonomous-room-start' | 'autonomous-room-end' | 'autonomous-room-paused',
+  systemKind: AutonomousRoomKind,
   content: string,
+  opaqueContent: string | null = null,
 ): Promise<void> {
   const repos = getRepositories();
   const message: MessageEvent = {
@@ -162,6 +313,7 @@ async function postAutonomousRoomAnnouncement(
     id: randomUUID(),
     role: 'ASSISTANT',
     content,
+    opaqueContent,
     attachments: [],
     createdAt: new Date().toISOString(),
     participantId: null,
@@ -290,11 +442,13 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
       runStateMessage: null,
       runTurnsConsumed: 0,
       runTokensConsumed: 0,
+      runMilestonesAnnounced: 0,
     });
     chat.runState = 'running';
     chat.runStartedAt = nowIso;
     chat.runTurnsConsumed = 0;
     chat.runTokensConsumed = 0;
+    chat.runMilestonesAnnounced = 0;
 
     // Post the run-start announcement.
     const caps: string[] = [];
@@ -500,8 +654,23 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   // than `postCheck.run{Turns,Tokens}Consumed` — the update we just queued
   // is still in the buffer, so the re-read sees the previous turn's value
   // and would miss budget exhaustion that just happened this turn.
+  //
+  // Same buffered-read hazard applies to the wall-clock anchor: on the first
+  // turn of a fresh run the idle → running reset wrote `runStartedAt = now`,
+  // but that write is still buffered, so `postCheck.runStartedAt` reads the
+  // *previous* run's start from the readonly DB. Left unpinned, a wall-clock-
+  // budgeted room on its 2nd-or-later run would compute a huge elapsed and
+  // falsely exhaust after a single turn. The local `chat` snapshot carries the
+  // authoritative start (mutated on the reset) and paused-accumulator, so pin
+  // both from it — exactly as the turn/token counters are pinned above.
   const verdict = checkBudget(
-    { ...postCheck, runTurnsConsumed: newTurnsConsumed, runTokensConsumed: newTokensConsumed },
+    {
+      ...postCheck,
+      runStartedAt: chat.runStartedAt,
+      runPausedAccumMs: chat.runPausedAccumMs,
+      runTurnsConsumed: newTurnsConsumed,
+      runTokensConsumed: newTokensConsumed,
+    },
     Date.now(),
     { dailyTokenBudget, dailyTokensSpent: postDailySpent },
   );
@@ -523,6 +692,50 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
       : `Autonomous run ended. Reason: ${verdict.reason}. ${newTurnsConsumed} turn(s), ${newTokensConsumed.toLocaleString()} token(s), ${Math.round(elapsedMs / 1000)}s elapsed.`;
     await postAutonomousRoomAnnouncement(chatId, kind, reasonText);
     return;
+  }
+
+  // 9b. Pacing milestones. The run is continuing (it did not exhaust above), so
+  //     check whether the binding budget has just crossed the halfway or
+  //     near-end mark and, if so, have the Host nudge the room. Each milestone
+  //     fires at most once per run, tracked by a bitmask reset at run start.
+  //     The per-run inputs come off the local `chat` snapshot — the bitmask,
+  //     the budget caps, and the wall-clock anchor (`runStartedAt` /
+  //     `runPausedAccumMs`) — for the same buffered-write reason the turn
+  //     counter does: `postCheck` re-reads the readonly DB and would miss the
+  //     idle → running reset still pending in the job child's write buffer. The
+  //     cross-room daily cap is passed separately (it lives in llm_logs, not on
+  //     the chat row); a binding daily cap yields a "pause for now" nudge.
+  const progress = computeBudgetProgress(
+    chat,
+    newTurnsConsumed,
+    newTokensConsumed,
+    Date.now(),
+    { budget: dailyTokenBudget, spent: postDailySpent },
+  );
+  if (progress) {
+    const mask = chat.runMilestonesAnnounced ?? 0;
+    let fire: { milestone: 'halfway' | 'near-end'; nextMask: number } | null = null;
+    if (progress.fraction >= NEAR_END_THRESHOLD && (mask & MILESTONE_NEAR_END) === 0) {
+      // A single long turn can vault straight past the halfway mark; fire only
+      // the (more urgent) near-end nudge, but record both bits so the now-moot
+      // halfway nudge never fires after it.
+      fire = { milestone: 'near-end', nextMask: mask | MILESTONE_NEAR_END | MILESTONE_HALFWAY };
+    } else if (progress.fraction >= HALFWAY_THRESHOLD && (mask & MILESTONE_HALFWAY) === 0) {
+      fire = { milestone: 'halfway', nextMask: mask | MILESTONE_HALFWAY };
+    }
+    if (fire) {
+      logger.info('Autonomous-room turn: pacing milestone reached', {
+        context: HANDLER, chatId, runId,
+        milestone: fire.milestone, binding: progress.binding,
+        fraction: Number(progress.fraction.toFixed(3)),
+      });
+      await repos.chats.update(chatId, {
+        runMilestonesAnnounced: fire.nextMask,
+      } as unknown as Partial<ChatMetadataBase>);
+      chat.runMilestonesAnnounced = fire.nextMask;
+      const { content, opaqueContent, systemKind } = buildMilestoneMessage(progress.binding, fire.milestone);
+      await postAutonomousRoomAnnouncement(chatId, systemKind, content, opaqueContent);
+    }
   }
 
   // Loop continues — enqueue the next turn.

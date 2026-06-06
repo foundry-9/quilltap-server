@@ -459,6 +459,7 @@ CREATE TABLE "chats" (
   "runPausedAccumMs" INTEGER DEFAULT 0,    -- cumulative ms spent paused; wall-clock budget = (now - runStartedAt) - runPausedAccumMs (keeps runStartedAt as the token-window anchor)
   "runTurnsConsumed" INTEGER DEFAULT NULL,
   "runTokensConsumed" INTEGER DEFAULT NULL,
+  "runMilestonesAnnounced" INTEGER DEFAULT 0, -- added in 4.6.1 (add-autonomous-run-milestones-v1): per-run bitmask of pacing nudges the Host has posted (bit 0 = halfway, bit 1 = near-end/10% remaining); reset to 0 at each run start
   "runDestructiveToolsAllowed" INTEGER DEFAULT 0,
   "budgetExcludeCacheHits" INTEGER DEFAULT 1, -- 1 = budget counts only billable cache-miss + output tokens; 0 = count every token incl. prompt-cache hits (added back from cacheUsage)
   "runVisibility" TEXT DEFAULT NULL,       -- 'owner_only' | 'household' | 'open'; NULL = inherit user default

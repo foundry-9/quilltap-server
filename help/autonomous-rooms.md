@@ -34,6 +34,21 @@ Should the Estate suffer an abrupt outage — the power cut, the server felled m
 
 And should a single turn prove impossible to commit to the ledger — some rare disagreement between a character's handiwork and the Estate's filing system — that turn is struck out whole rather than left half-written, and the room is set gently to *paused*, the cause noted in its status, awaiting your **Resume** rather than freezing mid-sentence. (As with an outage, a scheduled room so paused still keeps its next appointment, beginning afresh then if you have not resumed it.)
 
+## The Host calls the hour — pacing announcements
+
+A conversation that does not know when the hour grows late is apt to be cut off mid-flourish, its finest sentiment left forever unsaid. So that the assembled company may pace themselves and bring matters to a graceful close, **the Host marks two moments aloud** as a run draws on toward its limit:
+
+- **The midpoint.** When the run has spent half of whatever budget binds it, the Host raps a glass and observes that the gathering has reached its halfway mark — *there is room yet, but let the conversation begin to find its way toward what matters most.*
+- **The near-end.** When but a tenth of the budget remains, the Host consults a pocket-watch and warns that the gathering must soon close — *say now what most needs saying, and bring your threads to a graceful rest.*
+
+The Host measures these moments against the **binding** budget — whichever of turns, tokens, wall-clock time, or the daily user-token allowance stands closest to exhaustion, and so will halt the run first — and phrases the announcement to suit it ("our time together," "the exchanges allotted to us," "the gathering's allowance," "the day's allowance"). Each is sounded but once per run.
+
+A nicety of manners attends the **daily user-token cap**, for it does not *end* a run so much as set the room down for the night, to resume of its own accord once the allowance comes round again. So when the daily allowance is the binding budget, the Host's near-end announcement is framed as a *pause* rather than a farewell: the company are told to finish what most needs saying *for now*, with the assurance that they shall reconvene — not that the gathering closes for good. They are asked to wrap up the present scene all the same.
+
+Only the **estimated-spend cap** is left out of this reckoning entirely: it is a convenience tally rather than a hard stop on the loop, and so is not counted toward the milestones.
+
+A word on who hears what. As with every announcement from the Estate's staff, the householder watching the transcript hears the Host in full voice. The characters themselves, in a room where any participant keeps the staff opaque, receive instead a plain, unattributed note to the same effect — so the gentle pressure to wrap up reaches them whether or not they may perceive the Host by name.
+
 ## Scheduling — cron, plain and proper
 
 A scheduled autonomous room runs on a five-field cron expression and a **freshness window** — the maximum interval after a scheduled fire time during which a late catch-up is still considered timely. If the server was unavailable at the scheduled moment but comes back within the freshness window, the run will start as soon as the scheduler ticks. Beyond the freshness window the missed slot is recorded and skipped; the next scheduled run is computed forward from the cron.

@@ -567,6 +567,10 @@
           "type": ["integer", "null"],
           "description": "Tokens consumed in the current/most-recent autonomous-room run."
         },
+        "runMilestonesAnnounced": {
+          "type": "integer",
+          "description": "Bitmask of per-run pacing nudges the Host has already posted for the current/most-recent autonomous-room run (bit 0 = halfway, bit 1 = near-end / 10% remaining). Reset to 0 at each run start."
+        },
         "runDestructiveToolsAllowed": {
           "type": "integer",
           "enum": [0, 1],

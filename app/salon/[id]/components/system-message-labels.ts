@@ -38,6 +38,11 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'status-change': 'status change',
   'session-opened': 'terminal opened',
   'session-closed': 'terminal closed',
+  'autonomous-room-start': 'run begun',
+  'autonomous-room-end': 'run ended',
+  'autonomous-room-paused': 'run paused',
+  'autonomous-room-halfway': 'halfway through',
+  'autonomous-room-nearing-end': 'nearing the end',
   timestamp: 'time',
 }
 
@@ -163,6 +168,13 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
     'join-scenario': 'low',
     'silent-mode-enter': 'low',
     'silent-mode-exit': 'low',
+    // Autonomous-room lifecycle: run boundaries and the near-end pacing nudge
+    // are high-signal; the start banner and the halfway nudge are medium.
+    'autonomous-room-start': 'medium',
+    'autonomous-room-end': 'high',
+    'autonomous-room-paused': 'high',
+    'autonomous-room-halfway': 'medium',
+    'autonomous-room-nearing-end': 'high',
     '*': 'medium',
   },
   concierge: { danger: 'high', '*': 'high' },

@@ -324,6 +324,8 @@ import { addThinkingDisplayFieldsMigration } from './add-thinking-display-fields
 import { addAutoScrollOnResponseCompleteFieldMigration } from './add-auto-scroll-on-response-complete-field';
 // 4.6 private character rooms: budgetExcludeCacheHits column on chats (optional all-tokens budget mode)
 import { addAutonomousBudgetCacheModeMigration } from './add-autonomous-budget-cache-mode';
+// 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
+import { addAutonomousRunMilestonesMigration } from './add-autonomous-run-milestones';
 
 /**
  * All available migrations.
@@ -644,6 +646,8 @@ export const migrations: Migration[] = [
   addAutoScrollOnResponseCompleteFieldMigration,
   // 4.6 private character rooms: budgetExcludeCacheHits column on chats (optional all-tokens budget mode)
   addAutonomousBudgetCacheModeMigration,
+  // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
+  addAutonomousRunMilestonesMigration,
 ];
 
 export {
@@ -945,5 +949,7 @@ export {
   addAutoScrollOnResponseCompleteFieldMigration,
   // 4.6 private character rooms: budgetExcludeCacheHits column on chats (optional all-tokens budget mode)
   addAutonomousBudgetCacheModeMigration,
+  // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
+  addAutonomousRunMilestonesMigration,
 };
 
