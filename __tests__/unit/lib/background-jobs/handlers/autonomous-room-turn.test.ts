@@ -179,6 +179,72 @@ describe('handleAutonomousRoomTurn — counter bookkeeping', () => {
     expect(finalUpdate.runTurnsConsumed).toBe(1)
   })
 
+  it('clears the token counter to this run\'s own usage on the first turn of a new run', async () => {
+    // Same buffered-read hazard as the turn counter, one field over: a fresh
+    // manual/scheduled start leaves the previous run's 50000-token total in
+    // the committed DB (the reset to 0 is buffered in the job child). This
+    // run actually spent 3000 tokens. The post-turn write must record 3000,
+    // not Math.max(3000, 50000) = 50000 — the bug floored against the stale
+    // re-read `post.runTokensConsumed` and carried the old run's count over.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'idle', runTurnsConsumed: 999, runTokensConsumed: 50000 }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    repos.llmLogs.getTotalTokenUsageForRun = jest.fn(async () => ({ totalTokens: 3000 })) as never
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const updatesWithTokens = state.chatUpdates.filter(u => 'runTokensConsumed' in u)
+    const resetUpdate = updatesWithTokens[0]
+    const finalUpdate = updatesWithTokens[updatesWithTokens.length - 1]
+    expect(resetUpdate.runTokensConsumed).toBe(0)
+    expect(finalUpdate.runTokensConsumed).toBe(3000)
+  })
+
+  it('keeps the accumulated token count when continuing a run (resume)', async () => {
+    // A resumed run is already `running` (the service flipped it back without
+    // touching the counters), so the idle → running reset never fires and
+    // chat.runTokensConsumed holds the genuine pre-pause total (20000). The
+    // run keeps accumulating: getTotalTokenUsageForRun re-sums every llm_logs
+    // row tagged with the preserved runId (pre-pause + this turn) = 23000.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', runTurnsConsumed: 5, runTokensConsumed: 20000 }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    repos.llmLogs.getTotalTokenUsageForRun = jest.fn(async () => ({ totalTokens: 23000 })) as never
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const updatesWithTokens = state.chatUpdates.filter(u => 'runTokensConsumed' in u)
+    // No reset write — only the single post-turn update.
+    expect(updatesWithTokens).toHaveLength(1)
+    expect(updatesWithTokens[0].runTokensConsumed).toBe(23000)
+  })
+
+  it('floors a transient zero token read against the run\'s preserved count (resume)', async () => {
+    // The run's rows are buffered one turn behind, so a transient read can
+    // return 0; Math.max against the local snapshot keeps the counter
+    // monotonic. On a continuing run that floor is the preserved 20000 — the
+    // count must never drop back to 0 mid-run.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({ runState: 'running', runTurnsConsumed: 5, runTokensConsumed: 20000 }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    // Default getTotalTokenUsageForRun returns { totalTokens: 0 }.
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const updatesWithTokens = state.chatUpdates.filter(u => 'runTokensConsumed' in u)
+    expect(updatesWithTokens).toHaveLength(1)
+    expect(updatesWithTokens[0].runTokensConsumed).toBe(20000)
+  })
+
   it('increments off the local snapshot when continuing a run (already running)', async () => {
     const { state, repos } = createBufferedRepos({
       chat: baseChat({ runState: 'running', runTurnsConsumed: 7 }),
@@ -254,6 +320,34 @@ describe('handleAutonomousRoomTurn — counter bookkeeping', () => {
       jobId: 'job-1',
       chatId: 'chat-1',
     })
+    mockGetRepositories.mockReturnValue(repos as never)
+
+    await handleAutonomousRoomTurn(baseJob() as never)
+
+    const exhaustionTransitions = state.chatUpdates.filter(
+      u => u.runState === 'budgetExhausted',
+    )
+    expect(exhaustionTransitions).toHaveLength(0)
+    expect(mockEnqueueAutonomousRoomTurn).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT trip budgetExhausted on the first turn of a fresh run with a small token cap', async () => {
+    // Token-counter mirror of the turn-cap regression above. A room with
+    // budgetMaxTokens=10000 and a stale 50000-token total carried over from a
+    // prior run would trip budgetExhausted immediately on the first turn — the
+    // buggy floor against `post.runTokensConsumed` saw 50000 >= 10000. With the
+    // fix the local snapshot (reset to 0 on idle → running) gives this run's
+    // own 3000, well under the cap, so the next turn is enqueued normally.
+    const { state, repos } = createBufferedRepos({
+      chat: baseChat({
+        runState: 'idle',
+        runTokensConsumed: 50000,
+        budgetMaxTokens: 10000,
+      }),
+      jobId: 'job-1',
+      chatId: 'chat-1',
+    })
+    repos.llmLogs.getTotalTokenUsageForRun = jest.fn(async () => ({ totalTokens: 3000 })) as never
     mockGetRepositories.mockReturnValue(repos as never)
 
     await handleAutonomousRoomTurn(baseJob() as never)

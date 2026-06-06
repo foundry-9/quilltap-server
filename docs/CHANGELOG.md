@@ -4,6 +4,12 @@
 
 ### 4.6.1
 
+#### Fix: autonomous-room token counter now resets on a fresh run
+
+A manually-started or scheduled autonomous-room run now starts its per-run token tally from zero, instead of carrying over the previous run's total. A *resumed* (paused → running) run still keeps the count it had, as intended.
+
+The post-turn token bookkeeping in `autonomous-room-turn.ts` floored `runTokensConsumed` against `post.runTokensConsumed` — a re-read served from the forked job child's readonly connection. On the first turn of a fresh run, the idle→running `runTokensConsumed: 0` reset is still buffered in the child, so that re-read returned the *previous* run's total; `Math.max(thisRunTokens, previousRunTokens)` then carried the stale count forward. A room with `budgetMaxTokens` set would trip `budgetExhausted` on the first turn of its second-or-later run. Fixed by flooring against the local `chat` snapshot (reset to 0 on idle→running for a fresh run, preserved for a resumed run) — the same pin the turn counter already used. No schema change; same monotonic-floor and cache-hit-counting behavior otherwise.
+
 #### Autonomous rooms ("enclaves") can now be edited after creation
 
 The autonomous-settings form from the New Room flow can now be reused to edit an existing autonomous room. Editable: title, schedule cron, catch-up freshness window, the four budget caps (turns/tokens/wall-clock/spend), the "count only the dear tokens" cache-hit toggle, visibility, and destructive-tool authorization. The participant roster and per-character connection profiles/system prompts are not edited here — those stay on the Participants sidebar card.

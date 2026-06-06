@@ -627,7 +627,19 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   // repository adds the stripped cache reads back from `cacheUsage`.
   const includeCacheHits = (chat.budgetExcludeCacheHits ?? 1) === 0;
   const runUsage = await repos.llmLogs.getTotalTokenUsageForRun(runId, { includeCacheHits });
-  const newTokensConsumed = Math.max(runUsage.totalTokens, post.runTokensConsumed ?? 0);
+  // The monotonic floor is the local `chat` snapshot — mutated to 0 on the
+  // idle→running transition for a fresh manual/scheduled run, or carrying the
+  // preserved count for a resumed run — NOT the re-read `post`. For the same
+  // buffered-write reason the turn counter is pinned below (see the long
+  // comment above): on the first turn of a fresh run the idle→running
+  // `runTokensConsumed: 0` reset is still pending in the job child's write
+  // buffer, so `post.runTokensConsumed` reads the *previous* run's stale total
+  // off the readonly DB. Flooring against it would carry the old run's tokens
+  // into the new one — a room with `budgetMaxTokens` set would then trip
+  // `budgetExhausted` on the first turn of its second-or-later run. A resumed
+  // run leaves the idle→running block untouched, so its `chat.runTokensConsumed`
+  // is the genuine pre-pause count and the run keeps accumulating from there.
+  const newTokensConsumed = Math.max(runUsage.totalTokens, chat.runTokensConsumed ?? 0);
 
   // Turn accounting: increment off the local `chat` snapshot (already
   // mutated to 0 on the idle→running transition when applicable), not the
