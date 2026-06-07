@@ -80,6 +80,8 @@ const PRETTY_LABELS: Record<string, string> = {
 
   // 4.6 character vault cutover
   'cutover-characters-to-vault-v1': "Settling every character into their vault for keeps",
+  // 4.7 project store cutover
+  'cutover-projects-to-store-v1': 'Folding each project into its own document store for good',
   'drop-character-scenario-column-v1': 'Sweeping out a disused scenario drawer',
 
   // Per-character fields

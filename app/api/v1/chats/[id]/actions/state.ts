@@ -49,7 +49,7 @@ export async function handleGetState(
     let projectState: Record<string, unknown> = {};
     if (chat.projectId) {
       const project = await repos.projects.findById(chat.projectId);
-      if (project && project.userId === user.id) {
+      if (project) {
         projectState = (project.state || {}) as Record<string, unknown>;
       }
     }

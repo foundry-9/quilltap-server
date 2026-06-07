@@ -37,9 +37,9 @@ export default async function Home() {
     userId
       ? repos.chats.findByUserId(userId)
       : [],
-    // Projects - fetch all, will sort and slice later
+    // Projects - global to the instance; fetch all, sort and slice later
     userId
-      ? repos.projects.findByUserId(userId)
+      ? repos.projects.findAll()
       : [],
     // Characters - all, will filter to favorites
     userId

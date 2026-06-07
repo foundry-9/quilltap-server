@@ -32,7 +32,7 @@ export async function handleMoveFile(
 
   if (projectId !== undefined && projectId !== null) {
     const project = await ctx.repos.projects.findById(projectId);
-    if (!project || project.userId !== ctx.user.id) {
+    if (!project) {
       return notFound('Project');
     }
   }

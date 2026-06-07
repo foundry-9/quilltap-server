@@ -256,12 +256,17 @@ export type {
 // ============================================================================
 export {
   ProjectSchema,
+  ProjectRowSchema,
+  ProjectPropertiesSchema,
   ProjectContextSchema,
+  PROJECT_STORE_MANAGED_FIELDS,
 } from './project.types';
 
 export type {
   Project,
   ProjectInput,
+  ProjectRow,
+  ProjectProperties,
   ProjectContext,
 } from './project.types';
 

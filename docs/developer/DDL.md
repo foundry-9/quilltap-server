@@ -754,35 +754,33 @@ CREATE INDEX "idx_connection_profiles_userId" ON "connection_profiles" ("userId"
 
 ### projects
 
+As of the project-store cutover (`cutover-projects-to-store-v1`), the `projects`
+row is slim: only `id`, `name`, `officialMountPointId`, and the timestamps are
+columns. Everything else lives in the project's **official document store**
+(the mount point `officialMountPointId` points at) as top-level files:
+
+| Former column(s) | Store file | Format |
+| --- | --- | --- |
+| `description` | `description.md` | Markdown body |
+| `instructions` | `instructions.md` | Markdown body |
+| `state` | `state.json` | the JSON object |
+| `allowAnyCharacter`, `characterRoster`, `color`, `icon`, `defaultDisabledTools`, `defaultDisabledToolGroups`, `defaultAgentModeEnabled`, `defaultAvatarGenerationEnabled`, `defaultImageProfileId`, `defaultAlertCharactersOfLanternImages`, `storyBackgroundsEnabled`, `staticBackgroundImageId`, `storyBackgroundImageId`, `backgroundDisplayMode` | `properties.json` | one flat JSON object |
+
+The repository (`projects.repository.ts`) overlays these files on read
+(`applyProjectStoreOverlay`) and routes them back to the store on write, so the
+hydrated `Project` object is unchanged for callers. `userId` was dropped
+entirely — projects are global to the instance (single-user-per-instance).
+
 ```sql
 CREATE TABLE "projects" (
   "id" TEXT PRIMARY KEY,
-  "userId" TEXT NOT NULL,
   "name" TEXT NOT NULL,
-  "description" TEXT,
-  "instructions" TEXT,
-  "allowAnyCharacter" INTEGER DEFAULT 0,
-  "characterRoster" TEXT DEFAULT '[]',
-  "color" TEXT,
-  "icon" TEXT,
+  "officialMountPointId" TEXT DEFAULT NULL,
   "createdAt" TEXT NOT NULL,
-  "updatedAt" TEXT NOT NULL,
-  "defaultDisabledTools" TEXT DEFAULT '[]',
-  "defaultDisabledToolGroups" TEXT DEFAULT '[]',
-  "state" TEXT DEFAULT '{}',
-  "defaultAgentModeEnabled" INTEGER DEFAULT NULL,
-  "defaultAvatarGenerationEnabled" INTEGER DEFAULT NULL,
-  "defaultImageProfileId" TEXT DEFAULT NULL,
-  "defaultAlertCharactersOfLanternImages" INTEGER DEFAULT NULL,
-  "storyBackgroundsEnabled" INTEGER DEFAULT NULL,
-  "staticBackgroundImageId" TEXT DEFAULT NULL,
-  "storyBackgroundImageId" TEXT DEFAULT NULL,
-  "backgroundDisplayMode" TEXT DEFAULT 'theme',
-  "officialMountPointId" TEXT DEFAULT NULL
+  "updatedAt" TEXT NOT NULL
 );
 
 CREATE INDEX "idx_projects_createdAt" ON "projects" ("createdAt" DESC);
-CREATE INDEX "idx_projects_userId" ON "projects" ("userId");
 ```
 
 ### files

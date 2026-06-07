@@ -278,7 +278,8 @@ export async function restore(
     let projectsRestored = 0;
     for (const project of data.projects) {
       try {
-        const { userId, createdAt, updatedAt, ...projectData } = project;
+        // userId no longer exists on Project (projects are global).
+        const { createdAt, updatedAt, ...projectData } = project;
         await repos.projects.create(projectData, { id: project.id });
         projectsRestored++;
       } catch (error) {

@@ -4,6 +4,22 @@
 
 ### 4.7-dev
 
+#### Projects collapsed into their document store
+
+The `projects` table is now a slim identity row — only `id`, `name`, `officialMountPointId`, `createdAt`, and `updatedAt` remain as columns. Everything else moves into the project's official document store as top-level files, mirroring the 4.6 character-vault cutover:
+
+- `description` → `description.md`, `instructions` → `instructions.md`, `state` → `state.json`
+- the 14 settings fields (`allowAnyCharacter`, `characterRoster`, `color`, `icon`, `defaultDisabledTools`, `defaultDisabledToolGroups`, `defaultAgentModeEnabled`, `defaultAvatarGenerationEnabled`, `defaultImageProfileId`, `defaultAlertCharactersOfLanternImages`, `storyBackgroundsEnabled`, `staticBackgroundImageId`, `storyBackgroundImageId`, `backgroundDisplayMode`) → one flat `properties.json`
+
+`userId` is dropped entirely — projects are global to the instance (single-user-per-instance).
+
+- **Overlay** (`lib/projects/project-store/`): `applyProjectStoreOverlay[One]` re-assembles the hydrated `Project` from the slim row plus the store files on every read; `applyProjectStoreWriteOverlay` routes store-resident fields back to the files on write (per-mount-point promise-chain serialization for `properties.json`/`state.json`). The hydrated `Project` shape is unchanged, so callers, resolvers, and UI are untouched.
+- **Read failure is asymmetric and store-only (no DB-column fallback).** `findById` throws `ProjectStoreUnavailableError` when a project's store is missing/unreadable; list/roster reads (`findAll`, `findByCharacterId`) log at `error` and drop the offending project so one bad row can't take down the whole list.
+- **Provisioning is airtight:** `repos.projects.create` provisions and populates the store before returning (fails hard otherwise); a new startup backfill (`backfill-project-stores.ts`, Phase 3.4a) populates the files for any storeless project from the still-present columns; the import path provisions + writes the files from the imported payload. `findByCharacterId` now filters in memory.
+- **Repository** drops `UserOwnedBaseRepository` for the plain base; the user-scoped projects wrapper is now a global pass-through. Per-user ownership checks on projects were removed (`checkOwnership` is an existence check now); `project.userId` reads in the project-info / state tool handlers and the chat/file state actions are gone.
+- **Migration** `cutover-projects-to-store-v1` (backup-first, count guard, per-project write + verify, blocking gate, single-transaction column drop including `DROP INDEX idx_projects_userId`). Depends on `add-project-official-mount-point-v1`.
+- **Export/import** keep the flat, hydrated `ExportedProject` (minus `userId`) so `.qtap` files stay portable; export reads the store, import writes it. `public/schemas/qtap-export.schema.json` and `docs/developer/DDL.md` updated.
+
 #### Fix: new characters now keep the identity field typed into the create form
 
 The character create handler (`app/api/v1/characters/handlers/post.ts`) silently dropped the `identity` field on the way to the repository: `createCharacterSchema` never declared `identity`, so Zod stripped it from the request body, and the `repos.characters.create({...})` call omitted it too. The typed-in identity was discarded and the vault's `identity.md` was written empty, while every other vantage-point field (description, manifesto, personality) persisted normally. Added `identity` to both the create schema and the create call.

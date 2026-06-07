@@ -629,6 +629,27 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.4a: Project Store Backfill
+      // ================================================================
+      // For every project, ensure its official document store is populated
+      // with the four overlay files (description.md / instructions.md /
+      // state.json / properties.json). The project-store read overlay reads
+      // from these files with no DB-column fallback, so they must exist before
+      // any overlay read. The cutover migration populates them authoritatively
+      // (pre-Phase 3); this is the self-heal for imports and any project a
+      // blocked migration left storeless while its columns still exist.
+      // Synchronous so files exist before the first request hits.
+      try {
+        const { backfillProjectStores } = await import('./lib/startup/backfill-project-stores');
+        await backfillProjectStores();
+      } catch (backfillError) {
+        logger.warn('Error during project store backfill, continuing startup', {
+          context: 'instrumentation.register',
+          error: backfillError instanceof Error ? backfillError.message : String(backfillError),
+        });
+      }
+
+      // ================================================================
       // PHASE 3.4: Ensure Project Scenario Infrastructure
       // ================================================================
       // For every project, make sure `officialMountPointId` is populated

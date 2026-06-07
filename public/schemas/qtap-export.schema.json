@@ -1016,12 +1016,11 @@
 
     "ExportedProject": {
       "type": "object",
-      "description": "A project with optional resolved relationship metadata. Fields prefixed with '_' are informational.",
-      "required": ["id", "userId", "name", "createdAt", "updatedAt"],
+      "description": "A project with optional resolved relationship metadata. Fields prefixed with '_' are informational. The export is the flat, hydrated shape: description/instructions/state and the settings fields are read out of the project's document store (where they now live) and serialized inline for portability. `userId` was dropped in the project-store cutover — projects are global to the instance.",
+      "required": ["id", "name", "createdAt", "updatedAt"],
       "additionalProperties": true,
       "properties": {
         "id": { "$ref": "#/$defs/UUID" },
-        "userId": { "$ref": "#/$defs/UUID" },
         "name": { "type": "string", "minLength": 1, "maxLength": 100 },
         "description": { "type": ["string", "null"], "maxLength": 2000 },
         "instructions": { "type": ["string", "null"], "maxLength": 10000 },
@@ -1034,6 +1033,9 @@
         "defaultDisabledTools": { "type": "array", "items": { "type": "string" } },
         "defaultDisabledToolGroups": { "type": "array", "items": { "type": "string" } },
         "defaultAgentModeEnabled": { "type": ["boolean", "null"] },
+        "defaultAvatarGenerationEnabled": { "type": ["boolean", "null"] },
+        "defaultImageProfileId": { "type": ["string", "null"] },
+        "defaultAlertCharactersOfLanternImages": { "type": ["boolean", "null"] },
         "state": { "type": "object" },
         "storyBackgroundsEnabled": { "type": ["boolean", "null"] },
         "staticBackgroundImageId": { "type": ["string", "null"] },

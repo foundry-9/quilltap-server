@@ -229,7 +229,10 @@ export const withAuth = withContext;
 export const withAuthParams = withContextParams;
 export const createAuthenticatedHandler = createContextHandler;
 export const createAuthenticatedParamsHandler = createContextParamsHandler;
-export const checkOwnership = <T extends { userId?: string }>(
+// Existence check, retained for call-site compatibility. Per-user ownership is
+// not enforced here (and global resources like projects no longer carry a
+// `userId` at all), so the constraint is widened to any object.
+export const checkOwnership = <T extends object>(
   resource: T | null | undefined,
   _userId: string
 ): resource is T => exists(resource);

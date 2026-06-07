@@ -302,6 +302,8 @@ import { addTextReplacementRulesTableMigration } from './add-text-replacement-ru
 import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
 // 4.6 character vault cutover: move every content field into the vault and drop the DB columns
 import { cutoverCharactersToVaultMigration } from './cutover-characters-to-vault';
+// 4.7 project store cutover: move every project field into its official store and drop the DB columns (incl. userId)
+import { cutoverProjectsToStoreMigration } from './cutover-projects-to-store';
 // 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
 import { addAutonomousRoomsFieldsMigration } from './add-autonomous-rooms-fields';
 // 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
@@ -656,6 +658,8 @@ export const migrations: Migration[] = [
   addCarinaFlagMigration,
   // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
   addCarinaMessageMetaMigration,
+  // 4.7 project store cutover: fold each project into its official document store and drop the legacy columns (incl. userId)
+  cutoverProjectsToStoreMigration,
 ];
 
 export {
@@ -963,5 +967,7 @@ export {
   addCarinaFlagMigration,
   // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
   addCarinaMessageMetaMigration,
+  // 4.7 project store cutover
+  cutoverProjectsToStoreMigration,
 };
 

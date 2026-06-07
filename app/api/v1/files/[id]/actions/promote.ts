@@ -26,7 +26,7 @@ export async function handlePromoteFile(
 
   if (targetProjectId) {
     const project = await ctx.repos.projects.findById(targetProjectId);
-    if (!project || project.userId !== ctx.user.id) {
+    if (!project) {
       return notFound('Project');
     }
   }
