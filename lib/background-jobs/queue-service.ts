@@ -67,6 +67,28 @@ export interface MemoryExtractionPayload {
 }
 
 /**
+ * Payload for a Carina memory-extraction job.
+ *
+ * Unlike the per-turn extractor, a Carina exchange is a single isolated Q&A:
+ * the answerer (who may not even be a chat participant) is asked a question and
+ * posts a `systemSender: 'carina'` reference answer. That message is excluded
+ * from the normal per-turn transcript (every systemSender message is), so its
+ * memories are formed through this dedicated path instead. The handler keys on
+ * the posted carina message — its `content` is the answer, its
+ * `carinaMeta.question` the prompt — and runs a one-slice SELF extraction for
+ * the answerer.
+ */
+export interface CarinaMemoryExtractionPayload {
+  chatId: string;
+  /** The posted Carina reference-answer message (systemSender 'carina'). */
+  carinaMessageId: string;
+  /** The answerer character whose SELF memories this exchange forms. */
+  answererId: string;
+  /** Connection profile to source the cheap-LLM extractor from. */
+  connectionProfileId: string;
+}
+
+/**
  * Payload for context summary job
  */
 export interface ContextSummaryPayload {
@@ -480,6 +502,48 @@ export async function enqueueMemoryExtraction(
   }
 
   return enqueueJob(userId, 'MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
+}
+
+/**
+ * Enqueue a Carina memory-extraction job for a single posted reference answer.
+ *
+ * Dedupe: keyed on the posted carina message id. Each Carina answer is a
+ * distinct message, so this only guards against an accidental double-enqueue
+ * for the same message (e.g. a retry of `runCarinaQuery`). Works from both the
+ * main process (markup path) and the forked child (the `ask_carina` tool during
+ * an autonomous-room turn) — the child buffers the create back to the parent,
+ * exactly as the per-turn extractor already does.
+ */
+export async function enqueueCarinaMemoryExtraction(
+  userId: string,
+  payload: CarinaMemoryExtractionPayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  if (options?.skipDedupCheck) {
+    return enqueueJob(userId, 'CARINA_MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
+  }
+
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'CARINA_MEMORY_EXTRACTION') return false;
+      const existingPayload = j.payload as unknown as CarinaMemoryExtractionPayload;
+      return existingPayload.carinaMessageId === payload.carinaMessageId;
+    });
+    if (existing) {
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[CarinaMemoryExtraction] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through and enqueue anyway.
+  }
+
+  return enqueueJob(userId, 'CARINA_MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
 }
 
 /**

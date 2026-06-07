@@ -99,18 +99,27 @@ When a Carina query fires, the system builds a **minimal, isolated LLM call** fo
 
 1. **System prompt** — built the same way as a normal character turn: identity, description, personality, manifesto (from the character vault via `applyDocumentStoreOverlay`)
 2. **Character's scenarios** — if the character has a default scenario, include it
-3. **Previous Carina exchanges in this chat** — only other `@Name` queries and their answers directed at this same character in this same chat session. This gives continuity for follow-up questions ("And what about...?") without pulling in the full chat history
-4. **The question** — delivered as a user-role message
+3. **Memory recall (Commonplace Book)** — the answerer's own relevant memories, recalled by semantic search against the question and whispered into the call. *(Added after v1 — see "Memory: revised behavior" below.)*
+4. **Previous Carina exchanges in this chat** — only other `@Name` queries and their answers directed at this same character in this same chat session. This gives continuity for follow-up questions ("And what about...?") without pulling in the full chat history
+5. **The question** — delivered as a user-role message
 
 ### Context excluded
 
 - Full chat history (the answerer doesn't see the conversation)
 - Other characters' messages
-- Memory recall / Commonplace Book whispers
 - Project context
 - Core whispers
 
-### Memory suppression
+### Memory: revised behavior
+
+> **Note:** The original spec (below the line) called for *no* memory recall and *no* memory formation. Both were reversed in a later change. Carina answerers now:
+>
+> - **Receive recall.** `runCarinaQuery` runs `searchMemoriesSemantic(answererId, question, …)` over the answerer's whole memory store and injects the formatted result (via `buildCommonplaceLLMContext`) into the isolated call's system prompt. It is recall only — still no live conversation, project, or core context.
+> - **Form memories.** After the answer posts, `runCarinaQuery` enqueues a `CARINA_MEMORY_EXTRACTION` job. Its handler (`lib/background-jobs/handlers/carina-memory-extraction.ts`) loads the posted carina message, builds a one-slice `TurnTranscript` (the question as the opener, the answer as the answerer's sole contribution, **no** user-controlled character → OTHER pass self-skips), and runs `processTurnForMemory` — yielding SELF-only memories for the answerer. Public and whispered exchanges alike form memories. Behavior is global (every `canBeCarina` answerer); no per-character flag.
+>
+> The `systemSender: 'carina'` tag still keeps the answer out of the *normal* per-turn extractor (`buildTurnTranscript` skips every systemSender message); the dedicated job is what forms Carina's memories instead.
+
+#### (Original spec — superseded)
 
 No memories are created from Carina interactions. The memory-formation pipeline must be explicitly skipped for messages tagged as Carina responses. The Carina response message should carry a marker (e.g., `systemKind: 'carina-response'`) that the memory system checks and short-circuits on.
 

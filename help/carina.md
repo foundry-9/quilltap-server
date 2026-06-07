@@ -6,7 +6,7 @@ url: /salon
 
 There are moments in any well-appointed Salon when the conversation calls for a swift consultation — not a full discourse, not a fresh interlocutor joining the party with all the attendant ceremony, but simply an answer. The capital of a country. The formula for a compound. The contents of a particular file. In civilised establishments, one dispatches such questions to the reference desk.
 
-Carina is Quilltap's reference desk. She does not speak as herself — she has no self to speak from, strictly speaking. What she does is route your inquiry to whichever character you have designated as the answerer, extract a clean response from that character's personality and the chat's available tools, and deliver it back to you with a minimum of fuss. No memories formed. No conversation history consulted. No elaborate entrance. Just the answer, attributed to the character who provided it, appearing in your chat with the discreet economy of a well-trained librarian.
+Carina is Quilltap's reference desk. She does not speak as herself — she has no self to speak from, strictly speaking. What she does is route your inquiry to whichever character you have designated as the answerer, extract a clean response from that character's personality, their own recollections, and the chat's available tools, and deliver it back to you with a minimum of fuss. No conversation history consulted. No elaborate entrance. Just the answer, attributed to the character who provided it, appearing in your chat with the discreet economy of a well-trained librarian. The answerer does, however, remember being asked — a question put to the reference desk is a question the desk recalls afterward.
 
 ## The `@Name` syntax
 
@@ -48,17 +48,21 @@ A message may contain only one `@Name` invocation that fires — the first match
 The answerer character builds its response from:
 
 - Its own **personality**, **identity**, **description**, and **manifesto** — its full character as configured in Aurora
+- Its own **memories** — recollections from its Commonplace Book that bear on your question, whispered in for the occasion just as they would be for an ordinary turn
 - Its **default scenario**, if one is set
 - Any **previous Carina exchanges** in this chat directed at this same character — so follow-up questions ("And what about...?") carry appropriate continuity
 
 What the answerer does **not** receive:
 
 - The chat history — the answerer cannot see what has been discussed
-- Memory recall from the Commonplace Book
 - Project context or core whispers
 - Other characters' messages or perspectives
 
-This isolation is the point. A Carina answer is a reference answer: drawn from the character's nature and the tools at hand, not from the conversational context it has not been party to. No memories are formed from the exchange on either side.
+This isolation is the point. A Carina answer is a reference answer: drawn from the character's nature, its own recollections, and the tools at hand — not from the conversational context it has not been party to.
+
+### What the answerer remembers afterward
+
+A consultation is not forgotten the moment it concludes. After the answer is delivered, the answerer forms its own memories of the exchange — what it was asked, and what it replied — filed away in its Commonplace Book exactly as any other turn would be. Whispered consultations are remembered no less than public ones: the answerer experienced the question regardless of who was permitted to see the reply. Over time, a frequently consulted reference character accumulates a sense of what it is repeatedly asked, and its recollections inform later answers. (The party putting the question — you, or another character via `ask_carina` — forms no memory of the exchange on Carina's account; only the answerer remembers.)
 
 ## The `ask_carina` tool
 

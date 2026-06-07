@@ -45,6 +45,18 @@ jest.mock('../writer', () => ({
   postCarinaResponse: jest.fn(),
 }));
 
+jest.mock('@/lib/memory/memory-service', () => ({
+  searchMemoriesSemantic: jest.fn(),
+}));
+
+jest.mock('@/lib/chat/context/memory-injector', () => ({
+  formatMemoriesForContext: jest.fn(),
+}));
+
+jest.mock('@/lib/background-jobs/queue-service', () => ({
+  enqueueCarinaMemoryExtraction: jest.fn(),
+}));
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 import { buildIdentityStack } from '@/lib/chat/context/system-prompt-builder';
 import {
@@ -58,6 +70,9 @@ import {
 } from '@/lib/services/chat-message/tool-execution.service';
 import { supportsCapability } from '@/lib/plugins/provider-registry';
 import { postCarinaResponse } from '../writer';
+import { searchMemoriesSemantic } from '@/lib/memory/memory-service';
+import { formatMemoriesForContext } from '@/lib/chat/context/memory-injector';
+import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -161,6 +176,17 @@ beforeEach(() => {
   jest.mocked(processToolCalls).mockResolvedValue({ toolMessages: [] } as never);
   jest.mocked(createToolContext).mockReturnValue({} as never);
   jest.mocked(supportsCapability).mockReturnValue(true);
+
+  // By default no memories are recalled, so the system prompt is unchanged and
+  // the existing assertions hold. Specific tests override these.
+  jest.mocked(searchMemoriesSemantic).mockResolvedValue([]);
+  jest.mocked(formatMemoriesForContext).mockReturnValue({
+    content: '',
+    tokenCount: 0,
+    memoriesUsed: 0,
+    debugMemories: [],
+  } as never);
+  jest.mocked(enqueueCarinaMemoryExtraction).mockResolvedValue('job-mem-1' as never);
   // postCarinaResponse returns the posted MessageEvent (the service reads
   // `.id` for messageId and splices the whole message into context upstream).
   jest.mocked(postCarinaResponse).mockResolvedValue({
@@ -737,6 +763,93 @@ describe('runCarinaQuery', () => {
         (jest.mocked(streamMessage).mock.calls[0][0] as { messages: Array<{ role: string; content: string }> }).messages;
       const sysMessage = messagesArg.find((m) => m.role === 'system');
       expect(sysMessage?.content).toContain('Reference Query');
+    });
+  });
+
+  // ── Memory recall into the call (Commonplace Book whisper) ────────────────
+  describe('memory recall', () => {
+    function withRecalledMemories() {
+      jest.mocked(searchMemoriesSemantic).mockResolvedValue([
+        { memory: { id: 'm1' }, score: 0.9, usedEmbedding: true },
+      ] as never);
+      jest.mocked(formatMemoriesForContext).mockReturnValue({
+        content: '## Relevant Memories\n- [today] Aria prefers terse answers.',
+        tokenCount: 20,
+        memoriesUsed: 1,
+        debugMemories: [],
+      } as never);
+    }
+
+    it('recalls the answerer\'s memories against the question (default embedding profile)', async () => {
+      withRecalledMemories();
+      await runCarinaQuery(BASE_OPTS);
+
+      expect(searchMemoriesSemantic).toHaveBeenCalledTimes(1);
+      const [characterId, query, opts] = jest.mocked(searchMemoriesSemantic).mock.calls[0];
+      expect(characterId).toBe('char-1');
+      expect(query).toBe('What is the capital of France?');
+      expect(opts).toMatchObject({ userId: 'user-1', embeddingProfileId: undefined });
+    });
+
+    it('injects the recalled memories into the system prompt', async () => {
+      withRecalledMemories();
+      await runCarinaQuery(BASE_OPTS);
+
+      const messagesArg: Array<{ role: string; content: string }> =
+        (jest.mocked(streamMessage).mock.calls[0][0] as { messages: Array<{ role: string; content: string }> }).messages;
+      const sysMessage = messagesArg.find((m) => m.role === 'system');
+      expect(sysMessage?.content).toContain('You remember the following entries');
+      expect(sysMessage?.content).toContain('Aria prefers terse answers.');
+    });
+
+    it('omits the recall section when nothing relevant is found', async () => {
+      // Defaults already return [] / empty content.
+      await runCarinaQuery(BASE_OPTS);
+
+      const messagesArg: Array<{ role: string; content: string }> =
+        (jest.mocked(streamMessage).mock.calls[0][0] as { messages: Array<{ role: string; content: string }> }).messages;
+      const sysMessage = messagesArg.find((m) => m.role === 'system');
+      expect(sysMessage?.content).not.toContain('You remember the following entries');
+    });
+
+    it('answers anyway when memory recall throws', async () => {
+      jest.mocked(searchMemoriesSemantic).mockRejectedValue(new Error('vector store down'));
+      const result = await runCarinaQuery(BASE_OPTS);
+      expect(result).toMatchObject({ ok: true, answer: 'Paris.' });
+    });
+  });
+
+  // ── Memory formation (CARINA_MEMORY_EXTRACTION enqueue) ───────────────────
+  describe('memory formation', () => {
+    it('enqueues a Carina memory-extraction job after a successful public answer', async () => {
+      await runCarinaQuery(BASE_OPTS);
+
+      expect(enqueueCarinaMemoryExtraction).toHaveBeenCalledTimes(1);
+      const [userId, payload] = jest.mocked(enqueueCarinaMemoryExtraction).mock.calls[0];
+      expect(userId).toBe('user-1');
+      expect(payload).toEqual({
+        chatId: 'chat-1',
+        carinaMessageId: 'msg-123',
+        answererId: 'char-1',
+        connectionProfileId: 'conn-1',
+      });
+    });
+
+    it('enqueues extraction for whispered answers too', async () => {
+      await runCarinaQuery({ ...BASE_OPTS, whisper: true, askerParticipantId: 'p1' });
+      expect(enqueueCarinaMemoryExtraction).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not enqueue extraction when the answer fails to persist', async () => {
+      jest.mocked(postCarinaResponse).mockResolvedValue(null as never);
+      await runCarinaQuery(BASE_OPTS);
+      expect(enqueueCarinaMemoryExtraction).not.toHaveBeenCalled();
+    });
+
+    it('still returns the answer when the extraction enqueue throws', async () => {
+      jest.mocked(enqueueCarinaMemoryExtraction).mockRejectedValue(new Error('queue down'));
+      const result = await runCarinaQuery(BASE_OPTS);
+      expect(result).toMatchObject({ ok: true, answer: 'Paris.', messageId: 'msg-123' });
     });
   });
 });

@@ -91,6 +91,7 @@ The fix is the **deferred-file-write pattern**: the child stages files in `<data
 | Handler | Read-your-writes? | Idempotent under retry? | External side effects | Expected RPC writes |
 |---------|-------------------|-------------------------|-----------------------|---------------------|
 | memory-extraction | No | Yes (memories upserted by content hash) | LLM extraction call (before-batch) | `memories.create`, `memories.upsert`, `chats.updateMessage` |
+| carina-memory-extraction | No | Yes (gate dedupes by content; SELF-only from a one-slice synthetic transcript) | Cheap-LLM extraction call (before-batch) | `memories.create`, `memories.update`, `chats.updateMessage`, `createMemoryExtractionEvent` |
 | inter-character-memory | No | Yes (legacy drain — no-op handler) | None | None |
 | context-summary | No | Yes (deterministic summary) | LLM call (before-batch) | `chats.update`, `createContextSummaryEvent`, enqueue danger classification |
 | memory-housekeeping | No | Yes (decisions made from upfront reads) | None | `memories.delete`, `memories.update` (bulk) |

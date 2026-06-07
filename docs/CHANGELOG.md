@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Carina now forms memories and receives memory recall
+
+Reversed Carina's original "no memory" design (the feature is still unreleased this cycle). Carina answerers now both remember their consultations and draw on what they remember:
+
+- **Recall in the call** — `runCarinaQuery` runs a semantic search of the answerer's own memories against the question (`searchMemoriesSemantic`, default embedding profile) and injects the formatted result into the isolated call's system prompt via `buildCommonplaceLLMContext`. Recall only — still no live conversation, project, or core context. A recall miss or error never blocks the answer.
+- **Memory formation** — after the answer posts, `runCarinaQuery` enqueues a new `CARINA_MEMORY_EXTRACTION` background job. Its handler (`lib/background-jobs/handlers/carina-memory-extraction.ts`) loads the posted carina message, builds a one-slice `TurnTranscript` (question = turn opener, answer = the answerer's sole contribution, no user-controlled character), and runs `processTurnForMemory`. With no user character in the transcript the OTHER pass self-skips, so only SELF memories form — the answerer remembers what it was asked and what it answered.
+- **Global, both directions** — applies to every `canBeCarina` answerer (no new flag, no migration). Public and whispered exchanges both form memories.
+- The `systemSender: 'carina'` tag still excludes the answer from the *normal* per-turn extractor (`buildTurnTranscript` skips every systemSender message); the dedicated job is what forms Carina's memories instead. Enqueue works from both the markup path (main process) and the `ask_carina` tool during an autonomous-room turn (forked child), the same way per-turn extraction already enqueues from the child.
+- Help (`help/carina.md`) and the Carina feature doc updated.
+
 #### Fix: autonomous-room renames no longer fire nearly every turn
 
 The auto-rename (`TITLE_UPDATE`) and summarization-gate cadence keys off `calculateInterchangeCount`, which for autonomous rooms counted every ASSISTANT message — including staff whispers (host, prospero, aurora, commonplaceBook, librarian). Each autonomous turn emits one character message plus several whispers, so the interchange counter climbed ~5 per turn instead of ~1. The title-check gate fires once per multiple-of-10 crossed, so the inflated counter crossed a decade boundary almost every turn and enqueued a rename job nearly every turn.
@@ -31,7 +41,7 @@ Added Carina, an inline query system that lets users and LLM characters ask quic
 - **`@Name:` / `@Name?` markup** — place at the start of a line in any Salon message to route a question to the named character publicly (`:`) or as a whisper back to the asker only (`?`). Quoted forms (`"…"` / `'…'`) accept multi-sentence questions; smart quotes are supported. One query fires per message (first match wins).
 - **`ask_carina` tool** — programmatic equivalent for LLM characters; same public/whisper semantics via a `whisper` boolean parameter. Offered only when at least one `canBeCarina` answerer exists, and withheld from the answerer's own tool slate to prevent recursion.
 - **Per-character `canBeCarina` flag** — opt-in on the character edit page in Aurora; off by default. Answerers need not be participants in the chat to answer.
-- **Isolated calls** — the answerer sees its own identity/personality/scenario and any prior Carina exchanges in the chat, but no full chat history, no memory recall, and no project context. The answerer has access to the chat's tools and runs the normal tool-call loop. No memories are formed from the exchange (the `systemSender: 'carina'` tag excludes it from extraction).
+- **Isolated calls** — the answerer sees its own identity/personality/scenario, its own recalled memories, and any prior Carina exchanges in the chat, but no full chat history and no project context. The answerer has access to the chat's tools and runs the normal tool-call loop. (Memory recall and memory formation were added later in this same dev cycle — see "Carina now forms memories and receives memory recall" above; the original spec had neither.)
 - **Attribution** — answers are posted as `systemSender: 'carina'` / `systemKind: 'carina-response'` messages attributed to the answerer character and rendered with that character's own avatar (not a dedicated staff avatar), as a full-row reference card rather than a collapsed chip. Errors are reported by Prospero with `systemKind: 'carina-error'`.
 - **Delivery** — answers are generated server-side and surfaced via the existing post-turn chat refresh (not live-streamed in this version). A public `@Name:` answer is spliced into the current turn so the first character to respond in the same cycle also sees it; a `@Name?` whisper is scoped to the asker and is not relayed to other characters.
 - Migrations: `add-carina-flag-v1` adds `canBeCarina INTEGER DEFAULT NULL` to `characters`; `add-carina-message-meta-v1` adds `carinaMeta TEXT DEFAULT NULL` to `chat_messages` (JSON `{ answererId, question }`, drives avatar resolution and exchange continuity).

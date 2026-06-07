@@ -25,6 +25,7 @@ import { handleMemoryRegenerateAll } from './memory-regenerate-all';
 import { handleWardrobeOutfitAnnouncement } from './wardrobe-announcement';
 import { handleAutonomousRoomTurn } from './autonomous-room-turn';
 import { handleAutonomousRoomScheduleTick } from './autonomous-room-schedule-tick';
+import { handleCarinaMemoryExtraction } from './carina-memory-extraction';
 
 /**
  * Job handler function type
@@ -55,6 +56,7 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   WARDROBE_OUTFIT_ANNOUNCEMENT: handleWardrobeOutfitAnnouncement,
   AUTONOMOUS_ROOM_TURN: handleAutonomousRoomTurn,
   AUTONOMOUS_ROOM_SCHEDULE_TICK: handleAutonomousRoomScheduleTick,
+  CARINA_MEMORY_EXTRACTION: handleCarinaMemoryExtraction,
 };
 
 /**
@@ -89,3 +91,4 @@ export { handleMemoryRegenerateAll };
 export { handleWardrobeOutfitAnnouncement };
 export { handleAutonomousRoomTurn };
 export { handleAutonomousRoomScheduleTick };
+export { handleCarinaMemoryExtraction };
