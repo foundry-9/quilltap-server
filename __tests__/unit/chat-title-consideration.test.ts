@@ -68,6 +68,33 @@ describe('calculateInterchangeCount', () => {
     expect(calculateInterchangeCount(messages, 'autonomous')).toBe(3)
     expect(calculateInterchangeCount(messages, 'salon')).toBe(0)
   })
+
+  it('excludes staff whispers from the autonomous interchange count', () => {
+    // One real character turn drags along several staff whispers; only the
+    // genuine character message should tick the interchange meter.
+    const messages = [
+      { role: 'ASSISTANT', type: 'message' },
+      { role: 'ASSISTANT', type: 'message', systemSender: 'host' },
+      { role: 'ASSISTANT', type: 'message', systemSender: 'commonplaceBook' },
+      { role: 'ASSISTANT', type: 'message', systemSender: 'aurora' },
+      { role: 'ASSISTANT', type: 'message' },
+      { role: 'ASSISTANT', type: 'message', systemSender: 'prospero' },
+      { role: 'ASSISTANT', type: 'message', systemSender: 'librarian' },
+    ]
+    // 2 real turns + 5 whispers → counter sees 2, not 7.
+    expect(calculateInterchangeCount(messages, 'autonomous')).toBe(2)
+  })
+
+  it('excludes staff whispers from regular-chat interchange counts too', () => {
+    const messages = [
+      { role: 'USER', type: 'message' },
+      { role: 'ASSISTANT', type: 'message' },
+      { role: 'ASSISTANT', type: 'message', systemSender: 'commonplaceBook' },
+      { role: 'USER', type: 'message' },
+      { role: 'ASSISTANT', type: 'message' },
+    ]
+    expect(calculateInterchangeCount(messages, 'salon')).toBe(2)
+  })
 })
 
 describe('shouldCheckTitleAtInterchange', () => {

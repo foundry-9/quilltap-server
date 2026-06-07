@@ -90,9 +90,16 @@ export function evaluateSummarizationGate(
  * meter. Autonomous rooms have no human user, so that floor is permanently
  * zero; instead, count each assistant turn as one interchange so the title
  * check and summarization gate fire on the natural cadence of the room.
+ *
+ * Staff whispers (`systemSender` set — host/prospero/aurora/commonplaceBook/
+ * librarian/etc.) carry role ASSISTANT but are synthetic system messages, not
+ * real turns. They are excluded from the count: each autonomous turn drags
+ * along several whispers, so counting them inflated the meter by ~5/turn and
+ * collapsed the title-check / summarization cadence (meant to fire roughly
+ * every 10 interchanges) down to nearly every turn.
  */
 export function calculateInterchangeCount(
-  messages: Array<{ role?: string; type?: string }>,
+  messages: Array<{ role?: string; type?: string; systemSender?: string | null }>,
   chatType?: string,
 ): number {
   let userMessages = 0
@@ -101,6 +108,11 @@ export function calculateInterchangeCount(
   for (const msg of messages) {
     // Skip non-message types (like context-summary, tool-result, etc.)
     if (msg.type && msg.type !== 'message') {
+      continue
+    }
+
+    // Skip staff whispers — they are not interchange-bearing turns.
+    if (msg.systemSender) {
       continue
     }
 

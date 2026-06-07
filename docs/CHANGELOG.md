@@ -4,6 +4,12 @@
 
 ### 4.7-dev
 
+#### Fix: autonomous-room renames no longer fire nearly every turn
+
+The auto-rename (`TITLE_UPDATE`) and summarization-gate cadence keys off `calculateInterchangeCount`, which for autonomous rooms counted every ASSISTANT message — including staff whispers (host, prospero, aurora, commonplaceBook, librarian). Each autonomous turn emits one character message plus several whispers, so the interchange counter climbed ~5 per turn instead of ~1. The title-check gate fires once per multiple-of-10 crossed, so the inflated counter crossed a decade boundary almost every turn and enqueued a rename job nearly every turn.
+
+`calculateInterchangeCount` (`lib/chat/context-summary.ts`) now skips messages with `systemSender` set in both the autonomous and regular-chat paths, counting only genuine user/character turns. This restores the intended roughly-every-10-interchanges cadence. No schema change; `systemSender` already exists on chat messages.
+
 #### Tri-tier wardrobe + shared mount-tier resolver
 
 Wardrobe is now tri-tier, matching knowledge, scenarios, and document search: a character's wearable garments are drawn from the character's own vault, the active chat's project document stores, and Quilltap General — in that precedence order (nearer tier wins on id collision). Previously wardrobe was two-tier (character vault + Quilltap General archetypes only); project stores were never consulted.
