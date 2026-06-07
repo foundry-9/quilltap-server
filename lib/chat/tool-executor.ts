@@ -8,6 +8,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { toolRegistry } from '@/lib/plugins/tool-registry'
 import { getRepositories } from '@/lib/repositories/factory'
 import type { ToolExecutionContext as PluginToolContext } from '@/lib/plugins/interfaces/tool-plugin'
+import type { MessageEvent } from '@/lib/schemas/types'
 import {
   executeImageGenerationTool,
   type ImageToolExecutionContext,
@@ -185,6 +186,13 @@ export interface ToolExecutionContext {
    * back to immediate enqueue.
    */
   pendingWardrobeAnnouncements?: Set<string>;
+  /**
+   * Surface a Carina (`ask_carina`) answer to the Salon the instant it posts,
+   * via the turn's live SSE stream. Set by the orchestrator (which holds the
+   * stream controller); absent in the autonomous-room/forked-child path, where
+   * there is no client stream and the post-turn refresh handles surfacing.
+   */
+  emitCarinaAnswer?: (message: MessageEvent) => void;
 }
 
 /**
@@ -956,6 +964,7 @@ export async function executeToolCallWithContext(
         userId,
         chatId,
         callingParticipantId: context.callingParticipantId,
+        emitCarinaAnswer: context.emitCarinaAnswer,
       });
       return {
         toolName: 'ask_carina',

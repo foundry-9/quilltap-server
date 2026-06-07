@@ -24,7 +24,7 @@ import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage, ReasoningSegment } from './types'
 import { saveToolMessages, type ToolWhisperContext } from './tool-execution.service'
-import { encodeDoneEvent } from './streaming.service'
+import { encodeDoneEvent, encodeCarinaAnswerEvent, safeEnqueue } from './streaming.service'
 import {
   triggerTurnMemoryExtraction,
   triggerContextSummaryCheck,
@@ -295,6 +295,9 @@ export async function finalizeMessageResponse({
           question: carinaQuery.question,
           whisper: carinaQuery.whisper,
           askerParticipantId: characterParticipant.id,
+          // Surface the answer live (before this turn's done event) so the Salon
+          // renders the card immediately rather than at the post-turn refresh.
+          onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
         })
         if (!carinaResult.ok) {
           await postProsperoCarinaError({

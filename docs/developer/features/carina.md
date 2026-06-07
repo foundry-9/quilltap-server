@@ -183,9 +183,44 @@ Registered in the tool registry alongside existing tools. Available to all chara
 - Same `systemSender`, `systemKind`, and non-counting behavior
 - Only the asker sees it
 
-### Streaming
+### Streaming / live surfacing
 
-Carina responses stream to the UI like any other LLM turn. This keeps the implementation consistent with the existing streaming infrastructure and avoids problems with tool-call loops (agent-style multi-step responses) that would be awkward to buffer.
+The Carina call itself runs **server-side** — the answer (including any tool-call
+loop) is accumulated in full, not token-streamed to the client, which keeps the
+agent-style multi-step responses simple to handle.
+
+The *posted answer*, however, is surfaced to the Salon **the instant it is
+persisted**, rather than waiting for the post-turn `fetchChat()` refresh. The
+moment `postCarinaResponse` succeeds, `runCarinaQuery` invokes an optional
+`onPosted(message)` callback; callers that hold the turn's live SSE stream pass a
+callback that emits a `carinaAnswer` event:
+
+```
+data: {"carinaAnswer": <the full posted MessageEvent>}
+```
+
+(`encodeCarinaAnswerEvent` in `lib/services/chat-message/streaming.service.ts`.)
+
+The three emit sites — all running inside the active `POST /api/v1/messages` SSE
+request:
+
+| Trigger | Call site | Wiring |
+| --- | --- | --- |
+| User `@Name:` / `@Name?` markup | `orchestrator.service.ts` (user-message hook) | `onPosted` → `safeEnqueue(controller, encodeCarinaAnswerEvent(...))` |
+| Character `@Name:` markup in a response | `message-finalizer.service.ts` (assistant-markup path) | same `onPosted` |
+| Character `ask_carina` tool | `tool-executor.ts` → `ask-carina-handler.ts` | `ToolExecutionContext.emitCarinaAnswer` (set by the orchestrator after `createToolContext`) → forwarded as `onPosted` |
+
+The forked-child / autonomous-room path leaves `onPosted` undefined (no client
+stream); the existing refresh keeps surfacing those answers — no regression.
+
+On the client (`app/salon/[id]/hooks/useSSEStreaming.ts`), `readSSEStream` routes
+a `carinaAnswer` event to `onCarinaAnswer`, which inserts the message into the
+flow optimistically, **deduped by `id`**. The end-of-turn `fetchChat()` replaces
+the whole array with the authoritative, pre-rendered copy (same `id`), so there is
+no duplicate, and whisper visibility is governed by the same `visibleMessages`
+filter that applies to the refetched copy (no flash). Token-by-token streaming of
+the answer text remains a deferred enhancement; the `onPosted` signature is the
+hook for it.
 
 ### Display
 
@@ -293,4 +328,4 @@ Help text: *"When enabled, this character can be invoked with @Name in any chat 
 2. **Rate limiting: one Carina query per message.** If a message contains multiple `@Name` lines, only the first fires. This prevents spam without requiring time-based throttling infrastructure. The `ask_carina` tool call is naturally limited to one per tool-call turn by the existing tool-call loop.
 3. **Declining to answer is a prompt-engineering concern, not an architectural one.** The character's manifesto, personality, and system prompt govern whether and how it responds. A character could be prompted to lie, refuse, or filter by asker — that's by design. The Carina system makes the call unconditionally; the LLM decides what to say.
 4. **No separate token budget.** Carina calls use the same token limits as any other LLM call for that connection profile. If the user wants short answers, that's a prompt concern.
-5. **Carina responses stream.** The response streams to the UI like any other LLM turn. This keeps the implementation consistent with the existing streaming infrastructure and avoids problems with tool-call loops (agent-style multi-step responses) that would be awkward to buffer and deliver as a single block.
+5. **Carina answers are surfaced live, but not token-streamed.** The call runs server-side and the answer is accumulated in full (this sidesteps the awkwardness of buffering agent-style tool-call loops). The *posted* message is then surfaced to the Salon the instant it persists, via a `carinaAnswer` SSE event on the active turn stream (see [Streaming / live surfacing](#streaming--live-surfacing)), rather than waiting for the post-turn `fetchChat()`. Token-by-token streaming of the answer text is a deferred enhancement.

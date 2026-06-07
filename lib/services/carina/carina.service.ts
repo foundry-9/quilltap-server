@@ -48,7 +48,7 @@ import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notificat
 import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
 import { postCarinaResponse } from './writer';
 import type { CarinaResult } from './carina.types';
-import type { Character, ConnectionProfile } from '@/lib/schemas/types';
+import type { Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types';
 
 /** Maximum detect→execute→re-stream iterations within a single Carina answer. */
 const MAX_TOOL_ITERATIONS = 5;
@@ -75,6 +75,16 @@ export interface RunCarinaQueryOptions {
    * target. null when no participant context is available (answer goes public).
    */
   askerParticipantId: string | null;
+  /**
+   * Called the instant the answer is persisted, with the posted message. Lets a
+   * caller holding a live SSE stream surface the answer to the Salon immediately
+   * (rather than waiting for the post-turn `fetchChat()` refresh). Optional and
+   * absent in the autonomous-room/forked-child path, where there is no client
+   * stream — there the existing refresh keeps surfacing answers. Must never
+   * throw; the wrapper below swallows and logs any error so a posted answer is
+   * never undone by a failed emit.
+   */
+  onPosted?: (message: MessageEvent) => void;
 }
 
 /** Resolve the answerer's default scenario content, if any. */
@@ -428,6 +438,30 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
         ok: false,
         error: { kind: 'llm-failed', detail: 'failed to persist answer', characterName: answerer.name },
       };
+    }
+
+    // 7a. Surface the answer to the operator immediately. A caller holding a live
+    // SSE stream (the orchestrator / finalizer / ask_carina tool path) emits a
+    // `carinaAnswer` event so the Salon renders the reference card the instant it
+    // returns, instead of waiting for the post-turn fetchChat(). A failed emit
+    // must never undo a posted answer.
+    if (opts.onPosted) {
+      try {
+        opts.onPosted(posted);
+        logger.debug('[Carina] Answer surfaced live to client', {
+          context: 'carina',
+          chatId,
+          messageId: posted.id,
+          answererId: answerer.id,
+        });
+      } catch (emitError) {
+        logger.warn('[Carina] Live answer emit failed; answer stands', {
+          context: 'carina',
+          chatId,
+          answererId: answerer.id,
+          error: getErrorMessage(emitError),
+        });
+      }
     }
 
     // 8. Form the answerer's SELF memories from this exchange, off the hot

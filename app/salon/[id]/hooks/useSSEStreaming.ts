@@ -82,6 +82,11 @@ interface SSEEvent {
   isSilentMessage?: boolean
   // The Courier: { pendingExternalTurn: true, messageId, participantId, characterName }
   pendingExternalTurn?: boolean
+  // Carina: the full posted reference-answer message, surfaced the instant it
+  // returns so the Salon renders the card without waiting for the post-turn
+  // fetchChat(). Inserted optimistically and deduped by id; the end-of-turn
+  // refresh reconciles it to the authoritative copy.
+  carinaAnswer?: Message
 }
 
 /**
@@ -321,6 +326,8 @@ export function useSSEStreaming({
       onToolsDetected?: (data: SSEEvent, offset: number) => void
       onToolResult?: (data: SSEEvent) => void
       onDone: (fullContent: string, data: SSEEvent) => void | Promise<void>
+      /** Called when a Carina reference answer is surfaced mid-turn */
+      onCarinaAnswer?: (message: Message) => void
       /** Called for intermediate done events during a chain (not the final one) */
       onIntermediateDone?: (fullContent: string, data: SSEEvent) => void | Promise<void>
       onTurnStart?: (event: { participantId: string; characterName: string; chainDepth: number }) => void
@@ -397,6 +404,12 @@ export function useSSEStreaming({
         // Handle tool results
         if (data.toolResult && opts.onToolResult) {
           opts.onToolResult(data)
+        }
+
+        // Handle a Carina reference answer surfaced mid-turn — insert it into the
+        // flow immediately rather than waiting for the post-turn fetchChat().
+        if (data.carinaAnswer && opts.onCarinaAnswer) {
+          opts.onCarinaAnswer(data.carinaAnswer)
         }
 
         // Handle completion
@@ -591,6 +604,10 @@ export function useSSEStreaming({
         participantId: firstCharParticipant?.id || null,
         onToolsDetected: trackToolsDetected,
         onToolResult: trackToolResult,
+        onCarinaAnswer: (msg) => {
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          scrollOnStreamComplete()
+        },
         onDone: async (fullContent, data) => {
           if (data.emptyResponse) {
             showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
@@ -788,6 +805,10 @@ export function useSSEStreaming({
         participantId,
         onToolsDetected: trackToolsDetected,
         onToolResult: trackToolResult,
+        onCarinaAnswer: (msg) => {
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          scrollOnStreamComplete()
+        },
         onDone: (fullContent, data) => {
           setResponseStatus(null)
 

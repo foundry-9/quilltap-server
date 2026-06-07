@@ -11,6 +11,7 @@
 import { logger } from '@/lib/logger';
 import { validateAskCarinaInput } from '../ask-carina-tool';
 import type { AskCarinaToolOutput } from '../ask-carina-tool';
+import type { MessageEvent } from '@/lib/schemas/types';
 
 export type { AskCarinaToolOutput };
 
@@ -22,6 +23,12 @@ export interface AskCarinaToolContext {
   chatId: string;
   /** Participant ID of the character invoking the tool (for whisper targeting). */
   callingParticipantId?: string | null;
+  /**
+   * Surface the answer to the Salon the instant it posts, via the turn's live
+   * SSE stream. Forwarded to `runCarinaQuery` as `onPosted`. Absent in the
+   * autonomous-room/forked-child path (no client stream).
+   */
+  emitCarinaAnswer?: (message: MessageEvent) => void;
 }
 
 const moduleLogger = logger.child({ module: 'ask-carina-handler' });
@@ -83,6 +90,7 @@ export async function executeAskCarinaTool(
       question: input.question,
       whisper: input.whisper,
       askerParticipantId: context.callingParticipantId ?? null,
+      onPosted: context.emitCarinaAnswer,
     });
 
     if (result.ok) {

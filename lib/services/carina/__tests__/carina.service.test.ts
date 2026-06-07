@@ -271,6 +271,77 @@ describe('runCarinaQuery', () => {
     });
   });
 
+  // ── 2.5 onPosted live-surface callback ────────────────────────────────────
+
+  describe('onPosted callback (live surfacing)', () => {
+    it('invokes onPosted once with the posted message on success', async () => {
+      const onPosted = jest.fn();
+      const result = await runCarinaQuery({ ...BASE_OPTS, onPosted });
+
+      expect(result).toMatchObject({ ok: true });
+      expect(onPosted).toHaveBeenCalledTimes(1);
+      // It receives the exact message returned by postCarinaResponse.
+      expect(onPosted.mock.calls[0][0]).toMatchObject({
+        id: 'msg-123',
+        systemSender: 'carina',
+      });
+    });
+
+    it('fires onPosted for a whisper answer too', async () => {
+      const onPosted = jest.fn();
+      const result = await runCarinaQuery({
+        ...BASE_OPTS,
+        whisper: true,
+        askerParticipantId: 'p1',
+        onPosted,
+      });
+
+      expect(result).toMatchObject({ ok: true });
+      expect(onPosted).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT invoke onPosted when no answerer is found', async () => {
+      jest.mocked(getRepositories).mockReturnValue(
+        makeMockRepos({
+          characters: { findByUserId: jest.fn().mockResolvedValue([]) },
+        }) as never,
+      );
+      const onPosted = jest.fn();
+
+      const result = await runCarinaQuery({ ...BASE_OPTS, onPosted });
+
+      expect(result).toMatchObject({ ok: false, error: { kind: 'not-found' } });
+      expect(onPosted).not.toHaveBeenCalled();
+    });
+
+    it('does NOT invoke onPosted when the answer is empty', async () => {
+      jest.mocked(streamMessage).mockImplementation(async function* () {
+        yield { content: '   ' };
+        yield { done: true, rawResponse: { finishReason: 'stop' } };
+      } as never);
+      const onPosted = jest.fn();
+
+      const result = await runCarinaQuery({ ...BASE_OPTS, onPosted });
+
+      expect(result).toMatchObject({ ok: false, error: { kind: 'llm-failed' } });
+      expect(postCarinaResponse).not.toHaveBeenCalled();
+      expect(onPosted).not.toHaveBeenCalled();
+    });
+
+    it('still returns ok:true when onPosted throws (emit failure never undoes the answer)', async () => {
+      const onPosted = jest.fn(() => {
+        throw new Error('stream closed');
+      });
+
+      const result = await runCarinaQuery({ ...BASE_OPTS, onPosted });
+
+      expect(result).toMatchObject({ ok: true, answer: 'Paris.' });
+      expect(onPosted).toHaveBeenCalledTimes(1);
+      // The memory-extraction enqueue still runs after a thrown emit.
+      expect(enqueueCarinaMemoryExtraction).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // ── 3. Not found ──────────────────────────────────────────────────────────
 
   describe('not found', () => {

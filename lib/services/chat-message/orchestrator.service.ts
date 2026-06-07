@@ -46,6 +46,7 @@ import {
   encodeErrorEvent,
   encodeStatusEvent,
   encodeTurnStartEvent,
+  encodeCarinaAnswerEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
@@ -684,6 +685,9 @@ async function processMessage(
           question: carinaQuery.question,
           whisper: carinaQuery.whisper,
           askerParticipantId: userParticipantId ?? null,
+          // Surface the answer to the Salon the instant it returns — before the
+          // first character even starts responding — rather than at end-of-turn.
+          onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
         })
         if (carinaResult.ok) {
           // Splice a PUBLIC answer into this turn's in-memory context so the
@@ -1032,6 +1036,11 @@ async function processMessage(
       recap: builtContext.debugMemoryRecap,
     },
   )
+  // Let a character's `ask_carina` tool call surface its answer to the Salon
+  // live (same `carinaAnswer` SSE event the user-markup path uses above). The
+  // toolContext threads down into the native/text tool loops.
+  toolContext.emitCarinaAnswer = (msg) =>
+    safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg))
 
   // ============================================================================
   // Tool Change Notification

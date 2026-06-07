@@ -18,7 +18,7 @@ To consult a Carina answerer from any message in the Salon, place an `@Name` inv
 @Archivist: What were the main clauses of the Treaty of Westphalia?
 ```
 
-The answerer's reply appears in the chat for all participants to see — a compact reference card, visually distinct from ordinary conversation turns, attributed to the character named.
+The answerer's reply appears in the chat for all participants to see — a compact reference card, visually distinct from ordinary conversation turns, attributed to the character named. The card arrives the very instant the answer is ready: you need not wait for the assembled company to finish their own remarks before the reference desk slides its note across the table to you.
 
 ### Whispered queries (`@Name?`)
 

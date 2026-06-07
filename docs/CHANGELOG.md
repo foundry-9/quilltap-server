@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### Carina answers appear immediately
+
+Carina reference answers now surface in the Salon the instant they return, instead of waiting for the post-turn `fetchChat()` refresh (previously the answer only appeared after the responding character(s) had finished reacting to it).
+
+- `runCarinaQuery` (`lib/services/carina/carina.service.ts`) gained an optional `onPosted(message)` callback, invoked the moment `postCarinaResponse` persists the answer (before the memory-extraction enqueue). A thrown callback is logged and swallowed — a failed emit never undoes a posted answer.
+- New `carinaAnswer` SSE event (`encodeCarinaAnswerEvent` in `streaming.service.ts`) carries the full posted message. Wired at all three in-stream call sites: user `@Name:`/`@Name?` markup (orchestrator), a character's `@Name:` markup in a response (finalizer), and the `ask_carina` tool (threaded via `ToolExecutionContext.emitCarinaAnswer`, set by the orchestrator after `createToolContext`). The forked-child/autonomous path leaves `onPosted` undefined (no client stream) and is unchanged.
+- Client (`app/salon/[id]/hooks/useSSEStreaming.ts`): `readSSEStream` routes `carinaAnswer` to a new `onCarinaAnswer` handler that inserts the message optimistically, deduped by `id`. The end-of-turn `fetchChat()` reconciles it to the authoritative, pre-rendered copy; whisper visibility uses the same render-time filter, so there is no flash and no duplicate.
+- Token-by-token streaming of the answer text remains deferred. No schema, migration, or export change — `carinaAnswer` is transport-only and the message is already persisted.
+
 #### Fix: embedding failures and memory-housekeeping thrash no longer pile up or stall rooms
 
 - **Embeddings — deterministic failures no longer retry to DEAD.** `EMBEDDING_GENERATE` jobs that fail for reasons that recur on retry (empty/whitespace input, NaN/non-finite vectors, over-context input, dimension mismatch) are now marked failed and dropped instead of retrying three times each and accumulating as DEAD rows — `isPermanentEmbeddingError` in `embedding-generate.ts`. Transient errors (`fetch failed`, timeouts) still retry. `skipIfOversize` also now skips empty input up front.

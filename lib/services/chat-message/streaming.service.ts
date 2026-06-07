@@ -14,7 +14,7 @@ import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
-import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
+import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
@@ -669,6 +669,26 @@ export function encodeChainCompleteEvent(
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ chainComplete: true, ...data })}\n\n`)
+}
+
+/**
+ * Encode a Carina reference-answer event.
+ *
+ * Emitted the instant a Carina answer is persisted (the user's `@Name:`/`@Name?`
+ * markup, a character's `@Name:` markup, or the `ask_carina` tool) so the Salon
+ * can surface the answer bubble immediately rather than waiting for the post-turn
+ * `fetchChat()` refresh. Carries the full posted message so the client can insert
+ * it — and render it with the answerer's own avatar — without an extra round-trip.
+ *
+ * The client inserts optimistically and dedupes by `id`; the end-of-turn
+ * `fetchChat()` replaces the array with the authoritative, pre-rendered copy
+ * (same `id`), so there is no duplicate.
+ */
+export function encodeCarinaAnswerEvent(
+  encoder: TextEncoder,
+  message: MessageEvent
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ carinaAnswer: message })}\n\n`)
 }
 
 /**
