@@ -19,6 +19,7 @@ The `projects` table is now a slim identity row — only `id`, `name`, `official
 - **Repository** drops `UserOwnedBaseRepository` for the plain base; the user-scoped projects wrapper is now a global pass-through. Per-user ownership checks on projects were removed (`checkOwnership` is an existence check now); `project.userId` reads in the project-info / state tool handlers and the chat/file state actions are gone.
 - **Migration** `cutover-projects-to-store-v1` (backup-first, count guard, per-project write + verify, blocking gate, single-transaction column drop including `DROP INDEX idx_projects_userId`). Depends on `add-project-official-mount-point-v1`.
 - **Export/import** keep the flat, hydrated `ExportedProject` (minus `userId`) so `.qtap` files stay portable; export reads the store, import writes it. `public/schemas/qtap-export.schema.json` and `docs/developer/DDL.md` updated.
+- **Error handling for a degraded store:** since `findById` can now throw `ProjectStoreUnavailableError`, the global route error handler maps it to a deliberate 503 (with `projectId`) instead of an opaque 500. Reads that only need a project's existence (file move/promote target validation, chat-creation scenario-path resolution) use `findByIdRaw`, which never throws; chat get-state degrades to empty project state when the project store is unavailable so the chat's own state still returns.
 
 #### Fix: new characters now keep the identity field typed into the create form
 

@@ -926,7 +926,9 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
         projectScenarioPath: validatedData.projectScenarioPath,
       });
     } else {
-      const project = await repos.projects.findById(validatedData.projectId);
+      // Only the store pointer is needed here, which lives on the raw row — use
+      // findByIdRaw so scenario resolution doesn't throw on a degraded store.
+      const project = await repos.projects.findByIdRaw(validatedData.projectId);
       if (!project?.officialMountPointId) {
         logger.warn('[Chats v1] projectScenarioPath provided but project has no officialMountPointId', {
           projectId: validatedData.projectId,

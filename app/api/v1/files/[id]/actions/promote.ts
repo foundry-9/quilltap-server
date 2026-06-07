@@ -25,7 +25,9 @@ export async function handlePromoteFile(
   }
 
   if (targetProjectId) {
-    const project = await ctx.repos.projects.findById(targetProjectId);
+    // Existence gate only — promoting a file just sets its projectId and never reads
+    // the project's store, so use the raw row (which can't throw on a degraded store).
+    const project = await ctx.repos.projects.findByIdRaw(targetProjectId);
     if (!project) {
       return notFound('Project');
     }

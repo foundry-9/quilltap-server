@@ -13,6 +13,7 @@ import { startupState } from '@/lib/startup/startup-state';
 import { logger } from '@/lib/logger';
 import { validationError, serverError } from '@/lib/api/responses';
 import type { User } from '@/lib/schemas/types';
+import { ProjectStoreUnavailableError } from '@/lib/projects/project-store/schema';
 
 const contextLogger = logger.child({ module: 'api-context-middleware' });
 
@@ -165,6 +166,20 @@ async function handleRouteError(
     }
     const method = request.method;
     const url = new URL(request.url).pathname;
+    // A project with no usable document store is a broken invariant (the store-only
+    // read overlay throws rather than silently returning an empty project). Map it
+    // to a deliberate, contextful 503 instead of an opaque 500 so callers and logs
+    // can tell project-store degradation apart from a generic crash.
+    if (error instanceof ProjectStoreUnavailableError) {
+      contextLogger.error(`[${method} ${url}] Project document store unavailable`, {
+        projectId: error.projectId,
+        officialMountPointId: error.officialMountPointId,
+      });
+      return NextResponse.json(
+        { error: 'Project document store unavailable', projectId: error.projectId },
+        { status: 503 },
+      );
+    }
     contextLogger.error(`[${method} ${url}] Unhandled route error`, {}, error instanceof Error ? error : undefined);
     return serverError('Internal server error');
   }
