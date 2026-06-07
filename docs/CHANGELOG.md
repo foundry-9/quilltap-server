@@ -4,6 +4,14 @@
 
 ### 4.7-dev
 
+#### Fix: new characters now keep the identity field typed into the create form
+
+The character create handler (`app/api/v1/characters/handlers/post.ts`) silently dropped the `identity` field on the way to the repository: `createCharacterSchema` never declared `identity`, so Zod stripped it from the request body, and the `repos.characters.create({...})` call omitted it too. The typed-in identity was discarded and the vault's `identity.md` was written empty, while every other vantage-point field (description, manifesto, personality) persisted normally. Added `identity` to both the create schema and the create call.
+
+The AI-wizard path had the same gap in `wizardRequestSchema`: `existingData` didn't carry `identity` (so a pre-typed identity wasn't passed to the generator as context) and `fieldsToGenerate` didn't allow `'identity'` (so the wizard couldn't be asked to generate one). The wizard service already supported identity end to end; only these validators blocked it. Added `identity` to both.
+
+No schema, migration, or export change — `identity` is a vault-backed field already handled by the update path and exports. Editing an existing character's identity was unaffected; only creation lost it.
+
 #### Carina answers appear immediately
 
 Carina reference answers now surface in the Salon the instant they return, instead of waiting for the post-turn `fetchChat()` refresh (previously the answer only appeared after the responding character(s) had finished reacting to it).
