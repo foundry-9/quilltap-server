@@ -34,6 +34,15 @@ export type { MemoryGateOutcome } from './memory-gate'
 const HOUSEKEEPING_WATERMARK = 0.9
 
 /**
+ * Minimum gap between watermark-triggered housekeeping sweeps for a single
+ * character, enforced durably via the background-jobs table so it survives
+ * restarts and holds across the forked-child job pool. Prevents a room sitting
+ * at its cap from kicking off an (often expensive) sweep on every turn. The
+ * daily scheduled sweep is unaffected.
+ */
+const WATERMARK_SWEEP_THROTTLE_MS = 15 * 60 * 1000 // 15 minutes
+
+/**
  * If auto-housekeeping is enabled for this user and the character has reached
  * the watermark fraction of its cap, enqueue a housekeeping job for that
  * character. The enqueue helper dedupes against in-flight jobs, so calling
@@ -68,6 +77,35 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
     // sweep anyway burns 10–15 minutes of main-thread time for no benefit
     // and blocks the next chat turn's context build. Back off for an hour.
     if (shouldSkipWatermarkSweep(characterId)) {
+      return
+    }
+
+    // Durable cross-process / post-restart throttle. The in-memory cache above
+    // is process-local, but watermark enqueues fire from forked job children
+    // (memory extraction) while sweeps complete in *other* children — so that
+    // signal is frequently invisible across the pool, and it's wiped on every
+    // restart. The result is a storm of redundant (often expensive, because
+    // mergeSimilar compares embeddings) sweeps when a room sits right at its
+    // cap. Back it with a DB floor: if a sweep for this character already
+    // completed or is running within the throttle window, don't pile on
+    // another. The daily scheduled sweep still handles deep cleaning.
+    const recentHousekeeping = await repos.backgroundJobs.findRecentByType(
+      'MEMORY_HOUSEKEEPING',
+      50,
+    )
+    const nowMs = Date.now()
+    const throttledByRecentSweep = recentHousekeeping.some(j => {
+      const jobCharId = (j.payload as Record<string, unknown> | undefined)?.characterId
+      if (jobCharId !== characterId) return false
+      if (j.status !== 'COMPLETED' && j.status !== 'PROCESSING') return false
+      const ts = j.updatedAt ? new Date(j.updatedAt).getTime() : 0
+      return nowMs - ts < WATERMARK_SWEEP_THROTTLE_MS
+    })
+    if (throttledByRecentSweep) {
+      logger.debug('[Housekeeping] Skipping watermark sweep — recent sweep within throttle window', {
+        characterId,
+        throttleMs: WATERMARK_SWEEP_THROTTLE_MS,
+      })
       return
     }
 

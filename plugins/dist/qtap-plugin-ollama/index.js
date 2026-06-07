@@ -10137,6 +10137,16 @@ var NUM_CTX_CEILING = 16384;
 var NUM_CTX_FALLBACK = 8192;
 var numCtxCache = /* @__PURE__ */ new Map();
 var numCtxInflight = /* @__PURE__ */ new Map();
+function assertFiniteEmbedding(embedding) {
+  if (!Array.isArray(embedding) || embedding.length === 0) {
+    throw new Error("No embedding returned from Ollama");
+  }
+  for (let i = 0; i < embedding.length; i++) {
+    if (typeof embedding[i] !== "number" || !Number.isFinite(embedding[i])) {
+      throw new Error("Ollama returned a non-finite (NaN/Inf) embedding");
+    }
+  }
+}
 var OllamaEmbeddingProvider = class {
   constructor(baseUrl) {
     this.baseUrl = baseUrl || "http://localhost:11434";
@@ -10158,6 +10168,9 @@ var OllamaEmbeddingProvider = class {
   async generateEmbedding(text, model, apiKey, options) {
     void apiKey;
     void options;
+    if (!text || text.trim().length === 0) {
+      throw new Error("Cannot embed empty input");
+    }
     const numCtx = await this.resolveNumCtx(model);
     const requestPayload = {
       model,
@@ -10194,9 +10207,7 @@ var OllamaEmbeddingProvider = class {
     }
     const data = await response.json();
     const embedding = Array.isArray(data.embeddings) ? data.embeddings[0] : void 0;
-    if (!embedding) {
-      throw new Error("No embedding returned from Ollama");
-    }
+    assertFiniteEmbedding(embedding);
     return {
       embedding,
       model,
@@ -10210,6 +10221,9 @@ var OllamaEmbeddingProvider = class {
    * minimal payload and let Ollama use whatever context it loaded with.
    */
   async generateEmbeddingLegacy(text, model) {
+    if (!text || text.trim().length === 0) {
+      throw new Error("Cannot embed empty input");
+    }
     const response = await fetch(`${this.baseUrl}/api/embeddings`, {
       method: "POST",
       headers: {
@@ -10231,9 +10245,7 @@ var OllamaEmbeddingProvider = class {
     }
     const data = await response.json();
     const embedding = data.embedding;
-    if (!embedding) {
-      throw new Error("No embedding returned from Ollama");
-    }
+    assertFiniteEmbedding(embedding);
     return {
       embedding,
       model,

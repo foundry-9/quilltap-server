@@ -4,6 +4,12 @@
 
 ### 4.7-dev
 
+#### Fix: embedding failures and memory-housekeeping thrash no longer pile up or stall rooms
+
+- **Embeddings — deterministic failures no longer retry to DEAD.** `EMBEDDING_GENERATE` jobs that fail for reasons that recur on retry (empty/whitespace input, NaN/non-finite vectors, over-context input, dimension mismatch) are now marked failed and dropped instead of retrying three times each and accumulating as DEAD rows — `isPermanentEmbeddingError` in `embedding-generate.ts`. Transient errors (`fetch failed`, timeouts) still retry. `skipIfOversize` also now skips empty input up front.
+- **Ollama plugin (1.0.30 → 1.0.31).** Rejects empty/whitespace input before calling the server, and validates the returned vector for NaN/Inf (`assertFiniteEmbedding`) on both the `/api/embed` and legacy `/api/embeddings` paths, so a non-finite vector can't poison cosine similarity or break downstream JSON serialization.
+- **Memory housekeeping — durable watermark-sweep throttle.** The de-thrash backoff was process-local: the watermark enqueue and the sweep run in different forked job children (and the cache is wiped on restart), so a character sitting at its cap kicked off an expensive `mergeSimilar` sweep on nearly every turn, starving the turn queue. Added a durable, DB-backed throttle (`WATERMARK_SWEEP_THROTTLE_MS`, 15 min/character, via `backgroundJobs.findRecentByType`) layered on top of the existing in-memory cache. The daily scheduled sweep is unaffected. No schema change.
+
 #### Carina now forms memories and receives memory recall
 
 Reversed Carina's original "no memory" design (the feature is still unreleased this cycle). Carina answerers now both remember their consultations and draw on what they remember:
