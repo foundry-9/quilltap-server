@@ -155,7 +155,9 @@ export async function buildTools(
   /** Whether this character can create new outfits (enables create_wardrobe_item) */
   canCreateOutfits?: boolean,
   /** Whether document editing tools are enabled (project has linked document stores or files) */
-  documentEditingEnabled?: boolean
+  documentEditingEnabled?: boolean,
+  /** Whether the ask_carina tool is enabled for this character */
+  askCarinaEnabled?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -221,6 +223,7 @@ export async function buildTools(
     wardrobeCreateItem: canCreateOutfits !== false,
     whisper: !!isMultiCharacter,
     documentEditing: !!documentEditingEnabled,
+    askCarina: askCarinaEnabled,
     toolConfigs,
   })
 

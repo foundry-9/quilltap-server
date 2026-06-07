@@ -29,6 +29,20 @@ export {
   type ImageToolExecutionContext,
 } from './handlers/image-generation-handler';
 
+// Ask Carina Tool
+export {
+  askCarinaToolDefinition,
+  validateAskCarinaInput,
+  type AskCarinaToolInput,
+  type AskCarinaToolOutput,
+} from './ask-carina-tool';
+
+export {
+  executeAskCarinaTool,
+  formatAskCarinaResults,
+  type AskCarinaToolContext,
+} from './handlers/ask-carina-handler';
+
 // Web Search Tool
 export {
   webSearchToolDefinition,

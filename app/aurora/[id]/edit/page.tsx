@@ -91,6 +91,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     handlePronounsChange,
     handleScenariosChange,
     handleSystemTransparencyChange,
+    handleCanBeCarinaChange,
     handleCoreWhisperEnabledChange,
     handleSubmit,
     handleCancel,
@@ -318,6 +319,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                     onPronounsChange={handlePronounsChange}
                     onScenariosChange={handleScenariosChange}
                     onSystemTransparencyChange={handleSystemTransparencyChange}
+                    onCanBeCarinaChange={handleCanBeCarinaChange}
                     onCoreWhisperEnabledChange={handleCoreWhisperEnabledChange}
                   />
                 )

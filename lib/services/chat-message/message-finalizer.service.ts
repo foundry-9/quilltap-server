@@ -33,6 +33,9 @@ import {
 } from './memory-trigger.service'
 import { triggerAsyncCompression } from './compression-cache.service'
 import { detectAndConvertRngPatterns } from './rng-pattern-detector.service'
+import { parseCarinaQuery } from '@/lib/chat/carina-parser'
+import { runCarinaQuery } from '@/lib/services/carina/carina.service'
+import { postProsperoCarinaError } from '@/lib/services/prospero-notifications/writer'
 
 const logger = createServiceLogger('MessageFinalizer')
 
@@ -262,6 +265,51 @@ export async function finalizeMessageResponse({
           content: formattedResult,
           success: result.success,
           arguments: { type: pattern.type, rolls: pattern.rolls },
+        })
+      }
+    }
+  }
+
+  // ============================================================================
+  // Carina (inline LLM queries) — assistant-markup path
+  // ============================================================================
+  // If the character wrote @Name: / @Name? in their response, fire the isolated
+  // reference call. Mirrors the RNG-in-response block above: it runs AFTER the
+  // assistant message is saved (so the answer is ordered after it) and BEFORE
+  // the done event below (so the client's post-turn fetchChat() includes it).
+  // The asker is this character's participant; the answer carries
+  // systemSender:'carina' and is excluded from memory extraction automatically.
+  if (cleanedResponse) {
+    const carinaQuery = parseCarinaQuery(cleanedResponse)
+    if (carinaQuery) {
+      logger.info('Carina query detected in assistant response', {
+        chatId,
+        answerer: carinaQuery.characterName,
+        whisper: carinaQuery.whisper,
+      })
+      try {
+        const carinaResult = await runCarinaQuery({
+          userId,
+          chatId,
+          characterName: carinaQuery.characterName,
+          question: carinaQuery.question,
+          whisper: carinaQuery.whisper,
+          askerParticipantId: characterParticipant.id,
+        })
+        if (!carinaResult.ok) {
+          await postProsperoCarinaError({
+            chatId,
+            kind: carinaResult.error.kind,
+            characterName: carinaResult.error.characterName,
+            detail: carinaResult.error.detail,
+            whisper: carinaQuery.whisper,
+            askerParticipantId: characterParticipant.id,
+          })
+        }
+      } catch (carinaError) {
+        logger.warn('Carina assistant-markup query failed', {
+          chatId,
+          error: carinaError instanceof Error ? carinaError.message : String(carinaError),
         })
       }
     }

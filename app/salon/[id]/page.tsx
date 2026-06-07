@@ -1081,6 +1081,29 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (message.systemSender === 'ariel') {
       return { name: 'Ariel', title: null, avatarUrl: '/images/avatars/ariel-avatar.webp', defaultImage: null }
     }
+    // Carina (inline LLM queries): a reference answer renders with the ANSWERER
+    // character's own avatar — there is no dedicated Carina staff avatar. Resolve
+    // them via carinaMeta.answererId among participants, then off-scene cards,
+    // then a legible placeholder.
+    if (message.systemSender === 'carina') {
+      const answererId = message.carinaMeta?.answererId
+      if (answererId) {
+        const participant = chat?.participants.find(p => p.character?.id === answererId)
+        if (participant?.character) {
+          return {
+            name: participant.character.name,
+            title: participant.character.title ?? null,
+            avatarUrl: participant.character.avatarUrl ?? null,
+            defaultImage: participant.character.defaultImage ?? null,
+          }
+        }
+        const offScene = chat?.offSceneCharacters?.find(c => c.id === answererId)
+        if (offScene) {
+          return { name: offScene.name, title: offScene.title, avatarUrl: offScene.avatarUrl, defaultImage: null }
+        }
+      }
+      return { name: 'Carina', title: null, avatarUrl: null, defaultImage: null }
+    }
     if (message.participantId) {
       const participant = participantsWithImpersonation.getParticipantById(message.participantId)
       if (participant) {

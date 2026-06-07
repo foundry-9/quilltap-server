@@ -15,6 +15,7 @@ interface CharacterBasicInfoProps {
   onPronounsChange: (pronouns: { subject: string; object: string; possessive: string } | null) => void
   onScenariosChange: (scenarios: CharacterScenario[]) => void
   onSystemTransparencyChange: (enabled: boolean) => void
+  onCanBeCarinaChange: (value: boolean) => void
   onCoreWhisperEnabledChange: (value: boolean | null) => void
 }
 
@@ -79,6 +80,7 @@ export function CharacterBasicInfo({
   onPronounsChange,
   onScenariosChange,
   onSystemTransparencyChange,
+  onCanBeCarinaChange,
   onCoreWhisperEnabledChange,
 }: CharacterBasicInfoProps) {
   // Adapter so MarkdownLexicalEditor's (value: string) => void onChange feeds
@@ -132,6 +134,32 @@ export function CharacterBasicInfo({
               type="checkbox"
               checked={formData.systemTransparency}
               onChange={(e) => onSystemTransparencyChange(e.target.checked)}
+              className="h-5 w-5 qt-accent-primary"
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Carina (@-query) Switch */}
+      <div className="qt-card">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <label
+              htmlFor="canBeCarina"
+              className="block qt-text-label"
+            >
+              Can answer @-queries (Carina)
+            </label>
+            <p className="text-xs qt-text-secondary mt-1">
+              When enabled, this character may be invoked with <code>@Name</code> in any chat to field a quick question by way of their personality and available tools &mdash; without so much as setting foot in the conversation proper.
+            </p>
+          </div>
+          <label className="inline-flex items-center cursor-pointer select-none">
+            <input
+              id="canBeCarina"
+              type="checkbox"
+              checked={formData.canBeCarina ?? false}
+              onChange={(e) => onCanBeCarinaChange(e.target.checked)}
               className="h-5 w-5 qt-accent-primary"
             />
           </label>

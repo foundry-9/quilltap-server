@@ -162,6 +162,7 @@ The character optimizer enforces these vantage points when proposing edits. When
 - **Saquel Ytzama, the Keeper of Secrets** - the encryption, API key management, and secrets system — merged into Data & System tab at `/settings?tab=system`
 - **The Librarian** - synthetic chat-message author for Document Mode events (open/save/rename/delete) and character-driven `doc_*` tool calls; speaks via `systemSender: 'librarian'`
 - **The Host** - synthetic chat-message author for Salon participation events (character add/remove/status change) and autonomous-room announcements (run start/end/pause, pacing milestones, grace turn); speaks via `systemSender: 'host'`
+- **Carina** — the inline LLM query system; lets users and characters ask quick questions of a designated answerer character via `@Name:` markup (public) or `@Name?` (whisper), or via the `ask_carina` tool — per-character flag `canBeCarina` on the character edit page in Aurora; no dedicated settings tab
 
 Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes (`/foundry/*`) redirect to the appropriate `/settings` tab. The old content UI routes (`/chats`, `/characters`, `/projects`) also redirect to their current equivalents (`/salon`, `/aurora`, `/prospero`).
 
@@ -182,6 +183,7 @@ Rules for adding or updating these assets:
   - `prospero` — agentic / tool-use announcements; fires when a participant's connection profile is changed via the Participants sidebar, and authors the standalone bubble for any user-initiated tool run (the Run Tool modal). User-initiated runs may set `private: true`, which writes the operator's userId into `targetParticipantIds` so the Salon UI hides them by default and every character's LLM context excludes them.
   - `commonplaceBook` — memory recall whispers (memory recap, relevant memories, inter-character memories), targeted at the responding character via `targetParticipantIds`
   - `ariel` — terminal session announcements (PTY open/close in the Salon)
+  - `carina` — Carina query responses (quick-reference answers from a designated answerer character); unlike every other systemSender, a `carina` message renders with the **answerer character's own avatar** (resolved via `carinaMeta.answererId`), not a dedicated staff avatar — there is no `carina-avatar.webp`. The tag exists for memory suppression and the compact reference-card UI. Prospero authors any error messages that arise from a failed Carina query (with `systemKind: 'carina-error'`), not Carina herself.
 
 ## Claude-specific instructions
 

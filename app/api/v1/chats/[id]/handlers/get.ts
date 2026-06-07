@@ -367,6 +367,7 @@ export async function handleGet(
             systemSender: event.systemSender || null,
             systemKind: event.systemKind || null,
             customAnnouncer: event.customAnnouncer || null,
+            carinaMeta: event.carinaMeta || null,
             pendingExternalPrompt: event.pendingExternalPrompt || null,
             pendingExternalPromptFull: event.pendingExternalPromptFull || null,
             pendingExternalAttachments: event.pendingExternalAttachments || null,
@@ -392,6 +393,13 @@ export async function handleGet(
       const id = m?.customAnnouncer?.characterId;
       if (typeof id === 'string' && !participantCharacterIds.has(id)) {
         offSceneCharacterIds.add(id);
+      }
+      // Carina (inline LLM queries): a reference answer renders with the
+      // answerer character's own avatar. When the answerer isn't a participant,
+      // collect them here so the Salon can resolve their avatar/name.
+      const carinaAnswererId = m?.carinaMeta?.answererId;
+      if (typeof carinaAnswererId === 'string' && !participantCharacterIds.has(carinaAnswererId)) {
+        offSceneCharacterIds.add(carinaAnswererId);
       }
     }
     const offSceneCharacters: Array<{ id: string; name: string; title: string | null; avatarUrl: string | null }> = [];

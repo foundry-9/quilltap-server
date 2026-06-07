@@ -21,6 +21,7 @@ import { toolRegistry } from '@/lib/plugins/tool-registry';
 import type { UniversalTool } from '@/lib/plugins/interfaces/tool-plugin';
 import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler';
 import {
+  askCarinaToolDefinition,
   imageGenerationToolDefinition,
   webSearchToolDefinition,
   projectInfoToolDefinition,
@@ -60,6 +61,7 @@ import {
  * Map from built-in tool IDs to their OpenAI-format definitions (for schema inclusion)
  */
 const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<string, unknown> } }> = {
+  ask_carina: askCarinaToolDefinition,
   generate_image: imageGenerationToolDefinition,
   search: searchScriptoriumToolDefinition,
   search_web: webSearchToolDefinition,
@@ -95,6 +97,13 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
  * Built-in tool definitions (these are always available)
  */
 const BUILT_IN_TOOLS = [
+  {
+    id: 'ask_carina',
+    name: 'Ask Carina',
+    description: 'Ask a designated answerer character a quick standalone question without joining the conversation',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
   {
     id: 'generate_image',
     name: 'Generate Image',

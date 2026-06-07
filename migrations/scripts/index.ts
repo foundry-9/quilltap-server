@@ -326,6 +326,10 @@ import { addAutoScrollOnResponseCompleteFieldMigration } from './add-auto-scroll
 import { addAutonomousBudgetCacheModeMigration } from './add-autonomous-budget-cache-mode';
 // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
 import { addAutonomousRunMilestonesMigration } from './add-autonomous-run-milestones';
+// Carina (inline LLM queries): canBeCarina answerer flag on characters
+import { addCarinaFlagMigration } from './add-carina-flag-v1';
+// Carina (inline LLM queries): carinaMeta provenance column on chat_messages
+import { addCarinaMessageMetaMigration } from './add-carina-message-meta-v1';
 
 /**
  * All available migrations.
@@ -648,6 +652,10 @@ export const migrations: Migration[] = [
   addAutonomousBudgetCacheModeMigration,
   // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
   addAutonomousRunMilestonesMigration,
+  // Carina (inline LLM queries): canBeCarina answerer flag on characters
+  addCarinaFlagMigration,
+  // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
+  addCarinaMessageMetaMigration,
 ];
 
 export {
@@ -951,5 +959,9 @@ export {
   addAutonomousBudgetCacheModeMigration,
   // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
   addAutonomousRunMilestonesMigration,
+  // Carina (inline LLM queries): canBeCarina answerer flag on characters
+  addCarinaFlagMigration,
+  // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
+  addCarinaMessageMetaMigration,
 };
 

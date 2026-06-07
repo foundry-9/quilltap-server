@@ -221,6 +221,8 @@ const BUILT_IN_TOOLS = new Set<string>([
   // Terminal tools — Prospero Phase 2
   'terminal_read',
   'terminal_list',
+  // Carina — inline answerer tool
+  'ask_carina',
 ]);
 
 export async function executeToolCallWithContext(
@@ -944,6 +946,22 @@ export async function executeToolCallWithContext(
           ...(result.result && typeof result.result === 'object' ? result.result as Record<string, unknown> : {}),
         } : null,
         error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle ask_carina (inline Carina answerer)
+    if (toolCall.name === 'ask_carina') {
+      const { executeAskCarinaTool } = await import('@/lib/tools/handlers/ask-carina-handler');
+      const out = await executeAskCarinaTool(toolCall.arguments, {
+        userId,
+        chatId,
+        callingParticipantId: context.callingParticipantId,
+      });
+      return {
+        toolName: 'ask_carina',
+        success: out.success,
+        result: out.success ? { answer: out.answer } : null,
+        error: out.success ? undefined : out.error,
       };
     }
 

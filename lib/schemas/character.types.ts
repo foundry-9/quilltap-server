@@ -204,6 +204,16 @@ export const CharacterSchema = z.object({
    */
   coreWhisperEnabled: z.boolean().nullable().optional(),
 
+  /**
+   * Carina (inline LLM queries) — when true, this character can be invoked as
+   * an "answerer" via `@Name:` / `@Name?` markup or the `ask_carina` tool in any
+   * chat, producing a minimal isolated reference answer (identity only, no chat
+   * history, no memory) without joining the conversation. NULL/false = not an
+   * answerer. The character need not be a participant in the chat that invokes
+   * them.
+   */
+  canBeCarina: z.boolean().nullable().optional(),
+
   // Relationships
   partnerLinks: z.array(z.object({
     partnerId: UUIDSchema,

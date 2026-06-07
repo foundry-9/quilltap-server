@@ -298,6 +298,9 @@ export function VirtualizedMessageList({
                   editContent={editContent}
                   viewSourceMessageIds={viewSourceMessageIds}
                   isSystemMessageCollapsed={
+                    // Carina reference answers always render as a full row (with
+                    // the answerer's avatar + the answer), never a collapsed chip.
+                    message.systemSender !== 'carina' &&
                     !!message.systemSender && !expandedSystemMessageIds.has(message.id)
                   }
                   onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}

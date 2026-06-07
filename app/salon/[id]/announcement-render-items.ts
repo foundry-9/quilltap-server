@@ -25,8 +25,14 @@ export type RenderItem =
  * that should render as a packed chip rather than a full message row. A
  * systemSender message the user has explicitly expanded is NOT collapsed and
  * therefore breaks out of any surrounding chip group.
+ *
+ * Carina (inline LLM queries) reference answers are exempt: although they carry
+ * `systemSender: 'carina'`, they are real reference answers that must always
+ * render as a full row (with the answerer character's own avatar and the answer
+ * text), not as a collapsed chip.
  */
 function isCollapsedAnnouncement(message: Message, expandedSystemMessageIds: Set<string>): boolean {
+  if (message.systemSender === 'carina') return false
   return !!message.systemSender && !expandedSystemMessageIds.has(message.id)
 }
 

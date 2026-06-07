@@ -1,5 +1,34 @@
 // Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
+exports[`tool definitions: derived OpenAI parameters askCarina: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "character": {
+      "description": "The name of the character to ask. Must be a character with Carina answerer capability enabled.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "question": {
+      "description": "The question to ask.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "whisper": {
+      "default": false,
+      "description": "If true, the answer is whispered back to the caller only. If false, the answer appears in the chat publicly.",
+      "type": "boolean",
+    },
+  },
+  "required": [
+    "character",
+    "question",
+    "whisper",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters attachImage: parameters snapshot 1`] = `
 {
   "additionalProperties": false,

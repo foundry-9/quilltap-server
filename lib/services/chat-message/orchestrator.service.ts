@@ -90,6 +90,9 @@ import {
   type RngToolCall,
 } from './rng-pattern-detector.service'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
+import { parseCarinaQuery } from '@/lib/chat/carina-parser'
+import { runCarinaQuery } from '@/lib/services/carina/carina.service'
+import { postProsperoCarinaError } from '@/lib/services/prospero-notifications/writer'
 import {
   finalizeMessageResponse,
 } from './message-finalizer.service'
@@ -649,6 +652,67 @@ async function processMessage(
     }
   }
 
+  // ============================================================================
+  // Carina (inline LLM queries) — user-message path
+  // ============================================================================
+  // If the user addressed an answerer with @Name: / @Name?, fire the isolated
+  // reference call. Like the RNG auto-detect above, this is a SIDE-EFFECT: the
+  // normal responding participant still takes its turn ("both fire"). The answer
+  // (or a Prospero error) is posted now and surfaced to the client by the
+  // post-turn fetchChat() refresh; it carries systemSender:'carina', so it is
+  // excluded from memory extraction automatically.
+  if (!isContinueMode && content) {
+    const carinaQuery = parseCarinaQuery(content)
+    if (carinaQuery) {
+      logger.info('Carina query detected in user message', {
+        chatId,
+        userId,
+        answerer: carinaQuery.characterName,
+        whisper: carinaQuery.whisper,
+      })
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'gathering',
+        message: `Consulting ${carinaQuery.characterName}...`,
+        characterName: character.name,
+        characterId: character.id,
+      }))
+      try {
+        const carinaResult = await runCarinaQuery({
+          userId,
+          chatId,
+          characterName: carinaQuery.characterName,
+          question: carinaQuery.question,
+          whisper: carinaQuery.whisper,
+          askerParticipantId: userParticipantId ?? null,
+        })
+        if (carinaResult.ok) {
+          // Splice a PUBLIC answer into this turn's in-memory context so the
+          // first character to respond in the same cycle hears it (parallels the
+          // RNG-result push above; the DB copy already covers later turns). A
+          // whisper answer is scoped to the asker, so it is NOT injected into any
+          // responder's context.
+          if (!carinaQuery.whisper) {
+            existingMessages.push(carinaResult.message)
+          }
+        } else {
+          await postProsperoCarinaError({
+            chatId,
+            kind: carinaResult.error.kind,
+            characterName: carinaResult.error.characterName,
+            detail: carinaResult.error.detail,
+            whisper: carinaQuery.whisper,
+            askerParticipantId: userParticipantId ?? null,
+          })
+        }
+      } catch (carinaError) {
+        logger.warn('Carina user-message query failed', {
+          chatId,
+          error: carinaError instanceof Error ? carinaError.message : String(carinaError),
+        })
+      }
+    }
+  }
+
   // Build final user message content
   const finalUserMessageContent = isContinueMode
     ? undefined
@@ -715,6 +779,21 @@ async function processMessage(
   // whole tool-build step in that case.
   const isEffectiveCourier = streamingState.effectiveProfile.transport === 'courier'
 
+  // Carina (inline LLM queries): offer the ask_carina tool only when at least
+  // one answerer (a character with canBeCarina) exists. Uses the overlay-free
+  // raw read — canBeCarina is a DB column, not a vault field — to keep this
+  // per-turn check cheap.
+  let askCarinaEnabled = false
+  try {
+    const rawCharacters = await repos.characters.findAllRaw()
+    askCarinaEnabled = rawCharacters.some(c => c.canBeCarina === true)
+  } catch (carinaProbeError) {
+    logger.warn('Failed to probe for Carina answerers; ask_carina tool withheld', {
+      chatId,
+      error: carinaProbeError instanceof Error ? carinaProbeError.message : String(carinaProbeError),
+    })
+  }
+
   let tools: unknown[] = []
   let modelSupportsNativeTools = false
   let useNativeWebSearch = false
@@ -735,7 +814,8 @@ async function processMessage(
       helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
       canDressThemselves, // canDressThemselves - enables list_wardrobe and update_outfit_item
       canCreateOutfits, // canCreateOutfits - enables create_wardrobe_item
-      documentEditingEnabled // documentEditingEnabled - enables doc_* editing tools
+      documentEditingEnabled, // documentEditingEnabled - enables doc_* editing tools
+      askCarinaEnabled // askCarinaEnabled - enables ask_carina tool when an answerer exists
     )
     tools = builtTools.tools
     modelSupportsNativeTools = builtTools.modelSupportsNativeTools

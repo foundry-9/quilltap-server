@@ -81,6 +81,9 @@ import {
 import {
   terminalListToolDefinition,
 } from '@/lib/tools/terminal-list-tool';
+import {
+  askCarinaToolDefinition,
+} from '@/lib/tools/ask-carina-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -218,6 +221,9 @@ export interface BuildToolsOptions {
 
   /** Tool configurations for plugin tools (keyed by tool name) */
   toolConfigs?: Map<string, Record<string, unknown>>;
+
+  /** Whether to enable the ask_carina tool (inline Carina answerer) */
+  askCarina?: boolean;
 }
 
 /**
@@ -270,6 +276,7 @@ export async function buildToolsForProvider(
       wardrobeCreateItem: options.wardrobeCreateItem,
       documentEditing: options.documentEditing,
       includePluginTools: options.includePluginTools,
+      askCarina: options.askCarina,
     },
   });
 
@@ -344,6 +351,11 @@ export async function buildToolsForProvider(
   // Add whisper tool if enabled (multi-character chats only)
   if (options.whisper) {
     universalTools.push(whisperToolDefinition as UniversalTool);
+  }
+
+  // Add ask_carina tool if enabled (inline Carina answerer)
+  if (options.askCarina) {
+    universalTools.push(askCarinaToolDefinition as UniversalTool);
   }
 
   // Add wardrobe tools if enabled (gated by character wardrobe flags)

@@ -11,6 +11,7 @@
  * and review the diff in the PR.
  */
 
+import { askCarinaToolDefinition } from '../ask-carina-tool'
 import { attachImageToolDefinition } from '../attach-image-tool'
 import { deleteAnnotationToolDefinition } from '../delete-annotation-tool'
 import { docCloseDocumentToolDefinition } from '../doc-close-document-tool'
@@ -62,6 +63,7 @@ import { webSearchToolDefinition } from '../web-search-tool'
 import { whisperToolDefinition } from '../whisper-tool'
 
 const ALL_TOOLS = {
+  askCarina: askCarinaToolDefinition,
   attachImage: attachImageToolDefinition,
   deleteAnnotation: deleteAnnotationToolDefinition,
   docCloseDocument: docCloseDocumentToolDefinition,

@@ -50,6 +50,9 @@ async function postProsperoMessage(
   content: string,
   opaqueContent: string | null,
   kindLabel: string,
+  /** When set, the announcement is whispered only to these participants (e.g. a
+   *  Carina error in response to a `@Name?` whisper). null/undefined = public. */
+  targetParticipantIds: string[] | null = null,
 ): Promise<MessageEvent | null> {
   try {
     const repos = getRepositories();
@@ -73,6 +76,7 @@ async function postProsperoMessage(
       participantId: null,
       systemSender: 'prospero',
       systemKind: kindLabel,
+      targetParticipantIds: targetParticipantIds && targetParticipantIds.length ? targetParticipantIds : null,
     };
 
     await repos.chats.addMessage(chatId, message);
@@ -82,6 +86,7 @@ async function postProsperoMessage(
       chatId,
       messageId,
       kindLabel,
+      whispered: Boolean(targetParticipantIds && targetParticipantIds.length),
     });
 
     return message;
@@ -510,4 +515,71 @@ export async function postProsperoContextAnnouncement(
       : 'general-context';
 
   return postProsperoMessage(params.chatId, content, opaqueContent, kind);
+}
+
+// ---------------------------------------------------------------------------
+// Carina (inline LLM queries) error announcements. Carina has no voice of her
+// own — when an `@Name:` / `@Name?` query or an `ask_carina` tool call fails,
+// Prospero reports it. Public errors mirror the `:` separator; whispered errors
+// mirror `?` and are scoped to the asker via `targetParticipantIds`.
+// ---------------------------------------------------------------------------
+
+/** The failure that prevented a Carina query from being answered. */
+export type CarinaErrorKind = 'not-found' | 'no-profile' | 'llm-failed';
+
+export function buildCarinaErrorContent(
+  kind: CarinaErrorKind,
+  characterName: string | null,
+  detail?: string | null,
+): string {
+  switch (kind) {
+    case 'not-found':
+      return 'Prospero regrets to inform you that no answerer by that name is currently on duty.';
+    case 'no-profile': {
+      const who = characterName ? `${characterName}` : 'the answerer';
+      return `Prospero notes that ${who} lacks a connection to any LLM provider.`;
+    }
+    case 'llm-failed': {
+      const trailer = detail ? ` — ${detail}` : '';
+      const who = characterName ? `${characterName}` : 'the answerer';
+      return `Prospero reports that ${who} was unable to respond${trailer}.`;
+    }
+  }
+}
+
+export function buildCarinaErrorOpaqueContent(
+  kind: CarinaErrorKind,
+  characterName: string | null,
+  detail?: string | null,
+): string {
+  switch (kind) {
+    case 'not-found':
+      return 'System: The requested Carina character was not found or is not enabled as an answerer.';
+    case 'no-profile':
+      return `System: No connection profile available for the requested answerer character${characterName ? ` (${characterName})` : ''}.`;
+    case 'llm-failed':
+      return `System: The Carina answerer call failed${detail ? ` — ${detail}` : ''}.`;
+  }
+}
+
+export interface ProsperoCarinaErrorAnnouncement {
+  chatId: string;
+  kind: CarinaErrorKind;
+  /** Answerer character name, when known (null for not-found). */
+  characterName?: string | null;
+  /** Short error summary for the `llm-failed` case. */
+  detail?: string | null;
+  /** True when the original query was a `@Name?` whisper. */
+  whisper: boolean;
+  /** Participant id of the asker — the whisper target when `whisper` is true. */
+  askerParticipantId?: string | null;
+}
+
+export async function postProsperoCarinaError(
+  params: ProsperoCarinaErrorAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildCarinaErrorContent(params.kind, params.characterName ?? null, params.detail);
+  const opaqueContent = buildCarinaErrorOpaqueContent(params.kind, params.characterName ?? null, params.detail);
+  const targets = params.whisper && params.askerParticipantId ? [params.askerParticipantId] : null;
+  return postProsperoMessage(params.chatId, content, opaqueContent, 'carina-error', targets);
 }

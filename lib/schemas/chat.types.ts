@@ -157,8 +157,8 @@ export const MessageEventSchema = z.object({
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage: z.boolean().nullable().optional(),
-  /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close). */
-  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel']).nullable().optional(),
+  /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close); 'carina' = inline-query reference answers (Carina). Note: a 'carina' message renders with the ANSWERER character's own avatar (resolved via `carinaMeta.answererId`), not a dedicated Staff avatar — the tag exists for memory suppression and the compact reference-card UI hook. */
+  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel', 'carina']).nullable().optional(),
   /**
    * Neutral, persona-free rewrite of `content` for Staff-authored messages
    * (systemSender != null). When the chat has any non-user-character
@@ -242,6 +242,21 @@ export const MessageEventSchema = z.object({
     kind: z.enum(['character', 'custom']),
     characterId: UUIDSchema.nullable().optional(),
     displayName: z.string().nullable().optional(),
+  }).nullable().optional(),
+  /**
+   * Carina (inline LLM queries) provenance, set on `systemSender = 'carina'`
+   * messages. `answererId` is the workspace character id of the answerer — it
+   * drives (1) avatar resolution (the Salon renders the Carina reply with the
+   * answerer's own avatar, looking them up among participants or the chat's
+   * off-scene character cards), and (2) "prior Carina exchanges" continuity (the
+   * service replays earlier `answererId`-matched exchanges as Q/A pairs so
+   * follow-up questions have context, WITHOUT pulling in the full chat history).
+   * `question` is the verbatim text that was asked, stored so those Q/A pairs
+   * can be reconstructed. NULL on every non-Carina message.
+   */
+  carinaMeta: z.object({
+    answererId: UUIDSchema,
+    question: z.string(),
   }).nullable().optional(),
   /**
    * The Courier: when non-null, this message is a placeholder for a manual /

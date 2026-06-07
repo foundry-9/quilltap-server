@@ -223,7 +223,8 @@ CREATE TABLE "characters" (
   "canCreateOutfits" INTEGER DEFAULT NULL,
   "characterDocumentMountPointId" TEXT DEFAULT NULL,
   "systemTransparency" INTEGER DEFAULT NULL,  -- when 1 (true), this character may inspect "the Staff" — the chat-level toggles for self_inventory, Staff messages (Lantern/Aurora/Librarian/Prospero/Host), and character vaults still apply. When NULL or 0 (false), the character cannot see Staff messages, the self_inventory tool is withheld, and all character vaults (own + peers) are hidden from doc_* tools — a hard override on top of chat/project settings. Default NULL (opaque).
-  "coreWhisperEnabled" INTEGER DEFAULT NULL   -- per-character override of the global coreWhisper.enabled setting (Aurora's Core whisper). NULL = inherit from global. Resolution: chat → character → global.
+  "coreWhisperEnabled" INTEGER DEFAULT NULL,  -- per-character override of the global coreWhisper.enabled setting (Aurora's Core whisper). NULL = inherit from global. Resolution: chat → character → global.
+  "canBeCarina" INTEGER DEFAULT NULL          -- Carina (inline LLM queries): when 1 (true), this character can answer @Name queries / ask_carina calls as an isolated reference answer (identity only, no history, no memory). NULL/0 = not an answerer. Added by add-carina-flag-v1.
 );
 
 CREATE INDEX "idx_characters_createdAt" ON "characters" ("createdAt" DESC);
@@ -634,7 +635,8 @@ CREATE TABLE "chat_messages" (
   "pendingExternalPromptFull" TEXT DEFAULT NULL,
   "opaqueContent" TEXT DEFAULT NULL,
   "reasoningContent" TEXT DEFAULT NULL,
-  "reasoningSegments" TEXT DEFAULT NULL
+  "reasoningSegments" TEXT DEFAULT NULL,
+  "carinaMeta" TEXT DEFAULT NULL              -- Carina (inline LLM queries): JSON { answererId, question } on systemSender='carina' messages. Drives answerer-avatar resolution + "prior Carina exchanges" continuity. NULL on every non-Carina message. Added by add-carina-message-meta-v1.
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");

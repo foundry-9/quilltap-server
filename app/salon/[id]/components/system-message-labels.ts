@@ -9,6 +9,7 @@ const SENDER_DISPLAY_NAMES: Record<NonNullable<Message['systemSender']>, string>
   host: 'The Host',
   commonplaceBook: 'The Commonplace Book',
   ariel: 'Ariel',
+  carina: 'Carina',
 }
 
 const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
@@ -17,6 +18,8 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'general-context': 'general context',
   'connection-profile-change': 'connection change',
   'tool-run': 'tool run',
+  'carina-response': 'reference answer',
+  'carina-error': 'reference desk',
   'memory-recap': 'memory recap',
   'relevant-memories': 'relevant memories',
   'inter-character-memories': 'inter-character memories',
@@ -198,6 +201,9 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
     consolidated: 'low',
     '*': 'low',
   },
+  // Carina reference answers render as their own full row (never a collapsed
+  // chip), so this importance tier is only a defensive fallback.
+  carina: { 'carina-response': 'medium', '*': 'medium' },
 }
 
 const DEFAULT_IMPORTANCE: AnnouncementImportance = 'medium'
