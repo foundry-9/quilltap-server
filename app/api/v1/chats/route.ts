@@ -102,6 +102,17 @@ const createChatSchema = z.object({
    * `projectId`: general scenarios apply to project-less chats too.
    */
   generalScenarioPath: z.string().max(500).optional(),
+  /**
+   * Relative path of a group scenario file (`Scenarios/<filename>.md`) inside a
+   * group's official document store, paired with `groupScenarioGroupId` (which
+   * group's store to resolve it from). Offered in the New Chat dialog whenever
+   * ANY selected participant is a member of the group (the one sanctioned
+   * exception to per-responding-character group isolation — a chat-creation menu,
+   * not a per-turn access grant). Lower precedence than `projectScenarioPath`,
+   * higher than `generalScenarioPath`.
+   */
+  groupScenarioPath: z.string().max(500).optional(),
+  groupScenarioGroupId: z.uuid().optional(),
   timestampConfig: TimestampConfigSchema.optional(),
   projectId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
@@ -907,7 +918,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // Fetch the primary character for defaults resolution
   const primaryCharacter = await repos.characters.findById(buildResult.firstCharacter.characterId);
 
-  // Resolve scenario: custom text > character scenarioId > project scenario path > nothing
+  // Resolve scenario: custom text > character scenarioId > project scenario path >
+  // group scenario path > general scenario path > nothing
   let resolvedScenario = validatedData.scenario;
   if (!resolvedScenario && validatedData.scenarioId) {
     const matchingScenario = primaryCharacter?.scenarios?.find(s => s.id === validatedData.scenarioId);
@@ -946,6 +958,37 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
           logger.warn('[Chats v1] projectScenarioPath did not resolve to a body', {
             projectId: validatedData.projectId,
             projectScenarioPath: validatedData.projectScenarioPath,
+          });
+        }
+      }
+    }
+  }
+  if (!resolvedScenario && validatedData.groupScenarioPath) {
+    if (!validatedData.groupScenarioGroupId) {
+      logger.warn('[Chats v1] groupScenarioPath provided without groupScenarioGroupId; ignoring', {
+        groupScenarioPath: validatedData.groupScenarioPath,
+      });
+    } else {
+      // Only the store pointer is needed — read the slim row so resolution
+      // doesn't throw on a degraded store.
+      const group = await repos.groups.findByIdRaw(validatedData.groupScenarioGroupId);
+      if (!group?.officialMountPointId) {
+        logger.warn('[Chats v1] groupScenarioPath provided but group has no officialMountPointId', {
+          groupScenarioGroupId: validatedData.groupScenarioGroupId,
+          groupScenarioPath: validatedData.groupScenarioPath,
+        });
+      } else {
+        const { resolveGroupScenarioBody } = await import('@/lib/mount-index/group-scenarios');
+        const body = await resolveGroupScenarioBody(
+          group.officialMountPointId,
+          validatedData.groupScenarioPath,
+        );
+        if (body) {
+          resolvedScenario = body;
+        } else {
+          logger.warn('[Chats v1] groupScenarioPath did not resolve to a body', {
+            groupScenarioGroupId: validatedData.groupScenarioGroupId,
+            groupScenarioPath: validatedData.groupScenarioPath,
           });
         }
       }

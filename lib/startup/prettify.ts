@@ -83,6 +83,9 @@ const PRETTY_LABELS: Record<string, string> = {
   // 4.7 project store cutover
   'cutover-projects-to-store-v1': 'Folding each project into its own document store for good',
   'drop-character-scenario-column-v1': 'Sweeping out a disused scenario drawer',
+  // Groups
+  'create-groups-table-v1': 'Laying out the ledger for your circles of characters',
+  'create-group-join-tables-v1': 'Stitching characters and stores into their groups',
 
   // Per-character fields
   'add-default-image-profile-field-v1': 'Adding default image profile to characters',

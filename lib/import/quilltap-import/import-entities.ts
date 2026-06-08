@@ -17,6 +17,7 @@ import type {
   RoleplayTemplate,
   MessageEvent,
   Project,
+  Group,
 } from '@/lib/schemas/types';
 import type { ImportOptions, IdMappingState, ImportCounts } from './types';
 
@@ -209,6 +210,69 @@ export async function importProjects(
       );
       moduleLogger.warn('Failed to import project', {
         projectId: project.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return { imported, skipped };
+}
+
+export async function importGroups(
+  userId: string,
+  groups: Group[],
+  options: ImportOptions,
+  idMaps: IdMappingState,
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
+): Promise<ImportCounts> {
+  let imported = 0;
+  let skipped = 0;
+
+  for (const group of groups) {
+    try {
+      const existing = await repos.groups.findById(group.id);
+
+      if (existing) {
+        if (options.conflictStrategy === 'skip') {
+          skipped++;
+          idMaps.groups.set(group.id, group.id);
+          continue;
+        }
+
+        if (options.conflictStrategy === 'overwrite') {
+          await repos.groups.delete(group.id);
+        }
+
+        if (options.conflictStrategy === 'duplicate') {
+          const newId = randomUUID();
+          idMaps.groups.set(group.id, newId);
+          // createdAt / updatedAt / officialMountPointId are excluded so create()
+          // generates fresh values and provisions a new store.
+          const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...groupData } = group;
+          const newGroup = await repos.groups.create({
+            ...groupData,
+            name: `${groupData.name} (imported)`,
+          });
+          imported++;
+          continue;
+        }
+      }
+
+      // createdAt / updatedAt / officialMountPointId are excluded so create()
+      // generates fresh values and provisions a new store.
+      const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...groupData } = group;
+      const newGroup = await repos.groups.create(groupData);
+      idMaps.groups.set(group.id, newGroup.id);
+      imported++;
+    } catch (error) {
+      warnings.push(
+        `Failed to import group "${group.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to import group', {
+        groupId: group.id,
         error: error instanceof Error ? error.message : String(error),
       });
     }

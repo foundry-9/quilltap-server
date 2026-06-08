@@ -145,6 +145,22 @@
     },
     {
       "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "groups" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["groups"],
+            "properties": {
+              "groups": { "type": "array", "items": { "$ref": "#/$defs/ExportedGroup" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
         "properties": { "manifest": { "properties": { "exportType": { "const": "document-stores" } } } }
       },
       "then": {
@@ -253,6 +269,7 @@
         "tags": { "type": "integer", "minimum": 0 },
         "memories": { "type": "integer", "minimum": 0 },
         "projects": { "type": "integer", "minimum": 0 },
+        "groups": { "type": "integer", "minimum": 0 },
         "documentStores": { "type": "integer", "minimum": 0 },
         "documentStoreDocuments": { "type": "integer", "minimum": 0 },
         "documentStoreBlobs": { "type": "integer", "minimum": 0 },
@@ -1057,6 +1074,40 @@
           "type": "integer",
           "minimum": 0,
           "description": "Informational: number of files in this project at export time"
+        }
+      }
+    },
+
+    "ExportedGroup": {
+      "type": "object",
+      "description": "A group with optional resolved relationship metadata. Fields prefixed with '_' are informational. Similar to projects, groups have substantive content (description, instructions, state, color, icon) in their official document store, overlaid on read. Groups are global to the instance.",
+      "required": ["id", "name", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "type": ["string", "null"], "maxLength": 2000 },
+        "instructions": { "type": ["string", "null"], "maxLength": 10000 },
+        "color": { "type": ["string", "null"], "pattern": "^#(?:[0-9a-fA-F]{3}){1,2}$" },
+        "icon": { "type": ["string", "null"], "maxLength": 50 },
+        "officialMountPointId": { "type": ["string", "null"], "description": "ID of the group's canonical document store. Stripped on import; the destination instance recreates or links its own." },
+        "state": { "type": "object" },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" },
+        "_memberNames": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Informational: names of member characters at export time"
+        },
+        "_memberCharacterIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/UUID" },
+          "description": "Character IDs to re-establish membership on import"
+        },
+        "_linkedStoreMountPointIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/UUID" },
+          "description": "Additional linked document store mount-point IDs (beyond the official store)"
         }
       }
     },

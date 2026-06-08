@@ -1,15 +1,17 @@
 /**
  * Tiered Mount Pool — single source of truth for the "tri-tier" content pattern.
  *
- * Several features read content from up to three (sometimes four) tiers of
- * document stores, ranked by how "close" the store is to the responding
- * character:
+ * Several features read content from up to five tiers of document stores,
+ * ranked by how "close" the store is to the responding character:
  *
  *   1. character — the responding character's own vault
  *   2. participant — the vaults of the OTHER characters present in a chat
  *      (multi-character document access only; not a search/knowledge tier)
- *   3. project — every store linked to the active chat's project
- *   4. global — the singleton "Quilltap General" mount
+ *   3. group — the official + linked stores of every group the RESPONDING
+ *      character is a member of (per-character, NOT per-chat — a character never
+ *      gains a co-participant's group stores)
+ *   4. project — every store linked to the active chat's project
+ *   5. global — the singleton "Quilltap General" mount
  *
  * Knowledge injection (`lib/chat/context/knowledge-injector.ts`), the
  * scriptorium search tool (`lib/tools/handlers/search-scriptorium-handler.ts`),
@@ -35,7 +37,7 @@ const errMsg = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 /** Which tier a given mount point belongs to within a resolved pool. */
-export type MountTier = 'character' | 'participant' | 'project' | 'global';
+export type MountTier = 'character' | 'participant' | 'group' | 'project' | 'global';
 
 /**
  * The inputs needed to resolve a pool. Provide ids; the helper does the DB
@@ -85,40 +87,77 @@ export interface TierResolveOptions {
 export interface TieredMountPool {
   characterMountPointId: string | null;
   participantMountPointIds: string[];
-  projectMountPointIds: string[];
-  globalMountPointId: string | null;
-}
-
-/** The three-tier subset that search/knowledge consumers care about. */
-export interface TierTriple {
-  characterMountPointId: string | null;
+  groupMountPointIds: string[];
   projectMountPointIds: string[];
   globalMountPointId: string | null;
 }
 
 /**
- * Canonical dedup for the three-tier triple. A mount must never enter more than
- * one tier; precedence is character > project > global. This is the ONE place
- * the dedup rule is implemented — every resolver and the knowledge injector
- * funnel through it so the priority can't drift.
+ * The scoped-tier subset that search/knowledge consumers care about. Excludes
+ * the participant tier (which is resolved/deduped separately). `groupMountPointIds`
+ * is optional so callers that predate the group tier (e.g. the knowledge injector's
+ * local dedup) can omit it and get the legacy character/project/global behavior.
  */
-export function dedupeTierTriple(triple: TierTriple): TierTriple {
+export interface TierTriple {
+  characterMountPointId: string | null;
+  groupMountPointIds?: string[];
+  projectMountPointIds: string[];
+  globalMountPointId: string | null;
+}
+
+/**
+ * Canonical dedup for the scoped-tier set. A mount must never enter more than
+ * one tier; precedence among the scoped tiers is
+ * **character > group > project > global**. (The participant tier is deduped
+ * separately in `resolveTieredMountPool` — it sits between character and group
+ * in the overall ranking but is never subject to this triple's dedup because it
+ * carries peer vaults, not the responding character's own scoped stores.) This
+ * is the ONE place the scoped dedup rule is implemented — every resolver and the
+ * knowledge injector funnel through it so the priority can't drift.
+ */
+export function dedupeTierTriple(
+  triple: TierTriple,
+): Omit<TieredMountPool, 'participantMountPointIds'> {
   const characterMountPointId = triple.characterMountPointId ?? null;
+
+  // Group: closest after character. Drop any mount that equals the character
+  // vault; dedup within the group set.
+  const groupSeen = new Set<string>();
+  const groupMountPointIds: string[] = [];
+  for (const id of triple.groupMountPointIds ?? []) {
+    if (!id) continue;
+    if (id === characterMountPointId) continue;
+    if (groupSeen.has(id)) continue;
+    groupSeen.add(id);
+    groupMountPointIds.push(id);
+  }
+
+  // Global: nulled when it collides with a closer tier (character or group).
+  // A project collision is resolved by dropping the project mount (below),
+  // preserving the legacy global-over-project edge case — which never arises for
+  // the "Quilltap General" singleton in practice.
   let globalMountPointId = triple.globalMountPointId ?? null;
-  if (globalMountPointId && globalMountPointId === characterMountPointId) {
+  if (
+    globalMountPointId &&
+    (globalMountPointId === characterMountPointId || groupSeen.has(globalMountPointId))
+  ) {
     globalMountPointId = null;
   }
+
+  // Project: excludes character, every group mount, and global; dedup within.
   const seen = new Set<string>();
   const projectMountPointIds: string[] = [];
   for (const id of triple.projectMountPointIds ?? []) {
     if (!id) continue;
     if (id === characterMountPointId) continue;
+    if (groupSeen.has(id)) continue;
     if (id === globalMountPointId) continue;
     if (seen.has(id)) continue;
     seen.add(id);
     projectMountPointIds.push(id);
   }
-  return { characterMountPointId, projectMountPointIds, globalMountPointId };
+
+  return { characterMountPointId, groupMountPointIds, projectMountPointIds, globalMountPointId };
 }
 
 /**
@@ -137,6 +176,45 @@ export async function resolveProjectMountPointIds(
     return links.map((l) => l.mountPointId);
   } catch (error) {
     logger.warn('Project mount lookup failed', { projectId, error: errMsg(error) });
+    return [];
+  }
+}
+
+/**
+ * Resolve just the group tier — the union of the official store and every linked
+ * store across all groups the given character is a member of. Keyed on the
+ * RESPONDING character (never the chat): a character only ever sees its own
+ * groups' stores. A cheap helper for callers that only need the group tier.
+ * Returns `[]` for a missing character id or on any lookup failure (fails soft).
+ */
+export async function resolveGroupMountPointIdsForCharacter(
+  characterId: string | null | undefined,
+): Promise<string[]> {
+  if (!characterId) return [];
+  try {
+    const repos = getRepositories();
+    const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
+    if (memberships.length === 0) return [];
+    const ids = new Set<string>();
+    for (const membership of memberships) {
+      try {
+        // findByIdRaw avoids a store read on this hot path — we only need the
+        // group's officialMountPointId pointer, not its hydrated content.
+        const group = await repos.groups.findByIdRaw(membership.groupId);
+        if (group?.officialMountPointId) ids.add(group.officialMountPointId);
+        const links = await repos.groupDocMountLinks.findByGroupId(membership.groupId);
+        for (const link of links) ids.add(link.mountPointId);
+      } catch (error) {
+        logger.warn('Group store lookup failed for membership', {
+          groupId: membership.groupId,
+          characterId,
+          error: errMsg(error),
+        });
+      }
+    }
+    return [...ids];
+  } catch (error) {
+    logger.warn('Group mount lookup failed', { characterId, error: errMsg(error) });
     return [];
   }
 }
@@ -198,7 +276,14 @@ export async function resolveTieredMountPool(
     }
   }
 
-  // 2. Project-linked stores.
+  // 2. Group stores — official + linked stores of every group the RESPONDING
+  //    character belongs to. Per-character (keyed on ctx.characterId), never the
+  //    chat: a character never gains a co-participant's group stores. Fails soft.
+  const groupMountPointIds: string[] = ctx.characterId
+    ? await resolveGroupMountPointIdsForCharacter(ctx.characterId)
+    : [];
+
+  // 3. Project-linked stores.
   let projectMountPointIds: string[] = [];
   if (ctx.projectId) {
     try {
@@ -212,7 +297,7 @@ export async function resolveTieredMountPool(
     }
   }
 
-  // 3. Quilltap General singleton (null during the pre-provisioning window).
+  // 4. Quilltap General singleton (null during the pre-provisioning window).
   let globalMountPointId: string | null = null;
   try {
     globalMountPointId = await getGeneralMountPointId();
@@ -220,19 +305,22 @@ export async function resolveTieredMountPool(
     /* general mount not provisioned yet */
   }
 
-  // 4. Canonical dedup of the three-tier triple.
+  // 5. Canonical dedup of the scoped tiers (character > group > project > global).
   const deduped = dedupeTierTriple({
     characterMountPointId,
+    groupMountPointIds,
     projectMountPointIds,
     globalMountPointId,
   });
 
-  // 5. Participant vaults — admitted into their own tier, excluded from the
-  //    others so each mount classifies into exactly one bucket.
+  // 6. Participant vaults — admitted into their own tier, excluded from every
+  //    other resolved tier (including group) so each mount classifies into
+  //    exactly one bucket.
   const participantMountPointIds: string[] = [];
   if (includeParticipants && ctx.characterIds && ctx.characterIds.length > 0) {
     const excluded = new Set<string>([
       ...(deduped.characterMountPointId ? [deduped.characterMountPointId] : []),
+      ...deduped.groupMountPointIds,
       ...deduped.projectMountPointIds,
       ...(deduped.globalMountPointId ? [deduped.globalMountPointId] : []),
     ]);
@@ -258,6 +346,7 @@ export async function resolveTieredMountPool(
   const pool: TieredMountPool = { ...deduped, participantMountPointIds };
   logger.debug('Resolved tiered mount pool', {
     hasCharacter: !!pool.characterMountPointId,
+    groupCount: pool.groupMountPointIds.length,
     projectCount: pool.projectMountPointIds.length,
     participantCount: pool.participantMountPointIds.length,
     hasGlobal: !!pool.globalMountPointId,
@@ -275,7 +364,7 @@ export async function resolveTieredMountPool(
  */
 export function flattenTierPool(
   pool: TieredMountPool,
-  opts: { scope?: 'all' | 'character' | 'project'; includeParticipants?: boolean } = {},
+  opts: { scope?: 'all' | 'character' | 'group' | 'project'; includeParticipants?: boolean } = {},
 ): string[] {
   const { scope = 'all', includeParticipants = false } = opts;
   const ids = new Set<string>();
@@ -287,10 +376,13 @@ export function flattenTierPool(
   };
   if (scope === 'character') {
     addCharacterTier();
+  } else if (scope === 'group') {
+    for (const id of pool.groupMountPointIds) ids.add(id);
   } else if (scope === 'project') {
     for (const id of pool.projectMountPointIds) ids.add(id);
   } else {
     addCharacterTier();
+    for (const id of pool.groupMountPointIds) ids.add(id);
     for (const id of pool.projectMountPointIds) ids.add(id);
     if (pool.globalMountPointId) ids.add(pool.globalMountPointId);
   }
@@ -299,8 +391,8 @@ export function flattenTierPool(
 
 /**
  * Classify which tier a mount belongs to within a resolved pool, or `null` when
- * the mount is outside the pool. Precedence: character > participant > project >
- * global.
+ * the mount is outside the pool. Precedence: character > participant > group >
+ * project > global.
  */
 export function classifyMountTier(
   mountPointId: string,
@@ -308,6 +400,7 @@ export function classifyMountTier(
 ): MountTier | null {
   if (mountPointId === pool.characterMountPointId) return 'character';
   if (pool.participantMountPointIds.includes(mountPointId)) return 'participant';
+  if (pool.groupMountPointIds.includes(mountPointId)) return 'group';
   if (pool.projectMountPointIds.includes(mountPointId)) return 'project';
   if (mountPointId === pool.globalMountPointId) return 'global';
   return null;

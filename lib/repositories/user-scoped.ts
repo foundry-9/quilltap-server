@@ -22,6 +22,9 @@ import {
   MemoriesRepository,
   FilesRepository,
   ProjectsRepository,
+  GroupsRepository,
+  GroupCharacterMembersRepository,
+  GroupDocMountLinksRepository,
   LLMLogsRepository,
   type CreateOptions,
 } from '@/lib/database/repositories';
@@ -38,6 +41,7 @@ import type {
   ApiKey,
   ChatEvent,
   Project,
+  Group,
   LLMLog,
 } from '@/lib/schemas/types';
 
@@ -373,6 +377,40 @@ class UserScopedProjectsRepository {
 }
 
 /**
+ * User-scoped Groups Repository
+ */
+class UserScopedGroupsRepository {
+  constructor(_userId: string, private readonly baseRepo: GroupsRepository) {}
+
+  findAll(): Promise<Group[]> {
+    return this.baseRepo.findAll();
+  }
+
+  findById(id: string): Promise<Group | null> {
+    return this.baseRepo.findById(id);
+  }
+
+  findByIds(ids: string[]): Promise<Group[]> {
+    return this.baseRepo.findByIds(ids);
+  }
+
+  create(
+    data: Omit<Group, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions,
+  ): Promise<Group> {
+    return this.baseRepo.create(data, options);
+  }
+
+  update(id: string, data: Partial<Group>): Promise<Group | null> {
+    return this.baseRepo.update(id, data);
+  }
+
+  delete(id: string): Promise<boolean> {
+    return this.baseRepo.delete(id);
+  }
+}
+
+/**
  * User-scoped Files Repository
  */
 class UserScopedFilesRepository extends UserScopedTaggableRepository<FileEntry, FilesRepository> {
@@ -498,6 +536,12 @@ export interface UserScopedRepositoryContainer {
   images: UserScopedFilesRepository;
   /** Projects repository - only returns user's projects */
   projects: UserScopedProjectsRepository;
+  /** Groups repository - only returns user's groups */
+  groups: UserScopedGroupsRepository;
+  /** Group character members repository (mount index) */
+  groupCharacterMembers: GroupCharacterMembersRepository;
+  /** Group document mount links repository (mount index) */
+  groupDocMountLinks: GroupDocMountLinksRepository;
   /** LLM logs repository - only returns user's LLM logs */
   llmLogs: UserScopedLLMLogsRepository;
 }
@@ -547,6 +591,7 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
   const files = new UserScopedFilesRepository(userId, baseRepos.files);
   const memories = new UserScopedMemoriesRepository(userId, baseRepos.memories, characters);
   const projects = new UserScopedProjectsRepository(userId, baseRepos.projects);
+  const groups = new UserScopedGroupsRepository(userId, baseRepos.groups);
   const llmLogs = new UserScopedLLMLogsRepository(userId, baseRepos.llmLogs);
 
   const container: UserScopedRepositoryContainer = {
@@ -561,6 +606,9 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
     files,
     images: files, // Alias for backwards compatibility
     projects,
+    groups,
+    groupCharacterMembers: baseRepos.groupCharacterMembers,
+    groupDocMountLinks: baseRepos.groupDocMountLinks,
     llmLogs,
   };
 
