@@ -104,7 +104,10 @@ export async function ensureGroupOfficialStore(
     );
     const adoptable = eligible.find(s => isGroupOwnStoreName(s.name)) ?? eligible[0] ?? null;
     if (adoptable) {
-      await repos.groups.update(groupId, { officialMountPointId: adoptable.id });
+      // Raw FK write — must not re-read the store overlay. On the create path
+      // the adopted store may have no properties.json yet; the overlay-applying
+      // `update()` would throw GroupStoreUnavailableError. See setOfficialMountPointId.
+      await repos.groups.setOfficialMountPointId(groupId, adoptable.id);
       logger.info('Adopted existing linked store as group official', {
         groupId,
         mountPointId: adoptable.id,
@@ -137,7 +140,10 @@ export async function ensureGroupOfficialStore(
   });
 
   await repos.groupDocMountLinks.link(groupId, mountPoint.id);
-  await repos.groups.update(groupId, { officialMountPointId: mountPoint.id });
+  // Raw FK write — `create()` populates the store files (properties.json et al.)
+  // only AFTER this returns, so the overlay-applying `update()` would throw
+  // GroupStoreUnavailableError on its closing re-read. See setOfficialMountPointId.
+  await repos.groups.setOfficialMountPointId(groupId, mountPoint.id);
 
   logger.info('Created group-official document store', {
     groupId,

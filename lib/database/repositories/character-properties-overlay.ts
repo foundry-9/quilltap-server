@@ -92,6 +92,7 @@ export {
   type CharacterVaultDescriptor,
   CHARACTER_VAULT_DESCRIPTORS,
   MANAGED_FIELDS,
+  CharacterVaultUnavailableError,
 } from './vault-overlay/schema';
 
 export {

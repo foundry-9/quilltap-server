@@ -54,6 +54,7 @@ import {
   readCharacterVaultWardrobe,
   CharacterVaultPropertiesSchema,
   CharacterVaultPhysicalPromptsSchema,
+  CharacterVaultUnavailableError,
   CHARACTER_PROPERTIES_JSON_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_PERSONALITY_MD_PATH,
@@ -160,9 +161,20 @@ function mockRepoPaths(
 ) {
   const findManyByMountPointsAndPath = jest
     .fn()
-    .mockImplementation((_ids: string[], path: string) =>
-      Promise.resolve(docsByPath[path] ?? []),
-    );
+    .mockImplementation((ids: string[], path: string) => {
+      // A provisioned vault ALWAYS carries properties.json — it is the keystone
+      // the read overlay checks before hydrating (its absence throws/drops).
+      // So unless a test explicitly sets properties.json (to exercise the
+      // missing/malformed cases), auto-supply a valid one for every requested
+      // mount, mirroring reality and keeping the per-file overlay tests focused
+      // on the file they actually exercise.
+      if (path === CHARACTER_PROPERTIES_JSON_PATH && !(path in docsByPath)) {
+        return Promise.resolve(
+          ids.map((id) => ({ mountPointId: id, content: JSON.stringify(VALID_VAULT_PROPS) })),
+        );
+      }
+      return Promise.resolve(docsByPath[path] ?? []);
+    });
   const findManyByMountPointsInFolder = jest
     .fn()
     .mockImplementation((_ids: string[], folder: string) =>
@@ -258,15 +270,30 @@ describe('applyDocumentStoreOverlay — properties.json overlay', () => {
     expect(result.pronouns).toBeNull();
   });
 
-  it('falls back to DB for all five fields when properties.json is missing', async () => {
-    mockRepoPaths({}); // no docs anywhere
+  it('drops the character (batched) when properties.json is missing — no DB fallback', async () => {
+    // Explicitly no properties.json for mp-1 (overrides the helper's keystone
+    // default). Post-cutover there is no DB to fall back to, so the overlay must
+    // fail loudly: the batched path drops the row rather than return it hollow.
+    mockRepoPaths({ [CHARACTER_PROPERTIES_JSON_PATH]: [] });
     const char = makeCharacter({
       id: 'a',
       characterDocumentMountPointId: 'mp-1',
       title: 'db-title',
     });
-    const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.title).toBe('db-title');
+    const result = await applyDocumentStoreOverlay([char]);
+    expect(result).toEqual([]);
+  });
+
+  it('throws CharacterVaultUnavailableError (single) when properties.json is missing', async () => {
+    mockRepoPaths({ [CHARACTER_PROPERTIES_JSON_PATH]: [] });
+    const char = makeCharacter({
+      id: 'a',
+      characterDocumentMountPointId: 'mp-1',
+      title: 'db-title',
+    });
+    await expect(applyDocumentStoreOverlayOne(char)).rejects.toBeInstanceOf(
+      CharacterVaultUnavailableError,
+    );
   });
 
   it('falls back to DB for all five fields when properties.json is malformed', async () => {
@@ -892,7 +919,9 @@ describe('applyDocumentStoreOverlay — per-file independence', () => {
     jest.clearAllMocks();
   });
 
-  it('applies description.md overlay even when properties.json is missing', async () => {
+  it('applies description.md overlay independently of the other vault files', async () => {
+    // Keystone properties.json is auto-supplied by mockRepoPaths; only
+    // description.md is set here, proving per-file independence.
     mockRepoPaths({
       [CHARACTER_DESCRIPTION_MD_PATH]: [
         { mountPointId: 'mp-1', content: 'vault-description' },
@@ -901,11 +930,9 @@ describe('applyDocumentStoreOverlay — per-file independence', () => {
     const char = makeCharacter({
       id: 'a',
       characterDocumentMountPointId: 'mp-1',
-      title: 'db-title',
       description: 'db-description',
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.title).toBe('db-title');
     expect(result.description).toBe('vault-description');
   });
 
@@ -982,7 +1009,28 @@ describe('applyDocumentStoreOverlay — batching', () => {
     expect(propsCall![0]).toEqual(['mp-shared']);
   });
 
-  it('falls back gracefully when the repository throws', async () => {
+  it('drops only the broken character — one bad vault cannot take down the roster', async () => {
+    // mp-good has a properties.json keystone; mp-bad explicitly has none.
+    mockRepoPaths({
+      [CHARACTER_PROPERTIES_JSON_PATH]: [
+        { mountPointId: 'mp-good', content: JSON.stringify({ ...VALID_VAULT_PROPS, title: 'vault-good' }) },
+      ],
+    });
+    const chars = [
+      makeCharacter({ id: 'good', characterDocumentMountPointId: 'mp-good' }),
+      makeCharacter({ id: 'bad', characterDocumentMountPointId: 'mp-bad' }),
+      makeCharacter({ id: 'no-vault', characterDocumentMountPointId: null, title: 'db-title' }),
+    ];
+    const result = await applyDocumentStoreOverlay(chars);
+    // Broken 'bad' dropped; healthy 'good' hydrated; vault-less 'no-vault' passes through.
+    expect(result.map((c) => c.id)).toEqual(['good', 'no-vault']);
+    expect(result[0].title).toBe('vault-good');
+    expect(result[1].title).toBe('db-title');
+  });
+
+  it('propagates a store-read failure instead of silently returning hollow characters', async () => {
+    // Post-cutover there is no DB fallback, so a failed vault read must not be
+    // swallowed — it propagates so the caller fails loudly (mapped to 503).
     const findManyByMountPointsAndPath = jest.fn().mockRejectedValue(new Error('db exploded'));
     const findManyByMountPointsInFolder = jest.fn().mockResolvedValue([]);
     getRepositoriesMock.mockReturnValue({
@@ -995,8 +1043,7 @@ describe('applyDocumentStoreOverlay — batching', () => {
         title: 'db-title',
       }),
     ];
-    const result = await applyDocumentStoreOverlay(chars);
-    expect(result[0].title).toBe('db-title');
+    await expect(applyDocumentStoreOverlay(chars)).rejects.toThrow('db exploded');
   });
 });
 

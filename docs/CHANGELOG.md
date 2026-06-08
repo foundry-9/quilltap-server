@@ -4,6 +4,25 @@
 
 ### 4.7-dev
 
+#### Character vault reads fail loudly instead of returning hollow characters
+
+Post-4.6-cutover the character vault is the sole source of truth for content fields (the DB columns were dropped), but the read overlay still silently swallowed a missing/unreadable vault and returned a character with blank identity/description/manifesto/personality/etc. — and the `// falling back to DB values` path had no DB to fall back to. Aligned the character overlay with the project/group store contract so a broken vault fails loudly.
+
+- New `CharacterVaultUnavailableError`. The read overlay's single path (`applyDocumentStoreOverlayOne`, behind `findById`) now **throws** it when a vault-linked character's `properties.json` keystone is missing; the batched path (`applyDocumentStoreOverlay`, behind `findAll`/`findByIds`) **drops** the offending row (logged at `error`) so one bad vault can't take down the whole roster. A store-read exception now propagates instead of being swallowed.
+- `lib/api/middleware/auth.ts` maps `CharacterVaultUnavailableError` to a deliberate 503 (with `characterId`). Also added the previously-missing `GroupStoreUnavailableError` → 503 mapping.
+- Existence-only callers converted to `findByIdRaw` (never overlays) so a broken vault stays manageable: character delete + PUT ownership pre-checks, and cascade delete/preview (which read only `name`/`defaultImageId`/`avatarOverrides`).
+- Character vault startup backfill now repopulates a linked-but-empty vault from the raw row (`ensureCharacterVault` early-returns on a set FK without checking files exist), mirroring the project/group store backfills, so a broken vault self-heals on restart.
+- Tests: character-overlay suite updated to the throw/drop contract (keystone now required) plus a mixed-batch isolation test; `cascade-delete` mocks updated to `findByIdRaw`.
+
+#### Fix: group/project store provisioning order (create returned 500)
+
+Creating a new group failed with `POST /api/v1/groups 500` ("has no usable document store: properties.json missing"). `ensureGroupOfficialStore` persisted the new `officialMountPointId` through the overlay-applying `repos.groups.update()`, whose closing re-read demands `properties.json` — but `create()` doesn't write that file until *after* ensure returns, so the FK write threw and rolled the whole create back. The identical pattern existed in `ensureProjectOfficialStore` (latent: existing projects were provisioned by the cutover migration, so a fresh `create()` never exercised it).
+
+- Added `setOfficialMountPointId(id, mountPointId)` to the groups and projects repositories — a raw FK write via the store-aware `_update` that never re-reads the store overlay (write-side sibling of `findByIdRaw`).
+- `ensureGroupOfficialStore` / `ensureProjectOfficialStore` now persist the FK through `setOfficialMountPointId` at both the adopt and create sites, instead of `update()`.
+- Half-provisioned groups left by a prior failed create self-heal on next startup (the group-store backfill reads `findAllRaw` and writes `properties.json` from the raw row).
+- Regression test `__tests__/unit/lib/mount-index/ensure-store-raw-fk.test.ts` pins the contract: ensure() must call `setOfficialMountPointId` and never `update()`.
+
 #### Groups (cross-sections of characters)
 
 Added Groups: a Group is a cross-section of characters, parallel to how a Project is a cross-section of files/chats. Each group owns an official document store (holding `description.md`, a `Scenarios/` folder, and a `Knowledge/` folder) plus zero-or-more additional linked stores, and surfaces Description/Scenarios/Knowledge into chats, the Commonplace Book, and the search tool. Built to the `docs/developer/features/groups.md` spec.

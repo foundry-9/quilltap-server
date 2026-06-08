@@ -194,6 +194,17 @@ unconditional).
 access-control application state, not character content, and is therefore
 not vault-mirrored.
 
+Because the vault is the sole source of truth post-cutover, the read overlay
+fails loudly rather than returning a hollow character (there is no DB column
+left to fall back to), mirroring the project/group stores: a vault-linked
+character whose `properties.json` keystone is missing/unreadable causes
+`findById` to throw `CharacterVaultUnavailableError` (mapped to a 503 by the
+route handler) and list reads (`findAll`/`findByIds`) to drop the offending
+row. Existence-only callers (delete, ownership pre-checks, cascade delete) read
+`findByIdRaw`, which never applies the overlay, so a broken vault stays
+deletable/repairable; the startup backfill repopulates a linked-but-empty vault
+from the raw row.
+
 ```sql
 CREATE TABLE "characters" (
   "id" TEXT PRIMARY KEY,

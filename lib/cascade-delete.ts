@@ -113,7 +113,10 @@ export async function findExclusiveImagesForCharacter(
   characterId: string
 ): Promise<ExclusiveCharacterImage[]> {
   const repos = getRepositories()
-  const character = await repos.characters.findById(characterId)
+  // Raw row: cascade delete/preview only reads DB columns (name, defaultImageId,
+  // avatarOverrides) and must work even if the vault is broken — findById would
+  // throw CharacterVaultUnavailableError.
+  const character = await repos.characters.findByIdRaw(characterId)
 
   if (!character) {
     return []
@@ -248,7 +251,10 @@ export async function getCascadeDeletePreview(
   characterId: string
 ): Promise<CascadeDeletePreview | null> {
   const repos = getRepositories()
-  const character = await repos.characters.findById(characterId)
+  // Raw row: cascade delete/preview only reads DB columns (name, defaultImageId,
+  // avatarOverrides) and must work even if the vault is broken — findById would
+  // throw CharacterVaultUnavailableError.
+  const character = await repos.characters.findByIdRaw(characterId)
 
   if (!character) {
     return null
@@ -290,7 +296,10 @@ export async function executeCascadeDelete(
   deletedMemories: number
 }> {
   const repos = getRepositories()
-  const character = await repos.characters.findById(characterId)
+  // Raw row: cascade delete/preview only reads DB columns (name, defaultImageId,
+  // avatarOverrides) and must work even if the vault is broken — findById would
+  // throw CharacterVaultUnavailableError.
+  const character = await repos.characters.findByIdRaw(characterId)
 
   if (!character) {
     return { success: false, deletedChats: 0, deletedImages: 0, deletedMemories: 0 }

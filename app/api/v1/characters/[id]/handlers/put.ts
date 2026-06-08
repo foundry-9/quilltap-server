@@ -86,7 +86,11 @@ export async function handlePut(
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
 
-  const existingCharacter = await repos.characters.findById(id);
+  // Existence/ownership check only — use the raw row so a character with a
+  // broken vault can still be edited (and thereby repaired: update() routes
+  // managed fields back to the vault and auto-provisions a missing one).
+  // findById would throw CharacterVaultUnavailableError → 503.
+  const existingCharacter = await repos.characters.findByIdRaw(id);
 
   if (!checkOwnership(existingCharacter, user.id)) {
     return notFound('Character');

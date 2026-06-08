@@ -95,6 +95,36 @@ export const SINGLE_FILE_OVERLAY_PATHS = [
   CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
 ] as const;
 
+/**
+ * Thrown when a character flagged for vault overlay (`characterDocumentMountPointId`
+ * is set) has no usable vault — a null/unreadable mount, or a missing
+ * `properties.json` keystone. Post-cutover the vault is the sole source of truth
+ * for the managed content fields (identity, description, manifesto, personality,
+ * exampleDialogues, title, firstMessage, systemPrompts, scenarios, …); the DB row
+ * no longer carries them. A broken vault is therefore a broken invariant, not a
+ * routine state, and must fail loudly rather than return a hollowed-out character.
+ *
+ * The read overlay's single-fetch path (`applyDocumentStoreOverlayOne`, behind
+ * `findById`) throws this. The batched list path (`applyDocumentStoreOverlay`,
+ * behind `findAll`/`findByIds`) catches it, logs at `error`, and drops the
+ * offending character so one bad row cannot take down the whole roster. Mirrors
+ * `ProjectStoreUnavailableError` / `GroupStoreUnavailableError`.
+ */
+export class CharacterVaultUnavailableError extends Error {
+  constructor(
+    public readonly characterId: string,
+    public readonly characterDocumentMountPointId: string | null | undefined,
+    detail?: string,
+  ) {
+    super(
+      `Character ${characterId} has no usable vault ` +
+        `(characterDocumentMountPointId=${characterDocumentMountPointId ?? 'null'})` +
+        (detail ? `: ${detail}` : ''),
+    );
+    this.name = 'CharacterVaultUnavailableError';
+  }
+}
+
 // ============================================================================
 // VAULT FIELD DESCRIPTORS
 //

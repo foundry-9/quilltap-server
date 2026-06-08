@@ -199,6 +199,26 @@ export class ProjectsRepository extends AbstractBaseRepository<Project> {
   }
 
   /**
+   * Persist ONLY the `officialMountPointId` FK on the slim row, bypassing the
+   * document-store overlay entirely.
+   *
+   * Provisioning (`ensureProjectOfficialStore`) calls this to record a freshly
+   * created store's id BEFORE the store files exist. The normal,
+   * overlay-applying {@link update} cannot be used there: its closing re-read
+   * (`applyProjectStoreOverlayOne`) would throw `ProjectStoreUnavailableError`
+   * ("properties.json missing") because `writeProjectStoreManagedFields` hasn't
+   * run yet. The store-aware `_update` writes the column off the raw row and
+   * never re-reads the store. Write-side sibling of {@link findByIdRaw}; almost
+   * no caller wants this — use {@link update} for any normal write.
+   *
+   * @param id The project ID
+   * @param mountPointId The official store's mount-point ID
+   */
+  async setOfficialMountPointId(id: string, mountPointId: string): Promise<void> {
+    await this._update(id, { officialMountPointId: mountPointId });
+  }
+
+  /**
    * Delete a project
    * @param id The project ID
    * @returns Promise<boolean> True if project was deleted, false if not found

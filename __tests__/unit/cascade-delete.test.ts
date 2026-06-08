@@ -306,7 +306,7 @@ describe('Cascade Delete Utilities', () => {
   describe('findExclusiveImagesForCharacter', () => {
     it('should return empty array when character not found', async () => {
       const charsRepo = {
-        findById: jest.fn().mockResolvedValue(null),
+        findByIdRaw: jest.fn().mockResolvedValue(null),
       }
 
       mockGetRepositories.mockReturnValue({
@@ -316,14 +316,14 @@ describe('Cascade Delete Utilities', () => {
       const result = await findExclusiveImagesForCharacter('nonexistent-char')
 
       expect(result).toEqual([])
-      expect(charsRepo.findById).toHaveBeenCalledWith('nonexistent-char')
+      expect(charsRepo.findByIdRaw).toHaveBeenCalledWith('nonexistent-char')
     })
 
     it('should return empty array when character has no images', async () => {
       const character = { ...createMockCharacter('char-1'), defaultImageId: null, avatarOverrides: [] }
 
       const charsRepo = {
-        findById: jest.fn().mockResolvedValue(character),
+        findByIdRaw: jest.fn().mockResolvedValue(character),
         findByDefaultImageId: jest.fn().mockResolvedValue([]),
         findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
       }
@@ -346,7 +346,7 @@ describe('Cascade Delete Utilities', () => {
       const character = createMockCharacter('char-1')
 
       const charsRepo = {
-        findById: jest.fn().mockResolvedValue(character),
+        findByIdRaw: jest.fn().mockResolvedValue(character),
         findByDefaultImageId: jest.fn().mockResolvedValue([]),
         findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
       }
@@ -403,7 +403,7 @@ describe('Cascade Delete Utilities', () => {
   describe('getCascadeDeletePreview', () => {
     it('should return null when character not found', async () => {
       const charsRepo = {
-        findById: jest.fn().mockResolvedValue(null),
+        findByIdRaw: jest.fn().mockResolvedValue(null),
       }
 
       mockGetRepositories.mockReturnValue({
@@ -424,7 +424,7 @@ describe('Cascade Delete Utilities', () => {
       }
 
       const charsRepo = {
-        findById: jest.fn().mockResolvedValue(character),
+        findByIdRaw: jest.fn().mockResolvedValue(character),
         findByDefaultImageId: jest.fn().mockResolvedValue([]),
         findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
       }
@@ -473,7 +473,7 @@ describe('Cascade Delete Utilities', () => {
       }
 
       const charsRepo = {
-        findById: jest.fn().mockResolvedValue(character),
+        findByIdRaw: jest.fn().mockResolvedValue(character),
         findByDefaultImageId: jest.fn().mockResolvedValue([]),
         findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
       }
@@ -513,7 +513,7 @@ describe('Cascade Delete Utilities', () => {
   describe('executeCascadeDelete', () => {
     it('should return failure when character not found', async () => {
       const charsRepo = {
-        findById: jest.fn().mockResolvedValue(null),
+        findByIdRaw: jest.fn().mockResolvedValue(null),
       }
 
       mockGetRepositories.mockReturnValue({
@@ -544,7 +544,7 @@ describe('Cascade Delete Utilities', () => {
       }
 
       const charsRepo = {
-        findById: jest.fn().mockResolvedValue(character),
+        findByIdRaw: jest.fn().mockResolvedValue(character),
         findByDefaultImageId: jest.fn().mockResolvedValue([]),
         findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue(undefined),
@@ -602,7 +602,7 @@ describe('Cascade Delete Utilities', () => {
       }
 
       const charsRepo = {
-        findById: jest.fn().mockResolvedValue(character),
+        findByIdRaw: jest.fn().mockResolvedValue(character),
         findByDefaultImageId: jest.fn().mockResolvedValue([]),
         findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue(undefined),

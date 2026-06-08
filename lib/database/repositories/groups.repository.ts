@@ -196,6 +196,26 @@ export class GroupsRepository extends AbstractBaseRepository<Group> {
   }
 
   /**
+   * Persist ONLY the `officialMountPointId` FK on the slim row, bypassing the
+   * document-store overlay entirely.
+   *
+   * Provisioning (`ensureGroupOfficialStore`) calls this to record a freshly
+   * created store's id BEFORE the store files exist. The normal,
+   * overlay-applying {@link update} cannot be used there: its closing re-read
+   * (`applyGroupStoreOverlayOne`) would throw `GroupStoreUnavailableError`
+   * ("properties.json missing") because `writeGroupStoreManagedFields` hasn't
+   * run yet. The store-aware `_update` writes the column off the raw row and
+   * never re-reads the store. Write-side sibling of {@link findByIdRaw}; almost
+   * no caller wants this — use {@link update} for any normal write.
+   *
+   * @param id The group ID
+   * @param mountPointId The official store's mount-point ID
+   */
+  async setOfficialMountPointId(id: string, mountPointId: string): Promise<void> {
+    await this._update(id, { officialMountPointId: mountPointId });
+  }
+
+  /**
    * Delete a group row. Callers are responsible for dropping memberships and
    * unlinking additional stores (see the API delete handler); the official store
    * is orphaned, matching project delete behavior.

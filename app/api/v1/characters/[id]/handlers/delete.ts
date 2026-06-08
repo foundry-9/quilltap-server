@@ -19,7 +19,11 @@ export async function handleDelete(
   const { user, repos } = ctx;
 
   try {
-    const existingCharacter = await repos.characters.findById(id);
+    // Existence/ownership check only — use the raw row so a character with a
+    // broken vault can still be deleted (findById would throw
+    // CharacterVaultUnavailableError → 503, trapping the user with an
+    // undeletable character).
+    const existingCharacter = await repos.characters.findByIdRaw(id);
 
     if (!checkOwnership(existingCharacter, user.id)) {
       return notFound('Character');

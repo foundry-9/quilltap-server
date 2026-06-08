@@ -104,7 +104,10 @@ export async function ensureProjectOfficialStore(
     );
     const adoptable = eligible.find(s => isProjectOwnStoreName(s.name)) ?? eligible[0] ?? null;
     if (adoptable) {
-      await repos.projects.update(projectId, { officialMountPointId: adoptable.id });
+      // Raw FK write — must not re-read the store overlay. On the create path
+      // the adopted store may have no properties.json yet; the overlay-applying
+      // `update()` would throw ProjectStoreUnavailableError. See setOfficialMountPointId.
+      await repos.projects.setOfficialMountPointId(projectId, adoptable.id);
       logger.info('Adopted existing linked store as project official', {
         projectId,
         mountPointId: adoptable.id,
@@ -137,7 +140,10 @@ export async function ensureProjectOfficialStore(
   });
 
   await repos.projectDocMountLinks.link(projectId, mountPoint.id);
-  await repos.projects.update(projectId, { officialMountPointId: mountPoint.id });
+  // Raw FK write — `create()` populates the store files (properties.json et al.)
+  // only AFTER this returns, so the overlay-applying `update()` would throw
+  // ProjectStoreUnavailableError on its closing re-read. See setOfficialMountPointId.
+  await repos.projects.setOfficialMountPointId(projectId, mountPoint.id);
 
   logger.info('Created project-official document store', {
     projectId,
