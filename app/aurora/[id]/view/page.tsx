@@ -80,9 +80,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,
+    handleToggleCarina,
     togglingNpc,
     togglingFavorite,
     togglingControlledBy,
+    togglingCarina,
     savingAgentMode,
     savingHelpTools,
     savingCanDressThemselves,
@@ -315,12 +317,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           onToggleNpc={handleToggleNpc}
           onToggleFavorite={handleToggleFavorite}
           onToggleControlledBy={handleToggleControlledBy}
+          onToggleCarina={handleToggleCarina}
           onOptimize={() => setShowOptimizerModal(true)}
           onSearchReplace={() => setShowSearchReplaceModal(true)}
           onGenerateExternalPrompt={() => setShowExternalPromptDialog(true)}
           togglingNpc={togglingNpc}
           togglingFavorite={togglingFavorite}
           togglingControlledBy={togglingControlledBy}
+          togglingCarina={togglingCarina}
         />
 
         {/* Tabbed Content */}

@@ -80,6 +80,8 @@ Not every character is available for `@Name` consultation by default. To designa
 4. Enable the toggle labelled **"Can answer @-queries (Carina)"**
 5. Save the character
 
+For a quicker enrolment, you may skip the edit form entirely: a small **console** switch sits among the toggles in the upper right of every character card — both on the Aurora roster and atop a character's own page, tucked between the favourite star and the user-control figure. Click it to enlist or dismiss the character as a Carina answerer on the spot; the console glows when the character is enrolled, and the change is saved at once with no further ceremony.
+
 A character with this flag enabled may be invoked by `@Name` from any chat — they need not be a participant in the chat to answer. If no answerer by the requested name can be found, or if the character in question lacks an LLM connection, Prospero will report the difficulty.
 
 Characters without this flag cannot be invoked via `@Name` syntax, even if their name matches exactly.

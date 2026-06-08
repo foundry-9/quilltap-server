@@ -16,12 +16,14 @@ interface CharacterHeaderProps {
   onToggleNpc: () => void
   onToggleFavorite: () => void
   onToggleControlledBy: () => void
+  onToggleCarina: () => void
   onSearchReplace?: () => void
   onOptimize?: () => void
   onGenerateExternalPrompt?: () => void
   togglingNpc?: boolean
   togglingFavorite?: boolean
   togglingControlledBy?: boolean
+  togglingCarina?: boolean
 }
 
 export function CharacterHeader({
@@ -34,12 +36,14 @@ export function CharacterHeader({
   onToggleNpc,
   onToggleFavorite,
   onToggleControlledBy,
+  onToggleCarina,
   onSearchReplace,
   onOptimize,
   onGenerateExternalPrompt,
   togglingNpc = false,
   togglingFavorite = false,
   togglingControlledBy = false,
+  togglingCarina = false,
 }: CharacterHeaderProps) {
   // Stat line entries in display order. `value` is the bold figure (a count,
   // or the `N/total` fraction for character files); `tip` is the hover tooltip
@@ -146,6 +150,24 @@ export function CharacterHeader({
                 title={character?.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
               >
                 {character?.isFavorite ? '⭐' : '☆'}
+              </button>
+              <button
+                onClick={onToggleCarina}
+                disabled={togglingCarina}
+                className="qt-text-favorite transition-transform hover:scale-110 disabled:opacity-50"
+                title={character?.canBeCarina ? 'Disable Carina answers (@-queries)' : 'Enable Carina answers (@-queries)'}
+              >
+                {character?.canBeCarina ? (
+                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M4 3h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-5v2h2a1 1 0 1 1 0 2H7a1 1 0 1 1 0-2h2v-2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                )}
               </button>
               <button
                 onClick={onToggleControlledBy}

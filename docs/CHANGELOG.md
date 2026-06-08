@@ -4,6 +4,14 @@
 
 ### 4.7-dev
 
+#### Aurora: Carina toggle on character cards
+
+Added a third toggle — a small console (terminal) icon — to the character card toggle row, sitting between the favorite star and the user-control figure, on both the Aurora roster grid (`app/aurora/page.tsx`) and the character header card (`app/aurora/[id]/view/components/CharacterHeader.tsx`). Clicking it flips the character's `canBeCarina` flag (Carina inline @-query answerer eligibility) without opening the edit form. The icon is filled when enabled, outlined when disabled, mirroring the existing user-control toggle; tooltip reads "Enable/Disable Carina answers (@-queries)".
+
+- New `POST /api/v1/characters/[id]?action=toggle-carina` flips `canBeCarina` (null/undefined coerces to true) via a new `setCanBeCarina` method on the characters repository, returning the updated character.
+- The collection `GET /api/v1/characters` projection now includes `canBeCarina` (defaulting to `false`) so the grid can render the correct state; the item GET already spread the full record.
+- Header card wiring: `onToggleCarina` / `togglingCarina` props on `CharacterHeader`, with `handleToggleCarina` + `togglingCarina` state added to `useCharacterView` and passed through the view page. Both the grid and header use optimistic state updates, matching the favorite/user-control handlers.
+
 #### Aurora character card: rearranged header with stats line and group badges
 
 Reworked the middle section of the character card at the top of an Aurora character page (`app/aurora/[id]/view/components/CharacterHeader.tsx`). The character name (`<h1>`) and the favorite/user-control toggles now sit on a top row; the title (`<h2>`) and pronouns on the row below. Aliases moved out of the name line into their own badge row. A new stats line and group badges are bottom-aligned within the card.

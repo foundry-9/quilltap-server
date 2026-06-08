@@ -510,6 +510,16 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     return this.update(characterId, { controlledBy });
   }
 
+  /**
+   * Set Carina (inline @-query answerer) eligibility for a character
+   * @param characterId The character ID
+   * @param canBeCarina Whether this character may answer inline @-queries
+   * @returns Promise<Character | null> The updated character if found, null otherwise
+   */
+  async setCanBeCarina(characterId: string, canBeCarina: boolean): Promise<Character | null> {
+    return this.update(characterId, { canBeCarina });
+  }
+
   // ============================================================================
   // GENERIC SUB-ARRAY HELPERS
   // ============================================================================

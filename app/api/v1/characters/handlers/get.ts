@@ -64,6 +64,7 @@ export async function handleGet(
           defaultImage,
           isFavorite: character.isFavorite,
           controlledBy: character.controlledBy ?? 'llm',
+          canBeCarina: character.canBeCarina ?? false,
           defaultConnectionProfileId: character.defaultConnectionProfileId || null,
           defaultPartnerId: character.defaultPartnerId || null,
           defaultPartnerName,

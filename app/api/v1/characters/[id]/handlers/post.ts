@@ -58,7 +58,7 @@ const generateExternalPromptSchema = z.object({
   maxTokens: z.number().int().min(1000).max(20000),
 });
 
-const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive'] as const;
+const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'toggle-carina', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive'] as const;
 type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 async function handleOptimizeStream(
@@ -233,6 +233,22 @@ export async function handlePost(
       } catch (error) {
         logger.error('[Characters v1] Error toggling controlledBy', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to toggle controlled-by');
+      }
+    },
+
+    'toggle-carina': async () => {
+      try {
+        // Flip Carina (inline @-query answerer) eligibility. canBeCarina is
+        // nullable/optional, so a null/undefined current value coerces to true.
+        const newCanBeCarina = !character.canBeCarina;
+        const updatedCharacter = await repos.characters.setCanBeCarina(id, newCanBeCarina);
+
+        logger.debug('[Characters v1] Carina eligibility toggled', { characterId: id, canBeCarina: newCanBeCarina });
+
+        return NextResponse.json({ character: updatedCharacter });
+      } catch (error) {
+        logger.error('[Characters v1] Error toggling Carina eligibility', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to toggle Carina eligibility');
       }
     },
 

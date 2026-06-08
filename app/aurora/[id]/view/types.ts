@@ -74,6 +74,7 @@ export interface Character {
   defaultConnectionProfileId?: string
   controlledBy?: 'llm' | 'user'
   isFavorite?: boolean
+  canBeCarina?: boolean | null
   npc?: boolean
   defaultAgentModeEnabled?: boolean | null
   defaultHelpToolsEnabled?: boolean | null

@@ -36,6 +36,7 @@ interface Character {
   }
   isFavorite: boolean
   controlledBy: 'llm' | 'user'
+  canBeCarina?: boolean
   npc: boolean
   defaultPartnerName?: string | null
   createdAt: string
@@ -168,6 +169,21 @@ export default function CharactersPage() {
       )
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle controlled-by')
+    }
+  }
+
+  const toggleCarina = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault()
+    try {
+      const res = await fetch(`/api/v1/characters/${id}?action=toggle-carina`, { method: 'POST' })
+      if (!res.ok) throw new Error('Failed to toggle Carina eligibility')
+      const data = await res.json()
+      await mutateCharacters(
+        (prev) => prev && { characters: prev.characters.map((c) => (c.id === id ? { ...c, canBeCarina: data.character.canBeCarina } : c)) },
+        { revalidate: false }
+      )
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle Carina eligibility')
     }
   }
 
@@ -379,6 +395,23 @@ export default function CharactersPage() {
                     title={character.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                   >
                     {character.isFavorite ? '⭐' : '☆'}
+                  </button>
+                  <button
+                    onClick={(e) => toggleCarina(e, character.id)}
+                    className="qt-text-favorite transition-transform hover:scale-110"
+                    title={character.canBeCarina ? 'Disable Carina answers (@-queries)' : 'Enable Carina answers (@-queries)'}
+                  >
+                    {character.canBeCarina ? (
+                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M4 3h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-5v2h2a1 1 0 1 1 0 2H7a1 1 0 1 1 0-2h2v-2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="3" width="20" height="14" rx="2" />
+                        <line x1="8" y1="21" x2="16" y2="21" />
+                        <line x1="12" y1="17" x2="12" y2="21" />
+                      </svg>
+                    )}
                   </button>
                   <button
                     onClick={(e) => toggleControlledBy(e, character.id)}

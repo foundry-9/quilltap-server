@@ -31,6 +31,7 @@ interface UseCharacterViewReturn {
   togglingNpc: boolean
   togglingFavorite: boolean
   togglingControlledBy: boolean
+  togglingCarina: boolean
   savingAgentMode: boolean
   savingHelpTools: boolean
   savingCanDressThemselves: boolean
@@ -62,6 +63,7 @@ interface UseCharacterViewReturn {
   handleToggleNpc: () => Promise<void>
   handleToggleFavorite: () => Promise<void>
   handleToggleControlledBy: () => Promise<void>
+  handleToggleCarina: () => Promise<void>
 }
 
 export function useCharacterView(characterId: string): UseCharacterViewReturn {
@@ -82,6 +84,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [togglingNpc, setTogglingNpc] = useState(false)
   const [togglingFavorite, setTogglingFavorite] = useState(false)
   const [togglingControlledBy, setTogglingControlledBy] = useState(false)
+  const [togglingCarina, setTogglingCarina] = useState(false)
   const [savingAgentMode, setSavingAgentMode] = useState(false)
   const [savingHelpTools, setSavingHelpTools] = useState(false)
   const [savingCanDressThemselves, setSavingCanDressThemselves] = useState(false)
@@ -664,6 +667,25 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleToggleCarina = async () => {
+    if (!character) return
+    setTogglingCarina(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}?action=toggle-carina`, { method: 'POST' })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to toggle Carina eligibility')
+      }
+      const data = await res.json()
+      setCharacter({ ...character, canBeCarina: data.character.canBeCarina })
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle Carina eligibility')
+      console.error('Failed to toggle Carina eligibility', { error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setTogglingCarina(false)
+    }
+  }
+
   return {
     loading,
     error,
@@ -681,6 +703,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     togglingNpc,
     togglingFavorite,
     togglingControlledBy,
+    togglingCarina,
     savingAgentMode,
     savingHelpTools,
     savingCanDressThemselves,
@@ -712,5 +735,6 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,
+    handleToggleCarina,
   }
 }
