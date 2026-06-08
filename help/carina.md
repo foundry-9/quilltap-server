@@ -48,6 +48,7 @@ A message may contain only one `@Name` invocation that fires — the first match
 The answerer character builds its response from:
 
 - Its own **personality**, **identity**, **description**, and **manifesto** — its full character as configured in Aurora
+- A card naming **who is asking** — the surface-level view any character would have of the petitioner who has stepped up to the desk: their name, title, pronouns, aliases, and public identity (precisely what a stranger might know on sight or by reputation). The desk is no longer addressed by an anonymous voice. It does **not** receive the asker's private personality — only what is plainly knowable from the outside.
 - Its own **memories** — recollections from its Commonplace Book that bear on your question, whispered in for the occasion just as they would be for an ordinary turn
 - Its **default scenario**, if one is set
 - Any **previous Carina exchanges** in this chat directed at this same character — so follow-up questions ("And what about...?") carry appropriate continuity

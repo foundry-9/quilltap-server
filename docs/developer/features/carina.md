@@ -99,9 +99,10 @@ When a Carina query fires, the system builds a **minimal, isolated LLM call** fo
 
 1. **System prompt** — built the same way as a normal character turn: identity, description, personality, manifesto (from the character vault via `applyDocumentStoreOverlay`)
 2. **Character's scenarios** — if the character has a default scenario, include it
-3. **Memory recall (Commonplace Book)** — the answerer's own relevant memories, recalled by semantic search against the question and whispered into the call. *(Added after v1 — see "Memory: revised behavior" below.)*
-4. **Previous Carina exchanges in this chat** — only other `@Name` queries and their answers directed at this same character in this same chat session. This gives continuity for follow-up questions ("And what about...?") without pulling in the full chat history
-5. **The question** — delivered as a user-role message
+3. **Asker identity card** — a surface-level "who is asking" block appended to the Reference Query section of the system prompt: the asker's name, title, pronouns, aliases, and `identity` field (falling back to `description`, then a neutral placeholder), via `buildPublicIdentityCard`. The asker's participant id (`askerParticipantId`) is resolved against `chat.participants` to a character — the user's persona for `@Name?` markup, the calling character for `ask_carina`/character markup. **Surface view only** — the asker's private `personality`/`manifesto` are deliberately excluded (the answerer learns what any character would know of someone addressing them, not what they cannot see). Resolves to nothing — and the call falls back to the anonymous framing — when there is no participant context or the asker's vault can't be read.
+4. **Memory recall (Commonplace Book)** — the answerer's own relevant memories, recalled by semantic search against the question and whispered into the call. *(Added after v1 — see "Memory: revised behavior" below.)*
+5. **Previous Carina exchanges in this chat** — only other `@Name` queries and their answers directed at this same character in this same chat session. This gives continuity for follow-up questions ("And what about...?") without pulling in the full chat history
+6. **The question** — delivered as a user-role message
 
 ### Context excluded
 

@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### Fix: Carina answerers are now told who is asking
+
+A Carina answerer received only the bare question text — it had no idea who had addressed it (the asker's identity was threaded through `runCarinaQuery` solely for whisper targeting, never put into the prompt). Answerers consequently asked "who am I speaking with?" in their replies.
+
+- `runCarinaQuery` now resolves `askerParticipantId` against `chat.participants` to the asking character (the user's persona for `@Name?` markup, the calling character for `ask_carina`/character markup) and appends a surface-level identity card to the Reference Query block of the system prompt: name, title, pronouns, aliases, and the public `identity` field (falling back to `description`, then a neutral placeholder).
+- New reusable `buildPublicIdentityCard(character, userName?)` in `lib/chat/context/system-prompt-builder.ts` (with `NO_PUBLIC_IDENTITY_FALLBACK`) builds the card. It deliberately excludes the asker's private `personality`/`manifesto` — the answerer learns only what any character would know of someone addressing them.
+- Falls back to the previous anonymous framing when the asker can't be resolved (no participant context, or an unreadable character vault). Debug/warn logging added for resolution and failure.
+- Tests: new `lib/chat/context/__tests__/system-prompt-builder.test.ts` covering field selection, the identity→description→placeholder fallback chain, personality/manifesto exclusion, and `{{char}}`/`{{user}}` templating. Help (`carina.md`) and feature doc (`docs/developer/features/carina.md`) updated. No schema or migration change.
+
 #### Feature: group document stores surfaced to characters, the picker, and tools
 
 Group document stores (a Group's official store plus any linked stores) are now advertised on the same surfaces as project/general/character stores. The shared `resolveTieredMountPool` group tier already plumbed group stores through knowledge retrieval, the unified `search` tool (`scope: "group"`), and the doc-edit path resolver; this fills the remaining gaps.

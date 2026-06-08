@@ -5,7 +5,9 @@
  * minimal, ISOLATED reference answer:
  *   - system prompt = the answerer's identity stack (NOT the per-turn
  *     `buildSystemPrompt`, which layers in roleplay template / tool
- *     reinforcement) plus their default scenario,
+ *     reinforcement) plus their default scenario and a surface-level identity
+ *     card for whoever is asking (name/title/pronouns/aliases/identity — the
+ *     public view, never the asker's private personality),
  *   - the answerer's OWN relevant memories, recalled against the question and
  *     whispered in by the Commonplace Book (recall only — still NO general
  *     chat history, NO project or core whispers, NO live conversation),
@@ -29,7 +31,7 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
-import { buildIdentityStack } from '@/lib/chat/context/system-prompt-builder';
+import { buildIdentityStack, buildPublicIdentityCard } from '@/lib/chat/context/system-prompt-builder';
 import {
   buildTools,
   streamMessage,
@@ -48,7 +50,7 @@ import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notificat
 import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
 import { postCarinaResponse } from './writer';
 import type { CarinaResult } from './carina.types';
-import type { Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types';
+import type { Character, ChatParticipantBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types';
 
 /** Maximum detect→execute→re-stream iterations within a single Carina answer. */
 const MAX_TOOL_ITERATIONS = 5;
@@ -129,6 +131,55 @@ async function loadPriorCarinaExchanges(
     });
   }
   return pairs;
+}
+
+/**
+ * Build a surface-level identity card for the asker so the answerer knows who is
+ * addressing them — name, title, pronouns, aliases, and the public `identity`
+ * view (never personality; see {@link buildPublicIdentityCard}). All three Carina
+ * entry points hand us the asker's participant id — the user's persona for
+ * `@Name?` markup, the calling character for `ask_carina` / character markup —
+ * and every one resolves to a CHARACTER participant here.
+ *
+ * Returns null (and never throws) when the asker can't be resolved: no
+ * participant context (answer was going public anyway), an unknown participant,
+ * or a broken character vault. The call then proceeds without attribution, as it
+ * did before this was added.
+ */
+async function loadAskerIdentity(
+  repos: ReturnType<typeof getRepositories>,
+  participants: ChatParticipantBase[],
+  askerParticipantId: string | null,
+  chatId: string,
+): Promise<string | null> {
+  if (!askerParticipantId) return null;
+  const participant = participants.find((p) => p.id === askerParticipantId);
+  if (!participant?.characterId) return null;
+  try {
+    const asker = await repos.characters.findById(participant.characterId);
+    if (!asker) return null;
+    // When the asker IS the user-controlled persona, `{{user}}` in their own
+    // identity text means themselves; otherwise leave it to the generic default.
+    const userName = participant.controlledBy === 'user' ? asker.name : null;
+    const card = buildPublicIdentityCard(asker, userName);
+    logger.debug('[Carina] Resolved asker identity for answerer attribution', {
+      context: 'carina',
+      chatId,
+      askerParticipantId,
+      askerCharacterId: asker.id,
+      askerName: asker.name,
+      controlledBy: participant.controlledBy ?? 'llm',
+    });
+    return card;
+  } catch (error) {
+    logger.warn('[Carina] Failed to resolve asker identity; answering without attribution', {
+      context: 'carina',
+      chatId,
+      askerParticipantId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
 }
 
 /**
@@ -256,10 +307,24 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
     if (scenarioText) {
       systemPrompt += `\n\n## Scenario\n${scenarioText}`;
     }
-    systemPrompt +=
-      '\n\n## Reference Query\nYou are being consulted for a quick, standalone question. ' +
-      'Answer it directly and concisely from your own knowledge and the tools available to you. ' +
-      'You do not have the surrounding conversation in view.';
+    // Tell the answerer who is consulting them — the surface-level view any
+    // character would have of someone addressing them (name/title/pronouns/
+    // aliases/identity), never their private personality. Falls back to the
+    // anonymous framing when the asker can't be resolved.
+    const askerCard = await loadAskerIdentity(repos, chat.participants ?? [], askerParticipantId, chatId);
+    if (askerCard) {
+      systemPrompt +=
+        '\n\n## Reference Query\nYou are being consulted for a quick, standalone question by the ' +
+        'individual described below. Use this to know who is addressing you, then answer them ' +
+        'directly and concisely from your own knowledge and the tools available to you. You do not ' +
+        'have the surrounding conversation in view.' +
+        `\n\n### Who Is Asking\n${askerCard}`;
+    } else {
+      systemPrompt +=
+        '\n\n## Reference Query\nYou are being consulted for a quick, standalone question. ' +
+        'Answer it directly and concisely from your own knowledge and the tools available to you. ' +
+        'You do not have the surrounding conversation in view.';
+    }
 
     // The Commonplace Book whispers the answerer's own relevant memories into
     // the call (recall only — still no live conversation context).
