@@ -1471,8 +1471,10 @@ CREATE TABLE IF NOT EXISTS "group_doc_mount_links" (
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS "idx_group_doc_mount_links_groupId"
-  ON "group_doc_mount_links" ("groupId");
+-- UNIQUE(groupId, mountPointId) prevents duplicate links and serves
+-- groupId-prefix lookups (so no separate groupId index is kept).
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_group_doc_mount_links_group_mount"
+  ON "group_doc_mount_links" ("groupId", "mountPointId");
 CREATE INDEX IF NOT EXISTS "idx_group_doc_mount_links_mountPointId"
   ON "group_doc_mount_links" ("mountPointId");
 ```
@@ -1493,10 +1495,13 @@ CREATE TABLE IF NOT EXISTS "group_character_members" (
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
+-- characterId is the hot path for per-responding-character tier resolution.
 CREATE INDEX IF NOT EXISTS "idx_group_character_members_characterId"
   ON "group_character_members" ("characterId");
-CREATE INDEX IF NOT EXISTS "idx_group_character_members_groupId"
-  ON "group_character_members" ("groupId");
+-- UNIQUE(groupId, characterId) prevents duplicate memberships and serves
+-- groupId-prefix lookups (so no separate groupId index is kept).
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_group_character_members_group_char"
+  ON "group_character_members" ("groupId", "characterId");
 ```
 
 Note: both `groupId` and `characterId` reference tables in the main database (`groups`, `characters`). Cross-database foreign keys are not enforced by SQLite; referential integrity is maintained at the application layer.

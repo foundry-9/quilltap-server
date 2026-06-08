@@ -17,9 +17,9 @@ import { created, serverError } from '@/lib/api/responses';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
-  description: z.string().max(2000).optional(),
-  color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/).optional(),
-  icon: z.string().max(50).optional(),
+  description: z.string().max(2000).nullable().optional(),
+  color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/).nullable().optional(),
+  icon: z.string().max(50).nullable().optional(),
 });
 
 // ============================================================================

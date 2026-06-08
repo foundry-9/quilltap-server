@@ -32,11 +32,24 @@ export const GET = createAuthenticatedHandler(
   async (req: NextRequest, { repos }: RequestContext) => {
     try {
       const raw = req.nextUrl.searchParams.get('characterIds') ?? '';
-      const characterIds = raw
+      const requestedIds = raw
         .split(',')
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
 
+      if (requestedIds.length === 0) {
+        return NextResponse.json({ groupScenarios: [] });
+      }
+
+      // Only trust character ids the caller can actually access. `repos.characters`
+      // is user-scoped (returns null for ids the user doesn't own), so resolving
+      // each id here prevents probing arbitrary UUIDs for group membership /
+      // scenario metadata via the unscoped membership table.
+      const characterIds: string[] = [];
+      for (const id of requestedIds) {
+        const character = await repos.characters.findById(id);
+        if (character) characterIds.push(id);
+      }
       if (characterIds.length === 0) {
         return NextResponse.json({ groupScenarios: [] });
       }
@@ -51,7 +64,8 @@ export const GET = createAuthenticatedHandler(
       }
 
       logger.debug('[Groups v1] Aggregating group scenarios for New Chat', {
-        participantCount: characterIds.length,
+        requestedCount: requestedIds.length,
+        accessibleCount: characterIds.length,
         groupCount: groupIds.size,
       });
 

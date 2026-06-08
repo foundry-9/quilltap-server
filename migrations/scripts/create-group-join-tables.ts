@@ -32,7 +32,10 @@ const TABLE_DDL: string[] = [
     "createdAt" TEXT NOT NULL,
     "updatedAt" TEXT NOT NULL
   )`,
-  `CREATE INDEX IF NOT EXISTS "idx_group_doc_mount_links_groupId" ON "group_doc_mount_links" ("groupId")`,
+  // UNIQUE(groupId, mountPointId): hard guarantee against duplicate links (the
+  // repository's read-before-insert is racy under concurrency). Also serves
+  // groupId-prefix lookups, so no separate groupId index is needed.
+  `CREATE UNIQUE INDEX IF NOT EXISTS "idx_group_doc_mount_links_group_mount" ON "group_doc_mount_links" ("groupId", "mountPointId")`,
   `CREATE INDEX IF NOT EXISTS "idx_group_doc_mount_links_mountPointId" ON "group_doc_mount_links" ("mountPointId")`,
   `CREATE TABLE IF NOT EXISTS "group_character_members" (
     "id" TEXT PRIMARY KEY,
@@ -41,8 +44,11 @@ const TABLE_DDL: string[] = [
     "createdAt" TEXT NOT NULL,
     "updatedAt" TEXT NOT NULL
   )`,
+  // characterId is the hot path for per-responding-character tier resolution.
   `CREATE INDEX IF NOT EXISTS "idx_group_character_members_characterId" ON "group_character_members" ("characterId")`,
-  `CREATE INDEX IF NOT EXISTS "idx_group_character_members_groupId" ON "group_character_members" ("groupId")`,
+  // UNIQUE(groupId, characterId): hard guarantee against duplicate memberships;
+  // also serves groupId-prefix lookups, so no separate groupId index is needed.
+  `CREATE UNIQUE INDEX IF NOT EXISTS "idx_group_character_members_group_char" ON "group_character_members" ("groupId", "characterId")`,
 ];
 
 function openMountIndexDb(): DatabaseType {

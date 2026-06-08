@@ -60,7 +60,7 @@ export default function CharactersPage() {
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
   const router = useRouter()
-  const { groups, loading: groupsLoading, error: groupsError, fetchGroups, deleteGroup, createGroup } = useGroups()
+  const { groups, fetchGroups, deleteGroup, createGroup } = useGroups()
 
   // Fetch groups on mount
   useEffect(() => {
@@ -308,17 +308,16 @@ export default function CharactersPage() {
         </div>
       </div>
 
-      {/* Groups Section */}
-      {groups.length > 0 && (
-        <div className="mt-8">
-          <h2 className="qt-heading-2 mb-6 text-foreground">Groups</h2>
-          <GroupsGrid
-            groups={groups}
-            onCreateClick={() => setCreateGroupDialogOpen(true)}
-            onDeleteClick={handleDeleteGroup}
-          />
-        </div>
-      )}
+      {/* Groups Section — rendered unconditionally so GroupsGrid can show its
+          empty state ("No groups yet") for first-time users. */}
+      <div className="mt-8">
+        <h2 className="qt-heading-2 mb-6 text-foreground">Groups</h2>
+        <GroupsGrid
+          groups={groups}
+          onCreateClick={() => setCreateGroupDialogOpen(true)}
+          onDeleteClick={handleDeleteGroup}
+        />
+      </div>
 
       {/* Characters Section */}
       {visibleCharacters.length === 0 ? (
