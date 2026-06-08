@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Docs: Groups feature handoff plan
+
+Added `docs/developer/features/groups.md`, a build-ready specification for a future Groups feature (a cross-section of characters that owns a designated document store and exposes Description/Scenarios/Knowledge like Projects do, scoped per responding character). Planning document only — no code, schema, or behavior changes.
+
 #### Projects collapsed into their document store
 
 The `projects` table is now a slim identity row — only `id`, `name`, `officialMountPointId`, `createdAt`, and `updatedAt` remain as columns. Everything else moves into the project's official document store as top-level files, mirroring the 4.6 character-vault cutover:
