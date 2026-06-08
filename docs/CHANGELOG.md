@@ -4,6 +4,18 @@
 
 ### 4.7-dev
 
+#### Aurora character card: rearranged header with stats line and group badges
+
+Reworked the middle section of the character card at the top of an Aurora character page (`app/aurora/[id]/view/components/CharacterHeader.tsx`). The character name (`<h1>`) and the favorite/user-control toggles now sit on a top row; the title (`<h2>`) and pronouns on the row below. Aliases moved out of the name line into their own badge row. A new stats line and group badges are bottom-aligned within the card.
+
+- New `GET /api/v1/characters/[id]?action=stats` returns aggregate counts plus the character's groups: `{ stats: { memories, conversations, wardrobeItems, photos, scenarios, knowledge, core, characterFiles, characterFilesTotal }, groups: [{ id, name, color, icon }] }`. Counts are fanned out with `Promise.all`; the vault file links are fetched once and reused for photos, knowledge, and core. Character files render as a `N/total` fraction (e.g. `8/8`); the rest are plain counts.
+  - `memories` via `repos.memories.countByCharacterId`; `conversations` via `repos.chats.findByCharacterId().length`; `wardrobeItems` via `repos.wardrobe.findByCharacterId().length` (vault-overlaid); `photos` mirrors the Photo Gallery tab predicate (`photos/` plus legacy `images/avatar.webp` + `images/history/`); `scenarios` from `character.scenarios`.
+  - `knowledge` = files under the vault `Knowledge/` folder; `core` = files under the vault `Core/` packet folder; `characterFiles` = how many of the canonical managed vault files (`SINGLE_FILE_OVERLAY_PATHS`) are present (the `N/8` health figure), counted per distinct canonical path so case-variant duplicate rows can't inflate it past the set size.
+  - Groups hydrated via `repos.groupCharacterMembers.findByCharacterId` → `repos.groups.findByIds` (color/icon resolved from each group's store).
+- Each figure in the ledger carries a hover tooltip (`title`) explaining what it represents (e.g. why a character might have no `core` files, what `knowledge`/`scenarios` are). Pronouns get a subject/object/possessive breakdown tooltip; each group badge's tooltip shows the group's description (carried through the stats payload), falling back to the name.
+- Header data loads through a new `useCharacterStats` hook (separate from `useCharacterView` so secondary stats don't block the primary character load); refetched on `dataRefreshKey` changes (e.g. after Search & Replace).
+- Group badges render a color swatch + emoji (`group.color` / `group.icon`) and link to `/aurora/groups/[id]`, mirroring `GroupCard`.
+
 #### Fix: group editor page crashed under Next.js 16 (params Promise)
 
 The group editor (`app/aurora/groups/[id]/page.tsx`) read `params.id` synchronously, which Next.js 16 no longer allows — `params` is a Promise. The direct access returned `undefined`, so the page logged a sync-dynamic-API console error and then fetched `/api/v1/groups/undefined`, which failed. Unwrapped `params` with `React.use()`, matching every other client page in the app.

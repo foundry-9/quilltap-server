@@ -98,3 +98,28 @@ export interface TemplateCounts {
   userCount: number
   fieldCounts: Record<string, { char: number; user: number }>
 }
+
+/** Aggregate per-character counts shown in the header card. */
+export interface CharacterStats {
+  memories: number
+  conversations: number
+  wardrobeItems: number
+  photos: number
+  scenarios: number
+  knowledge: number
+  /** Files in the vault `Core/` packet folder. */
+  core: number
+  /** Canonical managed vault files present (the numerator of `N/total`). */
+  characterFiles: number
+  /** Total canonical managed vault files expected (the denominator). */
+  characterFilesTotal: number
+}
+
+/** Lightweight group descriptor for the header badges (color + emoji). */
+export interface GroupBadge {
+  id: string
+  name: string
+  description?: string | null
+  color?: string | null
+  icon?: string | null
+}

@@ -15,11 +15,13 @@ import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
 import { readCharacterAvatarBuffer } from '@/lib/photos/resolve-character-avatar';
+import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
+import { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
-const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags'] as const;
+const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags', 'stats'] as const;
 type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
 
 export async function handleGet(
@@ -284,6 +286,86 @@ export async function handleGet(
       } catch (error) {
         logger.error('[Characters v1] Error fetching character tags', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to fetch character tags');
+      }
+    },
+
+    stats: async () => {
+      try {
+        const mountPointId = character.characterDocumentMountPointId || null;
+
+        // Fan out the independent counts. The vault file links are fetched once
+        // and reused for photos, knowledge, and core so we don't re-query the
+        // mount-index three times for the same mount point.
+        const [memoryCount, chats, wardrobeItems, fileLinks, memberships] = await Promise.all([
+          repos.memories.countByCharacterId(id),
+          repos.chats.findByCharacterId(id),
+          repos.wardrobe.findByCharacterId(id),
+          mountPointId ? repos.docMountFileLinks.findByMountPointId(mountPointId) : Promise.resolve([]),
+          repos.groupCharacterMembers.findByCharacterId(id),
+        ]);
+
+        // Photos mirrors the Photo Gallery tab's predicate (Phase-3 `photos/`
+        // plus the legacy `images/avatar.webp` + `images/history/` portraits).
+        // Knowledge = files under the `Knowledge/` folder; Core = files under
+        // the `Core/` packet folder (the periodically re-offered core whisper).
+        // All three count link rows.
+        const presentPaths = new Set<string>();
+        let photos = 0;
+        let knowledge = 0;
+        let core = 0;
+        for (const link of fileLinks) {
+          const rel = link.relativePath.toLowerCase();
+          presentPaths.add(rel);
+          if (isPhotosRelativePath(link.relativePath) || rel === 'images/avatar.webp' || rel.startsWith('images/history/')) {
+            photos++;
+          }
+          if (rel.startsWith('knowledge/')) knowledge++;
+          if (rel.startsWith('core/')) core++;
+        }
+
+        // Character Files = how many of the canonical managed vault files are
+        // present (the `N/8` health figure). Counted per distinct canonical
+        // path so historic case-variant duplicate rows (`Manifesto.md` +
+        // `manifesto.md`) can't push the figure past the canonical set size.
+        let characterFiles = 0;
+        for (const corePath of SINGLE_FILE_OVERLAY_PATHS) {
+          if (presentPaths.has(corePath.toLowerCase())) characterFiles++;
+        }
+
+        // Hydrate the character's groups (membership lives in the mount-index;
+        // color/icon come from each group's document store via findByIds).
+        const groupIds = [...new Set(memberships.map((m) => m.groupId))];
+        const groupRecords = groupIds.length > 0 ? await repos.groups.findByIds(groupIds) : [];
+        const groups = groupRecords.map((g) => ({
+          id: g.id,
+          name: g.name,
+          description: g.description ?? null,
+          color: g.color ?? null,
+          icon: g.icon ?? null,
+        }));
+
+        const stats = {
+          memories: memoryCount,
+          conversations: chats.length,
+          wardrobeItems: wardrobeItems.length,
+          photos,
+          scenarios: character.scenarios?.length ?? 0,
+          knowledge,
+          core,
+          characterFiles,
+          characterFilesTotal: SINGLE_FILE_OVERLAY_PATHS.length,
+        };
+
+        logger.debug('[Characters v1] Computed character stats', {
+          characterId: id,
+          ...stats,
+          groupCount: groups.length,
+        });
+
+        return NextResponse.json({ stats, groups });
+      } catch (error) {
+        logger.error('[Characters v1] Error computing character stats', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to compute character stats');
       }
     },
   };
