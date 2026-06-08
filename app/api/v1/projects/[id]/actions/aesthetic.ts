@@ -1,0 +1,77 @@
+/**
+ * Projects API v1 - Default Aesthetic Actions
+ *
+ * GET /api/v1/projects/[id]?action=aesthetic&kind=lantern|aurora
+ *   - Read this project's official-store aesthetic file (single tier; no fallback).
+ * PUT /api/v1/projects/[id]?action=aesthetic&kind=lantern|aurora
+ *   - Write (or, when the body is empty, delete) that file. Deleting restores the
+ *     Quilltap General fallback for image generation.
+ *
+ * These are doc-store files (`lantern-aesthetics.md` / `aurora-aesthetics.md`) in
+ * the project's OFFICIAL document store — not project properties.
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { checkOwnership } from '@/lib/api/middleware';
+import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
+import { logger } from '@/lib/logger';
+import type { AuthenticatedContext } from '@/lib/api/middleware';
+import {
+  readAestheticForMount,
+  writeAestheticForMount,
+  type AestheticKind,
+} from '@/lib/image-gen/aesthetic';
+
+function parseKind(req: NextRequest): AestheticKind | null {
+  const kind = req.nextUrl.searchParams.get('kind');
+  return kind === 'lantern' || kind === 'aurora' ? kind : null;
+}
+
+export async function handleGetAesthetic(
+  req: NextRequest,
+  projectId: string,
+  { user, repos }: AuthenticatedContext
+): Promise<NextResponse> {
+  const project = await repos.projects.findById(projectId);
+  if (!checkOwnership(project, user.id)) {
+    return notFound('Project');
+  }
+  const kind = parseKind(req);
+  if (!kind) {
+    return badRequest('Query param "kind" must be "lantern" or "aurora"');
+  }
+  if (!project.officialMountPointId) {
+    return successResponse({ content: '' });
+  }
+  const content = await readAestheticForMount(project.officialMountPointId, kind);
+  return successResponse({ content: content ?? '' });
+}
+
+export async function handlePutAesthetic(
+  req: NextRequest,
+  projectId: string,
+  { user, repos }: AuthenticatedContext
+): Promise<NextResponse> {
+  const project = await repos.projects.findById(projectId);
+  if (!checkOwnership(project, user.id)) {
+    return notFound('Project');
+  }
+  const kind = parseKind(req);
+  if (!kind) {
+    return badRequest('Query param "kind" must be "lantern" or "aurora"');
+  }
+  if (!project.officialMountPointId) {
+    return serverError('Project has no official document store to write the aesthetic into');
+  }
+  const body = await req.json().catch(() => ({}));
+  const content = typeof body?.content === 'string' ? body.content : '';
+  await writeAestheticForMount(project.officialMountPointId, kind, content);
+  logger.info('[Projects v1] Project aesthetic updated', {
+    projectId,
+    kind,
+    length: content.trim().length,
+    deleted: content.trim().length === 0,
+    userId: user.id,
+  });
+  return successResponse({ success: true });
+}

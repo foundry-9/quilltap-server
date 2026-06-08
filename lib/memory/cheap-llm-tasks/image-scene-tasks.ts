@@ -20,6 +20,38 @@ import type {
   UncensoredFallbackOptions,
 } from './types'
 
+interface AestheticPromptInputs {
+  sceneAesthetic?: string | null
+  characterAesthetic?: string | null
+  depictionGuidelines?: Array<{ characterName: string; content: string }> | null
+}
+
+/**
+ * Build the labelled aesthetic + Ariel-Clause block appended to a crafting
+ * call's user message. Returns '' when nothing is set, so existing behaviour is
+ * unchanged. Per-character depiction guidelines are flagged MANDATORY and the
+ * matching system-prompt section instructs the model to treat them as binding.
+ */
+function buildAestheticSection(inputs: AestheticPromptInputs): string {
+  const parts: string[] = []
+  if (inputs.sceneAesthetic) {
+    parts.push(`Overall image aesthetic (apply this style to the whole image):\n${inputs.sceneAesthetic}`)
+  }
+  if (inputs.characterAesthetic) {
+    parts.push(`Character depiction aesthetic (how people and clothing should look):\n${inputs.characterAesthetic}`)
+  }
+  if (inputs.depictionGuidelines && inputs.depictionGuidelines.length > 0) {
+    const lines = inputs.depictionGuidelines
+      .map(g => `- ${g.characterName}: ${g.content}`)
+      .join('\n')
+    parts.push(
+      `Per-character depiction guidelines (MANDATORY — follow exactly for the named character, overriding the general aesthetic on conflict):\n${lines}`,
+    )
+  }
+  if (parts.length === 0) return ''
+  return `\n${parts.join('\n\n')}\n`
+}
+
 /**
  * Attachment description prompt template
  */
@@ -59,6 +91,10 @@ STYLE TRIGGER PHRASE:
 - If provided, the style trigger phrase is REQUIRED for the image to render correctly with the selected style
 - Place it naturally, typically at the beginning (e.g., "DB4RZ Daubrez style painting of a young woman...")
 - Do NOT omit or modify the trigger phrase - use it exactly as provided
+
+AESTHETIC & DEPICTION GUIDELINES:
+- You may receive an overall image aesthetic and/or a character depiction aesthetic. Apply these as the consistent visual style for the whole image (medium, era, palette, rendering).
+- You may also receive per-character depiction guidelines. These are MANDATORY, binding constraints for the named character and OVERRIDE the general aesthetic wherever they conflict. Never omit, soften, or contradict them.
 
 STRUCTURE EXAMPLE:
 BAD (concatenated): "Woman with red hair, hazel eyes, fair skin. sitting on Man with gray hair, glasses, plaid shirt.'s lap on a bench"
@@ -207,6 +243,10 @@ When the scene context or a character description implies someone is undressed, 
 - Implied context: tousled bedding, discarded clothing on the floor, a robe thrown over a chair — let the surroundings tell the story while the figure itself is shown with tasteful concealment
 
 The intent of the scene MUST come through. Use evocative mood language — "intimate", "tender", "vulnerable", "private moment", "morning after", "candlelit", "bare-shouldered", "barefoot", "freshly bathed" — to preserve the meaning. Do NOT erase the narrative by substituting fully-clothed alternatives ("wearing pajamas", "in casual clothes"); that destroys the scene. The reader of the final image should understand exactly what is happening; only the explicit anatomy is held back.
+
+AESTHETIC & DEPICTION GUIDELINES:
+- You may receive an overall image aesthetic and/or a character depiction aesthetic. Apply these as the consistent visual style (medium, era, palette, rendering) across the whole scene and its figures.
+- You may also receive per-character depiction guidelines. These are MANDATORY, binding constraints for the named character and OVERRIDE the general aesthetic wherever they conflict. Never omit, soften, or contradict them.
 
 GOOD EXAMPLE OUTPUT:
 "A misty forest clearing at twilight. A woman with flowing dark hair in a simple dress stands near a weathered stone bridge at the left of the frame, a man in traveler's clothes paused at the right edge. Soft golden light filters through ancient oaks; fog drifts across the mossy ground; fireflies just beginning to glow. Painterly, calm, atmospheric."
@@ -415,6 +455,9 @@ Style trigger phrase (MUST include exactly as shown): "${expansionContext.styleT
 `
   }
 
+  // Default aesthetics + the Ariel Clause (empty unless any are set).
+  const aestheticSection = buildAestheticSection(expansionContext)
+
   const llmMessages: LLMMessage[] = [
     {
       role: 'system',
@@ -426,7 +469,7 @@ Style trigger phrase (MUST include exactly as shown): "${expansionContext.styleT
 
 Available descriptions:
 ${placeholderDetails}
-${styleTriggerSection}
+${styleTriggerSection}${aestheticSection}
 Target length: ${expansionContext.targetLength} characters (for ${expansionContext.provider})
 
 Create the final image prompt (maximize detail while staying under the limit):`,
@@ -685,6 +728,9 @@ export async function craftStoryBackgroundPrompt(
     lengthGuidance = 'Keep the prompt under 1000 characters for Grok image generation.'
   }
 
+  // Default aesthetics + the Ariel Clause (empty unless any are set).
+  const aestheticSection = buildAestheticSection(context)
+
   const llmMessages: LLMMessage[] = [
     {
       role: 'system',
@@ -694,7 +740,7 @@ export async function craftStoryBackgroundPrompt(
       role: 'user',
       content: `Scene context: ${context.sceneContext}
 ${characterSection}
-
+${aestheticSection}
 Provider: ${context.provider}
 ${lengthGuidance}
 

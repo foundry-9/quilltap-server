@@ -18,10 +18,11 @@ import {
   handleListFiles,
   handleGetState,
   handleGetBackground,
+  handleGetAesthetic,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
-const PROJECT_GET_ACTIONS = ['list-characters', 'list-chats', 'list-files', 'get-state', 'get-background'] as const;
+const PROJECT_GET_ACTIONS = ['list-characters', 'list-chats', 'list-files', 'get-state', 'get-background', 'aesthetic'] as const;
 type ProjectGetAction = typeof PROJECT_GET_ACTIONS[number];
 
 /**
@@ -44,6 +45,7 @@ export async function handleGet(
     'list-files': () => handleListFiles(projectId, ctx),
     'get-state': () => handleGetState(projectId, ctx),
     'get-background': () => handleGetBackground(projectId, ctx),
+    'aesthetic': () => handleGetAesthetic(req, projectId, ctx),
   };
 
   return actionHandlers[action]();

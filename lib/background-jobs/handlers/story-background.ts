@@ -28,6 +28,11 @@ import {
   type AppearanceResolutionResult,
 } from '@/lib/image-gen/appearance-resolution';
 import {
+  resolveAesthetic,
+  resolveDepictionGuidelines,
+  getProjectOfficialMountPointId,
+} from '@/lib/image-gen/aesthetic';
+import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
 import {
@@ -475,13 +480,33 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   });
 
 
-  // 9. Craft the background prompt using cheap LLM
+  // 9. Resolve default aesthetics (lantern=scene, aurora=figures) and the Ariel
+  // Clause (per-character depiction guidelines). Both aesthetics resolve
+  // project-over-global; the Ariel Clause reads each character's own vault.
+  const projectOfficialMountPointId = await getProjectOfficialMountPointId(chat.projectId);
+  const [sceneAesthetic, characterAesthetic] = await Promise.all([
+    resolveAesthetic({ kind: 'lantern', projectOfficialMountPointId }),
+    resolveAesthetic({ kind: 'aurora', projectOfficialMountPointId }),
+  ]);
+  const depictionGuidelines = await resolveDepictionGuidelines(validCharacters);
+  logger.debug('[StoryBackground] Resolved aesthetics + depiction guidelines', {
+    context: 'background-jobs.story-background',
+    jobId: job.id,
+    hasSceneAesthetic: Boolean(sceneAesthetic),
+    hasCharacterAesthetic: Boolean(characterAesthetic),
+    depictionGuidelineCount: depictionGuidelines.length,
+  });
+
+  // 10. Craft the background prompt using cheap LLM
 
   const craftResult = await craftStoryBackgroundPrompt(
     {
       sceneContext,
       characters: characterDescriptions,
       provider: imageProfile.provider,
+      sceneAesthetic,
+      characterAesthetic,
+      depictionGuidelines,
     },
     cheapLLMSelection,
     job.userId,
@@ -519,6 +544,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           sceneContext,
           characters: characterDescriptions,
           provider: imageProfile.provider,
+          sceneAesthetic,
+          characterAesthetic,
+          depictionGuidelines,
         },
         uncensoredLLMSelection,
         job.userId,

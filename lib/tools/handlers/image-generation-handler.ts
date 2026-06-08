@@ -50,6 +50,11 @@ import {
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
+import {
+  resolveAesthetic,
+  resolveDepictionGuidelines,
+  getProjectOfficialMountPointId,
+} from '@/lib/image-gen/aesthetic';
 
 /**
  * Execution context for image generation tool
@@ -605,6 +610,45 @@ async function expandPromptWithDescriptions(
 
     }
 
+    // Resolve default aesthetics (scene + figures, project-over-global) and the
+    // Ariel Clause (per-character depiction guidelines) for the depicted
+    // characters. Fails soft — an ad-hoc image never breaks on a guidance read.
+    let sceneAesthetic: string | null = null;
+    let characterAesthetic: string | null = null;
+    let depictionGuidelines: Array<{ characterName: string; content: string }> = [];
+    try {
+      let projectOfficialMountPointId: string | null = null;
+      if (chatId) {
+        const chat = await repos.chats.findById(chatId);
+        projectOfficialMountPointId = await getProjectOfficialMountPointId(chat?.projectId);
+      }
+      [sceneAesthetic, characterAesthetic] = await Promise.all([
+        resolveAesthetic({ kind: 'lantern', projectOfficialMountPointId }),
+        resolveAesthetic({ kind: 'aurora', projectOfficialMountPointId }),
+      ]);
+      const entityIds = Array.from(
+        new Set(
+          resolvedPlaceholders
+            .map(p => p.entityId)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
+      if (entityIds.length > 0) {
+        const depicted = (await Promise.all(entityIds.map(id => repos.characters.findById(id))))
+          .filter((c): c is NonNullable<typeof c> => Boolean(c));
+        depictionGuidelines = await resolveDepictionGuidelines(depicted);
+      }
+      logger.debug('[Image Generation] Resolved aesthetics + depiction guidelines', {
+        hasSceneAesthetic: Boolean(sceneAesthetic),
+        hasCharacterAesthetic: Boolean(characterAesthetic),
+        depictionGuidelineCount: depictionGuidelines.length,
+      });
+    } catch (err) {
+      logger.warn('[Image Generation] Failed to resolve aesthetics; proceeding without', {
+        error: getErrorMessage(err),
+      });
+    }
+
     const craftResult = await craftImagePrompt(
       {
         originalPrompt: expansionContext.originalPrompt,
@@ -613,6 +657,9 @@ async function expandPromptWithDescriptions(
         provider: expansionContext.provider,
         styleTriggerPhrase: styleOptions?.styleTriggerPhrase,
         styleName: styleOptions?.styleName,
+        sceneAesthetic,
+        characterAesthetic,
+        depictionGuidelines,
       },
       cheapLLMSelection,
       userId,

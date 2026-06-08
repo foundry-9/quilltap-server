@@ -20,6 +20,7 @@ import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
+import { resolveAesthetic } from '@/lib/image-gen/aesthetic';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import {
   getCharacterVaultStore,
@@ -80,10 +81,13 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     return badRequest('API key for image profile is missing or invalid');
   }
 
+  // Aurora character aesthetic (global tier — a preview has no project context).
+  const characterAesthetic = await resolveAesthetic({ kind: 'aurora' });
+
   const { prompt, hasAppearance, leafCounts } = await buildCharacterAvatarPrompt(
     repos,
     character,
-    { equippedSlots },
+    { equippedSlots, characterAesthetic },
   );
 
   if (!hasAppearance) {

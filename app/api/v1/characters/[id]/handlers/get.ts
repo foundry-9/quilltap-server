@@ -18,10 +18,11 @@ import { readCharacterAvatarBuffer } from '@/lib/photos/resolve-character-avatar
 import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
 import { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
 import { logger } from '@/lib/logger';
-import { notFound, serverError } from '@/lib/api/responses';
+import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
+import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 
-const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags', 'stats'] as const;
+const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags', 'stats', 'depiction-guidelines'] as const;
 type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
 
 export async function handleGet(
@@ -367,6 +368,17 @@ export async function handleGet(
         logger.error('[Characters v1] Error computing character stats', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to compute character stats');
       }
+    },
+
+    'depiction-guidelines': async () => {
+      // The Ariel Clause file from this character's own vault root. Single-tier,
+      // raw (no fallback) — the editor shows exactly what's on disk.
+      const mountId = character.characterDocumentMountPointId;
+      if (!mountId) {
+        return successResponse({ content: '' });
+      }
+      const content = await readStoreFile(mountId, DEPICTION_GUIDELINES_FILENAME);
+      return successResponse({ content: content ?? '' });
     },
   };
 

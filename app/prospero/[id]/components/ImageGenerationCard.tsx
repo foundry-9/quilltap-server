@@ -9,6 +9,7 @@
 
 import type { Project, BackgroundDisplayMode } from '../types'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
+import { AestheticEditorField } from '@/components/settings/AestheticEditorField'
 
 interface ImageProfile {
   id: string
@@ -153,6 +154,28 @@ export function ImageGenerationCard({
               {project.backgroundDisplayMode === 'static' && 'Uses a manually uploaded background image.'}
               {(!project.backgroundDisplayMode || project.backgroundDisplayMode === 'theme') && 'No background image, uses your theme colors.'}
             </p>
+          </div>
+
+          {/* Default Aesthetics — project override of the global house style. */}
+          <div className="p-3 rounded-lg qt-border qt-bg-surface space-y-6">
+            <div>
+              <h4 className="qt-label text-foreground mb-1">Default Aesthetics</h4>
+              <p className="qt-text-xs qt-text-secondary">
+                Override the global house style for images in this project. Leave a field empty to inherit the global default.
+              </p>
+            </div>
+            <AestheticEditorField
+              label="Default Image Aesthetic"
+              description="Overall look for scenes and backgrounds in this project."
+              loadUrl={`/api/v1/projects/${project.id}?action=aesthetic&kind=lantern`}
+              namespace={`ProjectImageAesthetic-${project.id}`}
+            />
+            <AestheticEditorField
+              label="Default Character Aesthetic"
+              description="How people and outfits are depicted in this project's images."
+              loadUrl={`/api/v1/projects/${project.id}?action=aesthetic&kind=aurora`}
+              namespace={`ProjectCharacterAesthetic-${project.id}`}
+            />
           </div>
         </div>
       )}

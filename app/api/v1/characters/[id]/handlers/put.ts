@@ -7,13 +7,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { checkOwnership } from '@/lib/api/middleware';
+import { getActionParam } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { PronounsSchema, PhysicalDescriptionSchema } from '@/lib/schemas/character.types';
 import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
 import type { Character } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { notFound } from '@/lib/api/responses';
+import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
+import { writeStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 
 const updateCharacterSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -94,6 +96,24 @@ export async function handlePut(
 
   if (!checkOwnership(existingCharacter, user.id)) {
     return notFound('Character');
+  }
+
+  // Action dispatch: the depiction-guidelines (Ariel Clause) file lives in the
+  // character's vault root, not the character row.
+  if (getActionParam(req) === 'depiction-guidelines') {
+    const mountId = existingCharacter.characterDocumentMountPointId;
+    if (!mountId) {
+      return badRequest('Character has no document vault to store depiction guidelines');
+    }
+    const aestheticBody = await req.json().catch(() => ({}));
+    const content = typeof aestheticBody?.content === 'string' ? aestheticBody.content : '';
+    await writeStoreFile(mountId, DEPICTION_GUIDELINES_FILENAME, content);
+    logger.info('[Characters v1] Depiction guidelines updated', {
+      characterId: id,
+      length: content.trim().length,
+      deleted: content.trim().length === 0,
+    });
+    return successResponse({ success: true });
   }
 
   const body = await req.json();

@@ -38,6 +38,7 @@ import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, typ
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveAesthetic, getProjectOfficialMountPointId } from '@/lib/image-gen/aesthetic';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 
 /**
@@ -105,9 +106,22 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   const equippedSlots = payload.equippedSlotsOverride
     ?? await repos.chats.getEquippedOutfitForCharacter(payload.chatId, payload.characterId);
   const avatarProjectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
+  // Aurora character aesthetic (people/outfit look), project-over-global. The
+  // Ariel Clause (depiction-guidelines.md) deliberately does NOT apply to avatars.
+  const characterAesthetic = await resolveAesthetic({
+    kind: 'aurora',
+    projectOfficialMountPointId: await getProjectOfficialMountPointId(chat.projectId),
+  });
+  logger.debug('[CharacterAvatar] Resolved aurora aesthetic', {
+    context: 'background-jobs.character-avatar',
+    jobId: job.id,
+    characterId: payload.characterId,
+    hasAesthetic: Boolean(characterAesthetic),
+  });
   const { prompt, hasAppearance, leafCounts } = await buildCharacterAvatarPrompt(repos, character, {
     equippedSlots,
     projectMountPointIds: avatarProjectMountPointIds,
+    characterAesthetic,
   });
 
   if (!hasAppearance) {

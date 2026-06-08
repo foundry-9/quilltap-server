@@ -750,6 +750,32 @@ result.images.forEach((img) => {
 
 ## Feature Architecture
 
+### Default Aesthetics & the Ariel Clause
+
+Image-prompt generation is shaped by free-form Markdown guidance stored as **document-store files** (no DB columns, no migration). The single source of truth and all read/write helpers live in `lib/image-gen/aesthetic.ts`.
+
+Two aesthetic domains, two files, resolved **independently** and **project-overrides-global**:
+
+| File | Domain | Pipelines |
+|---|---|---|
+| `lantern-aesthetics.md` | general / scene / background look | story backgrounds, ad-hoc images |
+| `aurora-aesthetics.md` | how people and outfits are depicted | avatars; figures in backgrounds/ad-hoc images |
+
+`resolveAesthetic({ kind, projectOfficialMountPointId })` reads the project **official** store (`project.officialMountPointId`, looked up soft via `findByIdRaw`) first, then the **Quilltap General** store (`getGeneralMountPointId()`), then null. A whitespace-only file counts as absent so an empty project override falls through to global. Every read fails soft — image generation never breaks on an unreadable guidance file. Aesthetics are capped at 4 KB.
+
+**The Ariel Clause** (`resolveDepictionGuidelines(characters)`): for **story backgrounds and ad-hoc images only**, each depicted character's own vault root (`character.characterDocumentMountPointId`) is checked for `depiction-guidelines.md`. Present files are passed to the prompt generator as **mandatory, additive, per-character** constraints, attributed by name, capped at 2 KB each, and logged at `info` when applied. They override the general aesthetic on conflict and are never dropped. Not tiered (own vault only); **avatars are exempt**.
+
+Weaving differs by pipeline:
+
+- **Backgrounds / ad-hoc** (cheap-LLM rewrite): `craftStoryBackgroundPrompt` / `craftImagePrompt` (`lib/memory/cheap-llm-tasks/image-scene-tasks.ts`) append labelled blocks (`buildAestheticSection`) to the user message — scene aesthetic, character aesthetic, and a `MANDATORY` per-character depiction block. Both system prompts instruct the model to treat depiction guidelines as binding. Context types `StoryBackgroundPromptContext` / `ImagePromptExpansionContext` carry `sceneAesthetic` / `characterAesthetic` / `depictionGuidelines`.
+- **Avatars** (no LLM step): `buildCharacterAvatarPrompt` (`lib/wardrobe/avatar-prompt.ts`) prepends the aurora aesthetic as a capped (600-char) preamble. No depiction guidelines.
+
+**Editors** (all via the shared `components/settings/AestheticEditorField.tsx`, empty save deletes the file):
+
+- Images settings tab → `GET/PUT /api/v1/system/image-aesthetics?kind=lantern|aurora` (Quilltap General).
+- Project Image Generation card → `/api/v1/projects/[id]?action=aesthetic&kind=…` (project official store).
+- Character edit page (Descriptions tab) → `/api/v1/characters/[id]?action=depiction-guidelines` (character vault).
+
 ### System Overview
 
 ```

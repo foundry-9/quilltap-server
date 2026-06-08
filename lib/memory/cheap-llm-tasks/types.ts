@@ -104,6 +104,12 @@ export interface ImagePromptExpansionContext {
    * Name of the selected style (for context in the prompt crafting)
    */
   styleName?: string
+  /** General/scene aesthetic (from `lantern-aesthetics.md`), resolved project-over-global. */
+  sceneAesthetic?: string | null
+  /** People/outfit aesthetic (from `aurora-aesthetics.md`), resolved project-over-global. */
+  characterAesthetic?: string | null
+  /** The Ariel Clause: mandatory per-character depiction guidelines (never dropped). */
+  depictionGuidelines?: Array<{ characterName: string; content: string }> | null
 }
 
 /**
@@ -155,6 +161,12 @@ export interface StoryBackgroundPromptContext {
   }>
   /** Target image provider for length constraints */
   provider: string
+  /** General/scene aesthetic (from `lantern-aesthetics.md`), resolved project-over-global. */
+  sceneAesthetic?: string | null
+  /** People/outfit aesthetic (from `aurora-aesthetics.md`), resolved project-over-global. */
+  characterAesthetic?: string | null
+  /** The Ariel Clause: mandatory per-character depiction guidelines (never dropped). */
+  depictionGuidelines?: Array<{ characterName: string; content: string }> | null
 }
 
 /**

@@ -4,6 +4,23 @@
 
 ### 4.7-dev
 
+#### Feature: Lantern/Aurora default aesthetics, and the Ariel Clause is resolved
+
+Added a house style for image generation. Two free-form Markdown files are woven into the image-prompt step so avatars, story backgrounds, and ad-hoc (`generate_image`) pictures share a consistent look:
+
+- **`lantern-aesthetics.md`** (general/scene look) — feeds story backgrounds and ad-hoc images.
+- **`aurora-aesthetics.md`** (how people and outfits are depicted) — feeds avatars, plus the figures rendered in backgrounds and ad-hoc images.
+
+Each file resolves across two tiers, **project-overrides-global per file and independently**: the active chat's project **official** document store first (`project.officialMountPointId`), then the **Quilltap General** store. An empty/whitespace file is treated as absent, so clearing a project override restores the global fallback.
+
+**The Ariel Clause (resolved):** for story backgrounds and ad-hoc images only, when a character appears in the picture, a `depiction-guidelines.md` in that character's own vault root is passed to the image-prompt generator as a **mandatory, additive, per-character** constraint, attributed by name and never silently dropped. It overrides the general aesthetic on conflict. Avatars use the character aesthetic but **not** depiction guidelines.
+
+- New resolver module `lib/image-gen/aesthetic.ts` (filename constants, `resolveAesthetic`, `readAestheticForMount`/`writeAestheticForMount`, `resolveDepictionGuidelines`, `getProjectOfficialMountPointId`). All reads fail soft — image generation never breaks on an unreadable guidance file. Aesthetics are capped (4 KB) and the avatar preamble is capped (600 chars); depiction guidelines are capped (2 KB each) and logged at `info` when applied.
+- Wired into all three pipelines: `story-background.ts` (both craft calls, including the uncensored retry), `image-generation-handler.ts` (ad-hoc, with per-character vault lookup), and `character-avatar.ts` + `avatar-prompt.ts` (aurora only, capped preamble; also the `preview-avatar` endpoint). Context types `StoryBackgroundPromptContext` / `ImagePromptExpansionContext` gained `sceneAesthetic` / `characterAesthetic` / `depictionGuidelines`; both crafting system prompts now instruct the model to treat depiction guidelines as binding.
+- New Lexical editors: two **Default Aesthetic** fields on the Images settings tab (`section=default-aesthetics`), the same two on the project Image Generation card, and a **Depiction Guidelines** field on the character edit page (Descriptions tab) — all via a shared `AestheticEditorField` component (empty save deletes the file).
+- New API routes: `GET/PUT /api/v1/system/image-aesthetics?kind=lantern|aurora` (Quilltap General), `?action=aesthetic&kind=…` on the project route, and `?action=depiction-guidelines` on the character route.
+- These are ordinary document-store files — **no schema, migration, DDL, or `.qtap` change.** New help doc `help/image-aesthetics.md`. Tests: resolver + Ariel Clause, crafting injection, avatar preamble (29 cases).
+
 #### Feature: `self_inventory` gains group vaults, a `context` section, and auto-image filtering
 
 The `self_inventory` tool's `vault` and `vaultAccess` sections now split into `.character` / `.groups` sub-sections (mirroring the existing `quilltap` / `quilltap.version` dotted pattern), and a new top-level `context` section reports where the character is situated. All new sub-sections are part of `self_inventory`, so they inherit its existing System Transparency gating (withheld from opaque characters) — no new tool, no orchestrator change.

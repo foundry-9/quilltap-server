@@ -12,6 +12,7 @@ import LLMLogsSection from '@/components/characters/LLMLogsSection'
 import { DescriptionsTab } from '../view/components/DescriptionsTab'
 import { useCharacterEdit } from './hooks'
 import { CharacterBasicInfo } from './components'
+import { AestheticEditorField } from '@/components/settings/AestheticEditorField'
 import type { CharacterScenario } from './types'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../../shared/wizard-text-fields'
@@ -354,7 +355,24 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                 )
 
               case 'descriptions':
-                return <DescriptionsTab characterId={id} />
+                return (
+                  <div className="space-y-6">
+                    <DescriptionsTab characterId={id} />
+                    <div className="qt-card qt-bg-card qt-border rounded-lg p-4">
+                      <AestheticEditorField
+                        label="Depiction Guidelines (the Ariel Clause)"
+                        description="This character's own rules about how they may or may not be depicted in story backgrounds and ad-hoc images. These are mandatory constraints, passed to the image-prompt generator whenever this character appears — they are never applied to plain avatars."
+                        loadUrl={`/api/v1/characters/${id}?action=depiction-guidelines`}
+                        namespace={`DepictionGuidelines-${id}`}
+                        disabledHint={
+                          character?.characterDocumentMountPointId
+                            ? undefined
+                            : 'This character has no document vault yet, so depiction guidelines cannot be stored. Save the character once to provision its vault, then return here.'
+                        }
+                      />
+                    </div>
+                  </div>
+                )
 
               case 'rename':
                 return (

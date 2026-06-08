@@ -24,7 +24,17 @@ interface BuildPromptOptions {
    * there is no project context (two-tier fallback).
    */
   projectMountPointIds?: string[];
+  /**
+   * Resolved Aurora character aesthetic (from `aurora-aesthetics.md`,
+   * project-over-global). Avatars have no LLM rewrite step, so this is
+   * prepended as a short capped art-direction preamble. The Ariel Clause
+   * (`depiction-guidelines.md`) does NOT apply to avatars.
+   */
+  characterAesthetic?: string | null;
 }
+
+/** Cap for the avatar aesthetic preamble — a long doc can't blow the budget. */
+const AVATAR_AESTHETIC_MAX_CHARS = 600;
 
 interface BuildPromptResult {
   /** Final portrait prompt suitable for an image-generation provider. */
@@ -104,6 +114,17 @@ export async function buildCharacterAvatarPrompt(
     prompt = physBlock
       ? `${intro} ${physBlock}${outfitBlock}${outro}`
       : `${intro}${outfitBlock}${outro}`;
+
+    // Prepend the Aurora character aesthetic as a capped art-direction preamble.
+    // No LLM compresses this path, so cap it so a long doc can't dominate the
+    // provider's prompt budget.
+    const aesthetic = options.characterAesthetic?.trim();
+    if (aesthetic) {
+      const capped = aesthetic.length > AVATAR_AESTHETIC_MAX_CHARS
+        ? aesthetic.slice(0, AVATAR_AESTHETIC_MAX_CHARS)
+        : aesthetic;
+      prompt = `Art direction (apply this overall style): ${capped}\n\n${prompt}`;
+    }
   }
 
   return { prompt, hasAppearance, leafCounts };
