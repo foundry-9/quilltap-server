@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Fix: Create Project dialog now overlays as a modal
+
+The Projects page "Create Project" form rendered inline below the project cards instead of as a centered modal. Its `qt-dialog-overlay` was a direct child of `qt-page-container`, whose `> * { z-index: 1 }` rule trapped it in a local stacking context. `CreateProjectDialog` now renders through the shared `BaseModal`, which portals to `document.body` (escaping the stacking context) and supplies the standard backdrop, click-outside/Escape close, and header/body/footer chrome. The Create button is associated with the form via a `form` id so submit and native required-field validation still work.
+
 #### Feature: Lantern/Aurora default aesthetics, and the Ariel Clause is resolved
 
 Added a house style for image generation. Two free-form Markdown files are woven into the image-prompt step so avatars, story backgrounds, and ad-hoc (`generate_image`) pictures share a consistent look:
