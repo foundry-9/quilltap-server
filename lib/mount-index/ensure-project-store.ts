@@ -68,7 +68,13 @@ export async function ensureProjectOfficialStore(
 ): Promise<{ mountPointId: string; created: boolean } | null> {
   const repos = getRepositories();
 
-  const project = await repos.projects.findById(projectId);
+  // Read the RAW row, never the overlay-applied `findById`. Provisioning runs
+  // BEFORE the store files exist (project creation, startup backfill, and the
+  // cutover migration all call this), so the store-only overlay would throw
+  // `ProjectStoreUnavailableError` (missing properties.json) or, mid-migration,
+  // the schema-validating read can reject a legacy wide row. We only need the
+  // project's existence, name, and `officialMountPointId` — all raw-row fields.
+  const project = await repos.projects.findByIdRaw(projectId);
   if (!project) {
     logger.warn('ensureProjectOfficialStore: project not found', { projectId });
     return null;

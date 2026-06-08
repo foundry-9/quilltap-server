@@ -21,8 +21,12 @@ jest.mock('../../../../../migrations/lib/database-utils', () => ({
   sqliteTableExists: () => true,
   getSQLiteTableColumns: () => [],
 }));
-jest.mock('../../../../../lib/mount-index/ensure-project-store', () => ({
-  ensureProjectOfficialStore: jest.fn(),
+const mockFindById = jest.fn();
+jest.mock('../../../../../lib/repositories/factory', () => ({
+  getRepositories: () => ({ docMountPoints: { findById: mockFindById, findAll: jest.fn(), create: jest.fn() } }),
+}));
+jest.mock('../../../../../lib/mount-index/project-store-naming', () => ({
+  PROJECT_OWN_STORE_NAME_PREFIX: 'Project Files: ',
 }));
 jest.mock('../../../../../lib/projects/project-store/write-overlay', () => ({
   writeProjectStoreManagedFields: jest.fn(),
@@ -109,5 +113,23 @@ describe('mapLegacyProjectRow', () => {
 
   it('preserves an explicit backgroundDisplayMode', () => {
     expect(mapLegacyProjectRow({ id: 'a', name: 'A', backgroundDisplayMode: 'static' }).backgroundDisplayMode).toBe('static');
+  });
+});
+
+describe('resolveStoreForLegacyProject', () => {
+  let resolveStoreForLegacyProject: typeof import('@/migrations/scripts/cutover-projects-to-store').resolveStoreForLegacyProject;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    ({ resolveStoreForLegacyProject } = await import('@/migrations/scripts/cutover-projects-to-store'));
+  });
+
+  it('trusts an existing officialMountPointId without re-reading the project or probing the mount', async () => {
+    const project = { id: 'p1', name: 'Church', officialMountPointId: 'mp-existing' } as never;
+    const result = await resolveStoreForLegacyProject(project);
+    expect(result).toBe('mp-existing');
+    // Critical: it must NOT probe the mount point (a validating read that can
+    // mis-validate mid-migration and trigger a duplicate store).
+    expect(mockFindById).not.toHaveBeenCalled();
   });
 });

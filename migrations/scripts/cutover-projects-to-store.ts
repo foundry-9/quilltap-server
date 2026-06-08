@@ -54,7 +54,10 @@ import {
   parseLLMLogsBackupFilename,
   parseMountIndexBackupFilename,
 } from '../../lib/database/backends/sqlite/physical-backup';
-import { ensureProjectOfficialStore } from '../../lib/mount-index/ensure-project-store';
+import { getRepositories } from '../../lib/repositories/factory';
+import { getMountIndexSQLiteClient } from '../../lib/database/backends/sqlite/mount-index-client';
+import { loadMountIndexConfig } from '../../lib/database/config';
+import { PROJECT_OWN_STORE_NAME_PREFIX } from '../../lib/mount-index/project-store-naming';
 import { writeProjectStoreManagedFields } from '../../lib/projects/project-store/write-overlay';
 import { readDatabaseDocument } from '../../lib/mount-index/database-store';
 import type { Project } from '../../lib/schemas/project.types';
@@ -248,17 +251,77 @@ function loadLegacyProjectRows(db: DatabaseType): Project[] {
   return rows.map(mapLegacyProjectRow);
 }
 
+/**
+ * Resolve (or create) the official store for a legacy project WITHOUT going
+ * through the schema-validating / overlay project read.
+ *
+ * `ensureProjectOfficialStore` re-reads the project via `repos.projects.*`,
+ * which can't handle a legacy wide row mid-migration (boolean-coercion metadata
+ * isn't applied this early, so the row fails validation). Like the character
+ * cutover, we operate on the raw-loaded row instead.
+ *
+ * If `officialMountPointId` is set we trust it: the v4.10 migration backfilled
+ * it from a real linked store, and the per-project verify step below catches a
+ * genuinely-broken pointer (the write/read-back would fail → blocked). We
+ * deliberately do NOT probe the mount point via `repos.docMountPoints.findById`
+ * here — that read could also mis-validate this early and make us create a
+ * duplicate store, orphaning the project's existing files. We only create a
+ * fresh store when the pointer is genuinely null.
+ */
+export async function resolveStoreForLegacyProject(project: Project): Promise<string> {
+  if (project.officialMountPointId) {
+    return project.officialMountPointId;
+  }
+
+  const repos = getRepositories();
+
+  // Create a fresh `Project Files: <name>` store. Mount-index writes are safe
+  // mid-migration; the project-row FK update uses raw SQL to avoid the
+  // (validating) repository write path.
+  const desiredName = `${PROJECT_OWN_STORE_NAME_PREFIX}${(project.name || 'Untitled').trim()}`.slice(0, 200);
+  const allMounts = await repos.docMountPoints.findAll();
+  const taken = new Set(allMounts.map((mp) => mp.name));
+  let finalName = desiredName;
+  let suffix = 2;
+  while (taken.has(finalName)) finalName = `${desiredName} (${suffix++})`;
+
+  const mountPoint = await repos.docMountPoints.create({
+    name: finalName,
+    basePath: '',
+    mountType: 'database',
+    storeType: 'documents',
+    includePatterns: [],
+    excludePatterns: ['.git', 'node_modules', '.obsidian', '.trash'],
+    enabled: true,
+    lastScannedAt: null,
+    scanStatus: 'idle',
+    lastScanError: null,
+    conversionStatus: 'idle',
+    conversionError: null,
+    fileCount: 0,
+    chunkCount: 0,
+    totalSizeBytes: 0,
+  });
+  await repos.projectDocMountLinks.link(project.id, mountPoint.id);
+  getSQLiteDatabase()
+    .prepare('UPDATE projects SET officialMountPointId = ?, updatedAt = ? WHERE id = ?')
+    .run(mountPoint.id, new Date().toISOString(), project.id);
+
+  return mountPoint.id;
+}
+
 async function processOneProject(project: Project): Promise<ProjectOutcome> {
-  const ensured = await ensureProjectOfficialStore(project.id, project.name);
-  if (!ensured) {
+  let mountPointId: string;
+  try {
+    mountPointId = await resolveStoreForLegacyProject(project);
+  } catch (err) {
     return {
       id: project.id,
       name: project.name,
       action: 'blocked',
-      blockedReason: 'could not ensure official document store',
+      blockedReason: `could not ensure official document store: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
-  const mountPointId = ensured.mountPointId;
 
   await writeProjectStoreManagedFields(mountPointId, {
     ...project,
@@ -313,6 +376,34 @@ export const cutoverProjectsToStoreMigration: Migration = {
     try {
       logger.info('Ensuring physical backups exist before per-project work', ctx);
       await ensureBackupsExist(ctx);
+
+      // Open the mount-index DB connection explicitly. We write each project's
+      // overlay files into its mount-index-backed document store, but the
+      // mount-index connection is normally established by the app backend's
+      // connect(), which runs *after* migrations. The doc-mount repositories
+      // read the connection from a global singleton and never trigger the lazy
+      // `getDatabaseAsync()` path that initializes it — only a *main-DB* repo
+      // access does that. (The character vault cutover gets the connection for
+      // free because it touches a main-DB repo en route; our first store touch
+      // is a mount-index repo, so we must open it ourselves first.) Without
+      // this, every store write throws "Mount index database not initialized".
+      // The app's later connect() reuses this same connection.
+      const mountIndexDb = getMountIndexSQLiteClient(loadMountIndexConfig());
+      if (!mountIndexDb) {
+        const message =
+          'Refusing to migrate — the mount-index database could not be opened, so project ' +
+          'document stores are unreachable. Aborting before any destructive work.';
+        logger.error(message, ctx);
+        return {
+          id: MIGRATION_ID,
+          success: false,
+          itemsAffected: 0,
+          message,
+          error: 'mount index unavailable',
+          durationMs: Date.now() - startTime,
+          timestamp: new Date().toISOString(),
+        };
+      }
 
       const db = getSQLiteDatabase();
       const rawCount = (db.prepare('SELECT COUNT(*) AS n FROM projects').get() as { n: number }).n;
