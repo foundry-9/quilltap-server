@@ -357,6 +357,7 @@ export async function retrieveKnowledgeForTurn(
 
 function tierLabel(tier: KnowledgeTier): string {
   if (tier === 'character') return 'character';
+  if (tier === 'group') return 'group';
   if (tier === 'project') return 'project';
   return 'general';
 }

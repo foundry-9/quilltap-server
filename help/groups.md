@@ -25,6 +25,10 @@ will find:
   conversation is struck up.
 - **A Knowledge cabinet** — reference material the members can consult and search,
   woven into their replies as the moment demands.
+- **A Core shelf** *(optional)* — a `Core/` folder of shared grounding. Whatever a
+  member keeps here is offered back to them alongside their own Core whisper —
+  marked plainly as the Group's — so the few things the circle holds in common ride
+  at their elbow whenever they take the floor.
 
 You may also **link additional stores** to a Group — any document store you've
 already set up in the Scriptorium — and every member gains full read-and-write run
@@ -75,8 +79,21 @@ store linked to it — these shelves are working shelves, not glass cases.
 
 When a member character speaks, Quilltap consults the Group's Knowledge cabinet the
 same way it consults a character's own vault or a project's files — quietly, in the
-background, surfacing what's relevant. A character may also go looking on purpose,
-searching just their Groups' stores when they wish to consult the club library and
+background, surfacing what's relevant.
+
+**Prospero names the shelves.** At the opening of a chat — and again now and then as
+it runs on — Prospero slips each member a private note naming the very stores they
+may reach by membership, and their own vault besides, with the exact names to quote
+when they reach for a document tool. The note is a whisper, meant for that one
+member; a non-member at the same table never sees it.
+
+**The library is a click from the composer.** When *you* go to attach a file, any
+Group your chat persona belongs to appears under a **Group Files** heading in the
+file picker — set above your Projects — so the club library is never far from hand.
+
+**A character may search the club library alone.** Passing `scope: "group"` to the
+`search` or `doc_list_files` tool confines the hunt to just the stores of the Groups
+that character belongs to, for when they wish to consult the club's shelves and
 nowhere else.
 
 ## Tips & Notes

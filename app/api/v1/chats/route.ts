@@ -58,6 +58,7 @@ import {
   loadProsperoProjectContext,
   loadProsperoGeneralContext,
   postProsperoContextAnnouncement,
+  postProsperoGroupContextWhisper,
 } from '@/lib/services/prospero-notifications/writer';
 import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
@@ -366,6 +367,30 @@ async function createInitialMessagesScenarioAndStaff(
     logger.warn('[Chats v1] Failed to post chat-start Prospero context whisper', {
       chatId,
       projectId,
+      error: getErrorMessage(error, 'Unknown error'),
+    });
+  }
+
+  // Seed each character in the room with a targeted Prospero whisper naming the
+  // document stores they can reach by group membership plus their own vault.
+  // Unlike the public project/general announcement above, these are gated by
+  // membership / are personal, so they are whispered per character (and post
+  // nothing for characters with no group stores and no vault). Reload the chat
+  // to get persisted participant ids. Fails soft — chat creation must not break.
+  try {
+    const seededChat = await repos.chats.findById(chatId);
+    for (const participant of seededChat?.participants ?? []) {
+      if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
+      if (participant.status === 'removed') continue;
+      await postProsperoGroupContextWhisper({
+        chatId,
+        targetParticipantId: participant.id,
+        characterId: participant.characterId,
+      });
+    }
+  } catch (error) {
+    logger.warn('[Chats v1] Failed to post chat-start Prospero group-context whispers', {
+      chatId,
       error: getErrorMessage(error, 'Unknown error'),
     });
   }

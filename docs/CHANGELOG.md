@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### Feature: group document stores surfaced to characters, the picker, and tools
+
+Group document stores (a Group's official store plus any linked stores) are now advertised on the same surfaces as project/general/character stores. The shared `resolveTieredMountPool` group tier already plumbed group stores through knowledge retrieval, the unified `search` tool (`scope: "group"`), and the doc-edit path resolver; this fills the remaining gaps.
+
+- **Prospero whisper** (`lib/services/prospero-notifications/writer.ts`): new `postProsperoGroupContextWhisper` posts a per-character *targeted* whisper (`systemKind: 'group-context'`) naming the stores the character can reach by group membership plus their own vault, with `mount_point` usage hints. Wired into the two existing context-announcement sites: every character participant at chat-start (`app/api/v1/chats/route.ts`) and the responding character at the re-injection cadence (`orchestrator.service.ts`). Unlike the public project/general announcement these are whispers — group membership is per-character and the vault is personal. Posts nothing when a character has no group stores and no vault.
+- **Document-Mode picker** (`components/chat/LibraryFilePickerModal.tsx`): new "Group Files" section above Projects, listing the stores of the chat user-persona character's Groups. Backed by a new `GET /api/v1/chats/[id]?action=group-stores` action.
+- **`doc_list_files`** (`lib/tools/doc-list-files-tool.ts`, handler in `lib/tools/handlers/doc-edit/text-handlers.ts`): added explicit `scope: "group"` (mirrors the `search` tool); all-scope listings now tag group-store entries with scope `group`. The underlying access set already included group stores via the path resolver, so `doc_grep` and the read/write/copy tools already operated on them.
+- **Aurora Core whisper** (`lib/services/aurora-notifications/core-whisper.ts`): `assembleCorePacket` now merges `Core/*.md` from each Group the character belongs to, labeled `[Shared — <group>]`, after the character's own Core. A character with no personal vault still gets a packet when a Group supplies one. Stores already consumed (the vault, or another group) are not read twice.
+- **Knowledge label fix** (`lib/chat/context/knowledge-injector.ts`): the group knowledge tier was mislabeled "general" in rendered block headers (`tierLabel` lacked a `group` case); it now reads "group".
+- Tests: new Prospero group/vault whisper suite and Aurora `assembleCorePacket` group-merge suite; doc_list_files tool-definition snapshot updated. Help: `groups.md`, `core-whisper.md`, `document-editing-tools.md`. No schema or migration change — the group tables already exist.
+
 #### Feature: `quilltap db --write` for lock-gated read-write CLI access
 
 The `db` command now opens the database read-only by default and adds a `--write` flag for making changes safely. Previously the only writable path was `--repl`, which opened read-write without consulting the instance lock — racing a running server risked WAL corruption.

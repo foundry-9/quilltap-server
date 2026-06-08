@@ -22,6 +22,7 @@ Every `doc_*` tool accepts a `scope` parameter that determines where it operates
 - **`document_store`** (default) — Files within mounted document stores. Requires a `mount_point` parameter specifying which store to use.
 - **`project`** — Files stored in the project's own file area.
 - **`general`** — Files in the general (non-project) file storage.
+- **`group`** — Files in the document stores of the Groups the responding character belongs to. Available on `doc_list_files` (to enumerate just the group shelves) and on `search` (to confine a search to them). A character that belongs to no Groups sees nothing under this scope. Because membership is personal, a character only ever reaches *their own* Groups' stores — never a companion's.
 
 ## Available Tools
 

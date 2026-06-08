@@ -411,11 +411,12 @@ exports[`tool definitions: derived OpenAI parameters docListFiles: parameters sn
       "type": "boolean",
     },
     "scope": {
-      "description": "Optional: restrict to files in a specific scope. "document_store" for mounted stores, "project" for project files, "general" for general files.",
+      "description": "Optional: restrict to files in a specific scope. "document_store" for mounted stores, "project" for project files, "general" for general files, "group" for the document stores of the groups the responding character is a member of.",
       "enum": [
         "document_store",
         "project",
         "general",
+        "group",
       ],
       "type": "string",
     },

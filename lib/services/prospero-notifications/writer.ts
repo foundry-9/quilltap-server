@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
+import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import type { MessageEvent } from '@/lib/schemas/types';
 
 export interface ProsperoConnectionProfileChangeAnnouncement {
@@ -515,6 +516,217 @@ export async function postProsperoContextAnnouncement(
       : 'general-context';
 
   return postProsperoMessage(params.chatId, content, opaqueContent, kind);
+}
+
+// ---------------------------------------------------------------------------
+// Group + personal-vault context whisper. Unlike the project/general
+// announcement above — which is public, because every character in the room
+// shares the same project and household shelf — group stores are gated by
+// MEMBERSHIP and the character vault is personal. Both are therefore
+// *whispered* (targetParticipantIds) to a single character rather than
+// announced. Fired on the same timetable as the public announcement: once per
+// character at chat-start, and again for the responding character at the
+// re-injection cadence. Fails soft — a turn must never break because the
+// whisper could not be assembled.
+// ---------------------------------------------------------------------------
+
+/**
+ * Load the document stores the given character can reach by group membership —
+ * the official store plus any linked stores of every group the character
+ * belongs to. Reuses the shared `resolveGroupMountPointIdsForCharacter` tier
+ * resolver so membership/dedup stays identical to knowledge/search/path
+ * resolution. Disabled stores are skipped (tools reject them; naming them only
+ * confuses). Returns `[]` on no membership or any lookup failure.
+ */
+export async function loadProsperoGroupStores(
+  characterId: string,
+): Promise<ProsperoDocumentStoreInfo[]> {
+  try {
+    const ids = await resolveGroupMountPointIdsForCharacter(characterId);
+    if (!ids.length) return [];
+    const repos = getRepositories();
+    const stores: ProsperoDocumentStoreInfo[] = [];
+    for (const id of ids) {
+      const mp = await repos.docMountPoints.findById(id);
+      if (!mp || !mp.enabled) continue;
+      stores.push({
+        id: mp.id,
+        name: mp.name,
+        mountType: mp.mountType,
+        storeType: mp.storeType ?? 'documents',
+        isOfficial: false,
+        enabled: mp.enabled,
+      });
+    }
+    stores.sort((a, b) => a.name.localeCompare(b.name));
+    return stores;
+  } catch (error) {
+    logger.warn('[ProsperoNotification] Failed to load group document stores', {
+      context: 'prospero-notifications',
+      characterId,
+      error: getErrorMessage(error),
+    });
+    return [];
+  }
+}
+
+/**
+ * Load the character's own vault store, if one is linked. Uses `findByIdRaw`
+ * so a broken vault overlay can't throw on this fail-soft whisper path — we
+ * only need the `characterDocumentMountPointId` pointer, not hydrated managed
+ * fields. Returns null when the character has no vault (the common case) or on
+ * any failure.
+ */
+export async function loadProsperoCharacterVaultStore(
+  characterId: string,
+): Promise<ProsperoDocumentStoreInfo | null> {
+  try {
+    const repos = getRepositories();
+    const character = await repos.characters.findByIdRaw(characterId);
+    const mountPointId = character?.characterDocumentMountPointId ?? null;
+    if (!mountPointId) return null;
+    const mp = await repos.docMountPoints.findById(mountPointId);
+    if (!mp || !mp.enabled) return null;
+    return {
+      id: mp.id,
+      name: mp.name,
+      mountType: mp.mountType,
+      storeType: mp.storeType ?? 'character',
+      isOfficial: false,
+      enabled: mp.enabled,
+    };
+  } catch (error) {
+    logger.warn('[ProsperoNotification] Failed to load character vault store', {
+      context: 'prospero-notifications',
+      characterId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}
+
+function renderWhisperStoreLine(store: ProsperoDocumentStoreInfo): string {
+  const tags: string[] = [`${store.mountType}-backed`];
+  if (store.storeType === 'character') tags.push('your private vault');
+  if (!store.enabled) tags.push('currently disabled');
+  const tagSuffix = ` *(${tags.join('; ')})*`;
+  const safeName = store.name.replace(/`/g, '\\`');
+  return `- **${store.name}**${tagSuffix} — use \`mount_point: "${safeName}"\` (ID \`${store.id}\` also works).`;
+}
+
+function buildGroupAndVaultBody(
+  groupStores: ProsperoDocumentStoreInfo[],
+  vaultStore: ProsperoDocumentStoreInfo | null,
+): string[] {
+  const lines: string[] = [];
+  if (groupStores.length) {
+    lines.push('**Shared shelves of the groups you belong to:**', '');
+    for (const store of groupStores) lines.push(renderWhisperStoreLine(store));
+    lines.push('');
+  }
+  if (vaultStore) {
+    lines.push('**Your own vault:**', '');
+    lines.push(renderWhisperStoreLine(vaultStore));
+    lines.push('');
+  }
+
+  const scopeHints: string[] = [];
+  if (groupStores.length) scopeHints.push('`scope: "group"` reaches only these group shelves');
+  if (vaultStore) scopeHints.push('`scope: "character"` reaches only your own vault');
+  const scopeSentence = scopeHints.length
+    ? ` On \`doc_list_files\` and \`search\`, ${scopeHints.join(', and ')}.`
+    : '';
+
+  lines.push(
+    'Pass any of those names (or IDs) as the `mount_point` argument on `doc_*` tools, ' +
+      'or as `source_mount_point` / `dest_mount_point` on `doc_copy_file`. The `path` ' +
+      "argument is the file's relative path within the chosen store." +
+      scopeSentence,
+  );
+  return lines;
+}
+
+/**
+ * Persona-voiced form, persisted as Prospero's whisper (visible in the Salon
+ * with Prospero's avatar to the targeted character / system-transparent eyes).
+ */
+export function buildGroupAndVaultWhisperContent(
+  groupStores: ProsperoDocumentStoreInfo[],
+  vaultStore: ProsperoDocumentStoreInfo | null,
+): string {
+  const hasGroups = groupStores.length > 0;
+  if (!hasGroups && !vaultStore) return '';
+
+  let opener: string;
+  if (hasGroups && vaultStore) {
+    opener =
+      'Prospero leafs through the rolls of your fellowships and sets a private memorandum at your elbow — the shelves you may reach by right of membership, and your own vault besides:';
+  } else if (hasGroups) {
+    opener =
+      'Prospero leafs through the rolls of your fellowships and sets a private memorandum at your elbow — the shelves you may reach by right of membership:';
+  } else {
+    opener =
+      'Prospero sets a private memorandum at your elbow — the vault that is yours alone:';
+  }
+
+  return [opener, '', ...buildGroupAndVaultBody(groupStores, vaultStore)].join('\n').trimEnd();
+}
+
+/**
+ * Persona-stripped form. The context-builder swaps `content` → `opaqueContent`
+ * in the LLM context of any participant whose `systemTransparency !== true`.
+ */
+export function buildGroupAndVaultWhisperOpaqueContent(
+  groupStores: ProsperoDocumentStoreInfo[],
+  vaultStore: ProsperoDocumentStoreInfo | null,
+): string {
+  const hasGroups = groupStores.length > 0;
+  if (!hasGroups && !vaultStore) return '';
+
+  let opener: string;
+  if (hasGroups && vaultStore) {
+    opener = 'Document stores you can reach by group membership, plus your own vault:';
+  } else if (hasGroups) {
+    opener = 'Document stores you can reach by group membership:';
+  } else {
+    opener = 'Your own character vault:';
+  }
+
+  return [opener, '', ...buildGroupAndVaultBody(groupStores, vaultStore)].join('\n').trimEnd();
+}
+
+export interface ProsperoGroupContextWhisper {
+  chatId: string;
+  /** Participant id of the character the whisper is addressed to. */
+  targetParticipantId: string;
+  /** Character whose group memberships + vault are resolved. */
+  characterId: string;
+}
+
+/**
+ * Whisper a single character the document stores they can reach by group
+ * membership plus their own vault. Posts nothing (returns null) when the
+ * character belongs to no groups with stores and has no vault — there is no
+ * point announcing an empty shelf. The message is targeted to
+ * `targetParticipantId` only.
+ */
+export async function postProsperoGroupContextWhisper(
+  params: ProsperoGroupContextWhisper,
+): Promise<MessageEvent | null> {
+  const { chatId, targetParticipantId, characterId } = params;
+  if (!characterId || !targetParticipantId) return null;
+
+  const [groupStores, vaultStore] = await Promise.all([
+    loadProsperoGroupStores(characterId),
+    loadProsperoCharacterVaultStore(characterId),
+  ]);
+  if (groupStores.length === 0 && !vaultStore) return null;
+
+  const content = buildGroupAndVaultWhisperContent(groupStores, vaultStore);
+  if (!content) return null;
+  const opaqueContent = buildGroupAndVaultWhisperOpaqueContent(groupStores, vaultStore);
+
+  return postProsperoMessage(chatId, content, opaqueContent, 'group-context', [targetParticipantId]);
 }
 
 // ---------------------------------------------------------------------------

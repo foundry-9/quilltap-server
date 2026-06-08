@@ -38,6 +38,7 @@ import type { DocListFilesInput, DocListFilesOutput, DocFileInfo } from '../../d
 import { isAutomaticImagePath, isOsCruftName } from '@/lib/files/folder-utils';
 import { getRepositories } from '@/lib/repositories/factory';
 import { listDatabaseFiles } from '@/lib/mount-index/database-store';
+import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
   logger,
   type DocEditToolContext,
@@ -698,7 +699,7 @@ export async function handleListFiles(
   // Walk directory and collect file info
   const collectFiles = async (
     baseDir: string,
-    scope: DocEditScope,
+    scope: DocFileInfo['scope'],
     mountPointName?: string,
     folder?: string
   ): Promise<void> => {
@@ -749,9 +750,12 @@ export async function handleListFiles(
     }
   };
 
-  const shouldIncludeDocStore = !input.scope || input.scope === 'document_store';
+  const shouldIncludeDocStore = !input.scope || input.scope === 'document_store' || input.scope === 'group';
   const shouldIncludeProject = !input.scope || input.scope === 'project';
   const shouldIncludeGeneral = !input.scope || input.scope === 'general';
+
+  // Resolve group mount IDs once so per-mount tagging is O(1)
+  const groupMountIds = new Set(await resolveGroupMountPointIdsForCharacter(context.characterId));
 
   // List document store files
   if (shouldIncludeDocStore) {
@@ -761,6 +765,11 @@ export async function handleListFiles(
       if (input.mount_point && mp.name.toLowerCase() !== input.mount_point.toLowerCase() && mp.id !== input.mount_point) {
         continue;
       }
+      // When scope is 'group', skip any mount that is not a group store
+      if (input.scope === 'group' && !groupMountIds.has(mp.id)) {
+        continue;
+      }
+      const mpScope = groupMountIds.has(mp.id) ? 'group' : 'document_store';
       if (mp.mountType === 'database') {
         // Bytes live in doc_mount_documents; list from the mirror doc_mount_files rows.
         const dbEntries = await listDatabaseFiles(mp.id, input.folder ? { folder: input.folder } : {});
@@ -769,7 +778,7 @@ export async function handleListFiles(
           files.push({
             path: entry.relativePath,
             mount_point: mp.name,
-            scope: 'document_store',
+            scope: mpScope,
             size: entry.fileSizeBytes,
             modified: new Date(entry.lastModified).getTime(),
             kind: entry.kind as 'file' | 'folder' | undefined,
@@ -777,7 +786,7 @@ export async function handleListFiles(
         }
         continue;
       }
-      await collectFiles(mp.basePath, 'document_store', mp.name, input.folder);
+      await collectFiles(mp.basePath, mpScope, mp.name, input.folder);
     }
   }
 

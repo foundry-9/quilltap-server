@@ -134,6 +134,13 @@ export default function LibraryFilePickerModal({
   const { data: albumsData } = useSWR<PhotoAlbumsResponse>(
     isOpen ? `/api/v1/chats/${chatId}?action=photo-albums` : null
   )
+
+  // "Group Files" — document stores belonging to groups the user-persona
+  // character(s) in this chat are members of.
+  const { data: groupStoresData, isLoading: groupStoresLoading } = useSWR<{ stores: MountPointSummary[] }>(
+    isOpen ? `/api/v1/chats/${chatId}?action=group-stores` : null
+  )
+  const groupStores = groupStoresData?.stores || []
   const userPersonaAlbum =
     albumsData?.albums.find(a => a.kind === 'character' && a.isUserCharacter && a.isDefault) ??
     albumsData?.albums.find(a => a.kind === 'character' && a.isUserCharacter) ??
@@ -350,8 +357,10 @@ export default function LibraryFilePickerModal({
         <ScopePicker
           projects={projects}
           docStores={docStores}
+          groupStores={groupStores}
           projectsLoading={projectsLoading}
           mountsLoading={mountsLoading}
+          groupStoresLoading={groupStoresLoading}
           userPersonaName={userPersonaAlbum?.name ?? null}
           onPickGeneral={() => handleProjectScopeSelect(null, 'General')}
           onPickGallery={handleGalleryScopeSelect}
@@ -397,8 +406,10 @@ export default function LibraryFilePickerModal({
 function ScopePicker({
   projects,
   docStores,
+  groupStores,
   projectsLoading,
   mountsLoading,
+  groupStoresLoading,
   userPersonaName,
   onPickGeneral,
   onPickGallery,
@@ -407,8 +418,10 @@ function ScopePicker({
 }: {
   projects: Project[]
   docStores: MountPointSummary[]
+  groupStores: MountPointSummary[]
   projectsLoading: boolean
   mountsLoading: boolean
+  groupStoresLoading: boolean
   userPersonaName: string | null
   onPickGeneral: () => void
   onPickGallery: () => void
@@ -425,6 +438,25 @@ function ScopePicker({
         <ScopeCard icon="📁" title="General" subtitle="Files not assigned to any project" onClick={onPickGeneral} />
         <ScopeCard icon="🖼️" title={galleryTitle} subtitle={gallerySubtitle} onClick={onPickGallery} />
       </section>
+
+      {groupStores.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="qt-text-label">Group Files</h3>
+          {groupStores.map((store) => (
+            <ScopeCard
+              key={store.id}
+              icon="👥"
+              title={store.name}
+              subtitle="Shared with your group"
+              onClick={() => onPickMount(store)}
+            />
+          ))}
+        </section>
+      )}
+
+      {groupStoresLoading && (
+        <p className="qt-text-secondary py-2 text-center text-sm">Loading groups…</p>
+      )}
 
       {projects.length > 0 && (
         <section className="space-y-2">

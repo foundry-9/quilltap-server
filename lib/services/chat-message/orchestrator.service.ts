@@ -31,6 +31,7 @@ import {
   loadProsperoProjectContext,
   loadProsperoGeneralContext,
   postProsperoContextAnnouncement,
+  postProsperoGroupContextWhisper,
 } from '@/lib/services/prospero-notifications/writer'
 import { postLibrarianUploadAnnouncement } from '@/lib/services/librarian-notifications/writer'
 import {
@@ -499,6 +500,27 @@ async function processMessage(
       if (posted) {
         existingMessages.push(posted)
       }
+    }
+
+    // Group stores are gated by membership and the vault is personal, so they
+    // ride as a targeted whisper to the responding character (not the public
+    // announcement above). Refreshed on the same cadence for the character
+    // about to take the floor. Fails soft.
+    try {
+      const groupWhisper = await postProsperoGroupContextWhisper({
+        chatId,
+        targetParticipantId: characterParticipant.id,
+        characterId: character.id,
+      })
+      if (groupWhisper) {
+        existingMessages.push(groupWhisper)
+      }
+    } catch (error) {
+      logger.warn('[Orchestrator] Failed to post Prospero group-context whisper', {
+        chatId,
+        characterId: character.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 

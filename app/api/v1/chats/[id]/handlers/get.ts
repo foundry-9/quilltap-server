@@ -20,7 +20,7 @@ import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
-import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleAccessibleStores } from '../actions';
+import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores } from '../actions';
 import {
   getPhotoLinkSummaryBySha256,
   type PhotoLinkSummary,
@@ -120,6 +120,11 @@ export async function handleGet(
   // Handle photo-albums action - resolve candidate save targets for an image
   if (action === 'photo-albums') {
     return handleGetPhotoAlbums(chatId, ctx);
+  }
+
+  // Handle group-stores action - document stores of groups the user persona belongs to
+  if (action === 'group-stores') {
+    return handleGetGroupStores(chatId, ctx);
   }
 
   // Handle accessible-stores action - document stores for the Open-Document
