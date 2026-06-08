@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### Feature: `self_inventory` gains group vaults, a `context` section, and auto-image filtering
+
+The `self_inventory` tool's `vault` and `vaultAccess` sections now split into `.character` / `.groups` sub-sections (mirroring the existing `quilltap` / `quilltap.version` dotted pattern), and a new top-level `context` section reports where the character is situated. All new sub-sections are part of `self_inventory`, so they inherit its existing System Transparency gating (withheld from opaque characters) — no new tool, no orchestrator change.
+
+- **`vault.character`** — the character's own vault, now with auto-generated images filtered out by default. Avatars/wardrobe history under the vault's `images/` folder and document-store `character-avatars`/`story-backgrounds` images are hidden; OS cruft (`.DS_Store`, `Thumbs.db`, dot-files) is always hidden. New `includeAutomaticImages` input flag re-adds the auto-images (mirrors `doc_list_files`). Reuses `isAutomaticImagePath`/`isOsCruftName`/`IMAGE_FILE_EXTENSIONS` from `lib/files/folder-utils.ts`.
+- **`vault.groups`** — files in the vaults of every group the character belongs to, one entry per group store, same filtering. Bare `vault` returns both parts.
+- **`vaultAccess.character`** — unchanged behavior (who can read/write the character vault in this chat). **`vaultAccess.groups`** — membership-based and chat-independent: every member of each of the character's groups, all read/write. Bare `vaultAccess` returns both.
+- **`context`** (with `.chat` / `.project` / `.groups` / `.characters` / `.files`) — this chat's id and title; the current project's id, name, and linked stores; the character's groups (ids, names, linked stores); the other present characters (id, name, aliases, identity, and which is the user persona — self excluded); and the files attached to this chat, each with a copy-pasteable `doc_read_file(...)` invocation. Project id comes from the tool-execution context (falling back to the chat's `projectId`).
+- Implementation: new section builders, `resolveVault/VaultAccess/ContextIncludedParts` helpers, and a shared `resolveMyGroups` walk in `lib/tools/handlers/self-inventory-handler.ts`; reshaped output types in `lib/tools/self-inventory-tool.ts` (`vault`/`vaultAccess` are now `{ includedParts, character?, groups? }` wrappers); `projectId` threaded into `SelfInventoryToolContext` from `lib/chat/tool-executor.ts`. Debug logging added to every new builder.
+- Tests: 11 new handler cases (vault filter on/off, bare vault, group vaults, chat-independent group access, each `context.*`, bare `context`); tool-definitions snapshot updated. Help: `tools.md`, `character-system-transparency.md`. No schema or migration change.
+
 #### Fix: Carina answerers are now told who is asking
 
 A Carina answerer received only the bare question text — it had no idea who had addressed it (the asker's identity was threaded through `runCarinaQuery` solely for whisper targeting, never put into the prompt). Answerers consequently asked "who am I speaking with?" in their replies.

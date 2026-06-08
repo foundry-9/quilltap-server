@@ -218,6 +218,7 @@ export {
   type SelfInventoryQuilltapSection,
   type SelfInventoryRuntimeMode,
   type SelfInventoryClientShell,
+  type SelfInventoryContextSection,
 } from './self-inventory-tool';
 
 export {

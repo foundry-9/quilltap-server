@@ -20,6 +20,7 @@ import { getModelContextLimit } from '@/lib/llm/model-context-data';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types';
 import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
+import { isAutomaticImagePath, isOsCruftName, IMAGE_FILE_EXTENSIONS } from '@/lib/files/folder-utils';
 import {
   isDockerEnvironment,
   isElectronShell,
@@ -32,8 +33,16 @@ import {
   SelfInventoryToolInput,
   SelfInventoryToolOutput,
   SelfInventoryVaultSection,
+  SelfInventoryVaultCharacterSection,
+  SelfInventoryVaultGroupsSection,
+  SelfInventoryVaultGroup,
+  SelfInventoryVaultIncludedParts,
   SelfInventoryVaultFile,
   SelfInventoryVaultAccessSection,
+  SelfInventoryVaultAccessCharacterSection,
+  SelfInventoryVaultAccessGroupsSection,
+  SelfInventoryGroupVaultAccess,
+  SelfInventoryGroupVaultMember,
   SelfInventoryVaultAccessParticipant,
   SelfInventoryVaultAccessLevel,
   SelfInventoryMemorySection,
@@ -45,6 +54,17 @@ import {
   SelfInventoryQuilltapIncludedParts,
   SelfInventoryRuntimeMode,
   SelfInventoryClientShell,
+  SelfInventoryContextSection,
+  SelfInventoryContextIncludedParts,
+  SelfInventoryContextChat,
+  SelfInventoryContextProject,
+  SelfInventoryContextGroups,
+  SelfInventoryContextGroup,
+  SelfInventoryContextCharacters,
+  SelfInventoryContextCharacter,
+  SelfInventoryContextFiles,
+  SelfInventoryContextFile,
+  SelfInventoryContextMount,
   validateSelfInventoryInput,
   type SelfInventorySection,
 } from '../self-inventory-tool';
@@ -53,6 +73,8 @@ export interface SelfInventoryToolContext {
   userId: string;
   chatId: string;
   characterId: string;
+  /** Project the chat belongs to, when known (for the `context` section). */
+  projectId?: string;
   callingParticipantId?: string;
   loadedMemories?: LoadedMemoriesContext;
 }
@@ -75,9 +97,71 @@ function formatDate(iso: string): string {
   return iso.slice(0, 10);
 }
 
-async function buildVaultSection(
-  character: Character
-): Promise<SelfInventoryVaultSection> {
+function isImageFileName(basename: string): boolean {
+  const ext = basename.includes('.') ? basename.slice(basename.lastIndexOf('.')).toLowerCase() : '';
+  return (IMAGE_FILE_EXTENSIONS as readonly string[]).includes(ext);
+}
+
+/**
+ * Predicate for which vault files to surface. OS cruft is always dropped.
+ * Auto-generated images are dropped unless the caller opts in via
+ * `includeAutomaticImages`. "Auto-generated" covers two storage conventions:
+ *  - document stores (group vaults): images under `character-avatars/` or
+ *    `story-backgrounds/` (the shared `isAutomaticImagePath` rule), and
+ *  - character vaults: images under the top-level `images/` folder, where the
+ *    avatar (`images/avatar.webp`) and generated wardrobe history live. This
+ *    convention is private to character vaults, so it is gated behind
+ *    `treatImagesFolderAsGenerated` rather than baked into the shared helper.
+ */
+function keepVaultFile(
+  relativePath: string,
+  includeAutomaticImages: boolean,
+  treatImagesFolderAsGenerated: boolean
+): boolean {
+  const segments = relativePath.split('/');
+  const basename = segments[segments.length - 1] ?? '';
+  if (isOsCruftName(basename)) return false;
+  if (includeAutomaticImages) return true;
+  if (isAutomaticImagePath(relativePath)) return false;
+  if (treatImagesFolderAsGenerated && segments[0] === 'images' && isImageFileName(basename)) {
+    return false;
+  }
+  return true;
+}
+
+type DocMountFileRow = {
+  relativePath: string;
+  fileName: string;
+  fileType: string;
+  fileSizeBytes: number;
+  lastModified: string;
+};
+
+function mapVaultFiles(
+  rows: DocMountFileRow[],
+  mountPointName: string,
+  includeAutomaticImages: boolean,
+  treatImagesFolderAsGenerated: boolean
+): SelfInventoryVaultFile[] {
+  return rows
+    .filter((row) =>
+      keepVaultFile(row.relativePath, includeAutomaticImages, treatImagesFolderAsGenerated)
+    )
+    .map((row) => ({
+      mountPointName,
+      relativePath: row.relativePath,
+      fileName: row.fileName,
+      fileType: row.fileType,
+      fileSizeBytes: row.fileSizeBytes,
+      lastModified: row.lastModified,
+    }))
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+}
+
+async function buildVaultCharacterSection(
+  character: Character,
+  includeAutomaticImages: boolean
+): Promise<SelfInventoryVaultCharacterSection> {
   if (isMountIndexDegraded()) {
     return {
       available: false,
@@ -106,16 +190,16 @@ async function buildVaultSection(
   }
 
   const rows = await repos.docMountFiles.findByMountPointId(mountPointId);
-  const files: SelfInventoryVaultFile[] = rows
-    .map((row) => ({
-      mountPointName: mountPoint.name,
-      relativePath: row.relativePath,
-      fileName: row.fileName,
-      fileType: row.fileType,
-      fileSizeBytes: row.fileSizeBytes,
-      lastModified: row.lastModified,
-    }))
-    .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  const files = mapVaultFiles(rows, mountPoint.name, includeAutomaticImages, true);
+
+  logger.debug('self_inventory: vault.character built', {
+    context: 'self-inventory-handler',
+    characterId: character.id,
+    mountPointId: mountPoint.id,
+    totalRows: rows.length,
+    fileCount: files.length,
+    includeAutomaticImages,
+  });
 
   return {
     available: true,
@@ -126,10 +210,165 @@ async function buildVaultSection(
   };
 }
 
-async function buildVaultAccessSection(
+/** A group the calling character belongs to, with its resolved store ids. */
+interface ResolvedGroup {
+  groupId: string;
+  groupName: string;
+  /** Official store + any linked stores, de-duplicated. */
+  mountPointIds: string[];
+}
+
+/**
+ * Resolve the groups the character belongs to and each group's document
+ * stores. Shared by `vault.groups`, `vaultAccess.groups`, and `context.groups`.
+ * A group whose store is unavailable (throws) is skipped, not fatal.
+ */
+async function resolveMyGroups(characterId: string): Promise<ResolvedGroup[]> {
+  const repos = getRepositories();
+  const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
+  const resolved: ResolvedGroup[] = [];
+
+  for (const membership of memberships) {
+    let group;
+    try {
+      group = await repos.groups.findById(membership.groupId);
+    } catch (err) {
+      logger.debug('self_inventory: skipping group with unavailable store', {
+        context: 'self-inventory-handler',
+        groupId: membership.groupId,
+        error: getErrorMessage(err),
+      });
+      continue;
+    }
+    if (!group) continue;
+
+    const mountPointIds = new Set<string>();
+    if (group.officialMountPointId) mountPointIds.add(group.officialMountPointId);
+    const links = await repos.groupDocMountLinks.findByGroupId(membership.groupId);
+    for (const link of links) mountPointIds.add(link.mountPointId);
+
+    resolved.push({
+      groupId: group.id,
+      groupName: group.name,
+      mountPointIds: [...mountPointIds],
+    });
+  }
+
+  resolved.sort((a, b) => a.groupName.localeCompare(b.groupName));
+  return resolved;
+}
+
+async function buildVaultGroupsSection(
+  characterId: string,
+  includeAutomaticImages: boolean
+): Promise<SelfInventoryVaultGroupsSection> {
+  if (isMountIndexDegraded()) {
+    return {
+      available: false,
+      reason: 'mount_index_degraded',
+      message: 'Mount index database is in degraded mode.',
+    };
+  }
+
+  const repos = getRepositories();
+  const groups = await resolveMyGroups(characterId);
+  if (groups.length === 0) {
+    return {
+      available: false,
+      reason: 'no_groups',
+      message: 'You are not a member of any groups.',
+    };
+  }
+
+  const out: SelfInventoryVaultGroup[] = [];
+  for (const group of groups) {
+    for (const mountPointId of group.mountPointIds) {
+      const mountPoint = await repos.docMountPoints.findById(mountPointId);
+      if (!mountPoint) continue;
+      const rows = await repos.docMountFiles.findByMountPointId(mountPointId);
+      const files = mapVaultFiles(rows, mountPoint.name, includeAutomaticImages, false);
+      out.push({
+        groupId: group.groupId,
+        groupName: group.groupName,
+        mountPointId: mountPoint.id,
+        mountPointName: mountPoint.name,
+        fileCount: files.length,
+        files,
+      });
+    }
+  }
+
+  logger.debug('self_inventory: vault.groups built', {
+    context: 'self-inventory-handler',
+    characterId,
+    groupCount: groups.length,
+    storeCount: out.length,
+    includeAutomaticImages,
+  });
+
+  return { available: true, groups: out };
+}
+
+async function buildVaultAccessGroupsSection(
+  characterId: string
+): Promise<SelfInventoryVaultAccessGroupsSection> {
+  const repos = getRepositories();
+  const groups = await resolveMyGroups(characterId);
+  if (groups.length === 0) {
+    return {
+      available: false,
+      reason: 'no_groups',
+      message: 'You are not a member of any groups.',
+    };
+  }
+
+  const out: SelfInventoryGroupVaultAccess[] = [];
+  for (const group of groups) {
+    const members = await repos.groupCharacterMembers.findByGroupId(group.groupId);
+    const memberInfos: SelfInventoryGroupVaultMember[] = [];
+    const seen = new Set<string>();
+
+    for (const member of members) {
+      if (seen.has(member.characterId)) continue;
+      seen.add(member.characterId);
+
+      let characterName = 'Unknown';
+      try {
+        const c = await repos.characters.findById(member.characterId);
+        if (c) characterName = c.name;
+      } catch {
+        // Member's vault is broken — still list them by id, name unknown.
+      }
+
+      memberInfos.push({
+        characterId: member.characterId,
+        characterName,
+        isSelf: member.characterId === characterId,
+        access: 'read_write',
+      });
+    }
+
+    memberInfos.sort((a, b) => {
+      if (a.isSelf !== b.isSelf) return a.isSelf ? -1 : 1;
+      return a.characterName.localeCompare(b.characterName);
+    });
+
+    out.push({ groupId: group.groupId, groupName: group.groupName, members: memberInfos });
+  }
+
+  logger.debug('self_inventory: vaultAccess.groups built', {
+    context: 'self-inventory-handler',
+    characterId,
+    groupCount: out.length,
+  });
+
+  return { available: true, groups: out };
+}
+
+async function buildVaultAccessCharacterSection(
   character: Character,
   context: SelfInventoryToolContext
-): Promise<SelfInventoryVaultAccessSection> {
+): Promise<SelfInventoryVaultAccessCharacterSection> {
   const repos = getRepositories();
   const chat = await repos.chats.findById(context.chatId);
   const sharedVaultsEnabled = Boolean(chat?.allowCrossCharacterVaultReads);
@@ -723,6 +962,258 @@ function resolveQuilltapIncludedParts(
   };
 }
 
+async function buildVaultWrapper(
+  character: Character,
+  parts: SelfInventoryVaultIncludedParts,
+  includeAutomaticImages: boolean
+): Promise<SelfInventoryVaultSection> {
+  const out: SelfInventoryVaultSection = { includedParts: parts };
+  if (parts.character) {
+    out.character = await buildVaultCharacterSection(character, includeAutomaticImages).catch(
+      (err) => ({
+        available: false as const,
+        reason: 'error' as const,
+        message: getErrorMessage(err),
+      })
+    );
+  }
+  if (parts.groups) {
+    out.groups = await buildVaultGroupsSection(character.id, includeAutomaticImages).catch(
+      (err) => ({
+        available: false as const,
+        reason: 'error' as const,
+        message: getErrorMessage(err),
+      })
+    );
+  }
+  return out;
+}
+
+async function buildVaultAccessWrapper(
+  character: Character,
+  context: SelfInventoryToolContext,
+  parts: SelfInventoryVaultIncludedParts
+): Promise<SelfInventoryVaultAccessSection> {
+  const out: SelfInventoryVaultAccessSection = { includedParts: parts };
+  if (parts.character) {
+    out.character = await buildVaultAccessCharacterSection(character, context).catch((err) => ({
+      available: false as const,
+      sharedVaultsEnabled: false,
+      message: getErrorMessage(err),
+    }));
+  }
+  if (parts.groups) {
+    out.groups = await buildVaultAccessGroupsSection(character.id).catch((err) => ({
+      available: false as const,
+      reason: 'error' as const,
+      message: getErrorMessage(err),
+    }));
+  }
+  return out;
+}
+
+async function resolveMountNames(
+  mountPointIds: string[]
+): Promise<SelfInventoryContextMount[]> {
+  const repos = getRepositories();
+  const mounts: SelfInventoryContextMount[] = [];
+  for (const id of mountPointIds) {
+    const mp = await repos.docMountPoints.findById(id);
+    if (mp) mounts.push({ mountPointId: mp.id, name: mp.name });
+  }
+  return mounts;
+}
+
+async function buildContextProject(
+  projectId: string | null | undefined
+): Promise<SelfInventoryContextProject> {
+  if (!projectId) return { available: true, present: false };
+
+  const repos = getRepositories();
+  const project = await repos.projects.findById(projectId);
+  if (!project) return { available: true, present: false };
+
+  const mountPointIds = new Set<string>();
+  if (project.officialMountPointId) mountPointIds.add(project.officialMountPointId);
+  try {
+    const links = await repos.projectDocMountLinks.findByProjectId(projectId);
+    for (const link of links) mountPointIds.add(link.mountPointId);
+  } catch {
+    // Mount index unavailable — report the project with whatever stores we have.
+  }
+
+  const mountPoints = await resolveMountNames([...mountPointIds]);
+  return { available: true, present: true, id: project.id, name: project.name, mountPoints };
+}
+
+async function buildContextGroups(characterId: string): Promise<SelfInventoryContextGroups> {
+  const groups = await resolveMyGroups(characterId);
+  const out: SelfInventoryContextGroup[] = [];
+  for (const group of groups) {
+    const mountPoints = await resolveMountNames(group.mountPointIds);
+    out.push({ id: group.groupId, name: group.groupName, mountPoints });
+  }
+  return { available: true, groups: out };
+}
+
+async function buildContextCharacters(
+  self: Character,
+  chat: { participants: ChatParticipantBase[] } | null
+): Promise<SelfInventoryContextCharacters> {
+  if (!chat) return { available: false, message: 'Chat not found.' };
+
+  const repos = getRepositories();
+  const out: SelfInventoryContextCharacter[] = [];
+  const seen = new Set<string>();
+
+  for (const p of chat.participants) {
+    if (p.type !== 'CHARACTER') continue;
+    if (!p.characterId) continue;
+    if (!isParticipantPresent(p.status)) continue;
+    if (p.characterId === self.id) continue; // others present with you, not yourself
+    if (seen.has(p.characterId)) continue;
+    seen.add(p.characterId);
+
+    let c: Character | null = null;
+    try {
+      c = await repos.characters.findById(p.characterId);
+    } catch (err) {
+      logger.debug('self_inventory: context.characters skipping unavailable character', {
+        context: 'self-inventory-handler',
+        characterId: p.characterId,
+        error: getErrorMessage(err),
+      });
+      continue;
+    }
+    if (!c) continue;
+
+    out.push({
+      id: c.id,
+      name: c.name,
+      aliases: c.aliases ?? [],
+      identity: c.identity ?? null,
+      isUserPersona: p.controlledBy === 'user',
+    });
+  }
+
+  out.sort((a, b) => a.name.localeCompare(b.name));
+  return { available: true, characters: out };
+}
+
+function buildHowToReach(
+  scope: 'project' | 'document_store' | 'general',
+  mountPoint: string | null,
+  filePath: string
+): string {
+  if (scope === 'document_store') {
+    const mp = mountPoint ?? '<mount_point>';
+    return `doc_read_file(scope='document_store', mount_point='${mp}', path='${filePath}')`;
+  }
+  return `doc_read_file(scope='${scope}', path='${filePath}')`;
+}
+
+async function buildContextFiles(chatId: string): Promise<SelfInventoryContextFiles> {
+  const repos = getRepositories();
+  const docs = await repos.chatDocuments.findByChatId(chatId);
+  const files: SelfInventoryContextFile[] = docs
+    .map((d) => ({
+      scope: d.scope,
+      mountPoint: d.mountPoint ?? null,
+      filePath: d.filePath,
+      displayTitle: d.displayTitle ?? null,
+      howToReach: buildHowToReach(d.scope, d.mountPoint ?? null, d.filePath),
+    }))
+    .sort((a, b) => a.filePath.localeCompare(b.filePath));
+
+  return { available: true, files };
+}
+
+async function buildContextSection(
+  character: Character,
+  context: SelfInventoryToolContext,
+  parts: SelfInventoryContextIncludedParts
+): Promise<SelfInventoryContextSection> {
+  const repos = getRepositories();
+  const out: SelfInventoryContextSection = { includedParts: parts };
+  const chat = await repos.chats.findById(context.chatId);
+
+  if (parts.chat) {
+    const chatSection: SelfInventoryContextChat = chat
+      ? { available: true, chatId: chat.id, title: chat.title ?? null }
+      : { available: false, chatId: context.chatId, title: null, message: 'Chat not found.' };
+    out.chat = chatSection;
+  }
+
+  if (parts.project) {
+    out.project = await buildContextProject(context.projectId ?? chat?.projectId ?? null).catch(
+      (err) => ({ available: false as const, message: getErrorMessage(err) })
+    );
+  }
+
+  if (parts.groups) {
+    out.groups = await buildContextGroups(character.id).catch((err) => ({
+      available: false as const,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  if (parts.characters) {
+    out.characters = await buildContextCharacters(character, chat).catch((err) => ({
+      available: false as const,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  if (parts.files) {
+    out.files = await buildContextFiles(context.chatId).catch((err) => ({
+      available: false as const,
+      message: getErrorMessage(err),
+    }));
+  }
+
+  logger.debug('self_inventory: context section built', {
+    context: 'self-inventory-handler',
+    characterId: character.id,
+    chatId: context.chatId,
+    parts,
+  });
+
+  return out;
+}
+
+function resolveVaultIncludedParts(
+  requested: Set<SelfInventorySection>
+): SelfInventoryVaultIncludedParts | null {
+  const wantsAll = requested.has('vault');
+  const character = wantsAll || requested.has('vault.character');
+  const groups = wantsAll || requested.has('vault.groups');
+  if (!character && !groups) return null;
+  return { character, groups };
+}
+
+function resolveVaultAccessIncludedParts(
+  requested: Set<SelfInventorySection>
+): SelfInventoryVaultIncludedParts | null {
+  const wantsAll = requested.has('vaultAccess');
+  const character = wantsAll || requested.has('vaultAccess.character');
+  const groups = wantsAll || requested.has('vaultAccess.groups');
+  if (!character && !groups) return null;
+  return { character, groups };
+}
+
+function resolveContextIncludedParts(
+  requested: Set<SelfInventorySection>
+): SelfInventoryContextIncludedParts | null {
+  const wantsAll = requested.has('context');
+  const chat = wantsAll || requested.has('context.chat');
+  const project = wantsAll || requested.has('context.project');
+  const groups = wantsAll || requested.has('context.groups');
+  const characters = wantsAll || requested.has('context.characters');
+  const files = wantsAll || requested.has('context.files');
+  if (!chat && !project && !groups && !characters && !files) return null;
+  return { chat, project, groups, characters, files };
+}
+
 function resolveRequestedSections(input: unknown): Set<SelfInventorySection> {
   const parsed = input as { sections?: SelfInventorySection[] } | null | undefined;
   const requested = parsed?.sections;
@@ -774,25 +1265,18 @@ export async function executeSelfInventoryTool(
     characterName: character.name,
   };
 
-  if (requested.has('vault')) {
-    result.vault = await buildVaultSection(character).catch(
-      (err) => ({
-        available: false as const,
-        reason: 'error' as const,
-        message: getErrorMessage(err),
-      })
-    );
+  const includeAutomaticImages = Boolean(
+    (input as { includeAutomaticImages?: boolean } | null | undefined)?.includeAutomaticImages
+  );
+
+  const vaultParts = resolveVaultIncludedParts(requested);
+  if (vaultParts) {
+    result.vault = await buildVaultWrapper(character, vaultParts, includeAutomaticImages);
   }
 
-  if (requested.has('vaultAccess')) {
-    result.vaultAccess = await buildVaultAccessSection(
-      character,
-      context
-    ).catch((err) => ({
-      available: false as const,
-      sharedVaultsEnabled: false,
-      message: getErrorMessage(err),
-    }));
+  const vaultAccessParts = resolveVaultAccessIncludedParts(requested);
+  if (vaultAccessParts) {
+    result.vaultAccess = await buildVaultAccessWrapper(character, context, vaultAccessParts);
   }
 
   if (requested.has('memory')) {
@@ -877,10 +1361,21 @@ export async function executeSelfInventoryTool(
     }
   }
 
+  const contextParts = resolveContextIncludedParts(requested);
+  if (contextParts) {
+    result.context = await buildContextSection(character, context, contextParts).catch(() => ({
+      includedParts: contextParts,
+    }));
+  }
+
   return result;
 }
 
-function formatVaultSection(section: SelfInventoryVaultSection): string {
+function formatVaultFileLine(f: SelfInventoryVaultFile): string {
+  return `- ${f.relativePath}  [${f.fileType}, ${formatBytes(f.fileSizeBytes)}, modified ${formatDate(f.lastModified)}]`;
+}
+
+function formatVaultCharacter(section: SelfInventoryVaultCharacterSection): string {
   if (!section.available) {
     return `## Character Vault\nUnavailable — ${section.message}`;
   }
@@ -890,17 +1385,42 @@ function formatVaultSection(section: SelfInventoryVaultSection): string {
     return `${header}\n(no files)`;
   }
 
-  const lines = section.files.map((f) => {
-    const date = formatDate(f.lastModified);
-    return `- ${f.relativePath}  [${f.fileType}, ${formatBytes(f.fileSizeBytes)}, modified ${date}]`;
-  });
+  const lines = section.files.map(formatVaultFileLine);
   const footer = `(To read a file: doc_read_file with scope='document_store', mount_point='${section.mountPointName}', path='<relativePath>')`;
   return `${header}\n${lines.join('\n')}\n${footer}`;
 }
 
-function formatVaultAccessSection(section: SelfInventoryVaultAccessSection): string {
+function formatVaultGroups(section: SelfInventoryVaultGroupsSection): string {
   if (!section.available) {
-    return `## Vault Access (this chat)\nUnavailable — ${section.message}`;
+    return `## Group Vaults\nUnavailable — ${section.message}`;
+  }
+  if (section.groups.length === 0) {
+    return `## Group Vaults\n(no group vaults)`;
+  }
+
+  const blocks = section.groups.map((g) => {
+    const head = `### ${g.groupName} — ${g.mountPointName} (${g.fileCount} file${g.fileCount === 1 ? '' : 's'})`;
+    if (g.files.length === 0) {
+      return `${head}\n(no files)`;
+    }
+    const lines = g.files.map(formatVaultFileLine);
+    const footer = `(To read a file: doc_read_file with scope='document_store', mount_point='${g.mountPointName}', path='<relativePath>')`;
+    return `${head}\n${lines.join('\n')}\n${footer}`;
+  });
+
+  return [`## Group Vaults`, ...blocks].join('\n\n');
+}
+
+function formatVaultSection(section: SelfInventoryVaultSection): string {
+  const parts: string[] = [];
+  if (section.character) parts.push(formatVaultCharacter(section.character));
+  if (section.groups) parts.push(formatVaultGroups(section.groups));
+  return parts.join('\n\n');
+}
+
+function formatVaultAccessCharacter(section: SelfInventoryVaultAccessCharacterSection): string {
+  if (!section.available) {
+    return `## Vault Access — Character (this chat)\nUnavailable — ${section.message}`;
   }
 
   const toggleLine = section.sharedVaultsEnabled
@@ -929,7 +1449,7 @@ function formatVaultAccessSection(section: SelfInventoryVaultAccessSection): str
       : readOnly.map(formatParticipant).join('\n');
 
   return [
-    `## Vault Access (this chat)`,
+    `## Vault Access — Character (this chat)`,
     `Mount point: ${section.mountPointName}`,
     toggleLine,
     `Read/Write:`,
@@ -937,6 +1457,35 @@ function formatVaultAccessSection(section: SelfInventoryVaultAccessSection): str
     `Read-only:`,
     roBlock,
   ].join('\n');
+}
+
+function formatVaultAccessGroups(section: SelfInventoryVaultAccessGroupsSection): string {
+  if (!section.available) {
+    return `## Vault Access — Groups\nUnavailable — ${section.message}`;
+  }
+  if (section.groups.length === 0) {
+    return `## Vault Access — Groups\n(no groups)`;
+  }
+
+  const blocks = section.groups.map((g) => {
+    const head = `### ${g.groupName}`;
+    if (g.members.length === 0) {
+      return `${head}\n(no members)`;
+    }
+    const lines = g.members.map(
+      (m) => `- ${m.characterName}${m.isSelf ? ' (self)' : ''} — read/write`
+    );
+    return `${head}\nAll members can read and write this group's vault, in any chat:\n${lines.join('\n')}`;
+  });
+
+  return [`## Vault Access — Groups`, ...blocks].join('\n\n');
+}
+
+function formatVaultAccessSection(section: SelfInventoryVaultAccessSection): string {
+  const parts: string[] = [];
+  if (section.character) parts.push(formatVaultAccessCharacter(section.character));
+  if (section.groups) parts.push(formatVaultAccessGroups(section.groups));
+  return parts.join('\n\n');
 }
 
 function formatLoadedMemoriesSection(section: SelfInventoryLoadedMemoriesSection): string {
@@ -1091,6 +1640,87 @@ function formatQuilltapSection(section: SelfInventoryQuilltapSection): string {
   return parts.join('\n');
 }
 
+function formatContextChat(chat: SelfInventoryContextChat): string {
+  if (!chat.available) {
+    return `### This Chat\nUnavailable — ${chat.message ?? 'unknown error'}`;
+  }
+  return [`### This Chat`, `- Name: ${chat.title ?? '(untitled)'}`, `- ID: ${chat.chatId}`].join('\n');
+}
+
+function formatContextProject(project: SelfInventoryContextProject): string {
+  if (!project.available) {
+    return `### Project\nUnavailable — ${project.message}`;
+  }
+  if (!project.present) {
+    return `### Project\n(this chat is not part of a project)`;
+  }
+  const stores =
+    project.mountPoints.length > 0
+      ? project.mountPoints.map((m) => m.name).join(', ')
+      : '(none)';
+  return [
+    `### Project`,
+    `- Name: ${project.name}`,
+    `- ID: ${project.id}`,
+    `- Linked stores: ${stores}`,
+  ].join('\n');
+}
+
+function formatContextGroups(groups: SelfInventoryContextGroups): string {
+  if (!groups.available) {
+    return `### Your Groups\nUnavailable — ${groups.message}`;
+  }
+  if (groups.groups.length === 0) {
+    return `### Your Groups\n(you are not a member of any groups)`;
+  }
+  const lines = groups.groups.map((g) => {
+    const stores = g.mountPoints.length > 0 ? g.mountPoints.map((m) => m.name).join(', ') : '(none)';
+    return `- ${g.name} (id: ${g.id}) — linked stores: ${stores}`;
+  });
+  return [`### Your Groups`, ...lines].join('\n');
+}
+
+function formatContextCharacters(characters: SelfInventoryContextCharacters): string {
+  if (!characters.available) {
+    return `### Characters Present\nUnavailable — ${characters.message}`;
+  }
+  if (characters.characters.length === 0) {
+    return `### Characters Present\n(no other characters are present in this chat)`;
+  }
+  const lines = characters.characters.map((c) => {
+    const personaTag = c.isUserPersona ? ' (user persona)' : '';
+    const aliasTag = c.aliases.length > 0 ? ` [aka ${c.aliases.join(', ')}]` : '';
+    const identityLine = c.identity ? `\n    Identity: ${c.identity}` : '';
+    return `- ${c.name}${personaTag}${aliasTag} (id: ${c.id})${identityLine}`;
+  });
+  return [`### Characters Present`, ...lines].join('\n');
+}
+
+function formatContextFiles(files: SelfInventoryContextFiles): string {
+  if (!files.available) {
+    return `### Attached Files\nUnavailable — ${files.message}`;
+  }
+  if (files.files.length === 0) {
+    return `### Attached Files\n(no files are attached to this chat)`;
+  }
+  const lines = files.files.map((f) => {
+    const title = f.displayTitle ? ` "${f.displayTitle}"` : '';
+    const mountTag = f.mountPoint ? `, mount_point=${f.mountPoint}` : '';
+    return `- ${f.filePath}${title} [scope=${f.scope}${mountTag}]\n    Reach it: ${f.howToReach}`;
+  });
+  return [`### Attached Files`, ...lines].join('\n');
+}
+
+function formatContextSection(section: SelfInventoryContextSection): string {
+  const parts: string[] = [`## Context`];
+  if (section.chat) parts.push('', formatContextChat(section.chat));
+  if (section.project) parts.push('', formatContextProject(section.project));
+  if (section.groups) parts.push('', formatContextGroups(section.groups));
+  if (section.characters) parts.push('', formatContextCharacters(section.characters));
+  if (section.files) parts.push('', formatContextFiles(section.files));
+  return parts.join('\n');
+}
+
 export function formatSelfInventoryResults(output: SelfInventoryToolOutput): string {
   if (!output.success) {
     return `You are running on Quilltap v${output.quilltapVersion}.\n\nSelf-Inventory Error: ${output.error ?? 'Unknown error'}`;
@@ -1126,6 +1756,9 @@ export function formatSelfInventoryResults(output: SelfInventoryToolOutput): str
   }
   if (output.quilltap) {
     lines.push('', formatQuilltapSection(output.quilltap));
+  }
+  if (output.context) {
+    lines.push('', formatContextSection(output.context));
   }
 
   return lines.join('\n');

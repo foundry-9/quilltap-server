@@ -564,6 +564,7 @@ export async function executeToolCallWithContext(
         userId,
         chatId,
         characterId,
+        projectId: context.projectId,
         callingParticipantId: context.callingParticipantId,
         loadedMemories: context.loadedMemories,
       };
@@ -585,6 +586,7 @@ export async function executeToolCallWithContext(
       if (result.prompt) structuredResult.prompt = result.prompt;
       if (result.lastTurn) structuredResult.lastTurn = result.lastTurn;
       if (result.quilltap) structuredResult.quilltap = result.quilltap;
+      if (result.context) structuredResult.context = result.context;
 
       return {
         toolName: 'self_inventory',

@@ -13,7 +13,11 @@ import { zodToOpenAISchema } from './zod-to-openai-schema'
 
 export const SELF_INVENTORY_SECTIONS = [
   'vault',
+  'vault.character',
+  'vault.groups',
   'vaultAccess',
+  'vaultAccess.character',
+  'vaultAccess.groups',
   'memory',
   'loadedMemories',
   'chats',
@@ -23,6 +27,12 @@ export const SELF_INVENTORY_SECTIONS = [
   'quilltap.version',
   'quilltap.releaseNotes',
   'quilltap.changelog',
+  'context',
+  'context.chat',
+  'context.project',
+  'context.groups',
+  'context.characters',
+  'context.files',
 ] as const;
 
 export type SelfInventorySection = typeof SELF_INVENTORY_SECTIONS[number];
@@ -35,6 +45,30 @@ export const QUILLTAP_SUB_SECTIONS = [
 
 export type QuilltapSubSection = typeof QUILLTAP_SUB_SECTIONS[number];
 
+export const VAULT_SUB_SECTIONS = [
+  'vault.character',
+  'vault.groups',
+] as const satisfies readonly SelfInventorySection[];
+
+export type VaultSubSection = typeof VAULT_SUB_SECTIONS[number];
+
+export const VAULT_ACCESS_SUB_SECTIONS = [
+  'vaultAccess.character',
+  'vaultAccess.groups',
+] as const satisfies readonly SelfInventorySection[];
+
+export type VaultAccessSubSection = typeof VAULT_ACCESS_SUB_SECTIONS[number];
+
+export const CONTEXT_SUB_SECTIONS = [
+  'context.chat',
+  'context.project',
+  'context.groups',
+  'context.characters',
+  'context.files',
+] as const satisfies readonly SelfInventorySection[];
+
+export type ContextSubSection = typeof CONTEXT_SUB_SECTIONS[number];
+
 /**
  * Zod schema for the self inventory tool's input.
  */
@@ -43,8 +77,10 @@ export const selfInventoryToolInputSchema = z.object({
     z.enum(SELF_INVENTORY_SECTIONS)
       .describe(
         'Which section(s) to include. Options: ' +
-        '"vault" (files in your character vault), ' +
-        '"vaultAccess" (who can read/write your vault in this chat), ' +
+        '"vault" (files in your own character vault AND your group vaults), with finer-grained dotted variants ' +
+        '"vault.character" (just your own vault) and "vault.groups" (just the vaults of the groups you belong to); ' +
+        '"vaultAccess" (who can read/write your character vault in this chat AND who can read/write your group vaults), ' +
+        'with dotted variants "vaultAccess.character" (this chat only) and "vaultAccess.groups" (group members, in any chat); ' +
         '"memory" (total and high-importance memory counts), ' +
         '"loadedMemories" (memories actually loaded into this turn\'s prompt), ' +
         '"chats" (conversation count and date range), ' +
@@ -54,15 +90,24 @@ export const selfInventoryToolInputSchema = z.object({
         'For finer-grained quilltap queries, ask for one or more of the dotted sub-sections: ' +
         '"quilltap.version" (version + runtime + client shell only), ' +
         '"quilltap.releaseNotes" (release notes for the current or most recent release only), ' +
-        '"quilltap.changelog" (the changelog only).'
+        '"quilltap.changelog" (the changelog only); ' +
+        '"context" (where you are right now: this chat, the current project, your groups, the characters present with you, ' +
+        'and the files attached to this chat with instructions for reaching each via the doc_* tools), with dotted variants ' +
+        '"context.chat", "context.project", "context.groups", "context.characters", and "context.files".'
       )
   ).optional()
     .describe(
       'Optional list of section names to return. If omitted or empty, all top-level sections are returned ' +
-      '(equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "quilltap"). ' +
+      '(equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "quilltap", "context"). ' +
       'Pass one or more section names to receive only those sections — useful for saving tokens when ' +
-      'you only need specific information. The "quilltap.*" sub-sections let you fetch one piece of ' +
-      'the Quilltap section without pulling the changelog (which can be large).'
+      'you only need specific information. The "quilltap.*", "vault.*", "vaultAccess.*", and "context.*" sub-sections let you ' +
+      'fetch one piece of a section without pulling the rest (e.g. the changelog, which can be large).'
+    ),
+  includeAutomaticImages: z.boolean().optional()
+    .describe(
+      'When listing vault files (the "vault", "vault.character", or "vault.groups" sections), include auto-generated images ' +
+      '— character avatars and story backgrounds. Defaults to false: these are hidden to keep the listing focused on ' +
+      'authored content. OS junk files (.DS_Store, Thumbs.db, dot-files) are always hidden regardless of this flag.'
     ),
 });
 
@@ -77,7 +122,14 @@ export interface SelfInventoryVaultFile {
   lastModified: string;
 }
 
-export type SelfInventoryVaultSection =
+/** Which vault parts a `vault` request resolved to. Mirrors the quilltap pattern. */
+export interface SelfInventoryVaultIncludedParts {
+  character: boolean;
+  groups: boolean;
+}
+
+/** The character's own vault (auto-generated files filtered out by default). */
+export type SelfInventoryVaultCharacterSection =
   | {
       available: true;
       mountPointName: string;
@@ -90,6 +142,38 @@ export type SelfInventoryVaultSection =
       reason: 'no_vault' | 'mount_index_degraded' | 'error';
       message: string;
     };
+
+/** One group's vault file listing (one entry per group store). */
+export interface SelfInventoryVaultGroup {
+  groupId: string;
+  groupName: string;
+  mountPointId: string;
+  mountPointName: string;
+  fileCount: number;
+  files: SelfInventoryVaultFile[];
+}
+
+export type SelfInventoryVaultGroupsSection =
+  | {
+      available: true;
+      groups: SelfInventoryVaultGroup[];
+    }
+  | {
+      available: false;
+      reason: 'no_groups' | 'mount_index_degraded' | 'error';
+      message: string;
+    };
+
+/**
+ * The `vault` section is a wrapper carrying whichever of the two parts the
+ * caller asked for. Bare `vault` resolves both; `vault.character` /
+ * `vault.groups` resolve just one.
+ */
+export interface SelfInventoryVaultSection {
+  includedParts: SelfInventoryVaultIncludedParts;
+  character?: SelfInventoryVaultCharacterSection;
+  groups?: SelfInventoryVaultGroupsSection;
+}
 
 export interface SelfInventoryMemorySection {
   available: boolean;
@@ -153,7 +237,8 @@ export interface SelfInventoryVaultAccessParticipant {
   access: SelfInventoryVaultAccessLevel;
 }
 
-export type SelfInventoryVaultAccessSection =
+/** Who can read/write the character's own vault in THIS chat. */
+export type SelfInventoryVaultAccessCharacterSection =
   | {
       available: true;
       mountPointName: string;
@@ -165,6 +250,42 @@ export type SelfInventoryVaultAccessSection =
       sharedVaultsEnabled: boolean;
       message: string;
     };
+
+/** A member of a group the character belongs to; all members read/write the group vault. */
+export interface SelfInventoryGroupVaultMember {
+  characterId: string;
+  characterName: string;
+  isSelf: boolean;
+  access: 'read_write';
+}
+
+/** Who can read/write one group's vault. Membership-based; chat-independent. */
+export interface SelfInventoryGroupVaultAccess {
+  groupId: string;
+  groupName: string;
+  members: SelfInventoryGroupVaultMember[];
+}
+
+export type SelfInventoryVaultAccessGroupsSection =
+  | {
+      available: true;
+      groups: SelfInventoryGroupVaultAccess[];
+    }
+  | {
+      available: false;
+      reason: 'no_groups' | 'error';
+      message: string;
+    };
+
+/**
+ * The `vaultAccess` section is a wrapper carrying whichever parts the caller
+ * asked for. Bare `vaultAccess` resolves both; the dotted variants resolve one.
+ */
+export interface SelfInventoryVaultAccessSection {
+  includedParts: SelfInventoryVaultIncludedParts;
+  character?: SelfInventoryVaultAccessCharacterSection;
+  groups?: SelfInventoryVaultAccessGroupsSection;
+}
 
 export type SelfInventoryLastTurnSource = 'llm_log' | 'profile_fallback';
 
@@ -219,6 +340,86 @@ export interface SelfInventoryLastTurnSection {
   message?: string;
 }
 
+// ============================================================================
+// CONTEXT SECTION — where the character is right now
+// ============================================================================
+
+/** A document store reachable from a project or group. */
+export interface SelfInventoryContextMount {
+  mountPointId: string;
+  name: string;
+}
+
+export interface SelfInventoryContextChat {
+  available: boolean;
+  chatId: string;
+  title: string | null;
+  message?: string;
+}
+
+export type SelfInventoryContextProject =
+  | { available: true; present: true; id: string; name: string; mountPoints: SelfInventoryContextMount[] }
+  | { available: true; present: false }
+  | { available: false; message: string };
+
+export interface SelfInventoryContextGroup {
+  id: string;
+  name: string;
+  mountPoints: SelfInventoryContextMount[];
+}
+
+export type SelfInventoryContextGroups =
+  | { available: true; groups: SelfInventoryContextGroup[] }
+  | { available: false; message: string };
+
+export interface SelfInventoryContextCharacter {
+  id: string;
+  name: string;
+  aliases: string[];
+  identity: string | null;
+  /** True for the human user's controlled persona character. */
+  isUserPersona: boolean;
+}
+
+export type SelfInventoryContextCharacters =
+  | { available: true; characters: SelfInventoryContextCharacter[] }
+  | { available: false; message: string };
+
+export interface SelfInventoryContextFile {
+  scope: 'project' | 'document_store' | 'general';
+  mountPoint: string | null;
+  filePath: string;
+  displayTitle: string | null;
+  /** A copy-pasteable doc_read_file(...) invocation for reaching this file. */
+  howToReach: string;
+}
+
+export type SelfInventoryContextFiles =
+  | { available: true; files: SelfInventoryContextFile[] }
+  | { available: false; message: string };
+
+/** Which context parts a `context` request resolved to. */
+export interface SelfInventoryContextIncludedParts {
+  chat: boolean;
+  project: boolean;
+  groups: boolean;
+  characters: boolean;
+  files: boolean;
+}
+
+/**
+ * The `context` section is a wrapper carrying whichever parts the caller asked
+ * for. Bare `context` resolves all five; the dotted variants resolve a subset.
+ */
+export interface SelfInventoryContextSection {
+  includedParts: SelfInventoryContextIncludedParts;
+  chat?: SelfInventoryContextChat;
+  project?: SelfInventoryContextProject;
+  groups?: SelfInventoryContextGroups;
+  characters?: SelfInventoryContextCharacters;
+  files?: SelfInventoryContextFiles;
+}
+
 export interface SelfInventoryToolOutput {
   success: boolean;
   quilltapVersion: string;
@@ -232,6 +433,7 @@ export interface SelfInventoryToolOutput {
   prompt?: SelfInventoryPromptSection;
   lastTurn?: SelfInventoryLastTurnSection;
   quilltap?: SelfInventoryQuilltapSection;
+  context?: SelfInventoryContextSection;
   error?: string;
 }
 
@@ -240,9 +442,12 @@ export const selfInventoryToolDefinition = {
   function: {
     name: 'self_inventory',
     description:
-      'Return an introspection report about yourself in this chat. Eight top-level sections are available: ' +
-      '"vault" (every file in your character vault, with metadata for doc_read_file), ' +
-      '"vaultAccess" (who in this chat can read or write your vault right now), ' +
+      'Return an introspection report about yourself in this chat. Nine top-level sections are available: ' +
+      '"vault" (every file in your own character vault AND the vaults of the groups you belong to, with metadata for ' +
+      'doc_read_file; auto-generated avatars/backgrounds are hidden unless includeAutomaticImages is true) — request just ' +
+      '"vault.character" or "vault.groups" for one half; ' +
+      '"vaultAccess" (who can read or write your character vault in this chat, plus who can read/write your group vaults) — ' +
+      'request "vaultAccess.character" (this chat) or "vaultAccess.groups" (group members, regardless of chat) for one half; ' +
       '"memory" (total and high-importance memory counts), ' +
       '"loadedMemories" (the actual memories loaded into this turn\'s prompt), ' +
       '"chats" (conversation count and date range), ' +
@@ -253,9 +458,13 @@ export const selfInventoryToolDefinition = {
       'finer-grained pieces: "quilltap.version" (version + runtime + client shell only), "quilltap.releaseNotes" ' +
       '(release notes only), and "quilltap.changelog" (changelog only) — use these to save tokens when the changelog ' +
       'is large and you only need part of the Quilltap section. ' +
-      'Pass a "sections" array to request only specific sections; omit it to receive all eight top-level sections. ' +
-      'Use this when you need to know what source material you have access to, how you are currently configured, ' +
-      'or how close the last turn was to the context window limit.',
+      '"context" tells you where you are right now: this chat (id and name), the current project (id, name, linked stores), ' +
+      'your groups (ids, names, linked stores), the other characters present with you (names, aliases, identities), and the ' +
+      'files attached to this chat with a copy-pasteable doc_read_file(...) call for each — request "context.chat", ' +
+      '"context.project", "context.groups", "context.characters", or "context.files" for one part. ' +
+      'Pass a "sections" array to request only specific sections; omit it to receive all nine top-level sections. ' +
+      'Use this when you need to know what source material you have access to, who is around you, how you are currently ' +
+      'configured, or how close the last turn was to the context window limit.',
     parameters: zodToOpenAISchema(selfInventoryToolInputSchema),
   },
 };
