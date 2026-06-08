@@ -730,9 +730,15 @@ Subcommands (high-level shortcuts; auto-pick the right database):
   Most subcommands also accept --json and --limit N.
 
 Low-level options (legacy; still supported):
+  The database is opened READ-ONLY by default. Add --write to make changes.
   --tables              List all tables in the active database
   --count <table>       Show row count for a table
-  --repl                Interactive SQL prompt (extras: .cols, .find)
+  --repl                Interactive SQL prompt (extras: .cols, .find).
+                        Read-only unless combined with --write.
+  --write               Open the database read-write. Claims the instance lock
+                        for the duration and releases it on exit. Refuses (no
+                        override) if a running server or another instance holds
+                        the lock — stop it first. Works with raw SQL and --repl.
   --json                Emit machine-readable JSON instead of a table
                         (works with --tables, --count, and raw SQL)
   --llm-logs            Target the LLM logs database
@@ -769,6 +775,8 @@ Examples:
   quilltap db "SELECT count(*) FROM characters"
   quilltap db --count messages
   quilltap db --repl
+  quilltap db --write "UPDATE characters SET title = 'rival' WHERE id = '...'"
+  quilltap db --repl --write                           # interactive, read-write
   quilltap db --lock-status
   QUILLTAP_DB_PASSPHRASE=secret quilltap db --tables
 `);
@@ -837,6 +845,7 @@ async function dbCommand(args) {
   let showTables = false;
   let countTable = '';
   let repl = false;
+  let writable = false;
   let sql = '';
   let showHelp = false;
   let lockStatus = false;
@@ -852,6 +861,7 @@ async function dbCommand(args) {
       case '--tables': showTables = true; break;
       case '--count': countTable = cleaned[++i]; break;
       case '--repl': repl = true; break;
+      case '--write': writable = true; break;
       case '--json': asJson = true; break;
       case '--help': case '-h': showHelp = true; break;
       case '--lock-status': lockStatus = true; break;
@@ -919,6 +929,19 @@ async function dbCommand(args) {
     process.exit(1);
   }
 
+  // Read-write opens (`--write`, optionally with `--repl`) must claim the
+  // instance lock first so a server starting mid-operation refuses to run.
+  // Refuses (no override) if a live instance already holds it.
+  if (writable) {
+    const { acquireWriteLock } = require('../lib/lock-helpers');
+    try {
+      acquireWriteLock(dataDir);
+    } catch (err) {
+      console.error(err.message);
+      process.exit(1);
+    }
+  }
+
   // Open database — prefer SQLCipher-capable build
   let Database;
   try {
@@ -926,7 +949,7 @@ async function dbCommand(args) {
   } catch {
     Database = require('better-sqlite3');
   }
-  const db = new Database(dbPath, { readonly: !repl });
+  const db = new Database(dbPath, { readonly: !writable });
 
   if (pepper) {
     const keyHex = Buffer.from(pepper, 'base64').toString('hex');
@@ -971,7 +994,7 @@ async function dbCommand(args) {
     } else if (repl) {
       const readline = require('readline');
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: 'quilltap> ' });
-      console.log(`Connected to ${dbPath}`);
+      console.log(`Connected to ${dbPath}${writable ? '  (read-write — instance lock held)' : '  (read-only)'}`);
       console.log('Type .tables, .schema <table>, .cols <table>, .find <text>, or SQL. Ctrl+D to exit.\n');
       rl.prompt();
       rl.on('line', (line) => {
@@ -1033,19 +1056,40 @@ async function dbCommand(args) {
           }
         } catch (err) {
           console.error(`Error: ${err.message}`);
+          if (!writable && /readonly|read-only/i.test(err.message)) {
+            console.error('This REPL is read-only. Exit and re-run as `quilltap db --repl --write` to make changes.');
+          }
         }
         rl.prompt();
       });
       rl.on('close', () => {
         db.close();
+        if (writable) {
+          const { releaseWriteLock } = require('../lib/lock-helpers');
+          releaseWriteLock(dataDir);
+        }
         process.exit(0);
       });
       return; // Don't close db yet — REPL is interactive
     } else {
       printDbHelp();
     }
+  } catch (err) {
+    if (!writable && /readonly|read-only/i.test(err.message)) {
+      console.error('This database was opened read-only, so it cannot be modified.');
+      console.error('Re-run with --write to make changes — it claims the instance lock while it runs');
+      console.error('and refuses if another Quilltap instance is using the database. For example:');
+      console.error(`  quilltap db --write ${sql ? JSON.stringify(sql) : '"UPDATE ..."'}`);
+    } else {
+      console.error(`Error: ${err.message}`);
+    }
+    process.exitCode = 1;
   } finally {
     if (!repl) db.close();
+    if (writable && !repl) {
+      const { releaseWriteLock } = require('../lib/lock-helpers');
+      releaseWriteLock(dataDir);
+    }
   }
 }
 

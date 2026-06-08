@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Feature: `quilltap db --write` for lock-gated read-write CLI access
+
+The `db` command now opens the database read-only by default and adds a `--write` flag for making changes safely. Previously the only writable path was `--repl`, which opened read-write without consulting the instance lock — racing a running server risked WAL corruption.
+
+- `--write` opens the database read-write only if the instance lock is free. It claims `<dataDir>/quilltap.lock` (the same lockfile the server uses, same JSON shape) for the duration and releases it on exit (normal, Ctrl-C/Ctrl-D, signal, or crash via registered exit handlers). It refuses — with no override — when a live server or another instance holds the lock, mirroring the existing `optimize`/`backup` behavior. A dead/stale lock is claimed (same as the server); a live lock is always refused.
+- `--repl` now defaults to read-only; combine with `--write` (`quilltap db --repl --write`) for an interactive read-write session.
+- Attempting a write on a read-only connection (raw SQL or REPL) now prints a hint to re-run with `--write` instead of an opaque error/stack trace.
+- New helpers in `packages/quilltap/lib/lock-helpers.js`: `acquireWriteLock(dataDir)` / `releaseWriteLock(dataDir)` (plus `detectEnvironmentType`), reusing the existing `getLockStatus` for the live/stale decision. Atomic `O_CREAT|O_EXCL` create, tmp+rename writes, 50-entry history with `acquired`/`released`/`stale-detected`/`stale-claimed` events, and an unref'd 60s heartbeat for long sessions — matching `lib/database/backends/sqlite/instance-lock.ts`.
+- Wired into `packages/quilltap/bin/quilltap.js` (`dbCommand` legacy flag path only; verbs `optimize`/`backup` already manage the lock). Updated `printDbHelp`, the bash/zsh/fish completion templates, the CLI README, CLAUDE.md, and DDL.md.
+
 #### Fix: project-less avatar/Lantern image writes silently failed during autonomous turns
 
 The two project-less image-storage bridges — `writeCharacterAvatarToVault` and `writeLanternBackgroundToMountStore` — consume the `blobId`/`linkId` returned by `docMountFileLinks.linkBlobContent` and bake them into the `storageKey` they persist into `files.create`. In the forked job-runner child, that write was buffered (returning `undefined`) rather than executed, so the storageKey embedded a missing id and the resulting file row dangled. This was the latent-broken case flagged as a follow-up when the `linkBlobContent` child-proxy classification was fixed. It affected the wardrobe-avatar path (`character-avatar` handler), the project-less story-background path (`story-background` handler), and the `generate_image` tool when a character invokes it during an `AUTONOMOUS_ROOM_TURN`.

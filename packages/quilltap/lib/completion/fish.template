@@ -109,7 +109,8 @@ complete -c quilltap -n '__quilltap_using_subcommand db' -l 'type' -d 'Filter by
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'out' -d 'Output directory' -r -F
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'tables' -d 'List tables (low-level)'
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'count' -d 'Count rows in table' -x
-complete -c quilltap -n '__quilltap_using_subcommand db' -l 'repl' -d 'Open SQL REPL'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'repl' -d 'Open SQL REPL (read-only unless --write)'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'write' -d 'Open database read-write (lock-gated)'
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'llm-logs' -d 'Target llm-logs database'
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'mount-points' -d 'Target mount-index database'
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'lock-status' -d 'Show instance lock status'

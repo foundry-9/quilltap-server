@@ -141,11 +141,15 @@ Most subcommands accept `--json` (for piping) and `--limit N`. Names are case-in
 ```bash
 quilltap db --tables                                # List tables in active DB
 quilltap db --count chat_messages                   # Row count
-quilltap db "SELECT id FROM characters LIMIT 5"     # Raw SQL
-quilltap db --repl                                  # Interactive prompt
+quilltap db "SELECT id FROM characters LIMIT 5"     # Raw SQL (read-only)
+quilltap db --repl                                  # Interactive prompt (read-only)
+quilltap db --write "UPDATE characters SET title = 'rival' WHERE id = '...'"
+quilltap db --repl --write                          # Interactive, read-write
 quilltap db --llm-logs --tables                     # Target the LLM logs DB
 quilltap db --mount-points --tables                 # Target the mount index DB
 ```
+
+The database is opened **read-only by default**. Add `--write` to make changes: it opens the database read-write, **claims the instance lock** (`<dataDir>/quilltap.lock`) for the duration, and releases it on exit. It **refuses — with no override — if a running server or another instance holds the lock**, so stop the server first. `--repl` is read-only unless combined with `--write`. Attempting a write without `--write` fails with a hint to re-run with the flag.
 
 In the REPL, `.cols <table>` and `.find <text>` mirror the subcommand helpers.
 

@@ -113,7 +113,7 @@ _quilltap_complete() {
       local db_flags="--instance --data-dir --passphrase --json --limit --grep \
         --character --project --about --source --chat --message --rendered --field \
         --tail --last --full --from --type --out --id --diverged --blocked --help \
-        --tables --count --repl --llm-logs --mount-points \
+        --tables --count --repl --write --llm-logs --mount-points \
         --lock-status --lock-clean --lock-override"
       if [[ -z "$subverb" ]]; then
         if [[ "$cur" == -* ]]; then

@@ -103,9 +103,14 @@ npx quilltap db log <id> [--field request|response|both]    # Full LLM request/r
 ### Low-level (still supported)
 
 ```bash
+# The db command opens the database READ-ONLY by default. Add --write to make changes;
+# --write claims the instance lock for the duration and refuses if a server/another
+# instance holds it (no override). --repl is read-only unless combined with --write.
 npx quilltap db --tables                           # List tables in active DB
-npx quilltap db "SELECT COUNT(*) FROM characters;" # Run arbitrary SQL
-npx quilltap db --repl                             # Interactive REPL (.cols, .find shortcuts)
+npx quilltap db "SELECT COUNT(*) FROM characters;" # Run arbitrary SQL (read-only)
+npx quilltap db --repl                             # Interactive REPL, read-only (.cols, .find shortcuts)
+npx quilltap db --write "UPDATE characters SET title = 'rival' WHERE id = '...';"  # Lock-gated write
+npx quilltap db --repl --write                     # Interactive REPL, read-write
 npx quilltap db --count chat_messages              # Row count
 
 # LLM logs database
