@@ -313,6 +313,50 @@ describe('tiered-mount-pool', () => {
     })
   })
 
+  describe('doc-edit accessible write set (group writability)', () => {
+    // The doc-edit write path computes its accessible-mount set via
+    // resolveTieredMountPool({ characterId, characterIds }, { includeParticipants: true })
+    // then flattenTierPool(pool, { includeParticipants: true }). Group mounts must be
+    // treated like the character's own tier (writable), NOT like the read-only
+    // participant (peer-vault) tier. These tests assert that property at the seam.
+    beforeEach(() => {
+      mockFindMembersByCharacterId.mockImplementation(async (characterId: string) =>
+        characterId === 'member' ? [{ groupId: 'G1' }] : [],
+      )
+      mockFindGroupByIdRaw.mockResolvedValue({ id: 'G1', officialMountPointId: 'g1-official' })
+      mockFindGroupLinks.mockResolvedValue([{ mountPointId: 'g1-linked' }])
+      mockFindCharacterById.mockImplementation(async (id: string) => {
+        const map: Record<string, string> = { peer: 'peer-vault' }
+        return { id, userId: 'u1', characterDocumentMountPointId: map[id] ?? null }
+      })
+    })
+
+    it('a member: the group official + linked stores enter the writable flatten and classify as `group` (not participant)', async () => {
+      const pool = await resolveTieredMountPool(
+        { characterId: 'member', characterMountPointId: 'm-vault', characterIds: ['peer'] },
+        { includeParticipants: true },
+      )
+      const accessible = flattenTierPool(pool, { includeParticipants: true })
+      expect(accessible).toEqual(expect.arrayContaining(['g1-official', 'g1-linked']))
+      // Group mounts are the `group` tier — the writable seam treats this like the
+      // character's own tier, unlike the read-only `participant` (peer) tier.
+      expect(classifyMountTier('g1-official', pool)).toBe('group')
+      expect(classifyMountTier('g1-linked', pool)).toBe('group')
+      expect(classifyMountTier('peer-vault', pool)).toBe('participant')
+    })
+
+    it('a non-member co-participant: the same group stores never enter their accessible set', async () => {
+      const pool = await resolveTieredMountPool(
+        { characterId: 'other', characterMountPointId: 'o-vault', characterIds: ['member'] },
+        { includeParticipants: true },
+      )
+      const accessible = flattenTierPool(pool, { includeParticipants: true })
+      expect(accessible).not.toContain('g1-official')
+      expect(accessible).not.toContain('g1-linked')
+      expect(pool.groupMountPointIds).toEqual([])
+    })
+  })
+
   describe('resolveProjectMountPointIds', () => {
     it('returns [] for a missing project id', async () => {
       expect(await resolveProjectMountPointIds(null)).toEqual([])
