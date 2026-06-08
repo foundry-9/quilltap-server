@@ -5,11 +5,19 @@
  * side-effects committed here persist independently of whether the job's
  * later buffered writes succeed.
  *
- * Currently only `uploadFile` is supported — the child cannot execute
- * `writeProjectFileToMountStore` because that path issues real DB writes
- * (`docMountBlobs.create`, `docMountFiles.create`, `docMountPoints.refreshStats`)
- * with server-computed return values that the child proxy's synthetic
- * write results cannot model.
+ * Supported methods all share one root cause: they issue real DB writes
+ * (`docMountBlobs.create`, `docMountFiles.create` / `docMountFileLinks.linkBlobContent`,
+ * `docMountPoints.refreshStats`) whose server-computed return values
+ * (`storageKey`, `blobId`, `linkId`) the child proxy's synthetic buffered
+ * writes cannot model:
+ *   - `uploadFile` — project-scoped `FileStorageManager.uploadFile`
+ *     (→ `writeProjectFileToMountStore`)
+ *   - `writeCharacterAvatarToVault` — project-less character-vault avatar writes
+ *   - `writeLanternBackgroundToMountStore` — project-less Lantern background writes
+ *
+ * Each bridge short-circuits to `callHost(...)` when running in the child;
+ * the parent re-enters the same bridge here on its RW connection (where
+ * `QUILLTAP_JOB_CHILD` is unset, so there is no re-dispatch loop).
  */
 
 import { logger } from '@/lib/logger';
@@ -59,6 +67,20 @@ async function runMethod(
       const { fileStorageManager } = await import('@/lib/file-storage/manager');
       const params = args[0] as Parameters<typeof fileStorageManager.uploadFile>[0];
       return fileStorageManager.uploadFile(params);
+    }
+    case 'writeCharacterAvatarToVault': {
+      const { writeCharacterAvatarToVault } = await import(
+        '@/lib/file-storage/character-vault-bridge'
+      );
+      const params = args[0] as Parameters<typeof writeCharacterAvatarToVault>[0];
+      return writeCharacterAvatarToVault(params);
+    }
+    case 'writeLanternBackgroundToMountStore': {
+      const { writeLanternBackgroundToMountStore } = await import(
+        '@/lib/file-storage/lantern-store-bridge'
+      );
+      const params = args[0] as Parameters<typeof writeLanternBackgroundToMountStore>[0];
+      return writeLanternBackgroundToMountStore(params);
     }
     default: {
       const exhaustive: never = method;

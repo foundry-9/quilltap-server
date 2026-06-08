@@ -131,13 +131,22 @@ export interface ChildShutdownAckMessage {
  * by host RPCs are NOT rolled back if the job's later buffered writes
  * fail; periodic file reconciliation cleans up any orphan blobs.
  *
+ * Supported methods, all routing to the parent's RW file-storage layer:
+ *   - `uploadFile` — project-scoped `FileStorageManager.uploadFile`
+ *   - `writeCharacterAvatarToVault` — the project-less character-vault bridge
+ *   - `writeLanternBackgroundToMountStore` — the project-less Lantern bridge
+ * The latter two embed a server-generated `blobId`/`linkId` (deduped by sha,
+ * so the id may reference a pre-existing blob) into the returned `storageKey`,
+ * which the handler persists into `files.create` — a buffered/synthetic id
+ * would dangle, hence host-RPC rather than the buffered-write proxy.
+ *
  * `args` must be structured-clone-serialisable (Buffers OK because the
  * fork is configured with `serialization: 'advanced'`).
  */
 export interface ChildHostRpcRequestMessage {
   type: 'host-rpc';
   requestId: string;
-  method: 'uploadFile';
+  method: 'uploadFile' | 'writeCharacterAvatarToVault' | 'writeLanternBackgroundToMountStore';
   args: unknown[];
 }
 

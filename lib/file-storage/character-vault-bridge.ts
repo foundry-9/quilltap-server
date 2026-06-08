@@ -125,6 +125,18 @@ interface WriteAvatarResult {
 export async function writeCharacterAvatarToVault(
   input: WriteAvatarInput
 ): Promise<WriteAvatarResult> {
+  // In the forked job child the DB connection is readonly and writes are
+  // buffered (no read-your-writes). The `linkBlobContent` insert below returns
+  // a server-generated `blobId`/`linkId` (deduped by sha, so it may reference a
+  // pre-existing blob) that gets baked into the returned `storageKey` and
+  // persisted into `files.create`; a buffered/synthetic id would dangle. Route
+  // the whole write to the parent's RW connection via host-RPC and return the
+  // real result. Mirrors `FileStorageManager.uploadFile`.
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    const { callHost } = await import('@/lib/background-jobs/child/host-rpc-client');
+    return callHost<WriteAvatarResult>('writeCharacterAvatarToVault', input);
+  }
+
   const target = await getCharacterVaultStore(input.characterId);
   if (!target) {
     throw new Error(

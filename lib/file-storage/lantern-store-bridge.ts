@@ -84,6 +84,21 @@ interface WriteLanternBackgroundResult {
 export async function writeLanternBackgroundToMountStore(
   input: WriteLanternBackgroundInput
 ): Promise<WriteLanternBackgroundResult> {
+  // In the forked job child the DB connection is readonly and writes are
+  // buffered (no read-your-writes). The `linkBlobContent` insert below returns
+  // a server-generated `blobId` (deduped by sha, so it may reference a
+  // pre-existing blob) that gets baked into the returned `storageKey` and
+  // persisted into `files.create`; a buffered/synthetic id would dangle. Route
+  // the whole write to the parent's RW connection via host-RPC and return the
+  // real result. Mirrors `FileStorageManager.uploadFile`.
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    const { callHost } = await import('@/lib/background-jobs/child/host-rpc-client');
+    return callHost<WriteLanternBackgroundResult>(
+      'writeLanternBackgroundToMountStore',
+      input,
+    );
+  }
+
   const target = await getLanternBackgroundsStore();
   if (!target) {
     throw new Error('Lantern Backgrounds mount has not been provisioned');
