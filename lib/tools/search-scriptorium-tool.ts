@@ -27,10 +27,10 @@ export const searchScriptoriumToolInputSchema = z.object({
     )
     .optional(),
   scope: z
-    .enum(['all', 'project', 'character'])
+    .enum(['all', 'project', 'character', 'group'])
     .default('all')
     .describe(
-      "Which document stores the `documents` and `knowledge` sources reach into. \"all\" (the default) searches every store you can see — your own character vault, every document store linked to this chat's project, and the instance-wide Quilltap General store. \"project\" narrows to just the document stores linked to this chat's project (returns nothing if no project is attached). \"character\" narrows to just your own character vault. `scope` has no effect on `memories` or `conversations`."
+      "Which document stores the `documents` and `knowledge` sources reach into. \"all\" (the default) searches every store you can see — your own character vault, the stores of every group you belong to, every document store linked to this chat's project, and the instance-wide Quilltap General store. \"project\" narrows to just the document stores linked to this chat's project (returns nothing if no project is attached). \"character\" narrows to just your own character vault. \"group\" narrows to just the document stores of the groups you are a member of (returns nothing if you belong to no groups). `scope` has no effect on `memories` or `conversations`."
     )
     .optional(),
   limit: z
@@ -84,7 +84,7 @@ export interface SearchScriptoriumResult {
     chunkIndex?: number
     headingContext?: string
     // Knowledge-specific
-    knowledgeTier?: 'character' | 'project' | 'global'
+    knowledgeTier?: 'character' | 'group' | 'project' | 'global'
   }
 }
 

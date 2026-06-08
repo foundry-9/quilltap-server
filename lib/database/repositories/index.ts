@@ -26,6 +26,7 @@ export { LLMLogsRepository } from './llm-logs.repository';
 export { MemoriesRepository } from './memories.repository';
 export { PluginConfigRepository } from './plugin-config.repository';
 export { ProjectsRepository } from './projects.repository';
+export { GroupsRepository } from './groups.repository';
 export { PromptTemplatesRepository } from './prompt-templates.repository';
 export { ProviderModelsRepository } from './provider-models.repository';
 export { RoleplayTemplatesRepository } from './roleplay-templates.repository';
@@ -47,6 +48,8 @@ export { DocMountChunksRepository } from './doc-mount-chunks.repository';
 export { DocMountDocumentsRepository } from './doc-mount-documents.repository';
 export { DocMountBlobsRepository } from './doc-mount-blobs.repository';
 export { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
+export { GroupDocMountLinksRepository } from './group-doc-mount-links.repository';
+export { GroupCharacterMembersRepository } from './group-character-members.repository';
 export { ChatDocumentsRepository } from './chat-documents.repository';
 export { TerminalSessionsRepository } from './terminal-sessions.repository';
 export { TextReplacementRulesRepository, TextReplacementRuleConflictError } from './text-replacement-rules.repository';
@@ -65,6 +68,7 @@ import { LLMLogsRepository } from './llm-logs.repository';
 import { MemoriesRepository } from './memories.repository';
 import { PluginConfigRepository } from './plugin-config.repository';
 import { ProjectsRepository } from './projects.repository';
+import { GroupsRepository } from './groups.repository';
 import { PromptTemplatesRepository } from './prompt-templates.repository';
 import { ProviderModelsRepository } from './provider-models.repository';
 import { RoleplayTemplatesRepository } from './roleplay-templates.repository';
@@ -86,6 +90,8 @@ import { DocMountChunksRepository } from './doc-mount-chunks.repository';
 import { DocMountDocumentsRepository } from './doc-mount-documents.repository';
 import { DocMountBlobsRepository } from './doc-mount-blobs.repository';
 import { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
+import { GroupDocMountLinksRepository } from './group-doc-mount-links.repository';
+import { GroupCharacterMembersRepository } from './group-character-members.repository';
 import { ChatDocumentsRepository } from './chat-documents.repository';
 import { TerminalSessionsRepository } from './terminal-sessions.repository';
 import { TextReplacementRulesRepository } from './text-replacement-rules.repository';
@@ -109,6 +115,7 @@ export interface RepositoryContainer {
   memories: MemoriesRepository;
   pluginConfigs: PluginConfigRepository;
   projects: ProjectsRepository;
+  groups: GroupsRepository;
   promptTemplates: PromptTemplatesRepository;
   providerModels: ProviderModelsRepository;
   roleplayTemplates: RoleplayTemplatesRepository;
@@ -130,6 +137,8 @@ export interface RepositoryContainer {
   docMountDocuments: DocMountDocumentsRepository;
   docMountBlobs: DocMountBlobsRepository;
   projectDocMountLinks: ProjectDocMountLinksRepository;
+  groupDocMountLinks: GroupDocMountLinksRepository;
+  groupCharacterMembers: GroupCharacterMembersRepository;
   chatDocuments: ChatDocumentsRepository;
   terminalSessions: TerminalSessionsRepository;
   textReplacementRules: TextReplacementRulesRepository;
@@ -165,6 +174,7 @@ export function createRepositories(): RepositoryContainer {
       memories: new MemoriesRepository(),
       pluginConfigs: new PluginConfigRepository(),
       projects: new ProjectsRepository(),
+      groups: new GroupsRepository(),
       promptTemplates: new PromptTemplatesRepository(),
       providerModels: new ProviderModelsRepository(),
       roleplayTemplates: new RoleplayTemplatesRepository(),
@@ -186,6 +196,8 @@ export function createRepositories(): RepositoryContainer {
       docMountDocuments: new DocMountDocumentsRepository(),
       docMountBlobs: new DocMountBlobsRepository(),
       projectDocMountLinks: new ProjectDocMountLinksRepository(),
+      groupDocMountLinks: new GroupDocMountLinksRepository(),
+      groupCharacterMembers: new GroupCharacterMembersRepository(),
       chatDocuments: new ChatDocumentsRepository(),
       terminalSessions: new TerminalSessionsRepository(),
       textReplacementRules: new TextReplacementRulesRepository(),

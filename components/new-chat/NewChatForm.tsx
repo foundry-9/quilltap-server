@@ -13,6 +13,7 @@ import { AutonomousRoomCard } from './AutonomousRoomCard'
 import type {
   ConnectionProfile,
   GeneralScenarioOption,
+  GroupScenarioOption,
   ImageProfile,
   NewChatAutonomousState,
   NewChatFormState,
@@ -25,6 +26,7 @@ import type { ProjectListEntry } from './hooks/useNewChat'
 import {
   CUSTOM_SCENARIO_VALUE,
   GENERAL_SCENARIO_PREFIX,
+  GROUP_SCENARIO_PREFIX,
   PROJECT_SCENARIO_PREFIX,
 } from './types'
 
@@ -41,6 +43,8 @@ interface NewChatFormProps {
   projectScenarios?: ProjectScenarioOption[]
   /** General scenarios from `/api/v1/scenarios`; fetched for every non-help chat. */
   generalScenarios?: GeneralScenarioOption[]
+  /** Group scenarios from `/api/v1/groups/scenarios?characterIds=...`; fetched when characters are selected. */
+  groupScenarios?: GroupScenarioOption[]
   /**
    * In-form project picker plumbing. When `availableProjects` is non-empty and
    * `onSelectedProjectIdChange` is supplied, the form renders a dropdown so the
@@ -92,6 +96,7 @@ export function NewChatForm({
   project,
   projectScenarios = [],
   generalScenarios = [],
+  groupScenarios = [],
   availableProjects,
   selectedProjectId,
   onSelectedProjectIdChange,
@@ -117,14 +122,34 @@ export function NewChatForm({
 
   const hasProjectScenarios = projectScenarios.length > 0
   const hasGeneralScenarios = generalScenarios.length > 0
+  const hasGroupScenarios = groupScenarios.length > 0
   const hasCharacterScenarios = singleCharacterScenarios && singleCharacterScenarios.length > 0
-  const showScenarioDropdown = hasProjectScenarios || hasGeneralScenarios || hasCharacterScenarios
+  const showScenarioDropdown = hasProjectScenarios || hasGeneralScenarios || hasGroupScenarios || hasCharacterScenarios
+
+  // Group scenarios by groupId for rendering as optgroups
+  const groupScenariosByGroup = useMemo(() => {
+    const groups = new Map<string, { groupName: string; scenarios: GroupScenarioOption[] }>()
+    for (const scenario of groupScenarios) {
+      if (!groups.has(scenario.groupId)) {
+        groups.set(scenario.groupId, { groupName: scenario.groupName, scenarios: [] })
+      }
+      groups.get(scenario.groupId)!.scenarios.push(scenario)
+    }
+    return groups
+  }, [groupScenarios])
 
   const selectedProjectScenario = state.projectScenarioPath
     ? projectScenarios.find((s) => s.path === state.projectScenarioPath)
     : undefined
   const selectedGeneralScenario = state.generalScenarioPath
     ? generalScenarios.find((s) => s.path === state.generalScenarioPath)
+    : undefined
+  const selectedGroupScenario = state.groupScenarioPath
+    ? groupScenarios.find(
+        (s) =>
+          s.path === state.groupScenarioPath &&
+          s.groupId === state.groupScenarioGroupId
+      )
     : undefined
   const selectedCharacterScenario = state.scenarioId
     ? singleCharacterScenarios?.find((s) => s.id === state.scenarioId)
@@ -133,9 +158,11 @@ export function NewChatForm({
     ? { kind: 'project' as const, content: selectedProjectScenario.body }
     : selectedGeneralScenario
       ? { kind: 'general' as const, content: selectedGeneralScenario.body }
-      : selectedCharacterScenario
-        ? { kind: 'character' as const, content: selectedCharacterScenario.content }
-        : null
+      : selectedGroupScenario
+        ? { kind: 'group' as const, content: selectedGroupScenario.body }
+        : selectedCharacterScenario
+          ? { kind: 'character' as const, content: selectedCharacterScenario.content }
+          : null
   const showCustomTextarea = !selectedPreset
 
   // The character's own default — used to render the override-visibility note
@@ -155,9 +182,11 @@ export function NewChatForm({
     ? `${PROJECT_SCENARIO_PREFIX}${selectedProjectScenario.path}`
     : selectedGeneralScenario
       ? `${GENERAL_SCENARIO_PREFIX}${selectedGeneralScenario.path}`
-      : selectedCharacterScenario
-        ? selectedCharacterScenario.id
-        : CUSTOM_SCENARIO_VALUE
+      : selectedGroupScenario
+        ? `${GROUP_SCENARIO_PREFIX}${selectedGroupScenario.groupId}:${selectedGroupScenario.path}`
+        : selectedCharacterScenario
+          ? selectedCharacterScenario.id
+          : CUSTOM_SCENARIO_VALUE
 
   const handleScenarioSelectChange = (value: string) => {
     if (value === CUSTOM_SCENARIO_VALUE || value === '') {
@@ -166,6 +195,8 @@ export function NewChatForm({
         scenarioId: null,
         projectScenarioPath: null,
         generalScenarioPath: null,
+        groupScenarioPath: null,
+        groupScenarioGroupId: null,
       }))
       return
     }
@@ -175,6 +206,8 @@ export function NewChatForm({
         ...prev,
         projectScenarioPath: path,
         generalScenarioPath: null,
+        groupScenarioPath: null,
+        groupScenarioGroupId: null,
         scenarioId: null,
         scenario: '',
       }))
@@ -186,10 +219,30 @@ export function NewChatForm({
         ...prev,
         generalScenarioPath: path,
         projectScenarioPath: null,
+        groupScenarioPath: null,
+        groupScenarioGroupId: null,
         scenarioId: null,
         scenario: '',
       }))
       return
+    }
+    if (value.startsWith(GROUP_SCENARIO_PREFIX)) {
+      const rest = value.slice(GROUP_SCENARIO_PREFIX.length)
+      const colonIdx = rest.indexOf(':')
+      if (colonIdx > -1) {
+        const groupId = rest.slice(0, colonIdx)
+        const path = rest.slice(colonIdx + 1)
+        setState((prev) => ({
+          ...prev,
+          groupScenarioPath: path,
+          groupScenarioGroupId: groupId,
+          projectScenarioPath: null,
+          generalScenarioPath: null,
+          scenarioId: null,
+          scenario: '',
+        }))
+        return
+      }
     }
     // Character scenario UUID
     setState((prev) => ({
@@ -197,6 +250,8 @@ export function NewChatForm({
       scenarioId: value,
       projectScenarioPath: null,
       generalScenarioPath: null,
+      groupScenarioPath: null,
+      groupScenarioGroupId: null,
       scenario: '',
     }))
   }
@@ -208,6 +263,8 @@ export function NewChatForm({
       scenarioId: characterDefaultScenario.id,
       projectScenarioPath: null,
       generalScenarioPath: null,
+      groupScenarioPath: null,
+      groupScenarioGroupId: null,
       scenario: '',
     }))
   }
@@ -467,6 +524,17 @@ export function NewChatForm({
                   ))}
                 </optgroup>
               )}
+              {hasGroupScenarios && Array.from(groupScenariosByGroup.entries()).map(([groupId, { groupName, scenarios }]) => (
+                <optgroup key={`group:${groupId}`} label={`Group Scenarios: ${groupName}`}>
+                  {scenarios.map((s) => (
+                    <option key={`group:${groupId}:${s.path}`} value={`${GROUP_SCENARIO_PREFIX}${groupId}:${s.path}`}>
+                      {s.name}
+                      {s.isDefault ? ' (group default)' : ''}
+                      {s.description ? ` — ${s.description}` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
               {hasCharacterScenarios && (
                 <optgroup label="Character Scenarios">
                   {singleCharacterScenarios!.map((s) => (

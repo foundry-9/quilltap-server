@@ -783,6 +783,40 @@ CREATE TABLE "projects" (
 CREATE INDEX "idx_projects_createdAt" ON "projects" ("createdAt" DESC);
 ```
 
+### groups
+
+A **Group** is a cross-section of *characters* (parallel to how a Project is a
+cross-section of files/chats). Like `projects`, the `groups` row is slim: only
+`id`, `name`, `officialMountPointId`, and the timestamps are columns. Everything
+else lives in the group's **official document store** (the mount point
+`officialMountPointId` points at) as top-level files:
+
+| Hydrated field(s) | Store file | Format |
+| --- | --- | --- |
+| `description` | `description.md` | Markdown body |
+| `instructions` | `instructions.md` | Markdown body |
+| `state` | `state.json` | the JSON object |
+| `color`, `icon` | `properties.json` | one flat JSON object |
+
+The repository (`groups.repository.ts`) overlays these files on read
+(`applyGroupStoreOverlay`) and routes them back to the store on write, so the
+hydrated `Group` object is unchanged for callers. The official store also holds a
+`Scenarios/` folder and a `Knowledge/` folder. Group membership and *additional
+linked* stores live in the mount-index database (`group_character_members` and
+`group_doc_mount_links`).
+
+```sql
+CREATE TABLE "groups" (
+  "id" TEXT PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "officialMountPointId" TEXT DEFAULT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
+CREATE INDEX "idx_groups_name" ON "groups" ("name");
+```
+
 ### files
 
 ```sql
@@ -1422,6 +1456,55 @@ CREATE TABLE IF NOT EXISTS "project_doc_mount_links" (
 ```
 
 Note: `projectId` references the `projects` table in the main database. Cross-database foreign keys are not enforced by SQLite; referential integrity is maintained at the application layer.
+
+### group_doc_mount_links
+
+A group's *additional linked* stores (the official store is recorded on the
+`groups` row as `officialMountPointId`, not here). Direct analogue of
+`project_doc_mount_links`.
+
+```sql
+CREATE TABLE IF NOT EXISTS "group_doc_mount_links" (
+  "id" TEXT PRIMARY KEY,
+  "groupId" TEXT NOT NULL,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+-- UNIQUE(groupId, mountPointId) prevents duplicate links and serves
+-- groupId-prefix lookups (so no separate groupId index is kept).
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_group_doc_mount_links_group_mount"
+  ON "group_doc_mount_links" ("groupId", "mountPointId");
+CREATE INDEX IF NOT EXISTS "idx_group_doc_mount_links_mountPointId"
+  ON "group_doc_mount_links" ("mountPointId");
+```
+
+Note: `groupId` references the `groups` table in the main database. Cross-database foreign keys are not enforced by SQLite; referential integrity is maintained at the application layer.
+
+### group_character_members
+
+Many-to-many membership between characters and groups. `findByCharacterId` is the
+hot path for per-responding-character tier resolution, so `characterId` is
+indexed.
+
+```sql
+CREATE TABLE IF NOT EXISTS "group_character_members" (
+  "id" TEXT PRIMARY KEY,
+  "groupId" TEXT NOT NULL,
+  "characterId" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+-- characterId is the hot path for per-responding-character tier resolution.
+CREATE INDEX IF NOT EXISTS "idx_group_character_members_characterId"
+  ON "group_character_members" ("characterId");
+-- UNIQUE(groupId, characterId) prevents duplicate memberships and serves
+-- groupId-prefix lookups (so no separate groupId index is kept).
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_group_character_members_group_char"
+  ON "group_character_members" ("groupId", "characterId");
+```
+
+Note: both `groupId` and `characterId` reference tables in the main database (`groups`, `characters`). Cross-database foreign keys are not enforced by SQLite; referential integrity is maintained at the application layer.
 
 ### doc_mount_documents
 

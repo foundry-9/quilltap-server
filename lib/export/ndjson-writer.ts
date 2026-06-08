@@ -20,6 +20,7 @@ import type {
   ExportedChat,
   ExportedRoleplayTemplate,
   ExportedProject,
+  ExportedGroup,
   SanitizedConnectionProfile,
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
@@ -414,6 +415,58 @@ async function* streamProjects(
   }
 }
 
+async function* streamGroups(
+  userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const repos = getUserRepositories(userId);
+  for (const id of ids) {
+    const group = await repos.groups.findById(id);
+    if (!group) continue;
+
+    logger.debug('Exporting group', { groupId: id, groupName: group.name });
+
+    const memberCharacterIds: string[] = [];
+    const memberNames: string[] = [];
+    try {
+      const members = await repos.groupCharacterMembers.findByGroupId(id);
+      for (const member of members) {
+        memberCharacterIds.push(member.characterId);
+        const character = await repos.characters.findById(member.characterId);
+        if (character) memberNames.push(character.name);
+      }
+    } catch (error) {
+      logger.warn('Failed to load group members for export', {
+        groupId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const linkedStoreMountPointIds: string[] = [];
+    try {
+      const links = await repos.groupDocMountLinks.findByGroupId(id);
+      for (const link of links) {
+        linkedStoreMountPointIds.push(link.mountPointId);
+      }
+    } catch (error) {
+      logger.warn('Failed to load group linked stores for export', {
+        groupId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const data: ExportedGroup = {
+      ...group,
+      ...(memberNames.length > 0 && { _memberNames: memberNames }),
+      ...(memberCharacterIds.length > 0 && { _memberCharacterIds: memberCharacterIds }),
+      ...(linkedStoreMountPointIds.length > 0 && { _linkedStoreMountPointIds: linkedStoreMountPointIds }),
+    };
+    yield { kind: 'group', data };
+    bump(counts, 'groups');
+  }
+}
+
 async function* streamDocumentStores(
   _userId: string,
   ids: string[],
@@ -579,6 +632,8 @@ async function resolveExportIds(
       return (await repos.tags.findAll()).map((t) => t.id);
     case 'projects':
       return (await repos.projects.findAll()).map((p) => p.id);
+    case 'groups':
+      return (await repos.groups.findAll()).map((g) => g.id);
     case 'document-stores':
       return (await globalRepos.docMountPoints.findAll()).map((s) => s.id);
     default:
@@ -638,6 +693,9 @@ export async function* streamExportRecords(
       break;
     case 'projects':
       yield* streamProjects(userId, ids, counts);
+      break;
+    case 'groups':
+      yield* streamGroups(userId, ids, counts);
       break;
     case 'document-stores':
       yield* streamDocumentStores(userId, ids, counts);

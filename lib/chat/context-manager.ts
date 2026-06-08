@@ -1033,6 +1033,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     if (!_turnMountPool) {
       _turnMountPool = await resolveTieredMountPool({
         userId,
+        // characterId is REQUIRED for the group tier to resolve — the group
+        // tier is keyed on the responding character's own group memberships
+        // (never the chat). characterMountPointId remains the fast path for the
+        // character vault so the vault lookup is still skipped.
+        characterId: character.id ?? null,
         characterMountPointId: character.characterDocumentMountPointId ?? null,
         projectId: options.chat.projectId ?? null,
       })
@@ -1192,16 +1197,22 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     budget.knowledgeBudget > 0
   ) {
     try {
-      const { characterMountPointId, projectMountPointIds, globalMountPointId } =
+      const { characterMountPointId, groupMountPointIds, projectMountPointIds, globalMountPointId } =
         await getTurnMountPool()
 
-      if (characterMountPointId || projectMountPointIds.length > 0 || globalMountPointId) {
+      if (
+        characterMountPointId ||
+        groupMountPointIds.length > 0 ||
+        projectMountPointIds.length > 0 ||
+        globalMountPointId
+      ) {
         const result = await retrieveKnowledgeForTurn({
           characterId: character.id,
           userId,
           embeddingProfileId,
           query: memorySearchQuery,
           characterMountPointId,
+          groupMountPointIds,
           projectMountPointIds,
           globalMountPointId,
           budgetTokens: budget.knowledgeBudget,

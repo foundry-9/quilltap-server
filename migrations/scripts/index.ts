@@ -304,6 +304,10 @@ import { addTextReplacementsEnabledFieldMigration } from './add-text-replacement
 import { cutoverCharactersToVaultMigration } from './cutover-characters-to-vault';
 // 4.7 project store cutover: move every project field into its official store and drop the DB columns (incl. userId)
 import { cutoverProjectsToStoreMigration } from './cutover-projects-to-store';
+// Groups: slim groups table (main DB)
+import { createGroupsTableMigration } from './create-groups-table';
+// Groups: join tables — group_doc_mount_links + group_character_members (mount-index DB)
+import { createGroupJoinTablesMigration } from './create-group-join-tables';
 // 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
 import { addAutonomousRoomsFieldsMigration } from './add-autonomous-rooms-fields';
 // 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
@@ -660,6 +664,10 @@ export const migrations: Migration[] = [
   addCarinaMessageMetaMigration,
   // 4.7 project store cutover: fold each project into its official document store and drop the legacy columns (incl. userId)
   cutoverProjectsToStoreMigration,
+  // Groups: slim groups table (main DB)
+  createGroupsTableMigration,
+  // Groups: join tables — group_doc_mount_links + group_character_members (mount-index DB)
+  createGroupJoinTablesMigration,
 ];
 
 export {
@@ -969,5 +977,9 @@ export {
   addCarinaMessageMetaMigration,
   // 4.7 project store cutover
   cutoverProjectsToStoreMigration,
+  // Groups: slim groups table (main DB)
+  createGroupsTableMigration,
+  // Groups: join tables — group_doc_mount_links + group_character_members (mount-index DB)
+  createGroupJoinTablesMigration,
 };
 

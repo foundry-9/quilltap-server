@@ -271,6 +271,23 @@ export type {
 } from './project.types';
 
 // ============================================================================
+// GROUP TYPES
+// ============================================================================
+export {
+  GroupSchema,
+  GroupRowSchema,
+  GroupPropertiesSchema,
+  GROUP_STORE_MANAGED_FIELDS,
+} from './group.types';
+
+export type {
+  Group,
+  GroupInput,
+  GroupRow,
+  GroupProperties,
+} from './group.types';
+
+// ============================================================================
 // TEMPLATE TYPES
 // ============================================================================
 export {
@@ -432,6 +449,8 @@ export {
   DocMountFileSchema,
   DocMountChunkSchema,
   ProjectDocMountLinkSchema,
+  GroupDocMountLinkSchema,
+  GroupCharacterMemberSchema,
 } from './mount-index.types';
 
 export type {
@@ -439,4 +458,6 @@ export type {
   DocMountFile,
   DocMountChunk,
   ProjectDocMountLink,
+  GroupDocMountLink,
+  GroupCharacterMember,
 } from './mount-index.types';

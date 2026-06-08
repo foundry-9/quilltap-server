@@ -4,6 +4,20 @@
 
 ### 4.7-dev
 
+#### Groups (cross-sections of characters)
+
+Added Groups: a Group is a cross-section of characters, parallel to how a Project is a cross-section of files/chats. Each group owns an official document store (holding `description.md`, a `Scenarios/` folder, and a `Knowledge/` folder) plus zero-or-more additional linked stores, and surfaces Description/Scenarios/Knowledge into chats, the Commonplace Book, and the search tool. Built to the `docs/developer/features/groups.md` spec.
+
+- **Per-responding-character scope.** Group stores in scope for a turn are the union of the stores of every group the *responding* character is a member of — never the chat's participant set. A character never gains a co-participant's group stores.
+- **Data model.** Slim `groups` row in the main DB (`id`, `name`, `officialMountPointId`, timestamps); membership (`group_character_members`) and additional store links (`group_doc_mount_links`) live in the mount-index DB, mirroring `project_doc_mount_links`. Substantive content (description/instructions/state/color/icon) lives in the official store, overlaid on read (`lib/groups/group-store/`).
+- **Tier resolution.** `lib/mount-index/tiered-mount-pool.ts` gains a `group` tier; full precedence is `character > participant > group > project > global`. `resolveGroupMountPointIdsForCharacter` parallels `resolveProjectMountPointIds`. Group lookups fail soft (catch → empty).
+- **Consumers.** Knowledge injector (new `group` tier with its own literal-boost), scriptorium search (`scope: 'group'` added to the tool enum; included in `scope: 'all'`), and the doc-edit write path (group mounts are writable for members — they resolve from the responding `characterId`, unlike read-only peer vaults). The per-turn context-manager call now passes `characterId` so the group tier resolves.
+- **New Chat scenarios.** A group's `Scenarios/` are offered in the New Chat dialog whenever *any* selected participant is a member, grouped under `Group Scenarios: {name}` (the one sanctioned exception to per-responding-character isolation — a creation-time menu, not a per-turn grant). New `GET /api/v1/groups/scenarios`; chat-create accepts `groupScenarioPath` + `groupScenarioGroupId`.
+- **API.** `/api/v1/groups` (list/create), `/api/v1/groups/[id]` (get/update/delete + `addMember`/`removeMember`/`linkStore`/`unlinkStore` actions, `members`/`stores` reads), plus `[id]/scenarios` and `[id]/mount-points`. Delete drops memberships, unlinks additional stores, and orphans the official store (matching project delete).
+- **UI.** A Groups section above the character grid on the Aurora page, with a group editor (`/aurora/groups/[id]`) for name/description/color/icon, member management, and linked-store management.
+- **Export/import.** Groups participate in `.qtap` export and backup: new `groups` exportType, `ExportedGroup` def, member ids/names + linked-store refs; import recreates groups, relinks stores, and re-establishes membership (skipping members absent from the import set).
+- **Migrations.** `create-groups-table-v1` (main DB) and `create-group-join-tables-v1` (mount-index DB), with startup backfill/re-ensure of official stores and `Scenarios/`+`Knowledge/` folders.
+
 #### Docs: Groups feature handoff plan
 
 Added `docs/developer/features/groups.md`, a build-ready specification for a future Groups feature (a cross-section of characters that owns a designated document store and exposes Description/Scenarios/Knowledge like Projects do, scoped per responding character). Planning document only — no code, schema, or behavior changes.

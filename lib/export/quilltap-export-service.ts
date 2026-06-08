@@ -219,6 +219,23 @@ export async function previewExport(
         break;
       }
 
+      case 'groups': {
+        const allGroups = options.scope === 'all'
+          ? await repos.groups.findAll()
+          : [];
+        const ids = options.scope === 'all'
+          ? allGroups.map(g => g.id)
+          : entityIds;
+
+        for (const id of ids) {
+          const group = await repos.groups.findById(id);
+          if (group) {
+            entities.push({ id: group.id, name: group.name });
+          }
+        }
+        break;
+      }
+
       case 'document-stores': {
         const globalReposDS = getRepositories();
         const allStores = options.scope === 'all'

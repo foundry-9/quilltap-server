@@ -107,7 +107,7 @@ export async function previewImport(
   };
 
   // Preview all entity types
-  const [characters, chats, tags, connectionProfiles, imageProfiles, embeddingProfiles, roleplayTemplates, projects] =
+  const [characters, chats, tags, connectionProfiles, imageProfiles, embeddingProfiles, roleplayTemplates, projects, groups] =
     await Promise.all([
       checkCharacterExists(data.characters),
       checkExists(
@@ -148,6 +148,11 @@ export async function previewImport(
         (id) => repos.projects.findById(id),
         'projects'
       ),
+      checkExists(
+        data.groups,
+        (id) => repos.groups.findById(id),
+        'groups'
+      ),
     ]);
 
   const preview: ImportPreview = {
@@ -161,6 +166,7 @@ export async function previewImport(
       ...(embeddingProfiles.length > 0 && { embeddingProfiles }),
       ...(roleplayTemplates.length > 0 && { roleplayTemplates }),
       ...(projects.length > 0 && { projects }),
+      ...(groups.length > 0 && { groups }),
       ...(data.memories && {
         memories: { count: data.memories.length },
       }),

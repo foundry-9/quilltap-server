@@ -669,6 +669,36 @@ export async function register() {
         });
       }
 
+      // ================================================================
+      // PHASE 3.4b: Group store backfill + scenario/knowledge infrastructure
+      // ================================================================
+      // Groups mirror projects: each group's official store holds
+      // description.md / properties.json / state.json plus Scenarios/ and
+      // Knowledge/ folders. Backfill populates store files for any group whose
+      // store is missing them (imports / a blocked migration), then ensure the
+      // official store pointer and the two folders exist. Both idempotent and
+      // synchronous so stores are visible before the first request hits.
+      try {
+        const { backfillGroupStores } = await import('./lib/startup/backfill-group-stores');
+        await backfillGroupStores();
+      } catch (backfillError) {
+        logger.warn('Error during group store backfill, continuing startup', {
+          context: 'instrumentation.register',
+          error: backfillError instanceof Error ? backfillError.message : String(backfillError),
+        });
+      }
+      try {
+        const { ensureGroupScenariosForAllGroups } = await import(
+          './lib/startup/ensure-group-scenarios'
+        );
+        await ensureGroupScenariosForAllGroups();
+      } catch (ensureError) {
+        logger.warn('Error ensuring group scenario infrastructure, continuing startup', {
+          context: 'instrumentation.register',
+          error: ensureError instanceof Error ? ensureError.message : String(ensureError),
+        });
+      }
+
       // Companion: ensure the instance-wide "Quilltap General" mount has its
       // Scenarios/ folder. Idempotent and silent when the provisioning
       // migration hasn't run yet (returns null mountPointId).

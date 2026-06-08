@@ -35,6 +35,7 @@ import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search';
 import {
   LITERAL_BOOST_CHARACTER,
+  LITERAL_BOOST_GROUP,
   LITERAL_BOOST_PROJECT,
   LITERAL_BOOST_GLOBAL,
 } from '@/lib/embedding/literal-boost';
@@ -51,7 +52,7 @@ const DEFAULT_INLINE_TOKEN_THRESHOLD = 500;
 const DEFAULT_MIN_SCORE = 0.3;
 const POINTER_TEASER_MAX_CHARS = 120;
 
-export type KnowledgeTier = 'character' | 'project' | 'global';
+export type KnowledgeTier = 'character' | 'group' | 'project' | 'global';
 
 export interface KnowledgeRetrievalParams {
   characterId: string;
@@ -63,6 +64,12 @@ export interface KnowledgeRetrievalParams {
    * folder under it gets the tightest literal-boost (character tier).
    */
   characterMountPointId?: string | null;
+  /**
+   * Mount points of the stores belonging to the groups the RESPONDING character
+   * is a member of (official + linked). The Knowledge/ folder under each gets
+   * the group-tier literal-boost — tighter than project, looser than character.
+   */
+  groupMountPointIds?: string[];
   /**
    * Mount points linked to the active chat's project. The Knowledge/
    * folder under each gets the project-tier literal-boost.
@@ -132,10 +139,11 @@ export async function retrieveKnowledgeForTurn(
   // Build the tier plan, dropping duplicates between tiers so the same
   // mount can't enter the pool twice if a user has somehow linked their
   // character vault into a project, etc. Dedup is delegated to the shared
-  // `dedupeTierTriple` so the priority (character > project > global) stays
-  // identical to the scriptorium search / wardrobe / path resolver.
-  const { characterMountPointId, projectMountPointIds, globalMountPointId } = dedupeTierTriple({
+  // `dedupeTierTriple` so the priority (character > group > project > global)
+  // stays identical to the scriptorium search / wardrobe / path resolver.
+  const { characterMountPointId, groupMountPointIds, projectMountPointIds, globalMountPointId } = dedupeTierTriple({
     characterMountPointId: params.characterMountPointId ?? null,
+    groupMountPointIds: params.groupMountPointIds ?? [],
     projectMountPointIds: params.projectMountPointIds ?? [],
     globalMountPointId: params.globalMountPointId ?? null,
   });
@@ -143,6 +151,9 @@ export async function retrieveKnowledgeForTurn(
   const tiers: Array<{ tier: KnowledgeTier; mountPointIds: string[]; boost: number }> = [];
   if (characterMountPointId) {
     tiers.push({ tier: 'character', mountPointIds: [characterMountPointId], boost: LITERAL_BOOST_CHARACTER });
+  }
+  if ((groupMountPointIds ?? []).length > 0) {
+    tiers.push({ tier: 'group', mountPointIds: groupMountPointIds ?? [], boost: LITERAL_BOOST_GROUP });
   }
   if (projectMountPointIds.length > 0) {
     tiers.push({ tier: 'project', mountPointIds: projectMountPointIds, boost: LITERAL_BOOST_PROJECT });

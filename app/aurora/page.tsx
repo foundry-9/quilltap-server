@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
@@ -15,6 +15,8 @@ import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { processTemplate } from '@/lib/templates/processor'
+import { useGroups } from '@/app/aurora/hooks/useGroups'
+import { GroupsGrid } from '@/app/aurora/components/GroupsGrid'
 
 const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AIImportWizard'), {
   loading: () => <p className="qt-text-muted p-8 text-center">Loading wizard...</p>,
@@ -50,10 +52,20 @@ export default function CharactersPage() {
   const [resetBuiltinsDialogOpen, setResetBuiltinsDialogOpen] = useState(false)
   const [resetBuiltinsInProgress, setResetBuiltinsInProgress] = useState(false)
   const [deleteDialogCharacter, setDeleteDialogCharacter] = useState<Character | null>(null)
+  const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [newGroupDescription, setNewGroupDescription] = useState('')
+  const [creatingGroup, setCreatingGroup] = useState(false)
   const { getProfileProvider } = useConnectionProfiles()
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
   const router = useRouter()
+  const { groups, fetchGroups, deleteGroup, createGroup } = useGroups()
+
+  // Fetch groups on mount
+  useEffect(() => {
+    fetchGroups()
+  }, [fetchGroups])
 
   const { data, isLoading: loading, error: loadError, mutate: mutateCharacters } = useSWR<{ characters: Character[] }>('/api/v1/characters')
   const characters = useMemo(() => data?.characters ?? [], [data])
@@ -168,6 +180,31 @@ export default function CharactersPage() {
     router.push(`/aurora/${characterId}/view`)
   }
 
+  const handleCreateGroup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newGroupName.trim()) return
+
+    try {
+      setCreatingGroup(true)
+      const newGroup = await createGroup(newGroupName, newGroupDescription || null)
+      if (newGroup) {
+        setCreateGroupDialogOpen(false)
+        setNewGroupName('')
+        setNewGroupDescription('')
+        // Navigate to the new group
+        router.push(`/aurora/groups/${newGroup.id}`)
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to create group')
+    } finally {
+      setCreatingGroup(false)
+    }
+  }
+
+  const handleDeleteGroup = useCallback((groupId: string) => {
+    deleteGroup(groupId)
+  }, [deleteGroup])
+
   const handleImport = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
@@ -255,6 +292,13 @@ export default function CharactersPage() {
           >
             Summon From Lore
           </button>
+          <button
+            onClick={() => setCreateGroupDialogOpen(true)}
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Create a new group"
+          >
+            Create Group
+          </button>
           <Link
             href="/aurora/new"
             className="qt-button character-toolbar__button character-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -264,6 +308,18 @@ export default function CharactersPage() {
         </div>
       </div>
 
+      {/* Groups Section — rendered unconditionally so GroupsGrid can show its
+          empty state ("No groups yet") for first-time users. */}
+      <div className="mt-8">
+        <h2 className="qt-heading-2 mb-6 text-foreground">Groups</h2>
+        <GroupsGrid
+          groups={groups}
+          onCreateClick={() => setCreateGroupDialogOpen(true)}
+          onDeleteClick={handleDeleteGroup}
+        />
+      </div>
+
+      {/* Characters Section */}
       {visibleCharacters.length === 0 ? (
         <div className="character-empty-state mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">
           <p className="mb-4 text-lg qt-text-secondary">No characters yet</p>
@@ -492,6 +548,66 @@ export default function CharactersPage() {
           onClose={() => setDeleteDialogCharacter(null)}
           onConfirm={handleDeleteConfirm}
         />
+      )}
+
+      {/* Create Group Dialog */}
+      {createGroupDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
+            <h3 className="mb-4 qt-dialog-title text-foreground">
+              Create Group
+            </h3>
+            <form onSubmit={handleCreateGroup}>
+              <div className="mb-4">
+                <label className="mb-2 block text-sm font-medium text-foreground">
+                  Group Name *
+                </label>
+                <input
+                  type="text"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="e.g., Adventuring Party"
+                  className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent text-foreground text-sm"
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="mb-6">
+                <label className="mb-2 block text-sm font-medium text-foreground">
+                  Description (optional)
+                </label>
+                <textarea
+                  value={newGroupDescription}
+                  onChange={(e) => setNewGroupDescription(e.target.value)}
+                  placeholder="Optional description of this group"
+                  rows={3}
+                  className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent text-foreground text-sm resize-none"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreateGroupDialogOpen(false)
+                    setNewGroupName('')
+                    setNewGroupDescription('')
+                  }}
+                  disabled={creatingGroup}
+                  className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingGroup || !newGroupName.trim()}
+                  className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {creatingGroup ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
     </div>

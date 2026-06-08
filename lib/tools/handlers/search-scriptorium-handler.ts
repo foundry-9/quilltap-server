@@ -12,6 +12,7 @@ import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search'
 import {
   LITERAL_BOOST_CHARACTER,
+  LITERAL_BOOST_GROUP,
   LITERAL_BOOST_PROJECT,
   LITERAL_BOOST_GLOBAL,
 } from '@/lib/embedding/literal-boost'
@@ -88,6 +89,7 @@ export async function executeSearchScriptoriumTool(
     let pool: TieredMountPool = {
       characterMountPointId: null,
       participantMountPointIds: [],
+      groupMountPointIds: [],
       projectMountPointIds: [],
       globalMountPointId: null,
     }
@@ -112,24 +114,29 @@ export async function executeSearchScriptoriumTool(
     // `character` is the character's own vault only.
     const buildDocumentsPool = (): string[] => flattenTierPool(pool, { scope })
 
-    // Tiers for the `knowledge` source — same three pools, each constrained
-    // to `Knowledge/` paths, with tier-specific literal-phrase boosts so a
-    // hit in the closer voice outranks the same hit in the wider pool.
+    // Tiers for the `knowledge` source — same pools, each constrained to
+    // `Knowledge/` paths, with tier-specific literal-phrase boosts so a hit in
+    // the closer voice outranks the same hit in the wider pool. The `group` tier
+    // is the responding character's group stores (per-character, never the chat).
     const buildKnowledgeTiers = (): Array<{
-      tier: 'character' | 'project' | 'global'
+      tier: 'character' | 'group' | 'project' | 'global'
       mountPointIds: string[]
       boost: number
     }> => {
       const tiers: Array<{
-        tier: 'character' | 'project' | 'global'
+        tier: 'character' | 'group' | 'project' | 'global'
         mountPointIds: string[]
         boost: number
       }> = []
       const wantCharacter = scope === 'all' || scope === 'character'
+      const wantGroup = scope === 'all' || scope === 'group'
       const wantProject = scope === 'all' || scope === 'project'
       const wantGlobal = scope === 'all'
       if (wantCharacter && pool.characterMountPointId) {
         tiers.push({ tier: 'character', mountPointIds: [pool.characterMountPointId], boost: LITERAL_BOOST_CHARACTER })
+      }
+      if (wantGroup && pool.groupMountPointIds.length > 0) {
+        tiers.push({ tier: 'group', mountPointIds: pool.groupMountPointIds, boost: LITERAL_BOOST_GROUP })
       }
       if (wantProject && pool.projectMountPointIds.length > 0) {
         tiers.push({ tier: 'project', mountPointIds: pool.projectMountPointIds, boost: LITERAL_BOOST_PROJECT })
@@ -373,6 +380,7 @@ export async function executeSearchScriptoriumTool(
       documentSources: limitedResults.filter(r => r.sourceType === 'document').length,
       knowledgeSources: limitedResults.filter(r => r.sourceType === 'knowledge').length,
       knowledgeCharacter: limitedResults.filter(r => r.sourceType === 'knowledge' && r.metadata.knowledgeTier === 'character').length,
+      knowledgeGroup: limitedResults.filter(r => r.sourceType === 'knowledge' && r.metadata.knowledgeTier === 'group').length,
       knowledgeProject: limitedResults.filter(r => r.sourceType === 'knowledge' && r.metadata.knowledgeTier === 'project').length,
       knowledgeGlobal: limitedResults.filter(r => r.sourceType === 'knowledge' && r.metadata.knowledgeTier === 'global').length,
     })
