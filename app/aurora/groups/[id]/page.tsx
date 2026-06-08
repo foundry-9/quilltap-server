@@ -6,7 +6,7 @@
  * Edit group details, manage members, and link document stores.
  */
 
-import { useEffect, useState } from 'react'
+import { use, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
@@ -17,7 +17,7 @@ import { useGroupMountPoints } from '../hooks/useGroupMountPoints'
 import type { Group } from '../../types'
 
 interface GroupEditorPageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 function ChevronLeftIcon({ className }: { className?: string }) {
@@ -29,7 +29,7 @@ function ChevronLeftIcon({ className }: { className?: string }) {
 }
 
 export default function GroupEditorPage({ params }: GroupEditorPageProps) {
-  const groupId = params.id
+  const { id: groupId } = use(params)
   const router = useRouter()
 
   const [group, setGroup] = useState<Group | null>(null)

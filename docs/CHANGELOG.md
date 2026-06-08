@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Fix: group editor page crashed under Next.js 16 (params Promise)
+
+The group editor (`app/aurora/groups/[id]/page.tsx`) read `params.id` synchronously, which Next.js 16 no longer allows — `params` is a Promise. The direct access returned `undefined`, so the page logged a sync-dynamic-API console error and then fetched `/api/v1/groups/undefined`, which failed. Unwrapped `params` with `React.use()`, matching every other client page in the app.
+
 #### Character vault reads fail loudly instead of returning hollow characters
 
 Post-4.6-cutover the character vault is the sole source of truth for content fields (the DB columns were dropped), but the read overlay still silently swallowed a missing/unreadable vault and returned a character with blank identity/description/manifesto/personality/etc. — and the `// falling back to DB values` path had no DB to fall back to. Aligned the character overlay with the project/group store contract so a broken vault fails loudly.
