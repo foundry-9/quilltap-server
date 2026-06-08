@@ -122,28 +122,70 @@ export async function reindexSingleFile(
       relativePath
     );
 
-    if (existingLink) {
+    // Resolve the link the new chunks attach to.
+    //
+    // Database-backed stores keep their bytes in doc_mount_documents /
+    // doc_mount_blobs, and their file row + link are written by the content
+    // writer (linkDocumentContent / linkBlobContent) before reindex ever runs.
+    // We must NOT route them through linkFilesystemFile: that helper resolves a
+    // file row by (sha256, source = 'database') and, finding none — which is the
+    // case whenever the content was copied in from a filesystem mount, whose
+    // only file row carries source = 'filesystem' — forks a brand-new,
+    // content-less file row and repoints the link to it. That severs the
+    // document from its doc_mount_documents content row, leaving the file listed
+    // but unopenable. So for database stores we refresh chunk metadata on the
+    // existing link in place and leave the file row / content row untouched.
+    let linkId: string;
+    if (isDatabaseBacked) {
+      if (!existingLink) {
+        // The content writer always creates the link first; with no link there
+        // is nothing to reindex against, and fabricating a file row here would
+        // create exactly the content-less orphan this branch exists to avoid.
+        logger.warn('Skipping reindex: database-backed file has no link row', {
+          mountPointId,
+          relativePath,
+        });
+        return;
+      }
       await repos.docMountChunks.deleteByLinkId(existingLink.id);
+      await repos.docMountFileLinks.update(existingLink.id, {
+        conversionStatus: 'converted',
+        plainTextLength: plainText.length,
+        chunkCount: chunks.length,
+        lastModified: lastModifiedIso,
+      });
+      linkId = existingLink.id;
+      logger.debug('Reindexed database-backed file in place (content row untouched)', {
+        mountPointId,
+        relativePath,
+        linkId,
+        chunkCount: chunks.length,
+        plainTextLength: plainText.length,
+      });
+    } else {
+      if (existingLink) {
+        await repos.docMountChunks.deleteByLinkId(existingLink.id);
+      }
+      const link = await repos.docMountFileLinks.linkFilesystemFile({
+        mountPointId,
+        relativePath,
+        fileName: path.basename(relativePath),
+        fileType,
+        sha256,
+        fileSizeBytes,
+        lastModified: lastModifiedIso,
+        source: 'filesystem',
+        conversionStatus: 'converted',
+        plainTextLength: plainText.length,
+        chunkCount: chunks.length,
+      });
+      linkId = link.id;
     }
-
-    const link = await repos.docMountFileLinks.linkFilesystemFile({
-      mountPointId,
-      relativePath,
-      fileName: path.basename(relativePath),
-      fileType,
-      sha256,
-      fileSizeBytes,
-      lastModified: lastModifiedIso,
-      source: isDatabaseBacked ? 'database' : 'filesystem',
-      conversionStatus: 'converted',
-      plainTextLength: plainText.length,
-      chunkCount: chunks.length,
-    });
 
     // Insert new chunks
     if (chunks.length > 0) {
       const chunkData = chunks.map(chunk => ({
-        linkId: link.id,
+        linkId,
         mountPointId,
         chunkIndex: chunk.chunkIndex,
         content: chunk.content,

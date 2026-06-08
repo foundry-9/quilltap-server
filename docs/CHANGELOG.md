@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### Fix: database-store files copied in from a filesystem store listed but would not open
+
+Copying or writing a text file into a database-backed document store and then re-indexing it could leave the file listed in the Scriptorium but un-openable ("File row exists but no document content"). After the content writer (`linkDocumentContent` / `linkBlobContent`) correctly stored the bytes, `reindexSingleFile` (run via `triggerReindexIfNeeded` after every doc-edit copy/write) re-routed database-backed stores through `linkFilesystemFile`, which is meant for on-disk files. That helper resolves a `doc_mount_files` row by `(sha256, source='database')` and, finding none — which happens whenever the content was copied in from a filesystem mount, whose only file row carries `source='filesystem'` — forks a fresh, content-less file row and repoints the link to it, severing the document from its `doc_mount_documents` content row.
+
+- `lib/doc-edit/reindex-file.ts`: database-backed stores no longer call `linkFilesystemFile`. The file row + link already exist, so reindex now refreshes chunk metadata (`chunkCount`, `plainTextLength`, `conversionStatus`, `lastModified`) on the existing link in place and re-writes its chunks, leaving the file row and content row untouched. If no link exists (which should never happen, since the content writer creates it first) reindex bails with a warning rather than fabricating a content-less row. The filesystem path is unchanged.
+- This also covers blob-backed (pdf/docx) files in database stores, which were vulnerable to the same orphaning.
+- Note: files already orphaned by the old code (one per affected store) still need a one-time repair — re-copy them, or repoint the dangling link to the surviving content row.
+- Tests: `reindex-file-blobs` updated to assert in-place link refresh (no `linkFilesystemFile`), plus a regression test for the missing-link guard.
+
 #### Aurora: Carina toggle on character cards
 
 Added a third toggle — a small console (terminal) icon — to the character card toggle row, sitting between the favorite star and the user-control figure, on both the Aurora roster grid (`app/aurora/page.tsx`) and the character header card (`app/aurora/[id]/view/components/CharacterHeader.tsx`). Clicking it flips the character's `canBeCarina` flag (Carina inline @-query answerer eligibility) without opening the edit form. The icon is filled when enabled, outlined when disabled, mirroring the existing user-control toggle; tooltip reads "Enable/Disable Carina answers (@-queries)".
