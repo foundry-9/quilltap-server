@@ -2,6 +2,11 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.40] - 2026-06-09
+
+### Added
+- `Icons` story: a reference for theme authors listing every override-able Quilltap icon name (grouped by category) plus the override recipe — the `theme.json` `icons` map and the `.svg` (theme-tinted) vs `.webp` (full-color) modes. Exported from `@quilltap/theme-storybook/stories`.
+
 ## [1.0.38] - 2026-06-04
 
 ### Added

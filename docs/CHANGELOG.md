@@ -31,6 +31,15 @@ Themes can now replace any of the app's icons. A `.qtap-theme` bundle declares a
 - **Override modes.** `generateIconOverridesCSS` (`lib/themes/utils.ts`) emits mask mode for `.svg` overrides (keeps `currentColor` tinting) and image mode for `.webp` (full color); the `brand` quill is always image mode so an SVG brand mark isn't monochromed. Asset URLs are stripped of quote/backslash/newline characters before interpolation to prevent CSS injection from a malicious manifest.
 - No DB schema, migration, `.qtap`-export, or DDL change. Bundles that declare no `icons` are unaffected. The authoring tooling and a bundled proof-of-concept land in a later change.
 
+#### Theme icon overrides: authoring tooling + Madman's Box proof-of-concept
+
+Followed the icon-override runtime (above) with author tooling and the first bundled theme to use it.
+
+- **`create-quilltap-theme` (2.0.11):** scaffolded bundles now include an `icons/` folder (with a commented example), mirroring `fonts/`. The bundle README documents the optional `icons` manifest map and the `.svg` (theme-tinted) vs `.webp` (full-color) override modes. The scaffolded Storybook stories include the new `Icons` reference.
+- **`@quilltap/theme-storybook` (1.0.40):** added an `Icons` story — a reference listing every override-able icon name (grouped by category) plus the override recipe (the `theme.json` snippet and the two asset modes), so theme authors can see what's replaceable.
+- **Madman's Box (1.0.1):** the bundled theme now overrides five icons via `icons/` SVGs — a brass quill for the brand mark (full color), and Deco line variants for `settings`, `themes`, `wardrobe`, and `help` (theme-tinted). Demonstrates the override pipeline end to end; the override assets are served by the existing theme assets route. Reactivate the theme (or restart) to pick up the change.
+- No DB schema, migration, `.qtap`-export, or DDL change.
+
 #### Prospero project page: full-width cards for Lexical editors
 
 On a project's detail page (`/prospero/[id]`), the two cards that embed a Lexical editor now span the full grid width instead of sharing a row with other cards. Project Settings (project instructions) dropped its old `row-span-2`, which forced neighboring cards to flex around its tall column, in favor of `col-span-full`; Image Generation (which hosts the two aesthetic editors) gained `col-span-full`. The compact cards (Files, Document Stores, Scenarios, Wardrobe, Characters, Model Behavior) now flow through the multi-column grid first, and the two editor cards stack full-width below them, so the editors get room rather than being squeezed into a single column. Layout-only change — no schema, migration, `.qtap`, or DDL impact.

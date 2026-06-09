@@ -7,6 +7,7 @@
  */
 
 export * from './components/ColorPalette';
+export * from './components/Icons';
 export * from './components/Typography';
 export * from './components/Spacing';
 export * from './components/Buttons';

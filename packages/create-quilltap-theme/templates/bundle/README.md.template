@@ -14,6 +14,7 @@ This is a `.qtap-theme` bundle — a simple directory (or zip archive) containin
 ├── tokens.json     # Design tokens (colors, typography, spacing, effects)
 ├── styles.css      # CSS overrides (optional)
 ├── fonts/          # Custom font files (optional)
+├── icons/          # Icon override assets (optional)
 └── README.md       # This file
 ```
 
@@ -24,6 +25,29 @@ This is a `.qtap-theme` bundle — a simple directory (or zip archive) containin
 - **Spacing/Radius**: Edit `tokens.json` → `spacing` section
 - **Component styles**: Edit `styles.css` for custom CSS overrides
 - **Custom fonts**: Add `.woff2` files to `fonts/` and reference them in `theme.json`
+- **Custom icons**: Add `.svg` or `.webp` files to `icons/` and map them in `theme.json` (see below)
+
+## Custom icons
+
+Quilltap renders its UI icons through a central registry, so a theme can replace
+any of them. Drop replacement assets into `icons/` and add an `icons` map to
+`theme.json`, keyed by Quilltap's built-in icon name:
+
+```json
+{
+  "icons": {
+    "settings": "icons/settings.svg",
+    "brand": "icons/brand.webp"
+  }
+}
+```
+
+- **`.svg` overrides** are tinted by the current text color, exactly like the
+  built-in icons — good for monochrome glyphs that should follow the theme.
+- **`.webp` overrides** are drawn in full color — good for textured or
+  multi-color marks (the `brand` quill is always drawn in full color).
+- Icon names must match Quilltap's built-in names; unknown names are ignored.
+  Run `quilltap themes validate` to catch typos and bad asset paths.
 
 ## Installing
 

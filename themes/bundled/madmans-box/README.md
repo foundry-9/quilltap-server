@@ -26,14 +26,23 @@ lamplit dusk of the cabin — no light mode, regardless of the host's toggle.
 - **Lora** — readable text serif for assistant prose (comfortable at message size)
 - **Fira Code** — the console readout (mono / OOC / terminal)
 
+## Icons
+
+A handful of the app's icons are swapped for hand-cut Deco glyphs via the
+`icons` map in `theme.json`: a brass quill for the brand mark (drawn in full
+color), and theme-tinted line variants for **settings** (a cog), **themes** (a
+brush), **wardrobe** (an armoire), and **help** (an octagon mark). The rest of
+the icons fall back to Quilltap's built-in set.
+
 ## Structure
 
 ```
 madmans-box/
-├── theme.json      # Manifest + font declarations
+├── theme.json      # Manifest + font + icon declarations
 ├── tokens.json     # Colors, typography, spacing, effects
 ├── styles.css      # qt-* overrides + decorative treatments
 ├── fonts/          # Self-hosted woff2 files
+├── icons/          # Deco icon overrides (svg)
 └── README.md       # This file
 ```
 
