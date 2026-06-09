@@ -4,7 +4,8 @@
  * Image Generation Card
  *
  * Card displaying avatar generation, default image profile, and story background
- * settings for a project.
+ * settings for a project. Spans the full grid width because it hosts the Lexical
+ * aesthetic editors, which need room rather than a cramped single column.
  */
 
 import type { Project, BackgroundDisplayMode } from '../types'
@@ -48,7 +49,7 @@ export function ImageGenerationCard({
   onToggle,
 }: ImageGenerationCardProps) {
   return (
-    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">
+    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden col-span-full">
       {/* Header - always visible */}
       <button
         onClick={onToggle}

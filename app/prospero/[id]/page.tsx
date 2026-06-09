@@ -134,9 +134,10 @@ export default function ProjectDetailPage() {
         onSave={handleSave}
       />
 
-      {/* Cards grid - 3 columns on wide desktop, 2 on medium, 1 on mobile
-           Layout: Files          | Characters       | Project Settings (row-span-2)
-                   Model Behavior | Image Generation |                               */}
+      {/* Cards grid - 3 columns on wide desktop, 2 on medium, 1 on mobile.
+           Compact cards flow through the columns; the two cards that host a
+           Lexical editor (Project Settings, Image Generation) span the full
+           width at the bottom so the editors aren't squeezed into a column. */}
       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 grid-flow-row-dense">
         <FilesCard
           files={files}
@@ -170,6 +171,14 @@ export default function ProjectDetailPage() {
           expanded={cardState.characters}
           onToggle={() => toggleCard('characters')}
         />
+        <ModelBehaviorCard
+          project={project}
+          onAgentModeChange={handleSaveAgentMode}
+          expanded={cardState.modelBehavior}
+          onToggle={() => toggleCard('modelBehavior')}
+        />
+        {/* Full-width cards (host Lexical editors) — kept last so they stack
+            across the whole grid instead of flexing beside a compact card. */}
         <SettingsCard
           project={project}
           editForm={editForm}
@@ -177,12 +186,6 @@ export default function ProjectDetailPage() {
           onSave={handleSave}
           expanded={cardState.settings}
           onToggle={() => toggleCard('settings')}
-        />
-        <ModelBehaviorCard
-          project={project}
-          onAgentModeChange={handleSaveAgentMode}
-          expanded={cardState.modelBehavior}
-          onToggle={() => toggleCard('modelBehavior')}
         />
         <ImageGenerationCard
           project={project}

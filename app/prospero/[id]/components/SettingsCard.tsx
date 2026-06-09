@@ -4,7 +4,8 @@
  * Settings Card
  *
  * Card displaying project instructions and project state.
- * Spans two rows in the grid layout to give instructions plenty of room.
+ * Spans the full grid width so the Lexical instructions editor has room to
+ * breathe instead of being squeezed into a single column.
  */
 
 import { useState } from 'react'
@@ -44,7 +45,7 @@ export function SettingsCard({
   const [showStateEditorModal, setShowStateEditorModal] = useState(false)
 
   return (
-    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden row-span-2">
+    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden col-span-full">
       {/* Header - always visible */}
       <button
         onClick={onToggle}
