@@ -39,6 +39,10 @@
  *    link (via the sha256 reverse index); or
  *  - the file is referenced as a character `defaultImageId` or an
  *    `avatarOverrides[].imageId`.
+ *
+ * And if a chat's keep-set can't be fully resolved (a keep-id resolution
+ * throws), the whole chat's collapse is skipped for that run rather than risk
+ * deleting a current asset whose protecting sha256 went missing.
  */
 
 import { logger } from '@/lib/logger';
@@ -107,18 +111,16 @@ async function buildKeepSet(
 
   for (const id of candidateIds) {
     keepIds.add(id);
-    try {
-      const resolved = await resolveCharacterAvatar(id, repos);
-      if (resolved?.sha256) keepShas.add(resolved.sha256);
-    } catch (error) {
-      // An unresolvable keep-id is fine to leave out of the sha set — the raw
-      // id is still in keepIds, and we only ever *skip* on a match.
-      moduleLogger.debug('Could not resolve keep-set asset to a sha256', {
-        chatId: chat.id,
-        imageId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    // Let resolution errors propagate. An incomplete keep-set is dangerous:
+    // in the link-id case the current background/avatar is guarded ONLY by its
+    // sha256 (the raw stored link-id won't match a candidate's files.id), so a
+    // transient resolve failure that drops the sha could make the *current*
+    // asset look deletable. The caller wraps each chat in try/catch, so a throw
+    // here aborts this chat's collapse before any deletion ("when unsure,
+    // skip") and it retries on the next sweep. A clean `null` (the id resolves
+    // to nothing in either table) is safe: there is no live asset to protect.
+    const resolved = await resolveCharacterAvatar(id, repos);
+    if (resolved?.sha256) keepShas.add(resolved.sha256);
   }
 
   return { keepIds, keepShas };

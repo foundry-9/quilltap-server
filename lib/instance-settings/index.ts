@@ -137,8 +137,12 @@ export async function getGeneralMountPointId(): Promise<string | null> {
 
 
 /**
- * Read the timestamp of the last successful scheduled maintenance sweep, as a
+ * Read the timestamp of the last completed scheduled maintenance pass, as a
  * `Date`, or `null` if it has never run (or the stored value is unparseable).
+ * Note this marks when a pass *finished*, not that every sweep within it
+ * succeeded: the scheduler records it at the end of the pass even when an
+ * individual sweep failed (failures are isolated and swallowed), so a transient
+ * error in one sweep doesn't force a full re-run on the next dev restart.
  *
  * The maintenance scheduler (`lib/background-jobs/scheduled-maintenance.ts`)
  * has no job rows to peek at — unlike the memory-housekeeping scheduler, which
@@ -154,7 +158,11 @@ export async function getLastMaintenanceSweepAt(): Promise<Date | null> {
   return Number.isNaN(ts.getTime()) ? null : ts;
 }
 
-/** Record the timestamp of a successful scheduled maintenance sweep (ISO 8601). */
+/**
+ * Record the timestamp of a completed scheduled maintenance pass (ISO 8601).
+ * Written at the end of the pass regardless of whether individual sweeps
+ * failed — it tracks "last attempted pass," not "last fully-successful pass."
+ */
 export async function setLastMaintenanceSweepAt(when: Date = new Date()): Promise<void> {
   await writeSetting(KEY_LAST_MAINTENANCE_SWEEP_AT, when.toISOString());
 }

@@ -145,6 +145,19 @@ describe('collapseStaleChatAssets', () => {
     expect(files.findByLinkedTo).not.toHaveBeenCalledWith('chat-active');
   });
 
+  it('aborts a chat collapse (deletes nothing) when a keep-id fails to resolve', async () => {
+    // A transient resolve failure must not leave the current asset unprotected:
+    // skip the whole chat rather than risk deleting it.
+    mockResolveAvatar.mockRejectedValue(new Error('transient repo error'));
+
+    const summary = await collapseStaleChatAssets(NOW);
+
+    expect(mockDeleteFile).not.toHaveBeenCalled();
+    expect(summary.staleChats).toBe(1);
+    expect(summary.chatsCollapsed).toBe(0);
+    expect(summary.filesDeleted).toBe(0);
+  });
+
   it('is idempotent — a chat with only its current assets is a no-op', async () => {
     files.findByLinkedTo.mockImplementation(async (id: string) =>
       id === 'chat-stale'
