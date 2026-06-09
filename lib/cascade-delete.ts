@@ -15,9 +15,15 @@ import { removeFromCharacterGallery } from '@/lib/photos/character-gallery-servi
 import type { ChatMetadata, FileEntry } from '@/lib/schemas/types'
 
 /**
- * Delete a file's bytes from storage and metadata from repository
+ * Delete a file's bytes from storage and metadata from repository.
+ *
+ * Exported so the parent-side maintenance sweep can reuse the exact same
+ * GC-safe chokepoint: `fileStorageManager.deleteFile` routes `mount-blob:`
+ * storage keys through `deleteMountBlob` → `deleteWithGC` (shared bytes
+ * survive while any other link references them), then the `files` metadata row
+ * is removed. Never delete `files`/`doc_mount_files` rows directly.
  */
-async function deleteFileCompletely(fileId: string): Promise<boolean> {
+export async function deleteFileCompletely(fileId: string): Promise<boolean> {
   const repos = getRepositories()
   const entry = await repos.files.findById(fileId)
 

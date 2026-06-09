@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### Scheduled retention & cleanup sweeps
+
+Added a single parent-side daily maintenance tick that reaps data with no bearing on characters, stories, or memories. Runs in-process like the existing LLM-log and memory-housekeeping schedulers (no new job type, no child handler) because the asset deletion path bottoms out in `deleteWithGC`, which needs a write transaction on the mount-index DB and cannot run in the forked job child.
+
+- **New scheduler** `lib/background-jobs/scheduled-maintenance.ts`, started from `instrumentation.ts` Phase 3.5 and re-exported from `lib/background-jobs/index.ts`. 24h interval with a 5-minute startup grace; the startup tick short-circuits if a sweep ran within the last 20h, tracked via a new `lastMaintenanceSweepAt` key in `instance_settings`.
+- **Job retention split by status.** New `backgroundJobs.cleanupOldJobsByStatus(completedOlderThan, deadOlderThan)` reaps COMPLETED jobs after 7 days and DEAD jobs after 30 (both keyed off `completedAt`); PENDING/PROCESSING/FAILED/PAUSED are left untouched. `queue-service.cleanupFinishedJobs()` wraps it with the hardcoded windows. The old single-window `cleanupOldJobs` is kept as a deprecated shim.
+- **Stale-chat asset collapse.** When a chat has had no activity for 30 days (`lastMessageAt`, fallback `updatedAt`), its superseded generated story-backgrounds and wardrobe avatars are deleted, keeping only the currently-referenced ones (`storyBackgroundImageId` + `characterAvatars[].imageId`). Enumerated via `files.findByLinkedTo` (source=GENERATED, category=IMAGE) and deleted through the now-exported GC-safe `deleteFileCompletely` chokepoint. Skips anything saved to a `photos/` album or a character vault, anything promoted to a character default/override, and the current keep-set (matched on both id and content sha256). Active chats are never touched.
+- **Belt-and-suspenders sweeps.** The tick also runs `docMountFileLinks.sweepOrphanedFiles()` (after the collapse) and a new `terminalSessions.cleanupClosedSessions(olderThan)` that reaps closed (`exitedAt` non-null) PTY sessions older than 30 days plus their `<logsDir>/terminals/<id>.log` transcript files (best-effort, ENOENT-tolerant). Running sessions are never reaped.
+- **Manual CLI verb** `quilltap maintenance run|status`. `run` is lock-gated and refuses while the server holds `quilltap.lock`; it performs the job, terminal, and orphan sweeps directly in SQL. `status` is read-only and prints the last sweep time plus dry-run counts. The asset collapse runs only on the server tick (needs the app's file-storage machinery), so `status` reports a stale-chat count instead.
+- Retention windows are hardcoded constants in `lib/background-jobs/maintenance/retention-constants.ts` (no settings/UI/migration). Investigated `conversation_chunks`/`conversation_annotations` — both upsert in place via their UNIQUE keys, so no render-chunk reap is needed. No schema, migration, `.qtap`-export, or DDL change. CLI package (`packages/quilltap`) bumped to 4.7.0-dev.35.
+
 #### Centralized, theme-ready icon system (foundation + sidebar pilot)
 
 Started moving the app's scattered inline-SVG icons into one place so a `.qtap-theme` bundle can eventually override any of them.

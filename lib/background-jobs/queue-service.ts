@@ -10,6 +10,11 @@ import { BackgroundJobType } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import type { QueueStats } from '@/lib/database/repositories';
 import { ensureProcessorRunning } from './processor';
+import {
+  COMPLETED_JOB_RETENTION_DAYS,
+  DEAD_JOB_RETENTION_DAYS,
+  retentionCutoff,
+} from './maintenance/retention-constants';
 
 /**
  * Options for creating a job
@@ -1157,9 +1162,25 @@ export async function enqueueWardrobeOutfitAnnouncement(
 
 /**
  * Cleanup old completed jobs
+ *
+ * @deprecated Single-window reaper. Use {@link cleanupFinishedJobs}, which
+ * applies separate retention windows to COMPLETED vs DEAD jobs.
  */
 export async function cleanupOldJobs(daysOld: number = 7): Promise<number> {
   const repos = getRepositories();
   const olderThan = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
   return repos.backgroundJobs.cleanupOldJobs(olderThan);
+}
+
+/**
+ * Reap finished background jobs using the per-status retention windows from
+ * `lib/background-jobs/maintenance/retention-constants.ts`: COMPLETED jobs
+ * after the short window, DEAD jobs after the longer one. PENDING/PROCESSING/
+ * FAILED/PAUSED are left untouched. Called by the daily maintenance tick.
+ */
+export async function cleanupFinishedJobs(): Promise<{ completed: number; dead: number }> {
+  const repos = getRepositories();
+  const completedOlderThan = retentionCutoff(COMPLETED_JOB_RETENTION_DAYS);
+  const deadOlderThan = retentionCutoff(DEAD_JOB_RETENTION_DAYS);
+  return repos.backgroundJobs.cleanupOldJobsByStatus(completedOlderThan, deadOlderThan);
 }

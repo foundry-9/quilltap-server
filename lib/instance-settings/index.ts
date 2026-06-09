@@ -25,6 +25,7 @@ const KEY_MEMORY_EXTRACTION_LIMITS = 'memoryExtractionLimits';
 const KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID = 'lanternBackgroundsMountPointId';
 const KEY_USER_UPLOADS_MOUNT_POINT_ID = 'userUploadsMountPointId';
 const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
+const KEY_LAST_MAINTENANCE_SWEEP_AT = 'lastMaintenanceSweepAt';
 
 const DEFAULT_MEMORY_EXTRACTION_CONCURRENCY = 1;
 const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = {
@@ -134,6 +135,29 @@ export async function getGeneralMountPointId(): Promise<string | null> {
   return readSetting(KEY_GENERAL_MOUNT_POINT_ID);
 }
 
+
+/**
+ * Read the timestamp of the last successful scheduled maintenance sweep, as a
+ * `Date`, or `null` if it has never run (or the stored value is unparseable).
+ *
+ * The maintenance scheduler (`lib/background-jobs/scheduled-maintenance.ts`)
+ * has no job rows to peek at — unlike the memory-housekeeping scheduler, which
+ * short-circuits its startup tick via `backgroundJobs.findRecentByType`. So it
+ * persists this timestamp here instead and reads it back at boot to decide
+ * whether to skip the dev-restart-friendly startup tick. Instance-scoped and
+ * internal: not user-facing, not part of any `.qtap`/SillyTavern export.
+ */
+export async function getLastMaintenanceSweepAt(): Promise<Date | null> {
+  const raw = await readSetting(KEY_LAST_MAINTENANCE_SWEEP_AT);
+  if (raw === null) return null;
+  const ts = new Date(raw);
+  return Number.isNaN(ts.getTime()) ? null : ts;
+}
+
+/** Record the timestamp of a successful scheduled maintenance sweep (ISO 8601). */
+export async function setLastMaintenanceSweepAt(when: Date = new Date()): Promise<void> {
+  await writeSetting(KEY_LAST_MAINTENANCE_SWEEP_AT, when.toISOString());
+}
 
 // Re-export the schema for callers that want to validate independently.
 export { MemoryExtractionLimitsSchema };

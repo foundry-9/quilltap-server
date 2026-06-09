@@ -1103,7 +1103,7 @@ async function dbCommand(args) {
 // to the subcommand. Each subcommand parses these flags position-independently,
 // so they behave the same before or after the verb.
 const SUBCOMMANDS = new Set([
-  'db', 'themes', 'docs', 'memories', 'instances', 'memory-diff', 'completion', 'logs', 'migrations',
+  'db', 'themes', 'docs', 'memories', 'instances', 'memory-diff', 'completion', 'logs', 'migrations', 'maintenance',
 ]);
 // Global flags that consume the following token as their value.
 const GLOBAL_VALUE_FLAGS = new Set(['-p', '--port', '-d', '--data-dir', '-i', '--instance', '--passphrase']);
@@ -1168,6 +1168,12 @@ if (subName === 'db') {
 } else if (subName === 'migrations') {
   const { migrationsCommand } = require('../lib/migrations-commands');
   migrationsCommand(subArgs).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+} else if (subName === 'maintenance') {
+  const { maintenanceCommand } = require('../lib/maintenance-commands');
+  maintenanceCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });
