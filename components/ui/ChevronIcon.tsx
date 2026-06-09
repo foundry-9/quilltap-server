@@ -1,33 +1,33 @@
 /**
- * Shared chevron/disclosure icon component
+ * Shared chevron/disclosure icon.
  *
- * A downward-pointing chevron that rotates 180 degrees when expanded/rotated.
- * Used for collapsible sections, cards, and disclosure toggles throughout the app.
+ * @deprecated Thin wrapper around the central <Icon> primitive, kept so the
+ * icon migration can proceed incrementally. Prefer
+ * `<Icon name="chevron-down" className={expanded ? 'rotate-180' : ''} />`.
+ * The rotation is a `className` concern — the icon glyph itself is the shared
+ * downward chevron.
  *
  * @module components/ui/ChevronIcon
  */
 
+import { Icon } from '@/components/ui/icon';
+
 interface ChevronIconProps {
   className?: string
-  /** Whether the chevron should be rotated (expanded state) */
+  /** Whether the chevron should be rotated 180° (expanded state). */
   expanded?: boolean
-  /** Alias for expanded — used by sidebar sections */
+  /** Alias for `expanded` — used by sidebar sections. */
   rotated?: boolean
 }
 
 export function ChevronIcon({ className, expanded, rotated }: ChevronIconProps) {
   const isRotated = expanded || rotated
-  return (
-    <svg
-      className={`${className || ''} transition-transform duration-200 ${isRotated ? 'rotate-180' : ''}`}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  )
+  const classes = [
+    className ?? '',
+    'transition-transform duration-200',
+    isRotated ? 'rotate-180' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+  return <Icon name="chevron-down" className={classes} />
 }

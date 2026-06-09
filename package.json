@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.7.0-dev.32",
+  "version": "4.7.0-dev.33",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -28,6 +28,7 @@
     "dev:next": "next dev --turbopack",
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
     "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts",
+    "generate:icon-css": "tsx scripts/generate-icon-css.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "oneoff:cleanup-old-files-v1.6": "tsx scripts/cleanup-old-files.ts",

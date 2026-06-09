@@ -32,3 +32,4 @@
 @import "./_content.css";      /* Badges, avatars, code blocks */
 @import "./_typography.css";   /* Semantic typography classes */
 @import "./_utilities.css";    /* Background, border, text color utilities */
+@import "./_icons.css";        /* <Icon> defaults (generated — see icon-registry.ts) */

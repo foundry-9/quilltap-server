@@ -427,41 +427,6 @@
   }
 
   /**
-   * Sidebar header - brand logo and collapse toggle
-   */
-  .qt-left-sidebar-header {
-    @apply flex items-center justify-between px-3;
-    @apply border-b shrink-0;
-    height: var(--qt-left-sidebar-header-height);
-    border-color: var(--qt-left-sidebar-border);
-  }
-
-  .qt-left-sidebar-collapsed .qt-left-sidebar-header {
-    @apply flex-col justify-center items-center gap-2 px-2 py-3 border-b-0;
-    height: auto;
-  }
-
-  /**
-   * Brand logo in sidebar header
-   */
-  .qt-left-sidebar-brand {
-    @apply flex items-center;
-    @apply transition-opacity duration-150;
-  }
-
-  .qt-left-sidebar-brand:hover {
-    @apply opacity-80;
-  }
-
-  .qt-left-sidebar-brand-icon {
-    @apply flex-shrink-0;
-  }
-
-  .qt-left-sidebar-collapsed .qt-left-sidebar-brand {
-    @apply justify-center;
-  }
-
-  /**
    * Collapse toggle button
    */
   .qt-left-sidebar-toggle {

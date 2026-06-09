@@ -8,16 +8,15 @@
  * @module components/layout/left-sidebar
  */
 
-import { SidebarHeader } from './sidebar-header'
 import { SidebarFooter } from './sidebar-footer'
 import { CollapsedNav } from './collapsed-nav'
 
+// Note: the sidebar is always collapsed and CollapsedNav already provides the
+// quill Home/brand link as its first item, so there is no separate header.
 
 export function LeftSidebar() {
   return (
     <aside className="qt-left-sidebar qt-left-sidebar-collapsed" aria-label="Main navigation">
-      <SidebarHeader />
-
       <div className="qt-left-sidebar-content">
         <CollapsedNav />
       </div>

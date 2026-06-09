@@ -226,7 +226,6 @@
   --qt-left-sidebar-border: var(--color-sidebar-border);
   --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;
 
-  --qt-left-sidebar-header-height: 3.5rem;
   --qt-left-sidebar-footer-height: auto;
 
   --qt-left-sidebar-section-padding: 0.625rem;

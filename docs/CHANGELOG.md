@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### Centralized, theme-ready icon system (foundation + sidebar pilot)
+
+Started moving the app's scattered inline-SVG icons into one place so a `.qtap-theme` bundle can eventually override any of them.
+
+- **New `<Icon name="...">` primitive** (`components/ui/icon.tsx`) backed by a canonical registry (`components/ui/icons/icon-registry.ts`) that is the single source of truth for icon names and their default assets (`IconName` is derived from it). Default icons are monochrome SVGs in `public/images/icons/` rendered via CSS `mask-image` tinted by `currentColor`, so they inherit the theme foreground exactly like the old inline `stroke="currentColor"` SVGs; the `brand` quill renders full-color (background-image). Per-icon default CSS is generated from the registry into `app/styles/qt-components/_icons.css` by `scripts/generate-icon-css.ts` (`npm run generate:icon-css`); it lives in `@layer components` so Tailwind `w-`/`h-` sizing still wins. The CSS is structured so a future theme override can swap an icon by re-declaring its `[data-icon]` variables — the manifest field and runtime wiring land in a later change.
+- **Left sidebar migrated** as the first call site (`collapsed-nav`, `sidebar-footer`, `profile-menu`), deleting ~15 local inline-SVG icon components. `components/ui/icons/index.tsx` and `ChevronIcon.tsx` are now thin deprecated wrappers so the remaining call sites can migrate incrementally.
+- **Removed a duplicate Home link.** The always-collapsed sidebar rendered both a header brand and a nav "Home" item; the header's `<Image>` was sizeless and had hidden the duplication. Dropped the header (and its orphaned `qt-left-sidebar-header`/`-brand` CSS); the nav's quill Home item is now the single brand mark.
+- Proposed canonical icon-name contract catalogued in `docs/developer/ICON_INVENTORY.md`. No schema, migration, `.qtap`, or DDL change.
+
 #### Prospero project page: full-width cards for Lexical editors
 
 On a project's detail page (`/prospero/[id]`), the two cards that embed a Lexical editor now span the full grid width instead of sharing a row with other cards. Project Settings (project instructions) dropped its old `row-span-2`, which forced neighboring cards to flex around its tall column, in favor of `col-span-full`; Image Generation (which hosts the two aesthetic editors) gained `col-span-full`. The compact cards (Files, Document Stores, Scenarios, Wardrobe, Characters, Model Behavior) now flow through the multi-column grid first, and the two editor cards stack full-width below them, so the editors get room rather than being squeezed into a single column. Layout-only change — no schema, migration, `.qtap`, or DDL impact.
