@@ -90,6 +90,9 @@ member; a non-member at the same table never sees it.
 **The library is a click from the composer.** When *you* go to attach a file, any
 Group your chat persona belongs to appears under a **Group Files** heading in the
 file picker — set above your Projects — so the club library is never far from hand.
+The same shelf awaits in the **Open Document** picker: alongside the character
+vaults and the project shelves, a **Group Files** accordion lists every store your
+companions reach by membership, without your having to "Look everywhere" to find it.
 
 **A character may search the club library alone.** Passing `scope: "group"` to the
 `search` or `doc_list_files` tool confines the hunt to just the stores of the Groups

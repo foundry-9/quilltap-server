@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Fix: group stores now appear in the Open Document picker without "Look everywhere"
+
+The Document Mode "Open Document" picker (`DocumentPickerModal`, backed by `?action=accessible-stores`) only collected character vaults, project-linked stores, and Quilltap General — never group stores — so a group's official/linked stores showed only when "Look everywhere" was toggled (which returns every enabled store, bucketed under Database-/Filesystem-backed). `handleAccessibleStores` now resolves the group tier (`resolveGroupMountPointIdsForCharacter` across all non-removed character participants, the same resolver the `group-stores` action and tiered mount pool use) and returns those stores tagged `isGroupStore`. The picker buckets them into a dedicated **Group Files** accordion (above Database-backed, matching tier precedence and the attach-file picker's Group Files section) and holds them out of the generic backing buckets so each store appears once — in both default and look-everywhere modes. No schema, migration, or `.qtap` change.
+
 #### Fix: Create Project dialog now overlays as a modal
 
 The Projects page "Create Project" form rendered inline below the project cards instead of as a centered modal. Its `qt-dialog-overlay` was a direct child of `qt-page-container`, whose `> * { z-index: 1 }` rule trapped it in a local stacking context. `CreateProjectDialog` now renders through the shared `BaseModal`, which portals to `document.body` (escaping the stacking context) and supplies the standard backdrop, click-outside/Escape close, and header/body/footer chrome. The Create button is associated with the form via a `form` id so submit and native required-field validation still work.

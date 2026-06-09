@@ -23,6 +23,7 @@ import {
   type DocEditScope,
 } from '@/lib/doc-edit';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
   moveDatabaseDocument,
   deleteDatabaseDocument,
@@ -339,6 +340,14 @@ export interface AccessibleStoreOption {
   storeType: 'documents' | 'character';
   /** Present for `kind: 'character'`. */
   characterId?: string;
+  /**
+   * True when this store is reachable via a group membership (a group's
+   * official store or one of its linked stores) of some character participant.
+   * The picker buckets these into a dedicated "Group Files" accordion rather
+   * than the generic Database-/Filesystem-backed accordions, mirroring the
+   * tiered mount pool's group tier and the Library picker's Group Files section.
+   */
+  isGroupStore?: boolean;
 }
 
 /**
@@ -358,10 +367,12 @@ export interface ProjectLibraryTarget {
 /**
  * Document stores reachable from this chat, for the Open-Document picker's
  * right-column accordions. Mirrors `collectAccessibleMountPointIds`: every
- * participant's character vault, each document store linked to the chat's
+ * participant's character vault, the official + linked stores of every group a
+ * character participant belongs to, each document store linked to the chat's
  * project, plus the instance-wide "Quilltap General" mount (always accessible).
  * The client buckets the result by storeType/mountType into Character Vaults /
- * Database-backed / Filesystem-backed.
+ * Group Files / Database-backed / Filesystem-backed. Group stores carry
+ * `isGroupStore: true` so they bucket into Group Files regardless of backing.
  *
  * Only the project's *official* mount is held back — that one is the dedicated
  * left-column "Project library" button (returned separately as `projectLibrary`
@@ -407,6 +418,18 @@ export async function handleAccessibleStores(
       }
     }
 
+    // Group stores reachable from this chat: the union of every group's
+    // official + linked stores across all (non-removed) character participants.
+    // Surfaced as their own "Group Files" bucket in both default and
+    // look-everywhere modes. Resolved once and reused to tag/collect below.
+    const groupMountIds = new Set<string>();
+    for (const participant of chat.participants) {
+      if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
+      if (participant.status === 'removed') continue;
+      const ids = await resolveGroupMountPointIdsForCharacter(participant.characterId);
+      for (const id of ids) groupMountIds.add(id);
+    }
+
     const stores: AccessibleStoreOption[] = [];
 
     if (opts.all) {
@@ -435,6 +458,7 @@ export async function handleAccessibleStores(
           mountType: mp.mountType,
           storeType: mp.storeType,
           ...(owner ? { characterId: owner.id } : {}),
+          ...(groupMountIds.has(mp.id) ? { isGroupStore: true } : {}),
         });
       }
     } else {
@@ -460,7 +484,26 @@ export async function handleAccessibleStores(
         seen.add(mp.id);
       }
 
-      // 2. Document stores linked to the chat's project.
+      // 2. Group stores — official + linked stores of every group a character
+      //    participant belongs to. Resolved above; collected before project
+      //    links so group precedence holds (character > group > project).
+      for (const id of groupMountIds) {
+        if (seen.has(id)) continue;
+        const mp = await repos.docMountPoints.findById(id);
+        if (!mp || !mp.enabled) continue;
+        stores.push({
+          mountPointId: mp.id,
+          name: mp.name,
+          label: mp.name,
+          kind: 'document-store',
+          mountType: mp.mountType,
+          storeType: mp.storeType,
+          isGroupStore: true,
+        });
+        seen.add(mp.id);
+      }
+
+      // 3. Document stores linked to the chat's project.
       if (chat.projectId) {
         const links = await repos.projectDocMountLinks.findByProjectId(chat.projectId);
         for (const link of links) {
@@ -479,7 +522,7 @@ export async function handleAccessibleStores(
         }
       }
 
-      // 3. Quilltap General — always accessible to every chat, so it always
+      // 4. Quilltap General — always accessible to every chat, so it always
       // appears (under Database-backed, normally). Mirrors path-resolver.
       const generalId = await getGeneralMountPointId();
       if (generalId && !seen.has(generalId)) {
@@ -504,8 +547,9 @@ export async function handleAccessibleStores(
       total: stores.length,
       hasProjectLibrary: projectLibrary !== null,
       characterVaults: stores.filter(s => s.storeType === 'character').length,
-      databaseStores: stores.filter(s => s.storeType === 'documents' && s.mountType === 'database').length,
-      filesystemStores: stores.filter(s => s.storeType === 'documents' && s.mountType !== 'database').length,
+      groupStores: stores.filter(s => s.isGroupStore).length,
+      databaseStores: stores.filter(s => s.storeType === 'documents' && s.mountType === 'database' && !s.isGroupStore).length,
+      filesystemStores: stores.filter(s => s.storeType === 'documents' && s.mountType !== 'database' && !s.isGroupStore).length,
     });
 
     return successResponse({ stores, projectLibrary });

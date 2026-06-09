@@ -55,6 +55,8 @@ interface AccessibleStore {
   mountType: 'filesystem' | 'obsidian' | 'database'
   storeType: 'documents' | 'character'
   characterId?: string
+  /** True when reached via a group membership — bucketed into "Group Files". */
+  isGroupStore?: boolean
 }
 
 /** The project's official document store, when provisioned (see server). */
@@ -408,11 +410,14 @@ export default function DocumentPickerModal({
     return currentFolder.split('/')
   }, [currentFolder])
 
-  // Bucket the chat-accessible stores for the right-column accordions.
+  // Bucket the chat-accessible stores for the right-column accordions. Group
+  // stores get their own bucket and are held out of the generic Database-/
+  // Filesystem-backed buckets so each store appears exactly once.
   const storeBuckets = useMemo(() => ({
     characterVaults: accessibleStores.filter(s => s.storeType === 'character'),
-    databaseStores: accessibleStores.filter(s => s.storeType === 'documents' && s.mountType === 'database'),
-    filesystemStores: accessibleStores.filter(s => s.storeType === 'documents' && s.mountType !== 'database'),
+    groupStores: accessibleStores.filter(s => s.isGroupStore),
+    databaseStores: accessibleStores.filter(s => s.storeType === 'documents' && s.mountType === 'database' && !s.isGroupStore),
+    filesystemStores: accessibleStores.filter(s => s.storeType === 'documents' && s.mountType !== 'database' && !s.isGroupStore),
   }), [accessibleStores])
 
   // Clicking a store row drills into its file browser (Step 2). We pass the
@@ -586,6 +591,24 @@ export default function DocumentPickerModal({
                   : renderEmptyBucket()}
               </div>
             </CollapsibleCard>
+
+            {storeBuckets.groupStores.length > 0 && (
+              <CollapsibleCard
+                key={`group-${lookEverywhere}-${storeBuckets.groupStores.length > 0}`}
+                title="Group Files"
+                description="Stores shared with characters' groups"
+                defaultOpen={storeBuckets.groupStores.length > 0}
+                icon={
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.83-4M7 11a3 3 0 11-2.83-4" />
+                  </svg>
+                }
+              >
+                <div className="space-y-0.5">
+                  {storeBuckets.groupStores.map(renderStoreRow)}
+                </div>
+              </CollapsibleCard>
+            )}
 
             <CollapsibleCard
               key={`db-${lookEverywhere}-${storeBuckets.databaseStores.length > 0}`}
