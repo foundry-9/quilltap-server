@@ -43,6 +43,7 @@ async function handleGetTokens(themeId: string): Promise<Response> {
   const theme = themeRegistry.get(themeId);
   const tokens = themeRegistry.getTokens(themeId);
   const loadedFonts = themeRegistry.getFonts(themeId);
+  const loadedIcons = themeRegistry.getIcons(themeId);
   const cssOverrides = themeRegistry.getCSSOverrides(themeId);
 
   const fonts = loadedFonts.map(font => ({
@@ -55,9 +56,15 @@ async function handleGetTokens(themeId: string): Promise<Response> {
     display: font.display,
   }));
 
+  // Icon overrides resolve through the existing assets route (not the fonts route).
+  const icons = loadedIcons.map(icon => ({
+    name: icon.name,
+    src: `/api/themes/assets/${icon.pluginName}/${icon.src}`,
+  }));
+
   const subsystems = theme?.subsystems || undefined;
 
-  return successResponse({ tokens, fonts, cssOverrides, subsystems });
+  return successResponse({ tokens, fonts, icons, cssOverrides, subsystems });
 }
 
 /**

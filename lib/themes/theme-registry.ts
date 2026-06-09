@@ -53,6 +53,18 @@ export interface LoadedThemeFont {
 }
 
 /**
+ * Per-icon override for loaded themes
+ */
+export interface LoadedThemeIcon {
+  /** Canonical icon name (must match an app IconName to take effect) */
+  name: string;
+  /** Plugin/bundle name for URL construction (e.g. "bundle:madmans-box") */
+  pluginName: string;
+  /** Original source path relative to the bundle (e.g. "icons/prospero.webp") */
+  src: string;
+}
+
+/**
  * Theme source type
  */
 export type ThemeSource = 'plugin' | 'bundle' | 'default';
@@ -102,6 +114,9 @@ export interface LoadedTheme {
 
   /** Custom fonts bundled with the theme */
   fonts?: LoadedThemeFont[];
+
+  /** Per-icon overrides bundled with the theme */
+  icons?: LoadedThemeIcon[];
 
   /** Subsystem display overrides from theme plugin */
   subsystems?: Record<string, {
@@ -685,6 +700,20 @@ class ThemeRegistry extends AbstractMapRegistry<
       }
     }
 
+    // Build icon override entries (icon name -> bundle-relative asset path).
+    // Schema validation guarantees names are kebab-case; the asset is served by
+    // the existing /api/themes/assets route, so no file existence check here.
+    const icons: LoadedThemeIcon[] = [];
+    if (manifest.icons) {
+      for (const [iconName, assetPath] of Object.entries(manifest.icons)) {
+        icons.push({
+          name: iconName,
+          pluginName: `bundle:${themeId}`,
+          src: assetPath,
+        });
+      }
+    }
+
     // Resolve subsystem overrides
     const subsystems = resolveSubsystemOverrides(
       manifest.subsystems as Record<string, { name?: string; description?: string; thumbnail?: string; backgroundImage?: string }> | undefined,
@@ -710,6 +739,7 @@ class ThemeRegistry extends AbstractMapRegistry<
       source: 'bundle',
       bundlePath: installPath,
       fonts: fonts.length > 0 ? fonts : undefined,
+      icons: icons.length > 0 ? icons : undefined,
       subsystems,
     };
 
@@ -721,6 +751,7 @@ class ThemeRegistry extends AbstractMapRegistry<
       version: loadedTheme.version,
       supportsDarkMode: loadedTheme.supportsDarkMode,
       fontCount: fonts.length,
+      iconCount: icons.length,
     });
   }
 
@@ -811,6 +842,14 @@ class ThemeRegistry extends AbstractMapRegistry<
   getFonts(themeId: string): LoadedThemeFont[] {
     const theme = this.state.themes.get(themeId);
     return theme?.fonts || [];
+  }
+
+  /**
+   * Get per-icon overrides for a theme
+   */
+  getIcons(themeId: string): LoadedThemeIcon[] {
+    const theme = this.state.themes.get(themeId);
+    return theme?.icons || [];
   }
 
   /**

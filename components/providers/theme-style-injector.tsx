@@ -11,12 +11,13 @@
  * - @font-face rules for custom theme fonts
  * - :root selector with light mode colors and shared tokens
  * - .dark selector with dark mode colors
+ * - [data-icon] rules overriding individual icons
  *
  * @module providers/theme-style-injector
  */
 
 import { useMemo } from 'react';
-import { themeTokensToCSS, generateFontFacesCSS } from '@/lib/themes/utils';
+import { themeTokensToCSS, generateFontFacesCSS, generateIconOverridesCSS } from '@/lib/themes/utils';
 import type { ThemeTokens } from '@/lib/themes/types';
 
 // ============================================================================
@@ -34,6 +35,16 @@ export interface ThemeFontInfo {
   display?: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
 }
 
+/**
+ * Icon override for client-side CSS injection
+ */
+export interface ThemeIconInfo {
+  /** Canonical icon name (must match an app IconName to take effect) */
+  name: string;
+  /** Resolved asset URL (svg or webp) */
+  src: string;
+}
+
 export interface ThemeStyleInjectorProps {
   /** Theme tokens to convert to CSS variables */
   tokens: ThemeTokens | null;
@@ -49,6 +60,9 @@ export interface ThemeStyleInjectorProps {
 
   /** Custom fonts to load via @font-face rules */
   fonts?: ThemeFontInfo[];
+
+  /** Per-icon overrides to apply via [data-icon] rules */
+  icons?: ThemeIconInfo[];
 }
 
 // ============================================================================
@@ -78,6 +92,7 @@ export function ThemeStyleInjector({
   cssOverrides,
   themeId,
   fonts,
+  icons,
 }: ThemeStyleInjectorProps) {
   // Generate @font-face CSS for custom fonts
   const fontFacesCss = useMemo(() => {
@@ -87,6 +102,14 @@ export function ThemeStyleInjector({
     return generateFontFacesCSS(fonts);
   }, [fonts]);
 
+  // Generate [data-icon] override CSS for custom icons
+  const iconOverridesCss = useMemo(() => {
+    if (!icons || icons.length === 0) {
+      return '';
+    }
+    return generateIconOverridesCSS(icons);
+  }, [icons]);
+
   // Generate CSS from tokens (no logging in useMemo to avoid render-time side effects)
   const baseCss = useMemo(() => {
     if (!tokens) {
@@ -95,7 +118,7 @@ export function ThemeStyleInjector({
     return themeTokensToCSS(tokens);
   }, [tokens]);
 
-  // Combine all CSS: fonts + variables + overrides
+  // Combine all CSS: fonts + variables + icon overrides + component overrides
   const fullCss = useMemo(() => {
     if (!baseCss) return null;
 
@@ -109,13 +132,18 @@ export function ThemeStyleInjector({
     // Add theme variables
     parts.push(baseCss);
 
+    // Add per-icon overrides (unlayered, so they beat the @layer defaults in _icons.css)
+    if (iconOverridesCss) {
+      parts.push(`/* Theme Icon Overrides */\n${iconOverridesCss}`);
+    }
+
     // Add component overrides
     if (cssOverrides) {
       parts.push(`/* Theme Component Overrides */\n${cssOverrides}`);
     }
 
     return parts.join('\n\n');
-  }, [baseCss, cssOverrides, fontFacesCss]);
+  }, [baseCss, cssOverrides, fontFacesCss, iconOverridesCss]);
 
   // Don't render anything if no CSS to inject
   if (!fullCss) {

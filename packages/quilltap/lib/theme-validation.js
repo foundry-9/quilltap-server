@@ -36,6 +36,12 @@ const BLOCKED_EXTENSIONS = new Set([
 // Theme ID must be lowercase alphanumeric with hyphens
 const THEME_ID_REGEX = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
+// Icon override names: lowercase kebab-case (mirrors the app's IconName contract)
+const ICON_NAME_REGEX = /^[a-z][a-z0-9-]*$/;
+
+// Allowed file extensions for icon override assets
+const ICON_OVERRIDE_EXTENSIONS = ['.svg', '.webp'];
+
 // Required color keys in a palette
 const REQUIRED_COLOR_KEYS = [
   'background', 'foreground', 'primary', 'primaryForeground',
@@ -119,6 +125,35 @@ function validateManifest(manifest) {
         }
         if (!font.src || typeof font.src !== 'string') {
           errors.push(`fonts[${i}].src is required and must be a string`);
+        }
+      }
+    }
+  }
+
+  // Icons validation (per-icon override map: name -> bundle-relative asset path).
+  // The canonical icon-name list lives in the app and cannot be imported here, so
+  // this is a soft check: structure, asset extension, and traversal safety only.
+  if (manifest.icons !== undefined) {
+    if (typeof manifest.icons !== 'object' || manifest.icons === null || Array.isArray(manifest.icons)) {
+      errors.push('icons must be an object mapping icon names to asset paths');
+    } else {
+      for (const [iconName, assetPath] of Object.entries(manifest.icons)) {
+        if (!ICON_NAME_REGEX.test(iconName)) {
+          // Soft warning: the app validates the actual name list, but a malformed
+          // name here is almost certainly a typo that will silently never match.
+          warnings.push(`icons.${iconName} is not a valid icon name (expected lowercase kebab-case)`);
+        }
+        if (typeof assetPath !== 'string' || assetPath.length === 0) {
+          errors.push(`icons.${iconName} must be a non-empty string asset path`);
+          continue;
+        }
+        if (assetPath.includes('..') || path.isAbsolute(assetPath)) {
+          errors.push(`icons.${iconName} has an unsafe asset path: ${assetPath}`);
+          continue;
+        }
+        const ext = path.extname(assetPath).toLowerCase();
+        if (!ICON_OVERRIDE_EXTENSIONS.includes(ext)) {
+          errors.push(`icons.${iconName} must point to a .svg or .webp file (got "${assetPath}")`);
         }
       }
     }
@@ -383,4 +418,6 @@ module.exports = {
   ALLOWED_EXTENSIONS,
   BLOCKED_EXTENSIONS,
   THEME_ID_REGEX,
+  ICON_NAME_REGEX,
+  ICON_OVERRIDE_EXTENSIONS,
 };

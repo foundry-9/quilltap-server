@@ -15,6 +15,15 @@ Added a single parent-side daily maintenance tick that reaps data with no bearin
 - **Manual CLI verb** `quilltap maintenance run|status`. `run` is lock-gated and refuses while the server holds `quilltap.lock`; it performs the job, terminal, and orphan sweeps directly in SQL. `status` is read-only and prints the last sweep time plus dry-run counts. The asset collapse runs only on the server tick (needs the app's file-storage machinery), so `status` reports a stale-chat count instead.
 - Retention windows are hardcoded constants in `lib/background-jobs/maintenance/retention-constants.ts` (no settings/UI/migration). Investigated `conversation_chunks`/`conversation_annotations` — both upsert in place via their UNIQUE keys, so no render-chunk reap is needed. No schema, migration, `.qtap`-export, or DDL change. CLI package (`packages/quilltap`) bumped to 4.7.0-dev.35.
 
+#### Theme icon overrides: help and developer documentation
+
+Added user-facing and developer-facing documentation for the icon override system introduced in the previous three changes.
+
+- `help/themes.md` now documents the `icons` manifest field (under Custom Themes → Custom Icons), the `.svg`/`.webp` asset modes, the `brand`-is-always-image-mode rule, and the CLI validation behaviour. The "What Are Themes?" summary list now mentions icon overrides.
+- `docs/developer/THEME_PLUGIN_DEVELOPMENT.md` gains a bundle-format icon-overrides reference section before the existing deprecated-npm content: manifest snippet, asset-mode table, canonical-name pointers, CSS mechanics summary, and authoring notes.
+- `components/settings/appearance/README.md` updated with an Icon Overrides section covering the 79-icon map, the two render modes, and the live-switch behaviour.
+- `docs/developer/ICON_INVENTORY.md` added to the `update-documentation.md` registry.
+
 #### Centralized, theme-ready icon system (foundation + sidebar pilot)
 
 Started moving the app's scattered inline-SVG icons into one place so a `.qtap-theme` bundle can eventually override any of them.
@@ -31,6 +40,25 @@ Finished moving the app's inline-SVG icons onto the centralized `<Icon>` compone
 - **Registry grew to 79 canonical icons.** The signed-off name list was implemented in full, plus 14 reusable glyphs the sweep surfaced (`arrow-up`/`arrow-down`, `ban`, `camera`, `log-out`, `users`, `wrench`, `database`, `swap`, `file-plus`, `code`, `zap`, `cpu`, `layers`) — all additions, no renames, so the public contract is unchanged. Each new icon ships a default SVG in `public/images/icons/` and a generated rule in `_icons.css`.
 - **Cascade fix:** `_icons.css` is now imported first in `app/styles/qt-components/_index.css` so the `.qt-icon { 1em }` base size is the weakest sizing in `@layer components`. Call-site `w-`/`h-` utilities and `qt-*` classes that size icons (e.g. `.qt-collapsible-card-chevron`) both win, so no icon is frozen at 1em.
 - The only inline `<svg>` left in `components/` are genuine non-icon graphics (loading spinners, charts, provider badges, pending-state rings, chat-bubble tails, drop-zone/empty-state illustrations, the drag handle, and the animated quill) — catalogued in `ICON_INVENTORY.md` §4. Updated three homepage component tests that asserted on the old inline `<svg>` to target the `[data-icon]` span. No schema, migration, `.qtap`, or DDL change; theme-override wiring still lands in a later change.
+
+#### Theme icon overrides: manifest schema + runtime wiring
+
+Themes can now replace any of the app's icons. A `.qtap-theme` bundle declares an optional `icons` map in `theme.json` (icon name → bundle-relative asset path, `.svg` or `.webp`), and the override is applied live when the theme is active — no reload.
+
+- **Manifest schema.** Added an optional `icons` record to both `QtapThemeManifestSchema` (bundles) and `ThemeManifestSchema` (plugin parity) in `lib/themes/types.ts`, validated as `{ [kebab-name]: non-empty path }`. Documented the property in `public/schemas/qtap-theme.schema.json`.
+- **CLI validator.** `packages/quilltap/lib/theme-validation.js` now checks the `icons` block: it must be an object, values must be non-empty paths ending in `.svg`/`.webp` with no path traversal, and malformed icon names warn (the canonical name list lives in the app and can't be imported into the standalone validator).
+- **Runtime.** The theme registry reads `manifest.icons` into `LoadedTheme.icons` and exposes `getIcons(themeId)`; `/api/v1/themes/[id]?action=tokens` resolves each override to its `/api/themes/assets/bundle:<id>/<path>` URL (the existing assets route, not the fonts route). The theme provider threads `icons` to the style injector, which appends a `[data-icon]` rule per override into the same injected `<style>` block. Because that block is unlayered, the overrides beat the `@layer components` defaults in `_icons.css` by cascade source order.
+- **Override modes.** `generateIconOverridesCSS` (`lib/themes/utils.ts`) emits mask mode for `.svg` overrides (keeps `currentColor` tinting) and image mode for `.webp` (full color); the `brand` quill is always image mode so an SVG brand mark isn't monochromed. Asset URLs are stripped of quote/backslash/newline characters before interpolation to prevent CSS injection from a malicious manifest.
+- No DB schema, migration, `.qtap`-export, or DDL change. Bundles that declare no `icons` are unaffected. The authoring tooling and a bundled proof-of-concept land in a later change.
+
+#### Theme icon overrides: authoring tooling + Madman's Box proof-of-concept
+
+Followed the icon-override runtime (above) with author tooling and the first bundled theme to use it.
+
+- **`create-quilltap-theme` (2.0.11):** scaffolded bundles now include an `icons/` folder (with a commented example), mirroring `fonts/`. The bundle README documents the optional `icons` manifest map and the `.svg` (theme-tinted) vs `.webp` (full-color) override modes. The scaffolded Storybook stories include the new `Icons` reference.
+- **`@quilltap/theme-storybook` (1.0.40):** added an `Icons` story — a reference listing every override-able icon name (grouped by category) plus the override recipe (the `theme.json` snippet and the two asset modes), so theme authors can see what's replaceable.
+- **Madman's Box (1.0.1):** the bundled theme now overrides five icons via `icons/` SVGs — a brass quill for the brand mark (full color), and Deco line variants for `settings`, `themes`, `wardrobe`, and `help` (theme-tinted). Demonstrates the override pipeline end to end; the override assets are served by the existing theme assets route. Reactivate the theme (or restart) to pick up the change.
+- No DB schema, migration, `.qtap`-export, or DDL change.
 
 #### Prospero project page: full-width cards for Lexical editors
 

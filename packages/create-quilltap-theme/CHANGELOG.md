@@ -2,6 +2,12 @@
 
 All notable changes to this package will be documented in this file.
 
+## [2.0.11] - 2026-06-09
+
+### Added
+- Scaffolded bundles now include an `icons/` folder (with a commented example) for icon overrides, mirroring `fonts/`. The bundle README documents the optional `icons` manifest map and the `.svg` (theme-tinted) vs `.webp` (full-color) override modes.
+- The scaffolded Storybook stories now include the `Icons` reference story from `@quilltap/theme-storybook`.
+
 ## [2.0.10] - 2026-06-04
 
 ### Added

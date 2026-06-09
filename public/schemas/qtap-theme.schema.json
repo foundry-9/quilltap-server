@@ -105,6 +105,17 @@
       "items": { "$ref": "#/$defs/FontDefinition" },
       "description": "Custom font definitions"
     },
+    "icons": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Per-icon override map: icon name -> bundle-relative asset path (svg or webp). SVG overrides keep currentColor tinting; WebP overrides bake in their own color."
+    },
     "subsystems": {
       "type": "object",
       "additionalProperties": {
