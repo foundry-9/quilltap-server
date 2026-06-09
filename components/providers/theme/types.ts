@@ -113,11 +113,22 @@ export interface ThemeFont {
 }
 
 /**
+ * Per-icon override from theme (resolved asset URL)
+ */
+export interface ThemeIcon {
+  /** Canonical icon name (must match an app IconName to take effect) */
+  name: string;
+  /** Resolved asset URL (svg or webp) */
+  src: string;
+}
+
+/**
  * Response from theme tokens API
  */
 export interface ThemeTokensResponse {
   tokens: ThemeTokens;
   fonts?: ThemeFont[];
+  icons?: ThemeIcon[];
   cssOverrides?: string;
   subsystems?: Record<string, SubsystemOverride>;
 }

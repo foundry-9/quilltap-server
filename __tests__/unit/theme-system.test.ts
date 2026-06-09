@@ -3,7 +3,74 @@
  * Tests for theme selection, heading fonts, and theme previews
  */
 
+import { themeRegistry } from '@/lib/themes/theme-registry';
+import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens';
+import type { LoadedBundleTheme } from '@/lib/themes/bundle-loader';
+
 describe('Theme System', () => {
+  describe('Theme icon overrides', () => {
+    const THEME_ID = 'test-icon-override-theme';
+
+    const makeBundle = (icons?: Record<string, string>): LoadedBundleTheme => ({
+      manifest: {
+        format: 'qtap-theme',
+        formatVersion: 1,
+        id: THEME_ID,
+        name: 'Test Icon Override',
+        version: '1.0.0',
+        author: 'tester',
+        supportsDarkMode: true,
+        icons,
+      },
+      tokens: DEFAULT_THEME_TOKENS,
+      installPath: '/tmp/test-icon-override-theme',
+      indexEntry: {
+        id: THEME_ID,
+        version: '1.0.0',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        source: 'file',
+        sourceUrl: null,
+        registrySource: null,
+        signatureVerified: false,
+      },
+    } as unknown as LoadedBundleTheme);
+
+    afterEach(() => {
+      themeRegistry.unregisterTheme(THEME_ID);
+    });
+
+    it('registers per-icon overrides and exposes them via getIcons', () => {
+      themeRegistry.registerBundleTheme(makeBundle({
+        chat: 'icons/chat.svg',
+        prospero: 'icons/prospero.webp',
+      }));
+
+      const icons = themeRegistry.getIcons(THEME_ID);
+      expect(icons).toHaveLength(2);
+
+      const chat = icons.find(i => i.name === 'chat');
+      expect(chat).toMatchObject({
+        name: 'chat',
+        pluginName: `bundle:${THEME_ID}`,
+        src: 'icons/chat.svg',
+      });
+    });
+
+    it('resolves icon override URLs through the assets route', () => {
+      themeRegistry.registerBundleTheme(makeBundle({ prospero: 'icons/prospero.webp' }));
+
+      const [icon] = themeRegistry.getIcons(THEME_ID);
+      // Mirrors the URL the tokens API builds.
+      const url = `/api/themes/assets/${icon.pluginName}/${icon.src}`;
+      expect(url).toBe(`/api/themes/assets/bundle:${THEME_ID}/icons/prospero.webp`);
+    });
+
+    it('returns an empty array when a theme declares no icon overrides', () => {
+      themeRegistry.registerBundleTheme(makeBundle(undefined));
+      expect(themeRegistry.getIcons(THEME_ID)).toEqual([]);
+    });
+  });
+
   describe('Theme heading fonts', () => {
     it('should include headingFont property in theme summary', () => {
       const theme = {

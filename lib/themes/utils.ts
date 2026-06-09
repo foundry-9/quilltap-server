@@ -555,6 +555,74 @@ export function generateFontFacesCSS(fonts: FontFaceDefinition[]): string {
 }
 
 // ============================================================================
+// ICON OVERRIDE CSS GENERATION
+// ============================================================================
+
+/**
+ * Icon override definition for generating per-icon CSS rules.
+ *
+ * `src` is the fully-resolved asset URL (e.g. the themes asset route,
+ * `/api/themes/assets/bundle:<id>/icons/<name>.webp`).
+ */
+export interface IconOverrideDefinition {
+  /** Canonical icon name (must match an app IconName to take effect) */
+  name: string;
+  /** Resolved asset URL (svg or webp) */
+  src: string;
+}
+
+/**
+ * Strip characters that could break out of a CSS `url("...")` string.
+ *
+ * Icon names are kebab-regex-validated at the schema layer, but asset `src`
+ * values are free-form strings in the manifest — neutralise quotes, backslashes,
+ * and newlines so a malicious theme can't inject arbitrary CSS. Legitimate
+ * asset URLs never contain these characters.
+ */
+function sanitizeCssUrl(url: string): string {
+  return url.replace(/["\\\r\n]/g, '');
+}
+
+/**
+ * Generate a CSS rule overriding a single icon's paint.
+ *
+ * Re-declares the icon's `[data-icon="name"]` rule so it beats the layered
+ * default in `_icons.css` by cascade source-order (the injected theme <style>
+ * is unlayered). Mode is chosen by extension:
+ *   - `.svg`  -> mask mode, keeps `currentColor` tinting
+ *   - `.webp` (or anything else) -> image mode, full-colour background
+ *
+ * The `brand` icon is always forced to image mode — an SVG brand mark should
+ * not be monochromed.
+ */
+export function generateIconOverrideRule(icon: IconOverrideDefinition): string {
+  const safeSrc = sanitizeCssUrl(icon.src);
+  const isSvg = safeSrc.split(/[?#]/)[0].toLowerCase().endsWith('.svg');
+  const useImageMode = icon.name === 'brand' || !isSvg;
+
+  if (useImageMode) {
+    // Full-colour background; no currentColor tint behind a (possibly transparent) asset.
+    return `[data-icon="${icon.name}"] { --_qt-icon-mask: none; --_qt-icon-bg: url("${safeSrc}"); background-color: transparent; }`;
+  }
+  // Mask mode keeps currentColor tinting (matches the default SVG behaviour).
+  return `[data-icon="${icon.name}"] { --_qt-icon-mask: url("${safeSrc}"); --_qt-icon-bg: none; background-color: currentColor; }`;
+}
+
+/**
+ * Generate CSS for a set of per-icon overrides from a theme bundle.
+ *
+ * @param icons - Array of icon override definitions (name -> resolved asset URL)
+ * @returns CSS string with one `[data-icon="..."]` rule per override
+ */
+export function generateIconOverridesCSS(icons: IconOverrideDefinition[]): string {
+  if (!icons || icons.length === 0) {
+    return '';
+  }
+
+  return icons.map(icon => generateIconOverrideRule(icon)).join('\n');
+}
+
+// ============================================================================
 // CSS VARIABLE MAPPING EXPORTS
 // ============================================================================
 
