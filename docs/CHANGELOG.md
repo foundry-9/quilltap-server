@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Character page template buttons: full field coverage, system prompts that save, and reverse direction
+
+Reworked the `{{char}}`/`{{user}}` template buttons on the Aurora character Details view (`app/aurora/[id]/view/`).
+
+- **Forward buttons now cover all prompt fields and persist correctly.** The old "Name → `{{char}}`" / "Partner → `{{user}}`" handlers skipped `identity` entirely, counted `manifesto` but never replaced it, and packed system-prompt replacements into a `systemPrompts` PUT body that `updateCharacterSchema` silently strips — so system-prompt token swaps were never saved. The field set (identity, manifesto, description, personality, first message, example dialogues, every scenario, every system prompt, and the five physical-description prose/prompt fields) is now defined once in `collectTemplateFields`, walked by both the counter and the transform, so counts and replacements can't drift. System-prompt changes route through `PUT /api/v1/characters/[id]/prompts/[promptId]`. Also fixes a latent 400: the physical-description `name` (required by the PUT schema) now falls back to `'Appearance'` when empty and is never itself transformed.
+- **Two new reverse buttons.** "`{{char}}` → Name" bakes the character's own name back in wherever `{{char}}` appears. "`{{user}}` → name…" opens a picker (dropdown of user-controlled characters, excluding the one being viewed) and replaces every `{{user}}` with the chosen character's name. Each reverse button appears only when matching `{{char}}`/`{{user}}` literals exist; the user picker also requires at least one other user-controlled character.
+- **Shared save dispatch.** The HTTP fan-out (main PUT + per-prompt PUT/POST + partial-failure error collection) is extracted from the optimizer's `applyChanges` into `components/characters/apply-character-field-updates.ts`, now used by both the optimizer and the template buttons. Token replacement is case-insensitive (`{{Char}}`/`{{USER}}` match) and uses a function replacer so a chosen name containing `$` is inserted literally.
+
+No schema, migration, or `.qtap` change. Help doc `help/character-editing.md` and template-helper tests updated.
+
 #### Refine from Memories: full core-document coverage, no new scenarios, and array fields that actually save
 
 Overhauled the Aurora "Refine from Memories" character optimizer (`lib/services/character-optimizer.service.ts`, `components/characters/optimizer/`):

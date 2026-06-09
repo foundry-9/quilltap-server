@@ -1,27 +1,44 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { Character, TemplateCounts } from '../types'
+import { Character, TemplateCounts, UserControlledCharacter } from '../types'
 import { TemplateDisplay } from '@/components/characters/TemplateHighlighter'
+import { ReverseUserDialog } from './ReverseUserDialog'
 
 interface CharacterDetailsProps {
   characterId: string
   character: Character | null
   templateCounts: TemplateCounts
+  literalCounts: { charCount: number; userCount: number }
   replacingTemplate: 'char' | 'user' | null
+  reversingTemplate: 'char' | 'user' | null
   defaultPartnerName: string | null
+  userControlledCharacters: UserControlledCharacter[]
   onTemplateReplace: (type: 'char' | 'user') => void
+  onReverseTemplate: (type: 'char' | 'user', chosenName: string) => void
 }
 
 export function CharacterDetails({
   characterId,
   character,
   templateCounts,
+  literalCounts,
   replacingTemplate,
+  reversingTemplate,
   defaultPartnerName,
+  userControlledCharacters,
   onTemplateReplace,
+  onReverseTemplate,
 }: CharacterDetailsProps) {
+  const [showReverseUserDialog, setShowReverseUserDialog] = useState(false)
+
   if (!character) return null
+
+  // Any template operation in flight disables all four buttons.
+  const templateBusy = replacingTemplate !== null || reversingTemplate !== null
+  // The reverse {{user}} picker can only offer *other* user-controlled characters.
+  const otherUserControlled = userControlledCharacters.filter((c) => c.id !== characterId)
 
   return (
     <div className="space-y-6">
@@ -31,7 +48,7 @@ export function CharacterDetails({
         {templateCounts.charCount > 0 && (
           <button
             onClick={() => onTemplateReplace('char')}
-            disabled={replacingTemplate !== null}
+            disabled={templateBusy}
             className="flex items-center gap-1.5 rounded-lg border qt-border-primary/40 qt-bg-primary/10 px-3 py-2 qt-label text-primary qt-shadow-sm transition hover:qt-bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
             title={`Replace ${templateCounts.charCount} occurrences of "${character?.name}" with {{char}}`}
           >
@@ -53,7 +70,7 @@ export function CharacterDetails({
         {defaultPartnerName && templateCounts.userCount > 0 && (
           <button
             onClick={() => onTemplateReplace('user')}
-            disabled={replacingTemplate !== null}
+            disabled={templateBusy}
             className="flex items-center gap-1.5 rounded-lg border qt-border-success/40 qt-bg-success/10 px-3 py-2 qt-label qt-text-success qt-shadow-sm transition hover:qt-bg-success/20 disabled:cursor-not-allowed disabled:opacity-50"
             title={`Replace ${templateCounts.userCount} occurrences of "${defaultPartnerName}" with {{user}}`}
           >
@@ -68,6 +85,50 @@ export function CharacterDetails({
             <span className="qt-text-success">→</span>
             <code className="rounded qt-bg-success/20 px-1 text-xs qt-text-success">{`{{user}}`}</code>
             <span className="text-xs qt-text-success/80">({templateCounts.userCount})</span>
+          </button>
+        )}
+
+        {/* {{char}} → Character Name button (reverse) */}
+        {literalCounts.charCount > 0 && (
+          <button
+            onClick={() => onReverseTemplate('char', character.name)}
+            disabled={templateBusy}
+            className="flex items-center gap-1.5 rounded-lg border qt-border-primary/40 qt-bg-primary/10 px-3 py-2 qt-label text-primary qt-shadow-sm transition hover:qt-bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
+            title={`Replace ${literalCounts.charCount} occurrences of {{char}} with "${character?.name}"`}
+          >
+            {reversingTemplate === 'char' ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+            <code className="rounded qt-bg-primary/20 px-1 text-xs text-primary">{`{{char}}`}</code>
+            <span className="text-primary">→</span>
+            <span className="hidden sm:inline">{character?.name}</span>
+            <span className="text-xs text-primary/80">({literalCounts.charCount})</span>
+          </button>
+        )}
+
+        {/* {{user}} → chosen name button (reverse, opens picker) */}
+        {literalCounts.userCount > 0 && otherUserControlled.length > 0 && (
+          <button
+            onClick={() => setShowReverseUserDialog(true)}
+            disabled={templateBusy}
+            className="flex items-center gap-1.5 rounded-lg border qt-border-success/40 qt-bg-success/10 px-3 py-2 qt-label qt-text-success qt-shadow-sm transition hover:qt-bg-success/20 disabled:cursor-not-allowed disabled:opacity-50"
+            title={`Replace ${literalCounts.userCount} occurrences of {{user}} with a user-controlled character's name`}
+          >
+            {reversingTemplate === 'user' ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-success border-r-transparent"></div>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+            <code className="rounded qt-bg-success/20 px-1 text-xs qt-text-success">{`{{user}}`}</code>
+            <span className="qt-text-success">→</span>
+            <span className="hidden sm:inline">name…</span>
+            <span className="text-xs qt-text-success/80">({literalCounts.userCount})</span>
           </button>
         )}
 
@@ -88,6 +149,11 @@ export function CharacterDetails({
           <div>
             <h2 className="qt-heading-4 text-foreground mb-2">
               Identity
+              {(templateCounts.fieldCounts.identity?.char > 0 || templateCounts.fieldCounts.identity?.user > 0) && (
+                <span className="ml-2 text-xs font-normal qt-text-xs">
+                  (template replacements available)
+                </span>
+              )}
             </h2>
             <div className="qt-text-small">
               <TemplateDisplay
@@ -249,6 +315,17 @@ export function CharacterDetails({
           </div>
         )}
       </div>
+
+      {showReverseUserDialog && (
+        <ReverseUserDialog
+          characters={otherUserControlled}
+          onClose={() => setShowReverseUserDialog(false)}
+          onConfirm={(name) => {
+            setShowReverseUserDialog(false)
+            onReverseTemplate('user', name)
+          }}
+        />
+      )}
     </div>
   )
 }

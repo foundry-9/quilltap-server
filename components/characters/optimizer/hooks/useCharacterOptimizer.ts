@@ -9,6 +9,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
+import { applyCharacterFieldUpdates } from '../../apply-character-field-updates';
 import type {
   OptimizerPhase,
   SuggestionDecision,
@@ -406,57 +407,25 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
           updatePayload.physicalDescription = merged;
         }
 
-        const errors: string[] = [];
-        const jsonHeaders = { 'Content-Type': 'application/json' };
-
-        // System-prompt refinements: dedicated PUT per prompt.
-        for (const { subId, finalValue } of promptUpdates) {
-          const res = await fetch(
-            `/api/v1/characters/${characterId}/prompts/${subId}`,
-            {
-              method: 'PUT',
-              headers: jsonHeaders,
-              body: JSON.stringify({ content: finalValue }),
-            }
-          );
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            errors.push(
-              (data.error as string | undefined) ?? 'A system prompt refinement could not be saved.'
-            );
-          }
-        }
-
-        // New system prompts: dedicated POST, named as proposed.
-        for (const { name, finalValue } of promptCreates) {
-          const res = await fetch(`/api/v1/characters/${characterId}/prompts`, {
-            method: 'POST',
-            headers: jsonHeaders,
-            body: JSON.stringify({ name, content: finalValue }),
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            errors.push(
-              (data.error as string | undefined) ?? `The new system prompt "${name}" could not be saved.`
-            );
-          }
-        }
-
-        // Everything that rides the PUT body (only fire if there is something to send).
-        if (Object.keys(updatePayload).length > 0) {
-          const putResponse = await fetch(`/api/v1/characters/${characterId}`, {
-            method: 'PUT',
-            headers: jsonHeaders,
-            body: JSON.stringify(updatePayload),
-          });
-          if (!putResponse.ok) {
-            const errorData = await putResponse.json().catch(() => ({}));
-            errors.push(
-              (errorData.error as string | undefined) ??
-                'The amendments could not be inscribed into the character record.'
-            );
-          }
-        }
+        // Fan the updates out across the main PUT and the dedicated system-prompt
+        // endpoints (system prompts are stripped by the PUT schema). Keep the
+        // optimizer's voiced fallback strings for partial failures.
+        const { errors } = await applyCharacterFieldUpdates(characterId, {
+          mainUpdates: updatePayload,
+          promptUpdates: promptUpdates.map(({ subId, finalValue }) => ({
+            id: subId,
+            content: finalValue,
+          })),
+          promptCreates: promptCreates.map(({ name, finalValue }) => ({
+            name,
+            content: finalValue,
+          })),
+          messages: {
+            promptUpdateFailed: 'A system prompt refinement could not be saved.',
+            promptCreateFailed: (name) => `The new system prompt "${name}" could not be saved.`,
+            mainPutFailed: 'The amendments could not be inscribed into the character record.',
+          },
+        });
 
         if (errors.length > 0) {
           throw new Error(errors.join(' '));

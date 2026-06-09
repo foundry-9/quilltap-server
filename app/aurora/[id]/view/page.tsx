@@ -59,7 +59,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     defaultImageProfileId,
     avatarRefreshKey,
     templateCounts,
+    literalCounts,
     replacingTemplate,
+    reversingTemplate,
     fetchCharacter,
     fetchProfiles,
     fetchUserControlledCharacters,
@@ -67,6 +69,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     fetchImageProfiles,
     setCharacter,
     handleTemplateReplace,
+    handleReverseTemplate,
     handleSaveConnectionProfile,
     handleSaveDefaultPartner,
     handleSaveImageProfile,
@@ -162,9 +165,13 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             characterId={id}
             character={character}
             templateCounts={templateCounts}
+            literalCounts={literalCounts}
             replacingTemplate={replacingTemplate}
+            reversingTemplate={reversingTemplate}
             defaultPartnerName={defaultPartnerName}
+            userControlledCharacters={userControlledCharacters}
             onTemplateReplace={handleTemplateReplace}
+            onReverseTemplate={handleReverseTemplate}
           />
         )
 

@@ -388,6 +388,19 @@ Clothing records describe what your character wears in different situations. The
 - **Expand:** Click the chevron to see the full description rendered as markdown
 - Multiple outfits can be defined per character for different contexts
 
+## Template Placeholders on the Character Page
+
+Quilltap's roleplay machinery understands two travelling tokens — `{{char}}`, which stands in for whichever character is speaking, and `{{user}}`, which stands in for the person they are addressing. A character authored with these tokens rather than hard-coded names travels gracefully: lend them to a new conversation partner and they greet the newcomer by the correct name without a word of editing.
+
+The character's **Details** view does two helpful things on your behalf. First, it quietly underlines every spot where a bare name *could* become a token, and every token that is already in place. Second, when there is honest work to be done, it offers up to four buttons at the top of the page — each appearing only when it has something to do, with the number of affected occurrences noted in parentheses:
+
+- **Name → `{{char}}`** — sweeps through the character's prose and swaps every literal occurrence of *their own name* for the `{{char}}` token.
+- **Partner → `{{user}}`** — does the same for the name of the character's **default conversation partner**, swapping it for `{{user}}`. This one keeps its peace unless a default partner has been appointed (see the **Defaults** tab).
+- **`{{char}}` → Name** — the reverse errand: bakes the character's own name back into the prose wherever `{{char}}` appears, should you ever want the plain article instead of the token.
+- **`{{user}}` → name…** — opens a small dialog bearing a dropdown of your **user-controlled characters**. Choose one, and every `{{user}}` token is replaced with that character's name. (The character you are presently viewing is, sensibly, kept off its own list.)
+
+Every one of these sweeps reaches the *entire* dossier — identity, description, manifesto, personality, every scenario, the first message, the example dialogues, all of the character's system prompts, and the physical-description prose and image prompts. The work is saved at once and the page refreshed, so the counts and buttons settle to reflect the new state of affairs. (System prompts are filed through their own ledger behind the scenes, so a token swap inside a non-default prompt is no longer quietly mislaid.)
+
 ## Using Rename/Replace Tab
 
 The Rename/Replace tab helps with bulk changes to character content.

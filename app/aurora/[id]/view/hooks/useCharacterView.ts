@@ -2,7 +2,15 @@
 
 import { useCallback, useState } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { countTemplateReplacements, replaceWithTemplate } from '@/components/characters/TemplateHighlighter'
+import {
+  applyTemplateTransform,
+  collectTemplateFields,
+  countTemplateLiterals,
+  countTemplateReplacements,
+  replaceTemplateWithName,
+  replaceWithTemplate,
+} from '@/components/characters/TemplateHighlighter'
+import { applyCharacterFieldUpdates } from '@/components/characters/apply-character-field-updates'
 import { USER_CONTROLLED_PROFILE_ID } from '@/lib/constants/character'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import {
@@ -27,7 +35,9 @@ interface UseCharacterViewReturn {
   defaultImageProfileId: string
   avatarRefreshKey: number
   templateCounts: TemplateCounts
+  literalCounts: { charCount: number; userCount: number }
   replacingTemplate: 'char' | 'user' | null
+  reversingTemplate: 'char' | 'user' | null
   togglingNpc: boolean
   togglingFavorite: boolean
   togglingControlledBy: boolean
@@ -50,6 +60,7 @@ interface UseCharacterViewReturn {
   setAvatarRefreshKey: (key: number) => void
   setImageProfiles: (profiles: ImageProfile[]) => void
   handleTemplateReplace: (type: 'char' | 'user') => Promise<void>
+  handleReverseTemplate: (type: 'char' | 'user', chosenName: string) => Promise<void>
   handleSaveConnectionProfile: (profileId: string) => Promise<void>
   handleSaveDefaultPartner: (partnerId: string) => Promise<void>
   handleSaveImageProfile: (profileId: string | null) => Promise<void>
@@ -78,6 +89,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const [avatarRefreshKey, setAvatarRefreshKey] = useState(0)
   const [replacingTemplate, setReplacingTemplate] = useState<'char' | 'user' | null>(null)
+  const [reversingTemplate, setReversingTemplate] = useState<'char' | 'user' | null>(null)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
   const [savingPartner, setSavingPartner] = useState(false)
   const [savingImageProfile, setSavingImageProfile] = useState(false)
@@ -98,37 +110,24 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const defaultPartner = userControlledCharacters.find(c => c.id === defaultPartnerId)
   const defaultPartnerName = defaultPartner?.name || null
 
-  // Count template replacement opportunities across every prose field plus the
-  // single physicalDescription record and the prose-carrying arrays
-  // (systemPrompts, scenarios). Keys are synthetic per-entry so
-  // countTemplateReplacements can return per-field totals. `properties.json`
-  // metadata (pronouns, aliases, title, talkativeness) is intentionally
-  // excluded.
-  const templateFields: Record<string, string | null | undefined> = {
-    description: character?.description,
-    manifesto: character?.manifesto,
-    personality: character?.personality,
-    firstMessage: character?.firstMessage,
-    exampleDialogues: character?.exampleDialogues,
-  }
-  for (const p of character?.systemPrompts ?? []) {
-    templateFields[`systemPrompt:${p.id}`] = p.content
-  }
-  const pd = character?.physicalDescription
-  if (pd) {
-    templateFields[`physicalDescription:${pd.id}:fullDescription`] = pd.fullDescription
-    templateFields[`physicalDescription:${pd.id}:shortPrompt`] = pd.shortPrompt
-    templateFields[`physicalDescription:${pd.id}:mediumPrompt`] = pd.mediumPrompt
-    templateFields[`physicalDescription:${pd.id}:longPrompt`] = pd.longPrompt
-    templateFields[`physicalDescription:${pd.id}:completePrompt`] = pd.completePrompt
-  }
-  for (const s of character?.scenarios ?? []) {
-    templateFields[`scenario:${s.id}`] = s.content
-  }
+  // `collectTemplateFields` is the single source of truth for which character
+  // fields participate in templating (prose scalars incl. identity/manifesto,
+  // every scenario + system prompt, the physicalDescription prose/prompt
+  // fields). Both the forward count and the reverse-literal count walk it, and
+  // so does the transform engine, so they can never drift. `properties.json`
+  // metadata (pronouns, aliases, title, talkativeness) is intentionally excluded.
+  const templateDescriptors = character ? collectTemplateFields(character) : []
+  const templateFields: Record<string, string | null | undefined> = Object.fromEntries(
+    templateDescriptors.map((d) => [d.key, d.value])
+  )
 
   const templateCounts = character
     ? countTemplateReplacements(templateFields, character.name, defaultPartnerName)
     : { charCount: 0, userCount: 0, fieldCounts: {} }
+
+  // Count `{{char}}`/`{{user}}` literals already present — drives the reverse
+  // ("restore name") buttons.
+  const literalCounts = countTemplateLiterals(templateDescriptors.map((d) => d.value))
 
   const fetchCharacter = useCallback(async () => {
     try {
@@ -226,7 +225,40 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }, [characterId])
 
-  // Handler for template replacement
+  // Shared save routine for both template directions. The transform turns each
+  // templatable field's text from one form to the other; applyTemplateTransform
+  // routes the results to the main PUT and the dedicated system-prompt endpoint
+  // (system prompts are stripped by the character PUT schema). A full refetch
+  // resyncs counts/badges/buttons; on partial failure we still refetch so the UI
+  // never shows stale optimistic state.
+  const runTemplateSave = async (
+    transform: (text: string) => string,
+    successMsg: string
+  ): Promise<void> => {
+    if (!character) return
+
+    const { mainUpdates, changedSystemPrompts } = applyTemplateTransform(character, transform)
+
+    if (Object.keys(mainUpdates).length === 0 && changedSystemPrompts.length === 0) {
+      showSuccessToast('No replacements needed')
+      return
+    }
+
+    const { errors } = await applyCharacterFieldUpdates(characterId, {
+      mainUpdates,
+      promptUpdates: changedSystemPrompts,
+    })
+
+    await fetchCharacter()
+
+    if (errors.length > 0) {
+      showErrorToast(errors.join(' '))
+    } else {
+      showSuccessToast(successMsg)
+    }
+  }
+
+  // Forward: replace hard-coded names with {{char}} / {{user}} template tokens.
   const handleTemplateReplace = async (type: 'char' | 'user') => {
     if (!character) return
 
@@ -236,104 +268,39 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     if (!nameToReplace) return
 
     setReplacingTemplate(type)
-
     try {
-      // Build update payload with replaced fields
-      const updates: Record<string, string> = {}
-
-      if (character.description) {
-        const replaced = replaceWithTemplate(character.description, nameToReplace, template)
-        if (replaced !== character.description) updates.description = replaced
-      }
-      if (character.personality) {
-        const replaced = replaceWithTemplate(character.personality, nameToReplace, template)
-        if (replaced !== character.personality) updates.personality = replaced
-      }
-      // Apply template replacement to all scenarios
-      if (character.scenarios && character.scenarios.length > 0) {
-        const updatedScenarios = character.scenarios.map(s => {
-          const replaced = replaceWithTemplate(s.content, nameToReplace, template)
-          return replaced !== s.content ? { ...s, content: replaced } : s
-        })
-        const hasChanges = updatedScenarios.some((s, i) => s !== character.scenarios![i])
-        if (hasChanges) {
-          (updates as Record<string, unknown>).scenarios = updatedScenarios
-        }
-      }
-      if (character.firstMessage) {
-        const replaced = replaceWithTemplate(character.firstMessage, nameToReplace, template)
-        if (replaced !== character.firstMessage) updates.firstMessage = replaced
-      }
-      if (character.exampleDialogues) {
-        const replaced = replaceWithTemplate(character.exampleDialogues, nameToReplace, template)
-        if (replaced !== character.exampleDialogues) updates.exampleDialogues = replaced
-      }
-      // Apply template replacement to every system prompt variant (not just the default).
-      if (character.systemPrompts && character.systemPrompts.length > 0) {
-        const updatedPrompts = character.systemPrompts.map(p => {
-          const replaced = replaceWithTemplate(p.content, nameToReplace, template)
-          return replaced !== p.content ? { ...p, content: replaced } : p
-        })
-        if (updatedPrompts.some((p, i) => p !== character.systemPrompts![i])) {
-          (updates as Record<string, unknown>).systemPrompts = updatedPrompts
-        }
-      }
-      // Apply template replacement to the singular physicalDescription's five
-      // prose fields. The vault round-trips this record through
-      // physical-description.md / physical-prompts.json.
-      const pd = character.physicalDescription
-      if (pd) {
-        const fullDescription = pd.fullDescription
-          ? replaceWithTemplate(pd.fullDescription, nameToReplace, template)
-          : pd.fullDescription
-        const shortPrompt = pd.shortPrompt
-          ? replaceWithTemplate(pd.shortPrompt, nameToReplace, template)
-          : pd.shortPrompt
-        const mediumPrompt = pd.mediumPrompt
-          ? replaceWithTemplate(pd.mediumPrompt, nameToReplace, template)
-          : pd.mediumPrompt
-        const longPrompt = pd.longPrompt
-          ? replaceWithTemplate(pd.longPrompt, nameToReplace, template)
-          : pd.longPrompt
-        const completePrompt = pd.completePrompt
-          ? replaceWithTemplate(pd.completePrompt, nameToReplace, template)
-          : pd.completePrompt
-        const changed =
-          fullDescription !== pd.fullDescription ||
-          shortPrompt !== pd.shortPrompt ||
-          mediumPrompt !== pd.mediumPrompt ||
-          longPrompt !== pd.longPrompt ||
-          completePrompt !== pd.completePrompt
-        if (changed) {
-          (updates as Record<string, unknown>).physicalDescription = {
-            ...pd, fullDescription, shortPrompt, mediumPrompt, longPrompt, completePrompt,
-          }
-        }
-      }
-
-      if (Object.keys(updates).length === 0) {
-        showSuccessToast('No replacements needed')
-        return
-      }
-
-      const res = await fetch(`/api/v1/characters/${characterId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to update character')
-      }
-
-      await fetchCharacter()
-      showSuccessToast(`Replaced ${type === 'char' ? 'character name' : 'user character name'} with ${template}`)
+      await runTemplateSave(
+        (text) => replaceWithTemplate(text, nameToReplace, template),
+        `Replaced ${type === 'char' ? 'character name' : 'user character name'} with ${template}`
+      )
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to replace template')
       console.error('Template replacement failed', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setReplacingTemplate(null)
+    }
+  }
+
+  // Reverse: replace {{char}} / {{user}} tokens with a concrete name. For 'char'
+  // the name is this character's own; for 'user' the caller supplies the chosen
+  // user-controlled character's name (from the picker dialog).
+  const handleReverseTemplate = async (type: 'char' | 'user', chosenName: string) => {
+    if (!character) return
+
+    const name = type === 'char' ? character.name : chosenName
+    if (!name) return
+
+    setReversingTemplate(type)
+    try {
+      await runTemplateSave(
+        (text) => replaceTemplateWithName(text, type, name),
+        type === 'char' ? `Restored {{char}} to ${name}` : `Restored {{user}} to ${name}`
+      )
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to restore template')
+      console.error('Template restore failed', { error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setReversingTemplate(null)
     }
   }
 
@@ -699,7 +666,9 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     defaultImageProfileId,
     avatarRefreshKey,
     templateCounts,
+    literalCounts,
     replacingTemplate,
+    reversingTemplate,
     togglingNpc,
     togglingFavorite,
     togglingControlledBy,
@@ -722,6 +691,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     setAvatarRefreshKey,
     setImageProfiles,
     handleTemplateReplace,
+    handleReverseTemplate,
     handleSaveConnectionProfile,
     handleSaveDefaultPartner,
     handleSaveImageProfile,
