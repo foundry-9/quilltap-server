@@ -4,6 +4,19 @@
 
 ### 4.7-dev
 
+#### Refine from Memories: full core-document coverage, no new scenarios, and array fields that actually save
+
+Overhauled the Aurora "Refine from Memories" character optimizer (`lib/services/character-optimizer.service.ts`, `components/characters/optimizer/`):
+
+- **Covers the character's full appearance.** A new dedicated pass refines the physical description — the prose `fullDescription` plus the tiered image prompts (`shortPrompt`/`mediumPrompt`/`longPrompt`/`completePrompt`) — keyed per sub-field, so the optimizer now spans all of a character's core documents/properties rather than skipping appearance. `getPhysicalDescriptionSuggestionPrompt` added; physical suggestions carry the sub-field key on `subId` and a human label on `subName`.
+- **No more new scenarios.** The old "new items" pass (`getNewItemsSuggestionPrompt`) is replaced by `getNewSystemPromptsSuggestionPrompt`, which proposes only new *system prompts*. Existing scenarios may still be refined; new scenarios are out of scope and the shared schema preamble forbids them.
+- **Array fields now persist correctly.** Fixed the apply step (`useCharacterOptimizer.applyChanges`):
+  - **System prompts were never saved** — they were packed into a `systemPrompts` PUT body that `updateCharacterSchema` silently strips, and new prompts were dropped before that. Refinements now go through `PUT /api/v1/characters/[id]/prompts/[promptId]`; brand-new prompts go through `POST /api/v1/characters/[id]/prompts` under their **suggested name** (`Refined Prompt` fallback).
+  - **Physical descriptions were applied to a nonexistent `physicalDescriptions` array.** Sub-field refinements now merge into the single `physicalDescription` object and ride the PUT body.
+  - **Scenario refinements** continue via the PUT body (merged into the full array by id); new-scenario creation removed.
+- **Talkativeness now saves.** Added `talkativeness` (0.1–1.0) to `updateCharacterSchema` (PUT handler) so suggested verbosity changes route through the vault overlay instead of being stripped.
+- **UI/report:** suggestion cards and the apply summary show the proposed name for a brand-new system prompt; field labels updated (added Identity/Physical Description/Talkativeness, removed stale plural/clothing keys). Suggestions-file dossier groups updated (Physical Description in, Proposed New Scenarios out). No schema, migration, or `.qtap` change. Help doc `help/character-optimizer.md` and optimizer tests updated.
+
 #### Fix: group stores now appear in the Open Document picker without "Look everywhere"
 
 The Document Mode "Open Document" picker (`DocumentPickerModal`, backed by `?action=accessible-stores`) only collected character vaults, project-linked stores, and Quilltap General — never group stores — so a group's official/linked stores showed only when "Look everywhere" was toggled (which returns every enabled store, bucketed under Database-/Filesystem-backed). `handleAccessibleStores` now resolves the group tier (`resolveGroupMountPointIdsForCharacter` across all non-removed character participants, the same resolver the `group-stores` action and tiered mount pool use) and returns those stores tagged `isGroupStore`. The picker buckets them into a dedicated **Group Files** accordion (above Database-backed, matching tier precedence and the attach-file picker's Group Files section) and holds them out of the generic backing buckets so each store appears once — in both default and look-everywhere modes. No schema, migration, or `.qtap` change.

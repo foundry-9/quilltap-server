@@ -36,6 +36,7 @@ interface SuggestionCardProps {
 }
 
 const FIELD_LABELS: Record<string, string> = {
+  identity: 'Identity',
   description: 'Description',
   manifesto: 'Manifesto',
   personality: 'Personality',
@@ -44,12 +45,13 @@ const FIELD_LABELS: Record<string, string> = {
   firstMessage: 'First Message',
   systemPrompt: 'System Prompt',
   systemPrompts: 'System Prompt',
-  physicalDescriptions: 'Physical Description',
-  clothingRecords: 'Attire Record',
+  physicalDescription: 'Physical Description',
+  talkativeness: 'Talkativeness',
   title: 'Title',
 };
 
 const FIELD_BADGE_CLASS: Record<string, string> = {
+  identity: 'qt-badge-primary',
   description: 'qt-badge-secondary',
   manifesto: 'qt-badge-primary',
   personality: 'qt-badge-character',
@@ -58,8 +60,8 @@ const FIELD_BADGE_CLASS: Record<string, string> = {
   firstMessage: 'qt-badge-message',
   systemPrompt: 'qt-badge-memory',
   systemPrompts: 'qt-badge-memory',
-  physicalDescriptions: 'qt-badge-user-character',
-  clothingRecords: 'qt-badge-tag',
+  physicalDescription: 'qt-badge-user-character',
+  talkativeness: 'qt-badge-chat',
   title: 'qt-badge-primary',
 };
 
@@ -140,7 +142,14 @@ export function SuggestionCard({
 
   const fieldLabel = FIELD_LABELS[suggestion.field] ?? suggestion.field;
   const fieldBadge = FIELD_BADGE_CLASS[suggestion.field] ?? 'qt-badge-secondary';
-  const displayLabel = suggestion.subName ? `${fieldLabel}: ${suggestion.subName}` : fieldLabel;
+  // For a refined sub-item show its name; for a brand-new system prompt show
+  // the proposed name so the author knows what they're commissioning.
+  const newItemName = suggestion.name ?? suggestion.title;
+  const displayLabel = suggestion.subName
+    ? `${fieldLabel}: ${suggestion.subName}`
+    : newItemName
+    ? `${fieldLabel}: ${newItemName}`
+    : fieldLabel;
 
   const handleEditAccept = () => {
     onEdit(draftValue);

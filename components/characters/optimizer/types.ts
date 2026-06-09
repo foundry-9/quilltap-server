@@ -17,9 +17,16 @@ export interface OptimizerAnalysis {
 export interface OptimizerSuggestion {
   id: string;
   field: string;
+  /**
+   * For an existing scenario/system prompt, the item's id. For a
+   * `physicalDescription` suggestion, the sub-field key being refined
+   * (`fullDescription` | `shortPrompt` | `mediumPrompt` | `longPrompt` | `completePrompt`).
+   */
   subId?: string;
   subName?: string;
   title?: string;
+  /** Suggested name for a brand-new system prompt (only when no `subId`). */
+  name?: string;
   currentValue: string;
   proposedValue: string;
   rationale: string;
@@ -31,7 +38,7 @@ export type OptimizerPhase = 'preflight' | 'progress' | 'review' | 'apply' | 'su
 
 export type OptimizerOutputMode = 'apply' | 'suggestions-file';
 
-export type OptimizerSubStepKind = 'general' | 'scenario' | 'systemPrompt' | 'newItems';
+export type OptimizerSubStepKind = 'general' | 'scenario' | 'systemPrompt' | 'physicalDescription' | 'newSystemPrompts';
 
 export interface OptimizerSubStep {
   kind: OptimizerSubStepKind;

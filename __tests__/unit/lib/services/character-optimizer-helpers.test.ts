@@ -9,11 +9,12 @@ import {
   getGeneralFieldsSuggestionsPrompt,
   getScenarioSuggestionPrompt,
   getSystemPromptSuggestionPrompt,
-  getNewItemsSuggestionPrompt,
+  getPhysicalDescriptionSuggestionPrompt,
+  getNewSystemPromptsSuggestionPrompt,
 } from '@/lib/services/character-optimizer.service'
 import { createMockCharacter, createMockMemory } from '../fixtures/test-factories'
 import type { OptimizerAnalysis } from '@/lib/services/character-optimizer.service'
-import type { CharacterScenario, CharacterSystemPrompt } from '@/lib/schemas/types'
+import type { CharacterScenario, CharacterSystemPrompt, PhysicalDescription } from '@/lib/schemas/types'
 
 describe('buildCharacterContext', () => {
   it('includes character name', () => {
@@ -319,12 +320,55 @@ describe('per-item suggestion prompts', () => {
     })
   })
 
-  describe('getNewItemsSuggestionPrompt', () => {
-    it('includes the analysis and guides additions only', () => {
-      const result = getNewItemsSuggestionPrompt(mockAnalysis)
+  describe('getPhysicalDescriptionSuggestionPrompt', () => {
+    const physical: PhysicalDescription = {
+      id: 'pd-1',
+      name: 'Appearance',
+      usageContext: null,
+      shortPrompt: 'tall, dark hair',
+      mediumPrompt: 'a tall figure with dark hair',
+      longPrompt: 'a tall figure with long dark hair and grey eyes',
+      completePrompt: 'complete prompt',
+      fullDescription: 'A tall figure with dark hair.',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    }
+
+    it('lists the physical sub-field keys and includes the current values', () => {
+      const result = getPhysicalDescriptionSuggestionPrompt(mockAnalysis, physical)
+      expect(result).toContain('fullDescription')
+      expect(result).toContain('shortPrompt')
+      expect(result).toContain('mediumPrompt')
+      expect(result).toContain('longPrompt')
+      expect(result).toContain('completePrompt')
+      expect(result).toContain('A tall figure with dark hair.')
+      expect(result).toContain(JSON.stringify(mockAnalysis, null, 2))
+    })
+
+    it('handles a character with no physical description', () => {
+      const result = getPhysicalDescriptionSuggestionPrompt(mockAnalysis, null)
+      expect(result).toContain('no physical description yet')
+      expect(result).toContain('field="physicalDescription"')
+    })
+
+    it('forbids brand-new scenarios via the shared schema preamble', () => {
+      const result = getPhysicalDescriptionSuggestionPrompt(mockAnalysis, physical)
+      expect(result.toLowerCase()).toContain('do not propose brand-new scenarios')
+    })
+  })
+
+  describe('getNewSystemPromptsSuggestionPrompt', () => {
+    it('includes the analysis and guides system-prompt additions only', () => {
+      const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis)
       expect(result).toContain(JSON.stringify(mockAnalysis, null, 2))
       expect(result.toLowerCase()).toContain('new')
       expect(result.toLowerCase()).toContain('additions only')
+      expect(result).toContain('field="systemPrompt"')
+    })
+
+    it('explicitly forbids proposing new scenarios', () => {
+      const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis)
+      expect(result.toLowerCase()).toContain('do not propose new scenarios')
     })
   })
 })

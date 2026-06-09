@@ -37,6 +37,7 @@ const updateCharacterSchema = z.object({
     .optional(),
   firstMessage: z.string().optional(),
   exampleDialogues: z.string().optional(),
+  talkativeness: z.number().min(0.1).max(1.0).optional(),
   defaultConnectionProfileId: z.uuid()
     .optional()
     .or(

@@ -57,7 +57,7 @@ The optimizer works through three stages, each reported with an animated progres
 
 The progress bar shows three segments — one per stage — that fill as each proceeds. An elapsed timer counts up below. When filters narrow the results, you'll see a message such as "142 memoirs matched; top 30 selected for analysis."
 
-During **Generating**, the optimizer makes *one focused pass per subject* rather than pooling everything into a single verdict. Each of the character's existing scenarios is considered on its own terms, as is each existing system prompt; a separate pass handles the general fields (identity, description, personality, example dialogues, talkativeness), and a final pass asks whether any genuinely new scenarios or system prompts are warranted by the patterns the memoirs reveal. The modal shows a sub-step label such as "Scenario 2 of 5 — Tea Room" so you can see which subject is currently under consideration. This is more thorough (and, in candour, more costly in model calls) than a single sweeping pass, but it means per-scenario quirks are no longer averaged out across siblings.
+During **Generating**, the optimizer makes *one focused pass per subject* rather than pooling everything into a single verdict. A first pass handles the general fields (identity, description, manifesto, personality, example dialogues, talkativeness); then each of the character's existing scenarios is considered on its own terms, as is each existing system prompt; a dedicated pass refines the physical description (the prose appearance and its tiered image prompts); and a final pass asks whether any genuinely new system prompts are warranted by the patterns the memoirs reveal. The optimizer no longer invents new scenarios — existing scenarios may be refined, but new ones are out of scope. The modal shows a sub-step label such as "Scenario 2 of 5 — Tea Room" so you can see which subject is currently under consideration. This is more thorough (and, in candour, more costly in model calls) than a single sweeping pass, but it means per-subject quirks are no longer averaged out across siblings.
 
 When the analysis completes, you'll see a summary of the behavioural patterns discovered.
 
@@ -93,7 +93,7 @@ For characters that have a linked document-store vault, a second output mode is 
 Suggestions/refinement-<YYYYMMDD-HHMMSS>.md
 ```
 
-inside the character's vault. The dossier opens with YAML frontmatter identifying the run, then carries the analysis summary, the observed behavioural patterns, and each proposed change as its own section — grouped as General Fields, Scenario Refinements, Proposed New Scenarios, System Prompt Refinements, and Proposed New System Prompts. Each proposal shows the current and proposed text in fenced blocks, its significance score, the rationale, and the supporting memoir excerpts.
+inside the character's vault. The dossier opens with YAML frontmatter identifying the run, then carries the analysis summary, the observed behavioural patterns, and each proposed change as its own section — grouped as General Fields, Scenario Refinements, Physical Description, System Prompt Refinements, and Proposed New System Prompts. Each proposal shows the current and proposed text in fenced blocks, its significance score, the rationale, and the supporting memoir excerpts.
 
 Nothing is applied to the character in this mode — the dossier exists for the author and the character to read together (or for the character to consult via `doc_read_file` in-chat) and then commission piecemeal at leisure. To actually commission a proposal, edit the relevant vault file (or re-run the optimizer in its default apply-and-review mode with the proposal as your guide). The checkbox only appears when the character is vault-backed; it has no effect on characters whose properties live solely in the database.
 
@@ -105,12 +105,11 @@ The optimizer may propose changes to:
 - **Description** — How acquaintances perceive the character: behaviour, mannerisms, frequent verbal patterns. Not physical appearance, not internal monologue.
 - **Manifesto** — The character's axiomatic core and load-bearing truths. *Suggestions are rare and high-stakes.* The optimizer only proposes manifesto edits when memory contradicts a basic tenet or reveals a foundational fact not yet captured — never for stylistic improvements. Manifesto instability is treated as a red flag warranting careful review.
 - **Personality** — The character's own self-knowledge: the internal driver of speech and behaviour. Not visible to others unless shared.
-- **Scenarios** — Updates to the content of existing named scenarios where the established description no longer reflects how the character actually behaves in that context, or an entirely new scenario with a title and content if the memories reveal a recurring setting not yet catalogued
+- **Scenarios** — Refinements to the content of *existing* named scenarios where the established setting no longer reflects how the character actually behaves in that context. The optimizer will **not** invent new scenarios.
 - **Example Dialogues** — Sample conversations demonstrating voice
-- **System Prompts** — Individual named system prompts (modified, not created)
-- **Physical Descriptions** — Appearance descriptions at various detail levels
-- **Clothing Records** — Outfit and attire descriptions
-- **Talkativeness** — The character's verbosity setting
+- **Physical Description** — The character's appearance: the prose `fullDescription` and the tiered image-generation prompts (`shortPrompt`, `mediumPrompt`, `longPrompt`, `completePrompt`). Only refined when the memories genuinely reveal a visible, physical trait.
+- **System Prompts** — Existing named system prompts may be refined, and the optimizer may also propose an *entirely new* system prompt (with a suggested name) when the memories reveal an interaction style the existing set doesn't cover. New prompts are saved under their proposed name.
+- **Talkativeness** — The character's verbosity setting (a number between 0.1 and 1.0)
 
 The optimizer will **not** touch names, aliases, pronouns, titles, first messages, or other structural fields.
 
