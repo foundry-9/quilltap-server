@@ -15,6 +15,7 @@ A theme is a complete visual design for Quilltap that includes:
 - **Color scheme** — Primary, secondary, accent, and background colors for light and dark modes
 - **Typography** — Font families used for headings and body text
 - **Component styles** — Visual appearance of buttons, cards, inputs, and other UI elements
+- **Icon overrides** — Custom glyphs replacing any of the application's standard icons (`.qtap-theme` bundles only)
 - **Dark mode support** — Some themes provide separate styling for light and dark modes
 
 Quilltap comes with a built-in default theme and can be extended with custom themes installed as plugins or uploaded as `.qtap-theme` bundles.
@@ -301,6 +302,40 @@ npx create-quilltap-theme my-theme --plugin
 ```
 
 See the **Theme Plugin Development Guide** for details on the plugin format.
+
+### Custom Icons
+
+Beyond the customary palette and typography, `.qtap-theme` bundles may declare their own icon artwork — replacing any of the application's eighty-odd standard glyphs with designs of the author's own devising. When the theme is active, the substitution is instantaneous and entirely silent: no reload, no ceremony, simply a different glyph appearing in the expected place.
+
+#### Declaring Icon Overrides
+
+In your `theme.json`, add an `icons` record mapping each icon's name to a bundle-relative asset path:
+
+```json
+{
+  "icons": {
+    "brand":    "icons/brand.webp",
+    "settings": "icons/settings.svg",
+    "wardrobe": "icons/wardrobe.svg",
+    "help":     "icons/help.svg"
+  }
+}
+```
+
+Names must correspond to entries in Quilltap's canonical icon list — the complete catalogue appears in the **Icons** story of `@quilltap/theme-storybook`, which the `create-quilltap-theme` scaffold includes in its Storybook setup automatically. Icons not declared in the map are left at their defaults; the entire list need not be addressed, only those whose default glyph the theme wishes to improve upon.
+
+#### Two Modes of Replacement
+
+The file format governs how the replacement is rendered:
+
+- **`.svg` files** are painted in *mask mode*: the glyph is tinted by the surrounding text colour (`currentColor`). Ideal for clean monochrome line drawings that should harmonise with the theme's foreground, active, or muted states — the icon responds to hover and disabled colouring exactly as a stock glyph would. Passing splendidly in polite society, one might say.
+- **`.webp` files** (and other non-SVG formats) are displayed in *image mode*: the artwork is shown exactly as authored, colours unchanged by the interface. Well-suited to icons that carry their own palette — a brass-inlaid quill, a hand-lettered monogram, or an illustration that must retain its specific hue regardless of what the surrounding typography is doing.
+
+The `brand` icon is always displayed in image mode regardless of file format, so an SVG brand mark is never inadvertently reduced to a silhouette.
+
+#### Validating Icon Overrides
+
+The `npx quilltap themes validate` command checks the `icons` block as part of its inspection — it confirms that asset paths end in `.svg` or `.webp`, contain no suspicious traversal sequences, and that the values are non-empty. Icon names that fail the kebab-case convention receive a warning rather than an error, given that future Quilltap releases may extend the canonical list.
 
 ### Managing Themes via CLI
 

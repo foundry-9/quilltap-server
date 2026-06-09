@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### Theme icon overrides: help and developer documentation
+
+Added user-facing and developer-facing documentation for the icon override system introduced in the previous three changes.
+
+- `help/themes.md` now documents the `icons` manifest field (under Custom Themes → Custom Icons), the `.svg`/`.webp` asset modes, the `brand`-is-always-image-mode rule, and the CLI validation behaviour. The "What Are Themes?" summary list now mentions icon overrides.
+- `docs/developer/THEME_PLUGIN_DEVELOPMENT.md` gains a bundle-format icon-overrides reference section before the existing deprecated-npm content: manifest snippet, asset-mode table, canonical-name pointers, CSS mechanics summary, and authoring notes.
+- `components/settings/appearance/README.md` updated with an Icon Overrides section covering the 79-icon map, the two render modes, and the live-switch behaviour.
+- `docs/developer/ICON_INVENTORY.md` added to the `update-documentation.md` registry.
+
 #### Centralized, theme-ready icon system (foundation + sidebar pilot)
 
 Started moving the app's scattered inline-SVG icons into one place so a `.qtap-theme` bundle can eventually override any of them.
