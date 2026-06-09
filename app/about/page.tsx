@@ -143,7 +143,7 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Calliope &ndash; Themes</strong> &ndash; five bundled themes (Art Deco, Earl Grey, Great Estate, Old School, Rains) plus a Default, with live switching, declarative <code>.qtap-theme</code> bundles, and signed remote registries</span>
+            <span><strong>Calliope &ndash; Themes</strong> &ndash; six bundled themes (Art Deco, Earl Grey, Great Estate, Madman&apos;s Box, Old School, Rains) plus a Default, with live switching, declarative <code>.qtap-theme</code> bundles, and signed remote registries</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>

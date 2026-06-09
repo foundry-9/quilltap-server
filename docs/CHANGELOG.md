@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### New bundled theme: Madman's Box
+
+Added a sixth bundled `.qtap-theme` at `themes/bundled/madmans-box/`. Dark-only (`supportsDarkMode: false`, both color slots identical so it ignores the host light/dark toggle). Warm walnut+brass palette with amber tube-glow, phosphor-cyan for links/focus/active state, and banker's-lamp green for success. Self-hosts Raleway (UI), Mulish (user messages — has true italics), Lora (assistant prose), and Fira Code (mono); Lora and Mulish woff2s were instantiated from the upstream variable fonts at weights 400/500/600/700. OFL licenses for Lora and Mulish are bundled in `fonts/OFL.txt`. Bundled themes auto-register from `themes/bundled/` at startup, so it appears after a restart. No schema, migration, `.qtap`-export, or DDL change.
+
 #### Character page template buttons: full field coverage, system prompts that save, and reverse direction
 
 Reworked the `{{char}}`/`{{user}}` template buttons on the Aurora character Details view (`app/aurora/[id]/view/`).

@@ -32,7 +32,7 @@ appearance/
 
 ### Theme Selection
 - Default theme with preview
-- Bundled themes (Art Deco, Earl Grey, Great Estate, Old School, Rains)
+- Bundled themes (Art Deco, Earl Grey, Great Estate, Madman's Box, Old School, Rains)
 - User-installed bundle themes (.qtap-theme format)
 - Legacy plugin-provided themes (deprecated, shown with badge)
 - Live preview of color swatches

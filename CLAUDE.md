@@ -77,7 +77,7 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 
 - **Bundle format (.qtap-theme)** is the primary and recommended way to distribute themes — declarative zip archives containing JSON tokens, CSS, fonts, and images with no build tools required
 - **Plugin format (npm)** is deprecated — existing plugin themes still work but new themes should use bundles
-- All 5 bundled themes (Art Deco, Earl Grey, Great Estate, Old School, Rains) ship as `.qtap-theme` bundle directories in `themes/bundled/` — the old `plugins/dist/qtap-plugin-theme-*` directories have been removed
+- All 6 bundled themes (Art Deco, Earl Grey, Great Estate, Madman's Box, Old School, Rains) ship as `.qtap-theme` bundle directories in `themes/bundled/` — the old `plugins/dist/qtap-plugin-theme-*` directories have been removed
 - Theme bundles are stored at `<dataDir>/themes/<themeId>/` with an index at `<dataDir>/themes/themes-index.json`
 - Theme registries allow browsing/installing themes from remote sources with Ed25519 signature verification
 - `create-quilltap-theme` v2.0.0+ defaults to bundle format; use `--plugin` for legacy npm plugin format

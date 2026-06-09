@@ -92,7 +92,7 @@ The menu closes when you:
 The quick-switcher shows:
 
 - **Default theme** — Always available, at the top
-- **Bundled themes** — Five themes ship with Quilltap (Art Deco, Earl Grey, Great Estate, Old School, Rains)
+- **Bundled themes** — Six themes ship with Quilltap (Art Deco, Earl Grey, Great Estate, Madman's Box, Old School, Rains)
 - **Installed bundle themes** — Any `.qtap-theme` bundles you've installed
 - **Legacy plugin themes** — Any npm-based theme plugins (deprecated)
 
@@ -170,6 +170,7 @@ The quick-switcher menu is organized as:
 │ Default Theme       │ ← Default theme always first
 │ ─────────────────── │
 │ Great Estate        │ ← Bundled & installed themes
+│ Madman's Box        │
 │ Rains               │
 │ Earl Grey           │
 │ ─────────────────── │
