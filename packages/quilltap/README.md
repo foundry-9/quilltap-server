@@ -198,6 +198,18 @@ quilltap memories status [--character <name|id>]                       # Per-hol
 
 Shared filter flags apply to `ls`, `find`, `grep`, and `status` where they make sense: `--character`, `--about` (with `self` / `none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`. Sort flags (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, plus `-r` to reverse) apply to `ls`, `find`, and `grep`. Names accept fuzzy substrings; ambiguous names print candidates and exit 2. `--json` is supported by every verb. The legacy `quilltap db memories --character <name>` verb remains undisturbed.
 
+## Maintenance & Cleanup
+
+`quilltap maintenance` is the manual trigger for the retention sweeps that otherwise run on the server's daily maintenance tick. It reaps data with no bearing on characters, stories, or memories.
+
+```bash
+quilltap maintenance status                  # Read-only: last sweep time + dry-run counts of what would be reaped
+quilltap maintenance status --instance Friday --json
+quilltap maintenance run --instance Friday    # Run the sweeps once (lock-gated; refuses while the server is up)
+```
+
+`maintenance run` is a DB writer: it claims `<dataDir>/quilltap.lock` and **refuses while a running Quilltap server holds it** — stop the server first. Because it can only run with the server down, it performs the sweeps expressible as direct SQL/filesystem work: reaping finished background jobs (COMPLETED after 7 days, DEAD after 30, keyed off `completedAt`), closed terminal sessions older than 30 days plus their transcript files, and orphaned mount-index files. The **stale-chat asset collapse** (superseded story-backgrounds and wardrobe avatars) needs the server's file-storage machinery and runs only on the server's daily tick — `status` reports a stale-chat count so you can see the backlog. Retention windows mirror `lib/background-jobs/maintenance/retention-constants.ts`.
+
 ## Theme Management
 
 The CLI includes theme management commands:

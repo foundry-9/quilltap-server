@@ -724,6 +724,9 @@ export async function register() {
         const { scheduleHousekeeping } = await import('./lib/background-jobs/scheduled-housekeeping');
         scheduleHousekeeping();
 
+        const { scheduleMaintenance } = await import('./lib/background-jobs/scheduled-maintenance');
+        scheduleMaintenance();
+
         const { scheduleDangerScan } = await import('./lib/background-jobs/scheduled-danger-scan');
         await scheduleDangerScan();
 
