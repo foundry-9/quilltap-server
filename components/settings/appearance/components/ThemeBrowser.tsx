@@ -12,6 +12,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import useSWR from 'swr'
+import { Icon } from '@/components/ui/icon'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -262,14 +263,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
           onClick={() => setIsExpanded((prev) => !prev)}
           className="flex items-center gap-2 qt-heading-3 text-foreground hover:text-foreground/80 transition-colors"
         >
-          <svg
-            className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          <Icon name="chevron-right" className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
           Browse Themes
         </button>
 
@@ -287,14 +281,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
+                <Icon name="refresh" className="w-4 h-4" />
                 Refresh
               </>
             )}
@@ -324,14 +311,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                   onClick={() => setStatus(null)}
                   className="ml-2 text-current opacity-60 hover:opacity-100"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
+                  <Icon name="close" className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -339,19 +319,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
 
           {/* Search */}
           <div className="relative">
-            <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary pointer-events-none"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
+            <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary pointer-events-none" />
             <input
               type="text"
               placeholder="Search themes..."
@@ -428,32 +396,16 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                   >
                     {source.name}
                     {source.enabled ? (
-                      <svg
+                      <Icon
+                        name="check"
                         className="w-3.5 h-3.5"
                         style={{ color: 'var(--qt-success, hsl(142, 65%, 40%))' }}
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
+                      />
                     ) : (
-                      <svg
+                      <Icon
+                        name="ban"
                         className="w-3.5 h-3.5 qt-text-secondary"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                        />
-                      </svg>
+                      />
                     )}
                     <button
                       type="button"
@@ -461,14 +413,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                       className="ml-0.5 qt-text-secondary hover:qt-text-destructive transition-colors"
                       title={`Remove ${source.name}`}
                     >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
+                      <Icon name="close" className="w-3 h-3" />
                     </button>
                   </span>
                 ))
@@ -481,14 +426,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                 onClick={() => setShowAddSource((prev) => !prev)}
                 className="qt-button-secondary qt-button-sm flex items-center gap-1"
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
+                <Icon name="plus" className="w-3.5 h-3.5" />
                 Add Source
               </button>
             </div>
@@ -633,13 +571,7 @@ function RegistryThemeCard({ theme, isInstalling, onInstall }: RegistryThemeCard
           {/* Verified badge */}
           {theme.verified ? (
             <span className="qt-badge inline-flex items-center gap-0.5 text-xs" title="Verified">
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
+              <Icon name="shield" className="w-3 h-3" />
               Verified
             </span>
           ) : (
@@ -647,14 +579,7 @@ function RegistryThemeCard({ theme, isInstalling, onInstall }: RegistryThemeCard
               className="qt-badge inline-flex items-center gap-0.5 text-xs opacity-60"
               title="Unverified - not cryptographically signed"
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
-                />
-              </svg>
+              <Icon name="alert-triangle" className="w-3 h-3" />
               Unverified
             </span>
           )}
@@ -665,14 +590,7 @@ function RegistryThemeCard({ theme, isInstalling, onInstall }: RegistryThemeCard
               className="qt-badge inline-flex items-center gap-0.5 text-xs opacity-60"
               title="May not be compatible with this version"
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+              <Icon name="alert-circle" className="w-3 h-3" />
               Incompatible
             </span>
           )}
@@ -681,13 +599,7 @@ function RegistryThemeCard({ theme, isInstalling, onInstall }: RegistryThemeCard
         {/* Install / Installed button */}
         {theme.installed ? (
           <span className="qt-badge inline-flex items-center gap-1 text-xs">
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <Icon name="check" className="w-3 h-3" />
             Installed
           </span>
         ) : (
@@ -704,14 +616,7 @@ function RegistryThemeCard({ theme, isInstalling, onInstall }: RegistryThemeCard
               </>
             ) : (
               <>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
+                <Icon name="download" className="w-3.5 h-3.5" />
                 Install
               </>
             )}

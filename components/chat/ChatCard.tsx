@@ -20,6 +20,7 @@ import AvatarStack from '@/components/ui/AvatarStack'
 import { formatChatListDate } from '@/lib/format-time'
 import { CloseIcon } from '@/components/ui/icons'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { Icon } from '@/components/ui/icon'
 
 // ============================================================================
 // Types
@@ -109,50 +110,6 @@ export interface ChatCardProps {
   characterName?: string
 }
 
-// ============================================================================
-// Icons
-// ============================================================================
-
-function FolderIcon({ className, color }: { className?: string; color?: string | null }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill={color || 'none'}
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-    </svg>
-  )
-}
-
-function TrashIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
-      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-    </svg>
-  )
-}
-
-function LinkIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    </svg>
-  )
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  )
-}
 
 // ============================================================================
 // Helpers
@@ -273,9 +230,7 @@ export function ChatCard({
                 {displayTitle}
               </h3>
               <span className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-primary/10 px-2.5 py-0.5 qt-body-sm font-semibold flex-shrink-0" title="Messages">
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
+                <Icon name="chat" className="w-3 h-3" />
                 {chat.messageCount}
               </span>
               {chat.memoryCount !== undefined && (
@@ -289,10 +244,7 @@ export function ChatCard({
                     onReextractMemories?.(chat.id)
                   }}
                 >
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                  </svg>
+                  <Icon name="book" className="w-3 h-3" />
                   {chat.memoryCount}
                 </button>
               )}
@@ -319,12 +271,7 @@ export function ChatCard({
                     onRenderConversation?.(chat.id)
                   }}
                 >
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                  </svg>
+                  <Icon name="file" className="w-3 h-3" />
                 </button>
               )}
               {chat.isDangerousChat && (
@@ -335,10 +282,7 @@ export function ChatCard({
                   className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-muted qt-text-secondary px-2 py-0.5 qt-body-sm font-semibold flex-shrink-0"
                   title="Autonomous character-to-character room"
                 >
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="9" />
-                    <polyline points="12 7 12 12 15 14" />
-                  </svg>
+                  <Icon name="clock" className="w-3 h-3" />
                   Autonomous
                 </span>
               )}
@@ -350,9 +294,9 @@ export function ChatCard({
                 onClick={handleCopyLink}
               >
                 {copiedLink ? (
-                  <CheckIcon className="w-3 h-3 qt-text-success" />
+                  <Icon name="check" className="w-3 h-3 qt-text-success" />
                 ) : (
-                  <LinkIcon className="w-3 h-3" />
+                  <Icon name="link" className="w-3 h-3" />
                 )}
               </button>
             </div>
@@ -387,7 +331,7 @@ export function ChatCard({
                     className="inline-flex items-center gap-1 qt-text-xs px-2 py-1 rounded-full qt-bg-muted hover:qt-bg-surface-alt transition-colors"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <FolderIcon className="w-3 h-3" color={chat.project.color} />
+                    <Icon name="folder" className="w-3 h-3" style={chat.project.color ? { color: chat.project.color } : undefined} />
                     <span>{chat.project.name}</span>
                   </Link>
                 )}
@@ -412,7 +356,7 @@ export function ChatCard({
               title={actionType === 'delete' ? 'Delete chat' : 'Remove from project'}
             >
               {actionType === 'delete' ? (
-                <TrashIcon className="w-5 h-5" />
+                <Icon name="trash" className="w-5 h-5" />
               ) : (
                 <CloseIcon className="w-5 h-5" />
               )}

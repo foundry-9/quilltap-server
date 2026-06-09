@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Icon } from '@/components/ui/icon';
 import { showErrorToast } from '@/lib/toast';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { TagBadge } from '@/components/tags/tag-badge';
@@ -242,17 +243,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
               className="inline-flex items-center justify-center w-5 h-5 qt-text-secondary hover:text-foreground focus:outline-none disabled:opacity-50"
               aria-label="Cancel adding tag"
             >
-              <svg
-                className="w-4 h-4"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
+              <Icon name="close" className="w-4 h-4" />
             </button>
 
             {/* Suggestions dropdown */}

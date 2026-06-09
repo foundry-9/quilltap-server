@@ -10,54 +10,7 @@
  */
 
 import { useContentWidthOptional } from '@/components/providers/content-width-provider'
-
-/**
- * Expand icon - outward-pointing arrows (used when in narrow mode, click to expand)
- */
-function ExpandIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Left arrow pointing left */}
-      <polyline points="15 3 21 3 21 9" />
-      <line x1="21" y1="3" x2="14" y2="10" />
-      {/* Right arrow pointing right */}
-      <polyline points="9 21 3 21 3 15" />
-      <line x1="3" y1="21" x2="10" y2="14" />
-    </svg>
-  )
-}
-
-/**
- * Compress icon - inward-pointing arrows (used when in wide mode, click to compress)
- */
-function CompressIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Arrow pointing inward from top-right */}
-      <polyline points="4 14 10 14 10 20" />
-      <line x1="3" y1="21" x2="10" y2="14" />
-      {/* Arrow pointing inward from bottom-left */}
-      <polyline points="20 10 14 10 14 4" />
-      <line x1="21" y1="3" x2="14" y2="10" />
-    </svg>
-  )
-}
+import { Icon } from '@/components/ui/icon'
 
 export function NavContentWidthToggle() {
   const contentWidth = useContentWidthOptional()
@@ -83,9 +36,9 @@ export function NavContentWidthToggle() {
       aria-pressed={isWide}
     >
       {isWide ? (
-        <CompressIcon className="w-5 h-5" />
+        <Icon name="compress" className="w-5 h-5" />
       ) : (
-        <ExpandIcon className="w-5 h-5" />
+        <Icon name="expand" className="w-5 h-5" />
       )}
     </button>
   )

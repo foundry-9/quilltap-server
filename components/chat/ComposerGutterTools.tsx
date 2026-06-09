@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
+import { Icon } from '@/components/ui/icon'
 import RngDropdown, { type RngPendingResult } from './RngDropdown'
 
 interface ComposerGutterToolsProps {
@@ -58,14 +59,7 @@ export function ComposerGutterTools({
         aria-label="Insert announcement"
         style={{ gridColumn: '1 / -1' }}
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"
-          />
-        </svg>
+        <Icon name="megaphone" className="w-5 h-5" />
       </button>
 
       {/* Row 2, Col 1: Library File */}
@@ -77,10 +71,7 @@ export function ComposerGutterTools({
         title="Attach file from library"
         aria-label="Attach file from library"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11v6m-3-3h6" />
-        </svg>
+        <Icon name="file-plus" className="w-5 h-5" />
       </button>
 
       {/* Row 1, Col 2: Generate Image */}
@@ -92,10 +83,7 @@ export function ComposerGutterTools({
         title="Generate image"
         aria-label="Generate image"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-          <circle cx="12" cy="13" r="3" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
-        </svg>
+        <Icon name="camera" className="w-5 h-5" />
       </button>
 
       {/* Row 2, Col 1: Attach File */}
@@ -112,9 +100,7 @@ export function ComposerGutterTools({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
         ) : (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-          </svg>
+          <Icon name="paperclip" className="w-5 h-5" />
         )}
       </button>
 

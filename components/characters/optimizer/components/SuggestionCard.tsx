@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react';
+import { Icon } from '@/components/ui/icon';
 import type { OptimizerSuggestion, SuggestionDecision } from '../types';
 
 // Belt-and-braces guard: the optimizer service already coerces these fields,
@@ -93,14 +94,7 @@ function MemoryExcerpts({ excerpts }: { excerpts: string[] }) {
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-1.5 qt-caption hover:text-foreground transition-colors w-full text-left"
       >
-        <svg
-          className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
+        <Icon name="chevron-right" className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`} />
         <span>
           {expanded ? 'Conceal' : 'Consult'} the memoirs ({excerpts.length}{' '}
           {excerpts.length === 1 ? 'excerpt' : 'excerpts'})
@@ -255,9 +249,7 @@ export function SuggestionCard({
               onClick={onAccept}
               className="qt-button-success qt-button-sm flex-1 min-w-[80px]"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Icon name="check" className="w-3.5 h-3.5" />
               Accept
             </button>
           )}
@@ -267,9 +259,7 @@ export function SuggestionCard({
               onClick={onAccept}
               className="qt-button-ghost qt-button-sm flex-1 min-w-[80px] qt-text-success"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Icon name="check" className="w-3.5 h-3.5" />
               {isEdited ? 'Accepted (Edited)' : 'Accepted'}
             </button>
           )}
@@ -280,9 +270,7 @@ export function SuggestionCard({
               onClick={onReject}
               className="qt-button-destructive qt-button-sm flex-1 min-w-[80px]"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" className="w-3.5 h-3.5" />
               Reject
             </button>
           )}
@@ -292,9 +280,7 @@ export function SuggestionCard({
               onClick={onAccept}
               className="qt-button-ghost qt-button-sm flex-1 min-w-[80px] qt-text-destructive"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" className="w-3.5 h-3.5" />
               Rejected
             </button>
           )}
@@ -304,9 +290,7 @@ export function SuggestionCard({
             onClick={handleStartEdit}
             className="qt-button-secondary qt-button-sm flex-1 min-w-[80px]"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
+            <Icon name="pencil" className="w-3.5 h-3.5" />
             Edit &amp; Accept
           </button>
         </div>

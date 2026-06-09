@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { createPortal } from 'react-dom'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -278,19 +279,7 @@ export function ImportWizard({
                 onChange={handleFileSelect}
                 className="hidden"
               />
-              <svg
-                className="w-12 h-12 mx-auto mb-3 qt-text-secondary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                />
-              </svg>
+              <Icon name="cloud-upload" className="w-12 h-12 mx-auto mb-3 qt-text-secondary" />
               <p className="text-foreground font-medium">
                 {selectedFile ? selectedFile.name : 'Drag and drop a chat file here'}
               </p>
@@ -487,9 +476,7 @@ export function ImportWizard({
                 className="qt-text-secondary hover:text-foreground disabled:opacity-50"
                 aria-label="Close dialog"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <Icon name="close" className="w-5 h-5" />
               </button>
             </div>
 
@@ -508,9 +495,7 @@ export function ImportWizard({
                       }`}
                     >
                       {i < currentStepIndex ? (
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Icon name="check" className="w-3.5 h-3.5" />
                       ) : (
                         i + 1
                       )}

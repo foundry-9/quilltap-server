@@ -1,8 +1,8 @@
 # Icon inventory & canonical name contract
 
-**Status:** Phase 1 (the `<Icon>` system) and the Phase 2 **sidebar pilot** are implemented. This document is the **gate**: the proposed canonical icon-name list below is the permanent public contract that `.qtap-theme` bundles target. **It needs Charlie's sign-off before the remaining ~120-file migration (Phase 2b) locks the names in** — renaming an icon after themes ship overrides for it is a breaking change.
+**Status:** Phase 1 (the `<Icon>` system), the Phase 2 sidebar pilot, **and the Phase 2b app-wide sweep are all complete.** Every icon-bearing component file has been migrated to `<Icon>`; the only inline `<svg>` left in `components/` are the genuine non-icon graphics catalogued in §4. The canonical name list below (signed off 2026-06-09, plus the 14 names the sweep surfaced — see §2.1) is the permanent public contract that `.qtap-theme` bundles target. Renaming an icon after themes ship overrides for it is a breaking change; add freely, rename with care.
 
-Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.ts`](../../components/ui/icons/icon-registry.ts). Adding/renaming an icon = edit that file, drop the default SVG in `public/images/icons/`, and run `npm run generate:icon-css`.
+Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.ts`](../../components/ui/icons/icon-registry.ts) (**79 icons**). Adding/renaming an icon = edit that file, drop the default SVG in `public/images/icons/`, and run `npm run generate:icon-css`.
 
 ---
 
@@ -16,7 +16,7 @@ Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.t
 
 ## 2. Canonical icon-name list (the contract)
 
-`✓` = already implemented in the registry (Phase 1). `NEW` = proposed, to be added during the sweep. Names lean toward **function** a theme author would recognize. Several pairs intentionally **share a default glyph** but stay distinct names so a theme can diverge them later (noted).
+`✓` = implemented in the registry at Phase 1. `NEW` = was proposed here and has **since been implemented** during the Phase 2b sweep — every name in the tables below now exists in `icon-registry.ts` (plus the §2.1 additions). Names lean toward **function** a theme author would recognize. Several pairs intentionally **share a default glyph** but stay distinct names so a theme can diverge them later (noted).
 
 ### General UI & actions
 | Name | Status | Glyph | Consolidates (examples) |
@@ -100,6 +100,26 @@ Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.t
 
 ---
 
+### 2.1 Added during the Phase 2b sweep (genuinely new glyphs, not renames)
+
+The signed-off list covered the high-frequency glyphs from the initial scan. The full sweep surfaced more distinct, reusable glyphs with no canonical home. Because no theme had shipped overrides yet, these were promoted to canonical names during the sweep (additions, never renames — so the contract stays intact):
+
+| Name | Glyph | Used for |
+|---|---|---|
+| `arrow-up` / `arrow-down` | full-stem arrows | sort/scroll/dropdown direction (completes the `arrow-left`/`arrow-right` family) |
+| `ban` | circle with slash | silent/disabled/blocked states (participant "silent" overlay, disabled theme source, logging-off) |
+| `camera` | camera body + lens | regenerate avatar, generate-image gutter button |
+| `log-out` | arrow leaving a door | stop-impersonate, participant "absent" overlay, leave |
+| `users` | multi-person group | empty-participants state, group references |
+| `wrench` | wrench | Run Tool |
+| `database` | cylinder stack | State editor / data |
+| `swap` | two opposing horizontal arrows | Bulk Replace |
+| `file-plus` | document with `+` | insert/library file |
+| `code` | `</>` brackets | code-formatting toggle |
+| `zap` | lightning bolt | "Generate" actions (distinct from `sparkles`) |
+| `cpu` | chip | LLM-logs / memory-dedup / capabilities headers (system/processing) |
+| `layers` | stacked planes | task-queue header |
+
 ## 3. Decisions — SIGNED OFF (2026-06-09)
 
 1. **`profile`/`user` and `file`/`files`** — ✅ **keep distinct**, each pair sharing one default SVG so a theme can diverge the two surfaces later.
@@ -110,29 +130,33 @@ Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.t
 
 ---
 
-## 4. NOT migrated (genuine non-icon graphics)
+## 4. NOT migrated (genuine non-icon graphics — verified end state)
 
-These stay as inline SVG/components — they are not reusable themeable glyphs:
+The post-sweep audit (`grep -rn '<svg' components/`) returns **only** these categories — every one is a non-reusable graphic, not a themeable glyph:
 
-- **Loading spinners** (`animate-spin`) — ~30 instances incl. the shared `components/tools/import-export/components/LoadingSpinner.tsx` and `qt-spinner-*`. (A separate shared spinner is a possible future cleanup, out of scope here.)
-- **Charts / bar graphs** — `capabilities-report-card.tsx` data-viz.
-- **Provider badges** — `image-profiles/ProviderIcon.tsx` (plugin-supplied dynamic SVGs + abbreviation badges).
-- **Progress dividers / pending-state circles** — wizard step connectors, generation "pending" rings.
+- **Loading spinners** (`animate-spin`, the `M4 12a8 8 0 018-8V0…` arc) — the bulk of what remains, across dialogs/cards/steps, incl. the shared `components/tools/import-export/components/LoadingSpinner.tsx`. (Consolidating these into one shared spinner is a possible future cleanup, out of scope here.)
+- **Charts / bar graphs** — `components/tools/capabilities-report-card.tsx` (document-with-bars data-viz, 2 svgs).
+- **Provider badges** — `components/image-profiles/ProviderIcon.tsx` (plugin-supplied dynamic SVGs + abbreviation badges, 3 svgs).
+- **Pending-state rings** — `components/characters/ai-wizard/steps/GenerationStep.tsx` plain `<circle r="10">` field-status bullets (paired with the spinner = in-progress and `check-circle` = done).
+- **Chat-bubble tails** — `components/help-chat/HelpChatMessageList.tsx` (3 small triangle tails; bespoke geometric artwork).
+- **Drop-zone illustration** — `components/tools/import-export/steps/ImportFileStep.tsx` (two-way transfer-arrow drop-zone art).
+- **Empty-state illustration** — `components/tools/tasks-queue/index.tsx` clipboard "no tasks" art.
+- **Drag handle** — `components/settings/connection-profiles/ProfileCard.tsx` six-dot grip (carries drag listeners; UI chrome, see decision 4).
 - **The animated quill** — `components/chat/QuillAnimation.tsx` stays `<Image src="/quill.svg">` (bespoke `animate-quill-rock`); a `brand` theme override could later apply, but it is out of scope for the core migration.
-- **Drag handle** — see decision 5.
-
-The end-state audit (`grep -rn '<svg' components/`) should return only the above categories; they'll be listed here so the "all icons centralized" claim stays verifiable.
 
 ---
 
-## 5. Migration batching (Phase 2b, after sign-off)
+## 5. Migration batching (Phase 2b) — COMPLETE
 
-Done first as the pilot: **left sidebar** (`collapsed-nav`, `sidebar-footer`, `sidebar-header`, `profile-menu`). Remaining batches, each `npx tsc` + visual check + delete orphaned local icon defs:
+All batches landed (each verified with `npx tsc` + the §4 audit; orphaned local icon components deleted, with `ScenariosIcon` kept as a thin `<Icon name="scenarios">` wrapper so its many call sites stayed untouched):
 
-1. `components/ui/*` shells (BaseModal, FloatingDialog, SlideOverPanel, CollapsibleCard) + `dashboard/*` — high reuse, low risk.
-2. `components/chat/*` (24 files) — heaviest; split into composer/messages/dialogs.
-3. `components/tools/*` (23) + `components/settings/*` (11).
-4. `components/characters/*` + `character/*` + `wardrobe/*` + `memory/*` + `scenarios/*` + `setup-wizard/*`.
-5. `components/images/*` + `help-chat/*` + `profile/*` + `search/*` + `tags/*` + `homepage/*` + `terminal/*` + `state/*` + `import/*` + `quick-hide/*` + `layout/autonomous-room-badges.tsx`.
+- **Pilot:** left sidebar (`collapsed-nav`, `sidebar-footer`, `sidebar-header`, `profile-menu`).
+- **Batch 1:** `components/ui/*` shells (BaseModal, FloatingDialog, SlideOverPanel, CollapsibleCard) + `dashboard/*`.
+- **Batch 2:** `components/chat/*`.
+- **Batch 3:** `components/tools/*` + `components/settings/*`.
+- **Batch 4:** `components/characters/*` + `character/*` + `wardrobe/*` + `memory/*` + `scenarios/*` + `setup-wizard/*`.
+- **Batch 5:** `components/images/*` + `help-chat/*` + `profile/*` + `search/*` + `tags/*` + `homepage/*` + `terminal/*` + `state/*` + `import/*` + `quick-hide/*` + `new-chat/*` + `layout/autonomous-room-badges.tsx`.
 
-Each new canonical icon: add a registry entry, author `public/images/icons/<name>.svg` (24×24, monochrome `currentColor`), run `npm run generate:icon-css`. Record any further old→new consolidations here as they surface.
+Implementation note (cascade): `_icons.css` is imported **first** in `app/styles/qt-components/_index.css` so the `.qt-icon { width/height: 1em }` base is the weakest sizing in `@layer components` — call-site `w-*`/`h-*` utilities and any `qt-*` class that sizes an icon (e.g. `.qt-collapsible-card-chevron`) both win, so no icon is frozen at 1em.
+
+To add an icon later: add a registry entry, author `public/images/icons/<name>.svg` (24×24, monochrome `currentColor`), run `npm run generate:icon-css`.

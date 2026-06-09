@@ -13,6 +13,7 @@
  */
 
 import { useRef, useEffect, useCallback, useSyncExternalStore, type ReactNode } from 'react'
+import { Icon } from '@/components/ui/icon'
 
 interface CollapsibleCardProps {
   title: string
@@ -128,17 +129,10 @@ export function CollapsibleCard({
             {description && <p className="qt-card-description">{description}</p>}
           </div>
         </div>
-        <svg
+        <Icon
+          name="chevron-down"
           className={`qt-collapsible-card-chevron ${isOpen ? 'qt-collapsible-card-chevron-open' : ''}`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        />
       </button>
       {isOpen && (
         <>

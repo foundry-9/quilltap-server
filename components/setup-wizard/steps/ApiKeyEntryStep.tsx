@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { Icon } from '@/components/ui/icon'
 import type { WizardState, WizardAction, ProviderInfo } from '../useProviderWizardState'
 import { createApiKey, testConnection } from '../wizard-api'
 
@@ -159,17 +160,7 @@ export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
                 </span>
                 <h3 className="font-semibold text-lg">{provider.displayName}</h3>
                 {form.validated && (
-                  <svg
-                    className="w-5 h-5 qt-text-success ml-auto"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <Icon name="check" className="w-5 h-5 qt-text-success ml-auto" />
                 )}
               </div>
 

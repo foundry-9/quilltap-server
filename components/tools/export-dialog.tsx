@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { useExportData } from './import-export/hooks/useExportData'
 import { ENTITY_TYPE_LABELS } from './import-export/types'
 import {
@@ -108,19 +109,7 @@ export function ExportDialog({
                 className="qt-text-secondary hover:text-foreground disabled:opacity-50"
                 aria-label="Close dialog"
               >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+                <Icon name="close" className="w-6 h-6" />
               </button>
             </div>
           </div>

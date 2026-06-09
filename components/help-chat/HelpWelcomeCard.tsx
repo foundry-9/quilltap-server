@@ -1,5 +1,7 @@
 'use client'
 
+import { Icon } from '@/components/ui/icon'
+
 interface HelpWelcomeCardProps {
   onOpenDocument: (docId: string) => void
 }
@@ -28,9 +30,7 @@ export function HelpWelcomeCard({ onOpenDocument }: HelpWelcomeCardProps) {
             onClick={() => onOpenDocument(link.docId)}
             className="qt-help-welcome-link"
           >
-            <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 18l6-6-6-6" />
-            </svg>
+            <Icon name="chevron-right" className="w-3.5 h-3.5 flex-shrink-0" />
             {link.label}
           </button>
         ))}

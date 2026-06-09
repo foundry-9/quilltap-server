@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { Icon } from '@/components/ui/icon'
 
 interface DeleteSummary {
   characters: number
@@ -149,19 +150,7 @@ export function DeleteDataCard() {
             </p>
           </div>
           <div className="flex-shrink-0 qt-text-destructive">
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              />
-            </svg>
+            <Icon name="trash" className="w-8 h-8" />
           </div>
         </div>
 
@@ -193,9 +182,7 @@ export function DeleteDataCard() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 qt-bg-destructive/10 rounded-full flex items-center justify-center">
-                      <svg className="w-5 h-5 qt-text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
+                      <Icon name="alert-triangle" className="w-5 h-5 qt-text-destructive" />
                     </div>
                     <h2 className="qt-dialog-title text-foreground">
                       {step === 'complete' ? 'Deletion Complete' : 'Delete All Data'}
@@ -206,9 +193,7 @@ export function DeleteDataCard() {
                     className="qt-button qt-button-ghost qt-text-secondary hover:text-foreground p-1"
                     aria-label="Close dialog"
                   >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <Icon name="close" className="w-6 h-6" />
                   </button>
                 </div>
               </div>
@@ -357,9 +342,7 @@ export function DeleteDataCard() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-center">
                       <div className="w-16 h-16 qt-bg-success/10 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Icon name="check" className="w-8 h-8 qt-text-success" />
                       </div>
                     </div>
                     <p className="text-center qt-text-small">

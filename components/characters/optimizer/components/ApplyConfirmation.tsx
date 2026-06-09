@@ -8,6 +8,7 @@
  * the author's decisive hand upon the "Apply" button.
  */
 
+import { Icon } from '@/components/ui/icon';
 import type { OptimizerSuggestion } from '../types';
 
 interface ApplyConfirmationProps {
@@ -62,9 +63,7 @@ export function ApplyConfirmation({
   if (changes.length === 0) {
     return (
       <div className="flex flex-col items-center gap-4 py-8 text-center">
-        <svg className="w-12 h-12 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
+        <Icon name="file" className="w-12 h-12 qt-text-secondary" />
         <div className="flex flex-col gap-1">
           <h3 className="qt-section-title text-base">No Changes Accepted</h3>
           <p className="qt-section-subtitle text-sm">
@@ -84,9 +83,7 @@ export function ApplyConfirmation({
       {/* Summary header */}
       <div className="qt-card p-4 qt-bg-primary/5 qt-border-primary/20">
         <div className="flex items-center gap-2 mb-1">
-          <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+          <Icon name="check-circle" className="w-4 h-4 text-primary" />
           <h3 className="qt-section-title text-sm">
             {changes.length} {changes.length === 1 ? 'Amendment' : 'Amendments'} Awaiting Commission
           </h3>
@@ -136,9 +133,7 @@ export function ApplyConfirmation({
           disabled={applying}
           className="qt-button-secondary disabled:opacity-50"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
+          <Icon name="arrow-left" className="w-4 h-4" />
           Back to Review
         </button>
 
@@ -150,16 +145,12 @@ export function ApplyConfirmation({
         >
           {applying ? (
             <>
-              <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              <Icon name="refresh" className="w-4 h-4 animate-spin" />
               Applying Refinements…
             </>
           ) : (
             <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Icon name="check" className="w-4 h-4" />
               Apply {changes.length} {changes.length === 1 ? 'Change' : 'Changes'}
             </>
           )}

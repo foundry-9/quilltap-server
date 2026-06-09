@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { Icon } from '@/components/ui/icon';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Terminal } from './Terminal';
 import { useTerminalSession } from '@/hooks/useTerminalSession';
@@ -101,19 +102,10 @@ export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) 
             className="qt-icon-button p-1"
             aria-label={collapsed ? 'Expand' : 'Collapse'}
           >
-            <svg
+            <Icon
+              name="arrow-down"
               className={`w-4 h-4 transition-transform ${collapsed ? '-rotate-90' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 14l-7 7m0 0l-7-7m7 7V3"
-              />
-            </svg>
+            />
           </button>
           <h3 className="text-sm font-medium">{title}</h3>
         </div>
@@ -124,14 +116,7 @@ export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) 
             className="qt-button-icon text-sm"
             title="Pop out"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4m-4-6l6-6m0 0V4m0-2h2"
-              />
-            </svg>
+            <Icon name="external-link" className="w-4 h-4" />
           </button>
 
           {session.state !== 'exited' && (
@@ -140,9 +125,7 @@ export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) 
               className="qt-button-icon text-sm qt-text-destructive opacity-70 hover:opacity-100"
               title="Kill session"
             >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-              </svg>
+              <Icon name="close" className="w-4 h-4" />
             </button>
           )}
         </div>

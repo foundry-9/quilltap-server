@@ -9,6 +9,7 @@
  */
 
 import { useState, useMemo } from 'react'
+import { Icon } from '@/components/ui/icon'
 import useSWR from 'swr'
 
 /** Maps URL param patterns to their entity type and API source */
@@ -130,9 +131,7 @@ export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntity
             onClick={onCancel}
             className="p-0.5 rounded hover:bg-accent qt-text-secondary hover:text-foreground transition-colors"
           >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <Icon name="close" className="w-3.5 h-3.5" />
           </button>
         </div>
 

@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { Icon } from '@/components/ui/icon'
 import useSWR from 'swr'
 
 type RunState = 'idle' | 'running' | 'paused' | 'stopped' | 'budgetExhausted' | 'error'
@@ -152,22 +153,6 @@ function buildTooltip(room: AutonomousRoom, readout: BudgetReadout): string {
   return `${projectLine}\n${titleLine}\n${limitLine}\nstatus: ${status}`
 }
 
-function PlayIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false">
-      <polygon points="2,1 9,5 2,9" fill="currentColor" />
-    </svg>
-  )
-}
-
-function PauseIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false">
-      <rect x="2" y="1" width="2" height="8" fill="currentColor" />
-      <rect x="6" y="1" width="2" height="8" fill="currentColor" />
-    </svg>
-  )
-}
 
 export function AutonomousRoomBadges() {
   const { data, mutate } = useSWR<{ rooms: AutonomousRoom[] }>(
@@ -267,7 +252,7 @@ export function AutonomousRoomBadges() {
               aria-label={isRunning ? 'Pause' : 'Resume'}
               title={isRunning ? 'Pause' : 'Resume'}
             >
-              {isRunning ? <PauseIcon /> : <PlayIcon />}
+              {isRunning ? <Icon name="pause" className="w-2.5 h-2.5" /> : <Icon name="play" className="w-2.5 h-2.5" />}
             </button>
           </a>
         )

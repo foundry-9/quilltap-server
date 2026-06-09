@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState, useEffect } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
@@ -203,9 +204,7 @@ export function CharacterPickerPanel({
                     }
                   >
                     {isSelected && (
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
+                      <Icon name="check" className="h-4 w-4" />
                     )}
                   </div>
                 </button>
@@ -304,9 +303,7 @@ export function CharacterPickerPanel({
                       className="rounded p-1 qt-text-secondary hover:qt-bg-destructive/10 hover:qt-text-destructive"
                       title="Remove character"
                     >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <Icon name="close" className="h-5 w-5" />
                     </button>
                   </div>
                 </div>

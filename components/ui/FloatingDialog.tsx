@@ -9,6 +9,7 @@
 
 import { useState, useRef, useCallback, useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { Icon } from '@/components/ui/icon'
 
 export interface DialogGeometry {
   x: number
@@ -191,9 +192,7 @@ export function FloatingDialog({
             className="qt-floating-dialog-close"
             title="Close"
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <Icon name="close" className="w-4 h-4" />
           </button>
         </div>
       </div>

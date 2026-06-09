@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import useSWR from 'swr'
 import { CheckIcon } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icon'
 
 /**
  * Data directory info from the API
@@ -14,66 +15,6 @@ interface DataDirInfo {
   platform: 'docker' | 'linux' | 'darwin' | 'win32'
   isDocker: boolean
   canOpen: boolean
-}
-
-/**
- * Folder icon SVG
- */
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-    </svg>
-  )
-}
-
-/**
- * External link icon SVG
- */
-function ExternalLinkIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-      <polyline points="15 3 21 3 21 9" />
-      <line x1="10" y1="14" x2="21" y2="3" />
-    </svg>
-  )
-}
-
-/**
- * Copy icon SVG
- */
-function CopyIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  )
 }
 
 /**
@@ -188,7 +129,7 @@ export function DataDirectorySection() {
               {copied ? (
                 <CheckIcon className="w-4 h-4" />
               ) : (
-                <CopyIcon className="w-4 h-4" />
+                <Icon name="copy" className="w-4 h-4" />
               )}
             </button>
           </div>
@@ -221,13 +162,13 @@ export function DataDirectorySection() {
             disabled={opening}
             className="qt-button qt-button-secondary inline-flex items-center gap-2"
           >
-            <FolderIcon className="w-4 h-4" />
+            <Icon name="folder" className="w-4 h-4" />
             {opening ? 'Opening...' : 'Open in File Browser'}
           </button>
         ) : (
           <div className="qt-text-muted text-sm qt-bg-muted/30 p-3 rounded">
             <div className="flex items-start gap-2">
-              <ExternalLinkIcon className="w-4 h-4 mt-0.5 shrink-0" />
+              <Icon name="external-link" className="w-4 h-4 mt-0.5 shrink-0" />
               <div>
                 <p className="font-medium">Docker Environment</p>
                 <p className="mt-1">
