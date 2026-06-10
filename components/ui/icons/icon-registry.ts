@@ -78,6 +78,7 @@ export const ICON_REGISTRY = {
   'eye-off':       { defaultFile: '/images/icons/eye-off.svg',       defaultMode: 'mask' },
   'star':          { defaultFile: '/images/icons/star.svg',          defaultMode: 'mask' },
   'bookmark':      { defaultFile: '/images/icons/bookmark.svg',      defaultMode: 'mask' },
+  'tag':           { defaultFile: '/images/icons/tag.svg',           defaultMode: 'mask' },
   'expand':        { defaultFile: '/images/icons/expand.svg',        defaultMode: 'mask' },
   'compress':      { defaultFile: '/images/icons/compress.svg',      defaultMode: 'mask' },
 

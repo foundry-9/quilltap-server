@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<!--
+  Madman's Box icon redesign — contact sheet (dev tooling, not shipped).
+
+  Open directly via file:// (or `python3 -m http.server` from the repo root and
+  browse to /themes/tools/madmans-box-icon-preview.html). Renders every canonical
+  icon mask-style (the same mechanism the app uses) at 16/20/24/48 px in the
+  theme's own tints, with the app default beside each redesign for the squint
+  test. Missing overrides show as dashed gaps, so this doubles as a coverage
+  tracker. The name list below is cross-checked against icon-registry.ts by
+  check-madmans-box-icons.mjs — keep them in sync.
+
+  Review surface for docs/developer/features/madmans-box-icon-redesign.md §6.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Madman's Box — Icon Contact Sheet</title>
+<style>
+  :root {
+    --vault-black: hsl(28 32% 7%);
+    --old-gold: hsl(40 72% 52%);
+    --faded-brass: hsl(34 18% 60%);
+    --sealing-wax: hsl(4 72% 50%);
+    --parchment: hsl(38 30% 86%);
+    --card: hsl(28 24% 10%);
+    --rule: hsl(34 30% 25%);
+  }
+  body {
+    background: var(--vault-black);
+    color: var(--parchment);
+    font: 14px/1.5 Georgia, 'Times New Roman', serif;
+    margin: 0;
+    padding: 2rem;
+  }
+  h1 { font-weight: normal; letter-spacing: 0.08em; color: var(--old-gold); }
+  h1 small { color: var(--faded-brass); font-size: 0.55em; letter-spacing: 0.02em; }
+  .legend { color: var(--faded-brass); max-width: 60rem; margin-bottom: 2rem; }
+  .legend b { color: var(--parchment); font-weight: normal; }
+  .controls { margin-bottom: 1.5rem; color: var(--faded-brass); }
+  .controls label { margin-right: 1.5rem; cursor: pointer; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+    gap: 10px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .card.missing { border: 1px dashed var(--sealing-wax); opacity: 0.75; }
+  .card.missing .name::after { content: ' — not drawn yet'; color: var(--sealing-wax); }
+  .name {
+    width: 110px;
+    flex: none;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 12px;
+    color: var(--old-gold);
+    word-break: break-all;
+  }
+  .cell { display: flex; align-items: flex-end; gap: 8px; }
+  .icon {
+    display: inline-block;
+    background-color: var(--old-gold);
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-position: center;  mask-position: center;
+    -webkit-mask-size: contain;     mask-size: contain;
+  }
+  .default-cell .icon { background-color: var(--faded-brass); }
+  .divider { width: 1px; align-self: stretch; background: var(--rule); }
+  .tint-brass .icon { background-color: var(--faded-brass); }
+  .tint-wax .icon { background-color: var(--sealing-wax); }
+  .tint-parchment .icon { background-color: var(--parchment); }
+  .caption {
+    font-size: 9px;
+    font-family: ui-monospace, Menlo, monospace;
+    color: var(--faded-brass);
+    text-align: center;
+    margin-top: 2px;
+  }
+  .stack { display: flex; flex-direction: column; align-items: center; }
+  .summary { margin: 1.5rem 0; color: var(--faded-brass); }
+  .summary b { color: var(--old-gold); font-weight: normal; }
+</style>
+</head>
+<body>
+<h1>Madman&rsquo;s Box <small>icon contact sheet &mdash; sacred clockwork in a Gatsby cabinet</small></h1>
+<p class="legend">
+  Each card: <b>default</b> (brass, 24&thinsp;px) &middot; rule &middot; <b>redesign</b> in Old Gold at
+  16/20/24/48&thinsp;px &middot; rule &middot; tint robustness at 24&thinsp;px in <b>Faded Brass</b>,
+  <b>Sealing Wax</b>, <b>Parchment</b>. Everything is rendered as a CSS mask tinted by
+  background-color &mdash; exactly how the app paints icons. Squint at the 16&thinsp;px column:
+  if it does not read as its verb, it fails rule&nbsp;7.
+</p>
+<div id="file-warning" style="display:none; border:1px solid var(--sealing-wax); color:var(--sealing-wax); padding:0.6rem 1rem; margin-bottom:1.5rem; max-width:60rem;">
+  Chrome blocks CSS masks on <code>file://</code> pages, so the glyphs may render as empty boxes.
+  Serve the repo instead: <code>python3 -m http.server -d /path/to/quilltap-server 8123</code> then open
+  <code>http://localhost:8123/themes/tools/madmans-box-icon-preview.html</code> (Safari usually renders file:// fine).
+</div>
+<div class="controls">
+  <label><input type="checkbox" id="only-drawn" checked> show only drawn icons</label>
+  <label><input type="checkbox" id="only-missing"> show only missing</label>
+</div>
+<div class="summary" id="summary"></div>
+<div class="grid" id="grid"></div>
+
+<script>
+// Canonical 79 names — keep in sync with components/ui/icons/icon-registry.ts
+// (check-madmans-box-icons.mjs verifies this list matches the registry).
+const ICONS = [
+  // shared general-purpose UI
+  'close','pencil','refresh','check','check-circle','chat','info','trash','copy','plus',
+  'search','download','upload','cloud-upload','external-link','link','send','paperclip',
+  'eye','eye-off','star','bookmark','tag','expand','compress',
+  // navigation: chevrons & arrows
+  'chevron-down','chevron-right','chevron-left','arrow-left','arrow-right','arrow-up','arrow-down',
+  // status & feedback
+  'alert-triangle','alert-circle','shield','ban','clock','calendar',
+  // media & gallery
+  'image','camera','play','pause','stop','zoom-in','zoom-out',
+  // left-sidebar primary navigation
+  'projects','files','file','file-plus','folder','folder-plus','book','characters',
+  'scriptorium','photos','scenarios',
+  // people & domain actors
+  'profile','user','user-plus','users','megaphone','dice','sparkles','wand',
+  // system & tooling
+  'wrench','code','cpu','database','layers','zap','swap','log-out',
+  // appearance & domain nav
+  'settings','themes','wardrobe','help','sun','moon','monitor',
+  // brand
+  'brand',
+];
+
+const OVERRIDE_DIR = '../bundled/madmans-box/icons/';
+const DEFAULT_DIR = '../../public/images/icons/';
+const SIZES = [16, 20, 24, 48];
+const TINTS = [
+  ['tint-brass', 'brass'],
+  ['tint-wax', 'wax'],
+  ['tint-parchment', 'parch'],
+];
+
+function el(tag, cls, parent) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+function maskIcon(src, size, parent) {
+  const icon = el('span', 'icon', parent);
+  icon.style.width = size + 'px';
+  icon.style.height = size + 'px';
+  icon.style.webkitMaskImage = `url("${src}")`;
+  icon.style.maskImage = `url("${src}")`;
+  return icon;
+}
+
+const grid = document.getElementById('grid');
+const summary = document.getElementById('summary');
+let drawn = 0, probed = 0;
+
+for (const name of ICONS) {
+  const overrideSrc = OVERRIDE_DIR + name + '.svg';
+  // `brand`'s default is the full-colour /quill.svg; masked here it shows as a
+  // silhouette, which is fine for shape comparison.
+  const defaultSrc = name === 'brand' ? '../../public/quill.svg' : DEFAULT_DIR + name + '.svg';
+
+  const card = el('div', 'card', grid);
+  card.dataset.name = name;
+  el('div', 'name', card).textContent = name;
+
+  const defCell = el('div', 'cell default-cell', card);
+  const defStack = el('div', 'stack', defCell);
+  maskIcon(defaultSrc, 24, defStack);
+  el('div', 'caption', defStack).textContent = 'default';
+
+  el('div', 'divider', card);
+
+  const sizeCell = el('div', 'cell', card);
+  for (const size of SIZES) {
+    const stack = el('div', 'stack', sizeCell);
+    maskIcon(overrideSrc, size, stack);
+    el('div', 'caption', stack).textContent = size;
+  }
+
+  el('div', 'divider', card);
+
+  const tintCell = el('div', 'cell', card);
+  for (const [cls, label] of TINTS) {
+    const stack = el('div', 'stack ' + cls, tintCell);
+    maskIcon(overrideSrc, 24, stack);
+    el('div', 'caption', stack).textContent = label;
+  }
+
+  // CSS masks don't report load failures; probe with an Image to flag gaps.
+  const probe = new Image();
+  probe.onload = () => { drawn++; done(); };
+  probe.onerror = () => { card.classList.add('missing'); done(); };
+  probe.src = overrideSrc;
+}
+
+function done() {
+  probed++;
+  if (probed === ICONS.length) {
+    summary.innerHTML = `<b>${drawn}</b> of <b>${ICONS.length}</b> redesigns present` +
+      (drawn < ICONS.length ? ` &mdash; ${ICONS.length - drawn} remaining (dashed red cards)` : ' &mdash; full house.');
+    applyFilters();
+  }
+}
+
+if (location.protocol === 'file:') {
+  document.getElementById('file-warning').style.display = 'block';
+}
+
+const onlyDrawn = document.getElementById('only-drawn');
+const onlyMissing = document.getElementById('only-missing');
+function applyFilters() {
+  for (const card of grid.children) {
+    const missing = card.classList.contains('missing');
+    let show = true;
+    if (onlyDrawn.checked && missing) show = false;
+    if (onlyMissing.checked && !missing) show = false;
+    card.style.display = show ? '' : 'none';
+  }
+}
+onlyDrawn.addEventListener('change', () => { if (onlyDrawn.checked) onlyMissing.checked = false; applyFilters(); });
+onlyMissing.addEventListener('change', () => { if (onlyMissing.checked) onlyDrawn.checked = false; applyFilters(); });
+</script>
+</body>
+</html>

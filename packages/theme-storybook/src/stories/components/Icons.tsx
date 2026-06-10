@@ -24,7 +24,7 @@ const ICON_GROUPS: IconGroup[] = [
     names: [
       'close', 'pencil', 'refresh', 'check', 'check-circle', 'chat', 'info', 'trash',
       'copy', 'plus', 'search', 'download', 'upload', 'cloud-upload', 'external-link',
-      'link', 'send', 'paperclip', 'eye', 'eye-off', 'star', 'bookmark', 'expand', 'compress',
+      'link', 'send', 'paperclip', 'eye', 'eye-off', 'star', 'bookmark', 'tag', 'expand', 'compress',
     ],
   },
   {
@@ -131,7 +131,9 @@ export const Icons: React.FC = () => {
             full color — best for textured or multi-color marks.
           </li>
           <li>
-            The <code>brand</code> mark is always drawn in full color, even when overridden with an SVG.
+            The <code>brand</code> mark follows the same rule: an <code>.svg</code> override is
+            tinted like any other icon, so ship it as <code>.webp</code> if it should keep its own
+            colors.
           </li>
           <li>
             Names must match the built-in names below; unknown names are ignored. Run{' '}

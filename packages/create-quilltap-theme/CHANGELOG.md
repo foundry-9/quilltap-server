@@ -2,6 +2,11 @@
 
 All notable changes to this package will be documented in this file.
 
+## [2.0.12] - 2026-06-10
+
+### Changed
+- Bundle README template: the `brand` note reflects the app-side rule change — an `.svg` brand override is tinted like any other icon; ship `.webp` to keep its own colors.
+
 ## [2.0.11] - 2026-06-09
 
 ### Added

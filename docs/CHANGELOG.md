@@ -19,6 +19,18 @@ Consolidated mount-point file writes behind a single ingest pipeline and added a
 - **`quilltap docs` CLI** (`packages/quilltap`, bumped to `4.7.0-dev.41` — **requires `npm publish`**): new `link` (hard-link via `action=link-file`), `rmdir` (`action=delete-folder`), and `mvdir` (`action=move-folder`) verbs (all server-required), plus a `--base64` flag on `write` (PUT `…/files/{path}` JSON base64) and `read` (GET `…/files/{path}?encoding=base64`). Existing `write`/`delete`/`mkdir`/`move`/`copy` verbs and their offline fallbacks are unchanged. README updated.
 - **Scriptorium front-end now writes via the canonical item route.** Upload (`useMountPointBlobUpload`, `FileTable`) switched from `POST /blobs` to `PUT …/files/[...path]`; delete (`useFileActions`, `FileBrowser`, `FileTable`) and description PATCH (`FileTable`) switched to the `…/files/[...path]` route. A new `buildMountFileItemUrl` sits beside `buildMountBlobUrl` in `components/files/mountBlobUrl.ts`. The byte-serving `/blobs/[...path]` GET is deliberately kept for `<img>`/thumbnail/preview/download (it is the stable, persisted asset URL embedded in saved Markdown). tsc clean.
 
+#### Madman's Box: full icon redesign (theme 1.1.0) + icon-system fixes it surfaced
+
+The bundled Madman's Box theme now overrides **all 80 canonical icons** with original SVGs in its Art Deco/Gallifreyan design language (sharp butt caps and miter joins, 2.0/1.25 stroke weights, geometry-only `currentColor` masks — see `docs/developer/features/complete/madmans-box-icon-redesign.md` for the design spec). The five round-cap pilot icons from 1.0.1 were redrawn to match. Theme version bumped to 1.1.0; bundle re-validated (108 files).
+
+- **Brand mark now maskable.** Removed the forced image mode for `brand` icon overrides in `generateIconOverrideRule` (`lib/themes/utils.ts`): an `.svg` brand override is now masked and tinted by `currentColor` like every other icon, while `.webp` keeps full-color image mode. Updated the unit tests, `help/themes.md`, `THEME_PLUGIN_DEVELOPMENT.md`, the theme-storybook Icons story (1.0.41), and the create-quilltap-theme bundle README template (2.0.12). Madman's Box ships an SVG brand quill that inherits UI tint.
+- **Icon override cache-busting.** The theme assets route serves `Cache-Control: immutable`, but icon override URLs carried no version, so re-releasing a theme with a changed icon left browsers on the stale glyph forever. `/api/v1/themes/[id]?action=tokens` now appends `?v=<theme.version>` to every icon URL (the mask/image extension sniff already ignores query strings; unit test added).
+- **New canonical icon `tag` (80th).** Registry entry, default SVG (`public/images/icons/tag.svg`), regenerated `_icons.css`, Madman's Box override, ICON_INVENTORY §2.2, and the storybook catalogue. Needed by the Aurora Tags tab, which previously had no canonical glyph.
+- **Migrated three `app/`-level tab bars to `<Icon>`:** Aurora character view tabs (`app/aurora/[id]/view/tabIcons.tsx`), Aurora edit tabs, and the Settings page tabs were still inline SVGs — invisible to theme overrides — because the Phase 2b migration swept `components/*` but not `app/*`. Roughly 75 more `app/*` files with inline icon SVGs remain; tracked as a follow-up migration.
+- **Dev tooling (not shipped):** `themes/tools/madmans-box-icon-preview.html` (contact sheet rendering every icon mask-style at 16/20/24/48 px in four theme tints beside the app default) and `themes/tools/check-madmans-box-icons.mjs` (mechanical lint for the SVG contract: root attributes, paint discipline, stroke-weight band, registry name sync, coverage count). They live outside the bundle directory so packing/export never includes them.
+- The standalone `qtap-theme-madmans-box` repo was **not** synced — it is being retired; the bundled theme is canonical.
+- No DB schema, migration, `.qtap`-export, or DDL change.
+
 #### Memory extraction enrichment: canon reweighting, orienting context, targeting tags
 
 Enriched the per-turn memory extractor (`lib/memory/cheap-llm-tasks/`, `lib/memory/memory-processor.ts`, `lib/background-jobs/handlers/memory-extraction.ts`) so it judges novelty against vantage-point-correct canon and tags every memory along three controlled axes. No schema, migration, DDL, `.qtap`-export, or backup change.
@@ -43,9 +55,9 @@ Added a single parent-side daily maintenance tick that reaps data with no bearin
 
 Added user-facing and developer-facing documentation for the icon override system introduced in the previous three changes.
 
-- `help/themes.md` now documents the `icons` manifest field (under Custom Themes → Custom Icons), the `.svg`/`.webp` asset modes, the `brand`-is-always-image-mode rule, and the CLI validation behaviour. The "What Are Themes?" summary list now mentions icon overrides.
+- `help/themes.md` now documents the `icons` manifest field (under Custom Themes → Custom Icons), the `.svg`/`.webp` asset modes, the `brand`-is-always-image-mode rule, and the CLI validation behavior. The "What Are Themes?" summary list now mentions icon overrides.
 - `docs/developer/THEME_PLUGIN_DEVELOPMENT.md` gains a bundle-format icon-overrides reference section before the existing deprecated-npm content: manifest snippet, asset-mode table, canonical-name pointers, CSS mechanics summary, and authoring notes.
-- `components/settings/appearance/README.md` updated with an Icon Overrides section covering the 79-icon map, the two render modes, and the live-switch behaviour.
+- `components/settings/appearance/README.md` updated with an Icon Overrides section covering the 79-icon map, the two render modes, and the live-switch behavior.
 - `docs/developer/ICON_INVENTORY.md` added to the `update-documentation.md` registry.
 
 #### Centralized, theme-ready icon system (foundation + sidebar pilot)
