@@ -28,9 +28,11 @@ import {
   extractOtherMemoriesFromTurn,
   loadCanonForSelf,
   loadCanonForObserverAboutSubject,
-  renderCanonBlock,
+  renderSelfCanonBlock,
+  renderOtherCanonBlock,
   MemoryCandidate,
   UncensoredFallbackOptions,
+  type OrientingContext,
 } from './cheap-llm-tasks'
 import type { OtherSubjectInput } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
@@ -103,6 +105,21 @@ export interface TurnMemoryExtractionContext {
    */
   participantCharacters: Map<string, Character>
   chatId: string
+  /**
+   * Project the chat belongs to, when any. Stamped onto every derived memory's
+   * `projectId` so scope (`scope: narrow`) comparisons at recall time have a
+   * rename-proof, collision-proof key to compare against. Null for chats with
+   * no project.
+   */
+  projectId?: string | null
+  /**
+   * Non-canonical orienting context fed into the extraction footer (never the
+   * cached body prefix). `projectDescription` lets the model judge a memory's
+   * scope; `chatContextSummary` (the rolling Librarian summary) frames its
+   * temporal hinge. Both are background only — never a source of memories.
+   */
+  projectDescription?: string | null
+  chatContextSummary?: string | null
   userId: string
   connectionProfile: ConnectionProfile
   cheapLLMSettings: CheapLLMSettings
@@ -212,6 +229,7 @@ async function writeCandidate(opts: WriteOptions): Promise<void> {
       characterId: opts.characterId,
       aboutCharacterId: opts.aboutCharacterId,
       chatId: opts.ctx.chatId,
+      projectId: opts.ctx.projectId ?? null,
       content: opts.candidate.content || '',
       summary: opts.candidate.summary || '',
       keywords: opts.candidate.keywords || [],
@@ -324,6 +342,14 @@ export async function processTurnForMemory(
 
     const cheapMaxTokens = resolveMaxTokens(ctx.connectionProfile)
 
+    // Non-canonical orienting context, identical across every SELF/OTHER call
+    // this turn — built once so it stays in the variable footer without
+    // disturbing the cached body prefix.
+    const orienting: OrientingContext = {
+      projectDescription: ctx.projectDescription ?? null,
+      chatContextSummary: ctx.chatContextSummary ?? null,
+    }
+
     // Pre-resolve per-character rate limits so we know which characters to
     // skip entirely, throttle, or allow before we start firing LLM calls.
     const rateLimits = new Map<string, RateLimitDecision>()
@@ -354,7 +380,7 @@ export async function processTurnForMemory(
     // also used here just like an AI character's — we look up its identity
     // and vault mount point exactly the same way.
     // ---------------------------------------------------------------------
-    type Subject = { id: string; name: string; identity: string | null; isUser: boolean }
+    type Subject = { id: string; name: string; identity: string | null; description: string | null; isUser: boolean }
     const subjects: Subject[] = []
     for (const slice of allowedSlices) {
       const character = ctx.participantCharacters.get(slice.characterId)
@@ -362,6 +388,7 @@ export async function processTurnForMemory(
         id: slice.characterId,
         name: slice.characterName,
         identity: character?.identity ?? null,
+        description: character?.description ?? null,
         isUser: false,
       })
     }
@@ -371,6 +398,7 @@ export async function processTurnForMemory(
         id: ctx.transcript.userCharacterId,
         name: ctx.transcript.userCharacterName,
         identity: userCharacter?.identity ?? null,
+        description: userCharacter?.description ?? null,
         isUser: true,
       })
     }
@@ -382,9 +410,12 @@ export async function processTurnForMemory(
     for (const slice of allowedSlices) {
       const rl = rateLimits.get(slice.characterId)!
       const observerCharacter = ctx.participantCharacters.get(slice.characterId)
-      const selfCanonBlock = renderCanonBlock(loadCanonForSelf({
+      const selfCanonBlock = renderSelfCanonBlock(loadCanonForSelf({
         id: slice.characterId,
         name: slice.characterName,
+        manifesto: observerCharacter?.manifesto ?? null,
+        personality: observerCharacter?.personality ?? null,
+        description: observerCharacter?.description ?? null,
         identity: observerCharacter?.identity ?? null,
       }))
 
@@ -398,6 +429,7 @@ export async function processTurnForMemory(
         ctx.chatId,
         cheapMaxTokens,
         ctx.inAutonomousRoom === true,
+        orienting,
       )
 
       if (selfResult.usage) {
@@ -467,7 +499,7 @@ export async function processTurnForMemory(
       const resolvedSubjects: ResolvedSubject[] = []
       for (const subject of observerSubjects) {
         const canon = await loadCanonForObserverAboutSubject(observerVault, subject)
-        const subjectCanonBlock = renderCanonBlock(canon)
+        const subjectCanonBlock = renderOtherCanonBlock(canon)
         const pronouns: Pronouns | null = subject.isUser
           ? (ctx.transcript.userCharacterPronouns ?? null)
           : (ctx.transcript.characterSlices.find(s => s.characterId === subject.id)?.characterPronouns ?? null)
@@ -492,6 +524,7 @@ export async function processTurnForMemory(
         ctx.chatId,
         cheapMaxTokens,
         ctx.inAutonomousRoom === true,
+        orienting,
       )
 
       if (otherResult.usage) {

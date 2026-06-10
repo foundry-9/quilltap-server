@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### Memory extraction enrichment: canon reweighting, orienting context, targeting tags
+
+Enriched the per-turn memory extractor (`lib/memory/cheap-llm-tasks/`, `lib/memory/memory-processor.ts`, `lib/background-jobs/handlers/memory-extraction.ts`) so it judges novelty against vantage-point-correct canon and tags every memory along three controlled axes. No schema, migration, DDL, `.qtap`-export, or backup change.
+
+- **Vantage-point-correct canon.** Replaced the single `renderCanonBlock` with two builders. The SELF pass now feeds `manifesto` + `personality` + `description` + `identity` (rendered manifesto-first, labelled, empty fields omitted) instead of `identity` alone, so a character extracting about itself can tell "already who they are" from genuinely new. The OTHER pass keeps the observer's vault `Others/<name>.md` as the top source and falls back to `identity`, then to `description` only when identity is empty — never `personality`/`manifesto`.
+- **Orienting context (cache-safe).** The extraction prompt footer now carries the project description and the rolling chat summary (`ORIENTING CONTEXT` block, each value truncated to 1500 chars), placed after the stable body and before the `CONTEXT` block so the cheap-LLM prefix cache still hits. The block is background only — a new WHAT-TO-SKIP bullet forbids extracting a memory whose only source is it.
+- **Three targeting axes → keywords.** The model emits `temporal` (past/moment/present/future), `scope` (narrow/wide), and `context` (philosophy/relationships/history/banter/mannerisms/trivia/information). The parser validates them against closed vocabularies, defaults invalid/missing values (present/wide/information, logged at debug for drift visibility), and materializes them into the existing `keywords` array (`temporal` and `context` as bare words, `scope` as `scope: <value>`). They never persist as top-level memory fields.
+- **`projectId` now written on derived memories.** `CreateMemoryOptions` → gate INSERT → `repos.memories.create` now plumb `projectId` (the `memories.projectId` column and index already existed but nothing wrote them), stamped from `chat.projectId`. This is the prerequisite for a later recall-side change that down-weights `scope: narrow` memories whose `projectId` differs from the current chat. Back-fills automatically on a `regenerate-all`/`regenerate-chat` run.
+
 #### Scheduled retention & cleanup sweeps
 
 Added a single parent-side daily maintenance tick that reaps data with no bearing on characters, stories, or memories. Runs in-process like the existing LLM-log and memory-housekeeping schedulers (no new job type, no child handler) because the asset deletion path bottoms out in `deleteWithGC`, which needs a write transaction on the mount-index DB and cannot run in the forked job child.

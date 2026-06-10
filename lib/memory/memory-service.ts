@@ -191,6 +191,12 @@ export interface CreateMemoryOptions {
   aboutCharacterId?: string | null
   /** Source chat ID */
   chatId?: string | null
+  /**
+   * Project the source chat belongs to, when any. Persisted on the memory so
+   * recall-time scope (`scope: narrow`) comparisons have a rename-proof,
+   * collision-proof key. Null for project-less chats and manual entries.
+   */
+  projectId?: string | null
   /** How the memory was created */
   source?: 'AUTO' | 'MANUAL'
   /** Source message ID for auto-created memories */
@@ -382,6 +388,7 @@ async function createMemoryDirect(
     importance,
     aboutCharacterId: data.aboutCharacterId || null,
     chatId: data.chatId || null,
+    projectId: data.projectId ?? null,
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,
     witnessedContext: data.witnessedContext ?? null,
@@ -453,6 +460,7 @@ async function createMemoryDirectWithEmbedding(
     importance,
     aboutCharacterId: data.aboutCharacterId || null,
     chatId: data.chatId || null,
+    projectId: data.projectId ?? null,
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,
     witnessedContext: data.witnessedContext ?? null,

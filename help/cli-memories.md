@@ -125,6 +125,16 @@ In this mode the CLI hands the query to the running Quilltap server, which embed
 
 The literal `grep` (no `--semantic`) is undisturbed. If the embedding provider has drifted from what the corpus was embedded with, the server returns a clear dimension-mismatch error and the CLI relays it verbatim.
 
+## A Note on Targeting Tags
+
+As of version 4.7, every freshly-extracted memory arrives wearing three small lapel-pins, folded quietly into its `keywords` array alongside the free-form terms the extractor already chose. They describe the *frame* of the memory rather than its substance, and you will see them in the `keywords` line of any `show` output and in the Commonplace Book settings tab:
+
+- **A temporal hinge** — one of `past`, `moment`, `present`, or `future`, set down as a bare word. `past` was true once and is no longer; `moment` was true only at that instant in the scene; `present` is true now and expected to remain so; `future` is a stated intent not yet acted upon.
+- **A scope hinge** — either `scope: narrow` or `scope: wide`. A narrow memory is true only inside the project or story that produced it; a wide one holds regardless of which project a character finds themselves in. (The character's recall pass uses the memory's stored `projectId`, not the keyword, to make this judgement rigorous — the keyword is merely the visible badge.)
+- **A primary context** — the single dominant subject of the memory, drawn from a closed list of seven: `philosophy`, `relationships`, `history`, `banter`, `mannerisms`, `trivia`, or `information`.
+
+Because these tags live in the keyword field, the character's own keyword-based recall can match on them exactly as it matches any other keyword, and they survive into a `--json` dump untouched. Should the extractor ever fail to supply a clean value, the system quietly substitutes the sensible defaults — `present`, `scope: wide`, and `information` — so no memory is ever left un-badged. Memories formed before 4.7 carry no such pins until the chat that produced them is regenerated.
+
 ## `show` — One Memory in Full
 
 ```text

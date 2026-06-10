@@ -50,7 +50,8 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
     body: null,
     source: 'none',
   }),
-  renderCanonBlock: jest.fn(() => 'CANON'),
+  renderSelfCanonBlock: jest.fn(() => 'CANON'),
+  renderOtherCanonBlock: jest.fn(() => 'CANON'),
 }))
 
 jest.mock('@/lib/memory/memory-service', () => ({
@@ -69,7 +70,8 @@ const tasks = jest.requireMock('@/lib/memory/cheap-llm-tasks') as {
   extractOtherMemoriesFromTurn: jest.Mock
   loadCanonForSelf: jest.Mock
   loadCanonForObserverAboutSubject: jest.Mock
-  renderCanonBlock: jest.Mock
+  renderSelfCanonBlock: jest.Mock
+  renderOtherCanonBlock: jest.Mock
 }
 const { createMemoryWithGate } = jest.requireMock('@/lib/memory/memory-service') as {
   createMemoryWithGate: jest.Mock
@@ -179,7 +181,8 @@ describe('processTurnForMemory regressions', () => {
       body: null,
       source: 'none',
     } as any)
-    tasks.renderCanonBlock.mockReturnValue('CANON')
+    tasks.renderSelfCanonBlock.mockReturnValue('CANON')
+    tasks.renderOtherCanonBlock.mockReturnValue('CANON')
     tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [],
@@ -247,6 +250,40 @@ describe('processTurnForMemory regressions', () => {
       expect.objectContaining({
         sourceMessageTimestamp: '2026-04-01T12:34:56.000Z',
       }),
+      { userId: 'user-1' },
+    )
+  })
+
+  it('stamps the chat projectId onto every derived memory write', async () => {
+    tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
+      success: true,
+      result: [
+        { content: 'Avery is steady', summary: 'steady', keywords: [], importance: 0.7 },
+      ],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    } as any)
+
+    await processTurnForMemory({ ...makeTranscript(), projectId: 'proj-9' })
+
+    expect(createMemoryWithGate).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'proj-9' }),
+      { userId: 'user-1' },
+    )
+  })
+
+  it('writes projectId: null when the chat has no project', async () => {
+    tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
+      success: true,
+      result: [
+        { content: 'Avery is steady', summary: 'steady', keywords: [], importance: 0.7 },
+      ],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    } as any)
+
+    await processTurnForMemory(makeTranscript())
+
+    expect(createMemoryWithGate).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: null }),
       { userId: 'user-1' },
     )
   })
@@ -430,6 +467,7 @@ describe('processTurnForMemory regressions', () => {
       'chat-1',                // chatId
       2048,                    // resolvedMaxTokens
       false,                   // inAutonomousRoom (added in b437f0af, Sub-task D)
+      { projectDescription: null, chatContextSummary: null }, // orienting context
     )
     expect(createMemoryWithGate).toHaveBeenCalledWith(
       expect.objectContaining({

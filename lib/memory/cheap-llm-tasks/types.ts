@@ -19,6 +19,16 @@ export interface MemoryCandidate {
   keywords?: string[]
   /** Importance score from 0.0 to 1.0 */
   importance?: number
+  /**
+   * Targeting axes emitted by the extractor model. Transient only — the parser
+   * validates them against closed vocabularies, defaults invalid/missing
+   * values, and materializes them into `keywords` (bare word for temporal and
+   * context, `scope: <value>` for scope). They are never persisted as
+   * top-level memory fields.
+   */
+  temporal?: string
+  scope?: string
+  context?: string
 }
 
 /**

@@ -126,6 +126,7 @@ describe('Memory Module Barrel Exports', () => {
     expect(typeof memoryModule.extractOtherMemoriesFromTurn).toBe('function')
     expect(typeof memoryModule.loadCanonForSelf).toBe('function')
     expect(typeof memoryModule.loadCanonForObserverAboutSubject).toBe('function')
-    expect(typeof memoryModule.renderCanonBlock).toBe('function')
+    expect(typeof memoryModule.renderSelfCanonBlock).toBe('function')
+    expect(typeof memoryModule.renderOtherCanonBlock).toBe('function')
   })
 })

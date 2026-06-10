@@ -6,6 +6,7 @@ import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript'
 import type { Pronouns } from '@/lib/schemas/character.types'
+import { logger } from '@/lib/logger'
 import { formatNameWithPronouns } from '../format-utils'
 import { executeCheapLLMTask } from './core-execution'
 import type {
@@ -31,6 +32,116 @@ export const HARD_CANDIDATE_CAP = 2
 function resolveMaxMemories(resolvedMaxTokens: number | undefined): number {
   const budgetDerived = Math.ceil((resolvedMaxTokens ?? 8000) / 8000)
   return Math.min(HARD_CANDIDATE_CAP, Math.max(1, budgetDerived))
+}
+
+/**
+ * Non-canonical orienting context fed into the extraction footer. Project
+ * description and the rolling chat summary help the model judge a memory's
+ * temporal frame, scope, and context tag — they are NEVER a source of
+ * memories themselves. Held in the variable footer (never the cached body
+ * prefix) so cheap-LLM prefix caching still hits across a long extraction run.
+ */
+export interface OrientingContext {
+  projectDescription?: string | null
+  chatContextSummary?: string | null
+}
+
+/** Char budget per orienting line — character count, not tokens (no tokenizer on the cheap path). */
+const ORIENTING_TRUNCATE = 1500
+
+function truncateForOrienting(value: string): string {
+  return value.length <= ORIENTING_TRUNCATE
+    ? value
+    : `${value.slice(0, ORIENTING_TRUNCATE)}…`
+}
+
+/**
+ * Render the ORIENTING CONTEXT footer block. Each line appears only when its
+ * source is non-empty; the whole block is omitted when both are empty (so the
+ * prompt stays byte-identical to the no-context form). Placed after the stable
+ * body and before the CONTEXT block by the prompt builders.
+ */
+function renderOrientingContext(orienting: OrientingContext | undefined): string {
+  if (!orienting) return ''
+  const lines: string[] = []
+  const project = orienting.projectDescription?.trim()
+  if (project) lines.push(`PROJECT: ${truncateForOrienting(project)}`)
+  const summary = orienting.chatContextSummary?.trim()
+  if (summary) lines.push(`STORY SO FAR: ${truncateForOrienting(summary)}`)
+  if (lines.length === 0) return ''
+  return `ORIENTING CONTEXT — background only, never a source of memories\n${lines.join('\n')}\n\n`
+}
+
+/**
+ * Skip bullet (verbatim) appended to the WHAT TO SKIP list in both extraction
+ * bodies: the ORIENTING CONTEXT block is background for tagging only, not a
+ * memory source.
+ */
+const ORIENTING_CONTEXT_SKIP_BULLET = `- Never extract a memory whose only source is the ORIENTING CONTEXT block.
+  That block is background for judging temporal frame, scope, and context
+  only — it is not itself a source of memories.`
+
+/**
+ * TAGS instruction block (verbatim) appended to both extraction bodies. Teaches
+ * the three targeting axes, their closed vocabularies, and the
+ * exactly-one-per-axis requirement.
+ */
+const TAGS_INSTRUCTION_BLOCK = `TAGS — every memory object MUST carry exactly one value from each axis.
+These describe the memory's frame; they do not change its content.
+
+  temporal  one of: past | moment | present | future
+            past    — was true once, no longer true
+            moment  — true only at this instant in the scene
+            present — true now and expected to stay true
+            future  — a stated intent or commitment not yet acted on
+
+  scope     one of: narrow | wide
+            narrow  — true only inside this project / story
+            wide    — true of the subject regardless of project
+            Use the PROJECT line in ORIENTING CONTEXT to decide. When in
+            doubt, prefer wide.
+
+  context   one of: philosophy | relationships | history | banter |
+            mannerisms | trivia | information
+            The single dominant subject of this memory. Pick one.`
+
+/** Closed vocabularies for the three targeting axes. */
+const TEMPORAL_VALUES = new Set(['past', 'moment', 'present', 'future'])
+const SCOPE_VALUES = new Set(['narrow', 'wide'])
+const CONTEXT_VALUES = new Set([
+  'philosophy', 'relationships', 'history', 'banter',
+  'mannerisms', 'trivia', 'information',
+])
+
+/**
+ * Validate the three model-emitted targeting tags against their closed
+ * vocabularies, default any invalid/missing value (present / wide /
+ * information), and materialize them into the keyword array: `temporal` and
+ * `context` as bare words, `scope` as `scope: <value>`. Logs at debug whenever
+ * a value had to be defaulted so silent model drift is visible in the
+ * per-message memory logs. The tags never persist as top-level memory fields.
+ */
+function applyTargetingTags(
+  freeKeywords: string[],
+  item: Record<string, unknown>,
+): string[] {
+  const rawTemporal = typeof item.temporal === 'string' ? item.temporal.trim().toLowerCase() : ''
+  const rawScope = typeof item.scope === 'string' ? item.scope.trim().toLowerCase() : ''
+  const rawContext = typeof item.context === 'string' ? item.context.trim().toLowerCase() : ''
+
+  const temporal = TEMPORAL_VALUES.has(rawTemporal) ? rawTemporal : 'present'
+  const scope = SCOPE_VALUES.has(rawScope) ? rawScope : 'wide'
+  const context = CONTEXT_VALUES.has(rawContext) ? rawContext : 'information'
+
+  if (temporal !== rawTemporal || scope !== rawScope || context !== rawContext) {
+    logger.debug('[Memory] Targeting tag defaulted', {
+      temporal: { raw: rawTemporal || null, used: temporal },
+      scope: { raw: rawScope || null, used: scope },
+      context: { raw: rawContext || null, used: context },
+    })
+  }
+
+  return [...freeKeywords, temporal, `scope: ${scope}`, context]
 }
 
 /**
@@ -84,6 +195,7 @@ WHAT TO SKIP
   belong under category 5, not here.
 - Narrative references to tool output: terminal sessions, file paths,
   exit codes, commit hashes, command names.
+${ORIENTING_CONTEXT_SKIP_BULLET}
 
 DEDUPLICATION
 Before finalizing, scan your own list. If two memories encode the
@@ -114,7 +226,10 @@ EXAMPLE — good extraction:
     "content": "I committed to restructuring the summarization pipeline around a shared-base-plus-witness-set design after Charlie agreed it was the highest-leverage fix.",
     "summary": "committed to summarizer refactor",
     "keywords": ["summarizer", "commitment", "architecture"],
-    "importance": 0.85
+    "importance": 0.85,
+    "temporal": "future",
+    "scope": "narrow",
+    "context": "philosophy"
   }
 ]
 
@@ -128,6 +243,8 @@ all should be skipped):
 ]
 All four are established identity, ritual, or non-actionable
 reflection. Correct output: [].
+
+${TAGS_INSTRUCTION_BLOCK}
 
 Return JSON array only. No prose, no code fences. If nothing meets
 the bar, return [].`
@@ -154,11 +271,13 @@ function getSelfMemoryExtractionPrompt(
   observerName: string,
   canonBlock: string,
   inAutonomousRoom: boolean = false,
+  orienting?: OrientingContext,
 ): string {
   const preamble = inAutonomousRoom ? AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE : ''
+  const orientingBlock = renderOrientingContext(orienting)
   return `${preamble}${selfBodyForCap(maxMemories)}
 
-CONTEXT
+${orientingBlock}CONTEXT
 SUBJECT: ${observerName}
 
 ${canonBlock}`
@@ -225,6 +344,7 @@ WHAT TO SKIP (do not produce a memory for any of these)
   exit codes, commit hashes, command names, even when the subject
   mentions them in passing.
 - Anything implied by previously-established facts about the subject.
+${ORIENTING_CONTEXT_SKIP_BULLET}
 
 DEDUPLICATION
 Before finalizing, scan your own list. Within a single subject, if two
@@ -262,14 +382,20 @@ EXAMPLE — good extraction (observer is Friday, subjects 1=Amy 2=Charlie):
     "content": "Amy proposed reframing the cost problem as a four-tier prompt cache layout when Charlie was stuck between two designs.",
     "summary": "proposed four-tier cache layout",
     "keywords": ["cache", "architecture", "proposal"],
-    "importance": 0.85
+    "importance": 0.85,
+    "temporal": "moment",
+    "scope": "narrow",
+    "context": "philosophy"
   },
   {
     "subjectIndex": 2,
     "content": "Charlie agreed to defer the renaming pass until after Amy's cache patch lands.",
     "summary": "deferred rename until after cache patch",
     "keywords": ["rename", "deferred", "agreement"],
-    "importance": 0.65
+    "importance": 0.65,
+    "temporal": "future",
+    "scope": "narrow",
+    "context": "information"
   }
 ]
 
@@ -285,6 +411,8 @@ identity fact about subject 1, all should be skipped):
 ]
 All six restate facts in subject 1's ALREADY ESTABLISHED block.
 Correct output: [].
+
+${TAGS_INSTRUCTION_BLOCK}
 
 Return JSON array only. No prose, no code fences. If nothing meets the
 bar for any subject, return [].`
@@ -306,6 +434,7 @@ function getOtherMemoryExtractionPrompt(
   observerName: string,
   subjects: ReadonlyArray<{ name: string; pronouns: Pronouns | null; isUser: boolean; canonBlock: string }>,
   inAutonomousRoom: boolean = false,
+  orienting?: OrientingContext,
 ): string {
   const subjectsBlock = subjects.map((s, i) => {
     const label = formatNameWithPronouns(s.name, s.pronouns)
@@ -314,9 +443,10 @@ function getOtherMemoryExtractionPrompt(
   }).join('\n\n')
 
   const preamble = inAutonomousRoom ? AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE : ''
+  const orientingBlock = renderOrientingContext(orienting)
   return `${preamble}${otherBodyForCap(perSubjectCap)}
 
-CONTEXT
+${orientingBlock}CONTEXT
 OBSERVER: ${observerName}
 
 ${subjectsBlock}`
@@ -367,6 +497,9 @@ function parseOtherCandidatesBySubject(
     const bucket = result.get(subject.id)
     if (!bucket || bucket.length >= perSubjectCap) continue
 
+    const freeKeywords = Array.isArray(item.keywords)
+      ? (item.keywords as unknown[]).filter((k): k is string => typeof k === 'string')
+      : []
     const candidate: MemoryCandidate = {
       content: typeof item.content === 'string'
         ? item.content
@@ -374,7 +507,7 @@ function parseOtherCandidatesBySubject(
       summary: typeof item.summary === 'string'
         ? item.summary
         : (item.summary ? JSON.stringify(item.summary) : undefined),
-      keywords: Array.isArray(item.keywords) ? (item.keywords as string[]) : [],
+      keywords: applyTargetingTags(freeKeywords, item),
       importance: typeof item.importance === 'number' ? item.importance : 0.5,
     }
     if ((!candidate.content || candidate.content.length === 0) &&
@@ -445,16 +578,21 @@ function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
     const items = Array.isArray(parsed) ? parsed : [parsed]
 
     return items
-      .map(item => ({
-        content: typeof item.content === 'string'
-          ? item.content
-          : (item.content ? JSON.stringify(item.content) : undefined),
-        summary: typeof item.summary === 'string'
-          ? item.summary
-          : (item.summary ? JSON.stringify(item.summary) : undefined),
-        keywords: item.keywords || [],
-        importance: typeof item.importance === 'number' ? item.importance : 0.5,
-      }))
+      .map(item => {
+        const freeKeywords = Array.isArray(item.keywords)
+          ? (item.keywords as unknown[]).filter((k): k is string => typeof k === 'string')
+          : []
+        return {
+          content: typeof item.content === 'string'
+            ? item.content
+            : (item.content ? JSON.stringify(item.content) : undefined),
+          summary: typeof item.summary === 'string'
+            ? item.summary
+            : (item.summary ? JSON.stringify(item.summary) : undefined),
+          keywords: applyTargetingTags(freeKeywords, item as Record<string, unknown>),
+          importance: typeof item.importance === 'number' ? item.importance : 0.5,
+        }
+      })
       .filter(m => (m.content && m.content.length > 0) || (m.summary && m.summary.length > 0))
       .slice(0, HARD_CANDIDATE_CAP)
   } catch {
@@ -524,6 +662,7 @@ export async function extractSelfMemoriesFromTurn(
   chatId?: string,
   resolvedMaxTokens?: number,
   inAutonomousRoom: boolean = false,
+  orienting?: OrientingContext,
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
   const target = transcript.characterSlices.find(s => s.characterId === targetCharacterId)
   if (!target) {
@@ -536,7 +675,7 @@ export async function extractSelfMemoriesFromTurn(
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: getSelfMemoryExtractionPrompt(maxMemories, targetLabel, canonBlock, inAutonomousRoom),
+      content: getSelfMemoryExtractionPrompt(maxMemories, targetLabel, canonBlock, inAutonomousRoom, orienting),
     },
     {
       role: 'user',
@@ -585,6 +724,7 @@ export async function extractOtherMemoriesFromTurn(
   chatId?: string,
   resolvedMaxTokens?: number,
   inAutonomousRoom: boolean = false,
+  orienting?: OrientingContext,
 ): Promise<CheapLLMTaskResult<Map<string, MemoryCandidate[]>>> {
   const observer = transcript.characterSlices.find(s => s.characterId === observerCharacterId)
   if (!observer || subjects.length === 0) {
@@ -599,7 +739,7 @@ export async function extractOtherMemoriesFromTurn(
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: getOtherMemoryExtractionPrompt(perSubjectCap, observerLabel, subjects, inAutonomousRoom),
+      content: getOtherMemoryExtractionPrompt(perSubjectCap, observerLabel, subjects, inAutonomousRoom, orienting),
     },
     {
       role: 'user',
