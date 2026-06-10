@@ -14,6 +14,7 @@
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
 import { formatBytes } from '@/lib/utils/format-bytes'
 import { showConfirmation } from '@/lib/alert'
+import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
 import type { DocumentStoreFile, DocumentStoreBlob } from '../../types'
 
 interface FileTableProps {
@@ -175,13 +176,12 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
         const form = new FormData()
         form.set('file', file)
         // Default layout: images into images/, other files at the root. The
-        // user can move them later via the tree.
+        // user can move them later via the tree. The path is carried in the
+        // item-route URL; the multipart body needs only the `file` field.
         const isImage = (file.type || '').startsWith('image/')
         const defaultPath = isImage ? `images/${file.name}` : file.name
-        form.set('path', defaultPath)
-        form.set('description', '')
-        const res = await fetch(`/api/v1/mount-points/${mountPointId}/blobs`, {
-          method: 'POST',
+        const res = await fetch(buildMountFileItemUrl(mountPointId, defaultPath), {
+          method: 'PUT',
           body: form,
         })
         if (!res.ok) {
@@ -203,7 +203,7 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
     if (!ok) return
     try {
       const res = await fetch(
-        `/api/v1/mount-points/${mountPointId}/blobs/${encodePath(file.relativePath)}`,
+        buildMountFileItemUrl(mountPointId, file.relativePath),
         { method: 'DELETE' }
       )
       if (!res.ok) throw new Error(`Delete failed (${res.status})`)
@@ -237,7 +237,7 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
   ) => {
     try {
       const res = await fetch(
-        `/api/v1/mount-points/${mountPointId}/blobs/${encodePath(file.relativePath)}`,
+        buildMountFileItemUrl(mountPointId, file.relativePath),
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -245,10 +245,12 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
         }
       )
       if (!res.ok) throw new Error(`Update failed (${res.status})`)
-      const data = await res.json()
-      if (data?.blob) {
-        setBlobDetails(prev => ({ ...prev, [file.id]: data.blob as DocumentStoreBlob }))
-      }
+      // The item route's PATCH returns metadata, not the blob row; update the
+      // cached description optimistically (loadBlobDetail re-fetches the rest).
+      setBlobDetails(prev => {
+        const existing = prev[file.id]
+        return existing ? { ...prev, [file.id]: { ...existing, description } } : prev
+      })
     } catch (err) {
       setOperationError(err instanceof Error ? err.message : String(err))
     }

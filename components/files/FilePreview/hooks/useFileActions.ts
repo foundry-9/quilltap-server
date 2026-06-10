@@ -14,7 +14,7 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { triggerUrlDownload } from '@/lib/download-utils'
 import { FileInfo } from '../../types'
-import { buildMountBlobUrl } from '../../mountBlobUrl'
+import { buildMountBlobUrl, buildMountFileItemUrl } from '../../mountBlobUrl'
 
 interface FileAssociation {
   characters: { id: string; name: string; usage: string }[]
@@ -92,7 +92,7 @@ export function useFileActions({
 
     try {
       const deleteUrl = isMountBlob && file.mountPointId && file.relativePath
-        ? buildMountBlobUrl(file.mountPointId, file.relativePath)
+        ? buildMountFileItemUrl(file.mountPointId, file.relativePath)
         : `/api/v1/files/${file.id}`
       const response = await fetch(deleteUrl, {
         method: 'DELETE',
