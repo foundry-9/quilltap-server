@@ -77,11 +77,14 @@ Server-required subcommands (background-job queue lives in the running server):
                                          Enqueue embedding jobs for un-embedded chunks
 
 Write subcommands (server required for database-backed mounts):
-  write [--force] <mount> <path> [file]  Write a file from <file> or stdin
-  delete <mount> <path>                  Idempotent file delete
-  mkdir <mount> <path>                   Idempotent folder create
-  move <srcMount> <srcPath> <dstMount> <dstPath>           Move file (hard-link when possible)
-  copy [--force] <srcMount> <srcPath> <dstMount> <dstPath> Copy file (hard-link unless --force)
+  write [--force] [--base64] <mount> <path> [file]  Write a file from <file> or stdin
+  delete <mount> <path>                              Idempotent file delete
+  mkdir <mount> <path>                               Idempotent folder create
+  move <srcMount> <srcPath> <dstMount> <dstPath>                   Move file (hard-link when possible)
+  copy [--force] <srcMount> <srcPath> <dstMount> <dstPath>         Copy file (hard-link unless --force)
+  link <srcMount> <srcPath> <dstMount> <dstPath>                   Hard-link file (server-required)
+  rmdir <mount> <path>                               Delete an empty folder (server-required)
+  mvdir <mount> <fromPath> <toPath>                  Rename/move a folder (server-required)
 
 <mount> may be a mount name or UUID. Names are case-insensitive; ambiguous
 names print candidates and exit non-zero.
@@ -107,6 +110,11 @@ Options:
                             For 'write': overwrite existing destination
                             For 'copy':  overwrite + force a real byte copy
                                          (skips the default hard-link path)
+  --base64                  For 'write': send content as base64 JSON via PUT
+                                         .../files/{path} (portable path used
+                                         by the file browser; server-required)
+                            For 'read':  fetch raw bytes via GET .../files/{path}
+                                         ?encoding=base64 and emit to stdout
   -h, --help                Show this help
 
 Read-only operations (list, show, files, read, export) open the mount-index
@@ -129,6 +137,11 @@ Examples:
   quilltap docs move drafts foo.md notes 2026/foo.md
   quilltap docs copy notes today.md archive 2026-05/today.md
   quilltap docs copy --force notes today.md archive copy.md
+  quilltap docs link notes today.md archive 2026-05/today.md
+  quilltap docs rmdir notes 2026/may
+  quilltap docs mvdir notes drafts/old drafts/archive
+  quilltap docs write --base64 notes image.png < image.png
+  quilltap docs read --base64 notes image.png > image.png
   quilltap docs find Manifesto
   quilltap docs find --mount notes --ext md Knowledge
   quilltap docs grep --mount notes --ignore-case "five-point Calvinist"
@@ -174,6 +187,8 @@ function parseFlags(args) {
     // semantic search
     semantic: false,
     threshold: -1,
+    // base64 read/write flag
+    base64: false,
   };
   const positional = [];
   let i = 0;
@@ -219,6 +234,7 @@ function parseFlags(args) {
       case '--long': flags.long = true; break;
       case '--names-only': flags.namesOnly = true; break;
       case '--semantic': flags.semantic = true; break;
+      case '--base64': flags.base64 = true; break;
       case '--threshold': {
         const v = parseFloat(args[++i]);
         if (isNaN(v) || v < 0 || v > 1) {
@@ -1078,8 +1094,46 @@ function ttyGuard(fileType, flags, label) {
 
 async function handleRead(flags, id, relativePath) {
   if (!id || !relativePath) {
-    console.error('Usage: quilltap docs read [--rendered] <mount-id> <relativePath>');
+    console.error('Usage: quilltap docs read [--rendered] [--base64] <mount-id> <relativePath>');
     process.exit(1);
+  }
+
+  // --base64: fetch raw bytes via the item route (server-required).
+  if (flags.base64) {
+    const { db } = await openDb(flags);
+    let mount;
+    try {
+      mount = requireMount(db, id);
+    } finally {
+      db.close();
+    }
+    const url = fileItemUrl(flags.port, mount.id, relativePath) + '?encoding=base64';
+    let res;
+    try {
+      res = await fetch(url);
+    } catch (err) {
+      if (isConnectionRefused(err)) {
+        console.error(`Cannot reach Quilltap server at localhost:${flags.port}. --base64 read requires the running server.`);
+        console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+        process.exit(1);
+      }
+      throw err;
+    }
+    if (!res.ok) {
+      let body = null;
+      try { body = await res.json(); } catch { /* ignore */ }
+      const msg = body && body.error ? body.error : `HTTP ${res.status}`;
+      console.error(`Read failed: ${msg}`);
+      process.exit(1);
+    }
+    let body = null;
+    try { body = await res.json(); } catch { /* ignore */ }
+    if (!body || !body.content) {
+      console.error('Read failed: server returned no content');
+      process.exit(1);
+    }
+    process.stdout.write(Buffer.from(body.content, 'base64'));
+    return;
   }
 
   const { db } = await openDb(flags);
@@ -1469,6 +1523,35 @@ async function writeViaHttp(port, mountId, relativePath, data, force) {
   return { reachable: true, ok: true, result: unwrap(body) };
 }
 
+// fileItemUrl — builds the item-route URL for the new PUT/GET .../files/{path}
+// Each path segment is independently URL-encoded to preserve the slash
+// structure of the route.
+function fileItemUrl(port, mountId, relativePath) {
+  const encodedSegments = relativePath
+    .split('/')
+    .map(seg => encodeURIComponent(seg))
+    .join('/');
+  return `http://localhost:${port}/api/v1/mount-points/${encodeURIComponent(mountId)}/files/${encodedSegments}`;
+}
+
+async function writeViaHttpBase64(port, mountId, relativePath, data, force) {
+  const content = data.toString('base64');
+  const url = fileItemUrl(port, mountId, relativePath);
+  const attempt = await tryFetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, encoding: 'base64', force: !!force }),
+  });
+  if (!attempt.ok) return { reachable: false };
+  const body = await readBodyJson(attempt.res);
+  if (!attempt.res.ok) {
+    const msg = body && body.error ? body.error : `HTTP ${attempt.res.status}`;
+    const code = body && body.code ? body.code : null;
+    return { reachable: true, ok: false, status: attempt.res.status, error: msg, code };
+  }
+  return { reachable: true, ok: true, result: unwrap(body) };
+}
+
 async function handleWrite(flags, positional) {
   const force = flags.force;
   const [mountSpec, relativePath, filename] = positional;
@@ -1486,6 +1569,31 @@ async function handleWrite(flags, positional) {
     mount = requireMount(db, mountSpec);
   } finally {
     db.close();
+  }
+
+  // --base64: use the new item-route PUT (server-required; no offline fallback).
+  if (flags.base64) {
+    const http = await writeViaHttpBase64(flags.port, mount.id, relativePath, data, force);
+    if (!http.reachable) {
+      console.error(`Cannot reach Quilltap server at localhost:${flags.port}. --base64 write requires the running server.`);
+      console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+      process.exit(1);
+    }
+    if (!http.ok) {
+      console.error(`Write failed: ${http.error}`);
+      process.exit(http.code === 'DEST_EXISTS' ? 2 : 1);
+    }
+    const r = http.result;
+    if (r.sha256 !== sourceSha) {
+      console.error(`Checksum mismatch: source ${sourceSha} != dest ${r.sha256}`);
+      process.exit(1);
+    }
+    if (flags.json) {
+      process.stdout.write(JSON.stringify({ ...r, sourceSha256: sourceSha }, null, 2) + '\n');
+      return;
+    }
+    console.log(`${GREEN}Wrote${RESET} ${mount.name}:${r.relativePath ?? relativePath} (${formatBytes(r.sizeBytes)}, sha=${r.sha256.slice(0, 12)}…)`);
+    return;
   }
 
   const http = await writeViaHttp(flags.port, mount.id, relativePath, data, force);
@@ -1866,6 +1974,169 @@ async function handleFileOp(flags, positional, action) {
   }
   const verb = action === 'move' ? 'Moved' : 'Copied';
   console.log(`${GREEN}${verb}${RESET} ${sourceMount.name}:${result.sourcePath} → ${destMount.name}:${result.destPath} ${DIM}(${result.strategy}, ${formatBytes(result.sizeBytes)}, sha=${result.destSha256.slice(0, 12)}…) [direct mode — run 'quilltap docs scan' once the server is back]${RESET}`);
+}
+
+// ----------------------------------------------------------------------------
+// link — hard-link via server (server-required; no offline fallback)
+// ----------------------------------------------------------------------------
+
+async function handleLink(flags, positional) {
+  const [srcMountSpec, srcPath, dstMountSpec, dstPath] = positional;
+  if (!srcMountSpec || !srcPath || !dstMountSpec || !dstPath) {
+    console.error('Usage: quilltap docs link <srcMount> <srcPath> <dstMount> <dstPath>');
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let sourceMount, destMount;
+  try {
+    sourceMount = requireMount(db, srcMountSpec);
+    destMount = requireMount(db, dstMountSpec);
+  } finally {
+    db.close();
+  }
+
+  const http = await fileOpViaHttp(flags.port, 'link-file', sourceMount.id, {
+    sourcePath: srcPath,
+    destMountPointId: destMount.id,
+    destPath: dstPath,
+  });
+  if (!http.reachable) {
+    console.error(`Cannot reach Quilltap server at localhost:${flags.port}. 'link' requires the running server (hard-link logic lives there).`);
+    console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+    process.exit(1);
+  }
+  if (!http.ok) {
+    const r = http;
+    if (r.code === 'DEST_EXISTS') {
+      console.error(`Link failed: destination already exists at ${dstPath}`);
+      process.exit(2);
+    }
+    if (r.code === 'UNSUPPORTED') {
+      console.error(`Link failed: hard links are not supported across storage types or devices for this mount pair`);
+      process.exit(1);
+    }
+    if (r.code === 'SOURCE_NOT_FOUND') {
+      console.error(`Link failed: source not found at ${srcPath} in mount ${sourceMount.name}`);
+      process.exit(1);
+    }
+    console.error(`Link failed: ${r.error}`);
+    process.exit(1);
+  }
+  const r = http.result;
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+    return;
+  }
+  const strategy = r.strategy ? ` (${r.strategy})` : '';
+  const size = r.sizeBytes != null ? `, ${formatBytes(r.sizeBytes)}` : '';
+  const sha = r.destSha256 ? `, sha=${r.destSha256.slice(0, 12)}…` : '';
+  console.log(`${GREEN}Linked${RESET} ${sourceMount.name}:${srcPath} → ${destMount.name}:${dstPath}${DIM}${strategy}${size}${sha}${RESET}`);
+}
+
+// ----------------------------------------------------------------------------
+// rmdir — delete an empty folder (server-required)
+// ----------------------------------------------------------------------------
+
+async function handleRmdir(flags, positional) {
+  const [mountSpec, folderPath] = positional;
+  if (!mountSpec || !folderPath) {
+    console.error('Usage: quilltap docs rmdir <mount> <path>');
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let mount;
+  try {
+    mount = requireMount(db, mountSpec);
+  } finally {
+    db.close();
+  }
+
+  const attempt = await tryFetch(actionUrl(flags.port, mount.id, 'delete-folder'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: folderPath }),
+  });
+  if (!attempt.ok) {
+    console.error(`Cannot reach Quilltap server at localhost:${flags.port}. 'rmdir' requires the running server.`);
+    console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+    process.exit(1);
+  }
+  const body = await readBodyJson(attempt.res);
+  if (!attempt.res.ok) {
+    const code = body && body.code ? body.code : null;
+    const msg = body && body.error ? body.error : `HTTP ${attempt.res.status}`;
+    if (code === 'NOT_EMPTY' || code === 'CONFLICT') {
+      console.error(`rmdir failed: folder is not empty — ${folderPath}`);
+      console.error('Remove all files inside it first, or use delete to remove individual files.');
+      process.exit(1);
+    }
+    if (code === 'NOT_FOUND' || attempt.res.status === 404) {
+      console.error(`rmdir failed: folder not found — ${folderPath}`);
+      process.exit(1);
+    }
+    console.error(`rmdir failed: ${msg}`);
+    process.exit(1);
+  }
+  const r = unwrap(body);
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+    return;
+  }
+  console.log(`${GREEN}Removed${RESET} ${mount.name}:${folderPath}`);
+}
+
+// ----------------------------------------------------------------------------
+// mvdir — rename/move a folder (server-required)
+// ----------------------------------------------------------------------------
+
+async function handleMvdir(flags, positional) {
+  const [mountSpec, fromPath, toPath] = positional;
+  if (!mountSpec || !fromPath || !toPath) {
+    console.error('Usage: quilltap docs mvdir <mount> <fromPath> <toPath>');
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let mount;
+  try {
+    mount = requireMount(db, mountSpec);
+  } finally {
+    db.close();
+  }
+
+  const attempt = await tryFetch(actionUrl(flags.port, mount.id, 'move-folder'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fromPath, toPath }),
+  });
+  if (!attempt.ok) {
+    console.error(`Cannot reach Quilltap server at localhost:${flags.port}. 'mvdir' requires the running server.`);
+    console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+    process.exit(1);
+  }
+  const body = await readBodyJson(attempt.res);
+  if (!attempt.res.ok) {
+    const code = body && body.code ? body.code : null;
+    const msg = body && body.error ? body.error : `HTTP ${attempt.res.status}`;
+    if (code === 'DEST_EXISTS') {
+      console.error(`mvdir failed: destination already exists — ${toPath}`);
+      process.exit(2);
+    }
+    if (code === 'SOURCE_NOT_FOUND' || attempt.res.status === 404) {
+      console.error(`mvdir failed: source folder not found — ${fromPath}`);
+      process.exit(1);
+    }
+    console.error(`mvdir failed: ${msg}`);
+    process.exit(1);
+  }
+  const r = unwrap(body);
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+    return;
+  }
+  console.log(`${GREEN}Moved${RESET} ${mount.name}:${fromPath} → ${mount.name}:${toPath}`);
 }
 
 // ----------------------------------------------------------------------------
@@ -2584,6 +2855,15 @@ async function docsCommand(args) {
         break;
       case 'copy':
         await handleFileOp(flags, positional, 'copy');
+        break;
+      case 'link':
+        await handleLink(flags, positional);
+        break;
+      case 'rmdir':
+        await handleRmdir(flags, positional);
+        break;
+      case 'mvdir':
+        await handleMvdir(flags, positional);
         break;
       case 'status':
         await handleStatus(flags);
