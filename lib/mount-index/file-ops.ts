@@ -26,6 +26,13 @@ import {
   emitDocumentWritten,
 } from './db-store-events';
 import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
+import { FileOpError } from './file-op-error';
+import { normaliseRelativePath, detectNativeText, mimeForExtension } from './path-utils';
+
+// Re-exported so existing `import { FileOpError } from '@/lib/mount-index/file-ops'`
+// call sites keep working after the class moved to its own leaf module.
+export { FileOpError };
+export type { FileOpErrorCode } from './file-op-error';
 
 const logger = createServiceLogger('MountIndex:FileOps');
 
@@ -53,40 +60,12 @@ export interface CopyOpts {
 
 export type MoveOpts = Omit<CopyOpts, 'force'>;
 
-export class FileOpError extends Error {
-  constructor(
-    message: string,
-    public code:
-      | 'SOURCE_NOT_FOUND'
-      | 'DEST_EXISTS'
-      | 'MOUNT_NOT_FOUND'
-      | 'INVALID_PATH'
-      | 'UNSUPPORTED'
-      | 'VERIFY_FAILED'
-  ) {
-    super(message);
-    this.name = 'FileOpError';
-  }
-}
-
 // ============================================================================
 // Path helpers
 // ============================================================================
-
-function normaliseRelativePath(input: string): string {
-  const normalised = path
-    .normalize(input)
-    .replace(/\\/g, '/')
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '');
-  if (!normalised || normalised === '.') {
-    throw new FileOpError(`Invalid relative path: ${input}`, 'INVALID_PATH');
-  }
-  if (normalised.split('/').includes('..')) {
-    throw new FileOpError(`Path traversal not allowed: ${input}`, 'INVALID_PATH');
-  }
-  return normalised;
-}
+// `normaliseRelativePath`, `detectNativeText`, and `mimeForExtension` now live
+// in `./path-utils` (shared with the canonical write pipeline). They are
+// imported at the top of this module.
 
 async function loadMount(mountPointId: string): Promise<DocMountPoint> {
   const repos = getRepositories();
@@ -101,7 +80,7 @@ function isFilesystemMount(mp: DocMountPoint): boolean {
   return mp.mountType === 'filesystem' || mp.mountType === 'obsidian';
 }
 
-function resolveFsAbsolute(mp: DocMountPoint, relativePath: string): string {
+export function resolveFsAbsolute(mp: DocMountPoint, relativePath: string): string {
   if (!mp.basePath) {
     throw new FileOpError(
       `Filesystem mount has no basePath configured: ${mp.id}`,
@@ -164,7 +143,7 @@ async function sourceExistsOrThrow(
   throw new FileOpError(`Source not found: ${relativePath}`, 'SOURCE_NOT_FOUND');
 }
 
-async function destExists(mp: DocMountPoint, relativePath: string): Promise<boolean> {
+export async function destExists(mp: DocMountPoint, relativePath: string): Promise<boolean> {
   const repos = getRepositories();
   const link = await repos.docMountFileLinks.findByMountPointAndPath(mp.id, relativePath);
   if (link) return true;
@@ -206,63 +185,6 @@ async function readSourceBytes(
     `Source content missing: ${relativePath}`,
     'SOURCE_NOT_FOUND'
   );
-}
-
-// ============================================================================
-// File type detection
-// ============================================================================
-
-type NativeTextType = 'markdown' | 'txt' | 'json' | 'jsonl';
-
-function detectNativeText(relativePath: string): NativeTextType | null {
-  const ext = path.extname(relativePath).toLowerCase();
-  switch (ext) {
-    case '.md':
-    case '.markdown':
-      return 'markdown';
-    case '.txt':
-      return 'txt';
-    case '.json':
-      return 'json';
-    case '.jsonl':
-    case '.ndjson':
-      return 'jsonl';
-    default:
-      return null;
-  }
-}
-
-function mimeForExtension(relativePath: string): string {
-  const ext = path.extname(relativePath).toLowerCase();
-  switch (ext) {
-    case '.md':
-    case '.markdown':
-      return 'text/markdown; charset=utf-8';
-    case '.txt':
-      return 'text/plain; charset=utf-8';
-    case '.json':
-      return 'application/json; charset=utf-8';
-    case '.jsonl':
-    case '.ndjson':
-      return 'application/jsonl; charset=utf-8';
-    case '.webp':
-      return 'image/webp';
-    case '.png':
-      return 'image/png';
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg';
-    case '.gif':
-      return 'image/gif';
-    case '.svg':
-      return 'image/svg+xml';
-    case '.pdf':
-      return 'application/pdf';
-    case '.docx':
-      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    default:
-      return 'application/octet-stream';
-  }
 }
 
 // ============================================================================
@@ -607,9 +529,137 @@ export async function moveFile(opts: MoveOpts): Promise<FileOpResult> {
   };
 }
 
+/**
+ * Create a true hard link: a second (mountPointId, relativePath) that shares
+ * the source's bytes with NO copy. Database mounts insert a link row pointing
+ * at the existing fileId; filesystem mounts use POSIX `fs.link`. Cross-storage
+ * and cross-device links are impossible, so they raise `UNSUPPORTED` rather
+ * than silently degrading to a byte copy — that distinction is the whole point
+ * of `link` versus `copy`. Never overwrites an existing destination.
+ */
+export async function linkFile(opts: MoveOpts): Promise<FileOpResult> {
+  const sourceMount = await loadMount(opts.sourceMountPointId);
+  const destMount = await loadMount(opts.destMountPointId);
+  const sourceRel = normaliseRelativePath(opts.sourcePath);
+  const destRel = normaliseRelativePath(opts.destPath);
+
+  if (sourceMount.id === destMount.id && sourceRel === destRel) {
+    throw new FileOpError(`Source and destination are the same path: ${destRel}`, 'INVALID_PATH');
+  }
+
+  const sourceInfo = await sourceExistsOrThrow(sourceMount, sourceRel);
+
+  if (await destExists(destMount, destRel)) {
+    throw new FileOpError(
+      `Destination already exists: ${destRel}. Link will not overwrite.`,
+      'DEST_EXISTS'
+    );
+  }
+
+  const sourceIsFs = isFilesystemMount(sourceMount);
+  const destIsFs = isFilesystemMount(destMount);
+
+  let strategy: FileOpStrategy;
+
+  if (!sourceIsFs && !destIsFs) {
+    if (!sourceInfo.fileId || !sourceInfo.linkId) {
+      throw new FileOpError(`Source file has no content row: ${sourceRel}`, 'SOURCE_NOT_FOUND');
+    }
+    await hardLinkDbToDb({
+      sourceFileId: sourceInfo.fileId,
+      sourceLinkId: sourceInfo.linkId,
+      destMountPointId: destMount.id,
+      destRelativePath: destRel,
+    });
+    strategy = 'db-link';
+  } else if (sourceIsFs && destIsFs) {
+    const sourceAbs = sourceInfo.absolutePath!;
+    const destAbs = resolveFsAbsolute(destMount, destRel);
+    await fs.mkdir(path.dirname(destAbs), { recursive: true });
+    try {
+      await fs.link(sourceAbs, destAbs);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
+        throw new FileOpError(
+          `Cannot hard-link across devices: ${sourceRel} → ${destRel}. Use copy instead.`,
+          'UNSUPPORTED'
+        );
+      }
+      throw err;
+    }
+    await processMountFile(destMount, destAbs, destRel).catch(err => {
+      logger.warn('processMountFile after fs link failed', {
+        mountPointId: destMount.id,
+        relativePath: destRel,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+    strategy = 'fs-link';
+  } else {
+    throw new FileOpError(
+      `Cannot hard-link across storage types (filesystem ↔ database). Use copy instead.`,
+      'UNSUPPORTED'
+    );
+  }
+
+  const destSha = await computeDestSha256(destMount, destRel);
+  if (destSha !== sourceInfo.sha256) {
+    throw new FileOpError(
+      `Checksum mismatch after link: source ${sourceInfo.sha256} != dest ${destSha}`,
+      'VERIFY_FAILED'
+    );
+  }
+
+  logger.info('Linked file', {
+    sourceMountPointId: sourceMount.id,
+    sourcePath: sourceRel,
+    destMountPointId: destMount.id,
+    destPath: destRel,
+    strategy,
+  });
+
+  return {
+    strategy,
+    sourceSha256: sourceInfo.sha256,
+    destSha256: destSha,
+    sizeBytes: sourceInfo.sizeBytes,
+    sourcePath: sourceRel,
+    destPath: destRel,
+    sourceMountPointId: sourceMount.id,
+    destMountPointId: destMount.id,
+  };
+}
+
 // ============================================================================
 // Internal writers / deleters
 // ============================================================================
+
+/**
+ * Write raw bytes to a filesystem-backed mount and (best-effort) index the
+ * result, returning the on-disk sha256 + size + mtime. Shared by the
+ * byte-preserving copy/move path (`writeDestBytes`) and the canonical ingest
+ * pipeline (`store-file.ts`). Does NOT transcode — callers that want WebP
+ * transcoding handle it before calling in.
+ */
+export async function writeFsFileBytes(
+  mp: DocMountPoint,
+  relativePath: string,
+  bytes: Buffer
+): Promise<{ sha256: string; sizeBytes: number; mtime: number }> {
+  const abs = resolveFsAbsolute(mp, relativePath);
+  await fs.mkdir(path.dirname(abs), { recursive: true });
+  await fs.writeFile(abs, bytes);
+  await processMountFile(mp, abs, relativePath).catch(err => {
+    logger.warn('writeFsFileBytes: processMountFile failed', {
+      mountPointId: mp.id,
+      relativePath,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+  const stat = await fs.stat(abs);
+  const reread = await fs.readFile(abs);
+  return { sha256: sha256OfBuffer(reread), sizeBytes: reread.length, mtime: stat.mtime.getTime() };
+}
 
 async function writeDestBytes(
   destMount: DocMountPoint,
@@ -623,17 +673,7 @@ async function writeDestBytes(
   const destFileName = path.posix.basename(destRel);
 
   if (isFilesystemMount(destMount)) {
-    const abs = resolveFsAbsolute(destMount, destRel);
-    await fs.mkdir(path.dirname(abs), { recursive: true });
-    await fs.writeFile(abs, bytes);
-    await processMountFile(destMount, abs, destRel).catch(err => {
-      logger.warn('processMountFile after byte copy failed', {
-        mountPointId: destMount.id,
-        relativePath: destRel,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
-    return sha256OfBuffer(await fs.readFile(abs));
+    return (await writeFsFileBytes(destMount, destRel, bytes)).sha256;
   }
 
   // Database mount: route by file type.
@@ -705,7 +745,7 @@ async function deleteAtSource(
   }
 }
 
-async function deleteAtDest(mp: DocMountPoint, relativePath: string): Promise<void> {
+export async function deleteAtDest(mp: DocMountPoint, relativePath: string): Promise<void> {
   const repos = getRepositories();
   const link = await repos.docMountFileLinks.findByMountPointAndPath(mp.id, relativePath);
   if (link) {

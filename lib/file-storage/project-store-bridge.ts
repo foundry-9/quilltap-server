@@ -19,18 +19,14 @@
  * @module file-storage/project-store-bridge
  */
 
-import path from 'path';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
-import { emitDocumentWritten } from '@/lib/mount-index/db-store-events';
 import { pickPrimaryProjectStore } from '@/lib/mount-index/project-store-naming';
+import { storeMountFile } from '@/lib/mount-index/store-file';
 import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
 import {
   UNSAFE_LEAF_CHARS,
   sanitizeLeafName,
-  resolveUniqueRelativePath,
 } from './bridge-path-helpers';
 
 const STORAGE_KEY_PREFIX = 'mount-blob:';
@@ -139,59 +135,42 @@ export async function writeProjectFileToMountStore(
     );
   }
 
-  const repos = getRepositories();
   const safeName = sanitizeLeafName(input.filename);
   const folderDir = normaliseFolderDir(input.folderPath);
 
-  const transcoded = await transcodeToWebP(input.content, input.contentType);
+  // Build the desired path (pre-transcode extension; storeMountFile will
+  // normalise the extension and bump collisions via unique-suffix).
   const desiredPath = folderDir ? `${folderDir}/${safeName}` : safeName;
-  const basePath = normaliseBlobRelativePath(desiredPath, transcoded.storedMimeType);
-  const relativePath = await resolveUniqueRelativePath(target.mountPointId, basePath);
 
-  const parentDir = path.posix.dirname(relativePath);
-  const folderId =
-    parentDir !== '.' && parentDir !== '' && parentDir !== '/'
-      ? await ensureFolderPath(target.mountPointId, parentDir)
-      : null;
-
-  const mirrorFileType = detectMirrorFileType(relativePath);
-
-  // The existing link at this path (if any) will be re-pointed at the new
-  // content by linkBlobContent's UNIQUE(mountPointId, relativePath) upsert.
-  // Drop its chunks first so a re-extraction starts cleanly.
-  const existingLink = await repos.docMountFileLinks.findByMountPointAndPath(
-    target.mountPointId,
-    relativePath
-  );
-  if (existingLink) {
-    await repos.docMountChunks.deleteByLinkId(existingLink.id);
-  }
-
-  const { link, blobId } = await repos.docMountFileLinks.linkBlobContent({
+  logger.debug('writeProjectFileToMountStore: delegating to storeMountFile pipeline', {
     mountPointId: target.mountPointId,
-    relativePath,
-    fileName: path.posix.basename(relativePath),
-    folderId,
-    fileType: mirrorFileType,
-    originalFileName: safeName,
-    originalMimeType: input.contentType,
-    storedMimeType: transcoded.storedMimeType,
-    sha256: transcoded.sha256,
-    description: input.description ?? '',
-    data: transcoded.data,
+    desiredPath,
+    contentType: input.contentType,
   });
 
-  emitDocumentWritten({ mountPointId: target.mountPointId, relativePath });
-  repos.docMountPoints.refreshStats(target.mountPointId).catch(() => { /* best-effort */ });
+  const result = await storeMountFile({
+    mountPointId: target.mountPointId,
+    relativePath: desiredPath,
+    data: input.content,
+    originalMimeType: input.contentType,
+    originalFileName: safeName,
+    description: input.description,
+    collisionStrategy: 'unique-suffix',
+    treatNativeTextAsDocument: false,
+    transcodeImages: true,
+    extractText: false,
+    enqueueEmbedding: false,
+    assetStorage: 'database',
+  });
 
   return {
-    storageKey: buildMountBlobStorageKey(target.mountPointId, blobId),
-    mountPointId: target.mountPointId,
-    blobId,
-    relativePath: link.relativePath,
-    storedMimeType: transcoded.storedMimeType,
-    sizeBytes: transcoded.data.length,
-    sha256: transcoded.sha256,
+    storageKey: buildMountBlobStorageKey(result.mountPointId, result.blobId!),
+    mountPointId: result.mountPointId,
+    blobId: result.blobId!,
+    relativePath: result.relativePath,
+    storedMimeType: result.storedMimeType,
+    sizeBytes: result.sizeBytes,
+    sha256: result.sha256,
   };
 }
 
@@ -258,9 +237,3 @@ function normaliseFolderDir(folderPath?: string | null): string {
   return parts.join('/');
 }
 
-function detectMirrorFileType(relativePath: string): 'pdf' | 'docx' | 'blob' {
-  const ext = path.extname(relativePath).toLowerCase();
-  if (ext === '.pdf') return 'pdf';
-  if (ext === '.docx') return 'docx';
-  return 'blob';
-}

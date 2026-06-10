@@ -173,14 +173,32 @@ quilltap docs status                            # Per-mount extraction + embeddi
 quilltap docs scan <mount>                                    # Trigger a rescan
 quilltap docs reindex <mount> [path] [--force]                # Re-extract + re-chunk
 quilltap docs embed <mount> [path] [--force] [--wait]         # Enqueue embedding jobs
-quilltap docs write [--force] <mount> <path> [file]           # Stdin or file → mount
+quilltap docs write [--force] [--base64] <mount> <path> [file]  # Stdin or file → mount
+quilltap docs read [--rendered] [--base64] <mount> <path>       # File contents → stdout
 quilltap docs delete <mount> <path>                           # Idempotent delete
 quilltap docs mkdir <mount> <path>                            # Idempotent folder create
 quilltap docs move <srcMount> <srcPath> <dstMount> <dstPath>  # Move (hard-link when possible)
 quilltap docs copy [--force] <srcMount> <srcPath> <dstMount> <dstPath>
+quilltap docs link <srcMount> <srcPath> <dstMount> <dstPath>  # Hard-link (server-required; no byte copy)
+quilltap docs rmdir <mount> <path>                            # Delete an empty folder (server-required)
+quilltap docs mvdir <mount> <fromPath> <toPath>               # Rename/move a folder (server-required)
 ```
 
-Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous names print candidates and exit non-zero. `--json` is supported by every verb; `reindex` and `embed` refuse to run without a reachable server.
+Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous names print candidates and exit non-zero. `--json` is supported by every verb; `reindex`, `embed`, `link`, `rmdir`, and `mvdir` refuse to run without a reachable server.
+
+### `--base64` flag
+
+`write --base64`: reads the source bytes and sends them to the server via `PUT /api/v1/mount-points/{mountId}/files/{path}` with `{content: <base64>, encoding: "base64"}`. This is the portable path the file browser uses and handles arbitrary binary files cleanly. Server-required; the direct filesystem fallback is not available with this flag.
+
+`read --base64`: fetches raw bytes via `GET /api/v1/mount-points/{mountId}/files/{path}?encoding=base64` and emits the decoded bytes to stdout, suitable for binary round-trips. Server-required.
+
+### `link`, `rmdir`, `mvdir`
+
+`link` calls `POST /api/v1/mount-points/{srcMountId}?action=link-file` with `{sourcePath, destMountPointId, destPath}`. Creates a true hard link with no byte copy; the server reports back a `strategy` field. Errors: `DEST_EXISTS` (exit 2), `UNSUPPORTED` (cross-storage or cross-device), `SOURCE_NOT_FOUND`.
+
+`rmdir` calls `POST /api/v1/mount-points/{mountId}?action=delete-folder` with `{path}`. Fails with a clear message if the folder is not empty (`NOT_EMPTY` / `CONFLICT`).
+
+`mvdir` calls `POST /api/v1/mount-points/{mountId}?action=move-folder` with `{fromPath, toPath}`. Fails with exit 2 if the destination already exists (`DEST_EXISTS`).
 
 ## Memories
 

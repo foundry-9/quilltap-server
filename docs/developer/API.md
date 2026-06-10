@@ -3414,6 +3414,61 @@ List indexed files plus the folder structure for a mount point.
 
 For filesystem/obsidian mounts the folder list is augmented with on-disk directories (so empty folders show up too). For database-backed mounts it comes from `doc_mount_folders`.
 
+#### `GET /api/v1/mount-points/[id]/files/[...path]`
+
+Read a single file's content. This is the canonical per-file read for the CLI and the Scriptorium file browser/editor; it resolves text documents, database blobs, and on-disk files uniformly.
+
+**Query Parameters**:
+- `encoding` — `utf-8` (default for text-like files) or `base64` (default for binary). Any file can be read as `base64`.
+- `offset`, `limit` — line window (UTF-8 reads only), mirroring `doc_read_file`.
+- `raw=1` (or `Accept: application/octet-stream`) — stream the raw bytes instead of a JSON envelope (used as an `<img>`/download source). Response headers include `Content-Type`, `Content-Length`, and `X-File-Sha256`.
+
+**Response** (JSON envelope): `200 OK`
+
+```json
+{
+  "mountPointId": "mp-uuid",
+  "relativePath": "notes/intro.md",
+  "encoding": "utf-8",
+  "content": "# Intro\n…",
+  "mtime": 1737000000000,
+  "sha256": "…",
+  "sizeBytes": 1234,
+  "mimeType": "text/markdown; charset=utf-8",
+  "fileType": "markdown",
+  "totalLines": 42,
+  "truncated": false
+}
+```
+
+#### `PUT /api/v1/mount-points/[id]/files/[...path]`
+
+Write (create or overwrite) a single file. Routes through the canonical ingest pipeline (`storeMountFile`): native text lands in `doc_mount_documents`, binary in `doc_mount_blobs` (with image→WebP transcode and PDF/DOCX text extraction) on database mounts, or on disk for filesystem mounts.
+
+**Request Body** (JSON):
+
+```json
+{ "content": "…", "encoding": "utf-8", "expected_mtime": 1737000000000, "force": false }
+```
+
+`encoding` is `utf-8` or `base64` (base64 lets you write any binary file as JSON). `expected_mtime` enables optimistic concurrency — a mismatch returns `409 Conflict` (code `CONFLICT`) so an editor can prompt to reload. Alternatively send `multipart/form-data` with a `file` field (plus optional `expected_mtime`/`force`) for large binaries.
+
+**Response**: `200 OK` — `{ mountPointId, relativePath, kind, fileType, sha256, sizeBytes, mimeType, mtime }`.
+
+#### `DELETE /api/v1/mount-points/[id]/files/[...path]`
+
+Delete a single file. `200 OK` with `{ deleted, mountPointId, path }`, or `404` when the path doesn't exist.
+
+#### `PATCH /api/v1/mount-points/[id]/files/[...path]`
+
+Update file metadata: `rename` (same-mount move) and/or `description` (binary blobs only).
+
+**Request Body** (at least one field required):
+
+```json
+{ "rename": "notes/renamed.md", "description": "Cover art" }
+```
+
 #### `POST /api/v1/mount-points/[id]/folders`
 
 Create a folder inside a mount point. The path is normalised and validated to prevent traversal or invalid filesystem segments.
@@ -3439,7 +3494,7 @@ List blob metadata (no bytes) for a mount point.
 
 #### `POST /api/v1/mount-points/[id]/blobs`
 
-Upload a blob via `multipart/form-data`. Image bitmaps are transcoded to WebP via `sharp`; WebP, SVG, and other MIME types are stored as-is. PDF and DOCX uploads have their text extracted into `doc_mount_blobs.extractedText` and are chunked for embedding so they become searchable.
+Upload a blob via `multipart/form-data`. Thin adapter over the canonical `storeMountFile` ingest pipeline (`assetStorage: 'database'`, so blob bytes stay in the mount-index DB even for filesystem mounts — keeping persisted `<img>` URLs resolvable). Image bitmaps are transcoded to WebP via `sharp`; WebP, SVG, and other MIME types are stored as-is. PDF and DOCX uploads have their text extracted into `doc_mount_blobs.extractedText` and are chunked for embedding so they become searchable. For new clients prefer the canonical `PUT .../files/[...path]` item route above.
 
 **Form fields**:
 - `file` (required) — the binary
@@ -3469,6 +3524,20 @@ Update the blob's `description`.
 #### `DELETE /api/v1/mount-points/[id]/blobs/[...path]`
 
 Delete the blob. If no blob is found at that path, the endpoint falls back to deleting the matching text document (and its chunks and `doc_mount_files` row).
+
+#### File & folder operations (action dispatch)
+
+Cross-mount and folder operations live on the `[id]` action-dispatch route (they take a destination mount or are mount-scoped, so they don't fit a single item path). All share the error-code → HTTP mapping in `lib/mount-index/file-op-status.ts` (404 not-found, 409 `DEST_EXISTS`/`CONFLICT`/`NOT_EMPTY`, 400 `INVALID_PATH`/`UNSUPPORTED`, 500 `VERIFY_FAILED`).
+
+- `POST /api/v1/mount-points/[id]?action=write-file` — multipart `file`/`path`/`force` write (legacy; prefer `PUT .../files/[...path]`).
+- `POST /api/v1/mount-points/[id]?action=delete-file` — JSON `{ path }`.
+- `POST /api/v1/mount-points/[id]?action=move-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Cross-mount move (rename / byte-copy / hard-link strategy chosen automatically). Returns `{ strategy, sourceSha256, destSha256, sizeBytes, ... }`.
+- `POST /api/v1/mount-points/[id]?action=copy-file` — JSON `{ sourcePath, destMountPointId, destPath, force? }`. Copies; hard-links when possible unless `force` forces a byte copy.
+- `POST /api/v1/mount-points/[id]?action=link-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Creates a **true hard link** (db→db link row or POSIX `fs.link`); never byte-copies. Cross-storage or cross-device links return `400 UNSUPPORTED`. Never overwrites (`409 DEST_EXISTS`).
+- `POST /api/v1/mount-points/[id]?action=delete-folder` — JSON `{ path }`. Empty folders only (`409 NOT_EMPTY` otherwise).
+- `POST /api/v1/mount-points/[id]?action=move-folder` — JSON `{ fromPath, toPath }`. Moves the folder and everything under it (database rows or `fs.rename` + link-row reconciliation).
+
+> **Mount-point files vs. the file library (`/api/v1/files`).** These mount-point endpoints address content by **(mount, relative path)** and are the one surface for Scriptorium file CRUD. `/api/v1/files` is a separate **library** layer that addresses by **file id** and carries domain metadata the mount index has no columns for (category, generation prompt/model, `linkedTo` associations, tags, image dimensions, thumbnails, avatar back-references). Its uploads already persist bytes into mount stores via the storage bridges (which now funnel through `storeMountFile`), and `GET /api/v1/files/[id]` plus `/api/v1/files/proxy/[...key]` remain the stable, persisted read URLs for library assets. Use the mount-point routes for raw file content; use `/api/v1/files` for the library/metadata layer.
 
 ---
 
