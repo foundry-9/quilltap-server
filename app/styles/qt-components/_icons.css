@@ -72,6 +72,7 @@
 [data-icon="eye-off"] { --_qt-icon-mask: url("/images/icons/eye-off.svg"); --_qt-icon-bg: none; }
 [data-icon="star"] { --_qt-icon-mask: url("/images/icons/star.svg"); --_qt-icon-bg: none; }
 [data-icon="bookmark"] { --_qt-icon-mask: url("/images/icons/bookmark.svg"); --_qt-icon-bg: none; }
+[data-icon="tag"] { --_qt-icon-mask: url("/images/icons/tag.svg"); --_qt-icon-bg: none; }
 [data-icon="expand"] { --_qt-icon-mask: url("/images/icons/expand.svg"); --_qt-icon-bg: none; }
 [data-icon="compress"] { --_qt-icon-mask: url("/images/icons/compress.svg"); --_qt-icon-bg: none; }
 [data-icon="chevron-down"] { --_qt-icon-mask: url("/images/icons/chevron-down.svg"); --_qt-icon-bg: none; }

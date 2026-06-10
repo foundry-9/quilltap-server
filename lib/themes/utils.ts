@@ -592,13 +592,14 @@ function sanitizeCssUrl(url: string): string {
  *   - `.svg`  -> mask mode, keeps `currentColor` tinting
  *   - `.webp` (or anything else) -> image mode, full-colour background
  *
- * The `brand` icon is always forced to image mode — an SVG brand mark should
- * not be monochromed.
+ * This applies to `brand` too: an `.svg` brand override is masked and tinted
+ * like any other icon. Themes that want a full-colour brand mark should ship
+ * it as `.webp` (image mode).
  */
 export function generateIconOverrideRule(icon: IconOverrideDefinition): string {
   const safeSrc = sanitizeCssUrl(icon.src);
   const isSvg = safeSrc.split(/[?#]/)[0].toLowerCase().endsWith('.svg');
-  const useImageMode = icon.name === 'brand' || !isSvg;
+  const useImageMode = !isSvg;
 
   if (useImageMode) {
     // Full-colour background; no currentColor tint behind a (possibly transparent) asset.

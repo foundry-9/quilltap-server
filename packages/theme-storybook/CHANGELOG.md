@@ -2,6 +2,11 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.41] - 2026-06-10
+
+### Changed
+- `Icons` story: the catalogue now lists the new `tag` icon (80 names), and the `brand` note reflects the app-side rule change — an `.svg` brand override is tinted like any other icon; ship `.webp` to keep its own colors.
+
 ## [1.0.40] - 2026-06-09
 
 ### Added

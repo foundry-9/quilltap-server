@@ -20,7 +20,7 @@
 
 ## Bundle Format: Custom Icon Overrides
 
-Theme bundles may replace any of the application's 79 built-in icons by declaring an `icons` map in `theme.json`. Each entry maps a canonical icon name to a bundle-relative asset path (`.svg` or `.webp`):
+Theme bundles may replace any of the application's 80 built-in icons by declaring an `icons` map in `theme.json`. Each entry maps a canonical icon name to a bundle-relative asset path (`.svg` or `.webp`):
 
 ```json
 {
@@ -42,9 +42,9 @@ Place assets in an `icons/` directory inside the bundle. `create-quilltap-theme`
 | `.svg` | Mask | Tinted by `currentColor` — inherits hover/active/disabled colours from surrounding CSS |
 | `.webp` / other | Image | Full-colour as authored — no tinting; use for baked-palette artwork |
 
-The `brand` icon is always image mode regardless of extension (so an SVG brand mark is not monochromed).
+The `brand` icon follows the same extension rule as every other icon: an `.svg` override is masked and tinted; ship the brand mark as `.webp` if it should keep its own colours.
 
-**Canonical icon names:** the complete 79-name list is in [`docs/developer/ICON_INVENTORY.md`](./ICON_INVENTORY.md). The authoring reference (grouped catalogue + override recipe) is in `@quilltap/theme-storybook`'s **Icons** story; `create-quilltap-theme` includes it in the scaffolded Storybook. Source of truth for the implemented set: `components/ui/icons/icon-registry.ts` — `IconName` is derived from it.
+**Canonical icon names:** the complete name list (80 as of 2026-06) is in [`docs/developer/ICON_INVENTORY.md`](./ICON_INVENTORY.md). The authoring reference (grouped catalogue + override recipe) is in `@quilltap/theme-storybook`'s **Icons** story; `create-quilltap-theme` includes it in the scaffolded Storybook. Source of truth for the implemented set: `components/ui/icons/icon-registry.ts` — `IconName` is derived from it.
 
 **CSS mechanics (informational):** the override rules are emitted by `generateIconOverridesCSS` in `lib/themes/utils.ts` and appended by the theme-style-injector into the same unlayered `<style id="quilltap-theme-variables">` block as the token variables. Unlayered rules beat the `@layer components` defaults in `_icons.css` by cascade source order — no new serving route, no additional network requests.
 

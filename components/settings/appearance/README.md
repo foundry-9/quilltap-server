@@ -43,7 +43,7 @@ appearance/
 - Export button for any theme
 
 ### Icon Overrides
-- Active bundle themes can replace any of the 79 built-in icons via an `icons` map in `theme.json`
+- Active bundle themes can replace any of the 80 built-in icons via an `icons` map in `theme.json`
 - `.svg` overrides use mask mode (tinted by `currentColor`); `.webp` and other non-SVG formats use image mode (full color as authored)
 - `brand` is always image mode regardless of extension
 - Overrides are injected into the same `<style>` block as tokens — no reload, live theme-switch applies them instantly

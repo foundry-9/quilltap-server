@@ -45,7 +45,8 @@ any of them. Drop replacement assets into `icons/` and add an `icons` map to
 - **`.svg` overrides** are tinted by the current text color, exactly like the
   built-in icons — good for monochrome glyphs that should follow the theme.
 - **`.webp` overrides** are drawn in full color — good for textured or
-  multi-color marks (the `brand` quill is always drawn in full color).
+  multi-color marks (ship the `brand` quill as `.webp` if it should keep its
+  own colors; an `.svg` brand override is tinted like any other icon).
 - Icon names must match Quilltap's built-in names; unknown names are ignored.
   Run `quilltap themes validate` to catch typos and bad asset paths.
 

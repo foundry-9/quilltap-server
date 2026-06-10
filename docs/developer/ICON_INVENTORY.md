@@ -2,7 +2,7 @@
 
 **Status:** Phase 1 (the `<Icon>` system), the Phase 2 sidebar pilot, **and the Phase 2b app-wide sweep are all complete.** Every icon-bearing component file has been migrated to `<Icon>`; the only inline `<svg>` left in `components/` are the genuine non-icon graphics catalogued in §4. The canonical name list below (signed off 2026-06-09, plus the 14 names the sweep surfaced — see §2.1) is the permanent public contract that `.qtap-theme` bundles target. Renaming an icon after themes ship overrides for it is a breaking change; add freely, rename with care.
 
-Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.ts`](../../components/ui/icons/icon-registry.ts) (**79 icons**). Adding/renaming an icon = edit that file, drop the default SVG in `public/images/icons/`, and run `npm run generate:icon-css`.
+Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.ts`](../../components/ui/icons/icon-registry.ts) (**80 icons**). Adding/renaming an icon = edit that file, drop the default SVG in `public/images/icons/`, and run `npm run generate:icon-css`.
 
 ---
 
@@ -119,6 +119,12 @@ The signed-off list covered the high-frequency glyphs from the initial scan. The
 | `zap` | lightning bolt | "Generate" actions (distinct from `sparkles`) |
 | `cpu` | chip | LLM-logs / memory-dedup / capabilities headers (system/processing) |
 | `layers` | stacked planes | task-queue header |
+
+### 2.2 Added after the contract shipped (additions only — the contract allows them)
+
+| Name | Glyph | Added | Used for |
+|---|---|---|---|
+| `tag` | label/tag with eyelet | 2026-06-10 | Tags tab on Aurora character pages (surfaced while migrating the `app/`-level tab bars the Phase 2b sweep missed — that sweep batched `components/*` only) |
 
 ## 3. Decisions — SIGNED OFF (2026-06-09)
 

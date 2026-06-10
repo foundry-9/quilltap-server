@@ -381,14 +381,33 @@ describe('theme utility helpers', () => {
       expect(rule).toContain('background-color: transparent')
     })
 
-    it('forces image mode for the brand icon even with an .svg override', () => {
+    it('masks an .svg brand override like any other icon (currentColor tint)', () => {
       const rule = generateIconOverrideRule({
         name: 'brand',
         src: '/api/themes/assets/bundle:x/icons/brand.svg',
       })
-      expect(rule).toContain('--_qt-icon-bg: url("/api/themes/assets/bundle:x/icons/brand.svg")')
+      expect(rule).toContain('--_qt-icon-mask: url("/api/themes/assets/bundle:x/icons/brand.svg")')
+      expect(rule).toContain('--_qt-icon-bg: none')
+      expect(rule).toContain('background-color: currentColor')
+    })
+
+    it('keeps image mode for a .webp brand override (full colour)', () => {
+      const rule = generateIconOverrideRule({
+        name: 'brand',
+        src: '/api/themes/assets/bundle:x/icons/brand.webp',
+      })
+      expect(rule).toContain('--_qt-icon-bg: url("/api/themes/assets/bundle:x/icons/brand.webp")')
       expect(rule).toContain('--_qt-icon-mask: none')
-      expect(rule).not.toContain('currentColor')
+      expect(rule).toContain('background-color: transparent')
+    })
+
+    it('keeps mask mode for an .svg src carrying a cache-buster query string', () => {
+      const rule = generateIconOverrideRule({
+        name: 'settings',
+        src: '/api/themes/assets/bundle:x/icons/settings.svg?v=1.1.0',
+      })
+      expect(rule).toContain('--_qt-icon-mask: url("/api/themes/assets/bundle:x/icons/settings.svg?v=1.1.0")')
+      expect(rule).toContain('background-color: currentColor')
     })
 
     it('strips characters that could break out of url("...") (CSS injection guard)', () => {

@@ -305,7 +305,9 @@ See the **Theme Plugin Development Guide** for details on the plugin format.
 
 ### Custom Icons
 
-Beyond the customary palette and typography, `.qtap-theme` bundles may declare their own icon artwork — replacing any of the application's eighty-odd standard glyphs with designs of the author's own devising. When the theme is active, the substitution is instantaneous and entirely silent: no reload, no ceremony, simply a different glyph appearing in the expected place.
+Beyond the customary palette and typography, `.qtap-theme` bundles may declare their own icon artwork — replacing any of the application's eighty standard glyphs with designs of the author's own devising. When the theme is active, the substitution is instantaneous and entirely silent: no reload, no ceremony, simply a different glyph appearing in the expected place.
+
+For a demonstration of the form taken to its logical conclusion, activate the bundled **Madman's Box** theme: every last glyph in the house has been re-cut to its specifications — brass clockwork, sharp corners, and not a rounded cap in sight.
 
 #### Declaring Icon Overrides
 
@@ -331,7 +333,7 @@ The file format governs how the replacement is rendered:
 - **`.svg` files** are painted in *mask mode*: the glyph is tinted by the surrounding text colour (`currentColor`). Ideal for clean monochrome line drawings that should harmonise with the theme's foreground, active, or muted states — the icon responds to hover and disabled colouring exactly as a stock glyph would. Passing splendidly in polite society, one might say.
 - **`.webp` files** (and other non-SVG formats) are displayed in *image mode*: the artwork is shown exactly as authored, colours unchanged by the interface. Well-suited to icons that carry their own palette — a brass-inlaid quill, a hand-lettered monogram, or an illustration that must retain its specific hue regardless of what the surrounding typography is doing.
 
-The `brand` icon is always displayed in image mode regardless of file format, so an SVG brand mark is never inadvertently reduced to a silhouette.
+The `brand` icon obeys the same rule as the rest of the company: an `.svg` brand mark is tinted along with everything else, while a `.webp` brand mark keeps its own colours. Should your masthead insist upon arriving in full regalia — gilt, enamel, and all — supply it as `.webp`; supply it as `.svg` and it will dress to match the room.
 
 #### Validating Icon Overrides
 
