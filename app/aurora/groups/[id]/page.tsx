@@ -14,18 +14,11 @@ import { GroupMembersCard } from '../components/GroupMembersCard'
 import { GroupLinkedStoresCard } from '../components/GroupLinkedStoresCard'
 import { useGroupMembers } from '../hooks/useGroupMembers'
 import { useGroupMountPoints } from '../hooks/useGroupMountPoints'
+import { Icon } from '@/components/ui/icon'
 import type { Group } from '../../types'
 
 interface GroupEditorPageProps {
   params: Promise<{ id: string }>
-}
-
-function ChevronLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-    </svg>
-  )
 }
 
 export default function GroupEditorPage({ params }: GroupEditorPageProps) {
@@ -146,7 +139,7 @@ export default function GroupEditorPage({ params }: GroupEditorPageProps) {
           className="inline-flex items-center justify-center rounded-lg border qt-border-default qt-bg-muted/70 p-2 qt-shadow-sm transition hover:qt-bg-muted"
           title="Go back"
         >
-          <ChevronLeftIcon className="w-5 h-5" />
+          <Icon name="chevron-left" className="w-5 h-5" />
         </button>
         <h1 className="qt-page-title">Edit Group</h1>
       </div>

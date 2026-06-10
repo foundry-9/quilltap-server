@@ -11,6 +11,7 @@
 import type { Project, BackgroundDisplayMode } from '../types'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
 import { AestheticEditorField } from '@/components/settings/AestheticEditorField'
+import { Icon } from '@/components/ui/icon'
 
 interface ImageProfile {
   id: string
@@ -30,13 +31,6 @@ interface ImageGenerationCardProps {
   onToggle: () => void
 }
 
-function ImageIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-  )
-}
 
 export function ImageGenerationCard({
   project,
@@ -56,7 +50,7 @@ export function ImageGenerationCard({
         className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
       >
         <div className="flex items-center gap-3">
-          <ImageIcon className="w-5 h-5 qt-text-primary" />
+          <Icon name="image" className="w-5 h-5 qt-text-primary" />
           <div className="text-left">
             <h3 className="qt-heading-4 text-foreground">Image Generation</h3>
             <p className="qt-text-small qt-text-secondary">

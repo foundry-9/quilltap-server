@@ -13,16 +13,8 @@ import { useDocumentStoreDetail } from './hooks/useDocumentStoreDetail'
 import { FileTable } from './components'
 import { EditDocumentStoreDialog } from '../components/EditDocumentStoreDialog'
 import { formatBytes } from '@/lib/utils/format-bytes'
-import { PencilIcon, RefreshIcon } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icon'
 import type { UpdateDocumentStoreData } from '../types'
-
-function ChevronLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-    </svg>
-  )
-}
 
 export default function DocumentStoreDetailPage() {
   const params = useParams()
@@ -88,7 +80,7 @@ export default function DocumentStoreDetailPage() {
           onClick={() => router.push('/scriptorium')}
           className="inline-flex items-center gap-1 text-sm qt-text-secondary hover:text-foreground mb-4 transition-colors"
         >
-          <ChevronLeftIcon className="w-4 h-4" />
+          <Icon name="chevron-left" className="w-4 h-4" />
           Back to The Scriptorium
         </button>
 
@@ -120,14 +112,14 @@ export default function DocumentStoreDetailPage() {
               className={`qt-button-secondary inline-flex items-center gap-1.5 ${scanning || store.scanStatus === 'scanning' ? 'opacity-50 cursor-not-allowed' : ''}`}
               title={store.mountType === 'database' ? 'Rechunk all documents in this database-backed store' : undefined}
             >
-              <RefreshIcon className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
+              <Icon name="refresh" className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
               {scanning ? 'Scanning...' : store.mountType === 'database' ? 'Re-chunk' : 'Scan Now'}
             </button>
             <button
               onClick={() => setEditDialogOpen(true)}
               className="qt-button-secondary inline-flex items-center gap-1.5"
             >
-              <PencilIcon className="w-4 h-4" />
+              <Icon name="pencil" className="w-4 h-4" />
               Edit
             </button>
           </div>

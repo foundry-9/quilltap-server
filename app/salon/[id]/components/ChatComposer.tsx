@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
+import { Icon } from '@/components/ui/icon'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
@@ -184,9 +185,7 @@ export function ChatComposer({
       {/* No active characters warning */}
       {!hasActiveCharacters && (
         <div className="qt-alert qt-alert-warning flex items-center gap-3">
-          <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
+          <Icon name="alert-triangle" className="w-5 h-5 flex-shrink-0" />
           <div className="flex-1">
             <p className="font-medium text-sm">No characters in this chat</p>
             <p className="text-xs opacity-80 mt-0.5">
@@ -213,13 +212,9 @@ export function ChatComposer({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             ) : toolExecutionStatus.status === 'success' ? (
-              <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
+              <Icon name="check-circle" className="w-5 h-5 flex-shrink-0" />
             ) : (
-              <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
+              <Icon name="alert-circle" className="w-5 h-5 flex-shrink-0" />
             )}
             <span className="qt-label">{toolExecutionStatus.message}</span>
           </div>
@@ -259,13 +254,9 @@ export function ChatComposer({
                 className="qt-chat-attachment-chip"
               >
                 {file.mimeType.startsWith('image/') ? (
-                  <svg className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+                  <Icon name="image" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-success" />
                 ) : (
-                  <svg className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
+                  <Icon name="file" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
                 )}
                 <span className="text-foreground max-w-[150px] truncate">
                   {file.filename}
@@ -276,9 +267,7 @@ export function ChatComposer({
                   className="qt-chat-attachment-chip-remove"
                   title="Remove attachment"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <Icon name="close" className="w-4 h-4" />
                 </button>
               </div>
             ))}
@@ -300,9 +289,7 @@ export function ChatComposer({
                   className="qt-chat-attachment-chip-remove"
                   title="Remove tool result"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <Icon name="close" className="w-4 h-4" />
                 </button>
               </div>
             ))}
@@ -373,9 +360,7 @@ export function ChatComposer({
                   ? `Switch to chat mode (Enter to send)`
                   : `Switch to composition mode (${isMac ? 'Cmd' : 'Ctrl'}+Enter to send)`}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+                <Icon name="file" className="w-5 h-5" />
               </button>
 
               {/* Document Mode toggle button */}
@@ -389,9 +374,7 @@ export function ChatComposer({
                   className="qt-chat-toolbar-button qt-doc-open-button"
                   title={`Open document (${isMac ? 'Cmd' : 'Ctrl'}+Shift+D)`}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
+                  <Icon name="pencil" className="w-5 h-5" />
                 </button>
               )}
 
@@ -406,9 +389,7 @@ export function ChatComposer({
                   className="qt-chat-toolbar-button"
                   title="Open terminal"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+                  <Icon name="code" className="w-5 h-5" />
                 </button>
               )}
             </div>
@@ -452,9 +433,7 @@ export function ChatComposer({
               className="qt-chat-composer-send qt-chat-stop-button"
               title="Stop generating"
             >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <rect x="6" y="6" width="12" height="12" rx="1" />
-              </svg>
+              <Icon name="stop" className="w-5 h-5" />
             </button>
           ) : (
             /* Send button - disabled while generating when stop is in sidebar */
@@ -464,9 +443,7 @@ export function ChatComposer({
               className="qt-chat-composer-send"
               title={!hasActiveCharacters ? "Add a character to start chatting" : (streaming || waitingForResponse) ? "Generating..." : "Send message"}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
+              <Icon name="send" className="w-5 h-5" />
             </button>
           )}
         </form>

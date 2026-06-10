@@ -1,6 +1,7 @@
 'use client'
 
 import { memo } from 'react'
+import { Icon } from '@/components/ui/icon'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
@@ -438,9 +439,7 @@ function MessageRowInner({
                         className="qt-chat-attachment-image"
                       />
                       <div className="qt-chat-attachment-overlay">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                        </svg>
+                        <Icon name="zoom-in" />
                       </div>
                     </button>
                   ))}
@@ -476,9 +475,7 @@ function MessageRowInner({
                       title="Collapse this message"
                       aria-label="Collapse this message"
                     >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                      </svg>
+                      <Icon name="chevron-down" className="rotate-180" />
                     </button>
                   )}
                   {/* Copy */}
@@ -487,9 +484,7 @@ function MessageRowInner({
                     className="qt-chat-message-action-icon"
                     title="Copy message"
                   >
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
+                    <Icon name="copy" />
                   </button>
                   {/* Save image (only when one or more image attachments are present) */}
                   {onSaveImage && getImageAttachments(message).length > 0 && (
@@ -506,9 +501,7 @@ function MessageRowInner({
                         : 'Save image to a photo album'}
                       aria-label="Save image to a photo album"
                     >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                      </svg>
+                      <Icon name="bookmark" />
                     </button>
                   )}
                   {/* View source/rendered */}
@@ -518,14 +511,9 @@ function MessageRowInner({
                     title={viewSourceMessageIds.has(message.id) ? 'View rendered' : 'View source'}
                   >
                     {viewSourceMessageIds.has(message.id) ? (
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
+                      <Icon name="eye" />
                     ) : (
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                      </svg>
+                      <Icon name="code" />
                     )}
                   </button>
                   {/* Edit (user messages only) */}
@@ -535,9 +523,7 @@ function MessageRowInner({
                       className="qt-chat-message-action-icon"
                       title="Edit message"
                     >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
+                      <Icon name="pencil" />
                     </button>
                   )}
                   {/* Delete */}
@@ -546,9 +532,7 @@ function MessageRowInner({
                     className="qt-chat-message-action-icon qt-chat-message-action-icon-danger"
                     title="Delete message"
                   >
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    <Icon name="trash" />
                   </button>
                   {/* Regenerate (assistant messages only) */}
                   {message.role === 'ASSISTANT' && (
@@ -557,9 +541,7 @@ function MessageRowInner({
                       className="qt-chat-message-action-icon"
                       title="Regenerate response"
                     >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
+                      <Icon name="refresh" />
                     </button>
                   )}
                   {/* Re-attribute (when other participants exist) */}
@@ -569,9 +551,7 @@ function MessageRowInner({
                       className="qt-chat-message-action-icon"
                       title="Re-attribute to different participant"
                     >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                      </svg>
+                      <Icon name="swap" />
                     </button>
                   )}
                   {/* View LLM Logs (assistant messages with logs) */}
@@ -581,9 +561,7 @@ function MessageRowInner({
                       className="qt-chat-message-action-icon"
                       title="View LLM request/response logs"
                     >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                      </svg>
+                      <Icon name="cpu" />
                     </button>
                   )}
                   {/* Resend (user messages only) */}
@@ -593,9 +571,7 @@ function MessageRowInner({
                       className="qt-chat-message-action-icon"
                       title="Resend this message"
                     >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
-                      </svg>
+                      <Icon name="send" />
                     </button>
                   )}
                   {/* Swipe controls */}
@@ -607,9 +583,7 @@ function MessageRowInner({
                         className="qt-chat-message-action-icon disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Previous response"
                       >
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
+                        <Icon name="chevron-left" />
                       </button>
                       <span className="qt-text-xs px-1">
                         {swipeState.current + 1}/{swipeState.total}
@@ -620,9 +594,7 @@ function MessageRowInner({
                         className="qt-chat-message-action-icon disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Next response"
                       >
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
+                        <Icon name="chevron-right" />
                       </button>
                     </>
                   )}
@@ -652,9 +624,7 @@ function MessageRowInner({
               className="p-1 qt-text-secondary hover:text-foreground"
               title="Copy message"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+              <Icon name="copy" className="w-4 h-4" />
             </button>
             <button
               onClick={() => onToggleSourceView(message.id)}
@@ -662,14 +632,9 @@ function MessageRowInner({
               title={viewSourceMessageIds.has(message.id) ? 'View rendered' : 'View source'}
             >
               {viewSourceMessageIds.has(message.id) ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
+                <Icon name="eye" className="w-4 h-4" />
               ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                </svg>
+                <Icon name="code" className="w-4 h-4" />
               )}
             </button>
             {hasLLMLogs && message.role === 'ASSISTANT' && onViewLLMLogs && (
@@ -678,9 +643,7 @@ function MessageRowInner({
                 className="p-1 qt-text-secondary hover:text-foreground"
                 title="View LLM logs"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                </svg>
+                <Icon name="cpu" className="w-4 h-4" />
               </button>
             )}
           </div>

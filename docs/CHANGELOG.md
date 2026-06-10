@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### Icon migration: app/* inline SVGs → central `<Icon>` registry (+ two new canonical icons)
+
+Completed the follow-up flagged in the Madman's Box icon-redesign entry: migrated the remaining inline-SVG icons in `app/*` page files to the central `<Icon>` component so themes can override them. The earlier Phase 2b sweep covered `components/*` but skipped `app/*`. No DB schema, migration, DDL, `.qtap`-export, or backup change.
+
+- **~130 inline icon SVGs across 41 `app/*` files migrated** to `<Icon name="…">` (salon, prospero, scriptorium, aurora, generate-image, about), preserving each call site's size/color classes and aria attributes. Icon names are picked by meaning, not geometry; the name is a typed union, so an invalid name is a compile error.
+- **Two new canonical icons (registry now 82).** `minus` — counterpart to `plus`; used by the Salon terminal "hide pane (keep session alive)" button and as a general remove/collapse glyph. `sort` — neutral "sortable column" indicator in sortable tables (the Scriptorium file table); active sort direction keeps using the existing `arrow-up`/`arrow-down`. Each got a registry entry, a default SVG (`public/images/icons/`), regenerated `_icons.css`, a Madman's Box override (sharp butt/miter, contract-clean), a `theme.json` map entry, a preview-contact-sheet entry, an `ICON_INVENTORY.md` §2.2 row, and a theme-storybook catalogue entry. `check-madmans-box-icons.mjs` reports 82/82 coverage, contract clean. The bundled Madman's Box theme was bumped 1.1.0 → 1.1.1 for the two added overrides.
+- **`@quilltap/theme-storybook` bumped to 1.0.42 — requires `npm publish`** (added `minus` and `sort` to the override-able names catalogue).
+- **Deleted the deprecated shim wrappers** (`components/ui/icons/index.tsx`: `CloseIcon`/`PencilIcon`/`RefreshIcon`/`CheckIcon`/`ChatIcon`). All remaining call sites (8 files) now use `<Icon>` directly.
+- **Fixed a sizing/visibility regression the migration surfaced.** Three `.qt-chat-*` CSS rules sized the child `<svg>` directly; `<Icon>` renders a `<span class="qt-icon">`, so those selectors stopped matching. Updated `.qt-chat-message-action-icon`, `.qt-chat-attachment-overlay`, and its hover rule to also target `.qt-icon`, restoring the className-less Salon action-bar icons' size and the attachment-overlay zoom icon's hover-reveal.
+- **Left inline (genuine non-icon graphics):** loading spinners, the composer's pulsing response-status ring, and the About page's GitHub and Foundry-9 brand logos — none are themeable glyphs.
+
 #### Scriptorium canonical file API: one write pipeline + per-file REST item route
 
 Consolidated mount-point file writes behind a single ingest pipeline and added a complete per-file REST surface for the `quilltap docs` CLI and the (future) Scriptorium file browser. No schema, migration, DDL, `.qtap`-export, or backup change — content tables and storage keys are unchanged.

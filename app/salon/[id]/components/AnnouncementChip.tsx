@@ -1,6 +1,7 @@
 'use client'
 
 import { memo } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { formatMessageTime } from '@/lib/format-time'
 import {
   getSystemSenderDisplayName,
@@ -36,19 +37,11 @@ export const AnnouncementBarContents = memo(function AnnouncementBarContents({
       <span className="qt-chat-system-bar-sender">{senderName}</span>
       {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
       <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
-      <svg
+      <Icon
+        name={expanded ? 'chevron-down' : 'chevron-right'}
         className={`qt-chat-system-bar-chevron${expanded ? ' qt-chat-system-bar-chevron-down' : ''}`}
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
         aria-hidden="true"
-      >
-        {expanded ? (
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        ) : (
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        )}
-      </svg>
+      />
     </>
   )
 })

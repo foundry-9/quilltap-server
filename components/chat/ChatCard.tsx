@@ -18,7 +18,6 @@ import { TagDisplay } from '@/components/tags/tag-display'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import AvatarStack from '@/components/ui/AvatarStack'
 import { formatChatListDate } from '@/lib/format-time'
-import { CloseIcon } from '@/components/ui/icons'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
 
@@ -358,7 +357,7 @@ export function ChatCard({
               {actionType === 'delete' ? (
                 <Icon name="trash" className="w-5 h-5" />
               ) : (
-                <CloseIcon className="w-5 h-5" />
+                <Icon name="close" className="w-5 h-5" />
               )}
             </button>
           </div>

@@ -12,6 +12,7 @@
  */
 
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { formatBytes } from '@/lib/utils/format-bytes'
 import { showConfirmation } from '@/lib/alert'
 import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
@@ -81,21 +82,9 @@ function isBlobBacked(fileType: string): boolean {
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) {
-    return (
-      <svg className="w-3 h-3 ml-1 qt-text-secondary opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-      </svg>
-    )
+    return <Icon name="sort" className="w-3 h-3 ml-1 qt-text-secondary opacity-40" />
   }
-  return (
-    <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      {dir === 'asc' ? (
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-      ) : (
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-      )}
-    </svg>
-  )
+  return <Icon name={dir === 'asc' ? 'arrow-up' : 'arrow-down'} className="w-3 h-3 ml-1" />
 }
 
 function encodePath(relativePath: string): string {

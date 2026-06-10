@@ -9,6 +9,7 @@
 
 import { useState } from 'react'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
+import { Icon } from '@/components/ui/icon'
 import type { GroupMember } from '../../types'
 
 interface GroupMembersCardProps {
@@ -18,22 +19,6 @@ interface GroupMembersCardProps {
   onToggle: () => void
   onAdd: (characterId: string) => Promise<boolean>
   onRemove: (characterId: string) => Promise<boolean>
-}
-
-function UsersIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 8.048M12 4.354v8.048m-6.598-4.024A2 2 0 105.5 8.354m3.902-3.024A2 2 0 1110.5 8.354m6.598 4.024A2 2 0 1018.5 12.378m-3.902-3.024A2 2 0 1114.5 12.378" />
-    </svg>
-  )
-}
-
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  )
 }
 
 export function GroupMembersCard({
@@ -84,7 +69,7 @@ export function GroupMembersCard({
         className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
       >
         <div className="flex items-center gap-3">
-          <UsersIcon className="w-5 h-5 qt-text-primary" />
+          <Icon name="users" className="w-5 h-5 qt-text-primary" />
           <div className="text-left">
             <h3 className="qt-heading-4 text-foreground">Members</h3>
             <p className="qt-text-small qt-text-secondary">
@@ -121,7 +106,7 @@ export function GroupMembersCard({
                     className="ml-2 flex-shrink-0 p-1.5 rounded hover:qt-text-destructive transition-colors disabled:opacity-50"
                     title="Remove member"
                   >
-                    <XIcon className="w-4 h-4" />
+                    <Icon name="close" className="w-4 h-4" />
                   </button>
                 </div>
               ))}

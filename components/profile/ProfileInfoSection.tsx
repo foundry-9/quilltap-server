@@ -2,7 +2,6 @@
 
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { formatDateTime } from '@/lib/format-time'
-import { CheckIcon } from '@/components/ui/icons'
 import { Icon } from '@/components/ui/icon'
 import { UserProfile } from './types'
 
@@ -43,7 +42,7 @@ function InfoField({
           aria-label={`Copy ${label}`}
         >
           {copied ? (
-            <CheckIcon className="w-4 h-4" />
+            <Icon name="check" className="w-4 h-4" />
           ) : (
             <Icon name="copy" className="w-4 h-4" />
           )}

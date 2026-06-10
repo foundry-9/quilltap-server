@@ -2123,14 +2123,16 @@
     background: var(--qt-chat-attachment-overlay);
   }
 
-  .qt-chat-attachment-overlay svg {
+  .qt-chat-attachment-overlay svg,
+  .qt-chat-attachment-overlay .qt-icon {
     @apply w-6 h-6 text-white;
     opacity: 0;
     transition: opacity 150ms ease;
     filter: drop-shadow(0 0 8px rgb(0 0 0 / 0.45));
   }
 
-  .qt-chat-attachment-button:hover .qt-chat-attachment-overlay svg {
+  .qt-chat-attachment-button:hover .qt-chat-attachment-overlay svg,
+  .qt-chat-attachment-button:hover .qt-chat-attachment-overlay .qt-icon {
     opacity: 1;
   }
 
@@ -2210,7 +2212,8 @@
     background: color-mix(in srgb, var(--qt-status-danger-bg) 50%, transparent);
   }
 
-  .qt-chat-message-action-icon svg {
+  .qt-chat-message-action-icon svg,
+  .qt-chat-message-action-icon .qt-icon {
     @apply w-4 h-4;
   }
 

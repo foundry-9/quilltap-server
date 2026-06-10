@@ -60,6 +60,7 @@
 [data-icon="trash"] { --_qt-icon-mask: url("/images/icons/trash.svg"); --_qt-icon-bg: none; }
 [data-icon="copy"] { --_qt-icon-mask: url("/images/icons/copy.svg"); --_qt-icon-bg: none; }
 [data-icon="plus"] { --_qt-icon-mask: url("/images/icons/plus.svg"); --_qt-icon-bg: none; }
+[data-icon="minus"] { --_qt-icon-mask: url("/images/icons/minus.svg"); --_qt-icon-bg: none; }
 [data-icon="search"] { --_qt-icon-mask: url("/images/icons/search.svg"); --_qt-icon-bg: none; }
 [data-icon="download"] { --_qt-icon-mask: url("/images/icons/download.svg"); --_qt-icon-bg: none; }
 [data-icon="upload"] { --_qt-icon-mask: url("/images/icons/upload.svg"); --_qt-icon-bg: none; }
@@ -82,6 +83,7 @@
 [data-icon="arrow-right"] { --_qt-icon-mask: url("/images/icons/arrow-right.svg"); --_qt-icon-bg: none; }
 [data-icon="arrow-up"] { --_qt-icon-mask: url("/images/icons/arrow-up.svg"); --_qt-icon-bg: none; }
 [data-icon="arrow-down"] { --_qt-icon-mask: url("/images/icons/arrow-down.svg"); --_qt-icon-bg: none; }
+[data-icon="sort"] { --_qt-icon-mask: url("/images/icons/sort.svg"); --_qt-icon-bg: none; }
 [data-icon="alert-triangle"] { --_qt-icon-mask: url("/images/icons/alert-triangle.svg"); --_qt-icon-bg: none; }
 [data-icon="alert-circle"] { --_qt-icon-mask: url("/images/icons/alert-circle.svg"); --_qt-icon-bg: none; }
 [data-icon="shield"] { --_qt-icon-mask: url("/images/icons/shield.svg"); --_qt-icon-bg: none; }

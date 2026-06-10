@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { formatBytes } from '@/lib/utils/format-bytes'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
 import type { DocumentStore } from '@/app/scriptorium/types'
+import { Icon } from '@/components/ui/icon'
 
 interface DocumentStoresCardProps {
   linkedStores: DocumentStore[]
@@ -21,26 +22,6 @@ interface DocumentStoresCardProps {
   onUnlink: (storeId: string) => Promise<boolean>
 }
 
-function DatabaseIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
-      />
-    </svg>
-  )
-}
-
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  )
-}
 
 export function DocumentStoresCard({
   linkedStores,
@@ -90,7 +71,7 @@ export function DocumentStoresCard({
         className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
       >
         <div className="flex items-center gap-3">
-          <DatabaseIcon className="w-5 h-5 qt-text-primary" />
+          <Icon name="scriptorium" className="w-5 h-5 qt-text-primary" />
           <div className="text-left">
             <h3 className="qt-heading-4 text-foreground">The Scriptorium</h3>
             <p className="qt-text-small qt-text-secondary">
@@ -141,7 +122,7 @@ export function DocumentStoresCard({
                     className="ml-2 flex-shrink-0 p-1.5 rounded hover:qt-text-destructive transition-colors disabled:opacity-50"
                     title="Unlink document store"
                   >
-                    <XIcon className="w-4 h-4" />
+                    <Icon name="close" className="w-4 h-4" />
                   </button>
                 </div>
               ))}

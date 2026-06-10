@@ -8,7 +8,7 @@
 
 import Link from 'next/link'
 import type { ProjectChat } from '../types'
-import { CloseIcon } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icon'
 
 interface ChatsTabProps {
   projectId: string
@@ -52,7 +52,7 @@ export function ChatsTab({ projectId, chats, onRemoveChat }: ChatsTabProps) {
             className="qt-text-secondary hover:qt-text-destructive"
             title="Remove from project"
           >
-            <CloseIcon className="w-5 h-5" />
+            <Icon name="close" className="w-5 h-5" />
           </button>
         </div>
       ))}

@@ -66,6 +66,7 @@ export const ICON_REGISTRY = {
   'trash':         { defaultFile: '/images/icons/trash.svg',         defaultMode: 'mask' },
   'copy':          { defaultFile: '/images/icons/copy.svg',          defaultMode: 'mask' },
   'plus':          { defaultFile: '/images/icons/plus.svg',          defaultMode: 'mask' },
+  'minus':         { defaultFile: '/images/icons/minus.svg',         defaultMode: 'mask' },
   'search':        { defaultFile: '/images/icons/search.svg',        defaultMode: 'mask' },
   'download':      { defaultFile: '/images/icons/download.svg',      defaultMode: 'mask' },
   'upload':        { defaultFile: '/images/icons/upload.svg',        defaultMode: 'mask' },
@@ -90,6 +91,7 @@ export const ICON_REGISTRY = {
   'arrow-right':   { defaultFile: '/images/icons/arrow-right.svg',   defaultMode: 'mask' },
   'arrow-up':      { defaultFile: '/images/icons/arrow-up.svg',      defaultMode: 'mask' },
   'arrow-down':    { defaultFile: '/images/icons/arrow-down.svg',    defaultMode: 'mask' },
+  'sort':          { defaultFile: '/images/icons/sort.svg',          defaultMode: 'mask' },
 
   // --- status & feedback ---
   'alert-triangle':{ defaultFile: '/images/icons/alert-triangle.svg',defaultMode: 'mask' },

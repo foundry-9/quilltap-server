@@ -9,6 +9,7 @@
  */
 
 import { BaseModal } from '@/components/ui/BaseModal'
+import { Icon } from '@/components/ui/icon'
 import type { TerminalSessionMeta } from '../hooks/terminalModeApi'
 
 interface TerminalSessionPickerProps {
@@ -69,9 +70,7 @@ export default function TerminalSessionPicker({
               onClick={onSpawnNew}
               className="qt-list-row w-full text-left flex items-center gap-2 px-3 py-2 rounded border qt-border-default hover:qt-bg-muted"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              <Icon name="plus" className="w-4 h-4" />
               <span className="text-sm font-medium">New terminal</span>
             </button>
           </li>

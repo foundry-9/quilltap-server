@@ -1,6 +1,7 @@
 'use client'
 
 import MessageContent from '@/components/chat/MessageContent'
+import { Icon } from '@/components/ui/icon'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
 interface ThinkingBlockProps {
@@ -41,15 +42,10 @@ export function ThinkingBlock({
     <div className="qt-chat-thinking">
       <details className="qt-chat-thinking-details group" open={streaming || !collapsedByDefault}>
         <summary className="qt-chat-thinking-summary">
-          <svg
+          <Icon
+            name="chevron-right"
             className="qt-chat-thinking-chevron transition-transform group-open:rotate-90"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          />
           <span className="qt-chat-thinking-label">{streaming ? 'Thinking…' : 'Thinking'}</span>
         </summary>
         <div className="qt-chat-thinking-body">

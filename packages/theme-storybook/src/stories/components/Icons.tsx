@@ -23,7 +23,7 @@ const ICON_GROUPS: IconGroup[] = [
     category: 'General UI',
     names: [
       'close', 'pencil', 'refresh', 'check', 'check-circle', 'chat', 'info', 'trash',
-      'copy', 'plus', 'search', 'download', 'upload', 'cloud-upload', 'external-link',
+      'copy', 'plus', 'minus', 'search', 'download', 'upload', 'cloud-upload', 'external-link',
       'link', 'send', 'paperclip', 'eye', 'eye-off', 'star', 'bookmark', 'tag', 'expand', 'compress',
     ],
   },
@@ -31,7 +31,7 @@ const ICON_GROUPS: IconGroup[] = [
     category: 'Navigation arrows',
     names: [
       'chevron-down', 'chevron-right', 'chevron-left',
-      'arrow-left', 'arrow-right', 'arrow-up', 'arrow-down',
+      'arrow-left', 'arrow-right', 'arrow-up', 'arrow-down', 'sort',
     ],
   },
   {

@@ -8,6 +8,7 @@
 
 import Link from 'next/link'
 import type { Group } from '../types'
+import { Icon } from '@/components/ui/icon'
 
 interface GroupCardProps {
   group: Group
@@ -15,27 +16,6 @@ interface GroupCardProps {
   onDelete: () => void
 }
 
-/**
- * Users icon for groups without custom icons
- */
-function UsersIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 8.048M12 4.354v8.048m-6.598-4.024A2 2 0 105.5 8.354m3.902-3.024A2 2 0 1110.5 8.354m6.598 4.024A2 2 0 1018.5 12.378m-3.902-3.024A2 2 0 1114.5 12.378" />
-    </svg>
-  )
-}
-
-/**
- * Trash icon for delete button
- */
-function TrashIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-  )
-}
 
 export function GroupCard({ group, onClick, onDelete }: GroupCardProps) {
   return (
@@ -49,7 +29,7 @@ export function GroupCard({ group, onClick, onDelete }: GroupCardProps) {
             className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
             style={{ backgroundColor: group.color || 'var(--muted)' }}
           >
-            {group.icon || <UsersIcon className="w-5 h-5 qt-text-secondary" />}
+            {group.icon || <Icon name="users" className="w-5 h-5 qt-text-secondary" />}
           </div>
           <div>
             <h2 className="text-xl font-semibold text-foreground">{group.name}</h2>
@@ -77,7 +57,7 @@ export function GroupCard({ group, onClick, onDelete }: GroupCardProps) {
           className="qt-button-destructive qt-shadow-sm"
           title="Delete group"
         >
-          <TrashIcon className="w-5 h-5" />
+          <Icon name="trash" className="w-5 h-5" />
         </button>
       </div>
     </div>

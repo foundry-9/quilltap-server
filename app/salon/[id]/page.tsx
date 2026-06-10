@@ -64,6 +64,7 @@ import { TerminalPane } from './components/TerminalPane'
 import TerminalSessionPicker from './components/TerminalSessionPicker'
 import { useDocumentMode, type FocusRequest } from './hooks/useDocumentMode'
 import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
+import { Icon } from '@/components/ui/icon'
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -876,9 +877,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 href={`/projects/${chat.projectId}`}
                 className="inline-flex items-center gap-1.5 qt-text-secondary hover:text-foreground transition-colors flex-shrink-0"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
+                <Icon name="folder" className="w-4 h-4" />
                 <span>{chat.projectName}</span>
               </a>
               <span className="qt-text-muted">/</span>
@@ -934,9 +933,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               className="qt-danger-badge flex-shrink-0"
               title="The Concierge is off-duty for this chat. No moderation, no rerouting — set from the sidebar's Chat section."
             >
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-              </svg>
+              <Icon name="check-circle" className="w-3 h-3" />
               Off-duty
             </span>
           ) : chat.isDangerousChat ? (
@@ -944,9 +941,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               className="qt-danger-badge flex-shrink-0"
               title={`The Concierge has flagged this chat${chat.dangerCategories?.length ? `: ${chat.dangerCategories.join(', ')}` : ''}`}
             >
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-              </svg>
+              <Icon name="alert-triangle" className="w-3 h-3" />
               Flagged
             </span>
           ) : null}
@@ -982,9 +977,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               title="LLM Inspector (Cmd+Shift+L)"
               aria-label="Toggle LLM Inspector"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+              <Icon name="code" className="w-4 h-4" />
             </button>
           )}
           {showChatTotals && (

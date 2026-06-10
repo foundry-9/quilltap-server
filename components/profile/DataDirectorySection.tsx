@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from 'react'
 import useSWR from 'swr'
-import { CheckIcon } from '@/components/ui/icons'
 import { Icon } from '@/components/ui/icon'
 
 /**
@@ -127,7 +126,7 @@ export function DataDirectorySection() {
               aria-label="Copy path"
             >
               {copied ? (
-                <CheckIcon className="w-4 h-4" />
+                <Icon name="check" className="w-4 h-4" />
               ) : (
                 <Icon name="copy" className="w-4 h-4" />
               )}

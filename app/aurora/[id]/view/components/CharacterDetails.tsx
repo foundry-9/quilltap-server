@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { Icon } from '@/components/ui/icon'
 import { Character, TemplateCounts, UserControlledCharacter } from '../types'
 import { TemplateDisplay } from '@/components/characters/TemplateHighlighter'
 import { ReverseUserDialog } from './ReverseUserDialog'
@@ -55,9 +56,7 @@ export function CharacterDetails({
             {replacingTemplate === 'char' ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              <Icon name="refresh" className="w-4 h-4" />
             )}
             <span className="hidden sm:inline">{character?.name}</span>
             <span className="text-primary">→</span>
@@ -77,9 +76,7 @@ export function CharacterDetails({
             {replacingTemplate === 'user' ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-success border-r-transparent"></div>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              <Icon name="refresh" className="w-4 h-4" />
             )}
             <span className="hidden sm:inline">{defaultPartnerName}</span>
             <span className="qt-text-success">→</span>
@@ -99,9 +96,7 @@ export function CharacterDetails({
             {reversingTemplate === 'char' ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              <Icon name="refresh" className="w-4 h-4" />
             )}
             <code className="rounded qt-bg-primary/20 px-1 text-xs text-primary">{`{{char}}`}</code>
             <span className="text-primary">→</span>
@@ -121,9 +116,7 @@ export function CharacterDetails({
             {reversingTemplate === 'user' ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-success border-r-transparent"></div>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              <Icon name="refresh" className="w-4 h-4" />
             )}
             <code className="rounded qt-bg-success/20 px-1 text-xs qt-text-success">{`{{user}}`}</code>
             <span className="qt-text-success">→</span>
@@ -136,9 +129,7 @@ export function CharacterDetails({
           href={`/characters/${characterId}/edit`}
           className="character-edit-link flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition hover:qt-bg-primary/90"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
+          <Icon name="pencil" className="w-4 h-4" />
           Edit Character
         </Link>
       </div>
@@ -292,9 +283,7 @@ export function CharacterDetails({
           <div className="rounded-lg border qt-border-default qt-bg-muted/30 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+                <Icon name="code" className="w-5 h-5 text-primary" />
                 <span className="text-sm qt-text-primary">Active System Prompt:</span>
                 <span className="qt-text-small">
                   {character.systemPrompts.find(p => p.isDefault)?.name || character.systemPrompts[0]?.name || 'None'}
