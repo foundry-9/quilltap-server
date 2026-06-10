@@ -188,7 +188,10 @@ export async function storeMountFile(input: StoreFileInput): Promise<StoreFileRe
       mountPointId: mp.id,
       relativePath: rel,
       kind: 'filesystem',
-      fileType: link?.fileType ?? detectBlobFileType(rel),
+      // If processMountFile failed to index (no link row), still report a
+      // sensible type: native text by extension before the binary fallback,
+      // so a freshly-written .md/.txt isn't mislabelled as 'blob'.
+      fileType: link?.fileType ?? detectNativeText(rel) ?? detectBlobFileType(rel),
       sha256: fsResult.sha256,
       sizeBytes: fsResult.sizeBytes,
       storedMimeType: input.originalMimeType || mimeForExtension(rel),

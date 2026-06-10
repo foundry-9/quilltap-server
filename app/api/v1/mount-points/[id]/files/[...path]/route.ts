@@ -38,7 +38,13 @@ import { fileOpStatus } from '@/lib/mount-index/file-op-status';
 type Params = { id: string; path: string[] };
 
 function joinPath(parts: string[]): string {
-  return parts.map(p => decodeURIComponent(p)).join('/');
+  try {
+    return parts.map(p => decodeURIComponent(p)).join('/');
+  } catch {
+    // Malformed percent-encoding (e.g. a stray "%") — surface as a 400 rather
+    // than letting decodeURIComponent's URIError become a generic 500.
+    throw new FileOpError('Malformed percent-encoding in path', 'INVALID_PATH');
+  }
 }
 
 function handleFileOpError(error: unknown, action: string, ctx: Record<string, unknown>): NextResponse {
@@ -62,8 +68,11 @@ const readQuerySchema = z.object({
 
 export const GET = createAuthenticatedParamsHandler<Params>(
   async (req: NextRequest, _ctx: RequestContext, { id, path }) => {
-    const relativePath = joinPath(path);
+    // Raw (still-encoded) join for error-logging context until we can safely
+    // decode; joinPath() may throw FileOpError on malformed encoding.
+    let relativePath = path.join('/');
     try {
+      relativePath = joinPath(path);
       const url = new URL(req.url);
       const parsed = readQuerySchema.safeParse({
         encoding: url.searchParams.get('encoding') ?? undefined,
@@ -80,9 +89,13 @@ export const GET = createAuthenticatedParamsHandler<Params>(
 
       if (wantsRaw) {
         const { bytes, mimeType, sha256, sizeBytes } = await readMountFileBytes(id, relativePath);
-        const body = new Uint8Array(bytes.length);
-        bytes.copy(body);
-        return new NextResponse(body, {
+        // Buffer is already a Uint8Array; hand back a bounds-respecting view
+        // (no copy). The Response honours byteOffset/byteLength, so a pooled
+        // Buffer can't bleed neighbouring bytes. The cast satisfies the DOM
+        // BodyInit type, which wants Uint8Array<ArrayBuffer> rather than the
+        // ArrayBufferLike-generic view.
+        const body = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        return new NextResponse(body as unknown as BodyInit, {
           status: 200,
           headers: {
             'Content-Type': mimeType,
@@ -118,8 +131,11 @@ const writeBodySchema = z.object({
 
 export const PUT = createAuthenticatedParamsHandler<Params>(
   async (req: NextRequest, { user }: RequestContext, { id, path }) => {
-    const relativePath = joinPath(path);
+    // Raw (still-encoded) join for error-logging context until we can safely
+    // decode; joinPath() may throw FileOpError on malformed encoding.
+    let relativePath = path.join('/');
     try {
+      relativePath = joinPath(path);
       const contentType = req.headers.get('content-type') || '';
       let data: Buffer;
       let expectedMtime: number | undefined;
@@ -137,7 +153,13 @@ export const PUT = createAuthenticatedParamsHandler<Params>(
         originalMimeType = file.type || undefined;
         originalFileName = file.name || undefined;
         const mtimeRaw = form.get('expected_mtime');
-        if (mtimeRaw != null && String(mtimeRaw) !== '') expectedMtime = Number(mtimeRaw);
+        if (mtimeRaw != null && String(mtimeRaw) !== '') {
+          const parsedMtime = Number(mtimeRaw);
+          if (!Number.isInteger(parsedMtime) || parsedMtime < 0) {
+            return badRequest('expected_mtime must be a non-negative integer');
+          }
+          expectedMtime = parsedMtime;
+        }
         force = String(form.get('force') ?? '').toLowerCase() === 'true';
       } else {
         const body = await req.json().catch(() => null);
@@ -191,8 +213,11 @@ export const PUT = createAuthenticatedParamsHandler<Params>(
 
 export const DELETE = createAuthenticatedParamsHandler<Params>(
   async (_req: NextRequest, { user }: RequestContext, { id, path }) => {
-    const relativePath = joinPath(path);
+    // Raw (still-encoded) join for error-logging context until we can safely
+    // decode; joinPath() may throw FileOpError on malformed encoding.
+    let relativePath = path.join('/');
     try {
+      relativePath = joinPath(path);
       const result = await deleteFile({ mountPointId: id, relativePath });
       logger.info('[Mount Points v1] Deleted file (item route)', {
         mountPointId: id,
@@ -223,8 +248,11 @@ const patchBodySchema = z
 
 export const PATCH = createAuthenticatedParamsHandler<Params>(
   async (req: NextRequest, { user, repos }: RequestContext, { id, path }) => {
-    const relativePath = joinPath(path);
+    // Raw (still-encoded) join for error-logging context until we can safely
+    // decode; joinPath() may throw FileOpError on malformed encoding.
+    let relativePath = path.join('/');
     try {
+      relativePath = joinPath(path);
       const body = await req.json().catch(() => null);
       const parsed = patchBodySchema.safeParse(body);
       if (!parsed.success) {

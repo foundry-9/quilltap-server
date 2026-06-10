@@ -1128,7 +1128,9 @@ async function handleRead(flags, id, relativePath) {
     }
     let body = null;
     try { body = await res.json(); } catch { /* ignore */ }
-    if (!body || !body.content) {
+    // A zero-byte file legitimately returns content: "" (falsy), so check the
+    // type, not truthiness — otherwise empty files fail to round-trip.
+    if (!body || typeof body.content !== 'string') {
       console.error('Read failed: server returned no content');
       process.exit(1);
     }
