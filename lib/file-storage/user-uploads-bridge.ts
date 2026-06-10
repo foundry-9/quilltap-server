@@ -26,15 +26,12 @@
  * @module file-storage/user-uploads-bridge
  */
 
-import path from 'path';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
-import { emitDocumentWritten } from '@/lib/mount-index/db-store-events';
 import { getUserUploadsMountPointId } from '@/lib/instance-settings';
+import { storeMountFile } from '@/lib/mount-index/store-file';
 import { buildMountBlobStorageKey } from './project-store-bridge';
-import { sanitizeLeafName, resolveUniqueRelativePath } from './bridge-path-helpers';
+import { sanitizeLeafName } from './bridge-path-helpers';
 
 interface UserUploadsTarget {
   mountPointId: string;
@@ -102,39 +99,37 @@ export async function writeUserUploadToMountStore(
     throw new Error('Quilltap Uploads mount has not been provisioned');
   }
 
-  const repos = getRepositories();
   const safeName = sanitizeLeafName(input.filename);
-  const transcoded = await transcodeToWebP(input.content, input.contentType);
   const desiredPath = `${input.subfolder}/${safeName}`;
-  const basePath = normaliseBlobRelativePath(desiredPath, transcoded.storedMimeType);
-  const relativePath = await resolveUniqueRelativePath(target.mountPointId, basePath);
 
-  const folderId = await ensureFolderPath(target.mountPointId, input.subfolder);
-
-  const { blobId } = await repos.docMountFileLinks.linkBlobContent({
+  logger.debug('writeUserUploadToMountStore: delegating to storeMountFile pipeline', {
     mountPointId: target.mountPointId,
-    relativePath,
-    fileName: path.posix.basename(relativePath),
-    folderId,
-    originalFileName: safeName,
-    originalMimeType: input.contentType,
-    storedMimeType: transcoded.storedMimeType,
-    sha256: transcoded.sha256,
-    description: input.description ?? '',
-    data: transcoded.data,
+    desiredPath,
+    contentType: input.contentType,
   });
 
-  emitDocumentWritten({ mountPointId: target.mountPointId, relativePath });
-  repos.docMountPoints.refreshStats(target.mountPointId).catch(() => { /* best-effort */ });
+  const result = await storeMountFile({
+    mountPointId: target.mountPointId,
+    relativePath: desiredPath,
+    data: input.content,
+    originalMimeType: input.contentType,
+    originalFileName: safeName,
+    description: input.description,
+    collisionStrategy: 'unique-suffix',
+    treatNativeTextAsDocument: false,
+    transcodeImages: true,
+    extractText: false,
+    enqueueEmbedding: false,
+    assetStorage: 'database',
+  });
 
   return {
-    storageKey: buildMountBlobStorageKey(target.mountPointId, blobId),
-    mountPointId: target.mountPointId,
-    blobId,
-    relativePath,
-    storedMimeType: transcoded.storedMimeType,
-    sizeBytes: transcoded.data.length,
-    sha256: transcoded.sha256,
+    storageKey: buildMountBlobStorageKey(result.mountPointId, result.blobId!),
+    mountPointId: result.mountPointId,
+    blobId: result.blobId!,
+    relativePath: result.relativePath,
+    storedMimeType: result.storedMimeType,
+    sizeBytes: result.sizeBytes,
+    sha256: result.sha256,
   };
 }
-
