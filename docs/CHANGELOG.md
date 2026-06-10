@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### Scriptorium canonical file API: one write pipeline + per-file REST item route
+
+Consolidated mount-point file writes behind a single ingest pipeline and added a complete per-file REST surface for the `quilltap docs` CLI and the (future) Scriptorium file browser. No schema, migration, DDL, `.qtap`-export, or backup change — content tables and storage keys are unchanged.
+
+- **One canonical write/ingest pipeline.** New `lib/mount-index/store-file.ts` (`storeMountFile`) is the single chokepoint for fresh writes: native-text → `doc_mount_documents`, binary → `doc_mount_blobs` with image transcode + PDF/DOCX text extraction + chunk/embedding enqueue, content-addressed dedup, folder-ensure, mtime-based optimistic concurrency, and the `emitDocumentWritten` event. It is mount-type aware (`assetStorage: 'auto'` writes filesystem mounts to disk; `'database'` keeps blob bytes in the mount-index DB — used by the `/blobs` route so persisted `<img>` URLs stay resolvable) with three collision strategies (`error-if-exists` / `overwrite` / `unique-suffix`). It is byte-ingesting and deliberately distinct from `file-ops.copyFile`/`moveFile`, which stay byte-preserving.
+- **Shared leaf modules to break import cycles + dedup.** `file-op-error.ts` (the `FileOpError` class, re-exported from `file-ops.ts` for back-compat), `path-utils.ts` (`normaliseRelativePath` / `detectNativeText` / `mimeForExtension`, removing the file-ops copies), and `file-op-status.ts` (`fileOpStatus` for `FileOpError` + `DatabaseStoreError`, replacing the inline copy in the mount-point route). `file-ops.ts` now exports `resolveFsAbsolute` / `destExists` / `deleteAtDest` / the extracted `writeFsFileBytes` so the pipeline reuses them.
+- **The `/blobs` POST route is now a thin adapter** over `storeMountFile` (~150 inline lines deleted); behaviour and response shapes preserved.
+- **New canonical per-file item route** `app/api/v1/mount-points/[id]/files/[...path]/route.ts` — GET (UTF-8 / base64 / `?raw=1` byte stream / `?offset`+`?limit` line window), PUT (JSON `{content, encoding, expected_mtime, force}` or multipart), DELETE, PATCH (`rename` and/or `description`). Backed by new `lib/mount-index/read-file.ts` (`readMountFile` / `readMountFileBytes`).
+- **New action-dispatch verbs** on `POST /api/v1/mount-points/[id]`: `link-file` (true hard link via new `file-ops.linkFile` — db-link / fs-link, refuses cross-storage rather than byte-copying), `delete-folder`, and `move-folder` (new `lib/mount-index/folder-ops.ts` dispatching database vs filesystem).
+- Unit tests: `store-file.test.ts`, `read-file.test.ts` (existing mount-index suites still green — 207 tests). Follow-ups (not in this commit): funnel the four file-storage bridges through `storeMountFile`, collapse the generic `/api/v1/files` CRUD, switch in-repo front-end callers, and wire the CLI verbs (publish-gated).
+
 #### Memory extraction enrichment: canon reweighting, orienting context, targeting tags
 
 Enriched the per-turn memory extractor (`lib/memory/cheap-llm-tasks/`, `lib/memory/memory-processor.ts`, `lib/background-jobs/handlers/memory-extraction.ts`) so it judges novelty against vantage-point-correct canon and tags every memory along three controlled axes. No schema, migration, DDL, `.qtap`-export, or backup change.
