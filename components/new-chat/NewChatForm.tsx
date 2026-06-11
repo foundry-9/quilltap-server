@@ -164,7 +164,6 @@ export function NewChatForm({
         : selectedCharacterScenario
           ? { kind: 'character' as const, content: selectedCharacterScenario.content }
           : null
-  const showCustomTextarea = !selectedPreset
 
   // The character's own default — used to render the override-visibility note
   // when the form is currently using the project default but the character
@@ -210,7 +209,6 @@ export function NewChatForm({
         groupScenarioPath: null,
         groupScenarioGroupId: null,
         scenarioId: null,
-        scenario: '',
       }))
       return
     }
@@ -223,7 +221,6 @@ export function NewChatForm({
         groupScenarioPath: null,
         groupScenarioGroupId: null,
         scenarioId: null,
-        scenario: '',
       }))
       return
     }
@@ -240,7 +237,6 @@ export function NewChatForm({
           projectScenarioPath: null,
           generalScenarioPath: null,
           scenarioId: null,
-          scenario: '',
         }))
         return
       }
@@ -253,7 +249,6 @@ export function NewChatForm({
       generalScenarioPath: null,
       groupScenarioPath: null,
       groupScenarioGroupId: null,
-      scenario: '',
     }))
   }
 
@@ -568,16 +563,19 @@ export function NewChatForm({
               {selectedPreset.content}
             </div>
           )}
-          {showCustomTextarea && (
-            <MarkdownLexicalEditor
-              value={state.scenario}
-              onChange={(value) => setState((prev) => ({ ...prev, scenario: value }))}
-              disabled={creating}
-              namespace="NewChatForm.scenario"
-              ariaLabel="Starting scenario"
-              minHeight="6rem"
-            />
+          {selectedPreset && (
+            <p className="mb-1 mt-2 text-xs qt-text-muted">
+              Your notes here are added beneath the scenario above.
+            </p>
           )}
+          <MarkdownLexicalEditor
+            value={state.scenario}
+            onChange={(value) => setState((prev) => ({ ...prev, scenario: value }))}
+            disabled={creating}
+            namespace="NewChatForm.scenario"
+            ariaLabel={selectedPreset ? 'Additional scenario notes' : 'Starting scenario'}
+            minHeight="6rem"
+          />
         </div>
 
         {outfitCharacters.length > 0 && (

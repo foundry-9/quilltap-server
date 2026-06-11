@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### New Chat: layer free-text notes onto a chosen scenario
+
+The New Chat dialog's free-text editor now stays visible even after a preset scenario (character / project / group / general) is selected, so you can start from a scenario and add extra scene-setting on top instead of choosing one or the other.
+
+- `NewChatForm.tsx`: the `MarkdownLexicalEditor` is always rendered (previously hidden when a preset was selected). When a preset is chosen it sits below the read-only preview with an "added beneath the scenario above" hint and an "Additional scenario notes" label; with no preset it keeps the "Starting scenario" label. `handleScenarioSelectChange` no longer clears `scenario` when a preset is picked, so typed text survives selection changes.
+- `useNewChat.ts`: `scenario` is now sent independently of the preset field (split out of the precedence `if/else if`) rather than suppressing it.
+- `app/api/v1/chats/route.ts`: `scenario` changed from an override to additive. The route resolves the chosen preset body first, then appends `scenario` beneath it via the new `combineScenarioText` helper (`lib/chat/scenario-text.ts`, `presetBody.trimEnd() + "\n\n" + freeText.trim()`). With no preset, the free text is the whole scenario, as before. `contextSummary` now stores the combined `resolvedScenario` (previously only the raw custom text), so preset-only chats now show the scenario body in the Salon sidebar.
+- No schema, DB column, migration, DDL, or export change — the combined string still persists into the existing `chat.scenarioText`.
+- Tests: new `scenario-text.test.ts` (combine helper) and `components/new-chat/__tests__/NewChatForm.test.tsx` (editor stays visible with a preset; preset selection preserves typed text). `scenario-persistence.test.ts` updated for the combine semantics (custom text now appends to the `scenarioId` body rather than overriding it). Documented in `help/general-scenarios.md` and `help/project-scenarios.md`.
+
 #### Fix: keyword badges and accent surfaces were illegible on bold-accent themes
 
 Memory-card keyword pills (Aurora → character → Memories) rendered low-contrast under Madman's Box: the pill set a `bg-accent` background but no text color, so the text fell back to the card's light foreground over the theme's bright-amber accent. Root cause is broader — the app follows the shadcn/Quilltap convention where `accent` is a quiet hover/selected/surface tint (the default themes set it to a near-`muted` neutral), but Madman's Box maps `accent` to a loud amber, so every "quiet surface" use turned into a bright-amber block with low-contrast text. Swept and fixed app-side; the amber accent identity is preserved.

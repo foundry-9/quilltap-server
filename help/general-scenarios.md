@@ -61,9 +61,11 @@ In the new-chat drop-down you'll see, in order:
 - **Project Scenarios** — the contents of the project's `Scenarios/` folder, when a project is selected.
 - **General Scenarios** — the contents of the Quilltap General `Scenarios/` folder, always.
 - **Character Scenarios** — the personal scenarios of the single character you've chosen, when exactly one LLM-controlled character is selected.
-- **Custom...** — the textarea you've always known, for a one-off scenario typed on the spot.
+- **Custom...** — the blank-slate option, for a one-off scenario typed on the spot.
 
 A project default still pre-selects when present; otherwise the general default takes the field. You may, of course, choose any item from any group.
+
+Beneath the drop-down sits a writing-desk that never leaves the room. Choose **Custom...** and whatever you compose there *is* the scenario, plain and simple. But pick a ready-made scenario from any group and the desk politely remains — anything you jot beneath it is **added below** the chosen scenario rather than replacing it. So you may begin from a trusted envelope and then pencil in tonight's particulars ("...and a storm has knocked out the lights") without rewriting the whole thing. Your pencilled notes survive a change of selection, too, should you reconsider which envelope to start from.
 
 ## Keeping the Folder Healthy
 

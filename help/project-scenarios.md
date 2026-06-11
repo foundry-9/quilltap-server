@@ -58,9 +58,11 @@ When you begin a new chat within a project, the **Starting Scenario** drop-down 
 
 - **Project Scenarios** — the contents of the project's `Scenarios/` folder.
 - **Character Scenarios** — the personal scenarios of the single character you've chosen, if exactly one LLM-controlled character is selected.
-- **Custom...** — the textarea you've always known, for a one-off scenario typed on the spot.
+- **Custom...** — the blank-slate option, for a one-off scenario typed on the spot.
 
 The **project default** takes precedence when seeding the form's initial selection. If the chosen character also has a default scenario of her own, you'll see an inline note naming her default and offering a single click to switch to it — the override is never silent. You remain in charge of which scenario opens the curtain.
+
+The free-text desk beneath the drop-down stays open even once a scenario is chosen: anything written there is **layered beneath** the selected scenario rather than supplanting it, so a project scenario can be embellished with tonight's particulars without disturbing the original. (See [General Scenarios](general-scenarios.md) for the fuller account.)
 
 ## Keeping the Folder Healthy
 

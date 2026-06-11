@@ -627,10 +627,16 @@ export function useNewChat({
         requestBody.imageProfileId = state.imageProfileId
       }
 
-      // Scenario precedence: custom text > character scenarioId > projectScenarioPath > groupScenarioPath > generalScenarioPath.
+      // Free-text scenario notes — sent independently of any preset. The server
+      // appends them beneath the chosen preset body, or treats them as the whole
+      // scenario when no preset is selected.
       if (state.scenario) {
         requestBody.scenario = state.scenario
-      } else if (state.scenarioId) {
+      }
+
+      // Preset selection (mutually exclusive among the four sources):
+      // character scenarioId > projectScenarioPath > groupScenarioPath > generalScenarioPath.
+      if (state.scenarioId) {
         requestBody.scenarioId = state.scenarioId
       } else if (state.projectScenarioPath) {
         requestBody.projectScenarioPath = state.projectScenarioPath

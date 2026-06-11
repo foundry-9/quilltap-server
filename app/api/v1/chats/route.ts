@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
+import { combineScenarioText } from '@/lib/chat/scenario-text';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
@@ -87,7 +88,7 @@ const createParticipantSchema = z.object({
 const createChatSchema = z.object({
   participants: z.array(createParticipantSchema).min(1, 'At least one participant is required'),
   title: z.string().optional(),
-  scenario: z.string().optional(), // Custom scenario text override (highest precedence)
+  scenario: z.string().optional(), // Free-text scenario notes; appended beneath any resolved preset body, or used as the whole scenario when no preset is chosen.
   scenarioId: z.string().uuid().optional(), // ID of a named scenario from the character's scenarios array
   /**
    * Relative path of a project scenario file (`Scenarios/<filename>.md`) inside the
@@ -943,9 +944,11 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // Fetch the primary character for defaults resolution
   const primaryCharacter = await repos.characters.findById(buildResult.firstCharacter.characterId);
 
-  // Resolve scenario: custom text > character scenarioId > project scenario path >
-  // group scenario path > general scenario path > nothing
-  let resolvedScenario = validatedData.scenario;
+  // Resolve the chosen preset scenario body (if any), by precedence:
+  // character scenarioId > project scenario path > group scenario path > general
+  // scenario path > nothing. The free-text `scenario` is NOT part of this chain —
+  // it is appended to whatever the chain resolves (see combineScenarioText below).
+  let resolvedScenario: string | undefined;
   if (!resolvedScenario && validatedData.scenarioId) {
     const matchingScenario = primaryCharacter?.scenarios?.find(s => s.id === validatedData.scenarioId);
     if (matchingScenario) {
@@ -1031,6 +1034,18 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     }
   }
 
+  // Append the user's free-text scenario notes. When a preset resolved above, the
+  // notes are layered beneath it; when none did, the notes ARE the scenario.
+  const presetBody = resolvedScenario;
+  resolvedScenario = combineScenarioText(presetBody, validatedData.scenario);
+  const extraText = validatedData.scenario?.trim();
+  if (extraText) {
+    logger.debug('[Chats v1] combined free-text scenario with resolved preset', {
+      presetPresent: Boolean(presetBody && presetBody.trim().length > 0),
+      extraLength: extraText.length,
+    });
+  }
+
   const chatContext = await buildChatContext(
     buildResult.firstCharacter.characterId,
     buildResult.firstCharacter.userCharacterId,
@@ -1094,7 +1109,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     userId: user.id,
     participants: participantsWithTimestamps,
     title: validatedData.title || `Chat with ${chatContext.character.name}`,
-    contextSummary: validatedData.scenario || null,
+    contextSummary: resolvedScenario || null,
     tags: Array.from(buildResult.tags),
     roleplayTemplateId: defaultRoleplayTemplateId,
     timestampConfig: resolvedTimestampConfig,
