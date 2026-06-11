@@ -68,8 +68,9 @@ async function handleGetTokens(themeId: string): Promise<Response> {
   }));
 
   const subsystems = theme?.subsystems || undefined;
+  const images = themeRegistry.getImages(themeId);
 
-  return successResponse({ tokens, fonts, icons, cssOverrides, subsystems });
+  return successResponse({ tokens, fonts, icons, cssOverrides, subsystems, images });
 }
 
 /**

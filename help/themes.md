@@ -68,7 +68,7 @@ Theme bundles require no build tools, npm packages, or JavaScript code -- they a
 Bundle themes can be uninstalled from the Appearance settings:
 
 1. Find the bundle theme in your theme list (marked with a "Bundle" badge)
-2. Expand its preview
+2. Click its **Preview** button to open the preview window
 3. Click the trash icon to uninstall
 4. The theme is removed from your system
 
@@ -79,7 +79,7 @@ Note: Plugin themes and the built-in default theme cannot be uninstalled from th
 Any installed theme (including plugin themes and the default) can be exported as a `.qtap-theme` bundle:
 
 1. Find the theme in your theme list
-2. Expand its preview
+2. Click its **Preview** button to open the preview window
 3. Click the download/export icon
 4. Save the `.qtap-theme` file to your computer
 5. Share it with others or use it as a starting point for a new theme
@@ -238,14 +238,17 @@ For each theme, you can see:
 - **Dark mode support** — Whether the theme supports dark mode
 - **Active indicator** — Shows which theme is currently active
 
-### Previewing Themes
+### Previewing a Theme
 
-When viewing theme options:
+Every theme on the shelf wears a small **Preview** button, and pressing it throws open a full-page viewing window — a proper showroom rather than a keyhole. Within, you will find:
 
-1. Hover over a theme to see more details
-2. Click to preview the theme in the background
-3. See how colors look before committing
-4. Switch back if you prefer a different theme
+- **A banner in the theme's own livery** — the theme's background color, with the lettering automatically set to whichever shade (ivory or ink) reads most legibly against it. No more squinting at pale text on a brilliant ground.
+- **A Light / Dark switch** — flip between the two to see how the theme comports itself in either light. (Themes that keep no evening wardrobe show only the Light setting.)
+- **A live sampler** — genuine headings, buttons, inputs, badges, and a card, all dressed in the theme's colors and fonts, so you may judge the cut before committing.
+- **A gallery of the theme's bundled images** — any preview image and the backdrops it hangs in Quilltap's principal halls, arranged alphabetically over a faint checkerboard so transparent artwork reads clearly. A theme that bundles no imagery simply says so.
+- **A sheet of the theme's re-cut icons** — should the theme replace any of Quilltap's standard glyphs, each appears here in four guises (ordinary, muted, hovered, and set upon a colored button), with its name printed beneath in plain type for easy copying. A theme that leaves the icons alone says as much.
+
+From the banner you may **Apply** the theme outright, **Export** it as a `.qtap-theme` bundle, or — for bundle themes not presently in use — **Uninstall** it. Close the window by the **×**, the Escape key, or a click upon the surrounding gloom; nothing is committed until you press **Apply**.
 
 ## Color Modes Explained
 

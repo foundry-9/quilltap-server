@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### Theme preview is now a full-page modal (gallery + icon sheet)
+
+Replaced the inline "expanded card" theme preview in Settings → Appearance with a full-page modal dialog. The modal adds a Light/Dark toggle (driving both the banner and the live element preview), a gallery of the theme's bundled images, and an icon sheet showing each overridden icon in four states (default, muted, hover, on-primary). Also fixed banner-header contrast on vivid themes: the banner is painted in the theme's own background color with an accessible foreground (white/dark) computed from it.
+
+- New `themeRegistry.getImages(themeId)` returns manifest-referenced preview images only (`previewImage` + `subsystems[*].backgroundImage`/`thumbnail`), resolved to asset URLs via the existing `resolveThemeAssetUrl`, de-duped and sorted alphabetically. It does not enumerate the bundle directory. The tokens endpoint (`GET /api/v1/themes/:id?action=tokens`) now returns `images` alongside the already-present `icons`.
+- New `ThemePreviewModal` (built on `BaseModal`) reuses `ThemePreviewPanel` for the live preview. The icon sheet renders inside a theme-scoped container so the bundled icon-override CSS and color tokens are in effect; `generateIconOverrideRule`/`generateIconOverridesCSS` gained an optional `scopePrefix` argument for this (default empty preserves existing global behavior).
+- Contrast/badge helpers (`getLuminance`, `getContrastingTextColor`, `getMutedTextColor`, `getSourceBadge`) were lifted out of `ThemeCard` into a shared `components/settings/appearance/utils/contrast.ts`. `ThemeCard`'s inline expanded branch was removed; `ThemeSelector` now renders one modal driven by `previewThemeId`.
+- No schema, migration, DDL, or export change — reads existing manifest fields only. No `packages/` changes. Documented in `help/themes.md`.
+
 #### Fix: scheduled autonomous rooms could wedge "running" with no turns
 
 Fixed a race that left a cron-scheduled autonomous room stuck in `runState: 'running'` with zero turns consumed and no turn job in flight — sitting idle indefinitely (the schedule tick skips `running` rooms, so nothing recovered it). Cause: the scheduled-start path ran in the forked job child, where the `currentRunId` write was buffered; the first turn job it enqueued could run before that write committed, read the prior run's id, and self-abort via the stale-run guard without re-enqueuing. Most likely at a cold boot when a missed slot fires amid the startup job flood.

@@ -596,17 +596,16 @@ function sanitizeCssUrl(url: string): string {
  * like any other icon. Themes that want a full-colour brand mark should ship
  * it as `.webp` (image mode).
  */
-export function generateIconOverrideRule(icon: IconOverrideDefinition): string {
-  const safeSrc = sanitizeCssUrl(icon.src);
-  const isSvg = safeSrc.split(/[?#]/)[0].toLowerCase().endsWith('.svg');
-  const useImageMode = !isSvg;
+export function generateIconOverrideRule(icon: IconOverrideDefinition, scopePrefix = ''): string {
+  const safeSrc = sanitizeCssUrl(icon.src)
+  const isSvg = safeSrc.split(/[?#]/)[0].toLowerCase().endsWith('.svg')
+  const useImageMode = !isSvg
+  const prefix = scopePrefix ? `${scopePrefix} ` : ''
 
   if (useImageMode) {
-    // Full-colour background; no currentColor tint behind a (possibly transparent) asset.
-    return `[data-icon="${icon.name}"] { --_qt-icon-mask: none; --_qt-icon-bg: url("${safeSrc}"); background-color: transparent; }`;
+    return `${prefix}[data-icon="${icon.name}"] { --_qt-icon-mask: none; --_qt-icon-bg: url("${safeSrc}"); background-color: transparent; }`
   }
-  // Mask mode keeps currentColor tinting (matches the default SVG behaviour).
-  return `[data-icon="${icon.name}"] { --_qt-icon-mask: url("${safeSrc}"); --_qt-icon-bg: none; background-color: currentColor; }`;
+  return `${prefix}[data-icon="${icon.name}"] { --_qt-icon-mask: url("${safeSrc}"); --_qt-icon-bg: none; background-color: currentColor; }`
 }
 
 /**
@@ -615,12 +614,11 @@ export function generateIconOverrideRule(icon: IconOverrideDefinition): string {
  * @param icons - Array of icon override definitions (name -> resolved asset URL)
  * @returns CSS string with one `[data-icon="..."]` rule per override
  */
-export function generateIconOverridesCSS(icons: IconOverrideDefinition[]): string {
+export function generateIconOverridesCSS(icons: IconOverrideDefinition[], scopePrefix = ''): string {
   if (!icons || icons.length === 0) {
-    return '';
+    return ''
   }
-
-  return icons.map(icon => generateIconOverrideRule(icon)).join('\n');
+  return icons.map(icon => generateIconOverrideRule(icon, scopePrefix)).join('\n')
 }
 
 // ============================================================================

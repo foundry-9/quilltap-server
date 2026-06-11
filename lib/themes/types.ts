@@ -450,6 +450,18 @@ export const RegistryPreviewColorsSchema = z.object({
 
 export type RegistryPreviewColors = z.infer<typeof RegistryPreviewColorsSchema>;
 
+/** A manifest-referenced preview image for a theme (gallery source). */
+export interface ThemePreviewImage {
+  /** Display name, derived from the source key/filename. */
+  name: string;
+  /** Browser-usable URL (already resolved to an asset route). */
+  src: string;
+  /** Where the reference came from. */
+  kind: 'preview' | 'background' | 'thumbnail';
+  /** Subsystem key when kind is background/thumbnail (e.g. "aurora"); undefined for preview. */
+  subsystem?: string;
+}
+
 /**
  * A theme entry in a registry index
  */

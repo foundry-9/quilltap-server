@@ -13,7 +13,7 @@ import path from 'node:path';
 import { logger } from '@/lib/logger';
 import { pluginRegistry, getEnabledPluginsByCapability } from '@/lib/plugins';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
-import type { ThemeTokens, ThemeManifest } from './types';
+import type { ThemeTokens, ThemeManifest, ThemePreviewImage } from './types';
 import { safeValidateThemeTokens } from './types';
 import { DEFAULT_THEME_TOKENS, DEFAULT_THEME_METADATA } from './default-tokens';
 import { mergeThemeTokens, themeTokensToCSS } from './utils';
@@ -850,6 +850,97 @@ class ThemeRegistry extends AbstractMapRegistry<
   getIcons(themeId: string): LoadedThemeIcon[] {
     const theme = this.state.themes.get(themeId);
     return theme?.icons || [];
+  }
+
+  /**
+   * Manifest-referenced preview images for a theme (previewImage + subsystem
+   * background/thumbnail refs). Resolved to asset URLs, de-duped, sorted by name.
+   * Does NOT enumerate the bundle directory — manifest references only.
+   */
+  getImages(themeId: string): ThemePreviewImage[] {
+    const theme = this.state.themes.get(themeId);
+    if (!theme) return [];
+
+    const humanize = (key: string): string =>
+      key
+        .split(/[-_]/)
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+
+    const entries: ThemePreviewImage[] = [];
+
+    if (theme.previewImage) {
+      const src = resolveThemeAssetUrl(theme.previewImage, theme.pluginName);
+      if (src && src !== 'none') {
+        entries.push({ kind: 'preview', name: 'Preview', src });
+      } else {
+        logger.debug('theme-registry.getImages skipped preview (unresolved)', {
+          themeId,
+          value: theme.previewImage,
+        });
+      }
+    }
+
+    for (const [key, sub] of Object.entries(theme.subsystems ?? {})) {
+      const base = sub.name && sub.name.trim() ? sub.name.trim() : humanize(key);
+      const hasBackground = !!(sub.backgroundImage && sub.backgroundImage !== 'none');
+      const hasThumbnail = !!(sub.thumbnail && sub.thumbnail !== 'none');
+      const both = hasBackground && hasThumbnail;
+
+      if (hasBackground) {
+        const src = resolveThemeAssetUrl(sub.backgroundImage, theme.pluginName);
+        if (src && src !== 'none') {
+          entries.push({
+            kind: 'background',
+            subsystem: key,
+            name: both ? `${base} Background` : base,
+            src,
+          });
+        } else {
+          logger.debug('theme-registry.getImages skipped background (unresolved)', {
+            themeId,
+            subsystem: key,
+            value: sub.backgroundImage,
+          });
+        }
+      }
+
+      if (hasThumbnail) {
+        const src = resolveThemeAssetUrl(sub.thumbnail, theme.pluginName);
+        if (src && src !== 'none') {
+          entries.push({
+            kind: 'thumbnail',
+            subsystem: key,
+            name: both ? `${base} Thumbnail` : base,
+            src,
+          });
+        } else {
+          logger.debug('theme-registry.getImages skipped thumbnail (unresolved)', {
+            themeId,
+            subsystem: key,
+            value: sub.thumbnail,
+          });
+        }
+      }
+    }
+
+    const seen = new Set<string>();
+    const deduped = entries.filter((e) => {
+      if (seen.has(e.src)) return false;
+      seen.add(e.src);
+      return true;
+    });
+
+    deduped.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+    logger.debug('theme-registry.getImages', {
+      themeId,
+      count: deduped.length,
+      kinds: deduped.map((e) => e.kind),
+    });
+
+    return deduped;
   }
 
   /**

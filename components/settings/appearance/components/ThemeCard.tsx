@@ -4,7 +4,8 @@
  * Theme Card Component
  *
  * Individual theme card with preview, name, description, and selection state.
- * Supports expandable rich previews showing actual UI elements.
+ * The Preview button opens the full-page ThemePreviewModal (owned by the parent
+ * ThemeSelector) via the onToggleExpand callback.
  *
  * @module components/settings/appearance/components/ThemeCard
  */
@@ -16,8 +17,8 @@ import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
 import { generateFontFacesCSS } from '@/lib/themes/utils'
 import type { ThemeCardProps, PreviewColors } from '../types'
 import { useThemePreview } from '../hooks/useThemePreview'
-import { ThemePreviewPanel } from './ThemePreviewPanel'
 import { Icon } from '@/components/ui/icon'
+import { getContrastingTextColor, getMutedTextColor, getSourceBadge } from '../utils/contrast'
 
 // Default theme preview colors
 const DEFAULT_PREVIEW_COLORS: PreviewColors = {
@@ -36,79 +37,13 @@ const DEFAULT_PREVIEW_COLORS: PreviewColors = {
 }
 
 /**
- * Calculate relative luminance of a color
- * Based on WCAG 2.0 formula
- */
-function getLuminance(hexColor: string): number {
-  // Handle hsl() colors
-  if (hexColor.startsWith('hsl')) {
-    // For HSL, extract lightness value as approximation
-    const match = hexColor.match(/hsl\(\s*\d+\s*,?\s*[\d.]+%?\s*,?\s*([\d.]+)%?\s*\)/)
-    if (match) {
-      return parseFloat(match[1]) / 100
-    }
-    return 0.5 // fallback
-  }
-
-  // Remove # if present
-  const hex = hexColor.replace('#', '')
-
-  // Parse RGB values
-  let r: number, g: number, b: number
-  if (hex.length === 3) {
-    r = parseInt(hex[0] + hex[0], 16) / 255
-    g = parseInt(hex[1] + hex[1], 16) / 255
-    b = parseInt(hex[2] + hex[2], 16) / 255
-  } else {
-    r = parseInt(hex.slice(0, 2), 16) / 255
-    g = parseInt(hex.slice(2, 4), 16) / 255
-    b = parseInt(hex.slice(4, 6), 16) / 255
-  }
-
-  // Apply gamma correction
-  r = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4)
-  g = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4)
-  b = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4)
-
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
-/**
- * Get contrasting text color (white or dark) based on background
- */
-function getContrastingTextColor(bgColor: string): string {
-  const luminance = getLuminance(bgColor)
-  return luminance > 0.5 ? '#1a1a1a' : '#ffffff'
-}
-
-/**
- * Get muted text color based on background
- */
-function getMutedTextColor(bgColor: string): string {
-  const luminance = getLuminance(bgColor)
-  return luminance > 0.5 ? '#666666' : '#a0a0a0'
-}
-
-/**
  * Individual theme card with preview and selection state
  */
-/**
- * Get source badge label
- */
-function getSourceBadge(source?: string, deprecated?: boolean): { label: string; deprecated: boolean } | null {
-  switch (source) {
-    case 'bundle': return { label: 'Bundle', deprecated: false };
-    case 'plugin': return { label: 'Plugin', deprecated: deprecated ?? true };
-    default: return null;
-  }
-}
-
 export function ThemeCard({
   theme,
   isActive,
   onSelect,
   disabled,
-  isExpanded = false,
   onToggleExpand,
   onUninstall,
   onExport,
@@ -121,8 +56,8 @@ export function ThemeCard({
     : theme.description
   const supportsDarkMode = isDefault ? true : theme.supportsDarkMode
 
-  // Use the preview hook to lazy load tokens
-  const { tokens, fonts, cssOverrides, isLoading, error, fetchTokens } = useThemePreview(
+  // Use the preview hook to lazy load tokens (for fonts + preview colors)
+  const { tokens, fonts, fetchTokens } = useThemePreview(
     isDefault ? null : themeId
   )
 
@@ -162,142 +97,6 @@ export function ThemeCard({
   const handlePreviewClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     onToggleExpand?.()
-  }
-
-  // Handle apply button click when expanded
-  const handleApplyClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onSelect()
-  }
-
-  // Handle close button click
-  const handleCloseClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onToggleExpand?.()
-  }
-
-  if (isExpanded) {
-    // Expanded view with rich preview panels
-    return (
-      <div
-        className={`
-          relative flex flex-col p-4 rounded-lg border-2 transition-all
-          w-full col-span-full
-          ${isActive ? 'qt-border-primary bg-accent' : 'qt-border-default'}
-        `}
-      >
-        {/* Header with theme name, apply, and close buttons */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="qt-text-primary qt-heading-4">{name}</div>
-            {description && (
-              <div className="qt-text-small mt-0.5 max-w-2xl">
-                {description}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Source badge */}
-            {(() => {
-              const badge = isDefault ? { label: 'Built-in', deprecated: false } : getSourceBadge(theme?.source, theme?.deprecated)
-              return badge ? (
-                <span className={`inline-flex items-center px-2 py-0.5 rounded qt-text-label-xs ${badge.deprecated ? 'qt-bg-warning/15 qt-text-warning' : 'qt-bg-muted qt-text-secondary'}`}>
-                  {badge.label}
-                  {badge.deprecated && ' (deprecated)'}
-                </span>
-              ) : null
-            })()}
-            {/* Export button */}
-            {onExport && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onExport(); }}
-                className="qt-button-ghost qt-button-sm text-xs"
-                title="Export as .qtap-theme"
-              >
-                <Icon name="download" className="w-3.5 h-3.5" />
-              </button>
-            )}
-            {/* Uninstall button (bundle themes only) */}
-            {onUninstall && !isActive && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onUninstall(); }}
-                className="qt-button-ghost qt-button-sm text-xs qt-text-destructive hover:qt-text-destructive"
-                title="Uninstall theme"
-              >
-                <Icon name="trash" className="w-3.5 h-3.5" />
-              </button>
-            )}
-            {!isActive && (
-              <button
-                type="button"
-                onClick={handleApplyClick}
-                disabled={disabled}
-                className="qt-button-primary qt-button-sm"
-              >
-                Apply
-              </button>
-            )}
-            {isActive && (
-              <span className="qt-badge-success flex items-center gap-1">
-                <Icon name="check" className="w-3 h-3" />
-                Active
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={handleCloseClick}
-              className="qt-button-ghost p-1 qt-text-secondary hover:text-foreground"
-              aria-label="Close preview"
-            >
-              <Icon name="close" className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Preview content */}
-        {isLoading && !previewTokens && (
-          <div className="flex items-center justify-center py-12">
-            <div className="qt-spinner" />
-            <span className="ml-2 qt-text-small">Loading theme preview...</span>
-          </div>
-        )}
-
-        {error && !previewTokens && (
-          <div className="qt-alert-error p-4 rounded-lg">
-            <p className="font-medium">Failed to load theme preview</p>
-            <p className="qt-text-small mt-1">{error}</p>
-          </div>
-        )}
-
-        {previewTokens && (
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Light mode preview */}
-            <ThemePreviewPanel
-              tokens={previewTokens}
-              themeId={themeId}
-              mode="light"
-              fonts={fonts}
-              cssOverrides={cssOverrides}
-              label="Light Mode"
-            />
-
-            {/* Dark mode preview (only if theme supports it) */}
-            {supportsDarkMode && (
-              <ThemePreviewPanel
-                tokens={previewTokens}
-                themeId={themeId}
-                mode="dark"
-                fonts={fonts}
-                cssOverrides={cssOverrides}
-                label="Dark Mode"
-              />
-            )}
-          </div>
-        )}
-      </div>
-    )
   }
 
   // Collapsed view (default card)
