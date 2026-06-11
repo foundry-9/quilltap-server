@@ -98,6 +98,7 @@ function makeTranscript(extra: {
     characterId: string
     characterName: string
     text: string
+    isUserControlled?: boolean
   }>
 } = {}) {
   const slices = (extra.characterSlices ?? [
@@ -520,5 +521,121 @@ describe('processTurnForMemory regressions', () => {
       expect.objectContaining({ characterId: 'char-2', aboutCharacterId: 'user-char-1' }),
       { userId: 'user-1' },
     )
+  })
+
+  // ── User-controlled character as a memory HOLDER ────────────────────────────
+  // When a human drives a character, that character's opener arrives as a slice
+  // flagged isUserControlled. It must form its own SELF memories and OTHER
+  // observations, without being duplicated as a subject or becoming its own
+  // OTHER subject.
+  describe('user-controlled holder', () => {
+    function userHolderCtx() {
+      // Bob is driven by the human (slice flagged isUserControlled); Avery is
+      // a normal AI character. Both are slices this turn.
+      return makeTranscript({
+        userMessage: 'I keep my compass.',
+        userCharacterId: 'user-char-1',
+        characterSlices: [
+          { characterId: 'user-char-1', characterName: 'Bob', text: 'I keep my compass.', isUserControlled: true },
+          { characterId: 'char-1', characterName: 'Avery', text: 'Avery nods.' },
+        ],
+      })
+    }
+
+    beforeEach(() => {
+      // SELF returns a candidate only for the user-controlled holder; OTHER
+      // returns one candidate about every subject the observer is paired with.
+      tasks.extractSelfMemoriesFromTurn.mockImplementation(async (_t: unknown, targetId: string) => ({
+        success: true,
+        result: targetId === 'user-char-1'
+          ? [{ content: 'I committed to leaving at dawn.', summary: 'committed to leave', keywords: [], importance: 0.7 }]
+          : [],
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      }) as any)
+      tasks.extractOtherMemoriesFromTurn.mockImplementation(
+        async (_t: unknown, observerId: string, subjects: Array<{ id: string }>) => {
+          const map = new Map<string, unknown>()
+          for (const s of subjects) {
+            map.set(s.id, [{ content: `${observerId} about ${s.id}`, summary: 'obs', keywords: [], importance: 0.6 }])
+          }
+          return { success: true, result: map, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } } as any
+        },
+      )
+    })
+
+    it('forms SELF memories attributed to the user-controlled character (aboutCharacterId === self)', async () => {
+      await processTurnForMemory(userHolderCtx())
+
+      expect(tasks.extractSelfMemoriesFromTurn).toHaveBeenCalledWith(
+        expect.anything(), 'user-char-1', expect.anything(), expect.anything(),
+        'user-1', undefined, 'chat-1', expect.anything(), false, expect.anything(),
+      )
+      expect(createMemoryWithGate).toHaveBeenCalledWith(
+        expect.objectContaining({ characterId: 'user-char-1', aboutCharacterId: 'user-char-1' }),
+        { userId: 'user-1' },
+      )
+    })
+
+    it('forms OTHER memories the user character holds about the other present characters', async () => {
+      await processTurnForMemory(userHolderCtx())
+
+      // Bob (user-controlled) observes Avery.
+      expect(createMemoryWithGate).toHaveBeenCalledWith(
+        expect.objectContaining({ characterId: 'user-char-1', aboutCharacterId: 'char-1' }),
+        { userId: 'user-1' },
+      )
+      // Avery still observes Bob.
+      expect(createMemoryWithGate).toHaveBeenCalledWith(
+        expect.objectContaining({ characterId: 'char-1', aboutCharacterId: 'user-char-1' }),
+        { userId: 'user-1' },
+      )
+    })
+
+    it('never makes the user character its own OTHER subject', async () => {
+      await processTurnForMemory(userHolderCtx())
+
+      const bobCall = tasks.extractOtherMemoriesFromTurn.mock.calls.find((c: unknown[]) => c[1] === 'user-char-1')
+      expect(bobCall).toBeDefined()
+      const bobSubjects = bobCall![2] as Array<{ id: string }>
+      expect(bobSubjects.map(s => s.id)).toEqual(['char-1'])
+      expect(bobSubjects.some(s => s.id === 'user-char-1')).toBe(false)
+    })
+
+    it('de-dupes the user subject: exactly one user entry, tagged isUser, and logs the skip', async () => {
+      const result = await processTurnForMemory(userHolderCtx())
+
+      const averyCall = tasks.extractOtherMemoriesFromTurn.mock.calls.find((c: unknown[]) => c[1] === 'char-1')
+      expect(averyCall).toBeDefined()
+      const averySubjects = averyCall![2] as Array<{ id: string; isUser: boolean }>
+      const userEntries = averySubjects.filter(s => s.id === 'user-char-1')
+      expect(userEntries).toHaveLength(1)
+      expect(userEntries[0].isUser).toBe(true)
+      expect(result.debugLogs.join('\n')).toContain('Skipped duplicate user subject')
+    })
+
+    it('rate-limits the user-controlled holder on its own per-character cap', async () => {
+      // Bob is over the cap; Avery is fresh. The cap is keyed on character ID,
+      // so the user-controlled character is gated exactly like an AI one.
+      const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as { getRepositories: jest.Mock }
+      repositoriesMock.getRepositories.mockReturnValue({
+        memories: {
+          countCreatedSince: jest.fn<any>((id: string) => Promise.resolve(id === 'user-char-1' ? 25 : 0)),
+        },
+      })
+
+      const result = await processTurnForMemory({
+        ...userHolderCtx(),
+        memoryExtractionLimits: { enabled: true, maxPerHour: 20, softStartFraction: 0.7, softFloor: 0.7 },
+      })
+
+      expect(result.success).toBe(true)
+      // Bob (over cap) never forms memories…
+      const selfTargets = tasks.extractSelfMemoriesFromTurn.mock.calls.map((c: unknown[]) => c[1])
+      expect(selfTargets).not.toContain('user-char-1')
+      expect(selfTargets).toContain('char-1')
+      const otherObservers = tasks.extractOtherMemoriesFromTurn.mock.calls.map((c: unknown[]) => c[1])
+      expect(otherObservers).not.toContain('user-char-1')
+      expect(result.debugLogs.join('\n')).toContain('SKIPPED extraction for Bob')
+    })
   })
 })

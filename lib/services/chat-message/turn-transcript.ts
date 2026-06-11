@@ -14,6 +14,7 @@
 
 import type { Character, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
+import { logger } from '@/lib/logger'
 
 export interface TurnCharacterSlice {
   characterId: string
@@ -23,6 +24,13 @@ export interface TurnCharacterSlice {
   text: string
   /** Every assistant message ID that contributed to this slice. */
   contributingMessageIds: string[]
+  /**
+   * True when this slice's text was authored by the human driving a
+   * user-controlled character (role: 'USER'), not by an LLM. Such a slice is
+   * built from the turn opener so the user-controlled character forms its own
+   * SELF and OTHER memories from the turns the human plays it.
+   */
+  isUserControlled?: boolean
 }
 
 export interface TurnTranscript {
@@ -93,6 +101,7 @@ export function buildTurnTranscript(
   const slices = new Map<string, TurnCharacterSlice>()
   const sliceOrder: string[] = []
   let userMessage: string | null = null
+  let userSlice: TurnCharacterSlice | null = null
   let latestAssistantMessageId: string | null = null
 
   let scanning = options.turnOpenerMessageId === null
@@ -103,6 +112,34 @@ export function buildTurnTranscript(
       if (m.id === options.turnOpenerMessageId && m.role === 'USER') {
         userMessage = m.content
         scanning = true
+        // Promote a user-controlled opener to a first-class slice so its driver
+        // forms memories. The opener's participantId authoritatively identifies
+        // which user character spoke this turn (more reliable than the singular
+        // userCharacterId option, which is just the first user-controlled
+        // participant). Built before the forward walk; prepended below so it
+        // reads first chronologically.
+        const openerParticipant = participants.find(p => p.id === m.participantId)
+        if (
+          openerParticipant?.type === 'CHARACTER' &&
+          openerParticipant.controlledBy === 'user' &&
+          openerParticipant.characterId
+        ) {
+          const character = participantCharacters.get(openerParticipant.characterId)
+          if (character) {
+            userSlice = {
+              characterId: character.id,
+              characterName: character.name,
+              characterPronouns: character.pronouns ?? null,
+              text: m.content,
+              contributingMessageIds: [m.id],
+              isUserControlled: true,
+            }
+            logger.debug(
+              `[Memory] Built user-controlled slice for ${character.name} ` +
+              `(1 contributing message)`,
+            )
+          }
+        }
       }
       continue
     }
@@ -152,7 +189,9 @@ export function buildTurnTranscript(
     userCharacterId: options.userCharacterId,
     userCharacterName: options.userCharacterName,
     userCharacterPronouns: options.userCharacterPronouns,
-    characterSlices: sliceOrder.map(id => slices.get(id)!),
+    characterSlices: userSlice
+      ? [userSlice, ...sliceOrder.map(id => slices.get(id)!)]
+      : sliceOrder.map(id => slices.get(id)!),
     latestAssistantMessageId,
   }
 }

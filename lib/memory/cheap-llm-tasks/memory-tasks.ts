@@ -271,14 +271,36 @@ const AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE =
   `Memories about the participants' shared experience are allowed; memories ` +
   `that name or address the user are not.\n\n`
 
+/**
+ * Prepended to the SELF prompt when the subject is a character a human is
+ * driving directly (its turn slice was authored by the user). Human role-play
+ * is frequently first person ("I told her I wouldn't go"), whereas the SELF
+ * extractor is otherwise tuned on third-person-ish assistant prose. This clause
+ * binds first-person pronouns in the subject's own lines to the subject so the
+ * extractor attributes those decisions and realizations correctly.
+ *
+ * It is a *prepended* preamble (like the autonomous clause) so the cached
+ * `selfBodyForCap(...)` prefix stays byte-stable for the common AI path;
+ * user-controlled SELF calls simply form their own cache lineage.
+ */
+const FIRST_PERSON_USER_CLAUSE =
+  `IMPORTANT: The SUBJECT below is a character a human is playing directly, so ` +
+  `the SUBJECT's lines in the transcript may be written in the first person. ` +
+  `Read every "I", "me", "my", and "myself" in the SUBJECT's own lines as ` +
+  `referring to the SUBJECT — attribute those decisions, realizations, and ` +
+  `actions to the SUBJECT, not to anyone else in the exchange.\n\n`
+
 function getSelfMemoryExtractionPrompt(
   maxMemories: number,
   observerName: string,
   canonBlock: string,
   inAutonomousRoom: boolean = false,
   orienting?: OrientingContext,
+  isUserControlled: boolean = false,
 ): string {
-  const preamble = inAutonomousRoom ? AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE : ''
+  const preamble =
+    (isUserControlled ? FIRST_PERSON_USER_CLAUSE : '') +
+    (inAutonomousRoom ? AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE : '')
   const orientingBlock = renderOrientingContext(orienting)
   return `${preamble}${selfBodyForCap(maxMemories)}
 
@@ -627,21 +649,33 @@ function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
  * and inter-character-pass all see byte-identical input prefixes.
  */
 function renderTurnContext(transcript: TurnTranscript): string {
+  // A user-controlled character now arrives as a slice (built from the turn
+  // opener). It is the human participant *and* a memory-forming character, so
+  // we list it on the USER line and render its lines once in the body labeled
+  // "(the user-controlled character)" — never under the AI-character roster and
+  // never duplicated as a standalone opener. AI slices keep their existing
+  // labeling, so a turn with no user-controlled slice renders byte-identically
+  // to before.
+  const aiSlices = transcript.characterSlices.filter(s => !s.isUserControlled)
+  const userSlices = transcript.characterSlices.filter(s => s.isUserControlled)
+  const hasUserSlice = userSlices.length > 0
+
   const roster: string[] = ['PARTICIPANTS IN THIS TURN:']
-  if (transcript.userCharacterName) {
-    roster.push(`- USER: ${transcript.userCharacterName} (the human participant)`)
+  const userDisplayName = transcript.userCharacterName ?? userSlices[0]?.characterName ?? null
+  if (userDisplayName) {
+    roster.push(`- USER: ${userDisplayName} (the human participant)`)
   } else if (transcript.userMessage !== null) {
     roster.push('- USER: The human participant')
   }
 
-  if (transcript.characterSlices.length === 1) {
-    const slice = transcript.characterSlices[0]
+  if (aiSlices.length === 1) {
+    const slice = aiSlices[0]
     roster.push(
       `- CHARACTER: ${formatNameWithPronouns(slice.characterName, slice.characterPronouns ?? null)} (an AI character)`
     )
-  } else if (transcript.characterSlices.length > 1) {
+  } else if (aiSlices.length > 1) {
     roster.push('- CHARACTERS (AI characters in this chat):')
-    for (const slice of transcript.characterSlices) {
+    for (const slice of aiSlices) {
       roster.push(
         `  * ${formatNameWithPronouns(slice.characterName, slice.characterPronouns ?? null)}`
       )
@@ -649,14 +683,18 @@ function renderTurnContext(transcript: TurnTranscript): string {
   }
 
   const transcriptSections: string[] = []
-  if (transcript.userMessage !== null) {
+  // Render the standalone opener only when no user slice carries it — i.e. a
+  // plain human with no character. When a user slice exists, its body line
+  // below is the single rendering of that text.
+  if (transcript.userMessage !== null && !hasUserSlice) {
     const userLabel = transcript.userCharacterName
       ? `${transcript.userCharacterName} (the user)`
       : 'The user'
     transcriptSections.push(`${userLabel} says:\n"${transcript.userMessage}"`)
   }
   for (const slice of transcript.characterSlices) {
-    const characterLabel = `${formatNameWithPronouns(slice.characterName, slice.characterPronouns ?? null)} (the character)`
+    const role = slice.isUserControlled ? 'the user-controlled character' : 'the character'
+    const characterLabel = `${formatNameWithPronouns(slice.characterName, slice.characterPronouns ?? null)} (${role})`
     transcriptSections.push(`${characterLabel} says:\n"${slice.text}"`)
   }
 
@@ -692,11 +730,12 @@ export async function extractSelfMemoriesFromTurn(
 
   const maxMemories = resolveMaxMemories(resolvedMaxTokens)
   const targetLabel = formatNameWithPronouns(target.characterName, target.characterPronouns ?? null)
+  const isUserControlled = target.isUserControlled ?? false
 
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: getSelfMemoryExtractionPrompt(maxMemories, targetLabel, canonBlock, inAutonomousRoom, orienting),
+      content: getSelfMemoryExtractionPrompt(maxMemories, targetLabel, canonBlock, inAutonomousRoom, orienting, isUserControlled),
     },
     {
       role: 'user',

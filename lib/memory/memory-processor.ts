@@ -379,28 +379,48 @@ export async function processTurnForMemory(
     // the user-controlled character (if any). The user's character record is
     // also used here just like an AI character's — we look up its identity
     // and vault mount point exactly the same way.
+    //
+    // A user-controlled character now arrives as a slice as well (built from
+    // the turn opener), so it would appear both here in the slice loop and in
+    // the explicit user block below. De-dupe by character ID: the slice loop
+    // wins (it carries the authoritative speaker), and the explicit block only
+    // fires as a fallback when the user character is present but silent (e.g. a
+    // greeting turn produced no opener slice).
     // ---------------------------------------------------------------------
     type Subject = { id: string; name: string; identity: string | null; description: string | null; isUser: boolean }
     const subjects: Subject[] = []
+    const seenSubjectIds = new Set<string>()
     for (const slice of allowedSlices) {
+      if (seenSubjectIds.has(slice.characterId)) continue
+      seenSubjectIds.add(slice.characterId)
       const character = ctx.participantCharacters.get(slice.characterId)
       subjects.push({
         id: slice.characterId,
         name: slice.characterName,
         identity: character?.identity ?? null,
         description: character?.description ?? null,
-        isUser: false,
+        // The user-controlled character's subject entry stays tagged so other
+        // observers' OTHER prompts still read "(the user-controlled character)".
+        isUser: slice.isUserControlled ?? false,
       })
     }
     if (ctx.transcript.userCharacterId && ctx.transcript.userCharacterName) {
-      const userCharacter = ctx.participantCharacters.get(ctx.transcript.userCharacterId)
-      subjects.push({
-        id: ctx.transcript.userCharacterId,
-        name: ctx.transcript.userCharacterName,
-        identity: userCharacter?.identity ?? null,
-        description: userCharacter?.description ?? null,
-        isUser: true,
-      })
+      if (seenSubjectIds.has(ctx.transcript.userCharacterId)) {
+        debugLogs.push(
+          `[Memory] Skipped duplicate user subject for ${ctx.transcript.userCharacterName} ` +
+          `— already present as a turn slice`
+        )
+      } else {
+        seenSubjectIds.add(ctx.transcript.userCharacterId)
+        const userCharacter = ctx.participantCharacters.get(ctx.transcript.userCharacterId)
+        subjects.push({
+          id: ctx.transcript.userCharacterId,
+          name: ctx.transcript.userCharacterName,
+          identity: userCharacter?.identity ?? null,
+          description: userCharacter?.description ?? null,
+          isUser: true,
+        })
+      }
     }
 
     // ---------------------------------------------------------------------
@@ -449,7 +469,10 @@ export async function processTurnForMemory(
             `for ${slice.characterName} below importance ${rl.floor}`
           )
         }
-        debugLogs.push(`[Memory] SELF for ${slice.characterName}: ${candidates.length} candidate(s)`)
+        debugLogs.push(
+          `[Memory] SELF for ${slice.characterName}` +
+          `${slice.isUserControlled ? ' (user-controlled)' : ''}: ${candidates.length} candidate(s)`
+        )
         for (const candidate of candidates) {
           await writeCandidate({
             characterId: slice.characterId,
@@ -553,7 +576,8 @@ export async function processTurnForMemory(
           )
         }
         debugLogs.push(
-          `[Memory] OTHER observer=${observer.characterName} subject=${subject.subjectName} ` +
+          `[Memory] OTHER observer=${observer.characterName}` +
+          `${observer.isUserControlled ? ' (user-controlled)' : ''} subject=${subject.subjectName} ` +
           `canon=${subject.canonSource}: ${candidates.length} candidate(s)`
         )
         for (const candidate of candidates) {

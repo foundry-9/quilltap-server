@@ -202,3 +202,119 @@ describe('buildTurnTranscript', () => {
     expect(transcript.userCharacterName).toBe('Operator')
   })
 })
+
+describe('buildTurnTranscript — user-controlled characters', () => {
+  const userChar = makeCharacter('char-user', 'Operator')
+
+  // participant-user is a CHARACTER the human drives directly; participant-a is
+  // a normal LLM character. The opener carries the user participant's id.
+  const ucParticipants: ChatParticipantBase[] = [
+    {
+      id: 'participant-user',
+      type: 'CHARACTER',
+      characterId: 'char-user',
+      controlledBy: 'user',
+      isActive: true,
+      status: 'active',
+      hasHistoryAccess: true,
+      displayOrder: 0,
+    } as unknown as ChatParticipantBase,
+    {
+      id: 'participant-a',
+      type: 'CHARACTER',
+      characterId: 'char-a',
+      controlledBy: 'llm',
+      isActive: true,
+      status: 'active',
+      hasHistoryAccess: true,
+      displayOrder: 1,
+    } as unknown as ChatParticipantBase,
+  ]
+  const ucCharacterMap = new Map<string, Character>([
+    ['char-user', userChar],
+    ['char-a', charA],
+  ])
+
+  it('promotes a user-controlled opener to a prepended slice', () => {
+    const messages: MessageEvent[] = [
+      userMsg('u-1', 'I draw my blade and refuse to back down.', { participantId: 'participant-user' }),
+      assistantMsg('a-1', 'participant-a', 'Avery hesitates.'),
+    ]
+
+    const transcript = buildTurnTranscript(messages, ucParticipants, ucCharacterMap, {
+      turnOpenerMessageId: 'u-1',
+    })
+
+    // User slice is first (chronologically the opener precedes the reply).
+    expect(transcript.characterSlices).toHaveLength(2)
+    const userSlice = transcript.characterSlices[0]
+    expect(userSlice.characterId).toBe('char-user')
+    expect(userSlice.characterName).toBe('Operator')
+    expect(userSlice.isUserControlled).toBe(true)
+    expect(userSlice.text).toBe('I draw my blade and refuse to back down.')
+    expect(userSlice.contributingMessageIds).toEqual(['u-1'])
+
+    // The AI slice is unchanged and follows.
+    expect(transcript.characterSlices[1].characterId).toBe('char-a')
+    expect(transcript.characterSlices[1].isUserControlled).toBeFalsy()
+
+    // userMessage still frames the turn as before.
+    expect(transcript.userMessage).toBe('I draw my blade and refuse to back down.')
+  })
+
+  it('forms a user slice even when no AI character has replied yet', () => {
+    const messages: MessageEvent[] = [
+      userMsg('u-1', 'I wait alone in the dark.', { participantId: 'participant-user' }),
+    ]
+
+    const transcript = buildTurnTranscript(messages, ucParticipants, ucCharacterMap, {
+      turnOpenerMessageId: 'u-1',
+    })
+
+    expect(transcript.characterSlices).toHaveLength(1)
+    expect(transcript.characterSlices[0].characterId).toBe('char-user')
+    expect(transcript.characterSlices[0].isUserControlled).toBe(true)
+  })
+
+  it('does not slice a plain-human opener (no character participant)', () => {
+    const messages: MessageEvent[] = [
+      // No participantId — a human with no impersonated character.
+      userMsg('u-1', 'tell me a story'),
+      assistantMsg('a-1', 'participant-a', 'Once upon a time'),
+    ]
+
+    const transcript = buildTurnTranscript(messages, ucParticipants, ucCharacterMap, {
+      turnOpenerMessageId: 'u-1',
+    })
+
+    expect(transcript.characterSlices).toHaveLength(1)
+    expect(transcript.characterSlices[0].characterId).toBe('char-a')
+    expect(transcript.characterSlices.some(s => s.isUserControlled)).toBe(false)
+  })
+
+  it('does not slice an opener authored by an LLM-controlled participant (autonomous-style)', () => {
+    const messages: MessageEvent[] = [
+      // Opener attributed to an llm participant — no human is driving it.
+      userMsg('u-1', 'scene opener', { participantId: 'participant-a' }),
+      assistantMsg('a-1', 'participant-a', 'Avery speaks'),
+    ]
+
+    const transcript = buildTurnTranscript(messages, ucParticipants, ucCharacterMap, {
+      turnOpenerMessageId: 'u-1',
+    })
+
+    expect(transcript.characterSlices.some(s => s.isUserControlled)).toBe(false)
+  })
+
+  it('forms no user slice on a greeting-only turn (null opener)', () => {
+    const messages: MessageEvent[] = [
+      assistantMsg('a-greeting', 'participant-a', 'Welcome!'),
+    ]
+
+    const transcript = buildTurnTranscript(messages, ucParticipants, ucCharacterMap, {
+      turnOpenerMessageId: null,
+    })
+
+    expect(transcript.characterSlices.some(s => s.isUserControlled)).toBe(false)
+  })
+})

@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### User-controlled characters now form memories
+
+When a human drives a character (a participant with `controlledBy: 'user'`), that character now forms its own memories from the turns the human plays it — both SELF memories and OTHER-pass observations of the other characters present — so it carries those impressions forward when control returns to the LLM. Previously a user-controlled character was only ever a thing memories were *about*, never a holder. Always on; no flag, UI, settings, schema, migration, or export change.
+
+- `buildTurnTranscript` (`lib/services/chat-message/turn-transcript.ts`) promotes the turn opener to a first-class slice flagged `isUserControlled` when the opener's `participantId` resolves to a `controlledBy: 'user'` CHARACTER participant. The slice is built from the opener's authoritative participant (more reliable than the singular `userCharacterId`) and prepended so it reads first chronologically. New `isUserControlled?` field on `TurnCharacterSlice`.
+- `processTurnForMemory` (`lib/memory/memory-processor.ts`) now picks up the user slice automatically in both the SELF and OTHER loops. The OTHER-pass subject set is de-duped by character ID (the user character would otherwise appear once via its slice and once via the explicit user-subject block); the explicit block now fires only as a fallback for a present-but-silent user character. The user character is never its own OTHER subject, and its subject entry stays tagged `isUser: true`. New `[Memory]` debug logs distinguish user-driven extraction.
+- `renderTurnContext` (`lib/memory/cheap-llm-tasks/memory-tasks.ts`) renders the user-controlled character's text exactly once (labeled "the user-controlled character"), keeps it off the AI-character roster, and no longer double-feeds the opener. A new first-person clause is prepended to the SELF prompt only when the subject is user-controlled, binding "I/me/my" in the subject's own lines to the subject; it leaves the cached AI-path body prefix byte-identical.
+- The dry-run "regenerate from history" path shares the same builders, so re-extracting a conversation now also surfaces the played character's candidates for review.
+- New unit tests across the transcript builder, prompt rendering, and processor; documented in `help/memory-playing-a-character.md`.
+
 #### Theme preview is now a full-page modal (gallery + icon sheet)
 
 Replaced the inline "expanded card" theme preview in Settings → Appearance with a full-page modal dialog. The modal adds a Light/Dark toggle (driving both the banner and the live element preview), a gallery of the theme's bundled images, and an icon sheet showing each overridden icon in four states (default, muted, hover, on-primary). Also fixed banner-header contrast on vivid themes: the banner is painted in the theme's own background color with an accessible foreground (white/dark) computed from it.
