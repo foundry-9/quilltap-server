@@ -63,6 +63,12 @@ export function formatMemoryMetadataTag(opts: {
   relevance?: number | null
   weight?: number | null
   keywords?: readonly string[] | null
+  /**
+   * Short labels for the recall-context adjustments that fired for this memory
+   * (e.g. `narrow✓`, `past↓`), so the salon whisper shows *why* it ranked where
+   * it did. Omitted when no recallContext drove the search.
+   */
+  adjustments?: readonly string[] | null
 }): string {
   const parts: string[] = []
   if (typeof opts.importance === 'number' && Number.isFinite(opts.importance)) {
@@ -73,6 +79,12 @@ export function formatMemoryMetadataTag(opts: {
   }
   if (typeof opts.weight === 'number' && Number.isFinite(opts.weight)) {
     parts.push(`weight ${opts.weight.toFixed(2)}`)
+  }
+  if (opts.adjustments && opts.adjustments.length > 0) {
+    const trimmed = opts.adjustments.map(a => a.trim()).filter(a => a.length > 0)
+    if (trimmed.length > 0) {
+      parts.push(`recall: ${trimmed.join(' ')}`)
+    }
   }
   if (opts.keywords && opts.keywords.length > 0) {
     const trimmed = opts.keywords.map(k => k.trim()).filter(k => k.length > 0)
@@ -92,6 +104,14 @@ export interface DebugMemoryInfo {
   importance: number
   score: number
   effectiveWeight: number
+  /** Combined recall-context multiplier, when a recallContext drove the ranking. */
+  recallMultiplier?: number
+  /** Labels for the adjustments that fired (e.g. `narrow✓`, `past↓`). */
+  recallFired?: string[]
+  /** Blended `0.4·cosine + 0.6·weight` score before the recall multiplier. */
+  blendedBefore?: number
+  /** Blended score after the recall multiplier (what the head ranks on). */
+  blendedAfter?: number
 }
 
 /**
@@ -464,6 +484,16 @@ export function formatDynamicMemoryHead(
       weight: r.effectiveWeight ?? calculateEffectiveWeight(r.memory).effectiveWeight,
     }))
     .sort((a, b) => {
+      // When recall adjustments are present (a recallContext was supplied to
+      // searchMemoriesSemantic), rank by the post-adjustment blended score so the
+      // scope/temporal multipliers actually drive head ordering — otherwise this
+      // re-sort would undo them. Falls back to the historical weight-then-score
+      // heuristic when absent, so behavior is byte-identical with no recallContext.
+      const aAdj = a.recallAdjustment?.blendedAfter
+      const bAdj = b.recallAdjustment?.blendedAfter
+      if (aAdj !== undefined && bAdj !== undefined) {
+        return bAdj - aAdj
+      }
       const weightDiff = b.weight - a.weight
       if (Math.abs(weightDiff) > 0.05) return weightDiff
       return b.score - a.score
@@ -477,7 +507,7 @@ export function formatDynamicMemoryHead(
   let currentTokens = estimateTokens(`${header}\n`, provider)
   let memoriesUsed = 0
 
-  for (const { memory, score, weight } of ranked) {
+  for (const { memory, score, weight, recallAdjustment } of ranked) {
     const summary = memory.summary?.trim() || memory.content?.trim() || ''
     if (!summary) continue
     const idTag = `[m_${memory.id.slice(0, 4)}]`
@@ -486,6 +516,7 @@ export function formatDynamicMemoryHead(
       relevance: score,
       weight,
       keywords: memory.keywords,
+      adjustments: recallAdjustment?.fired,
     })
     const entry = `${idTag} ${summary}${meta}`
     const candidateTokens = estimateTokens(`${entry}\n`, provider)
@@ -500,6 +531,10 @@ export function formatDynamicMemoryHead(
       importance: memory.importance,
       score,
       effectiveWeight: weight,
+      recallMultiplier: recallAdjustment?.multiplier,
+      recallFired: recallAdjustment?.fired,
+      blendedBefore: recallAdjustment?.blendedBefore,
+      blendedAfter: recallAdjustment?.blendedAfter,
     })
   }
 

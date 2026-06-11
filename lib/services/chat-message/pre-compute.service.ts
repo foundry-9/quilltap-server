@@ -29,6 +29,8 @@ import {
 } from './compression-cache.service'
 import { extractMemorySearchKeywords, extractVisibleConversation, stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
+import type { RecallContext } from '@/lib/memory/recall-tags'
+import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 
@@ -239,6 +241,14 @@ async function proactiveRecallTask(
   }))
 
   const searchQuery = keywordResult.result.join(' ')
+  // Same per-turn recall context the dynamic head uses, so the proactive path
+  // gets identical cross-project scope gating + temporal down-weighting
+  // (see lib/memory/recall-tags.ts). chat.projectId is the rename-proof comparand.
+  const recallSettings = await getMemoryRecallSettings()
+  const recallContext: RecallContext = {
+    currentProjectId: chat.projectId ?? null,
+    scopePolicy: recallSettings.scopePolicy,
+  }
   try {
     const memoryResults = await searchMemoriesSemantic(
       character.id,
@@ -247,6 +257,7 @@ async function proactiveRecallTask(
         userId,
         limit: 20,
         minImportance: 0.3,
+        recallContext,
       }
     )
 

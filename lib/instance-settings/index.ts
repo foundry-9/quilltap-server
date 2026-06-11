@@ -18,10 +18,16 @@
 
 import { rawQuery } from '@/lib/database/manager';
 import { logger } from '@/lib/logger';
-import { MemoryExtractionLimitsSchema, type MemoryExtractionLimits } from '@/lib/schemas/settings.types';
+import {
+  MemoryExtractionLimitsSchema,
+  type MemoryExtractionLimits,
+  MemoryRecallSettingsSchema,
+  type MemoryRecallSettings,
+} from '@/lib/schemas/settings.types';
 
 const KEY_MEMORY_EXTRACTION_CONCURRENCY = 'memoryExtractionConcurrency';
 const KEY_MEMORY_EXTRACTION_LIMITS = 'memoryExtractionLimits';
+const KEY_MEMORY_RECALL = 'memoryRecall';
 const KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID = 'lanternBackgroundsMountPointId';
 const KEY_USER_UPLOADS_MOUNT_POINT_ID = 'userUploadsMountPointId';
 const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
@@ -33,6 +39,9 @@ const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = {
   maxPerHour: 20,
   softStartFraction: 0.7,
   softFloor: 0.7,
+};
+const DEFAULT_MEMORY_RECALL_SETTINGS: MemoryRecallSettings = {
+  scopePolicy: 'down-weight',
 };
 
 async function readSetting(key: string): Promise<string | null> {
@@ -104,6 +113,31 @@ export async function setMemoryExtractionLimits(value: MemoryExtractionLimits): 
 }
 
 /**
+ * Read the per-instance Commonplace Book recall settings (cross-project scope
+ * policy). Returns the documented default (`down-weight`) when the setting
+ * hasn't been written yet. Read on the per-turn recall path
+ * (`lib/chat/context-manager.ts`, `lib/services/chat-message/pre-compute.service.ts`).
+ */
+export async function getMemoryRecallSettings(): Promise<MemoryRecallSettings> {
+  const raw = await readSetting(KEY_MEMORY_RECALL);
+  if (raw === null) return DEFAULT_MEMORY_RECALL_SETTINGS;
+  try {
+    const parsed = JSON.parse(raw);
+    return MemoryRecallSettingsSchema.parse(parsed);
+  } catch (error) {
+    logger.warn('[InstanceSettings] memoryRecall failed to parse — using defaults', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return DEFAULT_MEMORY_RECALL_SETTINGS;
+  }
+}
+
+export async function setMemoryRecallSettings(value: MemoryRecallSettings): Promise<void> {
+  const validated = MemoryRecallSettingsSchema.parse(value);
+  await writeSetting(KEY_MEMORY_RECALL, JSON.stringify(validated));
+}
+
+/**
  * Read the Lantern Backgrounds mount-point id. The provisioning migration
  * writes this on first boot; runtime callers (the Lantern bridge) read it
  * to find where to land generated story backgrounds when no project context
@@ -168,5 +202,5 @@ export async function setLastMaintenanceSweepAt(when: Date = new Date()): Promis
 }
 
 // Re-export the schema for callers that want to validate independently.
-export { MemoryExtractionLimitsSchema };
-export type { MemoryExtractionLimits };
+export { MemoryExtractionLimitsSchema, MemoryRecallSettingsSchema };
+export type { MemoryExtractionLimits, MemoryRecallSettings };

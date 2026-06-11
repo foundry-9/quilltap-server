@@ -8,6 +8,11 @@ import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript
 import type { Pronouns } from '@/lib/schemas/character.types'
 import { logger } from '@/lib/logger'
 import { formatNameWithPronouns } from '../format-utils'
+import {
+  TEMPORAL_VALUES,
+  SCOPE_VALUES,
+  CONTEXT_VALUES,
+} from '@/lib/memory/recall-tags'
 import { executeCheapLLMTask } from './core-execution'
 import type {
   ChatMessage,
@@ -105,13 +110,11 @@ These describe the memory's frame; they do not change its content.
             mannerisms | trivia | information
             The single dominant subject of this memory. Pick one.`
 
-/** Closed vocabularies for the three targeting axes. */
-const TEMPORAL_VALUES = new Set(['past', 'moment', 'present', 'future'])
-const SCOPE_VALUES = new Set(['narrow', 'wide'])
-const CONTEXT_VALUES = new Set([
-  'philosophy', 'relationships', 'history', 'banter',
-  'mannerisms', 'trivia', 'information',
-])
+/**
+ * Closed vocabularies for the three targeting axes live in
+ * `lib/memory/recall-tags.ts` (the single source of truth, imported above) so
+ * the extraction (write) and recall (read) sides can never drift.
+ */
 
 /**
  * Validate the three model-emitted targeting tags against their closed

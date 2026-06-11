@@ -144,6 +144,32 @@ export const AutoHousekeepingSettingsSchema = z.object({
 export type AutoHousekeepingSettings = z.infer<typeof AutoHousekeepingSettingsSchema>;
 
 // ============================================================================
+// MEMORY RECALL SETTINGS (Commonplace Book — recall/read path)
+// ============================================================================
+
+/**
+ * Recall-time relevance controls for the Commonplace Book. These shape which
+ * stored memories surface in a chat by reading the targeting tags the extractor
+ * already writes into each memory's `keywords` (see lib/memory/recall-tags.ts).
+ *
+ * Stored instance-wide in `instance_settings['memoryRecall']` (single-user
+ * model — same class as `memoryExtractionLimits`), NOT on the column-per-field
+ * `chat_settings` table, so adding it needs no migration. Accessors:
+ * `getMemoryRecallSettings` / `setMemoryRecallSettings` in `lib/instance-settings`.
+ */
+export const MemoryRecallSettingsSchema = z.object({
+  /**
+   * What to do with a `scope: narrow` memory whose project differs from the
+   * current chat's project (the cross-project-leakage case). `down-weight`
+   * (default) applies a strong multiplicative penalty but never fully hides the
+   * memory; `exclude` filters it out of recall entirely.
+   */
+  scopePolicy: z.enum(['down-weight', 'exclude']).default('down-weight'),
+});
+
+export type MemoryRecallSettings = z.infer<typeof MemoryRecallSettingsSchema>;
+
+// ============================================================================
 // MEMORY EXTRACTION RATE LIMITS (Commonplace Book)
 // ============================================================================
 

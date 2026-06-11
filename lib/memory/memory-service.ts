@@ -25,6 +25,7 @@ import {
   deleteMemoriesWithUnlinkBatch,
 } from './memory-gate'
 import { calculateEffectiveWeight } from './memory-weighting'
+import { combineRecallMultipliers, type RecallContext } from './recall-tags'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 import { resolveAboutCharacterId } from './about-character-resolution'
@@ -239,6 +240,21 @@ export interface SemanticSearchResult {
   usedEmbedding: boolean
   /** Effective weight combining importance with time decay (0-1) */
   effectiveWeight?: number
+  /**
+   * Recall-context adjustment record — present only when a `recallContext` was
+   * supplied to `searchMemoriesSemantic`. Lets the injector show *why* a memory
+   * ranked where it did and lets tests assert on the post-adjustment ordering.
+   */
+  recallAdjustment?: {
+    /** Combined, clamped multiplier applied to the blended score. */
+    multiplier: number
+    /** Short labels for the adjustments that fired (e.g. `narrow✓`, `past↓`). */
+    fired: string[]
+    /** Blended `0.4·cosine + 0.6·weight` score before the multiplier. */
+    blendedBefore: number
+    /** Blended score after the multiplier (the value actually sorted on). */
+    blendedAfter: number
+  }
 }
 
 /**
@@ -611,6 +627,15 @@ export async function searchMemoriesSemantic(
      * unified `search` tool; per-turn injectors leave this off.
      */
     applyLiteralPhraseBoost?: boolean
+    /**
+     * Per-turn recall context. When supplied, the targeting tags
+     * (`temporal`/`scope`/`context`) and `projectId` carried on each candidate
+     * are read back and turned into bounded, clamped multipliers applied to the
+     * final blended score *after* the `0.4/0.6` blend is computed (see
+     * `lib/memory/recall-tags.ts`). Absent → ranking is byte-identical to the
+     * historical behavior. The `search` tool and tests leave this off.
+     */
+    recallContext?: RecallContext
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -746,13 +771,53 @@ export async function searchMemoriesSemantic(
         results = results.filter(r => r.memory.source === options.source)
       }
 
-      // Combine cosine similarity with effective weight for final ranking
-      // Weight dominates (60%), with similarity influencing ordering (40%)
-      results.sort((a, b) => {
-        const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
-        const finalScoreB = b.score * 0.4 + (b.effectiveWeight ?? 0) * 0.6
-        return finalScoreB - finalScoreA
-      })
+      // Blended ranking key: cosine (40%) + effective weight (60%). The blend
+      // itself is never modified — when a recallContext is supplied, the
+      // targeting-tag adjustments are bounded, clamped multipliers applied to
+      // this blended score *after* it is computed (see lib/memory/recall-tags.ts),
+      // so semantic relevance and recency keep their relative footing and each
+      // adjustment is auditable in isolation. No recallContext → the exact
+      // historical sort, byte-for-byte.
+      if (options.recallContext) {
+        const recallContext = options.recallContext
+        const adjusted: SemanticSearchResult[] = []
+        for (const r of results) {
+          const blendedBefore = r.score * 0.4 + (r.effectiveWeight ?? 0) * 0.6
+          const adj = combineRecallMultipliers(r.memory, recallContext)
+          if (adj.exclude) {
+            logger.debug('[Memory] Recall excluded cross-project narrow memory', {
+              characterId,
+              memoryId: r.memory.id,
+              memoryProjectId: r.memory.projectId ?? null,
+              currentProjectId: recallContext.currentProjectId,
+            })
+            continue
+          }
+          const blendedAfter = blendedBefore * adj.multiplier
+          if (adj.fired.length > 0) {
+            logger.debug('[Memory] Recall adjustment applied', {
+              characterId,
+              memoryId: r.memory.id,
+              fired: adj.fired,
+              multiplier: adj.multiplier,
+              blendedBefore,
+              blendedAfter,
+            })
+          }
+          r.recallAdjustment = { multiplier: adj.multiplier, fired: adj.fired, blendedBefore, blendedAfter }
+          adjusted.push(r)
+        }
+        adjusted.sort(
+          (a, b) => (b.recallAdjustment?.blendedAfter ?? 0) - (a.recallAdjustment?.blendedAfter ?? 0),
+        )
+        results = adjusted
+      } else {
+        results.sort((a, b) => {
+          const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
+          const finalScoreB = b.score * 0.4 + (b.effectiveWeight ?? 0) * 0.6
+          return finalScoreB - finalScoreA
+        })
+      }
 
       const tDone = performance.now()
 

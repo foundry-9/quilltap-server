@@ -17,6 +17,8 @@ import { Provider, Character, ChatParticipantBase, ChatMetadataBase, TimestampCo
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation, calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO, MEMORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
+import type { RecallContext } from '@/lib/memory/recall-tags'
+import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { generateMemoryRecap, type MemoryRecapResult } from '@/lib/memory/memory-recap'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import { compressMemories } from '@/lib/memory/cheap-llm-tasks'
@@ -968,6 +970,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         )
       } else if (memorySearchQuery) {
         memoryPath = 'two-pool'
+        // Read the instance-wide recall settings (cross-project scope policy)
+        // and assemble the per-turn recall context so the dynamic head reads the
+        // targeting tags back (see lib/memory/recall-tags.ts). chat.projectId is
+        // the rename-proof comparand for scope: narrow gating.
+        const recallSettings = await getMemoryRecallSettings()
+        const recallContext: RecallContext = {
+          currentProjectId: chat.projectId ?? null,
+          scopePolicy: recallSettings.scopePolicy,
+        }
         const memoryResults = await searchMemoriesSemantic(
           character.id,
           memorySearchQuery,
@@ -978,6 +989,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             // still leaves enough candidates to fill the head.
             limit: DYNAMIC_HEAD_DEFAULT_SIZE * 3,
             minImportance: minMemoryImportance,
+            recallContext,
           },
         )
         dynamicHeadResults = memoryResults.filter(r => !archiveIds.has(r.memory.id))
