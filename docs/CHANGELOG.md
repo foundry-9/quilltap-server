@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Madman's Box: refreshed Settings backgrounds
+
+Updated the `calliope-bg.webp` (Appearance) and `forge-bg.webp` (AI Providers) Settings background textures in the bundled Madman's Box theme. Asset-only refresh of two of the eight subsystem backgrounds wired in the previous entry; theme bumped 1.1.2 → 1.1.3 so installed copies pick up the new art. No code, schema, manifest-structure, or export change.
+
 #### Theme-overridable page backgrounds
 
 Themes can now override the per-page subsystem background images on the content pages (Aurora, Prospero, Salon, Files, Scriptorium, Photos) via the manifest `subsystems.<id>.backgroundImage` field — the same mechanism the Settings page already used. Previously those seven call sites hardcoded their `/images/<subsystem>.webp` URL inline; they now resolve it through the existing `useSubsystemInfo` pipeline via a new shared `useSubsystemBackgroundStyle(id)` hook (`components/providers/theme/`). Behavior is unchanged under the default theme. A theme that sets a subsystem's `backgroundImage` to `"none"` suppresses that page's background entirely. The Settings page was refactored onto the same hook (every settings tab is themeable, including AI Providers/`forge` and Appearance/`calliope`). No schema, migration, DDL, or export change — the manifest already supported `subsystems`. Documented in `help/themes.md`. The per-chat/per-project user-set story backgrounds in `/salon/[id]` and `/prospero/[id]` are unaffected.
