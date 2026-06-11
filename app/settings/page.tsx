@@ -12,7 +12,7 @@ import { MemorySearchTabContent } from '@/components/settings/tabs/MemorySearchT
 import { ImagesTabContent } from '@/components/settings/tabs/ImagesTabContent'
 import { TemplatesPromptsTabContent } from '@/components/settings/tabs/TemplatesPromptsTabContent'
 import { DataSystemTabContent } from '@/components/settings/tabs/DataSystemTabContent'
-import { useSubsystemInfo } from '@/components/providers/theme-provider'
+import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 import { Icon } from '@/components/ui/icon'
 import type { Tab } from '@/components/tabs/entity-tabs'
 import type { SubsystemId } from '@/lib/foundry/subsystem-defaults'
@@ -59,20 +59,16 @@ function SettingsTabContent({ activeTab }: { activeTab: string }) {
   }
 }
 
-/** Resolves the background image for the active settings tab */
-function useSettingsBackground() {
+/** Resolves the --story-background-url style for the active settings tab */
+function useSettingsBackgroundStyle() {
   const searchParams = useSearchParams()
   const activeTab = searchParams.get('tab') || 'providers'
   const subsystemId = TAB_SUBSYSTEM_MAP[activeTab] || 'forge'
-  const info = useSubsystemInfo(subsystemId)
-  return info.backgroundImage
+  return useSubsystemBackgroundStyle(subsystemId)
 }
 
 export default function SettingsPage() {
-  const backgroundImage = useSettingsBackground()
-  const containerStyle = backgroundImage
-    ? { '--story-background-url': `url(${backgroundImage})` } as React.CSSProperties
-    : undefined
+  const containerStyle = useSettingsBackgroundStyle()
 
   return (
     <div className="qt-page-container" style={containerStyle}>

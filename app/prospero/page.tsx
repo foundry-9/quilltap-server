@@ -9,11 +9,13 @@
 import { useEffect, useState } from 'react'
 import { useProjects } from './hooks/useProjects'
 import { ProjectsGrid, CreateProjectDialog, DeleteProjectDialog } from './components'
+import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 
 export default function ProjectsPage() {
   const { projects, loading, error, fetchProjects, createProject, deleteProject } = useProjects()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null)
+  const bgStyle = useSubsystemBackgroundStyle('prospero')
 
   useEffect(() => {
     fetchProjects()
@@ -52,7 +54,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/prospero.webp)' } as React.CSSProperties}>
+    <div className="qt-page-container text-foreground" style={bgStyle}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <h1 className="qt-heading-1 leading-tight">Projects</h1>
         <button

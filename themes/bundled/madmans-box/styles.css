@@ -515,6 +515,33 @@
 }
 
 /* ============================================================================
+   HOMEPAGE BACKGROUND — Madman's Box only
+   The homepage uses .qt-homepage-container (a centred, max-width column) and
+   sets no per-page --story-background-url, so by default it shows the whole-body
+   cabin gradient. Lay a fixed, full-viewport image over it here — mirroring the
+   app's own .qt-page-container::before pattern so it covers the viewport rather
+   than just the centred column. Dark-only theme ⇒ a single asset; no light
+   variant is ever shown. If home-bg.webp is absent the cabin gradient still
+   shows through, so the homepage degrades gracefully.
+   ============================================================================ */
+[data-theme="madmans-box"] .qt-homepage-container {
+  position: relative;
+}
+[data-theme="madmans-box"] .qt-homepage-container::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: url('/api/themes/assets/bundle:madmans-box/textures/home-bg.webp') center center / cover no-repeat;
+  z-index: 0;
+  opacity: 0.5;
+  pointer-events: none;
+}
+[data-theme="madmans-box"] .qt-homepage-container > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================================
    HEADING TYPOGRAPHY — geometric uppercase signage
    ============================================================================ */
 [data-theme="madmans-box"] h1,

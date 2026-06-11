@@ -14,6 +14,7 @@ import {
   transformSalonChatToCardData,
   type SalonChatShape,
 } from '@/lib/chat-utils'
+import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 
 type Chat = SalonChatShape
 
@@ -32,6 +33,7 @@ export default function ChatsPage() {
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
   const { shouldHideByIds, hideDangerousChats, includeAutonomousRooms } = useQuickHide()
+  const bgStyle = useSubsystemBackgroundStyle('salon')
 
   const { data: chatSettings } = useSWR<ChatSettingsResponse>('/api/v1/settings/chat')
   const visibilityDefault = chatSettings?.autonomousRoomSettings?.visibilityDefault ?? 'owner_only'
@@ -181,7 +183,7 @@ export default function ChatsPage() {
   }
 
   return (
-    <div className="chat-page qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/salon.webp)' } as React.CSSProperties}>
+    <div className="chat-page qt-page-container text-foreground" style={bgStyle}>
       {/* Highlight animation styles */}
       <style>{`
         @keyframes chatCardHighlight {

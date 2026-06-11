@@ -18,6 +18,7 @@ import { processTemplate } from '@/lib/templates/processor'
 import { useGroups } from '@/app/aurora/hooks/useGroups'
 import { GroupsGrid } from '@/app/aurora/components/GroupsGrid'
 import { Icon } from '@/components/ui/icon'
+import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 
 const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AIImportWizard'), {
   loading: () => <p className="qt-text-muted p-8 text-center">Loading wizard...</p>,
@@ -63,6 +64,7 @@ export default function CharactersPage() {
   const { shouldHideByIds } = useQuickHide()
   const router = useRouter()
   const { groups, fetchGroups, deleteGroup, createGroup } = useGroups()
+  const bgStyle = useSubsystemBackgroundStyle('aurora')
 
   // Fetch groups on mount
   useEffect(() => {
@@ -285,7 +287,7 @@ export default function CharactersPage() {
   }
 
   return (
-    <div className="character-page qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/aurora.webp)' } as React.CSSProperties}>
+    <div className="character-page qt-page-container text-foreground" style={bgStyle}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <h1 className="qt-page-title">Characters</h1>
         <div className="flex flex-wrap gap-3">

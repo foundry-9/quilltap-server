@@ -4,6 +4,12 @@
 
 ### 4.7-dev
 
+#### Theme-overridable page backgrounds
+
+Themes can now override the per-page subsystem background images on the content pages (Aurora, Prospero, Salon, Files, Scriptorium, Photos) via the manifest `subsystems.<id>.backgroundImage` field — the same mechanism the Settings page already used. Previously those seven call sites hardcoded their `/images/<subsystem>.webp` URL inline; they now resolve it through the existing `useSubsystemInfo` pipeline via a new shared `useSubsystemBackgroundStyle(id)` hook (`components/providers/theme/`). Behavior is unchanged under the default theme. A theme that sets a subsystem's `backgroundImage` to `"none"` suppresses that page's background entirely. The Settings page was refactored onto the same hook (every settings tab is themeable, including AI Providers/`forge` and Appearance/`calliope`). No schema, migration, DDL, or export change — the manifest already supported `subsystems`. Documented in `help/themes.md`. The per-chat/per-project user-set story backgrounds in `/salon/[id]` and `/prospero/[id]` are unaffected.
+
+The bundled Madman's Box theme is the first consumer: its manifest wires all eight subsystem backgrounds (the six content pages plus `forge` and `calliope`) and ships the matching WebP art under `textures/`. Its homepage background — which uses the whole-body `.qt-homepage-container` rather than a subsystem — is themed separately via a homepage-scoped `::before` rule in the theme's `styles.css` (`home-bg.webp`). As a dark-only theme it needs only a single background per surface, with no light/dark variant.
+
 #### Memory recall relevance — Phase 2: context steering, participant boost, opt-in related-memory expansion, query-path unification
 
 Completes the recall-relevance work begun in Phase 1 and unifies the two recall query paths. All adjustments remain bounded, clamped multipliers on the final blended score — the `0.4·cosine + 0.6·effectiveWeight` blend is untouched, and absent recall context still produces byte-identical historical behavior. No schema, migration, DDL-column, `.qtap`-export, or backup change; the new setting rides in the same migration-free `instance_settings['memoryRecall']` key/value store as Phase 1's `scopePolicy` (single-user model).

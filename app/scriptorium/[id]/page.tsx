@@ -18,6 +18,7 @@ import dynamic from 'next/dynamic'
 import { deriveMountCapabilities } from '@/lib/mount-index/capabilities'
 import type { DocMountPoint } from '@/lib/schemas/mount-index.types'
 import type { UpdateDocumentStoreData } from '../types'
+import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 
 // Heavy SVAR file manager (Phase 3) — lazy + client-only so the default
 // FileTable path never loads the SVAR runtime. Opt-in via the toggle below;
@@ -46,6 +47,7 @@ export default function DocumentStoreDetailPage() {
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [useSvarFileManager, setUseSvarFileManager] = useState(false)
+  const bgStyle = useSubsystemBackgroundStyle('scriptorium')
 
   useEffect(() => {
     fetchStore()
@@ -85,7 +87,7 @@ export default function DocumentStoreDetailPage() {
     : 'Never'
 
   return (
-    <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/scriptorium.webp)' } as React.CSSProperties}>
+    <div className="qt-page-container text-foreground" style={bgStyle}>
       {/* Header */}
       <div className="mb-6">
         <button

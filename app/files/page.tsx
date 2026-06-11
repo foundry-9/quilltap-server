@@ -10,13 +10,15 @@
 import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import FileBrowser from '@/components/files/FileBrowser'
+import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 
 function FilesPageContent() {
   const searchParams = useSearchParams()
   const selectedFileId = searchParams.get('fileId')
+  const bgStyle = useSubsystemBackgroundStyle('commonplace-book')
 
   return (
-    <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/commonplace_book.webp)' } as React.CSSProperties}>
+    <div className="qt-page-container text-foreground" style={bgStyle}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <div>
           <h1 className="qt-heading-1 leading-tight">Files</h1>
@@ -48,9 +50,10 @@ function FilesPageContent() {
 }
 
 export default function FilesPage() {
+  const bgStyle = useSubsystemBackgroundStyle('commonplace-book')
   return (
     <Suspense fallback={
-      <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/commonplace_book.webp)' } as React.CSSProperties}>
+      <div className="qt-page-container text-foreground" style={bgStyle}>
         <div className="flex min-h-screen items-center justify-center">
           <p className="text-lg text-foreground">Loading files...</p>
         </div>

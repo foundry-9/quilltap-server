@@ -4,7 +4,7 @@
   "id": "madmans-box",
   "name": "Madman's Box",
   "description": "Bigger on the inside, and dressed for the occasion. A mad inventor's time-machine cabin in dark walnut and brass — bakelite knobs, vacuum tubes aglow with amber, a Jacob's ladder crackling cyan between two posts. The room is warm and lamplit; the screens and the energy run cool phosphor-cyan. Banker's-lamp green where things go right. Dark by decree, never by accident. Raleway signage, Lora prose, and a Fira Code console for the dials.",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "author": "Foundry-9 LLC",
   "license": "MIT",
   "supportsDarkMode": false,
@@ -268,5 +268,15 @@
     "moon": "icons/moon.svg",
     "monitor": "icons/monitor.svg",
     "brand": "icons/brand.svg"
+  },
+  "subsystems": {
+    "aurora": { "backgroundImage": "textures/aurora-bg.webp" },
+    "prospero": { "backgroundImage": "textures/prospero-bg.webp" },
+    "salon": { "backgroundImage": "textures/salon-bg.webp" },
+    "commonplace-book": { "backgroundImage": "textures/commonplace-book-bg.webp" },
+    "scriptorium": { "backgroundImage": "textures/scriptorium-bg.webp" },
+    "lantern": { "backgroundImage": "textures/lantern-bg.webp" },
+    "forge": { "backgroundImage": "textures/forge-bg.webp" },
+    "calliope": { "backgroundImage": "textures/calliope-bg.webp" }
   }
 }

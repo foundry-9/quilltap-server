@@ -14,6 +14,7 @@ export { ThemeProvider, ThemeContext } from './theme/ThemeProvider';
 export { useTheme } from './theme/useTheme';
 export { useSubsystemInfo, useAllSubsystemInfo } from './theme/useSubsystemInfo';
 export type { ResolvedSubsystemInfo } from './theme/useSubsystemInfo';
+export { useSubsystemBackgroundStyle } from './theme/useSubsystemBackgroundStyle';
 export type {
   ThemeContextValue,
   ThemeSummary,

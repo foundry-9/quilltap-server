@@ -339,6 +339,45 @@ The `brand` icon obeys the same rule as the rest of the company: an `.svg` brand
 
 The `npx quilltap themes validate` command checks the `icons` block as part of its inspection — it confirms that asset paths end in `.svg` or `.webp`, contain no suspicious traversal sequences, and that the values are non-empty. Icon names that fail the kebab-case convention receive a warning rather than an error, given that future Quilltap releases may extend the canonical list.
 
+### Page Backgrounds
+
+Each of Quilltap's principal halls keeps a faint backdrop behind its furniture — Aurora has its portrait gallery, the Salon its parlour, the Scriptorium its stacks, and so on, with the Settings page changing its scene to suit whichever tab is presently in hand. Like the icons, these backdrops are yours to redress. A theme may hang its own painting in any of these rooms, or strip the walls bare entirely, and the swap is as silent and immediate as the rest.
+
+#### Declaring Background Overrides
+
+In your `theme.json`, add a `subsystems` record. Each key names a Quilltap subsystem; each value supplies a `backgroundImage` pointing at a bundle-relative asset:
+
+```json
+{
+  "subsystems": {
+    "aurora":           { "backgroundImage": "textures/aurora-bg.webp" },
+    "prospero":         { "backgroundImage": "textures/prospero-bg.webp" },
+    "salon":            { "backgroundImage": "textures/salon-bg.webp" },
+    "commonplace-book": { "backgroundImage": "textures/commonplace-book-bg.webp" },
+    "scriptorium":      { "backgroundImage": "textures/scriptorium-bg.webp" },
+    "lantern":          { "backgroundImage": "textures/lantern-bg.webp" }
+  }
+}
+```
+
+The subsystem keys are Quilltap's own — `aurora` (Characters), `prospero` (Projects), `salon` (Chats), `commonplace-book` (Files; note the hyphen), `scriptorium` (Document Stores), and `lantern` (Photos), among others. Only the rooms you name are re-papered; any subsystem left unmentioned keeps the house default, so a theme need address only those backdrops it wishes to improve upon.
+
+Bundle-relative paths (`textures/…`) resolve to the theme's own assets exactly as icon paths do; a fully-rooted `/path`, an `http(s)://` URL, or a `data:` URI is honoured as written. The art is painted at a polite low opacity behind the page's contents, so a sympathetic, unhurried image serves best.
+
+#### Suppressing a Background
+
+To leave a particular room's walls bare — no backdrop at all — set the value to the sentinel `"none"`:
+
+```json
+"subsystems": {
+  "salon": { "backgroundImage": "none" }
+}
+```
+
+Quilltap then renders that page with no story background whatsoever, rather than falling through to the stock image.
+
+For a worked example, activate the bundled **Madman's Box** theme, which dresses its principal halls in walnut and brass to match the rest of its furnishings.
+
 ### Managing Themes via CLI
 
 The `quilltap themes` CLI provides commands for managing theme bundles from the terminal:
