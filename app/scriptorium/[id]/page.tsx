@@ -14,7 +14,18 @@ import { FileTable } from './components'
 import { EditDocumentStoreDialog } from '../components/EditDocumentStoreDialog'
 import { formatBytes } from '@/lib/utils/format-bytes'
 import { Icon } from '@/components/ui/icon'
+import dynamic from 'next/dynamic'
+import { deriveMountCapabilities } from '@/lib/mount-index/capabilities'
+import type { DocMountPoint } from '@/lib/schemas/mount-index.types'
 import type { UpdateDocumentStoreData } from '../types'
+
+// Heavy SVAR file manager (Phase 3) — lazy + client-only so the default
+// FileTable path never loads the SVAR runtime. Opt-in via the toggle below;
+// FileTable stays the default until parity is confirmed.
+const SvarFileManager = dynamic(
+  () => import('@/components/files/svar/SvarFileManager').then((m) => m.SvarFileManager),
+  { ssr: false, loading: () => <p className="qt-section-title p-6">Summoning the file manager…</p> }
+)
 
 export default function DocumentStoreDetailPage() {
   const params = useParams()
@@ -34,6 +45,7 @@ export default function DocumentStoreDetailPage() {
   } = useDocumentStoreDetail(storeId)
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [useSvarFileManager, setUseSvarFileManager] = useState(false)
 
   useEffect(() => {
     fetchStore()
@@ -205,14 +217,31 @@ export default function DocumentStoreDetailPage() {
           an Upload button in this table; filesystem stores get populated by
           scans. */}
       <div className="border-t qt-border-default/60 pt-6">
-        <h2 className="qt-heading-3 mb-4">Indexed Files</h2>
-        <FileTable
-          files={files}
-          loading={filesLoading}
-          mountPointId={store.id}
-          mountType={store.mountType}
-          onRefresh={fetchFiles}
-        />
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="qt-heading-3">Indexed Files</h2>
+          <button
+            onClick={() => setUseSvarFileManager((v) => !v)}
+            className="qt-button-ghost inline-flex items-center gap-1.5 text-sm"
+            title="Preview the new SVAR-powered file manager"
+          >
+            <Icon name="layers" className="w-4 h-4" />
+            {useSvarFileManager ? 'Classic view' : 'New file manager (beta)'}
+          </button>
+        </div>
+        {useSvarFileManager ? (
+          <SvarFileManager
+            mountId={store.id}
+            capabilities={deriveMountCapabilities(store as unknown as DocMountPoint)}
+          />
+        ) : (
+          <FileTable
+            files={files}
+            loading={filesLoading}
+            mountPointId={store.id}
+            mountType={store.mountType}
+            onRefresh={fetchFiles}
+          />
+        )}
       </div>
 
       {/* Edit dialog */}

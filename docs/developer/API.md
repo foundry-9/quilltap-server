@@ -3332,7 +3332,26 @@ Create a mount point. The body is validated: `basePath` is required for `filesys
 
 #### `GET /api/v1/mount-points/[id]`
 
-Get a single mount point with computed `embeddedChunkCount`.
+Get a single mount point with computed `embeddedChunkCount` and a derived `capabilities` block.
+
+The `capabilities` object is computed server-side (`deriveMountCapabilities`, `lib/mount-index/capabilities.ts`) from the mount's `mountType` + `conversionStatus` + `enabled` + `scanStatus` — it is **not persisted**. A file-manager UI should gate which verbs it offers off this block rather than re-deriving the rules client-side. A mount is "quiescent" when `enabled` and not mid-conversion; all mutating flags require quiescence, and `canConvert` additionally requires no scan in progress.
+
+```json
+{
+  "mountPoint": {
+    "...": "…DocMountPoint fields…",
+    "embeddedChunkCount": 137,
+    "capabilities": {
+      "canWrite": true,
+      "canDelete": true,
+      "canCreateFolder": true,
+      "canMoveIn": true,
+      "canMoveOut": true,
+      "canConvert": true
+    }
+  }
+}
+```
 
 #### `PATCH /api/v1/mount-points/[id]`
 

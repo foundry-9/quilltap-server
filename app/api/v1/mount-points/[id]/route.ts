@@ -30,6 +30,7 @@ import { copyFile, moveFile, writeFile, deleteFile, linkFile, FileOpError } from
 import { deleteFolder, moveFolder } from '@/lib/mount-index/folder-ops';
 import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import { fileOpStatus } from '@/lib/mount-index/file-op-status';
+import { deriveMountCapabilities } from '@/lib/mount-index/capabilities';
 
 // ============================================================================
 // Schemas
@@ -66,8 +67,13 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         c => c.embedding != null && c.embedding.length > 0
       ).length;
 
+      // Derived (non-persisted) per-mount capability flags so the file-manager UI
+      // can gate verbs from a single server-side source of truth.
+      const capabilities = deriveMountCapabilities(mountPoint);
+      logger.debug('[Mount Points v1] Derived capabilities', { mountPointId: id, capabilities });
+
       return NextResponse.json({
-        mountPoint: { ...mountPoint, embeddedChunkCount },
+        mountPoint: { ...mountPoint, embeddedChunkCount, capabilities },
       });
     } catch (error) {
       logger.error('[Mount Points v1] Error fetching mount point', { mountPointId: id }, error instanceof Error ? error : undefined);

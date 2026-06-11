@@ -1,0 +1,103 @@
+/**
+ * SVAR File Manager → Quilltap theme bridge (promoted from the Phase-0 spike).
+ *
+ * Maps SVAR's `--wx-*` custom properties to Quilltap's `--qt-*` / `--color-*`
+ * semantic tokens. SVAR derives ~330 of its declarations from a small root
+ * token set, so we remap the roots (+ the filemanager/table/popup namespaces
+ * that don't derive from them) and the rest cascade. A `.qtap-theme` bundle
+ * restyles SVAR for free by overriding the same `--color-*` tokens — no
+ * per-theme SVAR CSS. References ONLY tokens, no hard-coded colours (CLAUDE.md).
+ *
+ * CASCADE NOTES — why this file is co-located + unlayered, not in
+ * `app/styles/qt-components/@layer components`:
+ *   SVAR's component CSS (`@svar-ui/react-filemanager/all.css`, imported by
+ *   `SvarFileManager.tsx`) is UNLAYERED, and unlayered styles beat ANY explicit
+ *   `@layer`. So a layered bridge would lose to SVAR's own `.wx-willow-theme`
+ *   defaults. This file is therefore unlayered and imported *after* SVAR's CSS,
+ *   and the selector is bumped to `:root .wx-willow-theme` (specificity 0,2,0)
+ *   so it wins regardless of source order.
+ *
+ * SVAR portals context menus to <body> with a `.wx-willow-theme` div, so
+ * `:root .wx-willow-theme` reaches them too — provided the active theme tokens
+ * cascade to <body>, which the app guarantees by setting `[data-theme]` on
+ * <html> (`applyThemeToDom`).
+ */
+
+:root .wx-willow-theme {
+  /* ── Brand / interactive ───────────────────────────────────────────── */
+  --wx-color-primary: var(--color-primary);
+  --wx-color-primary-font: var(--color-primary-foreground);
+  --wx-color-link: var(--color-primary);
+
+  /* ── Semantic status ───────────────────────────────────────────────── */
+  --wx-color-success: var(--color-success);
+  --wx-color-warning: var(--color-warning);
+  --wx-color-info: var(--color-info);
+  --wx-color-danger: var(--color-destructive);
+
+  /* ── Text ──────────────────────────────────────────────────────────── */
+  --wx-color-font: var(--color-foreground);
+  --wx-color-font-alt: var(--color-muted-foreground);
+  --wx-color-font-disabled: var(--color-muted-foreground);
+
+  /* Selection surface: a dark, accent-TINTED fill (not the full saturated
+     accent) so SVAR's light `--wx-color-font` text stays legible on top. The
+     strong "selected" cue is the brass edge marker below. A theme's accent can
+     be a loud hue (Madman's Box accent is bright amber), so never use it as a
+     full fill behind light body text — tint it into the card. */
+  --_qtap-selection: color-mix(in srgb, var(--color-accent) 24%, var(--color-card));
+
+  /* ── Surfaces ──────────────────────────────────────────────────────── */
+  --wx-background: var(--color-card);          /* panels, list/tiles, preview */
+  --wx-background-alt: var(--color-muted);      /* toolbar, alt rows, tags */
+  --wx-background-hover: var(--color-muted);    /* row / item hover (subtle) */
+  --wx-color-primary-selected: var(--_qtap-selection); /* selected tint / borders */
+  --wx-color-disabled: var(--color-muted);
+  --wx-color-disabled-alt: var(--color-muted);
+
+  /* ── Icons (the wxi glyph font is tinted via currentColor/icon-color) ── */
+  --wx-icon-color: var(--color-muted-foreground);
+
+  /* ── Borders & radii ───────────────────────────────────────────────── */
+  --wx-border-color: var(--color-border);
+  --wx-border-medium: 1px solid var(--color-border);
+  --wx-border-radius: var(--radius-sm);
+  --wx-radius-major: var(--radius-lg);
+
+  /* ── Shadows (Quilltap surface shadows) ────────────────────────────── */
+  --wx-shadow-light: var(--qt-card-shadow);
+  --wx-shadow-medium: var(--qt-popover-shadow);
+  --wx-box-shadow: var(--qt-card-shadow);
+  --wx-box-shadow-strong: var(--qt-dialog-shadow);
+
+  /* ── Typography ────────────────────────────────────────────────────── */
+  --wx-font-family: var(--font-sans);
+
+  /* ── Focus ─────────────────────────────────────────────────────────── */
+  --wx-input-border-focus: 1px solid var(--color-ring);
+
+  /* ── File-manager-specific tokens (--wx-fm-*) ──────────────────────────
+     The filemanager has its OWN namespace for its panels/grid that does NOT
+     derive from --wx-background etc., so these must be mapped explicitly. */
+  --wx-fm-background: var(--color-card);                 /* the panels */
+  --wx-fm-box-shadow: var(--qt-card-shadow);
+  --wx-fm-button-font-color: var(--color-muted-foreground);
+  --wx-fm-grid-border: 1px solid var(--color-border);
+  --wx-fm-grid-header-color: var(--color-muted);         /* column-header row */
+  --wx-fm-select-background: var(--_qtap-selection);     /* selected tree/grid item */
+
+  /* ── List/table view (--wx-table-*) ────────────────────────────────────
+     The list mode is a SVAR grid with its own header + selection vars; unmapped
+     they fall back to willow's LIGHT defaults on dark themes. */
+  --wx-table-header-background: var(--color-muted);
+  --wx-table-select-background: var(--_qtap-selection);
+  --wx-table-select-color: var(--color-foreground);     /* readable on the tint */
+  --wx-table-select-border: inset 3px 0 var(--color-primary); /* brass edge cue */
+
+  /* ── Popups / context menus (--wx-popup-*) ─────────────────────────────
+     Willow's default popup border is a near-transparent white that vanishes on
+     dark themes; use the semantic popover tokens for a solid, legible surface. */
+  --wx-popup-background: var(--color-popover);
+  --wx-popup-border: 1px solid var(--color-border);
+  --wx-popup-shadow: var(--qt-popover-shadow);
+}
