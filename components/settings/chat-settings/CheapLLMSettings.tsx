@@ -41,7 +41,7 @@ export function CheapLLMSettings({
             ].map((strategy) => (
               <label
                 key={strategy.value}
-                className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors"
+                className="flex items-start gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors"
               >
                 <input
                   type="radio"
@@ -120,7 +120,7 @@ export function CheapLLMSettings({
         </div>
 
         {/* Fallback to Local */}
-        <label className="flex items-center gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors">
+        <label className="flex items-center gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors">
           <input
             type="checkbox"
             checked={settings?.cheapLLMSettings.fallbackToLocal ?? true}
@@ -149,7 +149,7 @@ export function CheapLLMSettings({
             ].map((provider) => (
               <label
                 key={provider.value}
-                className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors"
+                className="flex items-start gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors"
               >
                 <input
                   type="radio"

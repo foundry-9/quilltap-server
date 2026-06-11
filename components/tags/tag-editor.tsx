@@ -216,7 +216,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
               setTimeout(() => inputRef.current?.focus(), 0);
             }}
             disabled={loading}
-            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium qt-bg-muted text-foreground hover:bg-accent focus:outline-none disabled:opacity-50"
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium qt-bg-muted text-foreground qt-hover-accent focus:outline-none disabled:opacity-50"
           >
             + Add Tag
           </button>
@@ -260,7 +260,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
                           type="button"
                           onClick={() => addTag(tag.name)}
                           disabled={loading}
-                          className="w-full px-4 py-2 text-left qt-text-small hover:bg-accent text-foreground disabled:opacity-50 whitespace-nowrap"
+                          className="w-full px-4 py-2 text-left qt-text-small qt-hover-accent text-foreground disabled:opacity-50 whitespace-nowrap"
                         >
                           {tag.name}
                         </button>

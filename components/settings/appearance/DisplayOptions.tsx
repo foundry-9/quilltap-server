@@ -55,7 +55,7 @@ export function DisplayOptions({
         <label
           className={`
           flex items-center justify-between gap-4 p-4 border rounded-lg transition-colors cursor-pointer
-          ${showNavThemeSelector ? 'qt-border-primary bg-accent' : 'qt-border-default hover:bg-accent'}
+          ${showNavThemeSelector ? 'qt-border-primary qt-bg-primary/10' : 'qt-border-default qt-hover-accent'}
           ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}
         `}
         >

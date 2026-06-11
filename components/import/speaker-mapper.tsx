@@ -218,7 +218,7 @@ export function SpeakerMapper({
   return (
     <div className="space-y-6">
       {/* Default connection profile */}
-      <div className="bg-accent rounded-lg p-4">
+      <div className="qt-bg-muted rounded-lg p-4">
         <label className="block text-sm qt-text-primary mb-2">
           Default Connection Profile
         </label>

@@ -258,7 +258,7 @@ export function ThemeSelector({
 
       {/* Hint about theme plugins */}
       {availableThemes.length === 0 && (
-        <div className="mt-4 p-4 bg-accent rounded-lg border qt-border-default">
+        <div className="mt-4 p-4 qt-bg-muted rounded-lg border qt-border-default">
           <div className="flex items-start gap-3">
             <Icon name="info" className="w-5 h-5 qt-text-secondary flex-shrink-0 mt-0.5" />
             <div>

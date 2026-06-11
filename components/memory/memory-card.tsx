@@ -96,7 +96,7 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, isDel
           {memory.keywords.map((keyword, index) => (
             <span
               key={index}
-              className="qt-text-xs px-2 py-0.5 bg-accent rounded"
+              className="qt-text-xs px-2 py-0.5 qt-bg-accent qt-text-on-accent rounded"
             >
               {keyword}
             </span>

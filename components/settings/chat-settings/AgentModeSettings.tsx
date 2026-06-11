@@ -37,7 +37,7 @@ export function AgentModeSettings({
       <div className="space-y-6">
         {/* Default Enabled Toggle */}
         <div>
-          <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer">
+          <label className="flex items-start gap-3 p-4 border qt-border-default rounded qt-hover-accent cursor-pointer">
             <input
               type="checkbox"
               checked={agentModeSettings.defaultEnabled}

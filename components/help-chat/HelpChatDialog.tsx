@@ -270,7 +270,7 @@ export function HelpChatDialog() {
           <button
             type="button"
             onClick={handleNewChat}
-            className="p-1 rounded hover:bg-accent qt-text-secondary hover:text-foreground transition-colors"
+            className="p-1 rounded qt-hover-accent qt-text-secondary transition-colors"
             title="New help chat"
           >
             <Icon name="plus" className="w-4 h-4" />

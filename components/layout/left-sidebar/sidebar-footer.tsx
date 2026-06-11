@@ -190,7 +190,7 @@ export function SidebarFooter() {
             <button
               type="button"
               onClick={handleThemeClick}
-              className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'themes' ? 'bg-accent' : ''}`}
+              className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'themes' ? 'qt-bg-primary/10' : ''}`}
               title="Themes"
             >
               <Icon name="themes" className="qt-left-sidebar-item-icon w-5 h-5" />
@@ -208,7 +208,7 @@ export function SidebarFooter() {
             <button
               type="button"
               onClick={handleQuickHideClick}
-              className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'quickHide' ? 'bg-accent' : ''}`}
+              className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'quickHide' ? 'qt-bg-primary/10' : ''}`}
               title={hasAnyHidden ? 'Show' : 'Hide'}
             >
               <QuickHideIcon hasHidden={hasAnyHidden} className="qt-left-sidebar-item-icon w-5 h-5" />

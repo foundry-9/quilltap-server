@@ -100,7 +100,7 @@ export function RestoreDialog({
         <label
           className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
             state.restoreMode === 'import'
-              ? 'qt-border-primary bg-accent'
+              ? 'qt-border-primary qt-bg-primary/10'
               : 'qt-border-default bg-background'
           }`}
         >

@@ -2,6 +2,12 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.43] - 2026-06-11
+
+### Added
+- `.qt-hover-accent` utility class: a hoverable accent surface for list rows, menu items, and option cards. On hover it paints the accent background and forces the accent foreground onto the row **and every descendant** (via `:hover :where(*)`), so composite rows stay legible even when a theme maps `accent` to a bold colour and the children carry their own colour. Mirrors the app-side definition.
+- `Surfaces` story: documents the accent-surface contract for theme authors — filled accent surfaces paired with `qt-text-on-accent`, hover rows via `qt-hover-accent`, and quiet selected/panel surfaces (`qt-bg-primary/10` / `qt-bg-muted`) that deliberately avoid the bold accent. Exported from `@quilltap/theme-storybook/stories`.
+
 ## [1.0.41] - 2026-06-10
 
 ### Changed

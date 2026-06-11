@@ -4,7 +4,16 @@
 
 ### 4.7-dev
 
-#### User-controlled characters now form memories
+#### Fix: keyword badges and accent surfaces were illegible on bold-accent themes
+
+Memory-card keyword pills (Aurora → character → Memories) rendered low-contrast under Madman's Box: the pill set a `bg-accent` background but no text color, so the text fell back to the card's light foreground over the theme's bright-amber accent. Root cause is broader — the app follows the shadcn/Quilltap convention where `accent` is a quiet hover/selected/surface tint (the default themes set it to a near-`muted` neutral), but Madman's Box maps `accent` to a loud amber, so every "quiet surface" use turned into a bright-amber block with low-contrast text. Swept and fixed app-side; the amber accent identity is preserved.
+
+- Filled chips/badges that carry persistent text on a solid accent fill now pair the fill with its accent foreground: keyword pills (`components/memory/memory-card.tsx`), the search dialog's `↵`/`Esc` kbd hints (`components/search/search-dialog.tsx`), and the theme-registry source pills (`components/settings/appearance/components/ThemeBrowser.tsx`) use `qt-bg-accent qt-text-on-accent`.
+- New `.qt-hover-accent` utility (`app/styles/qt-components/_utilities.css`): on hover it paints the accent background and forces the accent foreground onto the row **and every descendant**, so composite rows stay legible even when children carry their own color (e.g. `qt-text-primary` names that would otherwise go amber-on-amber). Replaced 48 full-opacity `hover:bg-accent` sites across 26 files. The `/opacity` blend variants (e.g. `hover:bg-accent/50`) were left alone — they composite dark over the card and stay readable.
+- Informational panels switched from `bg-accent` to the quiet `qt-bg-muted` surface (speaker-mapper, image-upload context note, theme-selector hint, timestamp-config info).
+- Selected/active states switched from `bg-accent` to the codebase's standard faint `qt-bg-primary/10` tint (export-type / restore / scope-selection / display-options cards, theme + color-mode menu rows, left-sidebar popout toggles).
+- `@quilltap/theme-storybook` 1.0.43: adds the `.qt-hover-accent` utility to its CSS copy and a new `Surfaces` story documenting the accent-surface contract for theme authors (filled accent + `qt-text-on-accent`, `qt-hover-accent`, and the quiet `qt-bg-muted` / `qt-bg-primary/10` surfaces).
+- No schema, migration, DDL, or export change. CSS-only behavior; resolves identically on the default themes (where `accent` is already subtle), so no visual regression there.
 
 When a human drives a character (a participant with `controlledBy: 'user'`), that character now forms its own memories from the turns the human plays it — both SELF memories and OTHER-pass observations of the other characters present — so it carries those impressions forward when control returns to the LLM. Previously a user-controlled character was only ever a thing memories were *about*, never a holder. Always on; no flag, UI, settings, schema, migration, or export change.
 

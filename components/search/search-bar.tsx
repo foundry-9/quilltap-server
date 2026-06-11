@@ -208,7 +208,7 @@ export function SearchBar() {
           setDialogInitialQuery('')
           setIsDialogOpen(true)
         }}
-        className="md:hidden p-2 qt-text-secondary hover:text-foreground hover:bg-accent rounded-md transition-colors"
+        className="md:hidden p-2 qt-text-secondary qt-hover-accent rounded-md transition-colors"
         aria-label="Search"
       >
         <Icon name="search" className="w-5 h-5" />

@@ -132,7 +132,7 @@ function ColorModeOption({ mode, label, icon, isActive, onSelect }: ColorModeOpt
       onClick={onSelect}
       className={`
         w-full flex items-center gap-3 px-3 py-2 text-left transition-colors rounded-md
-        ${isActive ? 'bg-accent' : 'hover:qt-bg-muted'}
+        ${isActive ? 'qt-bg-primary/10' : 'hover:qt-bg-muted'}
       `}
     >
       <span className="w-4 h-4 flex-shrink-0 qt-text-secondary">{icon}</span>
@@ -186,7 +186,7 @@ function ThemeOption({ theme, isActive, onSelect, resolvedColorMode, headingFont
       onClick={onSelect}
       className={`
         w-full flex items-center gap-3 px-3 py-2 text-left transition-colors rounded-md
-        ${isActive ? 'bg-accent' : 'hover:qt-bg-muted'}
+        ${isActive ? 'qt-bg-primary/10' : 'hover:qt-bg-muted'}
       `}
       style={{
         // Apply theme colors as inline styles for preview

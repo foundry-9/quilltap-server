@@ -129,7 +129,7 @@ export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntity
           <button
             type="button"
             onClick={onCancel}
-            className="p-0.5 rounded hover:bg-accent qt-text-secondary hover:text-foreground transition-colors"
+            className="p-0.5 rounded qt-hover-accent qt-text-secondary transition-colors"
           >
             <Icon name="close" className="w-3.5 h-3.5" />
           </button>

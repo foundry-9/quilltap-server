@@ -98,7 +98,7 @@ export function ScopeSelectionStep({
           <label className={`
             flex items-center p-4 rounded-lg border-2 cursor-pointer transition-colors
             ${scopeType === 'chat'
-              ? 'qt-border-primary bg-accent'
+              ? 'qt-border-primary qt-bg-primary/10'
               : 'qt-border-default bg-background hover:qt-border-primary/50'
             }
           `}>
@@ -123,7 +123,7 @@ export function ScopeSelectionStep({
         <label className={`
           flex items-center p-4 rounded-lg border-2 cursor-pointer transition-colors
           ${scopeType === 'character'
-            ? 'qt-border-primary bg-accent'
+            ? 'qt-border-primary qt-bg-primary/10'
             : 'qt-border-default bg-background hover:qt-border-primary/50'
           }
         `}>

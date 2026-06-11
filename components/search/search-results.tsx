@@ -31,7 +31,7 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
       onClick={() => {
         onResultClick?.()
       }}
-      className="block p-3 hover:bg-accent rounded-lg transition-colors"
+      className="block p-3 qt-hover-accent rounded-lg transition-colors"
     >
       <div className="flex items-start gap-3">
         {result.avatarUrl ? (
@@ -86,7 +86,7 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
       onClick={() => {
         onResultClick?.()
       }}
-      className="block p-3 hover:bg-accent rounded-lg transition-colors"
+      className="block p-3 qt-hover-accent rounded-lg transition-colors"
     >
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-full qt-bg-info/10 flex items-center justify-center flex-shrink-0">
@@ -148,7 +148,7 @@ function TagResultCard({ result, query, onResultClick }: { result: TagSearchResu
         // This will be handled by the SearchDialog to show expanded results
         onResultClick?.()
       }}
-      className="block p-3 hover:bg-accent rounded-lg transition-colors"
+      className="block p-3 qt-hover-accent rounded-lg transition-colors"
     >
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-full qt-bg-warning/10 flex items-center justify-center flex-shrink-0">
@@ -184,7 +184,7 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
       onClick={() => {
         onResultClick?.()
       }}
-      className="block p-3 hover:bg-accent rounded-lg transition-colors"
+      className="block p-3 qt-hover-accent rounded-lg transition-colors"
     >
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-full qt-bg-destructive/10 flex items-center justify-center flex-shrink-0">
@@ -247,7 +247,7 @@ function MessageResultCard({ result, query, onResultClick }: { result: MessageSe
       onClick={() => {
         onResultClick?.()
       }}
-      className="block p-3 hover:bg-accent rounded-lg transition-colors"
+      className="block p-3 qt-hover-accent rounded-lg transition-colors"
     >
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-full qt-bg-warning/10 flex items-center justify-center flex-shrink-0">

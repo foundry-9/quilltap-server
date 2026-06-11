@@ -327,10 +327,10 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
           {/* Footer with keyboard shortcuts */}
           <div className="px-4 py-2 border-t qt-border-default qt-bg-muted qt-text-xs flex justify-between">
             <span>
-              <kbd className="px-1.5 py-0.5 bg-accent rounded">↵</kbd> to search
+              <kbd className="px-1.5 py-0.5 qt-bg-accent qt-text-on-accent rounded">↵</kbd> to search
             </span>
             <span>
-              <kbd className="px-1.5 py-0.5 bg-accent rounded">Esc</kbd> to close
+              <kbd className="px-1.5 py-0.5 qt-bg-accent qt-text-on-accent rounded">Esc</kbd> to close
             </span>
           </div>
         </div>

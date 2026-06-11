@@ -352,7 +352,7 @@ export default function RoleplayTemplatesTab() {
                     <button
                       type="button"
                       onClick={addDelimiter}
-                      className="px-3 py-1 text-xs rounded border qt-border-default hover:bg-accent"
+                      className="px-3 py-1 text-xs rounded border qt-border-default qt-hover-accent"
                     >
                       + Add Delimiter
                     </button>
@@ -480,7 +480,7 @@ export default function RoleplayTemplatesTab() {
                   type="button"
                   onClick={closeModal}
                   disabled={saving}
-                  className="px-4 py-2 text-sm rounded-md border qt-border-default hover:bg-accent disabled:opacity-50"
+                  className="px-4 py-2 text-sm rounded-md border qt-border-default qt-hover-accent disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -555,7 +555,7 @@ export default function RoleplayTemplatesTab() {
                       handleCopyAsNew(previewTemplate)
                       setPreviewTemplate(null)
                     }}
-                    className="px-4 py-2 text-sm rounded-md border qt-border-default hover:bg-accent"
+                    className="px-4 py-2 text-sm rounded-md border qt-border-default qt-hover-accent"
                   >
                     Copy as New
                   </button>

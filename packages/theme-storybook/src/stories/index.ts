@@ -14,6 +14,7 @@ export * from './components/Buttons';
 export * from './components/Cards';
 export * from './components/Inputs';
 export * from './components/Badges';
+export * from './components/Surfaces';
 export * from './components/Avatars';
 export * from './components/Dialogs';
 export * from './components/Tabs';

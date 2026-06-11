@@ -30,7 +30,7 @@ export function TokenDisplaySettingsComponent({
         {TOKEN_DISPLAY_OPTIONS.map((option) => (
           <label
             key={option.key}
-            className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors"
+            className="flex items-start gap-3 p-4 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors"
           >
             <input
               type="checkbox"

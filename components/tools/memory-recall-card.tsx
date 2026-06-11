@@ -137,7 +137,7 @@ export function MemoryRecallCard() {
         )}
       </div>
 
-      <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer">
+      <label className="flex items-start gap-3 p-4 border qt-border-default rounded qt-hover-accent cursor-pointer">
         <input
           type="checkbox"
           checked={config.expandRelated}

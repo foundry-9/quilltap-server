@@ -245,7 +245,7 @@ export default function GenerateImageDialog({
                         <button
                           key={entity.id}
                           onClick={() => handleEntitySelect(entity)}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2"
+                          className="w-full px-3 py-2 text-left text-sm qt-hover-accent flex items-center gap-2"
                         >
                           <span className={`px-1.5 py-0.5 text-xs rounded ${
                             entity.type === 'character'

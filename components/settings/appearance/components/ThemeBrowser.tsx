@@ -392,7 +392,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                 sources.map((source) => (
                   <span
                     key={source.name}
-                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent text-sm text-foreground"
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md qt-bg-accent text-sm qt-text-on-accent"
                   >
                     {source.name}
                     {source.enabled ? (
