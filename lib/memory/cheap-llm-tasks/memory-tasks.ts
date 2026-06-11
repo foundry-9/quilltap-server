@@ -12,6 +12,8 @@ import {
   TEMPORAL_VALUES,
   SCOPE_VALUES,
   CONTEXT_VALUES,
+  type TemporalTag,
+  type ContextTag,
 } from '@/lib/memory/recall-tags'
 import { executeCheapLLMTask } from './core-execution'
 import type {
@@ -526,26 +528,42 @@ function parseOtherCandidatesBySubject(
 }
 
 /**
- * Prompt for extracting memory search keywords from recent conversation
+ * Prompt for extracting memory search keywords from recent conversation, plus a
+ * one-word guess at the current turn's dominant temporal frame and subject.
+ *
+ * The turn-level `temporal`/`context` guess feeds the recall-side targeting-tag
+ * adjustments (see lib/memory/recall-tags.ts): `context` steers recall toward
+ * memories whose own `context` tag matches the turn. Both are best-effort — the
+ * parser validates them against the closed vocabularies and drops anything
+ * unrecognized, so an omitted or garbled guess simply disables that adjustment.
  */
-const MEMORY_KEYWORD_EXTRACTION_PROMPT = `You are analyzing recent conversation messages to extract search keywords for a character's memory system.
+const MEMORY_KEYWORD_EXTRACTION_PROMPT = `You are analyzing recent conversation messages to extract search keywords for a character's memory system, plus a one-word guess at what the current moment is about.
 
-Your task: Given recent messages from a conversation, produce a list of keywords and short phrases that capture what is being discussed. These keywords will be used to search a character's stored memories for relevant context.
+Your task: Given recent messages from a conversation, produce (a) a list of keywords and short phrases that capture what is being discussed — used to search a character's stored memories for relevant context — and (b) a single best-guess temporal frame and context subject for the conversation right now.
 
-Focus on:
+Focus the keywords on:
 - People, places, and events mentioned
 - Topics and themes being discussed
 - Emotions and relationship dynamics
 - Decisions, preferences, or plans
 - Anything the character might have memories about
 
-Do NOT include:
+Do NOT include as keywords:
 - Generic conversational filler ("hello", "okay", "thanks")
 - The character's own name (they already know who they are)
 - Overly broad terms that would match everything
 
-Respond with a JSON array of keyword strings (3-10 keywords):
-["keyword1", "keyword phrase 2", "keyword3"]
+temporal — one of: past | moment | present | future
+  past    — about something no longer true
+  moment  — about a single fleeting instant
+  present — about how things are right now
+  future  — about an intention or plan not yet acted on
+
+context — the single dominant subject, one of:
+  philosophy | relationships | history | banter | mannerisms | trivia | information
+
+Respond with a JSON object (3-10 keywords):
+{"keywords": ["keyword1", "keyword phrase 2", "keyword3"], "temporal": "present", "context": "relationships"}
 
 JSON only - no other text.`
 
@@ -857,17 +875,32 @@ ${exchangesText}`,
 }
 
 /**
- * Extracts memory search keywords from recent conversation messages
+ * Result of the unified keyword distillation: the search keywords plus a
+ * best-guess `temporal`/`context` label for the current turn. The two guesses
+ * are validated against the closed vocabularies and left undefined when the
+ * model omits or garbles them, so the recall-side adjustments that consume them
+ * simply disable themselves rather than acting on noise.
+ */
+export interface MemorySearchExtraction {
+  keywords: string[]
+  temporal?: TemporalTag
+  context?: ContextTag
+}
+
+/**
+ * Extracts memory search keywords from recent conversation messages, plus a
+ * turn-level temporal/context guess.
  *
  * Used for proactive memory recall: analyzes messages since the character last
- * spoke to find keywords for searching the character's memory store.
+ * spoke to find keywords for searching the character's memory store. The turn
+ * guess feeds the recall-side targeting-tag adjustments (lib/memory/recall-tags.ts).
  *
  * @param recentMessages - Messages since the character last spoke
  * @param characterName - The name of the character whose memories will be searched
  * @param selection - The cheap LLM provider selection
  * @param userId - The user ID for API key retrieval
  * @param chatId - Optional chat ID for logging
- * @returns Array of keyword strings for memory search
+ * @returns Keywords for memory search plus an optional turn-level temporal/context guess
  */
 export async function extractMemorySearchKeywords(
   recentMessages: ChatMessage[],
@@ -876,7 +909,7 @@ export async function extractMemorySearchKeywords(
   userId: string,
   chatId?: string,
   characterId?: string
-): Promise<CheapLLMTaskResult<string[]>> {
+): Promise<CheapLLMTaskResult<MemorySearchExtraction>> {
   // Truncate messages to keep cheap LLM call fast
   const cappedMessages = recentMessages.slice(-20)
   const conversationText = cappedMessages
@@ -902,7 +935,7 @@ export async function extractMemorySearchKeywords(
     selection,
     messages,
     userId,
-    (content: string): string[] => {
+    (content: string): MemorySearchExtraction => {
       try {
         // Clean the response - remove markdown code blocks if present
         let cleanContent = content.trim()
@@ -913,16 +946,31 @@ export async function extractMemorySearchKeywords(
         }
 
         const parsed = JSON.parse(cleanContent)
-        if (!Array.isArray(parsed)) {
-          return []
-        }
 
-        // Filter to only string values and limit to 10
-        return parsed
-          .filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
-          .slice(0, 10)
+        // Accept either the new object shape { keywords, temporal, context } or a
+        // bare keyword array (legacy / model drift). A bare array carries no turn
+        // guess, which simply leaves context steering disabled for the turn.
+        const rawKeywords: unknown = Array.isArray(parsed) ? parsed : parsed?.keywords
+        const keywords = Array.isArray(rawKeywords)
+          ? rawKeywords
+              .filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
+              .slice(0, 10)
+          : []
+
+        const rawTemporal =
+          !Array.isArray(parsed) && typeof parsed?.temporal === 'string'
+            ? parsed.temporal.trim().toLowerCase()
+            : ''
+        const rawContext =
+          !Array.isArray(parsed) && typeof parsed?.context === 'string'
+            ? parsed.context.trim().toLowerCase()
+            : ''
+        const temporal = TEMPORAL_VALUES.has(rawTemporal) ? (rawTemporal as TemporalTag) : undefined
+        const context = CONTEXT_VALUES.has(rawContext) ? (rawContext as ContextTag) : undefined
+
+        return { keywords, temporal, context }
       } catch {
-        return []
+        return { keywords: [] }
       }
     },
     'memory-keyword-extraction',

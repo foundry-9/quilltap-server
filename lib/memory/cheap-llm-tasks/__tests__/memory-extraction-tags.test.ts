@@ -10,7 +10,9 @@
 import {
   extractSelfMemoriesFromTurn,
   extractOtherMemoriesFromTurn,
+  extractMemorySearchKeywords,
   type OrientingContext,
+  type MemorySearchExtraction,
 } from '../memory-tasks';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -141,6 +143,77 @@ describe('OTHER tag normalization → keywords (routed by subjectIndex)', () => 
     const result = await runOther();
     const amy = result.get('s1') ?? [];
     expect(amy[0].keywords).toEqual(['x', 'present', 'scope: wide', 'information']);
+  });
+});
+
+describe('extractMemorySearchKeywords — keyword + turn-guess parsing', () => {
+  async function runKeywords(): Promise<MemorySearchExtraction> {
+    const res = await extractMemorySearchKeywords(
+      [{ role: 'user', content: 'we keep circling back to the bridge plan' }],
+      'Friday',
+      SELECTION,
+      'user-1',
+      'chat-1',
+      'char-1',
+    );
+    return res.result ?? { keywords: [] };
+  }
+
+  it('parses the object shape with a valid temporal/context guess', async () => {
+    nextResponse = JSON.stringify({
+      keywords: ['bridge', 'plan', 'engineering'],
+      temporal: 'future',
+      context: 'philosophy',
+    });
+    const r = await runKeywords();
+    expect(r.keywords).toEqual(['bridge', 'plan', 'engineering']);
+    expect(r.temporal).toBe('future');
+    expect(r.context).toBe('philosophy');
+  });
+
+  it('lowercases and validates the guess, dropping out-of-vocabulary values', async () => {
+    nextResponse = JSON.stringify({
+      keywords: ['bridge'],
+      temporal: 'PRESENT',
+      context: 'gossip', // not in the closed vocabulary → undefined
+    });
+    const r = await runKeywords();
+    expect(r.keywords).toEqual(['bridge']);
+    expect(r.temporal).toBe('present');
+    expect(r.context).toBeUndefined();
+  });
+
+  it('leaves the guess undefined when the model omits it', async () => {
+    nextResponse = JSON.stringify({ keywords: ['bridge', 'plan'] });
+    const r = await runKeywords();
+    expect(r.keywords).toEqual(['bridge', 'plan']);
+    expect(r.temporal).toBeUndefined();
+    expect(r.context).toBeUndefined();
+  });
+
+  it('accepts a bare keyword array (legacy / model drift) with no guess', async () => {
+    nextResponse = JSON.stringify(['bridge', 'plan']);
+    const r = await runKeywords();
+    expect(r.keywords).toEqual(['bridge', 'plan']);
+    expect(r.temporal).toBeUndefined();
+    expect(r.context).toBeUndefined();
+  });
+
+  it('filters non-string keywords and caps the list at 10', async () => {
+    nextResponse = JSON.stringify({
+      keywords: ['a', 2, '', 'b', null, 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k'],
+    });
+    const r = await runKeywords();
+    expect(r.keywords).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']);
+    expect(r.keywords.length).toBe(10);
+  });
+
+  it('returns an empty extraction on non-JSON output', async () => {
+    nextResponse = 'sorry, I cannot do that';
+    const r = await runKeywords();
+    expect(r.keywords).toEqual([]);
+    expect(r.temporal).toBeUndefined();
+    expect(r.context).toBeUndefined();
   });
 });
 

@@ -17,7 +17,7 @@ import { Provider, Character, ChatParticipantBase, ChatMetadataBase, TimestampCo
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation, calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO, MEMORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
-import type { RecallContext } from '@/lib/memory/recall-tags'
+import type { RecallContext, ContextTag, TemporalTag } from '@/lib/memory/recall-tags'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { generateMemoryRecap, type MemoryRecapResult } from '@/lib/memory/memory-recap'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
@@ -27,7 +27,7 @@ import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/error-utils'
-import { extractVisibleConversation, stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks'
+import { extractVisibleConversation, stripToolArtifacts, extractMemorySearchKeywords } from '@/lib/memory/cheap-llm-tasks'
 
 // Import from extracted modules
 import {
@@ -970,18 +970,88 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         )
       } else if (memorySearchQuery) {
         memoryPath = 'two-pool'
-        // Read the instance-wide recall settings (cross-project scope policy)
-        // and assemble the per-turn recall context so the dynamic head reads the
-        // targeting tags back (see lib/memory/recall-tags.ts). chat.projectId is
-        // the rename-proof comparand for scope: narrow gating.
+
+        // Query unification (item 3): route the dynamic head through the SAME
+        // cheap-LLM keyword distillation the proactive path uses, instead of
+        // embedding the raw last user message verbatim. The distillation also
+        // emits a best-guess turn-level temporal/context, which drives context
+        // steering. This branch is the fallback (first turn / continue mode /
+        // empty proactive result), so the extra cheap-LLM call is rare — and it
+        // degrades gracefully: no cheap-LLM selection, or an empty/failed
+        // distillation, falls back to the raw query and today's behavior.
+        let distilledQuery = memorySearchQuery
+        let turnContext: ContextTag | null = null
+        let turnTemporal: TemporalTag | null = null
+        if (options.cheapLLMSelection) {
+          const tDistillStart = performance.now()
+          try {
+            // existingMessages here is the trimmed role/content view (not the
+            // ChatEvent shape), so map it directly.
+            const recentForDistill = existingMessages
+              .slice(-12)
+              .map(m => {
+                const role = m.role.toLowerCase() as 'user' | 'assistant' | 'system'
+                const content = role === 'assistant' ? (stripToolArtifacts(m.content || '') ?? '') : (m.content || '')
+                return { role, content }
+              })
+              .filter(m => m.content.length > 0)
+            if (newUserMessage) recentForDistill.push({ role: 'user', content: newUserMessage })
+
+            const distill = await extractMemorySearchKeywords(
+              recentForDistill,
+              character.name,
+              options.cheapLLMSelection,
+              userId,
+              chat.id,
+              character.id,
+            )
+            if (distill.success && distill.result && distill.result.keywords.length > 0) {
+              distilledQuery = distill.result.keywords.join(' ')
+              turnContext = distill.result.context ?? null
+              turnTemporal = distill.result.temporal ?? null
+              logger.debug('[ContextManager] Dynamic-head query distilled via cheap LLM', {
+                characterId: character.id,
+                keywordCount: distill.result.keywords.length,
+                turnContext,
+                turnTemporal,
+                latencyMs: Math.round(performance.now() - tDistillStart),
+              })
+            }
+          } catch (error) {
+            logger.debug('[ContextManager] Dynamic-head keyword distillation failed; using raw query', {
+              characterId: character.id,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+
+        // Characters present in the room this turn (responding character + every
+        // other character participant) for the participant-aware boost (item 4).
+        // Mirrors the set the orchestrator computes for the proactive path.
+        const presentAboutCharacterIds = Array.from(
+          new Set(
+            [character.id, ...(participantCharacters?.keys() ?? [])].filter(
+              (id): id is string => typeof id === 'string' && id.length > 0,
+            ),
+          ),
+        )
+
+        // Read the instance-wide recall settings and assemble the full per-turn
+        // recall context so the dynamic head reads the targeting tags back
+        // (see lib/memory/recall-tags.ts). chat.projectId is the rename-proof
+        // comparand for scope: narrow gating.
         const recallSettings = await getMemoryRecallSettings()
         const recallContext: RecallContext = {
           currentProjectId: chat.projectId ?? null,
           scopePolicy: recallSettings.scopePolicy,
+          turnContext,
+          turnTemporal,
+          presentAboutCharacterIds,
+          expandRelated: recallSettings.expandRelated,
         }
         const memoryResults = await searchMemoriesSemantic(
           character.id,
-          memorySearchQuery,
+          distilledQuery,
           {
             userId,
             embeddingProfileId,

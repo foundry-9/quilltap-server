@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Memory recall relevance — Phase 2: context steering, participant boost, opt-in related-memory expansion, query-path unification
+
+Completes the recall-relevance work begun in Phase 1 and unifies the two recall query paths. All adjustments remain bounded, clamped multipliers on the final blended score — the `0.4·cosine + 0.6·effectiveWeight` blend is untouched, and absent recall context still produces byte-identical historical behavior. No schema, migration, DDL-column, `.qtap`-export, or backup change; the new setting rides in the same migration-free `instance_settings['memoryRecall']` key/value store as Phase 1's `scopePolicy` (single-user model).
+
+- **Context-axis steering (item 3).** The cheap-LLM keyword distiller (`lib/memory/cheap-llm-tasks/memory-tasks.ts` `extractMemorySearchKeywords`) now also emits a best-guess turn-level `temporal` + `context` label. A memory whose own `context` tag matches the turn's guessed context gets a small boost (×1.10).
+- **Participant-aware boost (item 4).** A memory that is *about* a character present in the room this turn (the responding character plus every other character participant) gets a boost (×1.20) on the main dynamic head. It is a boost, never a filter — absent characters can still be discussed.
+- **Related-memory one-hop expansion (item 5).** New opt-in setting `expandRelated` (default OFF). When on, after the top hits are ranked, recall pulls each top hit's strongly-linked related memories in as extra candidates (one hop, capped at 3 per hit and 10 total), scores them against the same query embedding, runs them through the same blend + multipliers, and re-ranks the union — catching the memory relevant by association that didn't clear the embedding threshold directly (the classic RAG miss).
+- **Query-path unification.** The dynamic-head recall path now routes through the same cheap-LLM keyword distillation the proactive path already used (instead of embedding the raw last user message verbatim), so both paths build the embedding query at one quality bar and both feed the turn-level temporal/context guess into the adjustments.
+- **New setting — related-memory expansion.** `expandRelated` (boolean, default `false`) joins `scopePolicy` in `instance_settings['memoryRecall']` (`getMemoryRecallSettings`/`setMemoryRecallSettings`). Surfaced as a checkbox toggle on the existing "Recall Relevance" card on `/settings?tab=memory`.
+
 #### Memory recall relevance — Phase 1: read the targeting tags back at recall time (scope + temporal)
 
 Recall-side follow-up to the extraction-enrichment work. The extractor already writes `temporal`/`scope`/`context` targeting tags into every memory's `keywords` and a rename-proof `projectId`, but the per-turn recall path consulted none of them — it ranked purely on `0.4·cosine + 0.6·effectiveWeight`. Phase 1 reads `scope`/`temporal` back and applies bounded, clamped multipliers to the final blended score (the blend itself is untouched), closing cross-project memory leakage and demoting stale `past`/`moment` facts. No schema, migration, DDL-column, `.qtap`-export, or backup change — tags live in `keywords`, `projectId` already exists, and the new setting lives in the migration-free `instance_settings` key/value store.

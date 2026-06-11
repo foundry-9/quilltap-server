@@ -42,6 +42,7 @@ const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = {
 };
 const DEFAULT_MEMORY_RECALL_SETTINGS: MemoryRecallSettings = {
   scopePolicy: 'down-weight',
+  expandRelated: false,
 };
 
 async function readSetting(key: string): Promise<string | null> {

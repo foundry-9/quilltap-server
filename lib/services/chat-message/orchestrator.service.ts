@@ -932,6 +932,20 @@ async function processMessage(
   // Async Pre-Compression + Proactive Memory Recall (run in parallel)
   // ============================================================================
 
+  // Characters present in the room this turn: the responding character plus
+  // every other character participant (participantCharacters is keyed by
+  // characterId; it is empty in single-character chats). Threaded into the
+  // proactive recall path so memories ABOUT a present character get the
+  // participant-aware boost (item 4). The dynamic-head fallback computes the
+  // same set itself from the participant list it already holds.
+  const presentAboutCharacterIds = Array.from(
+    new Set(
+      [character.id, ...participantCharacters.keys()].filter(
+        (id): id is string => typeof id === 'string' && id.length > 0,
+      ),
+    ),
+  )
+
   const { cachedCompressionResponse, preSearchedMemories, stopKeepAlive } = await runPreContextPreCompute({
     chatId,
     userId,
@@ -939,6 +953,7 @@ async function processMessage(
     character,
     characterParticipant,
     isMultiCharacter,
+    presentAboutCharacterIds,
     isContinueMode,
     content,
     existingMessages,

@@ -14,7 +14,7 @@
  * - POST ?action=embeddings - Generate missing embeddings (characterId in body)
  * - POST ?action=housekeeping-config - Update auto-housekeeping settings
  * - POST ?action=extraction-limits-config - Update per-hour extraction rate limits
- * - POST ?action=recall-config - Update recall relevance settings (cross-project scope policy)
+ * - POST ?action=recall-config - Update recall relevance settings (cross-project scope policy, related-memory expansion)
  * - POST ?action=backfill-embeddings - Enqueue embedding-generate jobs for memories missing an embedding
  * - POST ?action=regenerate-all - Wipe and rebuild every chat-linked memory in the background
  * - POST ?action=extraction-concurrency - Update the per-user MEMORY_EXTRACTION concurrency cap
@@ -121,6 +121,7 @@ const extractionLimitsConfigSchema = z.object({
 
 const recallConfigSchema = z.object({
   scopePolicy: z.enum(['down-weight', 'exclude']).optional(),
+  expandRelated: z.boolean().optional(),
 });
 
 const backfillStartSchema = z.object({
@@ -824,12 +825,14 @@ async function handleWriteRecallConfig(
   const currentSettings = await getMemoryRecallSettings();
   const merged = {
     scopePolicy: parsed.data.scopePolicy ?? currentSettings.scopePolicy,
+    expandRelated: parsed.data.expandRelated ?? currentSettings.expandRelated,
   };
 
   await setMemoryRecallSettings(merged);
 
   logger.info('[Memories API] Recall settings updated (instance-wide)', {
     scopePolicy: merged.scopePolicy,
+    expandRelated: merged.expandRelated,
   });
 
   return NextResponse.json({ success: true, settings: merged });

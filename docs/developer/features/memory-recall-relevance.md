@@ -1,10 +1,18 @@
 # Memory Recall Relevance — Reading the Targeting Tags Back at Recall Time
 
-Status: **PHASE 1 IMPLEMENTED (4.7-dev)** — items 1 (scope + project gating) and
-2 (temporal down-weighting) are implemented, wired into both recall paths, with
-the cross-project scope-policy setting and debug instrumentation. Phase 2 (items
-3–5: context steering, participant boost, related-memory expansion, plus the
-two-recall-path query unification) remains the tracked follow-up below. Recall-
+Status: **PHASE 1 + 2 IMPLEMENTED (4.7-dev)** — all five adjustments and the
+two-recall-path query unification are now implemented. Phase 1 landed items 1
+(scope + project gating) and 2 (temporal down-weighting), wired into both recall
+paths, with the cross-project scope-policy setting and debug instrumentation.
+Phase 2 completes the set: item 3 (context-axis steering — the cheap-LLM
+distiller now also emits a turn-level `temporal`/`context` guess and a memory
+whose `context` matches gets a small boost), item 4 (participant-aware boost on
+the main dynamic head — a memory *about* any character present this turn is
+boosted, never filtered), and item 5 (opt-in related-memory one-hop expansion
+behind the new `expandRelated` setting). The query paths are unified: the
+dynamic head now routes through the same keyword distillation the proactive path
+uses, so both build the embedding query at one quality bar and both feed the
+turn-level guess into the adjustments. Recall-
 side follow-up to
 [`memory-extraction-enrichment.md`](./memory-extraction-enrichment.md), which is
 extraction-side-implemented. That doc writes the `temporal` / `scope` / `context`
@@ -13,10 +21,12 @@ this doc reads those signals back to make the Commonplace Book whispers more
 relevant per turn. The two docs are deliberately disjoint file-sets: enrichment
 touches the extraction/write path, this touches the recall/read path.
 
-Phase 1 implementation note: the cross-project scope-policy setting lives in the
-migration-free `instance_settings['memoryRecall']` key/value store (single-user
-model), **not** on the column-per-field `chat_settings` table (which would have
-needed a migration) — same call as `memoryExtractionLimits` in 4.4. Accessors:
+Implementation note: both recall settings — the cross-project scope-policy
+(`scopePolicy`, Phase 1) and the related-memory expansion toggle
+(`expandRelated`, default OFF, Phase 2) — live in the migration-free
+`instance_settings['memoryRecall']` key/value store (single-user model), **not**
+on the column-per-field `chat_settings` table (which would have needed a
+migration) — same call as `memoryExtractionLimits` in 4.4. Accessors:
 `getMemoryRecallSettings` / `setMemoryRecallSettings`. The pure tag-reading +
 multiplier logic is `lib/memory/recall-tags.ts`.
 

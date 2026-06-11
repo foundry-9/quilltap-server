@@ -25,7 +25,7 @@ import {
   deleteMemoriesWithUnlinkBatch,
 } from './memory-gate'
 import { calculateEffectiveWeight } from './memory-weighting'
-import { combineRecallMultipliers, type RecallContext } from './recall-tags'
+import { combineRecallMultipliers, RELATED_EXPANSION, type RecallContext } from './recall-tags'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 import { resolveAboutCharacterId } from './about-character-resolution'
@@ -810,7 +810,28 @@ export async function searchMemoriesSemantic(
         adjusted.sort(
           (a, b) => (b.recallAdjustment?.blendedAfter ?? 0) - (a.recallAdjustment?.blendedAfter ?? 0),
         )
-        results = adjusted
+
+        // Item 5 — one-hop related-memory expansion. After the top hits are
+        // ranked, pull each top hit's strongly-linked neighbors in as low-cost
+        // extra candidates (capped), score them against the same query embedding,
+        // run them through the same blend + multipliers, and re-rank the union.
+        // This catches the memory that's relevant by association but didn't clear
+        // the embedding threshold directly — the classic RAG miss. Only runs when
+        // the caller opts in via recallContext, since it costs one extra batched
+        // hydration.
+        if (recallContext.expandRelated) {
+          const expanded = await expandRelatedMemories(
+            adjusted,
+            limit,
+            embeddingResult.embedding,
+            recallContext,
+            { minImportance: options.minImportance, source: options.source },
+            characterId,
+          )
+          results = expanded
+        } else {
+          results = adjusted
+        }
       } else {
         results.sort((a, b) => {
           const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
@@ -833,6 +854,95 @@ export async function searchMemoriesSemantic(
   const textResults = await searchMemoriesText(characterId, query, options)
   bumpAccessTimes(characterId, textResults.map(r => r.memory.id))
   return textResults
+}
+
+/**
+ * Item 5 — one-hop related-memory expansion.
+ *
+ * Given the already-ranked candidate pool (`ranked`, sorted by post-adjustment
+ * blended score), pull the strongly-linked neighbors of the top hits in as extra
+ * candidates, score them against the same query embedding, run them through the
+ * same blend + recall multipliers, union them with the pool, and re-rank.
+ *
+ * Bounded on every axis so a corpus-heavy character can't balloon the candidate
+ * set: only the top `limit` hits seed neighbors, at most {@link RELATED_EXPANSION}
+ * `.maxPerHit` per seed and `.maxTotal` overall. Neighbors already in the pool are
+ * skipped; neighbors without a dimension-matching embedding can't be cosine-scored
+ * and are skipped; the same `minImportance`/`source` filters and cross-project
+ * exclusion that gate the main pool apply here too. `minScore` is intentionally
+ * NOT re-applied — a low-cosine neighbor relevant purely by association is the
+ * whole point of expansion.
+ */
+async function expandRelatedMemories(
+  ranked: SemanticSearchResult[],
+  limit: number,
+  queryEmbedding: ArrayLike<number>,
+  recallContext: RecallContext,
+  filters: { minImportance?: number; source?: 'AUTO' | 'MANUAL' },
+  characterId: string,
+): Promise<SemanticSearchResult[]> {
+  const repos = getRepositories()
+  const inPool = new Set(ranked.map(r => r.memory.id))
+
+  // Collect capped neighbor ids from the top hits only.
+  const neighborIds: string[] = []
+  const neighborSet = new Set<string>()
+  for (const seed of ranked.slice(0, limit)) {
+    let pulledFromSeed = 0
+    for (const neighborId of seed.memory.relatedMemoryIds ?? []) {
+      if (neighborIds.length >= RELATED_EXPANSION.maxTotal) break
+      if (pulledFromSeed >= RELATED_EXPANSION.maxPerHit) break
+      if (inPool.has(neighborId) || neighborSet.has(neighborId)) continue
+      neighborSet.add(neighborId)
+      neighborIds.push(neighborId)
+      pulledFromSeed++
+    }
+    if (neighborIds.length >= RELATED_EXPANSION.maxTotal) break
+  }
+
+  if (neighborIds.length === 0) {
+    return ranked
+  }
+
+  const neighbors = await repos.memories.findByIds(neighborIds)
+  const survivors: SemanticSearchResult[] = []
+  for (const memory of neighbors) {
+    // Character-scope + filter guards mirror the main pool.
+    if (memory.characterId !== characterId) continue
+    if (filters.minImportance !== undefined && memory.importance < filters.minImportance) continue
+    if (filters.source && memory.source !== filters.source) continue
+    if (!memory.embedding || memory.embedding.length !== queryEmbedding.length) continue
+
+    const cosineScore = cosineSimilarity(queryEmbedding, memory.embedding)
+    const { effectiveWeight } = calculateEffectiveWeight(memory)
+    const blendedBefore = cosineScore * 0.4 + (effectiveWeight ?? 0) * 0.6
+    const adj = combineRecallMultipliers(memory, recallContext)
+    if (adj.exclude) continue
+    const blendedAfter = blendedBefore * adj.multiplier
+    survivors.push({
+      memory,
+      score: cosineScore,
+      usedEmbedding: true,
+      effectiveWeight,
+      recallAdjustment: { multiplier: adj.multiplier, fired: [...adj.fired, 'related↗'], blendedBefore, blendedAfter },
+    })
+  }
+
+  logger.debug('[Memory] Recall related-memory expansion', {
+    characterId,
+    neighborsPulled: neighborIds.length,
+    neighborsSurvived: survivors.length,
+  })
+
+  if (survivors.length === 0) {
+    return ranked
+  }
+
+  const union = [...ranked, ...survivors]
+  union.sort(
+    (a, b) => (b.recallAdjustment?.blendedAfter ?? 0) - (a.recallAdjustment?.blendedAfter ?? 0),
+  )
+  return union
 }
 
 /**

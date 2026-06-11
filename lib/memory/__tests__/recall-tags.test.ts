@@ -11,9 +11,12 @@ import {
   parseTargetingTags,
   scopeProjectMultiplier,
   temporalMultiplier,
+  contextMultiplier,
+  participantMultiplier,
   combineRecallMultipliers,
   RECALL_MULTIPLIERS,
   MULTIPLIER_CLAMP,
+  RELATED_EXPANSION,
   DEFAULT_TEMPORAL,
   DEFAULT_SCOPE,
   DEFAULT_CONTEXT,
@@ -134,6 +137,61 @@ describe('temporalMultiplier', () => {
   })
 })
 
+describe('contextMultiplier', () => {
+  const withContext = (c: TargetingTags['context']): TargetingTags => ({
+    temporal: 'present',
+    scope: 'wide',
+    context: c,
+  })
+
+  it('boosts a memory whose context matches the turn guess', () => {
+    const r = contextMultiplier(withContext('relationships'), 'relationships')
+    expect(r.multiplier).toBe(RECALL_MULTIPLIERS.contextMatch)
+    expect(r.fired).toEqual(['ctx✓'])
+  })
+
+  it('passes through when the context differs', () => {
+    expect(contextMultiplier(withContext('history'), 'relationships')).toEqual({ multiplier: 1, fired: [] })
+  })
+
+  it('passes through when there is no turn guess', () => {
+    expect(contextMultiplier(withContext('history'), null)).toEqual({ multiplier: 1, fired: [] })
+    expect(contextMultiplier(withContext('history'), undefined)).toEqual({ multiplier: 1, fired: [] })
+  })
+})
+
+describe('participantMultiplier', () => {
+  const CHAR_A = 'char-aaaa'
+  const CHAR_B = 'char-bbbb'
+
+  it('boosts a memory about a present character', () => {
+    const r = participantMultiplier({ aboutCharacterId: CHAR_A }, [CHAR_A, CHAR_B])
+    expect(r.multiplier).toBe(RECALL_MULTIPLIERS.participantPresent)
+    expect(r.fired).toEqual(['present↑'])
+  })
+
+  it('passes through a memory about an absent character', () => {
+    expect(participantMultiplier({ aboutCharacterId: 'char-cccc' }, [CHAR_A, CHAR_B])).toEqual({ multiplier: 1, fired: [] })
+  })
+
+  it('passes through when the memory is about no one (null aboutCharacterId)', () => {
+    expect(participantMultiplier({ aboutCharacterId: null }, [CHAR_A])).toEqual({ multiplier: 1, fired: [] })
+  })
+
+  it('passes through when there is no present set', () => {
+    expect(participantMultiplier({ aboutCharacterId: CHAR_A }, undefined)).toEqual({ multiplier: 1, fired: [] })
+    expect(participantMultiplier({ aboutCharacterId: CHAR_A }, [])).toEqual({ multiplier: 1, fired: [] })
+  })
+})
+
+describe('RELATED_EXPANSION caps', () => {
+  it('bounds per-hit below total so a single hit cannot fill the whole expansion', () => {
+    expect(RELATED_EXPANSION.maxPerHit).toBeLessThanOrEqual(RELATED_EXPANSION.maxTotal)
+    expect(RELATED_EXPANSION.maxPerHit).toBeGreaterThan(0)
+    expect(RELATED_EXPANSION.maxTotal).toBeGreaterThan(0)
+  })
+})
+
 describe('combineRecallMultipliers', () => {
   it('multiplies scope and temporal adjustments together', () => {
     // narrow + same project (×1.15) and past (×0.85).
@@ -145,6 +203,40 @@ describe('combineRecallMultipliers', () => {
       5,
     )
     expect(r.fired).toEqual(['narrow✓', 'past↓'])
+  })
+
+  it('stacks scope, context, and participant boosts for a fully-matching memory', () => {
+    const CHAR_A = 'char-aaaa'
+    // same-project narrow (×1.15) + context match (×1.10) + present participant (×1.20).
+    const memory = {
+      projectId: PROJ_A,
+      aboutCharacterId: CHAR_A,
+      keywords: ['present', 'scope: narrow', 'philosophy'],
+    }
+    const r = combineRecallMultipliers(
+      memory,
+      ctx({ turnContext: 'philosophy', presentAboutCharacterIds: [CHAR_A] }),
+    )
+    expect(r.exclude).toBe(false)
+    expect(r.multiplier).toBeCloseTo(
+      RECALL_MULTIPLIERS.scopeNarrowSameProject *
+        RECALL_MULTIPLIERS.contextMatch *
+        RECALL_MULTIPLIERS.participantPresent,
+      5,
+    )
+    expect(r.fired).toEqual(['narrow✓', 'ctx✓', 'present↑'])
+  })
+
+  it('does not apply context/participant boosts when the turn signals are absent', () => {
+    const memory = {
+      projectId: PROJ_A,
+      aboutCharacterId: 'char-aaaa',
+      keywords: ['present', 'scope: narrow', 'philosophy'],
+    }
+    // ctx() supplies no turnContext / presentAboutCharacterIds → only scope fires.
+    const r = combineRecallMultipliers(memory, ctx())
+    expect(r.multiplier).toBe(RECALL_MULTIPLIERS.scopeNarrowSameProject)
+    expect(r.fired).toEqual(['narrow✓'])
   })
 
   it('short-circuits to exclude for a cross-project narrow memory under exclude policy', () => {

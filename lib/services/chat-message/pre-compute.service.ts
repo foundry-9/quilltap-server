@@ -48,6 +48,13 @@ export interface RunPreContextPreComputeOptions {
   character: Character
   characterParticipant: { id: string }
   isMultiCharacter: boolean
+  /**
+   * IDs of the characters present in the room this turn (responding character +
+   * other character participants). Threaded into the recall context so the
+   * proactive path applies the same participant-aware boost (item 4) the dynamic
+   * head does. Empty/undefined → no participant boost.
+   */
+  presentAboutCharacterIds?: readonly string[]
   isContinueMode: boolean
   /** Verbatim user-message text for this turn (empty in continue mode). */
   content: string
@@ -150,7 +157,7 @@ async function proactiveRecallTask(
 ): Promise<SemanticSearchResult[] | undefined> {
   const {
     chatId, userId, chat, character, characterParticipant,
-    isContinueMode, content, existingMessages,
+    presentAboutCharacterIds, isContinueMode, content, existingMessages,
     cheapLLMSelection, dangerSettings, allProfiles,
     controller, encoder,
   } = opts
@@ -229,7 +236,7 @@ async function proactiveRecallTask(
     character.id
   )
 
-  if (!keywordResult.success || !keywordResult.result || keywordResult.result.length === 0) {
+  if (!keywordResult.success || !keywordResult.result || keywordResult.result.keywords.length === 0) {
     return undefined
   }
 
@@ -240,14 +247,20 @@ async function proactiveRecallTask(
     characterId: character.id,
   }))
 
-  const searchQuery = keywordResult.result.join(' ')
+  const searchQuery = keywordResult.result.keywords.join(' ')
   // Same per-turn recall context the dynamic head uses, so the proactive path
-  // gets identical cross-project scope gating + temporal down-weighting
-  // (see lib/memory/recall-tags.ts). chat.projectId is the rename-proof comparand.
+  // gets identical scope gating, temporal down-weighting, context steering, and
+  // participant boost (see lib/memory/recall-tags.ts). chat.projectId is the
+  // rename-proof comparand; the turn's temporal/context guess and present-
+  // character set drive items 3–4.
   const recallSettings = await getMemoryRecallSettings()
   const recallContext: RecallContext = {
     currentProjectId: chat.projectId ?? null,
     scopePolicy: recallSettings.scopePolicy,
+    turnContext: keywordResult.result.context ?? null,
+    turnTemporal: keywordResult.result.temporal ?? null,
+    presentAboutCharacterIds,
+    expandRelated: recallSettings.expandRelated,
   }
   try {
     const memoryResults = await searchMemoriesSemantic(

@@ -156,7 +156,7 @@ describe('pre-compute.service', () => {
     it('extracts keywords from messages since the character last spoke, then searches memories', async () => {
       ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({
         success: true,
-        result: ['ship', 'storm'],
+        result: { keywords: ['ship', 'storm'], temporal: 'present', context: 'history' },
       })
       ;(mockSearchMemoriesSemantic as jest.Mock).mockResolvedValue([
         { id: 'm1', content: 'memory 1', importance: 0.6 },
@@ -166,6 +166,7 @@ describe('pre-compute.service', () => {
       const result = await runPreContextPreCompute(baseOptions({
         cheapLLMSelection: baseCheapLLM,
         content: 'a fresh user line',
+        presentAboutCharacterIds: ['char-1', 'char-2'],
         existingMessages: [
           { type: 'message', role: 'ASSISTANT', content: 'past line', participantId: 'p-char' } as any,
           { type: 'message', role: 'USER', content: 'a new question', participantId: 'p-user' } as any,
@@ -177,7 +178,22 @@ describe('pre-compute.service', () => {
       const sentMessages = callArgs[0] as Array<{ role: string; content: string }>
       expect(sentMessages.map(m => m.content)).toEqual(['a new question', 'a fresh user line'])
 
-      expect(mockSearchMemoriesSemantic).toHaveBeenCalledWith('char-1', 'ship storm', expect.objectContaining({ userId: 'user-1' }))
+      // The distilled keywords drive the embedding query, and the turn-level
+      // guess + present-character set + scope policy ride along in recallContext.
+      expect(mockSearchMemoriesSemantic).toHaveBeenCalledWith(
+        'char-1',
+        'ship storm',
+        expect.objectContaining({
+          userId: 'user-1',
+          recallContext: expect.objectContaining({
+            scopePolicy: 'down-weight',
+            turnContext: 'history',
+            turnTemporal: 'present',
+            presentAboutCharacterIds: ['char-1', 'char-2'],
+            expandRelated: false,
+          }),
+        }),
+      )
       expect(result.preSearchedMemories).toHaveLength(2)
     })
 
@@ -216,7 +232,7 @@ describe('pre-compute.service', () => {
     })
 
     it('returns undefined when semantic search throws', async () => {
-      ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({ success: true, result: ['k'] })
+      ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({ success: true, result: { keywords: ['k'] } })
       ;(mockSearchMemoriesSemantic as jest.Mock).mockRejectedValue(new Error('search broke'))
 
       const result = await runPreContextPreCompute(baseOptions({
@@ -231,7 +247,7 @@ describe('pre-compute.service', () => {
     })
 
     it('caps the returned memory list at 10', async () => {
-      ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({ success: true, result: ['k'] })
+      ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({ success: true, result: { keywords: ['k'] } })
       const many = Array.from({ length: 15 }, (_, i) => ({ id: `m${i}`, content: `c${i}`, importance: 0.5 }))
       ;(mockSearchMemoriesSemantic as jest.Mock).mockResolvedValue(many)
 

@@ -9,9 +9,12 @@
  *                              mannerisms | trivia | information
  *
  * This module reads them back at recall time and turns them into bounded,
- * clamped multipliers on the already-computed blended recall score. It is the
- * single source of truth for the closed vocabularies — the extraction path
- * imports the Sets from here, so the two sides can never drift.
+ * clamped multipliers on the already-computed blended recall score: scope+project
+ * gating and temporal down-weighting (items 1–2) read the memory's own tags;
+ * context steering and participant boost (items 3–4) compare against turn-level
+ * signals carried on the RecallContext. It is the single source of truth for the
+ * closed vocabularies — the extraction path imports the Sets from here, so the
+ * two sides can never drift.
  *
  * Pure + I/O-free — no logging, no DB, no LLM — so it is trivially unit-testable
  * and safe to import from the forked job child.
@@ -69,15 +72,42 @@ export type ScopePolicy = 'down-weight' | 'exclude'
  * `searchMemoriesSemantic`. Absent → recall behaves byte-identically to its
  * historical (pre-targeting) form.
  *
- * Phase 1 wires `currentProjectId` + `scopePolicy`. The remaining fields are
- * Phase 2 (context steering, participant boost, related-memory expansion) and
- * are added when those items land.
+ * Phase 1 wires `currentProjectId` + `scopePolicy` (items 1–2). Phase 2 adds the
+ * remaining fields: `turnContext` (item 3 context steering), `presentAboutCharacterIds`
+ * (item 4 participant boost), and `expandRelated` (item 5 one-hop expansion).
+ * `turnTemporal` is carried for symmetry and debug logging but has no multiplier
+ * of its own — temporal down-weighting (item 2) reads each memory's own
+ * `temporal` tag, not the turn's guess.
  */
 export interface RecallContext {
   /** The current chat's project (`chat.projectId`), or null when project-less. */
   currentProjectId: string | null
   /** What to do with a cross-project `scope: narrow` memory. */
   scopePolicy: ScopePolicy
+  /**
+   * IDs of the characters present in the room this turn — the responding
+   * character plus every other character participant. A memory whose
+   * `aboutCharacterId` is in this set is boosted (item 4). Empty/undefined →
+   * no participant boost.
+   */
+  presentAboutCharacterIds?: readonly string[]
+  /**
+   * The turn's dominant `context` axis, guessed by the unified keyword
+   * distillation. A memory whose own `context` tag matches is boosted (item 3).
+   * Null/undefined → no context steering.
+   */
+  turnContext?: ContextTag | null
+  /**
+   * The turn's dominant `temporal` axis (same cheap-LLM guess). Carried for
+   * debug symmetry only; no multiplier consumes it today.
+   */
+  turnTemporal?: TemporalTag | null
+  /**
+   * When true, one-hop related-memory expansion runs inside
+   * `searchMemoriesSemantic` after the top hits are ranked (item 5). Capped by
+   * {@link RELATED_EXPANSION}.
+   */
+  expandRelated?: boolean
 }
 
 /**
@@ -93,10 +123,28 @@ export const RECALL_MULTIPLIERS = {
   temporalPast: 0.85,
   /** `temporal: moment` — true only at one instant (see note in temporalMultiplier). */
   temporalMoment: 0.7,
+  /**
+   * Item 3 — the memory's `context` tag matches the turn's guessed dominant
+   * context. Lowest-confidence adjustment (the turn guess is itself cheap-LLM
+   * output), so the smallest boost.
+   */
+  contextMatch: 1.1,
+  /**
+   * Item 4 — the memory is *about* a character present in the room this turn.
+   * Boost, never a filter: absent people still get discussed.
+   */
+  participantPresent: 1.2,
 } as const
 
 /** Clamp on the *combined* multiplier so no single memory can explode the ranking. */
 export const MULTIPLIER_CLAMP = { min: 0, max: 4 } as const
+
+/**
+ * Item 5 — caps on one-hop related-memory expansion so a corpus-heavy character
+ * can't balloon the candidate set. `maxPerHit` bounds neighbors pulled from any
+ * single top hit; `maxTotal` bounds the whole expansion across all hits.
+ */
+export const RELATED_EXPANSION = { maxPerHit: 3, maxTotal: 10 } as const
 
 /** Result of a single adjustment: its multiplier plus a short debug label list. */
 export interface RecallMultiplier {
@@ -209,11 +257,55 @@ export function temporalMultiplier(tags: TargetingTags): RecallMultiplier {
 }
 
 /**
+ * Item 3 — context-axis steering.
+ *
+ * Boost a memory whose own `context` tag matches the turn's guessed dominant
+ * context. The turn guess is itself cheap-LLM output, so this is the
+ * lowest-confidence adjustment and carries the smallest boost. No turn guess
+ * (null/undefined) → pass through.
+ */
+export function contextMultiplier(
+  tags: TargetingTags,
+  turnContext: ContextTag | null | undefined,
+): RecallMultiplier {
+  if (turnContext && tags.context === turnContext) {
+    return { multiplier: RECALL_MULTIPLIERS.contextMatch, fired: ['ctx✓'] }
+  }
+  return { multiplier: 1, fired: [] }
+}
+
+/**
+ * Item 4 — participant-aware boost (dynamic head).
+ *
+ * Boost a memory that is *about* a character present in the room this turn. The
+ * present set includes the responding character itself, so its self-memories are
+ * boosted alongside present-other memories rather than losing ground to them —
+ * in a single-character chat every candidate is boosted uniformly, leaving the
+ * relative ranking unchanged. A boost, never a filter: absent characters still
+ * get discussed.
+ */
+export function participantMultiplier(
+  memory: MemoryTagView,
+  presentAboutCharacterIds: readonly string[] | null | undefined,
+): RecallMultiplier {
+  if (
+    memory.aboutCharacterId &&
+    presentAboutCharacterIds &&
+    presentAboutCharacterIds.includes(memory.aboutCharacterId)
+  ) {
+    return { multiplier: RECALL_MULTIPLIERS.participantPresent, fired: ['present↑'] }
+  }
+  return { multiplier: 1, fired: [] }
+}
+
+/**
  * Combine every applicable recall multiplier for one memory into a single
- * clamped adjustment. Phase 1 wires scope+project (item 1) and temporal (item 2).
- * The product is clamped to {@link MULTIPLIER_CLAMP} so no single memory can
- * dominate the ranking. A cross-project narrow memory under the `exclude` policy
- * short-circuits to `{ exclude: true }`.
+ * clamped adjustment. Items 1 (scope+project) and 2 (temporal) read the memory's
+ * own tags; items 3 (context steering) and 4 (participant boost) compare against
+ * the turn-level signals on the {@link RecallContext}. The product is clamped to
+ * {@link MULTIPLIER_CLAMP} so no single memory can dominate the ranking. A
+ * cross-project narrow memory under the `exclude` policy short-circuits to
+ * `{ exclude: true }`.
  */
 export function combineRecallMultipliers(
   memory: MemoryTagView,
@@ -232,8 +324,11 @@ export function combineRecallMultipliers(
   }
 
   const temporal = temporalMultiplier(tags)
+  const context = contextMultiplier(tags, ctx.turnContext)
+  const participant = participantMultiplier(memory, ctx.presentAboutCharacterIds)
 
-  const product = scope.multiplier * temporal.multiplier
+  const product =
+    scope.multiplier * temporal.multiplier * context.multiplier * participant.multiplier
   const clamped = Math.max(
     MULTIPLIER_CLAMP.min,
     Math.min(MULTIPLIER_CLAMP.max, product),
@@ -241,7 +336,7 @@ export function combineRecallMultipliers(
 
   return {
     multiplier: clamped,
-    fired: [...scope.fired, ...temporal.fired],
+    fired: [...scope.fired, ...temporal.fired, ...context.fired, ...participant.fired],
     exclude: false,
   }
 }

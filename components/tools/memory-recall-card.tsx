@@ -8,10 +8,12 @@ type ScopePolicy = 'down-weight' | 'exclude'
 
 interface RecallConfig {
   scopePolicy: ScopePolicy
+  expandRelated: boolean
 }
 
 const DEFAULT_CONFIG: RecallConfig = {
   scopePolicy: 'down-weight',
+  expandRelated: false,
 }
 
 const SCOPE_POLICY_OPTIONS: ReadonlyArray<{
@@ -99,6 +101,11 @@ export function MemoryRecallCard() {
     void saveConfig({ scopePolicy: value })
   }
 
+  const handleExpandRelatedChange = (value: boolean) => {
+    setConfig(c => ({ ...c, expandRelated: value }))
+    void saveConfig({ expandRelated: value })
+  }
+
   if (loading) {
     return <p className="qt-text-small qt-text-muted">Loading recall settings&hellip;</p>
   }
@@ -129,6 +136,25 @@ export function MemoryRecallCard() {
           <p className="qt-text-xs qt-text-secondary mt-1">{activePolicy.description}</p>
         )}
       </div>
+
+      <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer">
+        <input
+          type="checkbox"
+          checked={config.expandRelated}
+          onChange={e => handleExpandRelatedChange(e.target.checked)}
+          disabled={saving}
+          className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+        />
+        <div className="flex-1">
+          <div className="font-medium text-foreground">Follow the threads between memories</div>
+          <div className="qt-text-small mt-1">
+            When a memory surfaces, gather the handful of others it is bound to and let them
+            compete for a place in the recollection too. This rescues the memory that is plainly
+            relevant by association yet never quite matched the words of the moment. A touch more
+            work each turn; left off unless you ask for it.
+          </div>
+        </div>
+      </label>
 
       {error && <p className="qt-text-small qt-text-error">{error}</p>}
     </div>

@@ -165,6 +165,13 @@ export const MemoryRecallSettingsSchema = z.object({
    * memory; `exclude` filters it out of recall entirely.
    */
   scopePolicy: z.enum(['down-weight', 'exclude']).default('down-weight'),
+  /**
+   * When true, recall pulls each top hit's strongly-linked related memories in
+   * as extra candidates (one hop, capped) and re-ranks the union — catching the
+   * memory relevant by association that didn't clear the embedding threshold
+   * directly. Costs one extra batched lookup per turn; off by default.
+   */
+  expandRelated: z.boolean().default(false),
 });
 
 export type MemoryRecallSettings = z.infer<typeof MemoryRecallSettingsSchema>;
