@@ -17,10 +17,17 @@ import { randomUUID } from 'node:crypto';
 import type { ChatMetadataBase } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { enqueueAutonomousRoomTurn } from '../queue-service';
-import { runStartPatch, postRunStartAnnouncement } from './autonomous-room-announce';
+import { startScheduledAutonomousRun } from './autonomous-run-start';
 
 const HANDLER = 'background-jobs.autonomous-room-schedule-tick';
 const DEFAULT_FRESHNESS_WINDOW_MS = 12 * 60 * 60 * 1000; // 12h
+
+/**
+ * Grace window for the self-heal sweep. A run that just started has a
+ * freshly-bumped `updatedAt` and a turn job that may not be visible yet; only
+ * treat a `running` room as wedged once it's been untouched this long.
+ */
+const WEDGE_GRACE_MS = 60 * 1000; // 60s
 
 function freshnessWindowFor(chat: ChatMetadataBase, fallbackMs: number): number {
   return chat.scheduleFreshnessWindowMs ?? fallbackMs;
@@ -109,52 +116,49 @@ export async function handleAutonomousRoomScheduleTick(job: BackgroundJob): Prom
       continue;
     }
 
-    // Within freshness window — start a new run. Generate a fresh runId, flip
-    // the row straight to 'running' with counters zeroed (the shared run-start
-    // contract — same one the manual start uses), set scheduleLastRunAt = now,
-    // and advance scheduleNextRunAt past the consumed slot. Going to 'running'
-    // immediately keeps the management list / badges honest the moment the slot
-    // fires; the turn handler runs the model-availability precondition and the
-    // turns from there.
+    // Within freshness window — start a new run. Generate a fresh runId and
+    // hand the whole run-start to the shared, parent-ordered core. We MUST NOT
+    // do the `currentRunId` write + turn enqueue here in the child's buffered
+    // batch: the enqueued turn could run before the buffered write landed, read
+    // the prior run's id, and self-abort as `stale_run_job` — wedging the room
+    // `running` with zero turns. `startScheduledAutonomousRun` routes the
+    // write+enqueue to the parent's RW connection (host-RPC) so they commit in
+    // order, exactly like the always-race-free manual start.
     const runId = randomUUID();
     const nowIso = new Date(now).toISOString();
     const nextNext = nextCronFireFrom(chat.scheduleCron, nowDate);
-    const updates: Partial<ChatMetadataBase> = {
-      ...runStartPatch(nowIso, runId),
+    const result = await startScheduledAutonomousRun({
+      chatId: chat.id,
+      userId,
+      runId,
+      nowIso,
       scheduleLastRunAt: nowIso,
       scheduleNextRunAt: nextNext ? nextNext.toISOString() : null,
-    } as unknown as Partial<ChatMetadataBase>;
-    await repos.chats.update(chat.id, updates);
-
-    try {
-      await enqueueAutonomousRoomTurn(userId, { chatId: chat.id, runId });
+      onEnqueueFailure: 'idle',
+    });
+    if (result.ok) {
       enqueuedCount++;
-      // Run is live and a turn is queued — post the "run begun" banner.
-      await postRunStartAnnouncement(chat.id, runId, chat);
       logger.info('Autonomous-room scheduler: enqueued run', {
         context: HANDLER,
         chatId: chat.id,
         runId,
         nextRunAt: nextNext?.toISOString() ?? null,
       });
-    } catch (error) {
-      // Couldn't enqueue — the row already flipped to 'running', which the
-      // scheduler filter excludes, so leaving it there would wedge the room out
-      // of all future ticks. Roll it back to 'idle' (eligible again) so the
-      // next due slot can retry; scheduleNextRunAt has already advanced.
-      logger.error('Autonomous-room scheduler: failed to enqueue run, rolling run state back to idle', {
+    } else {
+      // The core already rolled the row back (to 'idle') on an enqueue failure;
+      // scheduleNextRunAt has advanced, so the next due slot can retry.
+      logger.error('Autonomous-room scheduler: run-start failed', {
         context: HANDLER,
         chatId: chat.id,
         runId,
-        error: error instanceof Error ? error.message : String(error),
+        reason: result.reason,
+        message: result.message,
       });
-      await repos.chats.update(chat.id, {
-        runState: 'idle',
-        runStateMessage: 'schedule:enqueue_failed',
-        runEndedAt: nowIso,
-      } as unknown as Partial<ChatMetadataBase>);
     }
   }
+
+  // Defense-in-depth: re-engage any room left `running` with nothing in flight.
+  const healedCount = await healWedgedRuns(userId);
 
   logger.info('Autonomous-room scheduler tick complete', {
     context: HANDLER,
@@ -163,5 +167,69 @@ export async function handleAutonomousRoomScheduleTick(job: BackgroundJob): Prom
     dueCount,
     staleCount,
     enqueuedCount,
+    healedCount,
   });
+}
+
+/**
+ * Self-heal sweep for wedged autonomous runs.
+ *
+ * A healthy `running` room always has a turn job either PROCESSING or PENDING —
+ * each turn enqueues the next one (paced via `scheduledAt`) before it finishes,
+ * so there's never a gap. A room in `runState: 'running'` with NO
+ * pending/processing `AUTONOMOUS_ROOM_TURN`, untouched for longer than the grace
+ * window, is therefore wedged: the schedule tick's start filter excludes
+ * `running` rooms, so nothing would ever re-engage it. We re-enqueue a turn for
+ * the live run so it resumes on its own.
+ *
+ * `currentRunId` is long-committed by the time a room can satisfy this
+ * condition, so a plain enqueue is race-free (unlike a fresh start). The grace
+ * window keeps us from racing a run that's still starting (freshly-bumped
+ * `updatedAt`, turn job not yet visible), and the "no turn in flight" check
+ * keeps a paced room — or one already healed by a prior tick — untouched. A rare
+ * double-enqueue is harmless: the turn handler's stale/concurrency guards let at
+ * most one turn proceed.
+ */
+export async function healWedgedRuns(userId: string): Promise<number> {
+  const repos = getRepositories();
+  const userChats = await repos.chats.findByUserId(userId);
+  const running = userChats.filter(
+    (c) => c.chatType === 'autonomous' && c.runState === 'running',
+  );
+  if (running.length === 0) return 0;
+
+  const now = Date.now();
+  let healedCount = 0;
+  for (const chat of running) {
+    if (!chat.currentRunId) continue;
+
+    const updatedMs = chat.updatedAt ? Date.parse(chat.updatedAt) : 0;
+    if (Number.isFinite(updatedMs) && now - updatedMs < WEDGE_GRACE_MS) continue;
+
+    const inFlight = await repos.backgroundJobs.findPendingForChat(chat.id);
+    if (inFlight.some((j) => j.type === 'AUTONOMOUS_ROOM_TURN')) continue;
+
+    try {
+      const jobId = await enqueueAutonomousRoomTurn(userId, {
+        chatId: chat.id,
+        runId: chat.currentRunId,
+      });
+      healedCount++;
+      logger.warn('Autonomous-room scheduler: re-enqueued stalled run (self-heal)', {
+        context: HANDLER,
+        chatId: chat.id,
+        runId: chat.currentRunId,
+        jobId,
+        idleForMs: Number.isFinite(updatedMs) ? now - updatedMs : null,
+      });
+    } catch (error) {
+      logger.error('Autonomous-room scheduler: self-heal enqueue failed', {
+        context: HANDLER,
+        chatId: chat.id,
+        runId: chat.currentRunId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return healedCount;
 }

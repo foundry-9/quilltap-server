@@ -18,10 +18,7 @@ import { Cron } from 'croner';
 import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueAutonomousRoomTurn } from '@/lib/background-jobs/queue-service';
-import {
-  runStartPatch,
-  postRunStartAnnouncement,
-} from '@/lib/background-jobs/handlers/autonomous-room-announce';
+import { beginAutonomousRun } from '@/lib/background-jobs/handlers/autonomous-run-start';
 import { logger } from '@/lib/logger';
 import type { ChatMetadataBase } from '@/lib/schemas/types';
 
@@ -89,51 +86,40 @@ export async function startAutonomousRoomManually(
     }
   }
 
-  // Flip straight to `running` (counters zeroed, pause state cleared) so the
-  // badge/header reflect the live status the instant this returns — we don't
-  // wait for the turn job to come around and promote `idle → running`.
-  await repos.chats.update(chatId, {
-    ...runStartPatch(nowIso, runId),
+  // Delegate the run-start (flip to `running`, enqueue the first turn, post the
+  // banner, roll back on enqueue failure) to the shared parent-ordered core —
+  // the same one the scheduled tick reaches via host-RPC. This path already runs
+  // in the parent, so it calls the core directly. Only write `scheduleNextRunAt`
+  // when we actually consumed a cron slot.
+  const advancedNextRunAt = nextScheduledRunAt !== chat.scheduleNextRunAt;
+  const result = await beginAutonomousRun({
+    chatId,
+    userId,
+    runId,
+    nowIso,
     scheduleLastRunAt: nowIso,
-    ...(nextScheduledRunAt !== chat.scheduleNextRunAt
-      ? { scheduleNextRunAt: nextScheduledRunAt }
-      : {}),
-  } as unknown as Partial<ChatMetadataBase>);
-
-  let jobId: string;
-  try {
-    jobId = await enqueueAutonomousRoomTurn(userId, { chatId, runId });
-  } catch (error) {
-    // The row already flipped to `running`, so the badge updated immediately;
-    // but no turn job made it onto the queue. Roll the row to `error` rather
-    // than leave it falsely `running` with nothing in flight (which the startup
-    // reconcile would otherwise have to clean up on the next restart).
-    logger.error('Manual autonomous-room start: enqueue failed, rolling run state to error', {
-      context: HANDLER, chatId, runId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    await repos.chats.update(chatId, {
-      runState: 'error',
-      runStateMessage: 'start:enqueue_failed',
-      runEndedAt: new Date().toISOString(),
-    } as unknown as Partial<ChatMetadataBase>);
-    throw error;
+    ...(advancedNextRunAt ? { scheduleNextRunAt: nextScheduledRunAt } : {}),
+    onEnqueueFailure: 'error',
+  });
+  if (!result.ok) {
+    // chat existence/type were already validated above, so the only reachable
+    // failure here is an enqueue error — the core already rolled the row to
+    // `error`. Re-throw the original cause (the route maps a throw to a 500),
+    // preserving the manual-start contract.
+    throw result.cause instanceof Error
+      ? result.cause
+      : new Error(`Autonomous-room start failed: ${result.message}`);
   }
-
-  // Run is live and a turn is queued — post the "run begun" banner. Best-effort
-  // (the helper swallows its own write failures); `chat` is the pre-update
-  // snapshot, whose participants and budget caps are unchanged by the flip.
-  await postRunStartAnnouncement(chatId, runId, chat);
 
   logger.info('Manual autonomous-room run started', {
     context: HANDLER,
     chatId,
     runId,
-    jobId,
-    advancedNextRunAt: nextScheduledRunAt !== chat.scheduleNextRunAt,
+    jobId: result.jobId,
+    advancedNextRunAt,
   });
 
-  return { ok: true, runId, jobId };
+  return { ok: true, runId, jobId: result.jobId };
 }
 
 /**

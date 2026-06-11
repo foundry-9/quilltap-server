@@ -4,6 +4,14 @@
 
 ### 4.7-dev
 
+#### Fix: scheduled autonomous rooms could wedge "running" with no turns
+
+Fixed a race that left a cron-scheduled autonomous room stuck in `runState: 'running'` with zero turns consumed and no turn job in flight — sitting idle indefinitely (the schedule tick skips `running` rooms, so nothing recovered it). Cause: the scheduled-start path ran in the forked job child, where the `currentRunId` write was buffered; the first turn job it enqueued could run before that write committed, read the prior run's id, and self-abort via the stale-run guard without re-enqueuing. Most likely at a cold boot when a missed slot fires amid the startup job flood.
+
+- The scheduled run-start now funnels through the same parent-ordered core as the manual start, reached from the child via a new `startScheduledAutonomousRun` host-RPC method, so `currentRunId`/`runState` commit on the parent's RW connection before the first turn is enqueued — the manual path was already race-free for this reason. Run-start logic is now single-sourced in `lib/background-jobs/handlers/autonomous-run-start.ts` (`beginAutonomousRun`), shared by `startAutonomousRoomManually` and the schedule tick.
+- Added a defense-in-depth self-heal sweep (`healWedgedRuns`) to the per-minute schedule tick: a room left `running` with no pending/processing turn job, untouched past a 60s grace, gets a turn re-enqueued so it resumes on its own instead of wedging.
+- No schema, migration, DDL, or export change. New unit tests for the run-start ordering contract, the host-RPC bridge routing, and the heal sweep.
+
 #### Madman's Box: refreshed Settings backgrounds
 
 Updated the `calliope-bg.webp` (Appearance) and `forge-bg.webp` (AI Providers) Settings background textures in the bundled Madman's Box theme. Asset-only refresh of two of the eight subsystem backgrounds wired in the previous entry; theme bumped 1.1.2 → 1.1.3 so installed copies pick up the new art. No code, schema, manifest-structure, or export change.

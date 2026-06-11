@@ -5,7 +5,7 @@
  * side-effects committed here persist independently of whether the job's
  * later buffered writes succeed.
  *
- * Supported methods all share one root cause: they issue real DB writes
+ * Most supported methods share one root cause: they issue real DB writes
  * (`docMountBlobs.create`, `docMountFiles.create` / `docMountFileLinks.linkBlobContent`,
  * `docMountPoints.refreshStats`) whose server-computed return values
  * (`storageKey`, `blobId`, `linkId`) the child proxy's synthetic buffered
@@ -14,6 +14,12 @@
  *     (→ `writeProjectFileToMountStore`)
  *   - `writeCharacterAvatarToVault` — project-less character-vault avatar writes
  *   - `writeLanternBackgroundToMountStore` — project-less Lantern background writes
+ *
+ * `startScheduledAutonomousRun` is here for a different reason: ORDERING. The
+ * scheduled run-start must commit `currentRunId`/`runState` on the RW connection
+ * *before* the first turn job is enqueued, or the turn reads a stale run id and
+ * self-aborts. Running it on the host makes the write+enqueue atomic-in-order,
+ * exactly like the always-race-free manual start.
  *
  * Each bridge short-circuits to `callHost(...)` when running in the child;
  * the parent re-enters the same bridge here on its RW connection (where
@@ -81,6 +87,15 @@ async function runMethod(
       );
       const params = args[0] as Parameters<typeof writeLanternBackgroundToMountStore>[0];
       return writeLanternBackgroundToMountStore(params);
+    }
+    case 'startScheduledAutonomousRun': {
+      const { startScheduledAutonomousRun } = await import(
+        '@/lib/background-jobs/handlers/autonomous-run-start'
+      );
+      const params = args[0] as Parameters<typeof startScheduledAutonomousRun>[0];
+      // Parent re-entry: QUILLTAP_JOB_CHILD is unset here, so the bridge runs
+      // `beginAutonomousRun` directly on the RW connection (no re-dispatch loop).
+      return startScheduledAutonomousRun(params);
     }
     default: {
       const exhaustive: never = method;

@@ -146,7 +146,11 @@ export interface ChildShutdownAckMessage {
 export interface ChildHostRpcRequestMessage {
   type: 'host-rpc';
   requestId: string;
-  method: 'uploadFile' | 'writeCharacterAvatarToVault' | 'writeLanternBackgroundToMountStore';
+  method:
+    | 'uploadFile'
+    | 'writeCharacterAvatarToVault'
+    | 'writeLanternBackgroundToMountStore'
+    | 'startScheduledAutonomousRun';
   args: unknown[];
 }
 
