@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
   ProfileInfoSection,
@@ -18,7 +20,10 @@ import {
  * - Profile settings (editable: name, email, avatar)
  */
 export default function ProfilePage() {
-  const { data, isLoading, error: loadError } = useSWR<{ profile: UserProfile } | UserProfile>('/api/v1/user/profile')
+  const { data, isLoading, error: loadError } = useQuery({
+    queryKey: queryKeys.userProfile.detail,
+    queryFn: ({ signal }) => apiFetch<{ profile: UserProfile } | UserProfile>('/api/v1/user/profile', { signal }),
+  })
   const profile = (data as any)?.profile || data || null
 
   const handleProfileUpdate = (updatedProfile: UserProfile) => {

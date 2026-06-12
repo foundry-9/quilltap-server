@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
 import { ChatCard } from '@/components/chat/ChatCard'
@@ -35,22 +37,41 @@ export default function ChatsPage() {
   const { shouldHideByIds, hideDangerousChats, includeAutonomousRooms } = useQuickHide()
   const bgStyle = useSubsystemBackgroundStyle('salon')
 
-  const { data: chatSettings } = useSWR<ChatSettingsResponse>('/api/v1/settings/chat')
+  const { data: chatSettings } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) => apiFetch<ChatSettingsResponse>('/api/v1/settings/chat', { signal }),
+  })
   const visibilityDefault = chatSettings?.autonomousRoomSettings?.visibilityDefault ?? 'owner_only'
   const wantsAutonomousByDefault = visibilityDefault !== 'owner_only'
   const effectiveIncludeAutonomous = wantsAutonomousByDefault || includeAutonomousRooms
-  const chatsKey = effectiveIncludeAutonomous ? '/api/v1/chats?includeAutonomous=true' : '/api/v1/chats'
 
-  const { data: chatsData, isLoading: chatsLoading, error: chatsError, mutate: mutateChats } = useSWR<{ chats: Chat[] }>(chatsKey)
-  const { data: charactersData, isLoading: charactersLoading } = useSWR<{ characters: Array<{ id: string; name: string; title?: string | null }> }>('/api/v1/characters')
-  const { data: profilesData, isLoading: profilesLoading } = useSWR<{ profiles: Array<{ id: string; name: string }> }>('/api/v1/connection-profiles')
+  const { data: chatsData, isLoading: chatsLoading, error: chatsError, refetch: mutateChats } = useQuery({
+    queryKey: queryKeys.chats.list({ includeAutonomous: effectiveIncludeAutonomous }),
+    queryFn: ({ signal }) =>
+      apiFetch<{ chats: Chat[] }>(
+        effectiveIncludeAutonomous ? '/api/v1/chats?includeAutonomous=true' : '/api/v1/chats',
+        { signal }
+      ),
+  })
+  const { data: charactersData, isLoading: charactersLoading } = useQuery({
+    queryKey: queryKeys.characters.list(),
+    queryFn: ({ signal }) =>
+      apiFetch<{ characters: Array<{ id: string; name: string; title?: string | null }> }>('/api/v1/characters', { signal }),
+  })
+  const { data: profilesData, isLoading: profilesLoading } = useQuery({
+    queryKey: queryKeys.connectionProfiles.all,
+    queryFn: ({ signal }) =>
+      apiFetch<{ profiles: Array<{ id: string; name: string }> }>('/api/v1/connection-profiles', { signal }),
+  })
 
   // Whether the user actually owns any autonomous rooms — used to decide
   // whether to surface the "hidden" hint when the toggle is off. Cheap GET;
   // the management endpoint is already user-scoped.
-  const { data: autonomousRoomsData } = useSWR<AutonomousRoomsListResponse>(
-    effectiveIncludeAutonomous ? null : '/api/v1/system/autonomous-rooms'
-  )
+  const { data: autonomousRoomsData } = useQuery({
+    queryKey: queryKeys.system.autonomousRooms,
+    queryFn: ({ signal }) => apiFetch<AutonomousRoomsListResponse>('/api/v1/system/autonomous-rooms', { signal }),
+    enabled: !effectiveIncludeAutonomous,
+  })
   const hasHiddenAutonomous = !effectiveIncludeAutonomous && (autonomousRoomsData?.rooms?.length ?? 0) > 0
 
   const chats = useMemo(() => chatsData?.chats ?? [], [chatsData])

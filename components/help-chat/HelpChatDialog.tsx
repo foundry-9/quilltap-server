@@ -10,7 +10,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { useRouter } from 'next/navigation'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { useHelpChat } from '@/components/providers/help-chat-provider'
 import { HelpChatComposer } from './HelpChatComposer'
@@ -150,9 +152,11 @@ export function HelpChatDialog() {
     onMessageComplete: handleMessageComplete,
   })
 
-  const { data: pastChatsData, mutate: mutatePastChats } = useSWR<{ chats: PastChat[] }>(
-    isOpen && !currentChatId && activeTab === 'ask' ? '/api/v1/help-chats' : null
-  )
+  const { data: pastChatsData, refetch: mutatePastChats } = useQuery({
+    queryKey: queryKeys.helpChat.pastChats,
+    queryFn: ({ signal }) => apiFetch<{ chats: PastChat[] }>('/api/v1/help-chats', { signal }),
+    enabled: isOpen && !currentChatId && activeTab === 'ask',
+  })
 
   useEffect(() => {
     if (pastChatsData?.chats) {

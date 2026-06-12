@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import useSWR from 'swr'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 // Using native img tag instead of next/image because /api/files/* routes
 // are dynamic API endpoints that can't go through Next.js image optimization
 import dynamic from 'next/dynamic'
@@ -71,7 +73,30 @@ export default function CharactersPage() {
     fetchGroups()
   }, [fetchGroups])
 
-  const { data, isLoading: loading, error: loadError, mutate: mutateCharacters } = useSWR<{ characters: Character[] }>('/api/v1/characters')
+  const queryClient = useQueryClient()
+  const { data, isLoading: loading, error: loadError } = useQuery({
+    queryKey: queryKeys.characters.list(),
+    queryFn: ({ signal }) => apiFetch<{ characters: Character[] }>('/api/v1/characters', { signal }),
+  })
+  // Shim preserving SWR's `mutate` signature so the handlers below stay
+  // unchanged: with an updater it writes optimistically (revalidating unless
+  // `{ revalidate: false }`), with no args it revalidates.
+  const mutateCharacters = useCallback(
+    async (
+      updater?: (prev: { characters: Character[] } | undefined) => { characters: Character[] } | undefined,
+      opts?: { revalidate?: boolean }
+    ): Promise<void> => {
+      if (updater) {
+        queryClient.setQueryData<{ characters: Character[] }>(queryKeys.characters.list(), updater)
+        if (opts?.revalidate !== false) {
+          await queryClient.invalidateQueries({ queryKey: queryKeys.characters.list() })
+        }
+        return
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.characters.list() })
+    },
+    [queryClient]
+  )
   const characters = useMemo(() => data?.characters ?? [], [data])
   const error = loadError ? (loadError instanceof Error ? loadError.message : 'An error occurred') : null
 

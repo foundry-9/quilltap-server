@@ -66,12 +66,21 @@ export const queryKeys = {
   llmLogs: {
     all: ['llm-logs'] as const,
     byChat: (chatId: string) => ['llm-logs', 'chat', chatId] as const,
+    byCharacter: (characterId: string, limit: number) => ['llm-logs', 'character', characterId, limit] as const,
     recent: (limit: number) => ['llm-logs', 'recent', limit] as const,
   },
   system: {
     tasksQueue: ['system', 'tasks-queue'] as const,
     capabilitiesReports: ['system', 'capabilities-reports'] as const,
     autonomousRooms: ['system', 'autonomous-rooms'] as const,
+    dataDir: ['system', 'data-dir'] as const,
+    unlock: ['system', 'unlock'] as const,
+  },
+  tools: {
+    all: ['tools'] as const,
+  },
+  userProfile: {
+    detail: ['user', 'profile'] as const,
   },
   roleplayTemplates: {
     all: ['roleplay-templates'] as const,
@@ -113,5 +122,6 @@ export const queryKeys = {
     all: ['help-chat'] as const,
     entity: (apiUrl: string) => ['help-chat', 'entity', apiUrl] as const,
     eligibility: ['help-chat', 'eligibility'] as const,
+    pastChats: ['help-chat', 'past-chats'] as const,
   },
 } as const

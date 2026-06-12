@@ -13,7 +13,9 @@
  */
 
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { Avatar } from '@/components/ui/Avatar'
@@ -798,15 +800,21 @@ function ChatSection({
     }
   }, [sectionOpen, hasEverOpened])
 
-  const { data: templatesData } = useSWR<RoleplayTemplate[]>(
-    hasEverOpened ? '/api/v1/roleplay-templates' : null
-  )
-  const { data: imageProfilesData } = useSWR<{ profiles: ImageProfile[] }>(
-    hasEverOpened ? '/api/v1/image-profiles' : null
-  )
-  const { data: apiKeysData } = useSWR<{ apiKeys: ApiKey[] }>(
-    hasEverOpened ? '/api/v1/api-keys' : null
-  )
+  const { data: templatesData } = useQuery({
+    queryKey: queryKeys.roleplayTemplates.all,
+    queryFn: ({ signal }) => apiFetch<RoleplayTemplate[]>('/api/v1/roleplay-templates', { signal }),
+    enabled: hasEverOpened,
+  })
+  const { data: imageProfilesData } = useQuery({
+    queryKey: queryKeys.imageProfiles.all,
+    queryFn: ({ signal }) => apiFetch<{ profiles: ImageProfile[] }>('/api/v1/image-profiles', { signal }),
+    enabled: hasEverOpened,
+  })
+  const { data: apiKeysData } = useQuery({
+    queryKey: queryKeys.apiKeys.all,
+    queryFn: ({ signal }) => apiFetch<{ apiKeys: ApiKey[] }>('/api/v1/api-keys', { signal }),
+    enabled: hasEverOpened,
+  })
 
   const roleplayTemplates = templatesData ?? []
   const imageProfiles = imageProfilesData?.profiles ?? []

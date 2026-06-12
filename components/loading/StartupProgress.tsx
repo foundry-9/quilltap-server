@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { useSWRConfig } from 'swr';
+import { useQueryClient } from '@tanstack/react-query';
 
 type ProgressTier = { current: number; total: number; unit: string };
 
@@ -116,7 +116,7 @@ function formatRelativeAge(ts: number): string {
 }
 
 export function StartupProgress() {
-  const { mutate } = useSWRConfig();
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<StartupStatus | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const stoppedRef = useRef(false);
@@ -138,12 +138,12 @@ export function StartupProgress() {
           setStatus(data);
           setFetchError(null);
 
-          // Once the server reports ready, revalidate all SWR caches one time
+          // Once the server reports ready, revalidate all query caches one time
           // so any data fetched during the startup window (and likely empty
           // or errored) gets refreshed.
           if ((data.phase === 'complete' || data.isReady) && !revalidatedRef.current) {
             revalidatedRef.current = true;
-            mutate(() => true, undefined, { revalidate: true });
+            queryClient.invalidateQueries();
           }
         }
       } catch (err) {
@@ -158,7 +158,7 @@ export function StartupProgress() {
     return () => {
       stoppedRef.current = true;
     };
-  }, [mutate]);
+  }, [queryClient]);
 
   const phase = status?.phase ?? 'pending';
   const isErrored = phase === 'failed';

@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 import { CharacterPickerPanel, NewChatForm, useNewChat } from '@/components/new-chat'
 
@@ -20,7 +22,10 @@ export default function NewChatPage() {
   const characterIdParam = searchParams.get('characterId') || undefined
   const autonomousParam = searchParams.get('autonomous') === '1'
 
-  const { data: chatSettings } = useSWR<ChatSettingsResponse>('/api/v1/settings/chat')
+  const { data: chatSettings } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) => apiFetch<ChatSettingsResponse>('/api/v1/settings/chat', { signal }),
+  })
   const autonomousHint = chatSettings?.autonomousRoomSettings
     ? {
         visibilityDefault: chatSettings.autonomousRoomSettings.visibilityDefault,

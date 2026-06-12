@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 
 /**
@@ -33,7 +35,10 @@ const platformNames: Record<string, string> = {
  * in the system file browser (on non-Docker environments).
  */
 export function DataDirectorySection() {
-  const { data, isLoading, error: loadError } = useSWR<DataDirInfo>('/api/v1/system/data-dir')
+  const { data, isLoading, error: loadError } = useQuery({
+    queryKey: queryKeys.system.dataDir,
+    queryFn: ({ signal }) => apiFetch<DataDirInfo>('/api/v1/system/data-dir', { signal }),
+  })
   const dirInfo = data || null
   const [opening, setOpening] = useState(false)
   const [copied, setCopied] = useState(false)

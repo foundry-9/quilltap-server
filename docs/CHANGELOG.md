@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### TanStack Query migration — Phase 5 (page-level reads + remaining consumers)
+
+Migrated the last `useSWR` reads — the big page components and remaining dialogs/cards. After this, no `useSWR`/`useSWRConfig` remains outside the surviving `<SWRConfig>` provider (removed in Phase 7).
+
+- Pages: `app/aurora/page.tsx` (characters read + a `mutateCharacters` shim preserving the optimistic `mutate(updater, { revalidate: false })` toggles for favorite/controlledBy/Carina), `app/salon/page.tsx` (5 reads + `mutateChats`→`refetch`), `app/profile/page.tsx`, `app/salon/new/page.tsx`, `app/generate-image/page.tsx`.
+- Dialogs/cards: `AddCharacterDialog`, `ChatSidebar` (3 conditional reads), `HelpChatDialog`, `LLMLogsSection`, `ProjectToolSettingsModal`, `DataDirectorySection`, `AutoLockSettingsCard`, and `CoreWhisperSection` (optimistic `setQueryData`).
+- `StartupProgress`: the global `useSWRConfig().mutate(() => true, …)` cache-bust on server-ready became `queryClient.invalidateQueries()`.
+- Grew `lib/query/keys.ts`: `userProfile`, `system.dataDir/unlock`, `llmLogs.byCharacter`, `tools`, `helpChat.pastChats`.
+- Front-end only: no API/route, schema, DDL, migration, export, or backup change.
+
 #### TanStack Query migration — Phase 4 (wrapper hooks + inline read/mutate pairs)
 
 Migrated the self-contained wrapper hooks and the inline read+mutate component pairs. Behavior preserved: SWR `mutate()` revalidations became `refetch()`/`invalidateQueries()`, optimistic `mutate(x, false)` became `setQueryData`, and the autonomous-room optimistic `mutate(post, { optimisticData, rollbackOnError })` pattern became `useMutation` with `onMutate`/`onError`/`onSettled`. Polling `refreshInterval` became `refetchInterval`.
