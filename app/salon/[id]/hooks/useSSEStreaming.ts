@@ -128,6 +128,19 @@ interface UseSSEStreamingParams {
   onToolResult?: (name: string, success: boolean, result: unknown) => void
 }
 
+/**
+ * The Salon's live message transport, built on Fetch Streams (SSE-style events).
+ *
+ * TanStack Query boundary: this is deliberately NOT a TanStack Query concern.
+ * Query is a server-state *cache*, not a streaming transport — stream chunks are
+ * never written into the query cache, and the live message buffer is owned here
+ * via `setMessages`/`setEphemeralMessages`. The query reads that surround
+ * streaming (chat list, chat settings, LLM logs) live on TanStack Query and are
+ * refreshed through their own hooks (e.g. `useLLMLogs.refreshLogs()` fires when a
+ * turn completes); the authoritative post-turn message reconciliation goes
+ * through the page's own `fetchChat()`. Keep that separation: do not move stream
+ * handling onto `useQuery`, and do not push chunks into `queryClient`.
+ */
 export function useSSEStreaming({
   chatId,
   chat,

@@ -4,6 +4,12 @@
 
 ### 4.7-dev
 
+#### TanStack Query migration — Phase 6 (SSE boundary)
+
+Documented the boundary between the Salon's live message transport and TanStack Query. The Fetch-Streams/SSE path (`useSSEStreaming`) stays as-is: stream chunks are never written into the query cache; the query reads *around* streaming (chat list, settings, LLM logs) are on TanStack Query and refresh through their own hooks. No behavior change.
+
+- `app/salon/[id]/hooks/useSSEStreaming.ts`: added an explicit boundary comment. Verified the streaming hooks (`useSSEStreaming`, `useMessageStreaming`) are free of `useSWR`/`useQuery`.
+
 #### TanStack Query migration — Phase 5 (page-level reads + remaining consumers)
 
 Migrated the last `useSWR` reads — the big page components and remaining dialogs/cards. After this, no `useSWR`/`useSWRConfig` remains outside the surviving `<SWRConfig>` provider (removed in Phase 7).
