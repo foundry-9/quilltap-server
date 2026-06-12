@@ -1,14 +1,16 @@
 # Feature: Carina (Inline LLM Queries)
 
-**Status:** Proposal / Not Implemented
+**Status:** Implemented (shipped)
 **Owner:** Charlie
-**Scope:** Allow users and LLM characters to direct quick questions to a designated "answerer" character, receiving a response built from that character's identity and tools but without chat history or memory formation.
+**Scope:** Allow users and LLM characters to direct quick questions to a designated "answerer" character, receiving a response built from that character's identity and tools without chat history. (The original proposal also excluded memory recall and formation; both were **reversed** before ship — see [Memory: revised behavior](#memory-revised-behavior).)
+
+> **Reading this doc:** sections below mixing "proposal" language with shipped reality are flagged. Where an "Original spec — superseded" block appears, the block **above** it is current and the superseded block is kept only for history. The authoritative behavior for memory is [Memory: revised behavior](#memory-revised-behavior).
 
 ## Motivation
 
 In a multi-character Salon chat, users and characters sometimes need a quick factual lookup, a calculation, or a web search without derailing the conversation. Today the only option is to address a character who then responds in full conversational mode — consuming context, forming memories, and appearing in the chat flow as a full participant turn.
 
-Carina provides a lightweight "ask the reference desk" mechanism: designate one or more characters as answerers, then invoke them inline with a compact `@Name:` syntax (or via an `ask_carina` tool call from another LLM). The answerer builds a fresh, minimal LLM call — character identity without chat history — answers the question, and the result is either whispered or posted publicly. No memories are formed. The interaction is fire-and-forget.
+Carina provides a lightweight "ask the reference desk" mechanism: designate one or more characters as answerers, then invoke them inline with a compact `@Name:` syntax (or via an `ask_carina` tool call from another LLM). The answerer builds a fresh, minimal LLM call — character identity without chat history — answers the question, and the result is either whispered or posted publicly. (As shipped, the answerer **does** receive memory recall and **does** form SELF-only memories through a dedicated path — see [Memory: revised behavior](#memory-revised-behavior). The "fire-and-forget, no memory" language in the original proposal was superseded.)
 
 ## Feature Name
 

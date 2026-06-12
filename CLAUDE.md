@@ -1,291 +1,187 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository. This file is loaded on every turn, so it stays short and points at deeper docs. **The rules in "Standing rules" below are not optional — follow them on every task.**
 
 ## Project Overview
 
-Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an AI assistant that actually knows what they're working on. Connect to any LLM provider, organize your work into projects with persistent files and context, create characters with real personalities, and build a private AI environment that learns and remembers.
+Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an AI assistant that actually knows what they're working on. Connect to any LLM provider, organize work into projects with persistent files and context, create characters with real personalities, and build a private AI environment that learns and remembers.
+
+- **Already implemented:** see the [README](README.md).
+- **Roadmap:** `docs/developer/features/`; completed work in `docs/developer/features/complete/`.
+
+## Standing rules (apply on every task)
+
+### Spelling — non-negotiable
+
+The project is **"Quilltap"** (quill + tap), **never** "Quilttap" (quilt + tap). A lint rule enforces this. Never write "quilttap" anywhere.
+
+### Writing voice
+
+- **User-facing** writing (UI, help docs, prompts, migration loading-screen labels) is in the style of *steampunk + Roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket*.
+- **`docs/CHANGELOG.md` is the exception:** terse, direct, plain American English. No steampunk voice.
+
+### Before committing
+
+- Record changes in `docs/CHANGELOG.md` (reverse chronological, plain voice — see above).
+- **All user-visible changes MUST be documented in `help/*.md`.** Help files need a `url` frontmatter field (with `?tab=`/`&section=` for settings deep-links) and an "In-Chat Navigation" section whose `help_navigate(url: "...")` call matches that `url`.
+- Keep the docs listed in [update-documentation](/.claude/commands/update-documentation.md) current; update that file if you add docs.
+- Linting, testing, type-checking, and version bumps are handled by the [/commit](/.claude/commands/commit.md) command. The `.githooks/pre-commit` hook kills the dev server, cleans `.next`, stops watchman, and stages dependency artifacts.
+- Check TypeScript with **`npx tsc`**, not `npm run build`.
+
+### Hard stops (ask first / never work around)
+
+- **`packages/` changes:** bump the version, then **stop and ask the human to `npm publish`** before installing. Never hand-copy package contents into place. If publish fails, fix the npm problem — don't work around it. **Exception — `packages/quilltap` (the CLI):** still bump its version, but don't ask for a manual `npm publish`; it publishes automatically at release.
+- **Plugin changes:** bump the patch version in `package.json` (and `manifest.json` if needed), then re-run `npm run build:plugins` before staging.
+- **Release (`tag-for-release`):** only after the human confirms they've walked the [release checklist](./docs/developer/DEVELOPMENT.md#checklist-before-release). Don't initiate it yourself.
+- **No stubs or `TODO` code** unless agreed in advance.
+- **Database writes via the CLI** use `--write` (lock-gated). Never use `--lock-override`.
+
+### Code-path chokepoints (don't bypass)
+
+- **Memory deletion** goes through `deleteMemoryWithUnlink(id)` / `deleteMemoriesWithUnlinkBatch(ids)` in `lib/memory/memory-gate.ts` — they scrub deleted IDs from neighbours' `relatedMemoryIds` first. Never call `repos.memories.delete*` directly. (Mirror of `createMemoryWithGate` on the write side.)
+- **Tool definitions in `lib/tools/`:** the Zod input schema is the single source of truth. Export `xxxToolInputSchema`, derive `parameters` via `zodToOpenAISchema(...)`, and make `validateXxxInput` a one-line `safeParse(...).success` delegate. **Never hand-write the `parameters` JSON Schema or duplicate validation** — they drift. Field descriptions go on `.describe()`; extra checks on `.refine()`. Register new tools in `lib/tools/__tests__/tool-definitions-snapshot.test.ts` and run `npx jest -u` on it.
+- **API routes:** new routes only under `/api/v1/` with the action-dispatch pattern (see below). Use middleware from `@/lib/api/middleware` and helpers from `@/lib/api/responses`.
+
+### Conventions
+
+- **Logging:** every new or touched backend path fires debug logs, with appropriate levels elsewhere, via the built-in logging system.
+- **Data/schema changes:** check whether they must be reflected in `.qtap`/SillyTavern exports, [`qtap-export.schema.json`](./public/schemas/qtap-export.schema.json), backups, and/or `migrations/`. Update [DDL.md](docs/developer/DDL.md) — it must stay current. Files kept only for migrations belong in `migrations/`.
+- **Linting:** don't swap HTML `<img>` for Next.js `<Image>` — `<img>` is deliberate where sources come from APIs Next.js can't pre-resolve.
+- **Next.js (16+) — don't reach for old-version patterns:** App Router only (`app/`, no `pages/` dir). There's no `middleware.ts`; cross-cutting request handling (security headers, CORS — *not* auth, which is single-user) lives in `proxy.ts` on the Edge runtime. Request APIs are async: `await cookies()` / `await headers()`, and route `params` / `searchParams` are Promises (`await params`). Don't write the old synchronous forms or look for conventions that moved.
+- **Migrations** have extra rules (loading-screen labels + progress reporting) — see [Writing migrations](#writing-migrations).
+- **Principles:** encapsulation, single source of truth (prefer inheritance over duplication), SRP, DRY, KISS, YAGNI.
+
+### Working environment
+
+- Dev runs via `npm run dev` (nearly always running, holds the instance lock) at `http://localhost:3000/`. Track it by tailing `logs/combined.log` (UTC timestamps).
+- macOS dev: account for BSD tool variants; GNU coreutils and `gnu-sed` are installed under `g`-prefixed names (`gsed`, etc.).
+- **Planning large changes:** plan with your most capable model and aggressively delegate well-specified subtasks to cheaper agent models (e.g. plan in Opus, delegate to Haiku). Don't use `git stash` or worktrees with agents — it tends to make a mess.
 
 ## Technology Stack
 
-- **Frontend Framework**: React via Next.js
-- **Build Tools**: Next.js
-- **Language**: TypeScript
-- **Package Manager**: npm
-- **Testing**: Jest (with native coverage) and Playwright
-- **Data Storage**: SQLite with SQLCipher encryption at rest. Uses `better-sqlite3-multiple-ciphers` driver (aliased as `better-sqlite3` in root `package.json` — npm installs it under the alias name, so `node_modules/better-sqlite3-multiple-ciphers/` does **not** exist at the repo root, only `node_modules/better-sqlite3/`). Runtime and **tests** should `require('better-sqlite3')`, not the native package name. The native name only resolves where a sub-package (e.g. `packages/quilltap/`) declares it as a direct dep and has its own `node_modules/` — that's true on developer machines but not in CI, where only the root `npm ci` runs. If a test needs to handle both, fall back through `better-sqlite3-multiple-ciphers` → `better-sqlite3`. Data models are defined as TypeScript interfaces with Zod schemas.
-- **File Storage**: local filesystem only
-- **AI and LLM Services**: OpenAI, Anthropic, Grok (xAI), Google, Ollama, OpenRouter, and any OpenAI-compatible endpoint
-- **Design Documentation**: Storybook
-- **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern
-- **User Documentation**: Found in `/help/` and maintained and searchable using MessagePack
-- **Electron**: Desktop shell lives in a separate repository ([quilltap-shell](https://github.com/foundry-9/quilltap-shell)); this repo produces the standalone tarball it consumes
-- **Native Modules**: `better-sqlite3` (compiled via node-gyp) and `sharp` (pre-built platform binaries via `@img/sharp-{platform}-{arch}`). Both require special handling in standalone and Docker builds — sharp's platform-specific binaries must be installed for the target platform. When adding new native modules, update `next.config.js` (`serverExternalPackages` + `outputFileTracingIncludes`).
-- **Background Jobs**: All job handlers run in a forked child process (`child_process.fork`, lazy-spawned). Parent (Next.js HTTP) is the only DB writer; the child opens a readonly SQLCipher connection, runs handlers, batches repository write payloads in an `AsyncLocalStorage` buffer, and ships them back over IPC for the parent to apply. The parent partitions writes by target database (main / mount-index / llm-logs) and commits each partition in its own transaction on its own connection (`lib/background-jobs/host/write-partition.ts`), so a doc-store failure cannot roll back unrelated chat/run-state writes. `AUTONOMOUS_ROOM_TURN` jobs are main-primary: the main partition commits first and authoritatively, then secondary partitions apply best-effort. A concurrent `docMountFolders.create` that hits a unique-index conflict at apply time resolves to the existing folder and remaps the discarded id across the batch. Two `AsyncLocalStorage` contexts scope per-job state: `autonomous-run-context.ts` tags LLM calls with the current autonomous run id (so per-run token budgets sum only the run's own spend), and `job-folder-cache.ts` memoizes folder-ensure operations within a single job to prevent duplicate buffered creates. See `lib/background-jobs/host/`, `lib/background-jobs/child/`, and `docs/developer/BACKGROUND_JOBS_CHILD.md`. Handlers should treat `getRepositories()` as the proxy: read methods pass through, write methods buffer; never assume read-your-writes within a single job.
+- **Framework / language:** React via Next.js, TypeScript, npm.
+- **Testing:** Jest (native coverage) and Playwright.
+- **Data:** SQLite + SQLCipher encryption at rest via `better-sqlite3-multiple-ciphers`, **aliased as `better-sqlite3`** in the root `package.json`. Runtime and tests `require('better-sqlite3')`, not the native name (which only resolves where a sub-package declares it directly). Tests needing both should fall back `better-sqlite3-multiple-ciphers` → `better-sqlite3`. Models are TS interfaces with Zod schemas.
+- **File storage:** local filesystem only.
+- **LLM providers:** OpenAI, Anthropic, Grok (xAI), Google, Ollama, OpenRouter, any OpenAI-compatible endpoint.
+- **Design docs:** Storybook. **User docs:** `/help/`, searchable via MessagePack.
+- **Electron shell:** separate repo ([quilltap-shell](https://github.com/foundry-9/quilltap-shell)); this repo produces the standalone tarball it consumes.
+- **Native modules:** `better-sqlite3` (node-gyp) and `sharp` (platform binaries). Both need special handling in standalone/Docker builds. New native modules → update `next.config.js` (`serverExternalPackages` + `outputFileTracingIncludes`).
+- **Background jobs:** forked child process; parent is the only DB writer. See [Background jobs](#background-jobs-summary).
 
 ## API Architecture
 
-All new API routes should be created under `/api/v1/` following the consolidated REST structure:
+All new routes live under `/api/v1/`:
 
-### Route Structure
+- **Collection:** `/api/v1/[resource]` · **Item:** `/api/v1/[resource]/[id]` · **System:** `/api/v1/system/[feature]`
 
-- **Collection routes**: `/api/v1/[resource]` (e.g., `/api/v1/characters`)
-- **Item routes**: `/api/v1/[resource]/[id]` (e.g., `/api/v1/characters/[id]`)
-- **System routes**: `/api/v1/system/[feature]` (e.g., `/api/v1/system/jobs`)
-
-### Action Dispatch Pattern
-
-Instead of creating separate routes for each action, use the `?action=` query parameter:
+Use the `?action=` query parameter instead of per-action routes:
 
 ```ts
-// Instead of separate routes:
-// /api/characters/[id]/favorite
-// /api/characters/[id]/export
-
-// Use action dispatch:
-// POST /api/v1/characters/[id]?action=favorite
-// GET /api/v1/characters/[id]?action=export
-
 import { createContextHandler, withActionDispatch } from '@/lib/api/middleware';
 
+// POST /api/v1/characters/[id]?action=favorite
 export const POST = createContextHandler<{ id: string }>(
-  withActionDispatch({
-    favorite: handleFavorite,
-    avatar: handleAvatar,
-  }, handleDefaultPost) // fallback for no action param
+  withActionDispatch({ favorite: handleFavorite, avatar: handleAvatar }, handleDefaultPost)
 );
 ```
 
-### Middleware & Response Utilities
+- **Context:** `createContextHandler` / `withContext` (`@/lib/api/middleware`)
+- **Action dispatch:** `withActionDispatch` / `withCollectionActionDispatch` (`@/lib/api/middleware/actions`)
+- **Responses:** `successResponse`, `errorResponse`, `notFound`, `badRequest`, `validationError`, `created`, … (`@/lib/api/responses`)
 
-- **Context**: Use `createContextHandler` or `withContext` from `@/lib/api/middleware`
-- **Action dispatch**: Use `withActionDispatch` or `withCollectionActionDispatch` from `@/lib/api/middleware/actions`
-- **Responses**: Use helpers from `@/lib/api/responses`: `successResponse`, `errorResponse`, `notFound`, `badRequest`, `validationError`, `created`, etc.
+Legacy non-v1 routes were removed in v2.8. Exceptions that remain: `/api/health`, `/api/plugin-routes/[...path]`, `/api/themes/*`. Note content/character/chat **API** paths stay at `/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects` even though their UI routes were renamed (below). Full reference: [API.md](docs/developer/API.md).
 
-### Deprecation
+## Client data fetching (TanStack Query)
 
-Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes are supported. A few non-v1 routes remain for specific purposes: `/api/health` (health check), `/api/plugin-routes/[...path]` (plugin dispatcher), and `/api/themes/*` (asset serving).
+Client server-state runs on **TanStack Query v5** (`@tanstack/react-query`); SWR is fully removed. `<QueryProvider>` (`lib/query/QueryProvider.tsx`) is the top-level provider. See the completed [migration spec](docs/developer/features/complete/tanstack-query-migration.md).
 
-## Client Data Fetching (TanStack Query)
+- **Query keys are the single source of truth.** Never pass a raw string/array key to `useQuery`/`useMutation`/`invalidateQueries` — always go through the factory in `lib/query/keys.ts` (e.g. `queryKeys.characters.detail(id)`). Prefix invalidation (`invalidateQueries({ queryKey: queryKeys.characters.all })`) depends on it. Add a block when you introduce a new entity.
+- **Fetcher:** `apiFetch<T>(url, init?)` from `lib/query/fetcher.ts` as the `queryFn`, forwarding the signal: `queryFn: ({ signal }) => apiFetch<T>(url, { signal })`. Throws `ApiFetchError` (`status` + parsed `info`) on non-2xx.
+- **Mutations** use `useMutation` with `onSuccess`/`onSettled` invalidation; optimistic updates via `onMutate` + `setQueryData` + rollback in `onError`.
+- **Tests** wrap with `renderWithQuery` / `createQueryWrapper` from `__tests__/helpers/renderWithQuery.tsx` (fresh client, retries off, `gcTime: 0`); `fetch` stays mocked via `jest-fetch-mock`.
+- The Salon's SSE streaming transport is **out of scope** — migrate the reads *around* streaming, never the stream itself.
 
-Client-side server-state fetching is migrating from SWR to **TanStack Query v5** (`@tanstack/react-query`) — see `docs/developer/features/tanstack-query-migration.md`. During the migration both coexist: `<QueryProvider>` (from `lib/query/QueryProvider.tsx`) wraps the surviving `<SWRConfig>` in `components/providers/session-provider.tsx`. New reads/writes should use TanStack Query, not SWR.
+## Glossary
 
-- **Query keys are the single source of truth.** Never pass a raw string/array key to `useQuery`/`useMutation`/`invalidateQueries`. Always go through the factory in `lib/query/keys.ts` (`queryKeys.characters.detail(id)`, etc.). This is what makes prefix-based invalidation (`invalidateQueries({ queryKey: queryKeys.characters.all })`) reliable instead of brittle URL string-matching. Add a block to the factory when you migrate a new entity.
-- **Fetcher:** use `apiFetch<T>(url, init?)` from `lib/query/fetcher.ts` as the `queryFn`, forwarding TanStack's `signal` (`queryFn: ({ signal }) => apiFetch<T>(url, { signal })`). It throws `ApiFetchError` (carries `status` + parsed `info`) on non-2xx, matching the old `swrFetcher`.
-- **Client factory:** `makeQueryClient()` in `lib/query/query-client.ts` (a per-mount factory, not a module singleton — keeps SSR/test isolation clean). Defaults preserve the old SWRConfig feel (`refetchOnWindowFocus: false`).
-- **Mutations** go through `useMutation` with `onSuccess`/`onSettled` invalidation; reproduce existing optimistic updates with `onMutate` + `setQueryData` + rollback in `onError`.
-- **Tests** wrap components with `renderWithQuery` from `__tests__/helpers/renderWithQuery.tsx` (fresh client, retries off, `gcTime: 0`); `fetch` is still mocked via `jest-fetch-mock`.
-- The Salon's SSE streaming transport is **out of scope** — TanStack Query is not a streaming transport. Migrate the reads *around* streaming, never the stream itself.
+### Feature names (UI route · settings)
 
-## Current State
+| Name | What it is |
+|---|---|
+| **The Salon** | chat interface — `/salon` |
+| **Aurora** | characters UI (`/aurora`) + roleplay templates (`/settings?tab=templates`) |
+| **Prospero** | agentic / tool-use systems — `/prospero`; `/settings?tab=system` |
+| **The Scriptorium** | external document stores / mountable knowledge — `/scriptorium` (API stays `/api/v1/mount-points`) |
+| **The Foundry** | architecture, plugins, packages — `/settings` (tabs from `lib/foundry/subsystem-defaults.ts`) |
+| **Calliope** | UX/UI + themes — `/settings?tab=appearance` |
+| **The Commonplace Book** | character memory (self-managed RAG) — `/settings?tab=memory` |
+| **The Lantern** | story-background / image subsystem — `/settings?tab=images` |
+| **The Concierge** | dangerous-content tracking/rerouting — `/settings?tab=chat` |
+| **Pascal the Croupier** | RNG / game-state — `/settings?tab=chat` |
+| **Saquel Ytzama** | encryption / secrets / API keys — `/settings?tab=system` |
+| **The Librarian** | synthetic author for Document-Mode events + character `doc_*` calls |
+| **The Host** | synthetic author for Salon participation + autonomous-room events |
+| **Carina** | inline LLM queries (`@Name:` / `@Name?` / `ask_carina`) — see [Carina](#carina-summary) |
 
-- **Details for things already implemented** are in [the README](README.md)
-- **Roadmap for future development** is in the files in the `docs/developer/features/` directory, with completed development in `docs/developer/features/complete/`
+Old UI routes (`/foundry/*`, `/chats`, `/characters`, `/projects`) redirect to their current equivalents.
 
-## Themes
+### Character fields (by vantage point)
 
-### Theme Distribution
+Four vantage-point fields plus a foundational one (`manifesto`). **Not interchangeable — never collapse them.** The character optimizer enforces these.
 
-- **Bundle format (.qtap-theme)** is the primary and recommended way to distribute themes — declarative zip archives containing JSON tokens, CSS, fonts, and images with no build tools required
-- **Plugin format (npm)** is deprecated — existing plugin themes still work but new themes should use bundles
-- All 6 bundled themes (Art Deco, Earl Grey, Great Estate, Madman's Box, Old School, Rains) ship as `.qtap-theme` bundle directories in `themes/bundled/` — the old `plugins/dist/qtap-plugin-theme-*` directories have been removed
-- Theme bundles are stored at `<dataDir>/themes/<themeId>/` with an index at `<dataDir>/themes/themes-index.json`
-- Theme registries allow browsing/installing themes from remote sources with Ed25519 signature verification
-- `create-quilltap-theme` v2.0.0+ defaults to bundle format; use `--plugin` for legacy npm plugin format
-
-### Theme Architecture
-
-- Theme registry is a singleton at `lib/themes/theme-registry.ts` with three source types: `'default'`, `'plugin'`, `'bundle'`
-- Bundle loader at `lib/themes/bundle-loader.ts` handles validation, install, uninstall, and loading
-- Registry client at `lib/themes/registry-client.ts` manages remote sources with caching and signature verification
-- Ed25519 crypto at `lib/themes/crypto.ts` for signing/verifying registries and bundles
-- Bundle manifest schema: `QtapThemeManifestSchema` in `lib/themes/types.ts`; JSON Schema at `public/schemas/qtap-theme.schema.json`
-- Asset/font serving routes at `app/api/themes/assets/` and `app/api/themes/fonts/` handle both plugin and bundle paths (bundle paths use `bundle:<themeId>` prefix)
-- CLI: `npx quilltap themes` subcommands (list/install/uninstall/validate/export/create/search/update/registry)
-
-### qt-* CSS tokens and semantic classes
-
-- Themes and styling should depend primarily on the `qt-*` semantic utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes. **IMPORTANT:** If you add new Tailwind classes, then almost certainly you should be adding them to the `qt-*` utility classes instead, and then apply those classes to the components you want to change.
-- qt-* significant changes need to be appropriately reflected in the stylebook, the [theme-storybook](/packages/theme-storybook) package, and maybe in the [create-quilltap-theme](/packages/create-quilltap-theme) package, as well as updating the bundled themes as necessary.
-  - **packages**: find in [packages/](/packages/)
-  - **bundled themes**: shipped in [themes/bundled/](/themes/bundled/)
-
-## Other Quilltap conventions
-
-- "instances" are the self-contained base-level directories to which you point Quilltap when you run it.
-  - Default instance for files depends on OS and category:
-    - OS
-      - Linux: ~/.quilltap/
-      - macOS: ~/Library/Application Support/Quilltap/
-      - Windows: %APPDATA%\Quilltap\
-      - Docker: /app/quilltap/
-      - Lima VM: /data/quilltap/ (VirtioFS mount of macOS path)
-      - WSL2: Accessed via /mnt/c/.../AppData/Roaming/Quilltap/ (Windows path passed as env var)
-    - Category
-      - `data/`
-      - `files/`
-      - `logs/`
-  - Other instances can exist
-    - specified by `QUILLTAP_DATA_DIR` environment variable (non-Docker)
-    - `QUILLTAP_HOST_DATA_DIR` environment variable passed to Docker so that it can display it in the UI
-    - CLI specification of instance directory
-      - `npx quilltap --data-dir /custom/path`
-      - `npx quilltap -d /custom/path`
-      - `docker run -v /custom/path:/app/quilltap foundry9/quilltap`
-      - The following can also use `QUILLTAP_DATA_DIR`:
-        - `./scripts/start-quilltap.sh -d /custom/path`
-        - `.\scripts\start-quilltap.ps1 -DataDir "D:\custom\path"`
-  - **IMPORTANT**: If I say I am in an instance in `~/iCloud/Quilltap/Friday`, for example, then this is the critical troubleshooting or development information I need for that instance:
-    - **Data**: `~/iCloud/Quilltap/Friday/data/`
-    - **Files**: `~/iCloud/Quilltap/Friday/files/`
-    - **Logs**: `~/iCloud/Quilltap/Friday/logs/`
-      - This includes `combined.log` and `error.log` which are automatically rolled every 2-3 MB
-      - This also includes `quilltap-stderr.log` and `quilltap-stdout.log` which are generated by server instances, and `startup.log` generated by the Electron app, and possibly `stdout.log` as well
-
-### Spelling **IMPORTANT**
-
-This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", as in "quilt" + "tap". There is a linting rule to keep you from using that word. Please, please, never call anything in this system "quilttap" because that is **WRONG.**
-
-### Character field semantics
-
-Quilltap distinguishes four character fields by *vantage point*, plus a fifth foundational field (`manifesto`) that is not a vantage point. They are not interchangeable; do not collapse them.
-
-- **manifesto** — the basic tenets, the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Not a vantage point — nobody "sees" the manifesto; it is the load-bearing truth the character is built on. Short, declarative, foundational. Synced as `manifesto.md` in the character vault (vault path lookups are case-insensitive, so `Manifesto.md` matches too).
-- **identity** — the most surface-level knowledge of the character, from outside. What strangers can know on sight or by reputation: name, station, occupation, public reputation. Shallow but useful for someone considering whether to approach. Never internal motivation or private mannerisms.
-- **description** — what someone talking to (or acquainted with) the character perceives. NOT physical appearance (that lives in `physicalDescriptions`). Behaviour, mannerisms, frequent verbal patterns. What an interlocutor notices, but not the character's internal monologue.
-- **personality** — what the character knows about themselves. The internal driver of speech and behaviour. Other characters don't see this unless the character shares it.
-- **title** — the user's or character's own private label/framing for them (e.g. "the protagonist", "the rival"). Not how others refer to them; not in scope for the optimizer to edit.
-
-The character optimizer enforces these vantage points when proposing edits. When writing about a character field anywhere (UI placeholder, help docs, prompts), align with these definitions.
-
-### Feature Names
-
-- **The Concierge** - the dangerous content tracking/rerouting/hiding system — merged into Chat tab at `/settings?tab=chat`
-- **The Commonplace Book** - the memory system that characters have, a self-managed RAG — settings at `/settings?tab=memory`
-- **The Lantern** - the story backgrounds subsystem, that can send context to image providers and put them up as backgrounds for chats or projects — settings at `/settings?tab=images`
-- **Prospero** - the agentic and tool-using systems, and the way LLMs work — UI route: `/prospero` (was `/projects`); settings tab `/settings?tab=system` (task queue, capabilities, LLM logs)
-- **Aurora** - the character model on the UI side (UI route: `/aurora` — was `/characters`) and the roleplay-template / prompt configuration on the settings side (`/settings?tab=templates`)
-- **Calliope** - the UX/UI and themes systems — settings at `/settings?tab=appearance`
-- **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/settings` (was `/foundry`, `/tools`); settings live on a single tabbed page (current tabs: providers, chat, system, templates, memory, images, appearance — see `lib/foundry/subsystem-defaults.ts` for the source of truth)
-- **The Salon** - the chat interface — UI route: `/salon` (was `/chats`)
-- **The Scriptorium** - external document stores / mountable knowledge sources — UI route: `/scriptorium`; API stays at `/api/v1/mount-points`
-- **Pascal the Croupier** - the RNG and game state tracking system — merged into Chat tab at `/settings?tab=chat`
-- **Saquel Ytzama, the Keeper of Secrets** - the encryption, API key management, and secrets system — merged into Data & System tab at `/settings?tab=system`
-- **The Librarian** - synthetic chat-message author for Document Mode events (open/save/rename/delete) and character-driven `doc_*` tool calls; speaks via `systemSender: 'librarian'`
-- **The Host** - synthetic chat-message author for Salon participation events (character add/remove/status change) and autonomous-room announcements (run start/end/pause, pacing milestones, grace turn); speaks via `systemSender: 'host'`
-- **Carina** — the inline LLM query system; lets users and characters ask quick questions of a designated answerer character via `@Name:` markup (public) or `@Name?` (whisper), or via the `ask_carina` tool — per-character flag `canBeCarina` on the character edit page in Aurora; no dedicated settings tab
-
-Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes (`/foundry/*`) redirect to the appropriate `/settings` tab. The old content UI routes (`/chats`, `/characters`, `/projects`) also redirect to their current equivalents (`/salon`, `/aurora`, `/prospero`).
+- **manifesto** — axiomatic core; the load-bearing truths every other field stays consistent with. Not a vantage point. Short, declarative. Synced as `manifesto.md` in the vault (case-insensitive lookup).
+- **identity** — surface knowledge from outside: name, station, occupation, public reputation. Never internal motivation.
+- **description** — what an interlocutor perceives: behaviour, mannerisms, verbal patterns. **NOT** physical appearance (that's `physicalDescriptions`) and not internal monologue.
+- **personality** — what the character knows about themselves; the internal driver. Unseen by others unless shared.
+- **title** — the user's/character's own private framing (e.g. "the rival"). Not how others refer to them; out of optimizer scope.
 
 ### Personified-feature avatars
 
-When a personified feature (the Lantern, the Concierge, Prospero, Aurora, Pascal, the Librarian, the Host, etc.) needs to "speak up" in a chat — usually via a synthetic message authored by the system in lieu of a participant — its avatar lives under `public/images/avatars/` as `<feature>-avatar.webp`. The chat UI references these as `/images/avatars/<feature>-avatar.webp` (see `getMessageAvatar` in `app/salon/[id]/page.tsx` for the Lantern case, keyed off `systemSender` on the message).
+When a personified feature "speaks" via a synthetic message, its avatar lives at `public/images/avatars/<feature>-avatar.webp` (lowercase, hyphenated; e.g. `lantern-avatar.webp`). Referenced as `/images/avatars/<feature>-avatar.webp`; resolved in `getMessageAvatar` (`app/salon/[id]/page.tsx`), keyed off `systemSender`.
 
-Rules for adding or updating these assets:
+- **Always WebP.** Convert with `cwebp -q 82 -m 6 -mt in.png -o out.webp`, then delete the PNG — every byte ships with the app.
+- **Adding a sender** means updating the `systemSender` Zod enum in `lib/schemas/chat.types.ts` **and** the matching `chat_messages` SQLite column, adding a `getMessageAvatar` branch, and adding the value to `public/schemas/qtap-export.schema.json`.
+- **The authoritative `systemSender` list is the enum in `lib/schemas/chat.types.ts`** — read it there rather than trusting a copy here. Per-sender responsibilities: `lantern` (image pipeline), `aurora` (avatar/wardrobe), `librarian` (Document-Mode + `doc_*`), `concierge` (dangerous-content), `host` (participation + autonomous-room), `prospero` (tool-use / connection-profile / Run-Tool bubbles; `private:true` runs hide via `targetParticipantIds`), `commonplaceBook` (memory-recall whispers, targeted), `ariel` (terminal PTY open/close), `carina` (renders with the **answerer's own** avatar — no `carina-avatar.webp`). A `pascal-avatar.webp` exists but Pascal authors no synthetic messages yet.
 
-- **Always WebP.** Convert source PNGs with `cwebp -q 82 -m 6 -mt <in>.png -o <out>.webp` (or better) and delete the PNG after verifying the WebP. Don't check multi-MB PNG originals into the repo — these are bundled with the app and every byte ships.
-- **Filename pattern:** `<feature>-avatar.webp`, all lowercase, hyphen-separated. The feature name should match how the feature is referred to elsewhere (e.g. `lantern-avatar.webp`, not `the-lantern-avatar.webp`).
-- **Pair new avatars with new `systemSender` enum values.** `MessageEventSchema` in `lib/schemas/chat.types.ts` and the matching SQLite column on `chat_messages` both list the allowed senders. Adding a new sender means updating the Zod enum in both places, adding a branch to `getMessageAvatar`, and including the new value in `public/schemas/qtap-export.schema.json`. Current `systemSender` enum (`lib/schemas/chat.types.ts`): `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`, `commonplaceBook`, `ariel`. (A `pascal-avatar.webp` exists on disk but Pascal does not currently author synthetic messages — the avatar is reserved for future use.) Sender responsibilities:
-  - `lantern` — image-pipeline announcements (background generation, etc.)
-  - `aurora` — character avatar refresh / wardrobe announcements
-  - `librarian` — Document Mode open/save/rename/delete announcements, plus character `doc_delete_file` / `doc_create_folder` / `doc_delete_folder` / `doc_copy_file` tool calls
-  - `concierge` — dangerous-content classification announcements
-  - `host` — Salon participation announcements (character add/remove/status change) and autonomous-room announcements (run start/end/pause, pacing milestones halfway/near-end, grace turn)
-  - `prospero` — agentic / tool-use announcements; fires when a participant's connection profile is changed via the Participants sidebar, and authors the standalone bubble for any user-initiated tool run (the Run Tool modal). User-initiated runs may set `private: true`, which writes the operator's userId into `targetParticipantIds` so the Salon UI hides them by default and every character's LLM context excludes them.
-  - `commonplaceBook` — memory recall whispers (memory recap, relevant memories, inter-character memories), targeted at the responding character via `targetParticipantIds`
-  - `ariel` — terminal session announcements (PTY open/close in the Salon)
-  - `carina` — Carina query responses (quick-reference answers from a designated answerer character); unlike every other systemSender, a `carina` message renders with the **answerer character's own avatar** (resolved via `carinaMeta.answererId`), not a dedicated staff avatar — there is no `carina-avatar.webp`. The tag keeps the answer out of the *normal* per-turn memory extractor (`buildTurnTranscript` skips every systemSender message) and drives the compact reference-card UI. Carina answerers **do** form memories and **do** receive memory recall — but via dedicated paths, not the normal turn: recall is injected by `runCarinaQuery` (`searchMemoriesSemantic` → `buildCommonplaceLLMContext`) into the isolated call; formation runs through the `CARINA_MEMORY_EXTRACTION` job (`lib/background-jobs/handlers/carina-memory-extraction.ts`), which builds a one-slice synthetic transcript (question = opener, answer = sole slice, no user character → OTHER pass self-skips) and yields SELF-only memories for the answerer. Behavior is global for every `canBeCarina` answerer; public and whispered exchanges both form memories. The answer is **surfaced live**: `runCarinaQuery` takes an optional `onPosted(message)` callback, and the three in-stream call sites (user `@Name:` markup → orchestrator; character `@Name:` markup → finalizer; `ask_carina` tool → `ToolExecutionContext.emitCarinaAnswer`, set by the orchestrator) emit a `carinaAnswer` SSE event (`encodeCarinaAnswerEvent`) the instant the answer persists, so the Salon renders the card immediately instead of waiting for the post-turn `fetchChat()` — the client (`useSSEStreaming` → `onCarinaAnswer`) inserts it deduped-by-id and the refresh reconciles to the authoritative copy. The forked-child/autonomous path leaves `onPosted` undefined (no client stream); token-by-token streaming of the answer text remains deferred. Prospero authors any error messages that arise from a failed Carina query (with `systemKind: 'carina-error'`), not Carina herself.
+## Instances and the CLI
 
-## Claude-specific instructions
+An **instance** is a self-contained base directory you point Quilltap at, holding `data/`, `files/`, and `logs/` subdirectories. OS defaults: macOS `~/Library/Application Support/Quilltap/`, Linux `~/.quilltap/`, Windows `%APPDATA%\Quilltap\`, Docker `/app/quilltap/`. Override with `QUILLTAP_DATA_DIR`, `--data-dir`/`-d`, `--instance <name>`, or a Docker volume mount.
 
-- If you have access to Opus and agents, then plan work in Opus for a change of any significant size and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work. Don't use git stash or worktrees with agents; you have a tendency to make a mess when you do that.
-- For every new feature and all existing functionality that is updated or touched in the backend, make sure that there are debug logs being fired for everything, and appropriate levels of logging for everything else, using the built-in logging system in this app
-- I am developing this in macOS, so take BSD versions of tools into account, and the fact that I have installed homebrew's coreutils and gnu-sed so that you can use GNU versions of things with "g"-prefixed utilities if you need them.
-- I am using "npm run dev" to work on this while we're working, so the base URL is probably `http://localhost:3000/` if you want to try something.
-- You should track what's going on with the running "npm run dev" process, which is nearly always running while we're working on this, by tailing or searching the `logs/combined.log` file. You can figure out what time it is (I think it's using universal time, not local time), and then look for things that we just tried by working through that log.
-- Databases are encrypted with SQLCipher. The standard `sqlite3` CLI cannot open them. Use the Quilltap CLI instead. **Prefer the high-level subcommands** over raw SQL — they auto-pick the right database, resolve names to UUIDs, and avoid the schema trial-and-error loop:
-  - Schema lookup (instead of `PRAGMA table_info`): `npx quilltap db schema <table>` — prints columns, FKs, indexes, and a link back to [DDL.md](docs/developer/DDL.md). `npx quilltap db schema --grep <text>` searches tables/columns by substring; `npx quilltap db schema` (no args) gives a grouped overview.
-  - Find by name: `npx quilltap db find character <name>` (also `find chat`, `find project`). Accepts fuzzy substrings and aliases; returns the UUID.
-  - Drill-down (no need to write the JOINs by hand):
-    - `npx quilltap db chats --character <name|id>` — chats containing a character
-    - `npx quilltap db chats --project <name|id>` — chats in a project
-    - `npx quilltap db messages --chat <name|id> --last N [--full]`
-    - `npx quilltap db logs --chat <name|id>` / `--message <id>` / `--character <name|id>` / `--tail N`
-    - `npx quilltap db memories --character <name|id> [--about <name|id>] [--source AUTO|MANUAL]`
-    - `npx quilltap db characters status [--id <name|id>] [--diverged] [--blocked]` — per-character vault readiness (vault present, files N/8, prompt/scenario/wardrobe counts, DB-vs-vault divergence)
-  - Single records: `npx quilltap db message <id>` and `npx quilltap db log <id>` print full content/request/response.
-  - Maintenance + health:
-    - `npx quilltap db optimize [target]` — VACUUM + ANALYZE + PRAGMA optimize. Refuses while the server holds the lock.
-    - `npx quilltap db backup [target] [--out <dir>]` — online encrypted snapshot. Safe alongside a running instance; the destination inherits the source's key. Default destination is `<dataDir>/backups/<timestamp>/`.
-    - `npx quilltap db integrity [target]` — `cipher_integrity_check` + `integrity_check`. Read-only. Exit 0/1/2.
-  - Document-store CLI (`npx quilltap docs`): read-only verbs include `list`, `show`, `files`, `ls`/`dir`, `tree` (ASCII folder hierarchy), `read`, `export`, `find` (substring on filename), `grep` (substring on extracted text), `status` (per-mount extraction + embedding rollup). Server-required verbs include `scan`, `reindex` (re-extract + re-chunk), `embed` (enqueue embedding jobs — `--wait` polls to completion), and the write verbs (`write`/`delete`/`mkdir`/`move`/`copy`). `reindex` and `embed` are explicit triggers for the two background pipelines; they refuse to run when the server is unreachable.
-  - Memories CLI (`npx quilltap memories`): read-only namespace with verbs `ls`, `find` (substring on summary/content), `grep` (pattern search inside content with snippets), `show <id|prefix>` (full record + related-memory neighbors), `tree <id|prefix>` (ASCII walk of the bidirectional related-memory graph with cycle handling), `status` (per-holder rollup including AUTO/MANUAL split, about-distribution, embedding presence, graph stats, dangling-edge count), `validate` (read-only health check; exit 1 on any dangling edge — `--list` prints offending source IDs and dangling targets). Shared filter flags: `--character` (default `all`), `--about` (with `self`/`none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`/`--until`, `--min-importance`/`--min-reinforced`, `--has-embedding`/`--no-embedding`. Sort flags on `ls`/`find`/`grep`: `--sort reinforced|importance|created|accessed|reinforcement-count|links`, `-r` to reverse. **Default sort is `reinforcedImportance DESC`** (what the recall path uses), not `createdAt DESC` like the legacy `db memories` verb. The legacy verb remains undisturbed.
-  - Logs CLI (`npx quilltap logs`): tail or print an instance's log files without remembering where they live. Flags: `--stream combined|error|stdout|stderr|startup` (comma-separated for multi-stream output with `[stream]` prefixes), `--tail N` (default 100; `0` = full file), `--follow`/`-f` (survives `combined.0.log`-style rotation), `--grep <pattern>` (JS regex). Resolves the logs directory via the same `--instance` / `--data-dir` plumbing the rest of the CLI uses. Use this rather than `tail -f` on `<instance>/logs/combined.log` — it follows across rotations and prefixes multi-stream output.
-  - Migrations CLI (`npx quilltap migrations`): read-only verbs `status` (in-source count vs recorded-applied count vs not-yet-recorded, with retired-from-active counter), `pending` (just the not-yet-recorded list), `run --dry-run` (lists pending; refuses without `--dry-run` because the actual runner stays at startup where the loading screen lives). `--json` on all three. Note: "not yet recorded" includes migrations whose `shouldRun()` returns `false` on this instance — the CLI does not invoke the predicate, so it cannot distinguish "would skip" from "would run."
-  - Shell completion: `npx quilltap completion bash|zsh|fish` emits a completion script. Dynamic completions for `--instance` shell out to `quilltap instances list --names-only`; mount/character completions similarly use hidden `--names-only` flags. See `packages/quilltap/README.md` for per-shell install instructions.
-  - Default instance: `npx quilltap instances default <name>` marks a registered instance as the fall-through target so flag-free `quilltap` invocations use it. `instances default --clear` reverts to the OS platform default. `instances rename <old> <new>` preserves the stored passphrase and updates the `*` marker. Resolution precedence: `--data-dir` > `--instance` > registered default > `QUILLTAP_DATA_DIR` env > OS platform default. The default-instance hint only fires when truly falling back to the OS default (not when the registered default is honored).
-  - All subcommands accept `--json` for piping and `--limit N` (default 50). Names are case-insensitive; ambiguous matches print all candidates and exit non-zero.
-  - **Read-only by default; `--write` makes changes (lock-gated).** The `db` command opens the database **read-only** unless you pass `--write`. So if you need to fix data with an `UPDATE`/`INSERT`/`DELETE`, the move is **`npx quilltap db --write "UPDATE ..."`** — *not* "the CLI can't write." A bare write fails with a hint pointing you at `--write`. `--write` opens the database read-write **only if the instance lock is free**: it claims `<dataDir>/quilltap.lock` (the same lockfile the server uses) for the duration and releases it on exit. It **refuses with no override** if a running server or another instance holds the lock — stop the server first (`npm run dev` holds the lock while it runs). `--repl` is likewise read-only unless combined with `--write` (`npx quilltap db --repl --write`). Never reach for `--lock-override` to work around this; it defeats the protection.
-  - Low-level (still supported):
-    - List tables: `npx quilltap db --tables`
-    - Raw SQL (read-only): `npx quilltap db "SELECT COUNT(*) FROM characters;"`
-    - Write a change (lock-gated): `npx quilltap db --write "UPDATE characters SET title = 'rival' WHERE id = '...';"`
-    - Interactive REPL: `npx quilltap db --repl` (read-only; add `--write` for read-write) (plus `.cols <table>` and `.find <text>` shortcuts)
-    - LLM logs DB: `npx quilltap db --llm-logs --tables`
-    - Mount-index DB: `npx quilltap db --mount-points --tables`
-  - Custom data dir: `npx quilltap db --data-dir ~/iCloud/Quilltap/Friday <subcommand-or-sql>` — pass the **instance root**, not the `data/` subdirectory. The CLI appends `data/quilltap.db` itself, so `--data-dir ~/iCloud/Quilltap/Friday/data` will fail looking for `data/data/quilltap.db`.
-  - Named instances: register an instance once with `npx quilltap instances add <name> <path>` (and optionally a passphrase, prompted hidden and verified against the `.dbkey` before saving) and then every subcommand accepts `--instance <name>` in place of `--data-dir`. The registry lives at `~/Library/Application Support/Quilltap/instances.json` (mode 0600 enforced). See `npx quilltap instances --help`.
-  - SQLite columns are **camelCase**, mirroring the Zod/TypeScript types (e.g. `createdAt`, `updatedAt`, `chatType`, `messageCount`, `projectId`) — not `snake_case`. When in doubt, run `npx quilltap db schema <table>` (the modern equivalent of `PRAGMA table_info(<table>);`) or check [DDL.md](docs/developer/DDL.md).
-  - All information about the databases, including schema and how to query them, can be found in [DDL.md](docs/developer/DDL.md).
-- This is built in Next.js 16+, so don't look in middleware.ts, but consider proxy.ts, for things you would expect there.
-- When creating or modifying API routes, always use the `/api/v1/` structure with action dispatch patterns. Don't create new routes outside `/api/v1/`. Use the middleware from `@/lib/api/middleware` and response helpers from `@/lib/api/responses`.
-- **Tool definitions in `lib/tools/`**: the Zod input schema is the single source of truth. Each tool file exports `xxxToolInputSchema` (a Zod object) and derives its OpenAI-shape `parameters` JSON via `zodToOpenAISchema(xxxToolInputSchema)` from `lib/tools/zod-to-openai-schema.ts` (Zod 4 native `z.toJSONSchema()`); `validateXxxInput` is a one-line `xxxToolInputSchema.safeParse(input).success` delegate. **Never hand-write the `parameters` JSON Schema or duplicate validation in `validateXxxInput`** — they will drift. Put field-level descriptions on `.describe()`, beyond-JSON-Schema checks (`val.trim().length > 0`, allowlists, exact-one-of) in `.refine()`, cross-field constraints in an object-level `.refine()`. Naming: `xxxToolInputSchema`, `xxxToolDefinition`, `validateXxxInput`. When adding a new tool, register it in `lib/tools/__tests__/tool-definitions-snapshot.test.ts` and run `npx jest -u lib/tools/__tests__/tool-definitions-snapshot.test.ts` to record its initial derived JSON — future drift will surface as a snapshot diff for deliberate review.
-- If asked to fix linting errors, do not change out HTML `<img>` tags for Next.js `<Image>` tags; there is a reason that we don't use them sometimes, usually related to their being pulled in via APIs so Next.js can't know what it's going to display.
-- Every time we change a plugin, let's go ahead and bump the release number (the last of the three numbers in semver) on its package.json, and manifest.json if required, and re-run `npm run build:plugins` before we add things to the commit.
-- Check for Typescript errors by running "npx tsc" rather than "npm run build"
-- **Important:** Before committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order. **The changelog is an exception to the Quilltap writing style described below.** Write entries concisely, in straightforward American English words and spellings — none of the steampunk / Roaring Twenties / Wodehouse / Lemony Snicket voice that applies to user-facing docs and UI. The changelog is a developer-facing record of changes; keep it terse and direct.
-- Keep the documentation listed in [update-documentation](/.claude/commands/update-documentation.md) up to date, and update that file if you add more documentation, in the same format.
-- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in .qtap or SillyTavern exports, the [qtap schema](./public/schemas/qtap-export.schema.json), backups, and/or the migrations/ directory. Update [DDL.md](docs/developer/DDL.md) as appropriate; it must be kept up-to-date.
-- Any files that exist in the app source code only because they are necessary for migrations should move to the `migrations/` directory.
-- **IMPORTANT**: If we make changes to anything in the `packages/` directory, we need to make sure we update package.json numbers and pause to allow the developer/human user to `npm publish` to push those packages into npmjs. We do *not* just copy things down into the appropriate directories! We wait to publish the new npm package first. You can stop everything, ask me to publish the new version, then install the new one. If that doesn't work, let's fix the NPM problem we're having, **NOT** work around it.
-- The pre-commit hook in `.githooks/pre-commit` kills the dev server, cleans .next, stops watchman, and stages dependency artifacts. Linting, testing, type-checking, and version updates are handled by the [/commit](/.claude/commands/commit.md) command before the actual commit.
-- Leave no stubs and "TODO" code behind unless you have agreed on it with me ahead of time
-- Memory deletion goes through a single chokepoint: `deleteMemoryWithUnlink(id)` and `deleteMemoriesWithUnlinkBatch(ids)` in `lib/memory/memory-gate.ts`. They scrub the deleted IDs from every neighbour's `relatedMemoryIds` before the row is removed — never call `repos.memories.delete*` (`delete`, `deleteForCharacter`, `bulkDelete`, `deleteBySourceMessageId(s)`, `deleteByChatId`) directly. This parallels `createMemoryWithGate` on the write side.
-- All user-visible changes **MUST** be documented in help files found in `help/*.md`
-- Help files have a `url` field in their frontmatter and an "In-Chat Navigation" section with an exact `help_navigate` tool call. When creating or modifying help files, ensure the `url` frontmatter points to the correct page (with `?tab=` and `&section=` parameters for settings deep-linking), and that the "In-Chat Navigation" section contains the matching `help_navigate(url: "...")` call.
-- All writing for users is to be in the style of "steampunk + roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket"
-- **IMPORTANT**: We need the human developer's confirmation that they have walked through the release checklist in [DEVELOPMENT.md](./docs/developer/DEVELOPMENT.md#checklist-before-release) when they are ready to run the command `tag-for-release` in production - if they want to go through them, then go through that list with them. Don't do anything there on your own unless they ask you to; this is up to the developer.
+> When I say I'm "in the `~/iCloud/Quilltap/Friday` instance," the troubleshooting paths are `~/iCloud/Quilltap/Friday/{data,files,logs}/`. Logs there include `combined.log` / `error.log` (auto-rolled every 2–3 MB) plus `quilltap-{stdout,stderr}.log`, `startup.log`, and sometimes `stdout.log`.
+
+**Databases are SQLCipher-encrypted — the `sqlite3` binary can't open them. Use `npx quilltap`.** Prefer high-level subcommands over raw SQL; they auto-pick the database, resolve names to UUIDs, and are read-only unless you pass `--write`. **Full command reference: [CLI.md](docs/developer/CLI.md).** Database schema: [DDL.md](docs/developer/DDL.md).
+
+## Themes
+
+- **Bundle format (`.qtap-theme`)** is primary: declarative zip archives (JSON tokens, CSS, fonts, images), no build tools. **Plugin (npm) format is deprecated** — existing ones still work; new themes use bundles. `create-quilltap-theme` defaults to bundles (`--plugin` for legacy npm format).
+- 6 bundled themes (Art Deco, Earl Grey, Great Estate, Madman's Box, Old School, Rains) ship as bundle dirs in `themes/bundled/`. Installed bundles live at `<dataDir>/themes/<themeId>/` (index `themes-index.json`). Registries support remote browse/install with Ed25519 verification.
+- **Architecture:** registry singleton `lib/themes/theme-registry.ts` (sources `default`/`plugin`/`bundle`); loader `lib/themes/bundle-loader.ts`; registry client `lib/themes/registry-client.ts`; crypto `lib/themes/crypto.ts`; manifest schema `QtapThemeManifestSchema` (`lib/themes/types.ts`) / JSON Schema `public/schemas/qtap-theme.schema.json`; asset/font routes under `app/api/themes/`. CLI: `npx quilltap themes`.
+- **`qt-*` semantic classes:** themes depend primarily on these. If you'd add a new Tailwind class, add it to a `qt-*` utility instead, then apply that. Significant `qt-*` changes must propagate to the stylebook, [theme-storybook](/packages/theme-storybook), maybe [create-quilltap-theme](/packages/create-quilltap-theme), and the bundled themes.
+
+## Subsystem pointers
+
+### Background jobs (summary)
+
+All job handlers run in a lazily-forked child process. **The parent (Next.js HTTP) is the only DB writer;** the child reads via a readonly SQLCipher connection, buffers write payloads in an `AsyncLocalStorage`, and ships them over IPC. The parent partitions writes by target DB (main / mount-index / llm-logs) and commits each in its own transaction, so one partition's failure can't roll back others. **In a handler, treat `getRepositories()` as a proxy: reads pass through, writes buffer — never assume read-your-writes within a single job.** Full mechanics (main-primary autonomous turns, folder-conflict id remapping, the two `AsyncLocalStorage` contexts): [BACKGROUND_JOBS_CHILD.md](docs/developer/BACKGROUND_JOBS_CHILD.md).
+
+### Carina (summary)
+
+Inline LLM queries: users/characters address a designated answerer character via `@Name:` (public), `@Name?` (whisper), or the `ask_carina` tool. The answerer builds a fresh minimal call, the result posts as a `systemSender: 'carina'` message rendered with the **answerer's own avatar**, and the answer is surfaced live via a `carinaAnswer` SSE event. Carina answers are kept out of the normal per-turn memory extractor but **do** form memories and receive recall through dedicated paths (`CARINA_MEMORY_EXTRACTION` job; recall injected by `runCarinaQuery`). Failed-query errors are authored by Prospero (`systemKind: 'carina-error'`), not Carina. Full design: [features/carina.md](docs/developer/features/carina.md).
 
 ## Writing migrations
 
-Every migration registered in [`migrations/scripts/`](./migrations/scripts) and listed in `migrations/scripts/index.ts` must satisfy two rules so the loading screen at startup can tell users what's happening:
+Every migration in `migrations/scripts/` (listed in `index.ts`) must satisfy two rules so the startup loading screen can describe it:
 
-1. **Each migration must have a pretty-label entry in [`lib/startup/prettify.ts`](./lib/startup/prettify.ts)** (the `PRETTY_LABELS` table). Use the project's steampunk-Wodehouse voice — terse, present-continuous, oriented around what's happening to the user's data, not the implementation. Without an entry, the loading screen falls back to a hyphen-split humanization of the migration ID, which leaks an internal name to users.
-
-2. **Any migration that iterates over a collection must call `reportProgress(...)` inside the loop**, imported from [`migrations/lib/progress.ts`](./migrations/lib/progress.ts). The helper is throttled (one emit per ~250 ms), so it is safe to call every iteration. Use the single-tier form for flat loops and the multi-tier form for nested ones:
+1. **A pretty-label entry in [`lib/startup/prettify.ts`](./lib/startup/prettify.ts)** (`PRETTY_LABELS`), in the steampunk-Wodehouse voice — terse, present-continuous, about the user's data, not the implementation. Without it the screen leaks the internal migration ID.
+2. **Any loop over a collection calls `reportProgress(...)`** from [`migrations/lib/progress.ts`](./migrations/lib/progress.ts) (throttled to ~250 ms, safe every iteration):
 
    ```ts
    import { reportProgress } from '../lib/progress';
-
-   // Flat:
-   reportProgress(i + 1, items.length, 'items');
-
-   // Nested (outer first):
-   reportProgress([
-     { current: p + 1, total: projects.length, unit: 'projects' },
-     { current: f + 1, total: files.length, unit: 'files' },
-   ]);
+   reportProgress(i + 1, items.length, 'items');                              // flat
+   reportProgress([{ current: p + 1, total: projects.length, unit: 'projects' },
+                   { current: f + 1, total: files.length, unit: 'files' }]);   // nested (outer first)
    ```
 
-   For batched/streaming migrations where the loop is internal to a SQL batch, count the total upfront with `SELECT COUNT(*)` and pass the running `totalScanned` against it. For synchronous transactions (`db.transaction(...)`) the progress can't reach the UI mid-transaction — fine to skip there.
+   For batched/streaming migrations, count totals upfront with `SELECT COUNT(*)` and pass the running `totalScanned`. Synchronous `db.transaction(...)` can't reach the UI mid-transaction — skipping there is fine.
 
-The commit skill enforces both rules. Adding a migration without a prettify entry, or with a non-trivial loop that doesn't call `reportProgress`, will block the commit.
-
-## Best Practices and Principles
-
-- respect encapsulation and single source of truth
-  - If a feature requires duplicate code, consider inheritance
-- SRP
-- DRY
-- KISS
-- YAGNI
+The commit skill enforces both rules and will block a non-compliant migration.

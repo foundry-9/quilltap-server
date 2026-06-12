@@ -69,6 +69,13 @@ First step of migrating the client's server-state fetching from SWR to TanStack 
 - Test harness: `__tests__/helpers/renderWithQuery.tsx` (fresh client per render, retries off, `gcTime: 0` — the TanStack analogue of the old `provider: () => new Map()` SWR wrapper). `fetch` stays mocked via `jest-fetch-mock`.
 - Front-end plumbing only: no API/route, schema, DDL, migration, export, or backup change.
 
+#### CLAUDE.md slimmed; CLI reference extracted to docs/developer/CLI.md
+
+Restructured `CLAUDE.md` to lead with the standing rules that apply on every task and push reference material to the end. Cut it from ~280 lines/~5,000 words to ~177 lines/~2,140 words by extracting the full `npx quilltap` CLI manual into a new `docs/developer/CLI.md` and trimming the inline background-jobs and Carina write-ups to short pointers at their existing docs (`BACKGROUND_JOBS_CHILD.md`, `features/carina.md`).
+
+- New file `docs/developer/CLI.md`: complete CLI reference (db inspection/maintenance/health, docs/memories/logs/migrations namespaces, instance resolution precedence, read-only-vs-`--write` lock-gating, low-level raw SQL, global flags). Registered in `.claude/commands/update-documentation.md`.
+- `CLAUDE.md`: grouped the always-obey rules (spelling, writing voice, pre-commit, hard stops, code-path chokepoints) up top; stopped inlining the volatile `systemSender` enum list and now points at the source enum in `lib/schemas/chat.types.ts` instead. No behavior or schema change — documentation only.
+
 #### Aurora header: the Carina and User-controlled toggles now light up when active
 
 The favorite star already filled in when a character was favorited, but the two icons beside it — the Carina (monitor) and User-controlled (person) toggles — were permanently golden regardless of state, giving no on/off feedback. They now mirror the star: golden (`qt-text-favorite`) when active, muted grey (`qt-text-secondary`) when inactive, with the color change animated via `transition`. Applies to both the `/aurora` list cards and the `/aurora/[id]/view` detail header.
