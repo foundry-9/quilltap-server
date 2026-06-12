@@ -13,7 +13,9 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
@@ -80,12 +82,16 @@ export default function AddCharacterDialog({
   // intercepts console calls and triggers setState. Logging should only happen
   // inside useEffect, event handlers, or other non-render contexts.
 
-  const { data: charactersData, isLoading } = useSWR<{ characters: CharacterOption[] }>(
-    isOpen ? '/api/v1/characters' : null
-  )
-  const { data: profilesData, error: profilesError } = useSWR<{ profiles: ConnectionProfile[] }>(
-    isOpen ? '/api/v1/connection-profiles' : null
-  )
+  const { data: charactersData, isLoading } = useQuery({
+    queryKey: queryKeys.characters.list(),
+    queryFn: ({ signal }) => apiFetch<{ characters: CharacterOption[] }>('/api/v1/characters', { signal }),
+    enabled: isOpen,
+  })
+  const { data: profilesData, error: profilesError } = useQuery({
+    queryKey: queryKeys.connectionProfiles.all,
+    queryFn: ({ signal }) => apiFetch<{ profiles: ConnectionProfile[] }>('/api/v1/connection-profiles', { signal }),
+    enabled: isOpen,
+  })
 
   const characters = useMemo(() => charactersData?.characters ?? [], [charactersData])
   const connectionProfiles = useMemo(() => profilesData?.profiles ?? [], [profilesData])

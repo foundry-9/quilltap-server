@@ -4,6 +4,71 @@
 
 ### 4.7-dev
 
+#### TanStack Query migration — Phase 7 (SWR removal)
+
+SWR is fully gone. With every read and mutation now on TanStack Query, the surviving provider and dependency were removed.
+
+- Removed `<SWRConfig>` from `components/providers/session-provider.tsx` (now `<QueryProvider>` is the sole top-level server-state provider).
+- Deleted `lib/swr-fetcher.ts` (nothing imports it; `apiFetch`/`ApiFetchError` in `lib/query/fetcher.ts` carry the same throw-on-non-2xx semantics).
+- Removed the `swr` dependency from `package.json` / lockfile.
+- Moved the migration spec to `docs/developer/features/complete/`.
+- Verified: no `useSWR`/`SWRConfig`/`swr` imports remain in app/components/hooks/lib/tests; `npx tsc`, full lint, and the unit suite (7108 tests) pass.
+
+#### TanStack Query migration — Phase 6 (SSE boundary)
+
+Documented the boundary between the Salon's live message transport and TanStack Query. The Fetch-Streams/SSE path (`useSSEStreaming`) stays as-is: stream chunks are never written into the query cache; the query reads *around* streaming (chat list, settings, LLM logs) are on TanStack Query and refresh through their own hooks. No behavior change.
+
+- `app/salon/[id]/hooks/useSSEStreaming.ts`: added an explicit boundary comment. Verified the streaming hooks (`useSSEStreaming`, `useMessageStreaming`) are free of `useSWR`/`useQuery`.
+
+#### TanStack Query migration — Phase 5 (page-level reads + remaining consumers)
+
+Migrated the last `useSWR` reads — the big page components and remaining dialogs/cards. After this, no `useSWR`/`useSWRConfig` remains outside the surviving `<SWRConfig>` provider (removed in Phase 7).
+
+- Pages: `app/aurora/page.tsx` (characters read + a `mutateCharacters` shim preserving the optimistic `mutate(updater, { revalidate: false })` toggles for favorite/controlledBy/Carina), `app/salon/page.tsx` (5 reads + `mutateChats`→`refetch`), `app/profile/page.tsx`, `app/salon/new/page.tsx`, `app/generate-image/page.tsx`.
+- Dialogs/cards: `AddCharacterDialog`, `ChatSidebar` (3 conditional reads), `HelpChatDialog`, `LLMLogsSection`, `ProjectToolSettingsModal`, `DataDirectorySection`, `AutoLockSettingsCard`, and `CoreWhisperSection` (optimistic `setQueryData`).
+- `StartupProgress`: the global `useSWRConfig().mutate(() => true, …)` cache-bust on server-ready became `queryClient.invalidateQueries()`.
+- Grew `lib/query/keys.ts`: `userProfile`, `system.dataDir/unlock`, `llmLogs.byCharacter`, `tools`, `helpChat.pastChats`.
+- Front-end only: no API/route, schema, DDL, migration, export, or backup change.
+
+#### TanStack Query migration — Phase 4 (wrapper hooks + inline read/mutate pairs)
+
+Migrated the self-contained wrapper hooks and the inline read+mutate component pairs. Behavior preserved: SWR `mutate()` revalidations became `refetch()`/`invalidateQueries()`, optimistic `mutate(x, false)` became `setQueryData`, and the autonomous-room optimistic `mutate(post, { optimisticData, rollbackOnError })` pattern became `useMutation` with `onMutate`/`onError`/`onSettled`. Polling `refreshInterval` became `refetchInterval`.
+
+- Wrapper hooks: `useLLMLogs`, `useChatControls` (its one connection-profiles read), `useTextReplacementRules`, `useStoryBackground` (polling + change detection), `useTasksQueue` (polling + job controls), `useGalleryData` (optimistic `setQueryData`), `useSystemPrompts`, `useRoleplayTemplates`, and `useChatSettings` (4 reads + ~30 handlers — kept byte-identical via a `mutateSettings` shim that maps to `setQueryData`/`invalidateQueries`).
+- Inline pairs: `image-gallery`, `api-keys-tab`, `tags-tab`, `ThemeBrowser`, `StateEditorModal`, `help-chat-provider`, `capabilities-report-card`, `llm-logs-card`, and the two autonomous-room components (`autonomous-rooms-card`, `autonomous-room-badges`) which now use `useMutation` for their optimistic toggles.
+- Grew `lib/query/keys.ts`: `llmLogs`, `system.tasksQueue/capabilitiesReports/autonomousRooms`, `chats.background`, `projects.background/state`, `settings.textReplacements`, `roleplayTemplates`, `embeddingProfiles`, `imageProfiles`, `images`, `apiKeys`, `themes`, `helpChat.eligibility`.
+- Tests: `tasks-queue-card` and `image-gallery-deleted-handling` moved from `SWRConfig` to `QueryClientProvider`; new focused `useChatSettings` optimistic-update test.
+- Front-end only: no API/route, schema, DDL, migration, export, or backup change.
+
+#### TanStack Query migration — Phase 3 (module-level cache hooks)
+
+Replaced the three hand-rolled module-level fetch caches with `useQuery`. They keep their "fetch once, share everywhere" reference-data feel via `staleTime: Infinity` and TanStack's by-key dedup, dropping the manual `fetchPromise` plumbing.
+
+- `hooks/useProviders.ts`, `hooks/useConnectionProfiles.ts`: `useQuery` + a `select` mapper; the `getProviderIcon`/`getProviderDisplayName`/`getProfileProvider` helpers are unchanged.
+- `hooks/usePersonaDisplayName.ts`: `useQuery` for `?controlledBy=user`, with the duplicate-name `Set` derived in `select` (referentially stable, which matters since every ChatCard mounts this hook). Removed the module cache and the test-only `resetDisplayNameCache()` export.
+- Test harness: added `createQueryWrapper()` to `__tests__/helpers/renderWithQuery.tsx` for `renderHook`. `usePersonaDisplayName.test.ts` now uses a fresh QueryClient per test instead of `resetDisplayNameCache()`. Two component suites that render these consumers (`homepage-components`, `ParticipantCard`) now render through `renderWithQuery` so a QueryClient is in scope.
+- Front-end only: no API/route, schema, DDL, migration, export, or backup change.
+
+#### TanStack Query migration — Phase 2 (conditional/simple reads)
+
+Migrated the low-risk, read-only SWR call sites to `useQuery` (no mutations in this batch). Behavior preserved: conditional `useSWR(cond ? url : null)` became `useQuery({ enabled: cond })`.
+
+- 16 files moved off SWR: `search-dialog.tsx` (dead import removed), `HelpEntityPicker.tsx`, `LibraryFilePickerModal.tsx` (5 reads), `FolderPicker.tsx`, `useFilePreview.ts` (raw-text queryFn, not JSON), `PluginConfigModal.tsx`, `useDictionaryFeed.ts`, `useEntitySearch.ts`, `GenerateImageDialog.tsx`, the Lexical spellcheck reads (`LexicalComposerWrapper.tsx`, `TextReplacementPlugin.tsx`, `DocumentPane.tsx`), `tag-style-provider.tsx`, `MoveToProjectModal.tsx`, `ChatProjectModal.tsx`, `CreateNPCDialog.tsx`.
+- `FolderPicker`'s `mutate()` revalidation became `refetch()`. Dynamic URLs are built inside the queryFn from the same inputs the query key encodes (satisfies `@tanstack/query/exhaustive-deps`).
+- Grew the `lib/query/keys.ts` factory: `chats.photoAlbums/groupStores`, `projects`, `mountPoints`, `tags`, `plugins`, `photos`, `files`, `helpChat`.
+- Front-end only: no API/route, schema, DDL, migration, export, or backup change.
+
+#### TanStack Query migration — Phase 1 scaffolding
+
+First step of migrating the client's server-state fetching from SWR to TanStack Query v5 (see `docs/developer/features/tanstack-query-migration.md`). This phase adds the foundations only; no fetch site has moved yet, so there is no behavior change.
+
+- Added deps: `@tanstack/react-query`, `@tanstack/react-query-devtools`, `@tanstack/eslint-plugin-query` (all ^5.101.0).
+- New `lib/query/`: `query-client.ts` (`makeQueryClient` factory — `staleTime: 30s`, `refetchOnWindowFocus: false`, `retry: 1`), `QueryProvider.tsx` (client provider holding the client in `useState`, dev-only devtools), `fetcher.ts` (`apiFetch` + `ApiFetchError`, mirroring `swrFetcher`'s throw-on-non-2xx and `error.status` shape, forwards `AbortSignal`), and `keys.ts` (the query-key factory — the single source of cache identity; grows per migration phase).
+- `components/providers/session-provider.tsx`: `<QueryProvider>` now wraps the existing `<SWRConfig>`. Both coexist until the last `useSWR` is gone.
+- `eslint.config.mjs`: added `@tanstack/eslint-plugin-query` flat recommended rules.
+- Test harness: `__tests__/helpers/renderWithQuery.tsx` (fresh client per render, retries off, `gcTime: 0` — the TanStack analogue of the old `provider: () => new Map()` SWR wrapper). `fetch` stays mocked via `jest-fetch-mock`.
+- Front-end plumbing only: no API/route, schema, DDL, migration, export, or backup change.
+
 #### CLAUDE.md slimmed; CLI reference extracted to docs/developer/CLI.md
 
 Restructured `CLAUDE.md` to lead with the standing rules that apply on every task and push reference material to the end. Cut it from ~280 lines/~5,000 words to ~177 lines/~2,140 words by extracting the full `npx quilltap` CLI manual into a new `docs/developer/CLI.md` and trimming the inline background-jobs and Carina write-ups to short pointers at their existing docs (`BACKGROUND_JOBS_CHILD.md`, `features/carina.md`).

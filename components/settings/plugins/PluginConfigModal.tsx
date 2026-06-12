@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -54,18 +56,20 @@ export function PluginConfigModal({
   const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState<Record<string, unknown>>({})
 
-  // Load current configuration via SWR (gated by isOpen && pluginName)
-  const { data, isLoading: loading, error: loadError } = useSWR<{ configSchema: ConfigField[]; config: Record<string, unknown> }>(
-    isOpen && pluginName ? `/api/v1/plugins/${encodeURIComponent(pluginName)}?action=get-config` : null
-  )
+  // Load current configuration via TanStack Query (gated by isOpen && pluginName)
+  const { data, isLoading: loading, error: loadError } = useQuery({
+    queryKey: queryKeys.plugins.config(pluginName),
+    queryFn: ({ signal }) => apiFetch<{ configSchema: ConfigField[]; config: Record<string, unknown> }>(`/api/v1/plugins/${encodeURIComponent(pluginName)}?action=get-config`, { signal }),
+    enabled: isOpen && !!pluginName,
+  })
 
   const configSchema = data?.configSchema ?? []
 
-  // Update error from SWR
+  // Update error from TanStack Query
   useEffect(() => {
     if (loadError) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync SWR error to local error state so handlers can also set errors
-      setError(loadError instanceof Error ? loadError.message : 'Failed to load configuration')
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync TanStack Query error to local error state so handlers can also set errors
+      setError((loadError as ApiFetchError | null)?.message || 'Failed to load configuration')
     }
   }, [loadError])
 

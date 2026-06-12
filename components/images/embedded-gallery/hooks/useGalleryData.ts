@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import useSWR from 'swr'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import type { GalleryImage, EntityType } from '../types'
 
@@ -40,20 +42,25 @@ function toGalleryImage(entry: CharacterGalleryEntry): GalleryImage {
 
 export function useGalleryData(entityId: string, _entityType: EntityType) {
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
+  const queryClient = useQueryClient()
 
-  const { data, isLoading: loading, mutate } = useSWR<CharacterGalleryListResponse>(
-    `/api/v1/characters/${entityId}/photos?limit=200`
-  )
+  const { data, isLoading: loading, refetch } = useQuery({
+    queryKey: queryKeys.characters.photos(entityId),
+    queryFn: ({ signal }) =>
+      apiFetch<CharacterGalleryListResponse>(`/api/v1/characters/${entityId}/photos?limit=200`, { signal }),
+  })
 
   const allImages: GalleryImage[] = (data?.entries ?? []).map(toGalleryImage)
 
   const fetchImages = useCallback(async () => {
-    await mutate()
-  }, [mutate])
+    await refetch()
+  }, [refetch])
 
   const setAllImages = useCallback(
     (update: ((prev: GalleryImage[]) => GalleryImage[]) | GalleryImage[]) => {
-      mutate(
+      // Optimistic, no-revalidate local edit (was SWR `mutate(updater, false)`).
+      queryClient.setQueryData<CharacterGalleryListResponse>(
+        queryKeys.characters.photos(entityId),
         prev => {
           if (!prev) return prev
           const next = typeof update === 'function'
@@ -67,11 +74,10 @@ export function useGalleryData(entityId: string, _entityType: EntityType) {
               next.some(n => n.id === e.linkId)
             ),
           }
-        },
-        false
+        }
       )
     },
-    [mutate]
+    [queryClient, entityId]
   )
 
   const handleImageError = (imageId: string) => {
@@ -155,7 +161,7 @@ export function useGalleryData(entityId: string, _entityType: EntityType) {
         onAvatarChange(null)
       }
 
-      await mutate()
+      await refetch()
       showSuccessToast('Image deleted')
     } catch (error) {
       showErrorToast(error instanceof Error ? error.message : 'Failed to delete image')
@@ -185,7 +191,7 @@ export function useGalleryData(entityId: string, _entityType: EntityType) {
         throw new Error(data.error || `Upload failed (${res.status})`)
       }
 
-      await mutate()
+      await refetch()
       showSuccessToast('Image uploaded')
       return true
     } catch (error) {

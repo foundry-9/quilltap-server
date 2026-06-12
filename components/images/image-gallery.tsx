@@ -7,7 +7,9 @@
 
 import { useState, useCallback } from 'react';
 import { Icon } from '@/components/ui/icon';
-import useSWR from 'swr';
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/query/fetcher';
+import { queryKeys } from '@/lib/query/keys';
 import { showConfirmation } from '@/lib/alert';
 import { showErrorToast } from '@/lib/toast';
 import DeletedImagePlaceholder from './DeletedImagePlaceholder';
@@ -40,16 +42,18 @@ interface ImageGalleryProps {
 export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, className = '' }: ImageGalleryProps) {
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set());
 
-  // Build query string for SWR
-  const queryParams = new URLSearchParams();
-  if (tagType) queryParams.append('tagType', tagType);
-  if (tagId) queryParams.append('tagId', tagId);
-  const queryString = queryParams.toString();
-
-  // Fetch images via SWR
-  const { data: imageData, isLoading: loading, error: loadError, mutate: mutateImages } = useSWR<{ data: ImageData[] }>(
-    `/api/v1/images${queryString ? '?' + queryString : ''}`
-  );
+  // Fetch images via TanStack Query. The URL is built inside the queryFn from
+  // tagType/tagId so the key (which encodes both) is the source of cache identity.
+  const { data: imageData, isLoading: loading, error: loadError, refetch: mutateImages } = useQuery({
+    queryKey: queryKeys.images.list({ tagType: tagType ?? null, tagId: tagId ?? null }),
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams();
+      if (tagType) params.append('tagType', tagType);
+      if (tagId) params.append('tagId', tagId);
+      const qs = params.toString();
+      return apiFetch<{ data: ImageData[] }>(`/api/v1/images${qs ? '?' + qs : ''}`, { signal });
+    },
+  });
 
   const images = imageData?.data ?? [];
   const error = loadError ? (loadError instanceof Error ? loadError.message : 'Failed to load images') : null;

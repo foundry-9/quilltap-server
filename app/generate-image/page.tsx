@@ -10,7 +10,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useClickOutside } from '@/hooks/useClickOutside'
@@ -44,7 +46,10 @@ export default function GenerateImagePage() {
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const { data: charactersData, isLoading } = useSWR<{ characters: Array<{ id: string; name: string }> }>('/api/v1/characters')
+  const { data: charactersData, isLoading } = useQuery({
+    queryKey: queryKeys.characters.list(),
+    queryFn: ({ signal }) => apiFetch<{ characters: Array<{ id: string; name: string }> }>('/api/v1/characters', { signal }),
+  })
 
   // Load all characters for placeholder insertion
   useEffect(() => {

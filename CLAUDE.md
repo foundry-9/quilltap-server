@@ -92,6 +92,16 @@ export const POST = createContextHandler<{ id: string }>(
 
 Legacy non-v1 routes were removed in v2.8. Exceptions that remain: `/api/health`, `/api/plugin-routes/[...path]`, `/api/themes/*`. Note content/character/chat **API** paths stay at `/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects` even though their UI routes were renamed (below). Full reference: [API.md](docs/developer/API.md).
 
+## Client data fetching (TanStack Query)
+
+Client server-state runs on **TanStack Query v5** (`@tanstack/react-query`); SWR is fully removed. `<QueryProvider>` (`lib/query/QueryProvider.tsx`) is the top-level provider. See the completed [migration spec](docs/developer/features/complete/tanstack-query-migration.md).
+
+- **Query keys are the single source of truth.** Never pass a raw string/array key to `useQuery`/`useMutation`/`invalidateQueries` — always go through the factory in `lib/query/keys.ts` (e.g. `queryKeys.characters.detail(id)`). Prefix invalidation (`invalidateQueries({ queryKey: queryKeys.characters.all })`) depends on it. Add a block when you introduce a new entity.
+- **Fetcher:** `apiFetch<T>(url, init?)` from `lib/query/fetcher.ts` as the `queryFn`, forwarding the signal: `queryFn: ({ signal }) => apiFetch<T>(url, { signal })`. Throws `ApiFetchError` (`status` + parsed `info`) on non-2xx.
+- **Mutations** use `useMutation` with `onSuccess`/`onSettled` invalidation; optimistic updates via `onMutate` + `setQueryData` + rollback in `onError`.
+- **Tests** wrap with `renderWithQuery` / `createQueryWrapper` from `__tests__/helpers/renderWithQuery.tsx` (fresh client, retries off, `gcTime: 0`); `fetch` stays mocked via `jest-fetch-mock`.
+- The Salon's SSE streaming transport is **out of scope** — migrate the reads *around* streaming, never the stream itself.
+
 ## Glossary
 
 ### Feature names (UI route · settings)

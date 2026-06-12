@@ -1,8 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
-import { SWRConfig } from "swr";
-import { swrFetcher } from "@/lib/swr-fetcher";
+import { QueryProvider } from "@/lib/query/QueryProvider";
 import { TagStyleProvider } from "./tag-style-provider";
 import { QuickHideProvider } from "./quick-hide-provider";
 
@@ -180,8 +179,11 @@ function CustomSessionProvider({
 // ============================================================================
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  // All client server-state runs through TanStack Query (the SWR -> TanStack
+  // Query migration is complete; see
+  // docs/developer/features/tanstack-query-migration.md).
   return (
-    <SWRConfig value={{ fetcher: swrFetcher, revalidateOnFocus: false }}>
+    <QueryProvider>
       <CustomSessionProvider
         refetchInterval={5 * 60}
         refetchOnWindowFocus={false}
@@ -198,6 +200,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
           </TagStyleProvider>
         </ThemeProvider>
       </CustomSessionProvider>
-    </SWRConfig>
+    </QueryProvider>
   );
 }

@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import type { LLMLog } from '@/lib/schemas/types'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
 import { formatDateTime } from '@/lib/format-time'
@@ -16,9 +18,11 @@ export default function LLMLogsSection({ characterId }: LLMLogsSectionProps) {
   const [selectedLog, setSelectedLog] = useState<LLMLog | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const { data, isLoading } = useSWR<{ logs: LLMLog[] }>(
-    isExpanded ? `/api/v1/llm-logs?characterId=${characterId}&limit=10` : null
-  )
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.llmLogs.byCharacter(characterId, 10),
+    queryFn: ({ signal }) => apiFetch<{ logs: LLMLog[] }>(`/api/v1/llm-logs?characterId=${characterId}&limit=10`, { signal }),
+    enabled: isExpanded,
+  })
   const logs = data?.logs ?? []
 
   const handleViewLog = (log: LLMLog) => {

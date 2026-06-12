@@ -1,6 +1,8 @@
 'use client'
 
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 import { useModalState } from '@/hooks/useModalState'
 import type { LLMLog } from '@/lib/schemas/types'
@@ -9,9 +11,10 @@ import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
 import { formatDateTime } from '@/lib/format-time'
 
 export default function LLMLogsCard() {
-  const { data, isLoading, error: loadError, mutate: mutateLogs } = useSWR<{ logs: LLMLog[] }>(
-    '/api/v1/llm-logs?limit=20'
-  )
+  const { data, isLoading, error: loadError, refetch: mutateLogs } = useQuery({
+    queryKey: queryKeys.llmLogs.recent(20),
+    queryFn: ({ signal }) => apiFetch<{ logs: LLMLog[] }>('/api/v1/llm-logs?limit=20', { signal }),
+  })
   const logs = data?.logs ?? []
 
   const {

@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { getErrorMessage } from '@/lib/error-utils'
 import type { QueueData, FullJobDetail } from '../types'
 
@@ -12,11 +14,13 @@ export function useTasksQueue() {
   const [jobActionLoading, setJobActionLoading] = useState<string | null>(null)
   const [showJobDialog, setShowJobDialog] = useState(false)
 
-  // Fetch queue status via SWR with optional polling
-  const { data: swrData, isLoading: loading, error: loadError, mutate: mutateQueue } = useSWR<QueueData>(
-    '/api/v1/system/tools?action=tasks-queue',
-    { refreshInterval: autoRefresh ? 5000 : 0 }
-  )
+  // Fetch queue status via TanStack Query with optional polling.
+  // `mutateQueue` is the query's refetch — handlers call it to revalidate after writes.
+  const { data: swrData, isLoading: loading, error: loadError, refetch: mutateQueue } = useQuery({
+    queryKey: queryKeys.system.tasksQueue,
+    queryFn: ({ signal }) => apiFetch<QueueData>('/api/v1/system/tools?action=tasks-queue', { signal }),
+    refetchInterval: autoRefresh ? 5000 : false,
+  })
 
   const data = swrData ?? null
 

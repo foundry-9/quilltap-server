@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.7.0-dev.60",
+  "version": "4.7.0-claude-intelligent-davinci-mpxgcc.56",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -68,6 +68,8 @@
     "@quilltap/plugin-types": "^2.5.1",
     "@quilltap/plugin-utils": "^2.2.12",
     "@svar-ui/react-filemanager": "2.6.0",
+    "@tanstack/react-query": "^5.101.0",
+    "@tanstack/react-query-devtools": "^5.101.0",
     "@tanstack/react-virtual": "^3.14.2",
     "@types/yauzl": "^2.10.3",
     "@xterm/addon-canvas": "^0.7.0",
@@ -103,7 +105,6 @@
     "remark-rehype": "^11.1.2",
     "semver": "^7.8.1",
     "sharp": "^0.34.5",
-    "swr": "^2.4.1",
     "tar": "^7.5.16",
     "unified": "^11.0.5",
     "ws": "^8.21.0",
@@ -116,6 +117,7 @@
     "@openrouter/sdk": "^0.12.79",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4.3.0",
+    "@tanstack/eslint-plugin-query": "^5.101.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

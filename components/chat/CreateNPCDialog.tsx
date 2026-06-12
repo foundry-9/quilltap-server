@@ -13,7 +13,9 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
@@ -49,9 +51,11 @@ export default function CreateNPCDialog({
   const nameInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { data: profilesData, isLoading } = useSWR<{ profiles: ConnectionProfile[] }>(
-    isOpen ? '/api/v1/connection-profiles' : null
-  )
+  const { data: profilesData, isLoading } = useQuery({
+    queryKey: queryKeys.connectionProfiles.all,
+    queryFn: ({ signal }) => apiFetch<{ profiles: ConnectionProfile[] }>('/api/v1/connection-profiles', { signal }),
+    enabled: isOpen,
+  })
   const connectionProfiles = profilesData?.profiles || []
 
   // Auto-select first profile when data loads

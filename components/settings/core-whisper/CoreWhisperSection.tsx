@@ -1,7 +1,9 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import useSWR from 'swr'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { SettingsCard } from '@/components/ui/SettingsCard'
 import {
   DEFAULT_CORE_WHISPER_SETTINGS,
@@ -21,7 +23,11 @@ const BUDGET_OPTIONS = [
 ] as const
 
 export function CoreWhisperSection() {
-  const { data: settings, mutate } = useSWR<ChatSettings>('/api/v1/settings/chat')
+  const queryClient = useQueryClient()
+  const { data: settings } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) => apiFetch<ChatSettings>('/api/v1/settings/chat', { signal }),
+  })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -50,14 +56,15 @@ export function CoreWhisperSection() {
           throw new Error(data.error || 'Failed to update Core whisper settings')
         }
         const updated = await res.json()
-        await mutate(updated, false)
+        // Optimistic, no-revalidate write (was SWR `mutate(updated, false)`).
+        queryClient.setQueryData(queryKeys.settings.chat, updated)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred')
       } finally {
         setSaving(false)
       }
     },
-    [settings, current, mutate],
+    [settings, current, queryClient],
   )
 
   return (
