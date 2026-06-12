@@ -155,7 +155,7 @@ export function CharacterHeader({
               <button
                 onClick={onToggleCarina}
                 disabled={togglingCarina}
-                className="qt-text-favorite transition-transform hover:scale-110 disabled:opacity-50"
+                className={`transition hover:scale-110 disabled:opacity-50 ${character?.canBeCarina ? 'qt-text-favorite' : 'qt-text-secondary'}`}
                 title={character?.canBeCarina ? 'Disable Carina answers (@-queries)' : 'Enable Carina answers (@-queries)'}
               >
                 <Icon name="monitor" className="w-6 h-6" />
@@ -163,7 +163,7 @@ export function CharacterHeader({
               <button
                 onClick={onToggleControlledBy}
                 disabled={togglingControlledBy}
-                className="qt-text-favorite transition-transform hover:scale-110 disabled:opacity-50"
+                className={`transition hover:scale-110 disabled:opacity-50 ${character?.controlledBy === 'user' ? 'qt-text-favorite' : 'qt-text-secondary'}`}
                 title={character?.controlledBy === 'user' ? 'Switch to LLM control' : 'Switch to user control'}
               >
                 <Icon name="user" className="w-6 h-6" />

@@ -4,6 +4,13 @@
 
 ### 4.7-dev
 
+#### Aurora header: the Carina and User-controlled toggles now light up when active
+
+The favorite star already filled in when a character was favorited, but the two icons beside it — the Carina (monitor) and User-controlled (person) toggles — were permanently golden regardless of state, giving no on/off feedback. They now mirror the star: golden (`qt-text-favorite`) when active, muted grey (`qt-text-secondary`) when inactive, with the color change animated via `transition`. Applies to both the `/aurora` list cards and the `/aurora/[id]/view` detail header.
+
+- `app/aurora/[id]/view/components/CharacterHeader.tsx` and `app/aurora/page.tsx`: conditional color class keyed off `canBeCarina` / `controlledBy === 'user'`. On the list page, also collapsed two dead ternaries that rendered the same `<Icon>` in both branches into a single icon with the conditional moved into `className`.
+- Front-end only: color goes through existing `qt-*` utility classes (no new Tailwind, no new `qt-*` tokens); no schema, DDL, migration, export, or backup change.
+
 #### Carina: a line opens when either side is an answerer
 
 Carina reachability is no longer gated on the answerer alone. A Carina line now opens when **either** party qualifies: a Carina answerer can still be reached by anyone, a Carina-enabled **asker** can reach any character — even a non-answerer — and the **human operator** can always reach anyone regardless of whether their persona is an answerer (or whether they have a persona participant at all).

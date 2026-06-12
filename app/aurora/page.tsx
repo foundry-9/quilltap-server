@@ -401,25 +401,17 @@ export default function CharactersPage() {
                   </button>
                   <button
                     onClick={(e) => toggleCarina(e, character.id)}
-                    className="qt-text-favorite transition-transform hover:scale-110"
+                    className={`transition hover:scale-110 ${character.canBeCarina ? 'qt-text-favorite' : 'qt-text-secondary'}`}
                     title={character.canBeCarina ? 'Disable Carina answers (@-queries)' : 'Enable Carina answers (@-queries)'}
                   >
-                    {character.canBeCarina ? (
-                      <Icon name="monitor" className="w-6 h-6" />
-                    ) : (
-                      <Icon name="monitor" className="w-6 h-6" />
-                    )}
+                    <Icon name="monitor" className="w-6 h-6" />
                   </button>
                   <button
                     onClick={(e) => toggleControlledBy(e, character.id)}
-                    className="qt-text-favorite transition-transform hover:scale-110"
+                    className={`transition hover:scale-110 ${character.controlledBy === 'user' ? 'qt-text-favorite' : 'qt-text-secondary'}`}
                     title={character.controlledBy === 'user' ? 'Switch to LLM control' : 'Switch to user control'}
                   >
-                    {character.controlledBy === 'user' ? (
-                      <Icon name="user" className="w-6 h-6" />
-                    ) : (
-                      <Icon name="user" className="w-6 h-6" />
-                    )}
+                    <Icon name="user" className="w-6 h-6" />
                   </button>
                 </div>
               </div>
