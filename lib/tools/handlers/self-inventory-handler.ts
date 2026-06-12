@@ -50,6 +50,7 @@ import {
   SelfInventoryChatSection,
   SelfInventoryPromptSection,
   SelfInventoryLastTurnSection,
+  SelfInventoryCarinaSection,
   SelfInventoryQuilltapSection,
   SelfInventoryQuilltapIncludedParts,
   SelfInventoryRuntimeMode,
@@ -824,6 +825,35 @@ async function buildLastTurnSection(
   }
 }
 
+async function buildCarinaSection(
+  characterId: string
+): Promise<SelfInventoryCarinaSection> {
+  const repos = getRepositories();
+
+  // canBeCarina is a DB column, not a vault field — use the overlay-free raw
+  // read so a single broken character vault can't sink the whole listing. This
+  // mirrors the orchestrator's per-turn Carina-answerer probe.
+  const rawCharacters = await repos.characters.findAllRaw();
+
+  const selfEnabled = rawCharacters.some(
+    (c) => c.id === characterId && c.canBeCarina === true
+  );
+
+  const otherAnswerers = rawCharacters
+    .filter((c) => c.canBeCarina === true && c.id !== characterId)
+    .map((c) => c.name)
+    .sort((a, b) => a.localeCompare(b));
+
+  logger.debug('self_inventory: carina section built', {
+    context: 'self-inventory-handler',
+    characterId,
+    selfEnabled,
+    otherAnswererCount: otherAnswerers.length,
+  });
+
+  return { available: true, selfEnabled, otherAnswerers };
+}
+
 function resolveRuntimeMode(): SelfInventoryRuntimeMode {
   const shell = isElectronShell();
   const docker = isDockerEnvironment();
@@ -1342,6 +1372,15 @@ export async function executeSelfInventoryTool(
     }));
   }
 
+  if (requested.has('carina')) {
+    result.carina = await buildCarinaSection(
+      context.characterId
+    ).catch((err) => ({
+      available: false as const,
+      message: getErrorMessage(err),
+    }));
+  }
+
   const includedQuilltapParts = resolveQuilltapIncludedParts(requested);
   if (includedQuilltapParts) {
     try {
@@ -1590,6 +1629,26 @@ function formatLastTurnSection(section: SelfInventoryLastTurnSection): string {
   ].join('\n');
 }
 
+function formatCarinaSection(section: SelfInventoryCarinaSection): string {
+  if (!section.available) {
+    return `## Carina\nUnavailable — ${section.message}`;
+  }
+
+  const selfLine = section.selfEnabled
+    ? `You ARE a Carina answerer — others can put quick questions to you with @YourName: (public) or @YourName? (whisper), and the ask_carina tool can route to you. Such queries reach you in isolation (no chat history), and your reply renders under your own avatar.`
+    : `You are NOT a Carina answerer — you cannot be addressed with @-queries or reached via the ask_carina tool.`;
+
+  const othersBlock =
+    section.otherAnswerers.length === 0
+      ? `Other Carina answerers: (none)`
+      : [
+          `Other Carina answerers (${section.otherAnswerers.length}):`,
+          ...section.otherAnswerers.map((name) => `- ${name}`),
+        ].join('\n');
+
+  return [`## Carina`, selfLine, ``, othersBlock].join('\n');
+}
+
 const RUNTIME_MODE_LABELS: Record<SelfInventoryRuntimeMode, string> = {
   'local-dev': 'Local (development)',
   'local-production': 'Local (production)',
@@ -1753,6 +1812,9 @@ export function formatSelfInventoryResults(output: SelfInventoryToolOutput): str
   }
   if (output.lastTurn) {
     lines.push('', formatLastTurnSection(output.lastTurn));
+  }
+  if (output.carina) {
+    lines.push('', formatCarinaSection(output.carina));
   }
   if (output.quilltap) {
     lines.push('', formatQuilltapSection(output.quilltap));

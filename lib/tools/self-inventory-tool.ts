@@ -23,6 +23,7 @@ export const SELF_INVENTORY_SECTIONS = [
   'chats',
   'prompt',
   'lastTurn',
+  'carina',
   'quilltap',
   'quilltap.version',
   'quilltap.releaseNotes',
@@ -86,6 +87,7 @@ export const selfInventoryToolInputSchema = z.object({
         '"chats" (conversation count and date range), ' +
         '"prompt" (the static system prompt assembled for every turn), ' +
         '"lastTurn" (provider/model/token usage from the most recent LLM call), ' +
+        '"carina" (whether you yourself are a Carina answerer, plus the names of every other Carina-enabled character), ' +
         '"quilltap" (Quilltap version, runtime environment, client shell, release notes, and changelog — all three parts). ' +
         'For finer-grained quilltap queries, ask for one or more of the dotted sub-sections: ' +
         '"quilltap.version" (version + runtime + client shell only), ' +
@@ -98,7 +100,7 @@ export const selfInventoryToolInputSchema = z.object({
   ).optional()
     .describe(
       'Optional list of section names to return. If omitted or empty, all top-level sections are returned ' +
-      '(equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "quilltap", "context"). ' +
+      '(equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "carina", "quilltap", "context"). ' +
       'Pass one or more section names to receive only those sections — useful for saving tokens when ' +
       'you only need specific information. The "quilltap.*", "vault.*", "vaultAccess.*", and "context.*" sub-sections let you ' +
       'fetch one piece of a section without pulling the rest (e.g. the changelog, which can be large).'
@@ -340,6 +342,25 @@ export interface SelfInventoryLastTurnSection {
   message?: string;
 }
 
+/**
+ * Carina (inline LLM queries): whether this character may answer `@Name:` /
+ * `@Name?` queries and `ask_carina` calls, plus the names of every other
+ * Carina-enabled character in the instance. `canBeCarina` is a DB column (not a
+ * vault field), so this is resolved from the overlay-free raw character read.
+ */
+export type SelfInventoryCarinaSection =
+  | {
+      available: true;
+      /** Whether THIS character is a Carina answerer (`canBeCarina === true`). */
+      selfEnabled: boolean;
+      /** Names of every OTHER Carina-enabled character, sorted, excluding self. */
+      otherAnswerers: string[];
+    }
+  | {
+      available: false;
+      message: string;
+    };
+
 // ============================================================================
 // CONTEXT SECTION — where the character is right now
 // ============================================================================
@@ -432,6 +453,7 @@ export interface SelfInventoryToolOutput {
   chats?: SelfInventoryChatSection;
   prompt?: SelfInventoryPromptSection;
   lastTurn?: SelfInventoryLastTurnSection;
+  carina?: SelfInventoryCarinaSection;
   quilltap?: SelfInventoryQuilltapSection;
   context?: SelfInventoryContextSection;
   error?: string;
@@ -442,7 +464,7 @@ export const selfInventoryToolDefinition = {
   function: {
     name: 'self_inventory',
     description:
-      'Return an introspection report about yourself in this chat. Nine top-level sections are available: ' +
+      'Return an introspection report about yourself in this chat. Ten top-level sections are available: ' +
       '"vault" (every file in your own character vault AND the vaults of the groups you belong to, with metadata for ' +
       'doc_read_file; auto-generated avatars/backgrounds are hidden unless includeAutomaticImages is true) — request just ' +
       '"vault.character" or "vault.groups" for one half; ' +
@@ -453,6 +475,7 @@ export const selfInventoryToolDefinition = {
       '"chats" (conversation count and date range), ' +
       '"prompt" (the static system prompt assembled for every turn), ' +
       '"lastTurn" (provider/model/token usage from the most recent LLM call), ' +
+      '"carina" (whether you are a Carina answerer for inline @-queries, and the names of every other Carina-enabled character), ' +
       '"quilltap" (Quilltap version, runtime environment, client shell, release notes for the current or most recent ' +
       'release, and the current changelog — all three parts). The "quilltap" section can also be requested in three ' +
       'finer-grained pieces: "quilltap.version" (version + runtime + client shell only), "quilltap.releaseNotes" ' +
@@ -462,7 +485,7 @@ export const selfInventoryToolDefinition = {
       'your groups (ids, names, linked stores), the other characters present with you (names, aliases, identities), and the ' +
       'files attached to this chat with a copy-pasteable doc_read_file(...) call for each — request "context.chat", ' +
       '"context.project", "context.groups", "context.characters", or "context.files" for one part. ' +
-      'Pass a "sections" array to request only specific sections; omit it to receive all nine top-level sections. ' +
+      'Pass a "sections" array to request only specific sections; omit it to receive all ten top-level sections. ' +
       'Use this when you need to know what source material you have access to, who is around you, how you are currently ' +
       'configured, or how close the last turn was to the context window limit.',
     parameters: zodToOpenAISchema(selfInventoryToolInputSchema),

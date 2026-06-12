@@ -4,7 +4,13 @@
 
 ### 4.7-dev
 
-#### New Chat: "Play As" any already-added character
+#### self_inventory: new `carina` section
+
+Added a tenth top-level section to the `self_inventory` tool, `carina`, so a character can introspect its Carina (inline `@`-query) standing: whether it is itself a Carina answerer (`canBeCarina === true`), and the names of every other Carina-enabled character in the instance.
+
+- `lib/tools/self-inventory-tool.ts`: added `'carina'` to `SELF_INVENTORY_SECTIONS`, the `SelfInventoryCarinaSection` type, and the `carina?` field on `SelfInventoryToolOutput`; updated the tool/section descriptions (nine → ten top-level sections).
+- `lib/tools/handlers/self-inventory-handler.ts`: `buildCarinaSection` resolves the data from `repos.characters.findAllRaw()` — the overlay-free raw read, since `canBeCarina` is a DB column, not a vault field — so a single broken character vault can't sink the listing (mirrors the orchestrator's per-turn answerer probe). Added `formatCarinaSection` and wired both into the execute/format paths.
+- Regenerated the tool-definitions snapshot (`lib/tools/__tests__/tool-definitions-snapshot.test.ts`); diff is additive (one enum value + description text). No schema, DDL, migration, export, or backup change.
 
 The **Play As (Optional)** dropdown on the New Chat and "Continue Elsewhere" forms now offers every character already added to the chat, not just characters whose default `controlledBy` is `'user'`. Choosing one switches that participant in place to `controlledBy: 'user'` (its connection profile is cleared) — the same in-place mechanism the expanded picker panel's "Play As (User)" select already used. Both controls now read and mutate one source of truth: `selectedCharacters[].controlledBy`.
 
