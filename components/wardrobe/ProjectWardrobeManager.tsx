@@ -302,10 +302,10 @@ export function ProjectWardrobeManager({
                   <h4 className="qt-label truncate">{item.title}</h4>
                   <span className="qt-text-xs qt-text-secondary truncate">{item.types.join(', ')}</span>
                   {item.componentItemIds && item.componentItemIds.length > 0 && (
-                    <span className="qt-badge qt-text-xs">Composite</span>
+                    <span className="qt-badge qt-text-secondary">Composite</span>
                   )}
-                  {item.isDefault && <span className="qt-badge qt-badge-primary qt-text-xs">Default</span>}
-                  {item.archivedAt && <span className="qt-badge qt-text-xs">Archived</span>}
+                  {item.isDefault && <span className="qt-badge qt-badge-primary">Default</span>}
+                  {item.archivedAt && <span className="qt-badge qt-text-secondary">Archived</span>}
                 </div>
                 {item.description && (
                   <p className="qt-text-small qt-text-secondary mt-1">{item.description}</p>

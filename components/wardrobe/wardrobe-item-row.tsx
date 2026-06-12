@@ -196,7 +196,7 @@ export function WardrobeItemRow({
               <span className="qt-text-xs qt-text-secondary">· default</span>
             )}
             {item.types.map((t) => (
-              <span key={t} className={`qt-badge ${TYPE_BADGE_CLASS[t]} qt-text-xs`}>
+              <span key={t} className={`qt-badge ${TYPE_BADGE_CLASS[t]}`}>
                 {t}
               </span>
             ))}
@@ -252,7 +252,7 @@ export function WardrobeItemRow({
                           className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:qt-bg-muted"
                         >
                           <span>{SLOT_LABEL[slot]}</span>
-                          <span className={`qt-badge ${TYPE_BADGE_CLASS[slot]} qt-text-xs`}>
+                          <span className={`qt-badge ${TYPE_BADGE_CLASS[slot]}`}>
                             {slot}
                           </span>
                         </button>

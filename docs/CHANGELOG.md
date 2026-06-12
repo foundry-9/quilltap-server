@@ -4,6 +4,29 @@
 
 ### 4.7-dev
 
+#### Fix: badges with `qt-text-xs` were illegible on bold-accent themes (app-wide)
+
+Badges carrying `qt-badge … qt-text-xs` (e.g. the `Default` scenario badge, wardrobe type/default/info/warning badges) went low-contrast on bold-accent themes such as Madman's Box. A `.qt-badge*` already sizes itself via `--qt-badge-font-size` (0.75rem) and sets its own per-variant foreground, but `.qt-text-xs` ALSO forces `color: var(--qt-text-secondary-fg)`; defined later in the cascade with equal specificity, that muted color overrode the badge's intended foreground — illegible amber-on-amber where `primary`/status fills are loud.
+
+- Swept the redundant-and-harmful `qt-text-xs` off every badge call site (12 spans across `components/scenarios/ScenarioRow.tsx` and the wardrobe UI: `wardrobe-item-row.tsx`, `equipped-bundle-card.tsx`, `equipped-slot-row.tsx`, `ProjectWardrobeManager.tsx`, `wardrobe-item-editor.tsx`). Solid-fill variants now show their own foreground; the two bare `qt-badge` labels (Composite/Archived) use color-only `qt-text-secondary` to keep their muted tint. Sizes are unchanged (the badge token already equals `text-xs`).
+- Chose a call-site sweep over a CSS guard on `.qt-text-xs` itself: many non-badge elements legitimately layer `qt-text-xs` with an explicit color (`qt-text-success`/`qt-text-warning`/`qt-text-muted`/`qt-text-secondary`), so raising `qt-text-xs`'s color specificity would have clobbered those. No `qt-*` class changed, so no theme-storybook / stylebook / bundled-theme update; no schema, DB, or export change.
+
+#### Fix: Scenario Edit dialog showed the wrong (previous) scenario's body
+
+Opening the Edit dialog for one scenario, then another, showed the first scenario's body in the editor for every subsequent scenario — and the first scenario opened (often the default, alphabetically first) showed an empty editor. Root cause: `ScenarioEditorModal` seeded its `body` state in a `useEffect`, but the Lexical editor's `remountKey` (`edit:<path>`) is computed during render. `MarkdownLexicalEditor` only reads its value at mount and remounts when `remountKey` changes, so the editor remounted on the new key while `body` still held the previous scenario's text; the effect's `setBody` landed a commit too late and never re-triggered a remount. Affected both project and general scenarios (shared modal).
+
+- `components/scenarios/ScenarioEditorModal.tsx`: seed the form synchronously during render (React's "adjust state when a prop changes" pattern, guarded by a `seededKey`) instead of in an effect, so `body` is correct in the same commit that flips `remountKey`. Re-seeds fresh on every open (including re-opening the same scenario). Removed the now-unused `useEffect`/`useMemo`.
+- New `components/scenarios/__tests__/ScenarioEditorModal.test.tsx`: the editor mock faithfully mimics the "read value only at mount, remount on remountKey" contract, so the switch-while-open case fails on the old code and passes on the fix (4 cases). UI-only React state fix; no schema, DB, or export change.
+
+#### Fix: Scenarios rows no longer wrap into unreadable single-letter columns in narrow cards
+
+In the narrow project Scenarios card (the three-column Prospero grid at `xl`, ~370px), the per-row `Edit` / `Rename` / `Delete` text buttons had no horizontal room and flexbox wrapped them down to one character per line. The row is now width-adaptive: inline buttons when the container is wide, a single `⋮` kebab menu when it's narrow. One component serves both the project card and the wide `/scenarios` page.
+
+- New `components/scenarios/ScenarioRow.tsx`: presentational row owning its own kebab open-state (outside-`mousedown` + capture-phase `Escape` close, mirroring `wardrobe-item-row.tsx`). Renders both an inline `Edit`/`Rename`/`Delete` cluster (`hidden @lg:flex`) and a kebab (`@lg:hidden`) built from the existing `qt-dropdown` / `qt-dropdown-item` classes; a Tailwind v4 container query (`@container` on the `ScenariosManager` root) picks one by the row's actual width. The default radio and Default badge are unchanged in both modes.
+- `components/scenarios/ScenariosManager.tsx`: extracted the inline `<li>` into `<ScenarioRow>`; all mutation handlers (set-default / edit / rename / delete) stay in the manager.
+- `app/prospero/[id]/components/ScenariosCard.tsx`: dropped `overflow-hidden` (rounded the header button instead) so the kebab menu on the last row isn't clipped by the card.
+- New `components/scenarios/__tests__/ScenarioRow.test.tsx` (12 cases: content, default radio, inline buttons, kebab open/close via Escape + outside click, menu-item callbacks). No new `qt-*` tokens or Tailwind utilities; no schema, DB, migration, or export change. Documented in `help/project-scenarios.md` and `help/general-scenarios.md`.
+
 #### Fix: Carina answers no longer fail with "empty response" when the answerer thrashes tools
 
 A Carina query routed to a tool-eager reasoning model could exhaust the tool-iteration budget without ever composing a prose reply — the model emitted a tool call on the initial stream and on all 5 allowed iterations, leaving the answer buffer empty. The loop exited on the cap and `runCarinaQuery` returned `llm-failed: empty response`, which Prospero surfaced as "<Name> was unable to respond — empty response," even though the answerer had gathered plenty via document/scene/memory tools.

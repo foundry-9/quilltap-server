@@ -99,7 +99,7 @@ export function EquippedSlotRow({
   return (
     <div className="qt-card py-2 px-3">
       <div className="flex items-center justify-between mb-1">
-        <span className={`qt-badge ${TYPE_BADGE_CLASS[slot]} qt-text-xs`}>{SLOT_LABEL[slot]}</span>
+        <span className={`qt-badge ${TYPE_BADGE_CLASS[slot]}`}>{SLOT_LABEL[slot]}</span>
         <div className="flex items-center gap-1">
           <button
             type="button"

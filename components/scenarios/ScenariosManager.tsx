@@ -20,6 +20,7 @@
 import { useCallback, useState } from 'react'
 import { showConfirmation, showPrompt } from '@/lib/alert'
 import { ScenarioEditorModal } from './ScenarioEditorModal'
+import { ScenarioRow } from './ScenarioRow'
 import type { Scenario, ScenarioMutator } from './types'
 
 interface ScenariosManagerProps {
@@ -118,7 +119,7 @@ export function ScenariosManager({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 @container">
       {warnings.length > 0 && (
         <div className="qt-bg-warning/10 qt-border qt-border-warning rounded p-3 text-sm space-y-1" role="alert">
           {warnings.map((w, i) => (
@@ -152,53 +153,15 @@ export function ScenariosManager({
       ) : (
         <ul className="divide-y qt-border-default">
           {scenarios.map((scenario) => (
-            <li key={scenario.path} className="py-3 flex items-start gap-3">
-              <input
-                type="radio"
-                checked={scenario.isDefault}
-                onChange={() => handleSetDefault(scenario)}
-                className="qt-radio mt-1"
-                title={scenario.isDefault ? `${scopeLabel} default` : `Set as ${scopeLabel} default`}
-                aria-label={`Set ${scenario.name} as ${scopeLabel} default`}
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  <h4 className="qt-label truncate">{scenario.name}</h4>
-                  <span className="qt-text-xs qt-text-secondary truncate">
-                    {scenario.filename}.md
-                  </span>
-                  {scenario.isDefault && (
-                    <span className="qt-badge qt-badge-primary qt-text-xs">Default</span>
-                  )}
-                </div>
-                {scenario.description && (
-                  <p className="qt-text-small qt-text-secondary mt-1">{scenario.description}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => openEdit(scenario)}
-                  className="qt-button qt-button-ghost qt-button-sm"
-                  title="Edit scenario"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleRename(scenario)}
-                  className="qt-button qt-button-ghost qt-button-sm"
-                  title="Rename file"
-                >
-                  Rename
-                </button>
-                <button
-                  onClick={() => handleDelete(scenario)}
-                  className="qt-button qt-button-ghost qt-button-sm qt-text-destructive"
-                  title="Delete scenario"
-                >
-                  Delete
-                </button>
-              </div>
-            </li>
+            <ScenarioRow
+              key={scenario.path}
+              scenario={scenario}
+              scopeLabel={scopeLabel}
+              onSetDefault={handleSetDefault}
+              onEdit={openEdit}
+              onRename={handleRename}
+              onDelete={handleDelete}
+            />
           ))}
         </ul>
       )}

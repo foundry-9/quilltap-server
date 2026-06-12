@@ -612,7 +612,7 @@ export function WardrobeItemEditor({
                       effectiveTypes.map((t) => (
                         <span
                           key={t}
-                          className={`qt-badge ${TYPE_BADGE_CLASS[t]} qt-text-xs uppercase`}
+                          className={`qt-badge ${TYPE_BADGE_CLASS[t]} uppercase`}
                         >
                           {t}
                         </span>
@@ -637,7 +637,7 @@ export function WardrobeItemEditor({
                         >
                           {c.title}
                           {c.isShared ? (
-                            <span className="qt-badge qt-badge-info qt-text-xs ml-1">
+                            <span className="qt-badge qt-badge-info ml-1">
                               shared
                             </span>
                           ) : null}
@@ -711,7 +711,7 @@ export function WardrobeItemEditor({
                                       <span className="flex-1 truncate text-sm text-foreground">
                                         {c.title}
                                         {c.isShared ? (
-                                          <span className="ml-1 qt-badge qt-badge-info qt-text-xs">
+                                          <span className="ml-1 qt-badge qt-badge-info">
                                             shared
                                           </span>
                                         ) : null}

@@ -50,6 +50,8 @@ The **Scenarios** card on each project's page is your atelier. Every project aut
 - **Delete** a scenario with the **Delete** button, after a moment's confirmation. The file is removed from the document store; chats that already used it are unaffected, since the scenario text is woven into the chat at the moment of its creation.
 - **Set the default** by clicking the radio button at the start of a row. The newly elected default has its frontmatter rewritten to `isDefault: true`, and any sibling that previously claimed the title is gently demoted.
 
+When the card is pinched for room — as it so often is in the three-abreast project grid — the trio of **Edit**, **Rename**, and **Delete** withdraw behind a single **⋮** menu at the end of each row; a click unfurls them. Where the card has elbow room to spare, the three present themselves inline, as plainly as ever. The radio button minding the default keeps its post on the left regardless.
+
 Should a scenario file have multiple defaults claimed (perhaps after editing the files directly through the Scriptorium), the card surfaces a soft warning naming the conflicting files so you may resolve the dispute at your leisure.
 
 ## Picking a Scenario for a New Chat

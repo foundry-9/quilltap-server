@@ -52,6 +52,8 @@ The **Scenarios** entry in the sidebar opens the dedicated page where you may:
 - **Delete** a scenario with **Delete**, after a moment's confirmation. Chats that already used it are unaffected, since the scenario text is woven into the chat at the moment of its creation.
 - **Set the default** by clicking the radio button at the start of a row. The newly elected default has its frontmatter rewritten to `isDefault: true`, and any sibling that previously claimed the title is gently demoted.
 
+On a generous, full-width page the **Edit**, **Rename**, and **Delete** buttons present themselves inline; should the window narrow to a sliver, the three retire behind a tidy **⋮** menu at the end of each row, a click away from service.
+
 If multiple files claim the default at once (perhaps after direct editing through the Scriptorium), the page surfaces a soft warning so you can settle the matter at your leisure.
 
 ## Picking a Scenario for a New Chat
