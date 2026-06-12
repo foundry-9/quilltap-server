@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### TanStack Query migration — Phase 2 (conditional/simple reads)
+
+Migrated the low-risk, read-only SWR call sites to `useQuery` (no mutations in this batch). Behavior preserved: conditional `useSWR(cond ? url : null)` became `useQuery({ enabled: cond })`.
+
+- 16 files moved off SWR: `search-dialog.tsx` (dead import removed), `HelpEntityPicker.tsx`, `LibraryFilePickerModal.tsx` (5 reads), `FolderPicker.tsx`, `useFilePreview.ts` (raw-text queryFn, not JSON), `PluginConfigModal.tsx`, `useDictionaryFeed.ts`, `useEntitySearch.ts`, `GenerateImageDialog.tsx`, the Lexical spellcheck reads (`LexicalComposerWrapper.tsx`, `TextReplacementPlugin.tsx`, `DocumentPane.tsx`), `tag-style-provider.tsx`, `MoveToProjectModal.tsx`, `ChatProjectModal.tsx`, `CreateNPCDialog.tsx`.
+- `FolderPicker`'s `mutate()` revalidation became `refetch()`. Dynamic URLs are built inside the queryFn from the same inputs the query key encodes (satisfies `@tanstack/query/exhaustive-deps`).
+- Grew the `lib/query/keys.ts` factory: `chats.photoAlbums/groupStores`, `projects`, `mountPoints`, `tags`, `plugins`, `photos`, `files`, `helpChat`.
+- Front-end only: no API/route, schema, DDL, migration, export, or backup change.
+
 #### TanStack Query migration — Phase 1 scaffolding
 
 First step of migrating the client's server-state fetching from SWR to TanStack Query v5 (see `docs/developer/features/tanstack-query-migration.md`). This phase adds the foundations only; no fetch site has moved yet, so there is no behavior change.

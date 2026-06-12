@@ -35,6 +35,8 @@ export const queryKeys = {
     list: (filters?: Filters) => ['chats', 'list', filters ?? {}] as const,
     detail: (id: string) => ['chats', 'detail', id] as const,
     state: (id: string) => ['chats', id, 'state'] as const,
+    photoAlbums: (id: string) => ['chats', id, 'photo-albums'] as const,
+    groupStores: (id: string) => ['chats', id, 'group-stores'] as const,
   },
   settings: {
     chat: ['settings', 'chat'] as const,
@@ -44,5 +46,37 @@ export const queryKeys = {
   },
   providers: {
     all: ['providers'] as const,
+  },
+  projects: {
+    all: ['projects'] as const,
+    list: (filters?: Filters) => ['projects', 'list', filters ?? {}] as const,
+    detail: (id: string) => ['projects', 'detail', id] as const,
+    files: (projectId: string) => ['projects', projectId, 'files'] as const,
+  },
+  mountPoints: {
+    all: ['mount-points'] as const,
+    list: (filters?: Filters) => ['mount-points', 'list', filters ?? {}] as const,
+  },
+  tags: {
+    all: ['tags'] as const,
+    list: (filters?: Filters) => ['tags', 'list', filters ?? {}] as const,
+  },
+  plugins: {
+    all: ['plugins'] as const,
+    config: (pluginName: string) => ['plugins', pluginName, 'config'] as const,
+  },
+  photos: {
+    all: ['photos'] as const,
+    list: (filters?: Filters) => ['photos', 'list', filters ?? {}] as const,
+  },
+  files: {
+    all: ['files'] as const,
+    list: (filters?: Filters) => ['files', 'list', filters ?? {}] as const,
+    folders: (projectId?: string) => ['files', 'folders', projectId ?? null] as const,
+    content: (url: string) => ['files', 'content', url] as const,
+  },
+  helpChat: {
+    all: ['help-chat'] as const,
+    entity: (apiUrl: string) => ['help-chat', 'entity', apiUrl] as const,
   },
 } as const

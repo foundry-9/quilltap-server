@@ -13,7 +13,9 @@
 
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react'
 import { Icon } from '@/components/ui/icon'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import DocumentGutter, { type LinePosition } from './DocumentGutter'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
@@ -119,7 +121,10 @@ function DocumentEditorPlugins({
   onFocusProcessed?: () => void
 }) {
   const [editor] = useLexicalComposerContext()
-  const { data: chatSettings } = useSWR<{ composerSpellcheck?: boolean }>('/api/v1/settings/chat')
+  const { data: chatSettings } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) => apiFetch<{ composerSpellcheck?: boolean }>('/api/v1/settings/chat', { signal }),
+  })
   const spellCheck = chatSettings?.composerSpellcheck ?? true
 
   // Sync editable state

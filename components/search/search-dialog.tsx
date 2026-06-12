@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { useRouter } from 'next/navigation'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
-import useSWR from 'swr'
 import { SearchResults } from './search-results'
 import type { SearchResult, SearchResponse, SearchType } from './types'
 

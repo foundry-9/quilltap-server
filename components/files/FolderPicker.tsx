@@ -8,7 +8,9 @@
  */
 
 import { useState, useCallback } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 interface FolderInfo {
   path: string
@@ -50,18 +52,25 @@ export default function FolderPicker({
   const [showNewFolderInput, setShowNewFolderInput] = useState(false)
   const [folders, setFolders] = useState<FolderInfo[]>([])
 
-  const filesUrl = projectId
-    ? `/api/v1/projects/${projectId}/files`
-    : '/api/v1/files?filter=general'
-  const foldersUrl = projectId
-    ? `/api/v1/files/folders?projectId=${projectId}`
-    : '/api/v1/files/folders'
-
-  // Fetch files and folders via SWR
-  const { data: filesData, isLoading: filesLoading } = useSWR<{ files: Array<{ folderPath?: string }> }>(filesUrl)
-  const { data: foldersData, isLoading: foldersLoading, mutate: mutateFolders } = useSWR<{ folders: DbFolder[] }>(
-    foldersUrl
-  )
+  // Fetch files and folders via TanStack Query. URLs are built inside the
+  // queryFn from `projectId` so the key (which encodes projectId) stays the
+  // single source of cache identity.
+  const { data: filesData, isLoading: filesLoading } = useQuery({
+    queryKey: projectId ? queryKeys.projects.files(projectId) : queryKeys.files.list({ filter: 'general' }),
+    queryFn: ({ signal }) =>
+      apiFetch<{ files: Array<{ folderPath?: string }> }>(
+        projectId ? `/api/v1/projects/${projectId}/files` : '/api/v1/files?filter=general',
+        { signal }
+      ),
+  })
+  const { data: foldersData, isLoading: foldersLoading, refetch: refetchFolders } = useQuery({
+    queryKey: queryKeys.files.folders(projectId ?? undefined),
+    queryFn: ({ signal }) =>
+      apiFetch<{ folders: DbFolder[] }>(
+        projectId ? `/api/v1/files/folders?projectId=${projectId}` : '/api/v1/files/folders',
+        { signal }
+      ),
+  })
 
   const loading = filesLoading || foldersLoading
   const files = filesData?.files ?? []
@@ -132,8 +141,8 @@ export default function FolderPicker({
 
   // Update folders state when data changes
   const fetchFolders = useCallback(async () => {
-    await mutateFolders()
-  }, [mutateFolders])
+    await refetchFolders()
+  }, [refetchFolders])
 
   const handleCreateFolder = async () => {
     if (!newFolderInput.trim()) return
