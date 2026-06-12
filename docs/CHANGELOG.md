@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### TanStack Query migration — Phase 1 scaffolding
+
+First step of migrating the client's server-state fetching from SWR to TanStack Query v5 (see `docs/developer/features/tanstack-query-migration.md`). This phase adds the foundations only; no fetch site has moved yet, so there is no behavior change.
+
+- Added deps: `@tanstack/react-query`, `@tanstack/react-query-devtools`, `@tanstack/eslint-plugin-query` (all ^5.101.0).
+- New `lib/query/`: `query-client.ts` (`makeQueryClient` factory — `staleTime: 30s`, `refetchOnWindowFocus: false`, `retry: 1`), `QueryProvider.tsx` (client provider holding the client in `useState`, dev-only devtools), `fetcher.ts` (`apiFetch` + `ApiFetchError`, mirroring `swrFetcher`'s throw-on-non-2xx and `error.status` shape, forwards `AbortSignal`), and `keys.ts` (the query-key factory — the single source of cache identity; grows per migration phase).
+- `components/providers/session-provider.tsx`: `<QueryProvider>` now wraps the existing `<SWRConfig>`. Both coexist until the last `useSWR` is gone.
+- `eslint.config.mjs`: added `@tanstack/eslint-plugin-query` flat recommended rules.
+- Test harness: `__tests__/helpers/renderWithQuery.tsx` (fresh client per render, retries off, `gcTime: 0` — the TanStack analogue of the old `provider: () => new Map()` SWR wrapper). `fetch` stays mocked via `jest-fetch-mock`.
+- Front-end plumbing only: no API/route, schema, DDL, migration, export, or backup change.
+
 #### Aurora header: the Carina and User-controlled toggles now light up when active
 
 The favorite star already filled in when a character was favorited, but the two icons beside it — the Carina (monitor) and User-controlled (person) toggles — were permanently golden regardless of state, giving no on/off feedback. They now mirror the star: golden (`qt-text-favorite`) when active, muted grey (`qt-text-secondary`) when inactive, with the color change animated via `transition`. Applies to both the `/aurora` list cards and the `/aurora/[id]/view` detail header.

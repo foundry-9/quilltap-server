@@ -66,6 +66,17 @@ export const POST = createContextHandler<{ id: string }>(
 
 Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes are supported. A few non-v1 routes remain for specific purposes: `/api/health` (health check), `/api/plugin-routes/[...path]` (plugin dispatcher), and `/api/themes/*` (asset serving).
 
+## Client Data Fetching (TanStack Query)
+
+Client-side server-state fetching is migrating from SWR to **TanStack Query v5** (`@tanstack/react-query`) — see `docs/developer/features/tanstack-query-migration.md`. During the migration both coexist: `<QueryProvider>` (from `lib/query/QueryProvider.tsx`) wraps the surviving `<SWRConfig>` in `components/providers/session-provider.tsx`. New reads/writes should use TanStack Query, not SWR.
+
+- **Query keys are the single source of truth.** Never pass a raw string/array key to `useQuery`/`useMutation`/`invalidateQueries`. Always go through the factory in `lib/query/keys.ts` (`queryKeys.characters.detail(id)`, etc.). This is what makes prefix-based invalidation (`invalidateQueries({ queryKey: queryKeys.characters.all })`) reliable instead of brittle URL string-matching. Add a block to the factory when you migrate a new entity.
+- **Fetcher:** use `apiFetch<T>(url, init?)` from `lib/query/fetcher.ts` as the `queryFn`, forwarding TanStack's `signal` (`queryFn: ({ signal }) => apiFetch<T>(url, { signal })`). It throws `ApiFetchError` (carries `status` + parsed `info`) on non-2xx, matching the old `swrFetcher`.
+- **Client factory:** `makeQueryClient()` in `lib/query/query-client.ts` (a per-mount factory, not a module singleton — keeps SSR/test isolation clean). Defaults preserve the old SWRConfig feel (`refetchOnWindowFocus: false`).
+- **Mutations** go through `useMutation` with `onSuccess`/`onSettled` invalidation; reproduce existing optimistic updates with `onMutate` + `setQueryData` + rollback in `onError`.
+- **Tests** wrap components with `renderWithQuery` from `__tests__/helpers/renderWithQuery.tsx` (fresh client, retries off, `gcTime: 0`); `fetch` is still mocked via `jest-fetch-mock`.
+- The Salon's SSE streaming transport is **out of scope** — TanStack Query is not a streaming transport. Migrate the reads *around* streaming, never the stream itself.
+
 ## Current State
 
 - **Details for things already implemented** are in [the README](README.md)

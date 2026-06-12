@@ -1,9 +1,12 @@
 import { defineConfig } from 'eslint/config'
 import nextVitals from 'eslint-config-next/core-web-vitals'
+import pluginQuery from '@tanstack/eslint-plugin-query'
 import quilltapPlugin from './eslint-quilltap-plugin.js'
 
 const eslintConfig = defineConfig([
   ...nextVitals,
+  // TanStack Query lint guardrails (exhaustive-deps, no-rest-destructuring, …)
+  ...pluginQuery.configs['flat/recommended'],
   {
     ignores: [
       '.next/**',
