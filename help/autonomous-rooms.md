@@ -65,7 +65,7 @@ From the Salon, click **New Autonomous Room** (next to *New Chat*); from the hom
 
 Two distinctions follow from that flip:
 
-- The *Play As* selection is removed — autonomous rooms have no user character.
+- The *Play As* selection is removed — autonomous rooms have no user character. (The reverse holds on an ordinary new-chat form: the instant you set a *Play As* character to take the user's chair, the **Make this an autonomous room** toggle greys itself out, since a room with a human at the table cannot run itself. Return that character to LLM control to restore the option.)
 - The right-hand card swaps **Reality Injection Mode** for **Autonomous Room**, where the household sets the cron expression (optional), the freshness window, the four budget caps (turns, tokens, wall-clock minutes, USD), whether the token cap counts only the dear (non-cached) tokens, the per-room visibility, and whether destructive tools are pre-authorized.
 
 Selection rules: at least two LLM-controlled characters, no user-controlled participants, every LLM character must have a connection profile. On submit, an **ad-hoc room** (one without a cron expression) takes itself in hand at once: the first run begins immediately, in the spirit of the householder who set it on its way and then turned to other matters. A **scheduled room** (one with a cron expression) waits, idle, for its first scheduled tick. Either kind of room appears in the **Autonomous Rooms** management list under the Chat tab, where **Pause**, **Resume**, and **Stop** are at one's disposal at all hours.

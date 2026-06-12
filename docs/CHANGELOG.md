@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### New Chat: "Play As" any already-added character
+
+The **Play As (Optional)** dropdown on the New Chat and "Continue Elsewhere" forms now offers every character already added to the chat, not just characters whose default `controlledBy` is `'user'`. Choosing one switches that participant in place to `controlledBy: 'user'` (its connection profile is cleared) — the same in-place mechanism the expanded picker panel's "Play As (User)" select already used. Both controls now read and mutate one source of truth: `selectedCharacters[].controlledBy`.
+
+- When any user-controlled participant is present, the **Make this an autonomous room** toggle is disabled with an explanatory note (on top of the existing submit-time and server-side guards, which are unchanged).
+- Reverting a character to "Chat as yourself": a default-user persona pulled in by the dropdown is removed from the cast; a default-LLM character that was flipped is handed back to the LLM with its connection profile cleared (so the submit guard asks for a profile again — same behavior as the picker panel).
+- Retired `state.selectedUserCharacterId` from `NewChatFormState`; the user persona now lives only in `selectedCharacters`. The submit path no longer appends a separate user participant. Seeding (continuation, single-character, single-LLM defaults) now adds the user/partner as an in-place user entry, skipped in autonomous mode.
+- `useNewChat` keeps the full character roster so a default-user character can be pulled into the cast and seeding can resolve a user character whose default is either `'llm'` or `'user'`.
+- UI/state-layer only: no schema, DDL, migration, `.qtap`/SillyTavern export, or backup changes. Help: `help/chats.md` (new "Play As" section), `help/autonomous-rooms.md` (toggle-disabling note). Tests: 7 new cases in `components/new-chat/__tests__/NewChatForm.test.tsx`.
+
 #### Fix: badges with `qt-text-xs` were illegible on bold-accent themes (app-wide)
 
 Badges carrying `qt-badge … qt-text-xs` (e.g. the `Default` scenario badge, wardrobe type/default/info/warning badges) went low-contrast on bold-accent themes such as Madman's Box. A `.qt-badge*` already sizes itself via `--qt-badge-font-size` (0.75rem) and sets its own per-variant foreground, but `.qt-text-xs` ALSO forces `color: var(--qt-text-secondary-fg)`; defined later in the cascade with equal specificity, that muted color overrode the badge's intended foreground — illegible amber-on-amber where `primary`/status fills are loud.

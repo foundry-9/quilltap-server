@@ -115,6 +115,15 @@ export function NewChatForm({
   )
   const singleLlm = llmSelected.length === 1 ? llmSelected[0] : null
 
+  // The single source of truth for "who the user plays as": the cast member
+  // whose `controlledBy` is 'user'. Both the "Play As" dropdown and the picker
+  // panel's per-character select read and mutate this same slot.
+  const userEntry = useMemo(
+    () => selectedCharacters.find((sc) => sc.controlledBy === 'user'),
+    [selectedCharacters]
+  )
+  const hasUserControlled = Boolean(userEntry)
+
   const singleCharacterScenarios = useMemo(() => {
     if (!singleLlm) return null
     const s = singleLlm.character.scenarios
@@ -292,12 +301,78 @@ export function NewChatForm({
       name: sc.character.name,
       isUserControlled: false,
     }))
-    const userChar = userControlledCharacters.find((c) => c.id === state.selectedUserCharacterId)
-    if (userChar) {
-      list.push({ id: userChar.id, name: userChar.name, isUserControlled: true })
+    if (userEntry) {
+      list.push({
+        id: userEntry.character.id,
+        name: userEntry.character.name,
+        isUserControlled: true,
+      })
     }
     return list
-  }, [llmSelected, userControlledCharacters, state.selectedUserCharacterId])
+  }, [llmSelected, userEntry])
+
+  // "Play As" options: every cast member (so any added character can take the
+  // user's chair) plus default-user characters not yet in the cast (preserving
+  // the ability to pull in a persona that wasn't picked).
+  const playAsOptions = useMemo(() => {
+    const castIds = new Set(selectedCharacters.map((sc) => sc.character.id))
+    const fromCast = selectedCharacters.map((sc) => ({
+      id: sc.character.id,
+      label: formatCharacterName(sc.character),
+    }))
+    const fromDefaults = userControlledCharacters
+      .filter((c) => !castIds.has(c.id))
+      .map((c) => ({ id: c.id, label: formatCharacterName(c) }))
+    return [...fromCast, ...fromDefaults]
+  }, [selectedCharacters, userControlledCharacters, formatCharacterName])
+
+  // Mark one character as the user's persona, in place. Reverting the prior
+  // user entry: a default-user persona pulled in by this dropdown is removed;
+  // a default-LLM character that was flipped is handed back to the LLM (its
+  // profile is cleared, matching CharacterPickerPanel.handleProfileChange, so
+  // the submit guard will ask for a profile again).
+  const handlePlayAsChange = useCallback(
+    (nextId: string) => {
+      const defaultUserIds = new Set(userControlledCharacters.map((c) => c.id))
+      setSelectedCharacters((prev) => {
+        let next = prev
+        const current = prev.find((sc) => sc.controlledBy === 'user')
+        if (current) {
+          if (defaultUserIds.has(current.character.id)) {
+            next = prev.filter((sc) => sc.character.id !== current.character.id)
+          } else {
+            next = prev.map((sc) =>
+              sc.character.id === current.character.id
+                ? { ...sc, controlledBy: 'llm' as const, connectionProfileId: '' }
+                : sc
+            )
+          }
+        }
+        if (nextId === '') return next // "Chat as yourself"
+        if (next.some((sc) => sc.character.id === nextId)) {
+          return next.map((sc) =>
+            sc.character.id === nextId
+              ? { ...sc, controlledBy: 'user' as const, connectionProfileId: '' }
+              : sc
+          )
+        }
+        const fromDefault = userControlledCharacters.find((c) => c.id === nextId)
+        if (fromDefault) {
+          return [
+            ...next,
+            {
+              character: fromDefault,
+              connectionProfileId: '',
+              selectedSystemPromptId: null,
+              controlledBy: 'user' as const,
+            },
+          ]
+        }
+        return next
+      })
+    },
+    [userControlledCharacters, setSelectedCharacters]
+  )
 
   const handleOutfitSelectionsChange = useCallback(
     (selections: OutfitSelection[]) => {
@@ -329,9 +404,6 @@ export function NewChatForm({
       setState((prev) => ({
         ...prev,
         autonomous: { ...prev.autonomous, enabled: next },
-        // Strip the Play-As selection when flipping into autonomous mode —
-        // autonomous rooms have no user. We leave it alone if flipping back.
-        selectedUserCharacterId: next ? '' : prev.selectedUserCharacterId,
       }))
     },
     [setState]
@@ -360,7 +432,7 @@ export function NewChatForm({
             checked={isAutonomous}
             onChange={(e) => handleAutonomousToggle(e.target.checked)}
             className="qt-checkbox mt-1"
-            disabled={creating}
+            disabled={creating || hasUserControlled}
           />
           <span>
             <span className="font-medium text-foreground">Make this an autonomous room</span>
@@ -374,9 +446,10 @@ export function NewChatForm({
             </span>
           </span>
         </label>
-        {isAutonomous && state.selectedUserCharacterId && (
+        {hasUserControlled && !isAutonomous && (
           <p className="mt-2 qt-text-xs qt-text-warning">
-            User character will be removed on submit — autonomous rooms have no user.
+            A character is set to Play As (user). Autonomous rooms have no user —
+            revert it to &ldquo;Chat as yourself&rdquo; to enable.
           </p>
         )}
       </div>
@@ -443,24 +516,22 @@ export function NewChatForm({
           </div>
         )}
 
-        {!isAutonomous && userControlledCharacters.length > 0 && (
+        {!isAutonomous && playAsOptions.length > 0 && (
           <div>
             <label htmlFor="new-chat-partner" className="mb-2 block text-sm qt-text-primary">
               Play As (Optional)
             </label>
             <select
               id="new-chat-partner"
-              value={state.selectedUserCharacterId}
-              onChange={(e) =>
-                setState((prev) => ({ ...prev, selectedUserCharacterId: e.target.value }))
-              }
+              value={userEntry?.character.id ?? ''}
+              onChange={(e) => handlePlayAsChange(e.target.value)}
               disabled={creating}
               className="qt-select"
             >
               <option value="">Chat as yourself</option>
-              {userControlledCharacters.map((char) => (
-                <option key={char.id} value={char.id}>
-                  {formatCharacterName(char)}
+              {playAsOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
                 </option>
               ))}
             </select>
@@ -476,7 +547,7 @@ export function NewChatForm({
               value={state.imageProfileId || null}
               onChange={handleImageProfileChange}
               characterId={characterIdForImage}
-              userCharacterId={state.selectedUserCharacterId}
+              userCharacterId={userEntry?.character.id}
             />
           ) : (
             <p className="qt-text-xs qt-text-muted">

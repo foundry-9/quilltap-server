@@ -12,10 +12,15 @@
  * with a plain textarea that surfaces its aria-label.
  */
 
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import React from 'react'
 import { NewChatForm } from '../NewChatForm'
-import type { NewChatFormState, GeneralScenarioOption } from '../types'
+import type {
+  Character,
+  GeneralScenarioOption,
+  NewChatFormState,
+  SelectedCharacter,
+} from '../types'
 
 // --- Stub heavy / irrelevant children -------------------------------------
 
@@ -64,14 +69,15 @@ jest.mock('@/components/new-chat/AutonomousRoomCard', () => ({
 }))
 
 jest.mock('@/hooks/usePersonaDisplayName', () => ({
-  useUserCharacterDisplayName: () => ({ formatCharacterName: (name: string) => name }),
+  useUserCharacterDisplayName: () => ({
+    formatCharacterName: (c: { name?: string } | null | undefined) => c?.name ?? '',
+  }),
 }))
 
 // --- Fixtures --------------------------------------------------------------
 
 function makeState(overrides: Partial<NewChatFormState> = {}): NewChatFormState {
   return {
-    selectedUserCharacterId: '',
     imageProfileId: '',
     scenario: '',
     scenarioId: null,
@@ -165,5 +171,156 @@ describe('NewChatForm scenario layering', () => {
     // The preset is set, but the free text survives (no `scenario: ''` reset).
     expect(next.generalScenarioPath).toBe(GENERAL_SCENARIO.path)
     expect(next.scenario).toBe('typed notes')
+  })
+})
+
+// --- "Play As" in-place + autonomous toggle --------------------------------
+
+function makeChar(id: string, name: string, overrides: Partial<Character> = {}): Character {
+  return { id, name, ...overrides }
+}
+
+function llm(character: Character, connectionProfileId = 'profile-1'): SelectedCharacter {
+  return { character, connectionProfileId, controlledBy: 'llm' }
+}
+
+function user(character: Character): SelectedCharacter {
+  return { character, connectionProfileId: '', controlledBy: 'user' }
+}
+
+/**
+ * Render with explicit cast + roster and a `setSelectedCharacters` spy so the
+ * Play-As updater can be inspected.
+ */
+function renderPlayAs(
+  selectedCharacters: SelectedCharacter[],
+  userControlledCharacters: Character[] = [],
+  stateOverrides: Partial<NewChatFormState> = {}
+) {
+  const setSelectedCharacters = jest.fn()
+  render(
+    <NewChatForm
+      profiles={[]}
+      imageProfiles={[]}
+      userControlledCharacters={userControlledCharacters}
+      selectedCharacters={selectedCharacters}
+      setSelectedCharacters={setSelectedCharacters}
+      state={makeState(stateOverrides)}
+      setState={jest.fn()}
+      project={null}
+      creating={false}
+    />
+  )
+  return { setSelectedCharacters }
+}
+
+/** Apply the functional updater the dropdown handed to setSelectedCharacters. */
+function applyUpdater(
+  spy: jest.Mock,
+  prev: SelectedCharacter[]
+): SelectedCharacter[] {
+  expect(spy).toHaveBeenCalledTimes(1)
+  const updater = spy.mock.calls[0][0] as (p: SelectedCharacter[]) => SelectedCharacter[]
+  return updater(prev)
+}
+
+const autonomousCheckbox = () =>
+  screen.getByRole('checkbox', { name: /Make this an autonomous room/i })
+
+describe('NewChatForm Play As (in-place)', () => {
+  it('lists cast characters and default-user characters in the dropdown', () => {
+    const alice = makeChar('a', 'Alice')
+    const bob = makeChar('b', 'Bob', { controlledBy: 'user' })
+    renderPlayAs([llm(alice)], [bob])
+
+    const select = screen.getByLabelText('Play As (Optional)')
+    const options = within(select).getAllByRole('option').map((o) => o.textContent)
+    expect(options).toEqual(['Chat as yourself', 'Alice', 'Bob'])
+  })
+
+  it('flips exactly the chosen cast character to user, leaving the rest LLM', () => {
+    const alice = makeChar('a', 'Alice')
+    const carol = makeChar('c', 'Carol')
+    const cast = [llm(alice), llm(carol)]
+    const { setSelectedCharacters } = renderPlayAs(cast)
+
+    fireEvent.change(screen.getByLabelText('Play As (Optional)'), {
+      target: { value: 'a' },
+    })
+
+    const next = applyUpdater(setSelectedCharacters, cast)
+    const a = next.find((sc) => sc.character.id === 'a')!
+    const c = next.find((sc) => sc.character.id === 'c')!
+    expect(a.controlledBy).toBe('user')
+    expect(a.connectionProfileId).toBe('')
+    expect(c.controlledBy).toBe('llm')
+    expect(c.connectionProfileId).toBe('profile-1')
+  })
+
+  it('"Chat as yourself" reverts a flipped default-LLM character to llm with no profile', () => {
+    // Alice is a default-LLM character currently flipped to user; she is NOT in
+    // the default-user roster, so reverting hands her back to the LLM.
+    const alice = makeChar('a', 'Alice')
+    const cast = [user(alice)]
+    const { setSelectedCharacters } = renderPlayAs(cast, [])
+
+    fireEvent.change(screen.getByLabelText('Play As (Optional)'), {
+      target: { value: '' },
+    })
+
+    const next = applyUpdater(setSelectedCharacters, cast)
+    expect(next).toHaveLength(1)
+    expect(next[0].controlledBy).toBe('llm')
+    expect(next[0].connectionProfileId).toBe('')
+  })
+
+  it('"Chat as yourself" removes a default-user persona pulled in by the dropdown', () => {
+    const alice = makeChar('a', 'Alice')
+    const bob = makeChar('b', 'Bob', { controlledBy: 'user' })
+    const cast = [llm(alice), user(bob)]
+    // Bob is in the default-user roster, so reverting removes him entirely.
+    const { setSelectedCharacters } = renderPlayAs(cast, [bob])
+
+    fireEvent.change(screen.getByLabelText('Play As (Optional)'), {
+      target: { value: '' },
+    })
+
+    const next = applyUpdater(setSelectedCharacters, cast)
+    expect(next).toEqual([llm(alice)])
+  })
+
+  it('adds a default-user character not yet in the cast as a user entry', () => {
+    const alice = makeChar('a', 'Alice')
+    const bob = makeChar('b', 'Bob', { controlledBy: 'user' })
+    const cast = [llm(alice)]
+    const { setSelectedCharacters } = renderPlayAs(cast, [bob])
+
+    fireEvent.change(screen.getByLabelText('Play As (Optional)'), {
+      target: { value: 'b' },
+    })
+
+    const next = applyUpdater(setSelectedCharacters, cast)
+    expect(next).toHaveLength(2)
+    const added = next.find((sc) => sc.character.id === 'b')!
+    expect(added.controlledBy).toBe('user')
+    expect(added.connectionProfileId).toBe('')
+  })
+
+  it('disables the autonomous toggle and shows the note when a user entry is present', () => {
+    const alice = makeChar('a', 'Alice')
+    const bob = makeChar('b', 'Bob', { controlledBy: 'user' })
+    renderPlayAs([llm(alice), user(bob)], [bob])
+
+    expect(autonomousCheckbox()).toBeDisabled()
+    expect(screen.getByText(/revert it to/i)).toBeInTheDocument()
+  })
+
+  it('enables the autonomous toggle with only LLM characters', () => {
+    const alice = makeChar('a', 'Alice')
+    const carol = makeChar('c', 'Carol')
+    renderPlayAs([llm(alice), llm(carol)])
+
+    expect(autonomousCheckbox()).not.toBeDisabled()
+    expect(screen.queryByText(/revert it to/i)).not.toBeInTheDocument()
   })
 })

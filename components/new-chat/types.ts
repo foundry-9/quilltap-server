@@ -100,11 +100,13 @@ export interface ImageProfile {
   modelName: string
 }
 
-export interface UserControlledCharacter {
-  id: string
-  name: string
-  title?: string | null
-}
+/**
+ * A character eligible to be the user's persona in the "Play As" dropdown.
+ * Carries the full {@link Character} so a chosen default-user character can be
+ * added to `selectedCharacters` in place (flipped to `controlledBy: 'user'`)
+ * without a second fetch.
+ */
+export type UserControlledCharacter = Character
 
 export interface Project {
   id: string
@@ -148,7 +150,6 @@ export interface NewChatAutonomousState {
 }
 
 export interface NewChatFormState {
-  selectedUserCharacterId: string
   imageProfileId: string
   scenario: string
   scenarioId: string | null
