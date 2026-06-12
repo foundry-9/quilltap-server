@@ -1,10 +1,11 @@
 /**
  * Ask Carina Tool Definition
  *
- * Provides a tool interface for LLMs to pose a quick, isolated question to a
- * designated "answerer" character (one with the Carina capability enabled).
- * The answerer runs its own minimal LLM call — no shared history — and posts
- * the reply as a `systemSender: 'carina'` message in the chat.
+ * Provides a tool interface for LLMs to pose a quick, isolated question to
+ * another character via Carina. A Carina line opens when EITHER side is a
+ * `canBeCarina` answerer: any answerer can be asked, and a caller who is itself
+ * an answerer may ask anyone. The recipient runs its own minimal LLM call — no
+ * shared history — and posts the reply as a `systemSender: 'carina'` message.
  */
 
 import { z } from 'zod';
@@ -19,7 +20,9 @@ export const askCarinaToolInputSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'The name of the character to ask. Must be a character with Carina answerer capability enabled.'
+      'The name of the character to ask. Any character with Carina answerer capability can be asked; ' +
+      'additionally, if you are yourself a Carina answerer, you may ask any character (a Carina line ' +
+      'opens when either side is an answerer).'
     ),
   question: z
     .string()
@@ -55,7 +58,7 @@ export const askCarinaToolDefinition = {
   function: {
     name: 'ask_carina',
     description:
-      'Ask a designated answerer character a quick standalone question. The answerer responds from their own identity and available tools without joining the conversation or seeing the chat history.',
+      'Ask another character a quick standalone question via Carina. They respond from their own identity and available tools without joining the conversation or seeing the chat history. You can ask any Carina answerer; if you are yourself a Carina answerer, you can ask any character (a Carina line opens when either side is an answerer).',
     parameters: zodToOpenAISchema(askCarinaToolInputSchema),
   },
 };

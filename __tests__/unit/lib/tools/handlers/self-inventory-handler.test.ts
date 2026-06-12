@@ -23,6 +23,7 @@ jest.mock('@/lib/logger', () => ({
 const mockRepos = {
   characters: {
     findById: jest.fn(),
+    findAllRaw: jest.fn(),
   },
   docMountPoints: {
     findById: jest.fn(),
@@ -422,5 +423,62 @@ describe('self-inventory context section', () => {
       characters: true,
       files: true,
     })
+  })
+})
+
+describe('self-inventory carina section (either-side reachability)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRepos.characters.findById.mockResolvedValue({
+      id: 'char-1',
+      name: 'Self',
+    })
+  })
+
+  // Roster: self + an answerer (Aria) + a plain non-answerer (Plain).
+  const ROSTER = [
+    { id: 'char-1', name: 'Self', canBeCarina: false },
+    { id: 'char-aria', name: 'Aria', canBeCarina: true },
+    { id: 'char-plain', name: 'Plain', canBeCarina: false },
+  ]
+
+  it('lists ONLY the answerers when self is not Carina-enabled', async () => {
+    mockRepos.characters.findAllRaw.mockResolvedValue(ROSTER)
+
+    const output = await executeSelfInventoryTool({ sections: ['carina'] }, baseContext)
+    const carina = output.carina
+    if (!carina || !carina.available) throw new Error('expected available carina section')
+
+    expect(carina.selfEnabled).toBe(false)
+    expect(carina.reachable).toEqual([{ name: 'Aria', isAnswerer: true }])
+
+    const formatted = formatSelfInventoryResults(output)
+    expect(formatted).toContain('You are NOT a Carina answerer')
+    expect(formatted).toContain('Carina answerers you can reach (1):')
+    expect(formatted).toContain('- Aria')
+    expect(formatted).not.toContain('- Plain')
+  })
+
+  it('lists EVERY other character (answerers noted) when self is Carina-enabled', async () => {
+    mockRepos.characters.findAllRaw.mockResolvedValue([
+      { id: 'char-1', name: 'Self', canBeCarina: true },
+      ...ROSTER.slice(1),
+    ])
+
+    const output = await executeSelfInventoryTool({ sections: ['carina'] }, baseContext)
+    const carina = output.carina
+    if (!carina || !carina.available) throw new Error('expected available carina section')
+
+    expect(carina.selfEnabled).toBe(true)
+    expect(carina.reachable).toEqual([
+      { name: 'Aria', isAnswerer: true },
+      { name: 'Plain', isAnswerer: false },
+    ])
+
+    const formatted = formatSelfInventoryResults(output)
+    expect(formatted).toContain('You ARE a Carina answerer')
+    expect(formatted).toContain('Characters you can reach via Carina (2):')
+    expect(formatted).toContain('- Aria (also a Carina answerer)')
+    expect(formatted).toContain('- Plain')
   })
 })

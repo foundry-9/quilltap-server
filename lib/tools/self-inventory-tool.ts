@@ -87,7 +87,7 @@ export const selfInventoryToolInputSchema = z.object({
         '"chats" (conversation count and date range), ' +
         '"prompt" (the static system prompt assembled for every turn), ' +
         '"lastTurn" (provider/model/token usage from the most recent LLM call), ' +
-        '"carina" (whether you yourself are a Carina answerer, plus the names of every other Carina-enabled character), ' +
+        '"carina" (whether you yourself are a Carina answerer, plus everyone you can reach via Carina — every other character if you are an answerer, with the ones who are also answerers noted; only the Carina answerers if you are not), ' +
         '"quilltap" (Quilltap version, runtime environment, client shell, release notes, and changelog — all three parts). ' +
         'For finer-grained quilltap queries, ask for one or more of the dotted sub-sections: ' +
         '"quilltap.version" (version + runtime + client shell only), ' +
@@ -342,19 +342,36 @@ export interface SelfInventoryLastTurnSection {
   message?: string;
 }
 
+/** One character this character can reach via Carina. */
+export interface SelfInventoryCarinaReachable {
+  /** The reachable character's name. */
+  name: string;
+  /** Whether they are themselves a Carina answerer (`canBeCarina === true`). */
+  isAnswerer: boolean;
+}
+
 /**
  * Carina (inline LLM queries): whether this character may answer `@Name:` /
- * `@Name?` queries and `ask_carina` calls, plus the names of every other
- * Carina-enabled character in the instance. `canBeCarina` is a DB column (not a
- * vault field), so this is resolved from the overlay-free raw character read.
+ * `@Name?` queries and `ask_carina` calls, plus everyone this character can
+ * reach via Carina. A line opens when EITHER side is `canBeCarina`, so:
+ *  - when `selfEnabled`, `reachable` lists EVERY other character (an enabled
+ *    asker can reach anyone), each flagged `isAnswerer` if they are also an
+ *    answerer themselves;
+ *  - when not enabled, `reachable` lists ONLY the Carina answerers — the only
+ *    characters this one can reach (the answerer side opens the line).
+ * `canBeCarina` is a DB column (not a vault field), so this is resolved from the
+ * overlay-free raw character read.
  */
 export type SelfInventoryCarinaSection =
   | {
       available: true;
       /** Whether THIS character is a Carina answerer (`canBeCarina === true`). */
       selfEnabled: boolean;
-      /** Names of every OTHER Carina-enabled character, sorted, excluding self. */
-      otherAnswerers: string[];
+      /**
+       * Characters this character can reach via Carina, sorted by name, excluding
+       * self. Everyone when `selfEnabled`; only the answerers otherwise.
+       */
+      reachable: SelfInventoryCarinaReachable[];
     }
   | {
       available: false;
@@ -475,7 +492,7 @@ export const selfInventoryToolDefinition = {
       '"chats" (conversation count and date range), ' +
       '"prompt" (the static system prompt assembled for every turn), ' +
       '"lastTurn" (provider/model/token usage from the most recent LLM call), ' +
-      '"carina" (whether you are a Carina answerer for inline @-queries, and the names of every other Carina-enabled character), ' +
+      '"carina" (whether you are a Carina answerer for inline @-queries, plus everyone you can reach via Carina — because a line opens when either side is an answerer, this is every other character when you are an answerer (the ones who are also answerers are noted), or only the Carina answerers when you are not), ' +
       '"quilltap" (Quilltap version, runtime environment, client shell, release notes for the current or most recent ' +
       'release, and the current changelog — all three parts). The "quilltap" section can also be requested in three ' +
       'finer-grained pieces: "quilltap.version" (version + runtime + client shell only), "quilltap.releaseNotes" ' +

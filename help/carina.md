@@ -85,11 +85,17 @@ For a quicker enrolment, you may skip the edit form entirely: a small **console*
 
 A character with this flag enabled may be invoked by `@Name` from any chat — they need not be a participant in the chat to answer. If no answerer by the requested name can be found, or if the character in question lacks an LLM connection, Prospero will report the difficulty.
 
-Characters without this flag cannot be invoked via `@Name` syntax, even if their name matches exactly.
+### A line opens from either side
+
+Here is the courtesy worth committing to memory: **a Carina line opens whenever either party to it is an answerer.** The flag on the answerer is the usual arrangement — designate a reference character, and anyone at all may consult them. But the flag on the *asker* serves just as well. A character who is themselves a Carina answerer may put a question to *any* character in your establishment — colleague, rival, or perfect stranger — whether or not that second party has ever been enrolled at the reference desk. Being a member of the desk's staff, one supposes, comes with the privilege of ringing anyone's bell.
+
+So the rule, stated plainly: if the one asking is an answerer, they may reach everyone; if the one being asked is an answerer, everyone may reach them. Only when *neither* party holds the flag does the line stay closed, and the `@Name` invocation pass by as ordinary text.
+
+**You, the proprietor, are the exception that needs no flag.** When you type `@Name` markup yourself, the line always opens — to any character in the house, answerer or not, whether or not your persona has ever been enrolled at the desk. The establishment answers to its owner. The either-side rule above governs the *characters* consulting one another; the human at the keyboard simply rings whatever bell they like.
 
 ## Errors
 
-When something goes awry — the named character is not found, is not enabled as a Carina answerer, or has no LLM connection that can be resolved — Prospero steps in to deliver the news. Public queries receive a public error message; whispered queries receive a whispered one. Carina herself has no voice for these announcements; she dispatches the matter to Prospero with the quiet efficiency of someone who knows better than to make a scene.
+When something goes awry — the named character is not found, the line cannot be opened from either side (neither asker nor answerer holds the flag), or the answerer has no LLM connection that can be resolved — Prospero steps in to deliver the news. Public queries receive a public error message; whispered queries receive a whispered one. Carina herself has no voice for these announcements; she dispatches the matter to Prospero with the quiet efficiency of someone who knows better than to make a scene.
 
 ## In-Chat Navigation
 

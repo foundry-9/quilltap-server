@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Carina: a line opens when either side is an answerer
+
+Carina reachability is no longer gated on the answerer alone. A Carina line now opens when **either** party qualifies: a Carina answerer can still be reached by anyone, a Carina-enabled **asker** can reach any character — even a non-answerer — and the **human operator** can always reach anyone regardless of whether their persona is an answerer (or whether they have a persona participant at all).
+
+- `lib/services/carina/carina.service.ts`: `runCarinaQuery` resolves the answerer name without the prior `canBeCarina` filter, then decides reachability from both sides. It prefers a `canBeCarina` name match (reachable by anyone); only when none of the name matches is an answerer does it consult the asker side via the new `askerOpensCarinaLine` helper. That helper opens the line when (1) the query is `operatorInitiated` (new option, set by the orchestrator's user-message path — short-circuits before any DB read), (2) the asking participant is `controlledBy: 'user'` (the operator's persona), or (3) the asking character is `canBeCarina` (read via the overlay-free `findByIdRaw`). When no side opens the line, the result is still `not-found`.
+- `lib/services/chat-message/orchestrator.service.ts`: the user-message markup path passes `operatorInitiated: true`.
+- The `ask_carina` tool definition (`lib/tools/ask-carina-tool.ts`) and the `self_inventory` `carina`-section descriptions were updated to state the either-side rule. Tool-definitions snapshot regenerated (two description strings).
+- `self_inventory` `carina` section now reports **who you can reach**, not just the other answerers (`lib/tools/self-inventory-tool.ts`, `lib/tools/handlers/self-inventory-handler.ts`): when the calling character is itself an answerer, `reachable` lists **every** other character, each flagged whether it is also an answerer; when it is not an answerer, `reachable` lists only the Carina answerers (the only characters it can reach). Replaced the `otherAnswerers: string[]` field with `reachable: { name, isAnswerer }[]` and reworked `formatCarinaSection`.
+- No schema, DDL, migration, `.qtap`/SillyTavern export, or backup change (`canBeCarina` is unchanged). Help: `help/carina.md` ("A line opens from either side"). Dev doc: `docs/developer/features/carina.md`. Tests: new either-side cases in `lib/services/carina/__tests__/carina.service.test.ts` and a new carina-section block in `__tests__/unit/lib/tools/handlers/self-inventory-handler.test.ts`.
+
 #### self_inventory: new `carina` section
 
 Added a tenth top-level section to the `self_inventory` tool, `carina`, so a character can introspect its Carina (inline `@`-query) standing: whether it is itself a Carina answerer (`canBeCarina === true`), and the names of every other Carina-enabled character in the instance.

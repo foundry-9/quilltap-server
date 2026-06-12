@@ -124,6 +124,10 @@ function makeMockRepos(overrides: Record<string, unknown> = {}) {
   return {
     characters: {
       findByUserId: jest.fn().mockResolvedValue([MOCK_CHARACTER]),
+      // Asker resolution for either-side reachability (overlay-free raw read).
+      // Defaults to "asker not found" → not Carina-enabled; tests that exercise
+      // the enabled-asker line override this.
+      findByIdRaw: jest.fn().mockResolvedValue(null),
     },
     connections: {
       findById: jest.fn().mockResolvedValue(MOCK_CONNECTION_PROFILE),
@@ -407,6 +411,162 @@ describe('runCarinaQuery', () => {
 
       expect(result).toMatchObject({ ok: false, error: { kind: 'not-found' } });
       expect(postCarinaResponse).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── 3a. Either-side reachability (Carina on either side opens the line) ──────
+  describe('either-side reachability', () => {
+    const NON_ANSWERER = {
+      ...MOCK_CHARACTER,
+      id: 'char-plain',
+      name: 'Plain',
+      canBeCarina: false,
+    };
+
+    it('opens the line to a NON-answerer when the ASKER is Carina-enabled', async () => {
+      // Asker participant 'p-asker' maps to an enabled character; the named
+      // answerer ("Plain") is NOT itself an answerer. The line should still open.
+      const findByIdRaw = jest
+        .fn()
+        .mockResolvedValue({ id: 'char-asker', canBeCarina: true });
+      jest.mocked(getRepositories).mockReturnValue(
+        makeMockRepos({
+          characters: {
+            findByUserId: jest.fn().mockResolvedValue([NON_ANSWERER]),
+            findByIdRaw,
+          },
+          chats: {
+            findById: jest.fn().mockResolvedValue({
+              ...MOCK_CHAT,
+              participants: [
+                { id: 'p-asker', type: 'CHARACTER', characterId: 'char-asker' },
+                { id: 'part-plain', type: 'CHARACTER', characterId: 'char-plain' },
+              ],
+            }),
+            getMessages: jest.fn().mockResolvedValue([]),
+            addMessage: jest.fn().mockResolvedValue(undefined),
+          },
+        }) as never,
+      );
+
+      const result = await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Plain',
+        askerParticipantId: 'p-asker',
+      });
+
+      expect(result).toMatchObject({ ok: true, answererName: 'Plain' });
+      expect(findByIdRaw).toHaveBeenCalledWith('char-asker');
+      expect(postCarinaResponse).toHaveBeenCalledTimes(1);
+    });
+
+    it('stays not-found for a NON-answerer when the asker is NOT Carina-enabled', async () => {
+      const findByIdRaw = jest
+        .fn()
+        .mockResolvedValue({ id: 'char-asker', canBeCarina: false });
+      jest.mocked(getRepositories).mockReturnValue(
+        makeMockRepos({
+          characters: {
+            findByUserId: jest.fn().mockResolvedValue([NON_ANSWERER]),
+            findByIdRaw,
+          },
+          chats: {
+            findById: jest.fn().mockResolvedValue({
+              ...MOCK_CHAT,
+              participants: [
+                { id: 'p-asker', type: 'CHARACTER', characterId: 'char-asker' },
+              ],
+            }),
+            getMessages: jest.fn().mockResolvedValue([]),
+            addMessage: jest.fn().mockResolvedValue(undefined),
+          },
+        }) as never,
+      );
+
+      const result = await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Plain',
+        askerParticipantId: 'p-asker',
+      });
+
+      expect(result).toMatchObject({ ok: false, error: { kind: 'not-found' } });
+      expect(postCarinaResponse).not.toHaveBeenCalled();
+    });
+
+    it('opens the line to a NON-answerer when the human operator initiated the query', async () => {
+      // operatorInitiated short-circuits: the operator reaches anyone regardless
+      // of persona flag, and we never touch findByIdRaw / the participant list.
+      const findByIdRaw = jest.fn().mockResolvedValue(null);
+      jest.mocked(getRepositories).mockReturnValue(
+        makeMockRepos({
+          characters: {
+            findByUserId: jest.fn().mockResolvedValue([NON_ANSWERER]),
+            findByIdRaw,
+          },
+        }) as never,
+      );
+
+      const result = await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Plain',
+        askerParticipantId: null,
+        operatorInitiated: true,
+      });
+
+      expect(result).toMatchObject({ ok: true, answererName: 'Plain' });
+      expect(findByIdRaw).not.toHaveBeenCalled();
+    });
+
+    it('opens the line when the asking participant is the user-controlled persona', async () => {
+      // No operatorInitiated flag, but the asker participant is controlledBy:'user'
+      // — the operator's persona — so the line opens without reading canBeCarina.
+      const findByIdRaw = jest.fn().mockResolvedValue(null);
+      jest.mocked(getRepositories).mockReturnValue(
+        makeMockRepos({
+          characters: {
+            findByUserId: jest.fn().mockResolvedValue([NON_ANSWERER]),
+            findByIdRaw,
+          },
+          chats: {
+            findById: jest.fn().mockResolvedValue({
+              ...MOCK_CHAT,
+              participants: [
+                { id: 'p-user', type: 'CHARACTER', characterId: 'char-user', controlledBy: 'user' },
+              ],
+            }),
+            getMessages: jest.fn().mockResolvedValue([]),
+            addMessage: jest.fn().mockResolvedValue(undefined),
+          },
+        }) as never,
+      );
+
+      const result = await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Plain',
+        askerParticipantId: 'p-user',
+      });
+
+      expect(result).toMatchObject({ ok: true, answererName: 'Plain' });
+      expect(findByIdRaw).not.toHaveBeenCalled();
+    });
+
+    it('does NOT consult the asker when the named answerer is itself enabled', async () => {
+      // Answerer "Aria" is canBeCarina — the answerer side already opens the
+      // line, so the asker flag should never be read.
+      const findByIdRaw = jest.fn().mockResolvedValue(null);
+      jest.mocked(getRepositories).mockReturnValue(
+        makeMockRepos({
+          characters: {
+            findByUserId: jest.fn().mockResolvedValue([MOCK_CHARACTER]),
+            findByIdRaw,
+          },
+        }) as never,
+      );
+
+      const result = await runCarinaQuery({ ...BASE_OPTS, askerParticipantId: 'p-asker' });
+
+      expect(result).toMatchObject({ ok: true, answererName: 'Aria' });
+      expect(findByIdRaw).not.toHaveBeenCalled();
     });
   });
 

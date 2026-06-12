@@ -839,19 +839,23 @@ async function buildCarinaSection(
     (c) => c.id === characterId && c.canBeCarina === true
   );
 
-  const otherAnswerers = rawCharacters
-    .filter((c) => c.canBeCarina === true && c.id !== characterId)
-    .map((c) => c.name)
-    .sort((a, b) => a.localeCompare(b));
+  // A Carina line opens when EITHER side is an answerer. So an enabled self can
+  // reach EVERY other character; a non-enabled self can reach only the answerers.
+  const others = rawCharacters.filter((c) => c.id !== characterId);
+  const pool = selfEnabled ? others : others.filter((c) => c.canBeCarina === true);
+
+  const reachable = pool
+    .map((c) => ({ name: c.name, isAnswerer: c.canBeCarina === true }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   logger.debug('self_inventory: carina section built', {
     context: 'self-inventory-handler',
     characterId,
     selfEnabled,
-    otherAnswererCount: otherAnswerers.length,
+    reachableCount: reachable.length,
   });
 
-  return { available: true, selfEnabled, otherAnswerers };
+  return { available: true, selfEnabled, reachable };
 }
 
 function resolveRuntimeMode(): SelfInventoryRuntimeMode {
@@ -1635,18 +1639,29 @@ function formatCarinaSection(section: SelfInventoryCarinaSection): string {
   }
 
   const selfLine = section.selfEnabled
-    ? `You ARE a Carina answerer — others can put quick questions to you with @YourName: (public) or @YourName? (whisper), and the ask_carina tool can route to you. Such queries reach you in isolation (no chat history), and your reply renders under your own avatar.`
-    : `You are NOT a Carina answerer — you cannot be addressed with @-queries or reached via the ask_carina tool.`;
+    ? `You ARE a Carina answerer — others can put quick questions to you with @YourName: (public) or @YourName? (whisper), and the ask_carina tool can route to you. Because you are an answerer, a Carina line opens to ANY character (a line opens when either side is an answerer), so you can reach everyone listed below. Queries reach the other party in isolation (no chat history), and the reply renders under the answerer's own avatar.`
+    : `You are NOT a Carina answerer — you cannot be addressed with @-queries or reached via the ask_carina tool. You can still reach the Carina answerers listed below (a line opens when either side is an answerer).`;
 
-  const othersBlock =
-    section.otherAnswerers.length === 0
-      ? `Other Carina answerers: (none)`
-      : [
-          `Other Carina answerers (${section.otherAnswerers.length}):`,
-          ...section.otherAnswerers.map((name) => `- ${name}`),
-        ].join('\n');
+  let reachBlock: string;
+  if (section.reachable.length === 0) {
+    reachBlock = section.selfEnabled
+      ? `Characters you can reach via Carina: (none — there are no other characters)`
+      : `Carina answerers you can reach: (none)`;
+  } else if (section.selfEnabled) {
+    reachBlock = [
+      `Characters you can reach via Carina (${section.reachable.length}):`,
+      ...section.reachable.map(
+        (r) => `- ${r.name}${r.isAnswerer ? ' (also a Carina answerer)' : ''}`
+      ),
+    ].join('\n');
+  } else {
+    reachBlock = [
+      `Carina answerers you can reach (${section.reachable.length}):`,
+      ...section.reachable.map((r) => `- ${r.name}`),
+    ].join('\n');
+  }
 
-  return [`## Carina`, selfLine, ``, othersBlock].join('\n');
+  return [`## Carina`, selfLine, ``, reachBlock].join('\n');
 }
 
 const RUNTIME_MODE_LABELS: Record<SelfInventoryRuntimeMode, string> = {

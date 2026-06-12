@@ -2,7 +2,9 @@
  * Carina (inline LLM queries) — core service.
  *
  * `runCarinaQuery` resolves a designated answerer character and produces a
- * minimal, ISOLATED reference answer:
+ * minimal, ISOLATED reference answer. A Carina line opens when EITHER side is
+ * `canBeCarina`: a Carina answerer can be reached by anyone, and a Carina-enabled
+ * asker can reach anyone (even a non-answerer). The answer is built from:
  *   - system prompt = the answerer's identity stack (NOT the per-turn
  *     `buildSystemPrompt`, which layers in roleplay template / tool
  *     reinforcement) plus their default scenario and a surface-level identity
@@ -81,6 +83,15 @@ export interface RunCarinaQueryOptions {
    * target. null when no participant context is available (answer goes public).
    */
   askerParticipantId: string | null;
+  /**
+   * The human operator initiated this query (the user-message `@Name:` / `@Name?`
+   * markup path). The operator can always reach any character, regardless of
+   * whether their persona is itself a `canBeCarina` answerer — being the
+   * proprietor carries the privilege. Defaults to false; only the orchestrator's
+   * user-message path sets it. Character markup and `ask_carina` (both
+   * character-initiated) leave it unset.
+   */
+  operatorInitiated?: boolean;
   /**
    * Called the instant the answer is persisted, with the posted message. Lets a
    * caller holding a live SSE stream surface the answer to the Salon immediately
@@ -237,6 +248,77 @@ async function loadCarinaMemoryRecall(
 }
 
 /**
+ * Whether the ASKER side opens the Carina line.
+ *
+ * Carina opens a communication line when EITHER side is enabled: a `canBeCarina`
+ * answerer can be reached by anyone, and the asker side opens the line when —
+ *  - the query is `operatorInitiated` (the human operator typed it). The operator
+ *    can always reach anyone, regardless of their persona's flag; OR
+ *  - the asking participant is the operator's user-controlled persona; OR
+ *  - the asking character is itself a `canBeCarina` answerer.
+ *
+ * We only consult this in the fallback case (no Carina-enabled answerer matched
+ * the requested name), so the common path never pays for it.
+ *
+ * `canBeCarina` is a DB column, not a vault field, so we read it via the
+ * overlay-free raw read (`findByIdRaw`) — a broken asker vault must not sink the
+ * check. Returns false (line stays answerer-gated) when the asker is a plain LLM
+ * character that isn't an answerer, or can't be resolved at all (no participant
+ * context, an unknown/non-character participant, or any lookup error).
+ */
+async function askerOpensCarinaLine(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  askerParticipantId: string | null,
+  operatorInitiated: boolean,
+): Promise<boolean> {
+  // The human operator can always reach anyone, even when no persona participant
+  // is present to resolve (`askerParticipantId` may be null in that case).
+  if (operatorInitiated) {
+    logger.debug('[Carina] Line opened by human operator (regardless of persona flag)', {
+      context: 'carina',
+      chatId,
+      askerParticipantId,
+    });
+    return true;
+  }
+  if (!askerParticipantId) return false;
+  try {
+    const chat = await repos.chats.findById(chatId);
+    const participant = (chat?.participants ?? []).find((p) => p.id === askerParticipantId);
+    if (!participant?.characterId) return false;
+    // A user-controlled asker is the operator's persona — always opens the line.
+    if (participant.controlledBy === 'user') {
+      logger.debug('[Carina] Line opened by user-controlled persona asker', {
+        context: 'carina',
+        chatId,
+        askerParticipantId,
+        askerCharacterId: participant.characterId,
+      });
+      return true;
+    }
+    const asker = await repos.characters.findByIdRaw(participant.characterId);
+    const enabled = asker?.canBeCarina === true;
+    logger.debug('[Carina] Resolved asker Carina flag for either-side reachability', {
+      context: 'carina',
+      chatId,
+      askerParticipantId,
+      askerCharacterId: participant.characterId,
+      askerEnabled: enabled,
+    });
+    return enabled;
+  } catch (error) {
+    logger.warn('[Carina] Failed to resolve asker Carina flag; treating line as answerer-gated', {
+      context: 'carina',
+      chatId,
+      askerParticipantId,
+      error: getErrorMessage(error),
+    });
+    return false;
+  }
+}
+
+/**
  * Resolve the answerer's connection profile via Carina's own chain (NOT the
  * participant-scoped `resolveConnectionProfile`):
  *   1. the answerer's default profile,
@@ -263,16 +345,44 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
   const { userId, chatId, characterName, question, whisper, askerParticipantId } = opts;
   const repos = getRepositories();
 
-  // 1. Resolve answerer by name (case-insensitive) among `canBeCarina` characters.
+  // 1. Resolve the answerer by name (case-insensitive). Carina opens a line when
+  //    EITHER side is `canBeCarina`: a Carina answerer is reachable by anyone,
+  //    AND a Carina-enabled ASKER can reach anyone — even a character that is not
+  //    itself an answerer. So match the name first (all matches, oldest first),
+  //    then decide reachability from both sides.
   const wanted = characterName.trim().toLowerCase();
   const candidates = await repos.characters.findByUserId(userId);
-  const answerer =
-    candidates
-      .filter((c) => c.canBeCarina === true && c.name.trim().toLowerCase() === wanted)
-      .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))[0] ?? null;
+  const nameMatches = candidates
+    .filter((c) => c.name.trim().toLowerCase() === wanted)
+    .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+
+  // Prefer a Carina-enabled answerer (reachable by anyone). Only when none of the
+  // name matches is itself an answerer do we consult the asker side: the human
+  // operator always opens the line, as does a `canBeCarina` character asker. An
+  // open line reaches the oldest plain name match.
+  let answerer = nameMatches.find((c) => c.canBeCarina === true) ?? null;
+  if (!answerer && nameMatches.length > 0) {
+    const askerOpens = await askerOpensCarinaLine(
+      repos,
+      chatId,
+      askerParticipantId,
+      opts.operatorInitiated === true,
+    );
+    if (askerOpens) {
+      answerer = nameMatches[0];
+      logger.debug('[Carina] Line opened by asker side to a non-answerer', {
+        context: 'carina',
+        chatId,
+        answererId: answerer.id,
+        answererName: answerer.name,
+        askerParticipantId,
+        operatorInitiated: opts.operatorInitiated === true,
+      });
+    }
+  }
 
   if (!answerer) {
-    logger.info('[Carina] No answerer found', { context: 'carina', chatId, characterName });
+    logger.info('[Carina] No reachable answerer found', { context: 'carina', chatId, characterName });
     return { ok: false, error: { kind: 'not-found', characterName } };
   }
 

@@ -707,6 +707,9 @@ async function processMessage(
           question: carinaQuery.question,
           whisper: carinaQuery.whisper,
           askerParticipantId: userParticipantId ?? null,
+          // The human operator typed this markup — they can reach any character,
+          // regardless of whether their persona is itself a Carina answerer.
+          operatorInitiated: true,
           // Surface the answer to the Salon the instant it returns — before the
           // first character even starts responding — rather than at end-of-turn.
           onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),

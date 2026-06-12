@@ -64,6 +64,18 @@ The regex is applied per-line against the raw message content. Only the **first*
 
 Detection runs in the message processing pipeline after the message is stored but before responses are generated — the same phase where text-block and simple-json tool calls are detected in `pseudo-tool.service.ts`. Carina queries are extracted from both user messages and LLM assistant messages.
 
+## Reachability (which lines are open)
+
+`runCarinaQuery` resolves the answerer by name (case-insensitive, oldest `createdAt` first) and then decides whether a line is open. A Carina line opens when **either** side qualifies:
+
+- **Answerer side** — the named character is `canBeCarina`. Reachable by anyone (the default arrangement). Preferred when several characters share the name.
+- **Asker side** — consulted only when no name match is itself an answerer. The asker side opens the line when:
+  1. **The human operator initiated the query** (`operatorInitiated: true`, set by the orchestrator's user-message markup path). The operator can always reach any character, regardless of whether their persona is `canBeCarina` — they may not even have a persona participant. This short-circuits before any DB read.
+  2. **The asking participant is user-controlled** (`controlledBy === 'user'`) — the operator's persona, resolved from `askerParticipantId` against `chat.participants`.
+  3. **The asking character is itself `canBeCarina`** — read via the overlay-free `findByIdRaw` (a broken asker vault must not sink the check).
+
+When no side opens the line, the result is `not-found`. The asker-side logic lives in `askerOpensCarinaLine` (carina.service.ts) and is only invoked in the fallback, so the common (answerer-enabled) path pays nothing for it.
+
 ## Database Changes
 
 ### `characters` table
@@ -149,7 +161,7 @@ An LLM tool that lets characters programmatically invoke Carina, producing the s
 
 ```typescript
 export const askCarinaToolInputSchema = z.object({
-  character: z.string().describe('The name of the character to ask. Must be a character with Carina answerer capability enabled.'),
+  character: z.string().describe('The name of the character to ask. Any character with Carina answerer capability can be asked; additionally, if you are yourself a Carina answerer, you may ask any character (a Carina line opens when either side is an answerer).'),
   question: z.string().describe('The question to ask.'),
   whisper: z.boolean().default(false).describe('If true, the answer is whispered back to the caller only. If false, the answer appears in the chat publicly.'),
 });
@@ -157,7 +169,7 @@ export const askCarinaToolInputSchema = z.object({
 
 ### Behavior
 
-- Resolves the character name against characters with `canBeCarina === true`
+- Resolves the character name. A Carina line opens when **either side** is `canBeCarina`: a `canBeCarina` answerer is reachable by anyone, and a `canBeCarina` *asker* (the calling character, resolved from `callingParticipantId`) can reach any named character — even one that is not itself an answerer. Resolution prefers a `canBeCarina` name match; only when none of the name matches is an answerer does it consult the asker's flag (`findByIdRaw`, overlay-free) before opening the line to the oldest plain match.
 - Fires the same Carina LLM call as the markup path
 - Returns the answer as a tool result to the calling LLM
 - The answer is also posted into the chat as a message (whispered or public per the `whisper` flag)
@@ -233,7 +245,7 @@ Errors are reported by **Prospero** (not Carina — Carina has no voice of her o
 
 ### Error conditions
 
-1. **Character not found or not `canBeCarina`**: "No answerer by that name is on duty."
+1. **No reachable character by that name** — either the name matches nothing, or it matches only non-`canBeCarina` characters while the asker is also not `canBeCarina` (no side opens the line): "No answerer by that name is on duty."
 2. **No connection profile resolvable**: "The answerer has no connection to an LLM provider."
 3. **LLM call fails** (network, rate limit, etc.): "The answerer was unable to respond — [error summary]."
 
