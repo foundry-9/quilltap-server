@@ -592,6 +592,112 @@ describe('runCarinaQuery', () => {
     });
   });
 
+  // ── 5.5 Forced-text final turn ────────────────────────────────────────────
+
+  describe('forced-text final turn (tool-budget exhaustion)', () => {
+    /** A tool call the model keeps emitting instead of answering. */
+    const PENDING_TOOL_CALL = { name: 'web_search', arguments: {}, callId: 'call-x' };
+
+    it('forces one tools-off turn and posts the prose answer when the tool budget is exhausted with an empty buffer', async () => {
+      // The model thrashes tools with EMPTY content for the initial call + all 5
+      // tool iterations (6 calls), never composing prose — the real Abigail case.
+      const TOOLCALL_RAW = { finishReason: 'tool_calls' };
+      jest.mocked(streamMessage)
+        .mockImplementationOnce(async function* () {
+          yield { content: '' };
+          yield { done: true, rawResponse: TOOLCALL_RAW };
+        } as never)
+        .mockImplementationOnce(async function* () {
+          yield { content: '' };
+          yield { done: true, rawResponse: TOOLCALL_RAW };
+        } as never)
+        .mockImplementationOnce(async function* () {
+          yield { content: '' };
+          yield { done: true, rawResponse: TOOLCALL_RAW };
+        } as never)
+        .mockImplementationOnce(async function* () {
+          yield { content: '' };
+          yield { done: true, rawResponse: TOOLCALL_RAW };
+        } as never)
+        .mockImplementationOnce(async function* () {
+          yield { content: '' };
+          yield { done: true, rawResponse: TOOLCALL_RAW };
+        } as never)
+        .mockImplementationOnce(async function* () {
+          yield { content: '' };
+          yield { done: true, rawResponse: TOOLCALL_RAW };
+        } as never)
+        // 7th call = the forced-text turn: it finally answers in prose.
+        .mockImplementationOnce(async function* () {
+          yield { content: 'We are 4.2 km out, and yes — I can track it.' };
+          yield { done: true, rawResponse: { finishReason: 'stop' } };
+        } as never);
+
+      // Every response carries a pending tool call (incl. the last, which the
+      // forced-text block inspects to decide whether to fire).
+      jest.mocked(detectToolCallsInResponse).mockReturnValue([PENDING_TOOL_CALL]);
+      jest.mocked(processToolCalls).mockResolvedValue({
+        toolMessages: [{ toolName: 'web_search', content: 'result', callId: 'call-x' }],
+      } as never);
+
+      const result = await runCarinaQuery(BASE_OPTS);
+
+      // 1 initial + 5 tool-loop iterations + 1 forced-text turn = 7 streams.
+      expect(streamMessage).toHaveBeenCalledTimes(7);
+      // The forced turn is the only one offered NO tools (empty slate →
+      // `undefined` downstream), so the model must answer in text.
+      const forcedCall = jest.mocked(streamMessage).mock.calls[6][0] as { tools?: unknown[] };
+      expect(forcedCall.tools).toEqual([]);
+      // The earlier turns still carry the (ask_carina-stripped) tool slate.
+      const loopCall = jest.mocked(streamMessage).mock.calls[5][0] as { tools?: unknown[] };
+      expect((loopCall.tools ?? []).length).toBeGreaterThan(0);
+
+      expect(result).toMatchObject({
+        ok: true,
+        answer: 'We are 4.2 km out, and yes — I can track it.',
+      });
+      expect(postCarinaResponse).toHaveBeenCalledTimes(1);
+    });
+
+    it('still returns llm-failed (gracefully) when even the forced-text turn yields nothing', async () => {
+      // Persistent empty + tool_calls on EVERY stream, including the forced turn.
+      jest.mocked(streamMessage).mockImplementation(async function* () {
+        yield { content: '' };
+        yield { done: true, rawResponse: { finishReason: 'tool_calls' } };
+      } as never);
+      jest.mocked(detectToolCallsInResponse).mockReturnValue([PENDING_TOOL_CALL]);
+      jest.mocked(processToolCalls).mockResolvedValue({
+        toolMessages: [{ toolName: 'web_search', content: 'result', callId: 'call-x' }],
+      } as never);
+
+      const result = await runCarinaQuery(BASE_OPTS);
+
+      // The forced-text turn is attempted exactly once (7th stream) and no more.
+      expect(streamMessage).toHaveBeenCalledTimes(7);
+      expect(result).toMatchObject({
+        ok: false,
+        error: { kind: 'llm-failed', detail: 'empty response' },
+      });
+      expect(postCarinaResponse).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire a forced turn for a genuinely empty response with no pending tool calls', async () => {
+      // A single stream that returns empty content AND no tool calls (finish:stop).
+      jest.mocked(streamMessage).mockImplementation(async function* () {
+        yield { content: '' };
+        yield { done: true, rawResponse: { finishReason: 'stop' } };
+      } as never);
+      jest.mocked(detectToolCallsInResponse).mockReturnValue([]);
+
+      const result = await runCarinaQuery(BASE_OPTS);
+
+      // Just the one call — the forced turn must not run when there were no
+      // pending tool calls to begin with.
+      expect(streamMessage).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({ ok: false, error: { kind: 'llm-failed', detail: 'empty response' } });
+    });
+  });
+
   // ── 6. Empty answer → llm-failed ─────────────────────────────────────────
 
   describe('empty answer', () => {

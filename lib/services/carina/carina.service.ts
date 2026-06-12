@@ -16,7 +16,11 @@
  *   - the question as a user-role message.
  *
  * It has access to the chat's enabled tools (minus `ask_carina`, a recursion
- * guard) and runs the standard detect→execute→re-stream tool loop.
+ * guard) and runs the standard detect→execute→re-stream tool loop. If that loop
+ * runs its iteration budget dry while the model is still only emitting tool calls
+ * (empty prose buffer), one final "forced-text" turn is streamed with NO tools
+ * offered, so the answerer must compose a reply from what it already gathered
+ * rather than failing with a misleading empty response.
  *
  * v1 runs entirely server-side (no live token streaming): the answer is
  * accumulated, posted as a `systemSender: 'carina'` message, and surfaced to the
@@ -478,6 +482,43 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       })) {
         if (chunk.content) answer += chunk.content;
         if (chunk.done) rawResponse = chunk.rawResponse;
+      }
+    }
+
+    // Forced-text final turn. If we ran the tool budget dry while the model was
+    // STILL trying to call tools — answer buffer empty, last response carrying
+    // unprocessed tool calls — it never composed a prose reply, and reporting
+    // that as an "empty response" is misleading (it gathered plenty, it just
+    // never stopped). Give it one last stream with NO tools offered (an empty
+    // slate resolves to `undefined` downstream, so the model is handed no tools
+    // and must answer in text) from the context it has already assembled. A
+    // genuinely empty/no-tool response skips this and falls through to the
+    // empty-response error below, as before.
+    if (!answer.trim() && rawResponse) {
+      const pendingToolCalls = detectToolCallsInResponse(rawResponse, connectionProfile.provider);
+      if (pendingToolCalls.length > 0) {
+        logger.debug('[Carina] Tool-iteration budget exhausted; forcing a final text answer', {
+          context: 'carina',
+          chatId,
+          answererId: answerer.id,
+          iterations,
+        });
+        answer = '';
+        rawResponse = null;
+        for await (const chunk of streamMessage({
+          messages: currentMessages,
+          connectionProfile,
+          apiKey,
+          modelParams,
+          tools: [],
+          useNativeWebSearch: false,
+          userId,
+          chatId,
+          characterId: answerer.id,
+        })) {
+          if (chunk.content) answer += chunk.content;
+          if (chunk.done) rawResponse = chunk.rawResponse;
+        }
       }
     }
 

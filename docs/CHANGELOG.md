@@ -4,6 +4,14 @@
 
 ### 4.7-dev
 
+#### Fix: Carina answers no longer fail with "empty response" when the answerer thrashes tools
+
+A Carina query routed to a tool-eager reasoning model could exhaust the tool-iteration budget without ever composing a prose reply — the model emitted a tool call on the initial stream and on all 5 allowed iterations, leaving the answer buffer empty. The loop exited on the cap and `runCarinaQuery` returned `llm-failed: empty response`, which Prospero surfaced as "<Name> was unable to respond — empty response," even though the answerer had gathered plenty via document/scene/memory tools.
+
+- `lib/services/carina/carina.service.ts`: after the detect→execute→re-stream loop, if the budget is exhausted with an empty answer buffer and the last response still carries pending tool calls, run one final "forced-text" turn — re-stream the accumulated context with `tools: []` (which resolves to `undefined` at the provider call, offering no tools), so the model must answer in prose from what it already gathered. A genuinely empty response with no pending tool calls skips the forced turn and falls through to the existing empty-response error unchanged.
+- Tests: three new cases in `carina.service.test.ts` (forced turn rescues the answer and posts it with no tools offered on the 7th stream; forced turn still empty → graceful `llm-failed`; no forced turn for a genuinely empty, no-tool response). 46 tests pass.
+- No schema, DB, migration, or export change.
+
 #### New Chat: layer free-text notes onto a chosen scenario
 
 The New Chat dialog's free-text editor now stays visible even after a preset scenario (character / project / group / general) is selected, so you can start from a scenario and add extra scene-setting on top instead of choosing one or the other.
