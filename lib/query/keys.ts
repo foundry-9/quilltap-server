@@ -37,12 +37,20 @@ export const queryKeys = {
     state: (id: string) => ['chats', id, 'state'] as const,
     photoAlbums: (id: string) => ['chats', id, 'photo-albums'] as const,
     groupStores: (id: string) => ['chats', id, 'group-stores'] as const,
+    background: (id: string) => ['chats', id, 'background'] as const,
   },
   settings: {
     chat: ['settings', 'chat'] as const,
+    textReplacements: ['settings', 'text-replacements'] as const,
   },
   connectionProfiles: {
     all: ['connection-profiles'] as const,
+  },
+  embeddingProfiles: {
+    all: ['embedding-profiles'] as const,
+  },
+  imageProfiles: {
+    all: ['image-profiles'] as const,
   },
   providers: {
     all: ['providers'] as const,
@@ -52,6 +60,32 @@ export const queryKeys = {
     list: (filters?: Filters) => ['projects', 'list', filters ?? {}] as const,
     detail: (id: string) => ['projects', 'detail', id] as const,
     files: (projectId: string) => ['projects', projectId, 'files'] as const,
+    background: (id: string) => ['projects', id, 'background'] as const,
+    state: (id: string) => ['projects', id, 'state'] as const,
+  },
+  llmLogs: {
+    all: ['llm-logs'] as const,
+    byChat: (chatId: string) => ['llm-logs', 'chat', chatId] as const,
+    recent: (limit: number) => ['llm-logs', 'recent', limit] as const,
+  },
+  system: {
+    tasksQueue: ['system', 'tasks-queue'] as const,
+    capabilitiesReports: ['system', 'capabilities-reports'] as const,
+    autonomousRooms: ['system', 'autonomous-rooms'] as const,
+  },
+  roleplayTemplates: {
+    all: ['roleplay-templates'] as const,
+  },
+  images: {
+    all: ['images'] as const,
+    list: (filters?: Filters) => ['images', 'list', filters ?? {}] as const,
+  },
+  apiKeys: {
+    all: ['api-keys'] as const,
+  },
+  themes: {
+    registrySources: ['themes', 'registry-sources'] as const,
+    registry: ['themes', 'registry'] as const,
   },
   mountPoints: {
     all: ['mount-points'] as const,
@@ -78,5 +112,6 @@ export const queryKeys = {
   helpChat: {
     all: ['help-chat'] as const,
     entity: (apiUrl: string) => ['help-chat', 'entity', apiUrl] as const,
+    eligibility: ['help-chat', 'eligibility'] as const,
   },
 } as const

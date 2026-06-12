@@ -4,15 +4,16 @@
 
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { SWRConfig } from 'swr'
-import { swrFetcher } from '@/lib/swr-fetcher'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { createTestQueryClient } from '../helpers/renderWithQuery'
 import { ImageGallery } from '@/components/images/image-gallery'
 
 function renderGallery(ui: React.ReactElement) {
+  const queryClient = createTestQueryClient()
   return render(
-    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, fetcher: swrFetcher }}>
+    <QueryClientProvider client={queryClient}>
       {ui}
-    </SWRConfig>
+    </QueryClientProvider>
   )
 }
 
@@ -164,7 +165,10 @@ describe('ImageGallery - Deleted Image Handling', () => {
 
       await waitFor(() => {
         // Should reload images after cleanup
-        expect(global.fetch).toHaveBeenCalledWith('/api/v1/images?tagType=CHARACTER&tagId=char-1')
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/v1/images?tagType=CHARACTER&tagId=char-1',
+          expect.anything()
+        )
       })
     })
   })

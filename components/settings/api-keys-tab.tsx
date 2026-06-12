@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { useModalState } from '@/hooks/useModalState'
@@ -33,9 +35,10 @@ export default function ApiKeysTab() {
   const [testResults, setTestResults] = useState<{ [key: string]: string }>({})
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
-  const { data, isLoading, error: loadError, mutate: mutateKeys } = useSWR<{ apiKeys: ApiKey[]; count: number }>(
-    '/api/v1/api-keys'
-  )
+  const { data, isLoading, error: loadError, refetch: mutateKeys } = useQuery({
+    queryKey: queryKeys.apiKeys.all,
+    queryFn: ({ signal }) => apiFetch<{ apiKeys: ApiKey[]; count: number }>('/api/v1/api-keys', { signal }),
+  })
   const {
     isOpen: isModalOpen,
     openModal: handleOpenModal,

@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { useTagStyles } from '@/components/providers/tag-style-provider'
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles'
 import type { TagVisualStyle } from '@/lib/schemas/types'
@@ -40,9 +42,10 @@ export default function TagsTab() {
   const { refresh: refreshQuickHideTags } = useQuickHide()
   const colorDebounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
-  const { data, isLoading, error: loadError, mutate: mutateTags } = useSWR<{ tags: TagOption[] }>(
-    '/api/v1/tags'
-  )
+  const { data, isLoading, error: loadError, refetch: mutateTags } = useQuery({
+    queryKey: queryKeys.tags.list(),
+    queryFn: ({ signal }) => apiFetch<{ tags: TagOption[] }>('/api/v1/tags', { signal }),
+  })
 
   // Sync SWR data to local state for UI mutations
   useEffect(() => {

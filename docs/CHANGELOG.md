@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### TanStack Query migration — Phase 4 (wrapper hooks + inline read/mutate pairs)
+
+Migrated the self-contained wrapper hooks and the inline read+mutate component pairs. Behavior preserved: SWR `mutate()` revalidations became `refetch()`/`invalidateQueries()`, optimistic `mutate(x, false)` became `setQueryData`, and the autonomous-room optimistic `mutate(post, { optimisticData, rollbackOnError })` pattern became `useMutation` with `onMutate`/`onError`/`onSettled`. Polling `refreshInterval` became `refetchInterval`.
+
+- Wrapper hooks: `useLLMLogs`, `useChatControls` (its one connection-profiles read), `useTextReplacementRules`, `useStoryBackground` (polling + change detection), `useTasksQueue` (polling + job controls), `useGalleryData` (optimistic `setQueryData`), `useSystemPrompts`, `useRoleplayTemplates`, and `useChatSettings` (4 reads + ~30 handlers — kept byte-identical via a `mutateSettings` shim that maps to `setQueryData`/`invalidateQueries`).
+- Inline pairs: `image-gallery`, `api-keys-tab`, `tags-tab`, `ThemeBrowser`, `StateEditorModal`, `help-chat-provider`, `capabilities-report-card`, `llm-logs-card`, and the two autonomous-room components (`autonomous-rooms-card`, `autonomous-room-badges`) which now use `useMutation` for their optimistic toggles.
+- Grew `lib/query/keys.ts`: `llmLogs`, `system.tasksQueue/capabilitiesReports/autonomousRooms`, `chats.background`, `projects.background/state`, `settings.textReplacements`, `roleplayTemplates`, `embeddingProfiles`, `imageProfiles`, `images`, `apiKeys`, `themes`, `helpChat.eligibility`.
+- Tests: `tasks-queue-card` and `image-gallery-deleted-handling` moved from `SWRConfig` to `QueryClientProvider`; new focused `useChatSettings` optimistic-update test.
+- Front-end only: no API/route, schema, DDL, migration, export, or backup change.
+
 #### TanStack Query migration — Phase 3 (module-level cache hooks)
 
 Replaced the three hand-rolled module-level fetch caches with `useQuery`. They keep their "fetch once, share everywhere" reference-data feel via `staleTime: Infinity` and TanStack's by-key dedup, dropping the manual `fetchPromise` plumbing.

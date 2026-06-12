@@ -11,8 +11,10 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -83,21 +85,25 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
 
   // ── Data fetching ──────────────────────────────────────────────────────
 
-  const { data: sourcesData, isLoading: isLoadingSourcesData, mutate: mutateSources } = useSWR<{ sources: RegistrySource[] }>(
-    isExpanded ? '/api/v1/themes?action=registry-sources' : null
-  )
+  const { data: sourcesData, isPending: isLoadingSourcesData, refetch: mutateSources } = useQuery({
+    queryKey: queryKeys.themes.registrySources,
+    queryFn: ({ signal }) => apiFetch<{ sources: RegistrySource[] }>('/api/v1/themes?action=registry-sources', { signal }),
+    enabled: isExpanded,
+  })
 
-  const { data: themesData, isLoading: isLoadingThemesData, error: themesLoadError, mutate: mutateThemes } = useSWR<{ themes: RegistryTheme[] }>(
-    isExpanded ? '/api/v1/themes?action=registry' : null
-  )
+  const { data: themesData, isPending: isLoadingThemesData, error: themesLoadError, refetch: mutateThemes } = useQuery({
+    queryKey: queryKeys.themes.registry,
+    queryFn: ({ signal }) => apiFetch<{ themes: RegistryTheme[] }>('/api/v1/themes?action=registry', { signal }),
+    enabled: isExpanded,
+  })
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Query data must sync to local state that's also mutated by action handlers (filter/delete/update)
     setIsLoadingSources(isLoadingSourcesData)
   }, [isLoadingSourcesData])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Query data must sync to local state that's also mutated by action handlers (filter/delete/update)
     setIsLoadingThemes(isLoadingThemesData)
     if (themesLoadError) {
       setThemesError(themesLoadError instanceof Error ? themesLoadError.message : 'Failed to load themes')
@@ -108,14 +114,14 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
 
   useEffect(() => {
     if (sourcesData?.sources) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Query data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setSources(sourcesData.sources)
     }
   }, [sourcesData])
 
   useEffect(() => {
     if (themesData?.themes) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Query data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setThemes(themesData.themes)
     }
   }, [themesData])

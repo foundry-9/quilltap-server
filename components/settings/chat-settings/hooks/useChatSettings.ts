@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import useSWR from 'swr'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import {
   ChatSettings,
@@ -77,18 +79,38 @@ export function useChatSettings(): UseChatSettingsReturn {
   // Get the avatar display context updater to sync style changes globally
   const { syncAvatarDisplayStyle } = useAvatarDisplay()
 
-  // Fetch all data via SWR
-  const { data: settingsData, isLoading, error: loadError, mutate: mutateSettings } = useSWR<ChatSettings>(
-    '/api/v1/settings/chat'
-  )
-  const { data: connProfileData } = useSWR<{ profiles: ConnectionProfile[] }>(
-    '/api/v1/connection-profiles'
-  )
-  const { data: embeddingProfileData } = useSWR<{ profiles: EmbeddingProfile[] }>(
-    '/api/v1/embedding-profiles'
-  )
-  const { data: imageProfileData } = useSWR<{ profiles: ImageProfile[] }>(
-    '/api/v1/image-profiles'
+  // Fetch all data via TanStack Query
+  const queryClient = useQueryClient()
+  const { data: settingsData, isLoading, error: loadError } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) => apiFetch<ChatSettings>('/api/v1/settings/chat', { signal }),
+  })
+  const { data: connProfileData } = useQuery({
+    queryKey: queryKeys.connectionProfiles.all,
+    queryFn: ({ signal }) => apiFetch<{ profiles: ConnectionProfile[] }>('/api/v1/connection-profiles', { signal }),
+  })
+  const { data: embeddingProfileData } = useQuery({
+    queryKey: queryKeys.embeddingProfiles.all,
+    queryFn: ({ signal }) => apiFetch<{ profiles: EmbeddingProfile[] }>('/api/v1/embedding-profiles', { signal }),
+  })
+  const { data: imageProfileData } = useQuery({
+    queryKey: queryKeys.imageProfiles.all,
+    queryFn: ({ signal }) => apiFetch<{ profiles: ImageProfile[] }>('/api/v1/image-profiles', { signal }),
+  })
+
+  // Shim preserving SWR's `mutate` signature so the ~30 handlers below stay
+  // unchanged. With a payload it writes optimistically without revalidating
+  // (the old `mutate(updated, false)`); with no args it revalidates (the old
+  // `mutate()`).
+  const mutateSettings = useCallback(
+    async (updated?: ChatSettings, _revalidate?: boolean): Promise<void> => {
+      if (updated !== undefined) {
+        queryClient.setQueryData(queryKeys.settings.chat, updated)
+      } else {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.settings.chat })
+      }
+    },
+    [queryClient]
   )
 
   const settings = settingsData ?? null

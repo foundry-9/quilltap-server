@@ -18,7 +18,9 @@
  */
 
 import { useMemo } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types'
 
@@ -87,9 +89,10 @@ export function useTextReplacementRules(): {
   error: unknown
   mutate: () => Promise<unknown>
 } {
-  const { data, error, isLoading, mutate } = useSWR<ListResponse>(
-    '/api/v1/settings/text-replacements',
-  )
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: queryKeys.settings.textReplacements,
+    queryFn: ({ signal }) => apiFetch<ListResponse>('/api/v1/settings/text-replacements', { signal }),
+  })
 
   const rules = data?.rules
 
@@ -98,5 +101,7 @@ export function useTextReplacementRules(): {
     [rules],
   )
 
-  return { rules, compiled, isLoading, error, mutate }
+  // `mutate` is preserved as the public revalidation handle; it now refetches
+  // the query (consumers call it after editing rules to pick up the new list).
+  return { rules, compiled, isLoading, error, mutate: refetch }
 }

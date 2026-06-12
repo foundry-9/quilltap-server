@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -31,9 +33,10 @@ export function CapabilitiesReportCard() {
     content: string
   } | null>(null)
 
-  const { data, isLoading, error: loadError, mutate: mutateReports } = useSWR<{ reports: ReportInfo[] }>(
-    '/api/v1/system/tools?action=capabilities-report-list'
-  )
+  const { data, isLoading, error: loadError, refetch: mutateReports } = useQuery({
+    queryKey: queryKeys.system.capabilitiesReports,
+    queryFn: ({ signal }) => apiFetch<{ reports: ReportInfo[] }>('/api/v1/system/tools?action=capabilities-report-list', { signal }),
+  })
   const reports = data?.reports ?? []
 
   const handleGenerateReport = async () => {

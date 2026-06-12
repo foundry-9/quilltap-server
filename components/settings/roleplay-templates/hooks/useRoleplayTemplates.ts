@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
-import useSWR from 'swr'
+import { useState, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { RoleplayTemplate, TemplateFormData, DelimiterFormEntry, INITIAL_FORM_DATA } from '../types'
 import type { TemplateDelimiter } from '@/lib/schemas/template.types'
 
@@ -87,13 +89,16 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
-  // Fetch templates and settings via SWR
-  const { data: templatesData, isLoading: loading, mutate: mutateTemplates } = useSWR<RoleplayTemplate[]>(
-    '/api/v1/roleplay-templates'
-  )
-  const { data: chatSettingsData } = useSWR<{ defaultRoleplayTemplateId?: string | null }>(
-    '/api/v1/settings/chat'
-  )
+  // Fetch templates and settings via TanStack Query
+  const { data: templatesData, isLoading: loading, refetch: mutateTemplates } = useQuery({
+    queryKey: queryKeys.roleplayTemplates.all,
+    queryFn: ({ signal }) => apiFetch<RoleplayTemplate[]>('/api/v1/roleplay-templates', { signal }),
+  })
+  const { data: chatSettingsData } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) =>
+      apiFetch<{ defaultRoleplayTemplateId?: string | null }>('/api/v1/settings/chat', { signal }),
+  })
 
   const templates = templatesData ?? []
   const defaultTemplateId = chatSettingsData?.defaultRoleplayTemplateId ?? null
