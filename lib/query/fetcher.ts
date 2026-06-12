@@ -1,9 +1,9 @@
 /**
  * Shared fetcher for TanStack Query.
  *
- * Mirrors the throw-on-non-2xx semantics of `lib/swr-fetcher.ts` so components
- * that branch on `error.status` keep working when they move from SWR to
- * `useQuery`. Use as `queryFn: ({ signal }) => apiFetch<T>(url, { signal })` so
+ * Throws on non-2xx (carrying `status` + parsed `info`) so components can
+ * branch on `error.status`. Use as
+ * `queryFn: ({ signal }) => apiFetch<T>(url, { signal })` so
  * TanStack's cancellation `AbortSignal` is forwarded and in-flight reads abort
  * when a query is no longer observed.
  */

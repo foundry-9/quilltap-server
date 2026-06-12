@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### TanStack Query migration — Phase 7 (SWR removal)
+
+SWR is fully gone. With every read and mutation now on TanStack Query, the surviving provider and dependency were removed.
+
+- Removed `<SWRConfig>` from `components/providers/session-provider.tsx` (now `<QueryProvider>` is the sole top-level server-state provider).
+- Deleted `lib/swr-fetcher.ts` (nothing imports it; `apiFetch`/`ApiFetchError` in `lib/query/fetcher.ts` carry the same throw-on-non-2xx semantics).
+- Removed the `swr` dependency from `package.json` / lockfile.
+- Moved the migration spec to `docs/developer/features/complete/`.
+- Verified: no `useSWR`/`SWRConfig`/`swr` imports remain in app/components/hooks/lib/tests; `npx tsc`, full lint, and the unit suite (7108 tests) pass.
+
 #### TanStack Query migration — Phase 6 (SSE boundary)
 
 Documented the boundary between the Salon's live message transport and TanStack Query. The Fetch-Streams/SSE path (`useSSEStreaming`) stays as-is: stream chunks are never written into the query cache; the query reads *around* streaming (chat list, settings, LLM logs) are on TanStack Query and refresh through their own hooks. No behavior change.

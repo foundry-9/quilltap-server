@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.7.0-claude-intelligent-davinci-mpxgcc.55",
+  "version": "4.7.0-claude-intelligent-davinci-mpxgcc.56",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -105,7 +105,6 @@
     "remark-rehype": "^11.1.2",
     "semver": "^7.8.1",
     "sharp": "^0.34.5",
-    "swr": "^2.4.1",
     "tar": "^7.5.16",
     "unified": "^11.0.5",
     "ws": "^8.21.0",
