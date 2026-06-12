@@ -17,7 +17,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
+import { renderWithQuery as render } from '../../../helpers/renderWithQuery'
 import React from 'react'
 import { ParticipantCard, ParticipantData } from '@/components/chat/ParticipantCard'
 

@@ -34,3 +34,19 @@ export function renderWithQuery(
     ...render(ui, { wrapper: Wrapper, ...options }),
   }
 }
+
+/**
+ * For `renderHook` (and other cases that need a wrapper but not a full render).
+ * Returns the wrapper component plus the client backing it, so `.ts` test files
+ * (which can't write JSX) can wrap hooks in a TanStack Query provider:
+ *
+ *   const { wrapper, queryClient } = createQueryWrapper()
+ *   renderHook(() => useThing(), { wrapper })
+ */
+export function createQueryWrapper(queryClient?: QueryClient) {
+  const client = queryClient ?? createTestQueryClient()
+  const Wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  )
+  return { wrapper: Wrapper, queryClient: client }
+}

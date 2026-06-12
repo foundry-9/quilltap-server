@@ -13,7 +13,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { renderWithQuery as render } from '../../../helpers/renderWithQuery'
 import React from 'react'
 import { WelcomeSection } from '@/components/homepage/WelcomeSection'
 import { QuickActionsRow } from '@/components/homepage/QuickActionsRow'

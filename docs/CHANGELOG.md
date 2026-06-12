@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### TanStack Query migration — Phase 3 (module-level cache hooks)
+
+Replaced the three hand-rolled module-level fetch caches with `useQuery`. They keep their "fetch once, share everywhere" reference-data feel via `staleTime: Infinity` and TanStack's by-key dedup, dropping the manual `fetchPromise` plumbing.
+
+- `hooks/useProviders.ts`, `hooks/useConnectionProfiles.ts`: `useQuery` + a `select` mapper; the `getProviderIcon`/`getProviderDisplayName`/`getProfileProvider` helpers are unchanged.
+- `hooks/usePersonaDisplayName.ts`: `useQuery` for `?controlledBy=user`, with the duplicate-name `Set` derived in `select` (referentially stable, which matters since every ChatCard mounts this hook). Removed the module cache and the test-only `resetDisplayNameCache()` export.
+- Test harness: added `createQueryWrapper()` to `__tests__/helpers/renderWithQuery.tsx` for `renderHook`. `usePersonaDisplayName.test.ts` now uses a fresh QueryClient per test instead of `resetDisplayNameCache()`. Two component suites that render these consumers (`homepage-components`, `ParticipantCard`) now render through `renderWithQuery` so a QueryClient is in scope.
+- Front-end only: no API/route, schema, DDL, migration, export, or backup change.
+
 #### TanStack Query migration — Phase 2 (conditional/simple reads)
 
 Migrated the low-risk, read-only SWR call sites to `useQuery` (no mutations in this batch). Behavior preserved: conditional `useSWR(cond ? url : null)` became `useQuery({ enabled: cond })`.
