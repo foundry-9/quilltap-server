@@ -28,7 +28,7 @@ A wardrobe item carries a small block of **YAML frontmatter** declaring its meta
 
 The **Wardrobe** card on each project's page is your atelier. Every project automatically grows one of these cards, and from it you may:
 
-- **Create** a new item via the **+ New wardrobe item** button — supply a title, an optional description, the slots it covers, an optional appropriateness note, and (for composites) the existing project items it bundles.
+- **Create** a new item via the **+ New wardrobe item** button — supply a title, an optional description, an optional **Portrait Cue**, the slots it covers, an optional appropriateness note, and (for composites) the existing project items it bundles. The Portrait Cue is a short, literal phrase whispered to the portraitist and the Lantern *in place of* the title when the bare name fails to conjure the right picture (the prose description, being for human eyes, never reaches the easel).
 - **Edit** an existing item with its **Edit** button; the inline form returns pre-filled.
 - **Delete** an item with the **Delete** button, after a moment's confirmation. Equipped references across existing chats are cleaned up; composites that bundled the item tolerate its absence gracefully.
 

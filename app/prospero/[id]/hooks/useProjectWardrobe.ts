@@ -18,6 +18,8 @@ import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.type
 export interface CreateProjectWardrobeInput {
   title: string
   description?: string | null
+  /** Plain-text image-generation cue; preferred over the title in image prompts. */
+  imagePrompt?: string | null
   types: WardrobeItemType[]
   appropriateness?: string | null
   isDefault?: boolean

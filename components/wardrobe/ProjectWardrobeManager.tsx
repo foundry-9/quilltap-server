@@ -28,6 +28,7 @@ interface ProjectWardrobeManagerProps {
 interface DraftState {
   title: string
   description: string
+  imagePrompt: string
   types: WardrobeItemType[]
   appropriateness: string
   isDefault: boolean
@@ -38,6 +39,7 @@ interface DraftState {
 const EMPTY_DRAFT: DraftState = {
   title: '',
   description: '',
+  imagePrompt: '',
   types: ['top'],
   appropriateness: '',
   isDefault: false,
@@ -49,6 +51,7 @@ function draftFromItem(item: WardrobeItem): DraftState {
   return {
     title: item.title,
     description: item.description ?? '',
+    imagePrompt: item.imagePrompt ?? '',
     types: item.types.slice(),
     appropriateness: item.appropriateness ?? '',
     isDefault: item.isDefault ?? false,
@@ -133,6 +136,7 @@ export function ProjectWardrobeManager({
     const payload: CreateProjectWardrobeInput = {
       title,
       description: draft.description.trim() || null,
+      imagePrompt: draft.imagePrompt.trim() || null,
       types: draft.types,
       appropriateness: draft.appropriateness.trim() || null,
       isDefault: draft.isDefault,
@@ -206,6 +210,23 @@ export function ProjectWardrobeManager({
               rows={2}
               placeholder="What it looks like / how it's worn"
             />
+          </div>
+
+          <div>
+            <label className="qt-label block mb-1">Portrait Cue (optional)</label>
+            <input
+              type="text"
+              value={draft.imagePrompt}
+              onChange={(e) => setDraft((p) => ({ ...p, imagePrompt: e.target.value }))}
+              className="qt-input w-full"
+              maxLength={200}
+              placeholder="e.g. intricate burnished-gold circular rank glyph on the shoulder"
+            />
+            <p className="mt-1 qt-text-xs qt-text-secondary">
+              A short, literal phrase whispered to the portraitist and the Lantern in place of the
+              title, should the bare name fail to conjure the right picture. The Description above is
+              for human eyes and never reaches the easel. Leave it empty to let the title speak.
+            </p>
           </div>
 
           <div>
@@ -307,8 +328,11 @@ export function ProjectWardrobeManager({
                   {item.isDefault && <span className="qt-badge qt-badge-primary">Default</span>}
                   {item.archivedAt && <span className="qt-badge qt-text-secondary">Archived</span>}
                 </div>
-                {item.description && (
-                  <p className="qt-text-small qt-text-secondary mt-1">{item.description}</p>
+                {/* Prefer the Portrait Cue (the image-maker's view); fall back to the prose description. */}
+                {(item.imagePrompt || item.description) && (
+                  <p className="qt-text-small qt-text-secondary mt-1">
+                    {item.imagePrompt || item.description}
+                  </p>
                 )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
