@@ -25,6 +25,7 @@ import {
   type MemoryRecallSettings,
 } from '@/lib/schemas/settings.types';
 
+const KEY_MAX_CONCURRENT_JOBS = 'maxConcurrentJobs';
 const KEY_MEMORY_EXTRACTION_CONCURRENCY = 'memoryExtractionConcurrency';
 const KEY_MEMORY_EXTRACTION_LIMITS = 'memoryExtractionLimits';
 const KEY_MEMORY_RECALL = 'memoryRecall';
@@ -33,6 +34,7 @@ const KEY_USER_UPLOADS_MOUNT_POINT_ID = 'userUploadsMountPointId';
 const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
 const KEY_LAST_MAINTENANCE_SWEEP_AT = 'lastMaintenanceSweepAt';
 
+const DEFAULT_MAX_CONCURRENT_JOBS = 4;
 const DEFAULT_MEMORY_EXTRACTION_CONCURRENCY = 1;
 const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = {
   enabled: false,
@@ -67,6 +69,29 @@ async function writeSetting(key: string, value: string): Promise<void> {
       'ON CONFLICT("key") DO UPDATE SET "value" = excluded."value"',
     [key, value],
   );
+}
+
+/**
+ * Read the per-instance global background-job concurrency cap — the maximum
+ * number of jobs of any type the dispatcher runs at once. Returns the
+ * documented default (4) when the setting hasn't been written yet; clamped to
+ * the supported 1–32 range. The dispatcher re-reads this each claim cycle, so a
+ * change takes effect within ~2 s without a restart.
+ */
+export async function getMaxConcurrentJobs(): Promise<number> {
+  const raw = await readSetting(KEY_MAX_CONCURRENT_JOBS);
+  if (raw === null) return DEFAULT_MAX_CONCURRENT_JOBS;
+  const parsed = Math.floor(Number(raw));
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_MAX_CONCURRENT_JOBS;
+  return Math.max(1, Math.min(32, parsed));
+}
+
+export async function setMaxConcurrentJobs(value: number): Promise<void> {
+  if (!Number.isFinite(value)) {
+    throw new Error('Concurrency must be a finite number');
+  }
+  const clamped = Math.max(1, Math.min(32, Math.floor(value)));
+  await writeSetting(KEY_MAX_CONCURRENT_JOBS, String(clamped));
 }
 
 /**

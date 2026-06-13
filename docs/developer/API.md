@@ -4303,7 +4303,27 @@ Resume a paused job.
 
 #### `GET /api/v1/system/tools?action=tasks-queue`
 
-Get tasks queue status.
+Get tasks queue status. The response includes `maxConcurrentJobs` — the current global background-job concurrency cap.
+
+#### `GET /api/v1/system/tools?action=job-concurrency`
+
+Get the global background-job concurrency cap (how many jobs of any type the dispatcher runs at once).
+
+**Response:**
+```json
+{ "success": true, "concurrency": 4 }
+```
+
+#### `POST /api/v1/system/tools?action=job-concurrency`
+
+Set the global background-job concurrency cap. Applies within ~2 s without a restart.
+
+**Body:**
+```json
+{ "concurrency": 8 }
+```
+
+`concurrency` is an integer in the range 1–32. Returns `{ "success": true, "concurrency": 8 }`.
 
 ---
 

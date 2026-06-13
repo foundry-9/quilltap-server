@@ -7,13 +7,16 @@
  * batched writes inside a single `db.transaction(...)` over the parent's
  * RW connection, then mark the job COMPLETED (or FAILED on error).
  *
- * Concurrency: a single global cap of `MAX_IN_FLIGHT` jobs of any type.
- * This replaces the previous per-type caps and the user-configurable
- * memory-extraction slider — the trade-off (heavy job types can starve
- * lighter ones) is documented in `docs/developer/BACKGROUND_JOBS_CHILD.md`.
+ * Concurrency: a single global cap on the number of in-flight jobs of any
+ * type, user-configurable via the `maxConcurrentJobs` instance setting
+ * (default 4, range 1–32; read fresh each claim cycle, so changes apply within
+ * ~2 s without a restart). This replaces the previous per-type caps — the
+ * trade-off (a heavy job type can starve lighter ones) is documented in
+ * `docs/developer/BACKGROUND_JOBS_CHILD.md`.
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
+import { getMaxConcurrentJobs } from '@/lib/instance-settings';
 import type { Database } from 'better-sqlite3';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
@@ -41,7 +44,10 @@ const log = logger.child({ module: 'jobs:dispatcher' });
 // ============================================================================
 
 const POLL_INTERVAL_MS = 2_000;
-const MAX_IN_FLIGHT = 4;
+// Fallback only — the live cap is read from the `maxConcurrentJobs` instance
+// setting each claim cycle (see pumpClaim). Used until the first read lands and
+// whenever a read fails.
+const DEFAULT_MAX_IN_FLIGHT = 4;
 const MAX_WAKE_DELAY_MS = 5 * 60 * 1000;
 const STUCK_JOB_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -56,6 +62,8 @@ interface DispatcherState {
   inFlight: Map<string, BackgroundJob>;
   claiming: boolean;
   running: boolean;
+  /** Last-read value of the `maxConcurrentJobs` instance setting. */
+  maxInFlight: number;
 }
 
 declare global {
@@ -71,6 +79,7 @@ function getState(): DispatcherState {
       inFlight: new Map(),
       claiming: false,
       running: false,
+      maxInFlight: DEFAULT_MAX_IN_FLIGHT,
     };
   }
   return globalThis.__quilltapJobDispatcher;
@@ -105,7 +114,7 @@ export function startDispatcher(): void {
     log.error('Error resetting orphaned jobs at startup', { error: getErrorMessage(err) });
   });
 
-  log.info('Dispatcher started', { pollIntervalMs: POLL_INTERVAL_MS, maxInFlight: MAX_IN_FLIGHT });
+  log.info('Dispatcher started', { pollIntervalMs: POLL_INTERVAL_MS, maxInFlight: state.maxInFlight });
 }
 
 export function stopDispatcher(): void {
@@ -126,9 +135,9 @@ export function dispatcherWake(): void {
   });
 }
 
-export function getDispatcherSnapshot(): { inFlight: number; running: boolean } {
+export function getDispatcherSnapshot(): { inFlight: number; running: boolean; maxInFlight: number } {
   const state = getState();
-  return { inFlight: state.inFlight.size, running: state.running };
+  return { inFlight: state.inFlight.size, running: state.running, maxInFlight: state.maxInFlight };
 }
 
 // ============================================================================
@@ -140,7 +149,24 @@ async function pumpClaim(): Promise<void> {
   if (!state.running || state.claiming) return;
   state.claiming = true;
   try {
-    while (state.inFlight.size < MAX_IN_FLIGHT) {
+    // Refresh the global concurrency cap from the `maxConcurrentJobs` instance
+    // setting before claiming. One indexed PK read per pump (every 2 s / on
+    // wake / on job completion); a failure keeps the last-known value so the
+    // loop never breaks on a transient DB hiccup.
+    try {
+      const cap = await getMaxConcurrentJobs();
+      if (cap !== state.maxInFlight) {
+        log.debug('Concurrency cap changed', { from: state.maxInFlight, to: cap });
+        state.maxInFlight = cap;
+      }
+    } catch (err) {
+      log.warn('Failed to read concurrency cap; keeping current', {
+        current: state.maxInFlight,
+        error: getErrorMessage(err),
+      });
+    }
+
+    while (state.inFlight.size < state.maxInFlight) {
       const repos = getRepositories();
       const job = await repos.backgroundJobs.claimNextJob();
       if (!job) {
@@ -258,13 +284,13 @@ async function reconcileFailedAutonomousTurnIfNeeded(
   }
 }
 
-// Serialize apply calls. With concurrency=4, multiple jobs finish around
+// Serialize apply calls. With several jobs in flight, multiple finish around
 // the same time and the parent receives several `job-result` messages
 // nearly simultaneously. Each tries to `BEGIN IMMEDIATE` on the same
 // connection — the second one hits "cannot start a transaction within a
 // transaction." Chain applies through a Promise so only one runs at a
-// time; the dispatcher's claim loop still uses MAX_IN_FLIGHT for parallel
-// child execution, but the parent's transaction boundary is single-file.
+// time; the dispatcher's claim loop still runs jobs in the child up to the
+// global concurrency cap, but the parent's transaction boundary is single-file.
 let applyChain: Promise<unknown> = Promise.resolve();
 
 async function applyWritesAtomically(

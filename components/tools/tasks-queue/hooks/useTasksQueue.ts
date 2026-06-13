@@ -70,6 +70,31 @@ export function useTasksQueue() {
     [mutateQueue]
   )
 
+  const saveConcurrency = useCallback(
+    async (value: number) => {
+      try {
+        setError(null)
+        const res = await fetch('/api/v1/system/tools?action=job-concurrency', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ concurrency: value }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || 'Failed to set concurrency')
+        }
+
+        await mutateQueue()
+      } catch (err) {
+        const errorMessage = getErrorMessage(err)
+        setError(errorMessage)
+        console.error('Failed to set job concurrency', { error: errorMessage })
+      }
+    },
+    [mutateQueue]
+  )
+
   const viewJob = useCallback(async (jobId: string) => {
     try {
       setJobActionLoading(jobId)
@@ -183,6 +208,7 @@ export function useTasksQueue() {
     setShowJobDialog,
     fetchQueueStatus,
     controlQueue,
+    saveConcurrency,
     viewJob,
     pauseJob,
     resumeJob,

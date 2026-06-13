@@ -26,13 +26,9 @@ Memories whose chat has already been deleted (orphans) are also wiped, since not
 
 If a chat has been classified as containing dangerous content and you have configured a **dangerous-compatible cheap LLM** in the Chat tab — either via the explicit *Uncensored Text Profile* setting or by marking a connection profile as both *Cheap* and *Dangerous-Compatible* — that profile will be used to extract memories from that chat. Other chats use your standard cheap LLM as usual. This routing happens automatically; you don't need to do anything special beyond having the dangerous profile configured.
 
-## Memory Extraction Concurrency
+## How Fast the Sweep Runs
 
-By default, the background processor runs memory extraction one chat at a time. On a fresh instance with a handful of chats, this is plenty fast. On a long-lived instance with hundreds of chats, the wait can grow tedious — and many cloud providers will happily accept several requests in flight at once.
-
-The **Memory extraction concurrency** setting at the top of this card lets you raise the parallelism, from 1 (sequential) up to 32 — matching the upper bound of the `memory-diff` CLI's `--concurrency` flag. Higher numbers finish a sweep faster but spawn more simultaneous LLM calls; if your provider rate-limits aggressively, or if you're routing through a small local model, keep the value low. A comfortable starting point for cloud providers (OpenAI, Anthropic, Z.AI) is 8–16; local Ollama generally prefers 2–4. The 32 ceiling is reserved for beefy remote APIs that can absorb the parallel load without throttling.
-
-The setting takes effect immediately on save and persists across restarts. It also applies to the regular per-turn extraction that runs during ordinary chats, not just to regeneration sweeps.
+How many extraction jobs run shoulder-to-shoulder is no longer set here — it is governed by the single **Simultaneous Labours** dial that presides over *every* background errand. You will find it atop the **Tasks Queue** card in the **Data & System** tab of Settings. Nudge it upward when a capable backend can shoulder more at once; leave it at the modest factory setting of four when in doubt. See [Managing Tasks](system-tasks-queue.md) for the full account.
 
 ## Watching the Sweep
 

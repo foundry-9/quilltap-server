@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### Configurable background-job concurrency
+
+The global cap on how many background jobs run at once is now adjustable instead of hardcoded at 4. A "Simultaneous Labours" slider in the Tasks Queue card (Settings → Data & System) sets it from 1 to 32; the default stays 4. Use a higher value when a more capable backend can handle more parallel work.
+
+- New `maxConcurrentJobs` instance setting with `getMaxConcurrentJobs`/`setMaxConcurrentJobs` accessors (`lib/instance-settings/index.ts`, clamped 1–32, default 4).
+- The dispatcher (`lib/background-jobs/host/job-dispatcher.ts`) reads the cap fresh each claim cycle, so a change applies within ~2 s without a restart; falls back to 4 if the read fails.
+- New API action `GET`/`POST /api/v1/system/tools?action=job-concurrency` (validated 1–32); the tasks-queue status response now includes `maxConcurrentJobs`.
+- Removed the dead "Memory extraction concurrency" number input from the Memory Regenerate card — it set `instance_settings.memoryExtractionConcurrency`, which the dispatcher stopped honoring when concurrency was unified into the global cap. The legacy key and its `/api/v1/memories?action=extraction-concurrency` route remain for the `memory-diff` CLI.
+
 #### TanStack Query migration — Phase 7 (SWR removal)
 
 SWR is fully gone. With every read and mutation now on TanStack Query, the surviving provider and dependency were removed.
