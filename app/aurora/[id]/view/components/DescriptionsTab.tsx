@@ -13,6 +13,7 @@ interface DescriptionsTabProps {
 interface FormState {
   name: string
   usageContext: string
+  headAndShouldersPrompt: string
   shortPrompt: string
   mediumPrompt: string
   longPrompt: string
@@ -23,6 +24,7 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   name: '',
   usageContext: '',
+  headAndShouldersPrompt: '',
   shortPrompt: '',
   mediumPrompt: '',
   longPrompt: '',
@@ -35,6 +37,7 @@ function toForm(pd: CharacterPhysicalDescription | null | undefined): FormState 
   return {
     name: pd.name || '',
     usageContext: pd.usageContext || '',
+    headAndShouldersPrompt: pd.headAndShouldersPrompt || '',
     shortPrompt: pd.shortPrompt || '',
     mediumPrompt: pd.mediumPrompt || '',
     longPrompt: pd.longPrompt || '',
@@ -98,6 +101,7 @@ export function DescriptionsTab({ characterId }: DescriptionsTabProps) {
           id: pd?.id,
           name: form.name,
           usageContext: form.usageContext || null,
+          headAndShouldersPrompt: form.headAndShouldersPrompt || null,
           shortPrompt: form.shortPrompt || null,
           mediumPrompt: form.mediumPrompt || null,
           longPrompt: form.longPrompt || null,
@@ -161,9 +165,10 @@ export function DescriptionsTab({ characterId }: DescriptionsTabProps) {
   return (
     <div className="space-y-4">
       <p className="qt-text-small qt-text-secondary">
-        One physical description per character, with short/medium/long/complete
-        prompt variants and a full freeform description. Stored in the character
-        vault as <code>physical-description.md</code> + <code>physical-prompts.json</code>.
+        One physical description per character, with a head-and-shoulders avatar
+        prompt, short/medium/long/complete prompt variants, and a full freeform
+        description. Stored in the character vault as <code>physical-description.md</code>{' '}
+        + <code>physical-prompts.json</code>.
       </p>
 
       <div className="qt-card space-y-4">
@@ -205,6 +210,30 @@ export function DescriptionsTab({ characterId }: DescriptionsTabProps) {
           <p className="mt-1 text-xs qt-text-small">
             Describes when this appearance is most appropriate.
           </p>
+        </div>
+
+        {/* Head & Shoulders Prompt — used for avatar generation */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label htmlFor="physical-headshoulders" className="block text-sm qt-text-primary">
+              Head &amp; Shoulders
+            </label>
+            <span className={`text-xs ${charCountClass(form.headAndShouldersPrompt.length, 500)}`}>
+              {form.headAndShouldersPrompt.length}/500
+            </span>
+          </div>
+          <p className="text-xs qt-text-secondary mb-2">
+            Used for avatar generation — describe only the head, face, hair, expression
+            and neckline; nothing below the shoulders.
+          </p>
+          <MarkdownLexicalEditor
+            value={form.headAndShouldersPrompt}
+            onChange={setField('headAndShouldersPrompt')}
+            remountKey={remountKey}
+            namespace="DescriptionsTab.headAndShouldersPrompt"
+            ariaLabel="Head and shoulders prompt"
+            minHeight="4rem"
+          />
         </div>
 
         {/* Short Prompt */}

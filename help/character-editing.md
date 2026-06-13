@@ -126,7 +126,7 @@ Each character carries a private vault in the Scriptorium — a small database-b
 | `personality.md` | **Personality** (the inward, self-knowledge prose field) |
 | `example-dialogues.md` | **Example Dialogues** (style samples for the LLM) |
 | `physical-description.md` | The **Full Description** of the character's first (default) physical description |
-| `physical-prompts.json` | The **short / medium / long / complete** prompts of the first (default) physical description (JSON with `short`, `medium`, `long`, `complete` keys) |
+| `physical-prompts.json` | The **head-and-shoulders / short / medium / long / complete** prompts of the first (default) physical description (JSON with `headAndShoulders`, `short`, `medium`, `long`, `complete` keys) |
 | `Prompts/*.md` | The character's **System Prompts** — one file per named variant, with YAML frontmatter carrying `name` (required) and an optional `isDefault: true` |
 | `Scenarios/*.md` | The character's **Scenarios** — one file per scene, with the first `# heading` as the title and the body beneath as the context |
 | `Wardrobe/*.md` | The character's **Wardrobe Items** — one Markdown file per garment, with frontmatter carrying `title`, `types`, `appropriateness`, the `default` flag, and timestamps; the body beneath is the freeform description |
@@ -267,6 +267,13 @@ Physical descriptions help:
 3. Edit manually or use AI to regenerate
 
 ### Physical Description Types
+
+**Head & Shoulders** (used for avatars)
+
+- The prompt the avatar generator reaches for first, since an avatar is a head-and-shoulders crop
+- Describe only what such a crop reveals: face, hair, expression, neckline, and any visible upper attire — never the chest, waist, hips, legs, or other anatomy below the shoulders
+- Keeping it above the collar also keeps image-provider moderation from balking at a portrait it would otherwise refuse
+- Example: "Young woman, glossy jet-black wavy hair from a center part, deep brown almond eyes, warm wheatish skin, high cheekbones, a warm closed-lipped smile, pearl stud earrings, open collar of a deep-wine field shirt"
 
 **Short Description** (1 sentence)
 

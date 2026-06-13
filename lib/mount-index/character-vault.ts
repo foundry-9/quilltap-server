@@ -92,6 +92,7 @@ export async function ensureCharacterVault(
 export function renderPhysicalPromptsJson(primary: PhysicalDescription | null | undefined): string {
   return JSON.stringify(
     {
+      headAndShoulders: primary?.headAndShouldersPrompt ?? null,
       short: primary?.shortPrompt ?? null,
       medium: primary?.mediumPrompt ?? null,
       long: primary?.longPrompt ?? null,

@@ -333,6 +333,7 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
         // Valid physicalDescription sub-field keys (carried on suggestion.subId).
         const PHYSICAL_KEYS = [
           'fullDescription',
+          'headAndShouldersPrompt',
           'shortPrompt',
           'mediumPrompt',
           'longPrompt',

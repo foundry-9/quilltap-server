@@ -56,6 +56,10 @@ export const PhysicalDescriptionSchema = z.object({
   id: UUIDSchema,
   name: z.string().min(1),
   usageContext: z.string().max(200).nullable().optional(),
+  // Tight head-and-shoulders portrait prompt — face/hair/expression/neckline
+  // only, never below-shoulder anatomy. Preferred source for avatar generation
+  // (avatars are a head-and-shoulders crop); see lib/wardrobe/avatar-prompt.ts.
+  headAndShouldersPrompt: z.string().max(500).nullable().optional(),
   shortPrompt: z.string().max(350).nullable().optional(),
   mediumPrompt: z.string().max(500).nullable().optional(),
   longPrompt: z.string().max(750).nullable().optional(),

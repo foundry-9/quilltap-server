@@ -598,6 +598,54 @@ export async function enqueueMemoryHousekeeping(
 }
 
 /**
+ * Payload for CHARACTER_HEADSHOULDERS_BACKFILL — generate a head-and-shoulders
+ * portrait prompt for one character that lacks one.
+ */
+export interface CharacterHeadShouldersBackfillPayload {
+  characterId: string;
+}
+
+/**
+ * Enqueue a head-and-shoulders backfill job for a character.
+ *
+ * Dedupes against in-flight (PENDING/PROCESSING) jobs for the same
+ * (userId, characterId). Background priority (-1). Generation is idempotent,
+ * so retries are harmless — callers may raise `maxAttempts` so a cold job
+ * child (provider not yet ready) retries instead of giving up.
+ */
+export async function enqueueCharacterHeadShouldersBackfill(
+  userId: string,
+  payload: CharacterHeadShouldersBackfillPayload,
+  options?: EnqueueJobOptions,
+): Promise<{ jobId: string; isNew: boolean }> {
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j =>
+      j.type === 'CHARACTER_HEADSHOULDERS_BACKFILL'
+      && (j.payload as Record<string, unknown>).characterId === payload.characterId);
+    if (existing) {
+      return { jobId: existing.id, isNew: false };
+    }
+  } catch (error) {
+    logger.warn('[HeadShouldersBackfill] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through and enqueue anyway.
+  }
+
+  const jobId = await enqueueJob(
+    userId,
+    'CHARACTER_HEADSHOULDERS_BACKFILL',
+    payload as unknown as Record<string, unknown>,
+    { ...options, priority: options?.priority ?? -1 },
+  );
+  return { jobId, isNew: true };
+}
+
+/**
  * Enqueue a per-chat memory regeneration job.
  *
  * Dedupes: if a PENDING or PROCESSING MEMORY_REGENERATE_CHAT job already

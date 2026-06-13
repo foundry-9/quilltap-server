@@ -315,7 +315,7 @@
         "exampleDialogues": { "type": "string" },
         "physicalDescription": {
           "oneOf": [{ "type": "object" }, { "type": "null" }],
-          "description": "Singular physical description with full text plus token-sized prompt variants (short/medium/long/complete). Pre-4.6 exports carried a `physicalDescriptions` array instead; importers fold legacy index 0 into this field."
+          "description": "Singular physical description with full text plus token-sized prompt variants (headAndShoulders/short/medium/long/complete; headAndShoulders is the head-and-shoulders crop preferred for avatar generation). Pre-4.6 exports carried a `physicalDescriptions` array instead; importers fold legacy index 0 into this field."
         },
         "avatarUrl": {
           "type": ["string", "null"],

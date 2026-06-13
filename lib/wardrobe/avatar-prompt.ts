@@ -65,7 +65,12 @@ export async function buildCharacterAvatarPrompt(
   let physicalText = '';
   const desc = character.physicalDescription;
   if (desc) {
+    // Avatars are a head-and-shoulders crop, so prefer the dedicated
+    // head-and-shoulders prompt (face/hair/expression/neckline only). It avoids
+    // sending below-the-crop anatomy that image-provider moderation rejects.
+    // Fall back through the full-body variants when it isn't set yet.
     physicalText = (
+      desc.headAndShouldersPrompt ||
       desc.mediumPrompt ||
       desc.shortPrompt ||
       desc.longPrompt ||

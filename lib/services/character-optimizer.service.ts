@@ -36,7 +36,7 @@ export interface OptimizerSuggestion {
   /**
    * For an existing scenario or system prompt, the item's id. For a
    * `physicalDescription` suggestion, the sub-field key being refined — one of
-   * `fullDescription | shortPrompt | mediumPrompt | longPrompt | completePrompt`.
+   * `fullDescription | headAndShouldersPrompt | shortPrompt | mediumPrompt | longPrompt | completePrompt`.
    */
   subId?: string;
   subName?: string;
@@ -195,6 +195,7 @@ export function buildCharacterContext(character: Character): string {
     const pd = character.physicalDescription;
     parts.push('=== Physical Description ===');
     parts.push(`[Physical Description: "${pd.name}" (ID: ${pd.id})]`);
+    parts.push(`Head & Shoulders: ${pd.headAndShouldersPrompt || '(empty)'}`);
     parts.push(`Short: ${pd.shortPrompt || '(empty)'}`);
     parts.push(`Medium: ${pd.mediumPrompt || '(empty)'}`);
     parts.push(`Long: ${pd.longPrompt || '(empty)'}`);
@@ -258,7 +259,7 @@ Respond with JSON:
 const SUGGESTION_SCHEMA_PREAMBLE = `Each suggestion object in the JSON array must follow this schema:
 {
   "field": "identity|description|manifesto|personality|exampleDialogues|talkativeness|scenarios|systemPrompt|physicalDescription",
-  "subId": "ID of the existing scenario or system prompt being updated (only when refining an existing item); for a physicalDescription suggestion, the sub-field key being refined — one of fullDescription, shortPrompt, mediumPrompt, longPrompt, completePrompt",
+  "subId": "ID of the existing scenario or system prompt being updated (only when refining an existing item); for a physicalDescription suggestion, the sub-field key being refined — one of fullDescription, headAndShouldersPrompt, shortPrompt, mediumPrompt, longPrompt, completePrompt",
   "subName": "Human-readable name of the existing sub-item, or the label of the physical sub-field (only when subId is set)",
   "name": "Name for a NEW system prompt (only when field is 'systemPrompt' and no subId is provided)",
   "currentValue": "The current text of the field/item being changed",
@@ -397,6 +398,7 @@ export function getPhysicalDescriptionSuggestionPrompt(
     ? [
         `Name: ${pd.name}`,
         `fullDescription: ${pd.fullDescription || '(empty)'}`,
+        `headAndShouldersPrompt: ${pd.headAndShouldersPrompt || '(empty)'}`,
         `shortPrompt: ${pd.shortPrompt || '(empty)'}`,
         `mediumPrompt: ${pd.mediumPrompt || '(empty)'}`,
         `longPrompt: ${pd.longPrompt || '(empty)'}`,
@@ -408,6 +410,7 @@ export function getPhysicalDescriptionSuggestionPrompt(
 
 The physical description has these sub-fields:
 - fullDescription — prose appearance description (the physical-description document)
+- headAndShouldersPrompt — a tight head-and-shoulders portrait prompt for avatars: face, hair, expression, neckline and visible upper attire ONLY; never breasts, torso, waist, hips, legs, or any anatomy below the shoulders
 - shortPrompt — a brief image-generation prompt (a few words / phrases)
 - mediumPrompt — a moderately detailed image-generation prompt
 - longPrompt — a detailed image-generation prompt
@@ -425,11 +428,12 @@ ${SUGGESTION_SCHEMA_PREAMBLE}
 
 Additional rules specific to physical-description refinement:
 - Set field="physicalDescription".
-- Set subId to the exact sub-field key being changed: one of fullDescription, shortPrompt, mediumPrompt, longPrompt, completePrompt.
-- Set subName to a human label for that sub-field (e.g. "Full Description", "Short Prompt", "Medium Prompt", "Long Prompt", "Complete Prompt").
+- Set subId to the exact sub-field key being changed: one of fullDescription, headAndShouldersPrompt, shortPrompt, mediumPrompt, longPrompt, completePrompt.
+- Set subName to a human label for that sub-field (e.g. "Full Description", "Head & Shoulders", "Short Prompt", "Medium Prompt", "Long Prompt", "Complete Prompt").
 - currentValue must be the existing text of that sub-field (empty string if it has none).
 - proposedValue must be the complete new text for that sub-field.
-- Keep the image prompts (short/medium/long/complete) in the comma-or-phrase style image models expect; keep fullDescription in prose.
+- Keep the image prompts (headAndShoulders/short/medium/long/complete) in the comma-or-phrase style image models expect; keep fullDescription in prose.
+- For headAndShouldersPrompt specifically: describe ONLY what a head-and-shoulders crop shows (face, hair, expression, neckline, visible upper attire). Never describe breasts, torso, waist, hips, legs, or any anatomy below the shoulders.
 
 Respond with a JSON array of suggestion objects (may be empty).`;
 }

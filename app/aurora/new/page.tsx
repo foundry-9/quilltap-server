@@ -150,6 +150,7 @@ export default function NewCharacterPage() {
             body: JSON.stringify({
               physicalDescription: {
                 name: pendingPhysicalDescription.current.name,
+                headAndShouldersPrompt: pendingPhysicalDescription.current.headAndShouldersPrompt,
                 shortPrompt: pendingPhysicalDescription.current.shortPrompt,
                 mediumPrompt: pendingPhysicalDescription.current.mediumPrompt,
                 longPrompt: pendingPhysicalDescription.current.longPrompt,

@@ -263,7 +263,7 @@ keyed by `(mountPointId, relativePath)` where `mountPointId` matches
 | exampleDialogues | `example-dialogues.md` |
 | pronouns, aliases, title, firstMessage, talkativeness | `properties.json` |
 | physicalDescription.fullDescription | `physical-description.md` |
-| physicalDescription.{short,medium,long,complete}Prompt | `physical-prompts.json` |
+| physicalDescription.{headAndShoulders,short,medium,long,complete}Prompt | `physical-prompts.json` |
 | systemPrompts[] | `Prompts/<sanitized-name>.md` (one file per record) |
 | scenarios[] | `Scenarios/<sanitized-title>.md` (one file per record) |
 

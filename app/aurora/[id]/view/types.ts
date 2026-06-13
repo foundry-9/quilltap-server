@@ -47,6 +47,7 @@ export interface CharacterPhysicalDescription {
   id: string
   name?: string | null
   usageContext?: string | null
+  headAndShouldersPrompt?: string | null
   shortPrompt?: string | null
   mediumPrompt?: string | null
   longPrompt?: string | null

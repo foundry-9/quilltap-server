@@ -114,6 +114,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           body: JSON.stringify({
             physicalDescription: {
               name: data.physicalDescription.name,
+              headAndShouldersPrompt: data.physicalDescription.headAndShouldersPrompt,
               shortPrompt: data.physicalDescription.shortPrompt,
               mediumPrompt: data.physicalDescription.mediumPrompt,
               longPrompt: data.physicalDescription.longPrompt,

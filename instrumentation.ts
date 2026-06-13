@@ -593,6 +593,17 @@ export async function register() {
               './lib/startup/move-shared-wardrobe-to-general'
             );
             await moveSharedWardrobeToGeneral();
+
+            // One-time scan that enqueues a head-and-shoulders portrait-prompt
+            // backfill job for every character that has appearance text but no
+            // `headAndShouldersPrompt` yet (avatars prefer that variant). Jobs
+            // are enqueued (never run inline) so a large library can't block
+            // startup; gated by an instance_settings flag. Runs last so every
+            // character already has a vault to write the result back into.
+            const { enqueueHeadShouldersBackfill } = await import(
+              './lib/startup/enqueue-headshoulders-backfill'
+            );
+            await enqueueHeadShouldersBackfill();
           })
           .catch((backfillError) => {
             logger.warn('Error during character vault backfill or physical-file migration', {

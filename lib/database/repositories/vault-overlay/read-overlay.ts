@@ -214,6 +214,7 @@ function hydrateOne(character: Character, maps: VaultFileMaps): Character {
           id: stableUuidFromString(`physical:${mountId}`),
           name: 'default',
           usageContext: null,
+          headAndShouldersPrompt: null,
           shortPrompt: null,
           mediumPrompt: null,
           longPrompt: null,
@@ -230,6 +231,7 @@ function hydrateOne(character: Character, maps: VaultFileMaps): Character {
     if (physPromptsRaw !== undefined) {
       const parsedPrompts = parseVaultPhysicalPrompts(physPromptsRaw, character.id);
       if (parsedPrompts) {
+        patched.headAndShouldersPrompt = parsedPrompts.headAndShoulders ?? null;
         patched.shortPrompt = parsedPrompts.short;
         patched.mediumPrompt = parsedPrompts.medium;
         patched.longPrompt = parsedPrompts.long;

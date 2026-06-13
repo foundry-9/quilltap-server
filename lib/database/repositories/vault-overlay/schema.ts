@@ -33,6 +33,10 @@ export const CharacterVaultPropertiesSchema = z.object({
 export type CharacterVaultProperties = z.infer<typeof CharacterVaultPropertiesSchema>;
 
 export const CharacterVaultPhysicalPromptsSchema = z.object({
+  // Optional: legacy physical-prompts.json files written before this field
+  // existed only carry {short,medium,long,complete}. A non-optional key here
+  // would make the strict safeParse reject them and wipe ALL prompt tiers.
+  headAndShoulders: z.string().nullable().optional(),
   short: z.string().nullable(),
   medium: z.string().nullable(),
   long: z.string().nullable(),

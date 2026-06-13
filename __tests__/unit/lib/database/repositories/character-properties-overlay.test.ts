@@ -485,6 +485,44 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     expect(result.physicalDescription!.completePrompt).toBe('vault-complete');
   });
 
+  it('hydrates headAndShouldersPrompt from physical-prompts.json', async () => {
+    mockRepoPaths({
+      [CHARACTER_PHYSICAL_PROMPTS_JSON_PATH]: [
+        {
+          mountPointId: 'mp-1',
+          content: JSON.stringify({ ...VALID_VAULT_PHYSICAL_PROMPTS, headAndShoulders: 'vault-headshoulders' }),
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      characterDocumentMountPointId: 'mp-1',
+      physicalDescription: makePhysicalDescription({ id: 'pd-1' }),
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.physicalDescription!.headAndShouldersPrompt).toBe('vault-headshoulders');
+  });
+
+  it('back-compat: a legacy physical-prompts.json without headAndShoulders still parses (field null, other tiers survive)', async () => {
+    mockRepoPaths({
+      [CHARACTER_PHYSICAL_PROMPTS_JSON_PATH]: [
+        // VALID_VAULT_PHYSICAL_PROMPTS has no headAndShoulders key — the shape
+        // written before the field existed. The `.optional()` on the vault
+        // schema is what keeps this parsing instead of wiping all tiers.
+        { mountPointId: 'mp-1', content: JSON.stringify(VALID_VAULT_PHYSICAL_PROMPTS) },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      characterDocumentMountPointId: 'mp-1',
+      physicalDescription: makePhysicalDescription({ id: 'pd-1' }),
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.physicalDescription!.headAndShouldersPrompt).toBeNull();
+    expect(result.physicalDescription!.shortPrompt).toBe('vault-short');
+    expect(result.physicalDescription!.completePrompt).toBe('vault-complete');
+  });
+
   it('accepts null prompt values from physical-prompts.json (null means null)', async () => {
     mockRepoPaths({
       [CHARACTER_PHYSICAL_PROMPTS_JSON_PATH]: [
@@ -1303,6 +1341,20 @@ describe('CharacterVaultPhysicalPromptsSchema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('accepts an optional headAndShoulders key', () => {
+    const parsed = CharacterVaultPhysicalPromptsSchema.safeParse({
+      ...VALID_VAULT_PHYSICAL_PROMPTS,
+      headAndShoulders: 'hs',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts a legacy object missing headAndShoulders (back-compat — the field is optional)', () => {
+    // VALID_VAULT_PHYSICAL_PROMPTS carries no headAndShoulders key.
+    const parsed = CharacterVaultPhysicalPromptsSchema.safeParse(VALID_VAULT_PHYSICAL_PROMPTS);
+    expect(parsed.success).toBe(true);
+  });
+
   it('accepts all-null values', () => {
     const parsed = CharacterVaultPhysicalPromptsSchema.safeParse({
       short: null,
@@ -1391,6 +1443,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
 
     const physPrompts = JSON.parse(getWrite(CHARACTER_PHYSICAL_PROMPTS_JSON_PATH)!);
     expect(physPrompts).toEqual({
+      headAndShoulders: null,
       short: 'short',
       medium: 'medium',
       long: 'long',

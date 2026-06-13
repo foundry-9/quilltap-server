@@ -122,6 +122,7 @@ export async function readCharacterVaultManagedFields(
                 id: stableUuidFromString(`physical:${mountPointId}`),
                 name: 'default',
                 usageContext: null,
+                headAndShouldersPrompt: null,
                 shortPrompt: null,
                 mediumPrompt: null,
                 longPrompt: null,
@@ -134,6 +135,7 @@ export async function readCharacterVaultManagedFields(
             patched.fullDescription = physDescMd === '' ? null : physDescMd;
           }
           if (physPromptsJson !== null) {
+            patched.headAndShouldersPrompt = physPromptsJson.headAndShoulders ?? null;
             patched.shortPrompt = physPromptsJson.short;
             patched.mediumPrompt = physPromptsJson.medium;
             patched.longPrompt = physPromptsJson.long;

@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Added a "Head & Shoulders" physical-description prompt for avatars
+
+Character avatars are a head-and-shoulders crop, but avatar generation used the full-body physical description — which often described below-the-crop anatomy that image-provider moderation (e.g. OpenAI `gpt-image-2`) rejects, even for fully-clothed characters. Added a dedicated head-and-shoulders prompt variant and made avatars prefer it.
+
+- New optional `headAndShouldersPrompt` field on `physicalDescription` (max 500 chars), stored in the vault `physical-prompts.json` under the `headAndShoulders` key. Legacy files without the key still load (the field reads back as null).
+- Avatar generation now prefers `headAndShouldersPrompt`, falling back to the medium/short/long/complete/full chain when it's empty. Story-background and system-prompt builders are unchanged (they keep using the full-body variants).
+- The character creation wizard, AI import, and the character optimizer now generate/refine the field, with guidance to describe only face, hair, expression, and neckline — never breasts, torso, waist, hips, or legs.
+- A one-time startup scan enqueues background `CHARACTER_HEADSHOULDERS_BACKFILL` jobs to fill the field for existing characters that have appearance text but no head-and-shoulders prompt yet. Jobs run in the background so a large library never blocks startup.
+- Editable in Aurora → character → Descriptions.
+
 #### Removed the wardrobe DB mirror and dropped the `wardrobe_items` table
 
 Wardrobe items already lived in the document store (`Wardrobe/*.md`), but the code kept a parallel `wardrobe_items` DB table as a mirror and reconciled the two on every write. That second path is now gone; wardrobe lives solely in the vault.

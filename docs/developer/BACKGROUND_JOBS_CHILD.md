@@ -109,6 +109,7 @@ The fix is the **deferred-file-write pattern**: the child stages files in `<data
 | chat-danger-classification | No | Yes (sticky classification) | LLM call (before-batch) | `createSystemEvent`, `chats.update`, enqueue concierge announcement |
 | scene-state-tracking | No | Yes (deterministic derivation) | LLM call (before-batch) | `createSystemEvent`, `chats.update` |
 | **character-avatar** | No | **Requires deferred-file-write** | Danger classification LLM, image generation, file upload (before-batch) | `folders.create`, `folders.findByPath`, `files.create`, `chats.update`, `characters.update`, `__finalizeFile` |
+| character-headshoulders-backfill | No | Yes (idempotent overwrite; skips if already set) | Cheap-LLM `generateField` (before-batch) | `characters.update` (→ `linkDocumentContent` ×2 via `writeDatabaseDocument` — text docs only, no deferred file) |
 | conversation-render | No | Yes (deterministic upsert) | None | `chats.update`, `conversationChunks.upsert`, enqueue embedding-generate |
 | wardrobe-outfit-announcement | No | Yes (deterministic) | None | `postOutfitChangeWhisper` (notify) |
 
