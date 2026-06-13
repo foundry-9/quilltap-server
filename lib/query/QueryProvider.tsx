@@ -20,7 +20,13 @@ export function QueryProvider({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       {children}
       {process.env.NODE_ENV === 'development' && (
-        <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
+        // `buttonPosition="relative"` drops the toggle out of its own fixed
+        // overlay so this wrapper places it. We sit it in the bottom-right,
+        // raised above the Next.js dev indicator (pinned bottom-right in
+        // next.config.js) so the two don't stack on top of each other.
+        <div style={{ position: 'fixed', bottom: 56, right: 16, zIndex: 99998 }}>
+          <ReactQueryDevtools initialIsOpen={false} buttonPosition="relative" />
+        </div>
       )}
     </QueryClientProvider>
   )
