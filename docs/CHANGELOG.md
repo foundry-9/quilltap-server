@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### Removed the wardrobe DB mirror and dropped the `wardrobe_items` table
+
+Wardrobe items already lived in the document store (`Wardrobe/*.md`), but the code kept a parallel `wardrobe_items` DB table as a mirror and reconciled the two on every write. That second path is now gone; wardrobe lives solely in the vault.
+
+- Removed the DB-mirror sync machinery: `syncCharacterVaultWardrobe`, `performVaultWardrobeSync`, and `ingestVaultOnlyWardrobeIntoDb` (`lib/database/repositories/vault-overlay/wardrobe-sync.ts`), plus the unused `CharactersRepository.syncWardrobeToVault` wrapper. `getOverlaidWardrobeItems` now reads vault-only (logs and returns `[]` for a character with no usable vault instead of falling back to DB rows).
+- `WardrobeRepository`: removed the legacy DB update/delete fallbacks (update/delete now require a resolvable vault mount and throw otherwise), deleted `createFromVault` and the now-callerless `findByIds`, and dropped the raw-DB fallbacks from the id/archetype lookups so no per-request read touches the table.
+- Decoupled wardrobe from `writeCharacterVaultManagedFields`; the full-character vault writer no longer projects wardrobe (which would risk wiping existing `Wardrobe/*.md` files). Repointed `ensureCharacterVault` and the character-vault backfill off `findByCharacterIdRaw`.
+- Cleaned dead managed-fields mirror writes: the `prompts-dir`/`scenarios-dir` cases no longer write `systemPrompts`/`scenarios` back to dropped DB columns.
+- New migration `drop-wardrobe-items-table-v1` snapshots all rows to `<dataDir>/backup/pre-drop-wardrobe-items.json`, then drops the index and table. It is gated behind both vault-population flags (`wardrobe_folder_migrated_v1`, `shared_wardrobe_moved_to_general_v1`), so the table is dropped only on a startup after both one-time population tasks have run.
+- `findByCharacterIdRaw` and the `refresh-vault-wardrobe` / `move-shared-wardrobe-to-general` startup tasks are intentionally retained for now; they still run once on straight-through upgrades and are slated for removal in a later release.
+
 #### Wardrobe items: optional image-generation cue ("Portrait Cue")
 
 Wardrobe items gained an optional `imagePrompt` field — a short plain-text phrase fed to the avatar and Lantern image pipelines *in place of* the item's title when set, falling back to the title when blank. The title and prose `description` are unchanged; `description` is still stripped from image prompts (it's human prose). This lets a garment carry a literal visual cue the bare title can't convey (e.g. a rank glyph) without disturbing the human-readable title.

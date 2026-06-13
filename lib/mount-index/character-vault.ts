@@ -71,13 +71,10 @@ export async function ensureCharacterVault(
 
   await scaffoldCharacterMount(mountPoint.id);
 
-  // Read wardrobe raw so the projection writes DB values into the vault, not
-  // overlaid (vault-sourced) values it would otherwise see.
-  const wardrobeItems = await repos.wardrobe.findByCharacterIdRaw(character.id);
-  await writeCharacterVaultManagedFields(mountPoint.id, {
-    character,
-    wardrobeItems,
-  });
+  // Project the character's content fields into the new vault. Wardrobe is not
+  // projected here — it lives solely in the vault and is written through the
+  // wardrobe-writes path; a brand-new vault has no wardrobe yet.
+  await writeCharacterVaultManagedFields(mountPoint.id, { character });
 
   await repos.characters.update(character.id, {
     characterDocumentMountPointId: mountPoint.id,

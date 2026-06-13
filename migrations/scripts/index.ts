@@ -252,6 +252,8 @@ import { migrateOutfitPresetsToCompositesMigration } from './migrate-outfit-pres
 import { convertEquippedOutfitToArraysMigration } from './convert-equipped-outfit-to-arrays-v1';
 // Drop the outfit_presets table (after backup snapshot)
 import { dropOutfitPresetsTableMigration } from './drop-outfit-presets-table-v1';
+// Drop the wardrobe_items table (after backup snapshot; gated on vault population)
+import { dropWardrobeItemsTableMigration } from './drop-wardrobe-items-table-v1';
 // Provision the global Lantern Backgrounds mount point
 import { provisionLanternBackgroundsMountMigration } from './provision-lantern-backgrounds-mount';
 // Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount
@@ -584,6 +586,8 @@ export const migrations: Migration[] = [
   convertEquippedOutfitToArraysMigration,
   // Drop the outfit_presets table (after backup snapshot)
   dropOutfitPresetsTableMigration,
+  // Drop the wardrobe_items table (after backup snapshot; gated on vault population)
+  dropWardrobeItemsTableMigration,
   // Provision the global Lantern Backgrounds mount point
   provisionLanternBackgroundsMountMigration,
   // Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount
@@ -901,6 +905,8 @@ export {
   convertEquippedOutfitToArraysMigration,
   // Drop the outfit_presets table (after backup snapshot)
   dropOutfitPresetsTableMigration,
+  // Drop the wardrobe_items table (after backup snapshot; gated on vault population)
+  dropWardrobeItemsTableMigration,
   // Provision the global Lantern Backgrounds mount point
   provisionLanternBackgroundsMountMigration,
   // Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount

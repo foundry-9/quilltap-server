@@ -272,29 +272,44 @@ Reads go through `applyDocumentStoreOverlay()` in
 `applyDocumentStoreWriteOverlay()`. The repository's `*Raw` helpers bypass
 the overlay (used by exports and the migration's populator).
 
-### wardrobe_items — LEGACY/DEPRECATED in 4.6 (vault-first cutover)
+### wardrobe_items — DROPPED in 4.7 (`drop-wardrobe-items-table-v1`)
 
-As of 4.6 the wardrobe is **vault-first**: this table is no longer the
-write target and is slated for removal. Wardrobe items now live as
-`Wardrobe/*.md` frontmatter files:
+The wardrobe became **vault-first** in 4.6; in 4.7 the legacy DB mirror and its
+sync-back machinery were removed and the table itself was dropped by
+`drop-wardrobe-items-table-v1`. The migration snapshots all rows to
+`<dataDir>/backup/pre-drop-wardrobe-items.json` before the drop, and its
+`shouldRun` is gated behind **both** population flags in `instance_settings`
+(`wardrobe_folder_migrated_v1` and `shared_wardrobe_moved_to_general_v1`) so the
+table can never be dropped before the one-time vault-population startup tasks
+have completed (a two-startup sequence: migrations run before startup tasks, so
+the flags are set on one startup and the table is dropped on the next).
+
+Wardrobe items now live exclusively as `Wardrobe/*.md` frontmatter files in the
+document store:
 
 - **Character-owned items** live in each character's document vault under
   `Wardrobe/*.md` (the vault linked via
   `characters.characterDocumentMountPointId`).
 - **Shared archetypes** (formerly `wardrobe_items` rows with
-  `characterId = NULL`) live in the singleton **"Quilltap General"** mount
-  under a `Wardrobe/` folder. A one-time startup task
-  (`lib/startup/move-shared-wardrobe-to-general.ts`) relocates the existing
-  shared archetypes there and drops their DB rows — it runs as a startup task
-  rather than a migration because migrations execute before the mount-index
-  database is initialized and so can't write vault documents.
+  `characterId = NULL`) live in the singleton **"Quilltap General"** mount under
+  a `Wardrobe/` folder. A one-time startup task
+  (`lib/startup/move-shared-wardrobe-to-general.ts`) relocated the existing
+  shared archetypes there before the table was dropped.
+- **Project stores** may shadow shared archetypes under their own `Wardrobe/`
+  folders (project tier wins over Quilltap General on id collision).
 
-Reads/writes flow through the vault overlay (`buildWardrobeItemFile` in
-`lib/mount-index/character-vault.ts`; `parseWardrobeItemFile` in
-`lib/database/repositories/vault-overlay/parsers.ts`). The schema below
-documents the historical table only.
+Reads flow through the vault overlay (`getOverlaidWardrobeItems` /
+`WardrobeRepository`); writes go through the vault-first writers
+(`createVaultWardrobeItem` / `updateVaultWardrobeItem` / `deleteVaultWardrobeItem`
+in `lib/database/repositories/vault-overlay/wardrobe-writes.ts`, which re-project
+the `Wardrobe/` folder via `projectVaultWardrobe`). File shape is produced by
+`buildWardrobeItemFile` (`lib/mount-index/character-vault.ts`) and parsed by
+`parseWardrobeItemFile` (`lib/database/repositories/vault-overlay/parsers.ts`).
+
+The historical table shape (for reference; no longer present):
 
 ```sql
+-- DROPPED in 4.7 by drop-wardrobe-items-table-v1
 CREATE TABLE "wardrobe_items" (
   "id" TEXT PRIMARY KEY,
   "characterId" TEXT,
@@ -314,7 +329,7 @@ CREATE TABLE "wardrobe_items" (
 CREATE INDEX "idx_wardrobe_items_character" ON "wardrobe_items"("characterId");
 ```
 
-`componentItemIds` is a JSON array of other wardrobe item ids. An empty array (or NULL, treated identically) means a leaf item; a populated array means a composite — equipping the item stores its own id but at read time `expandComposites` resolves the components transitively (cycle-tolerant, depth-capped). Cycles are rejected at save time by `WardrobeRepository`.
+`componentItemIds` is a JSON array of other wardrobe item ids. An empty array (or NULL, treated identically) means a leaf item; a populated array means a composite — equipping the item stores its own id but at read time `expandComposites` resolves the components transitively (cycle-tolerant, depth-capped). Cycles are rejected at save time by the vault writers (`wardrobe-writes.ts`).
 
 #### Wardrobe/*.md frontmatter
 

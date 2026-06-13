@@ -73,8 +73,10 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
         // project/group store backfills.
         const existingProps = await readCharacterVaultProperties(outcome.mountPointId, character.id);
         if (!existingProps) {
-          const wardrobeItems = await repos.wardrobe.findByCharacterIdRaw(character.id);
-          await writeCharacterVaultManagedFields(outcome.mountPointId, { character, wardrobeItems });
+          // Repopulate the missing content files. Wardrobe is not part of this
+          // projection — it lives solely in the vault (no DB rows to source
+          // from) and is reconciled by the one-time refresh-vault-wardrobe task.
+          await writeCharacterVaultManagedFields(outcome.mountPointId, { character });
           result.filesRepopulated++;
           logger.warn('Repopulated character vault with missing files', {
             characterId: character.id,

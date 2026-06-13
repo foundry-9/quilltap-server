@@ -14,7 +14,6 @@ import {
   applyDocumentStoreOverlay,
   applyDocumentStoreOverlayOne,
   applyDocumentStoreWriteOverlay,
-  syncCharacterVaultWardrobe,
   MANAGED_FIELDS,
 } from './character-properties-overlay';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
@@ -265,19 +264,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       'Error creating character',
       { userId: data.userId, name: data.name }
     );
-  }
-
-  /**
-   * Re-project a character's wardrobe items into its vault `Wardrobe/` folder.
-   *
-   * Called by import paths that create wardrobe items AFTER the character
-   * itself (so the wardrobe rows didn't exist when `create()` ran its initial
-   * projection). Idempotent — safe to call even when the vault is already in
-   * sync. Equivalent to `repos.wardrobe.create()`'s post-write side effect,
-   * but explicitly invoked so importers don't have to know about it.
-   */
-  async syncWardrobeToVault(characterId: string): Promise<void> {
-    await syncCharacterVaultWardrobe(characterId);
   }
 
   /**
