@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Wardrobe items: optional image-generation cue ("Portrait Cue")
+
+Wardrobe items gained an optional `imagePrompt` field — a short plain-text phrase fed to the avatar and Lantern image pipelines *in place of* the item's title when set, falling back to the title when blank. The title and prose `description` are unchanged; `description` is still stripped from image prompts (it's human prose). This lets a garment carry a literal visual cue the bare title can't convey (e.g. a rank glyph) without disturbing the human-readable title.
+
+- New optional `imagePrompt` on `WardrobeItemSchema` (`lib/schemas/wardrobe.types.ts`); not Markdown.
+- `decorateOutfitItems(..., { titleOnly: true })` now emits `imagePrompt` over `title` when present (`lib/wardrobe/outfit-description.ts`); the prose path is unchanged. Threaded through the avatar prompt (already title-only) and the scene/appearance paths (`lib/image-gen/appearance-resolution.ts`, `lib/memory/cheap-llm-tasks/{types,image-scene-tasks}.ts`, `lib/background-jobs/handlers/story-background.ts`, `lib/tools/handlers/image-generation-handler.ts`).
+- Persisted as `imagePrompt:` vault frontmatter (`buildWardrobeItemFile` / `parseWardrobeItemFile`); round-trips through `.qtap` export/import and is documented in `qtap-export.schema.json` and `DDL.md`.
+- Editor: new "Portrait Cue" input in the wardrobe item editor (`components/wardrobe/wardrobe-item-editor.tsx`), accepted by all six wardrobe create/update API routes.
+- Wardrobe is vault-only: removed the stale no-vault SQL-write fallback in `WardrobeRepository.create` (it now throws when no Character Vault / Quilltap General mount resolves instead of writing a primary `wardrobe_items` row). The sync-mirror path (`createFromVault`) is unchanged; the legacy `wardrobe_items` table has no `imagePrompt` column and never receives one.
+
 #### Configurable background-job concurrency
 
 The global cap on how many background jobs run at once is now adjustable instead of hardcoded at 4. A "Simultaneous Labours" slider in the Tasks Queue card (Settings → Data & System) sets it from 1 to 32; the default stays 4. Use a higher value when a more capable backend can handle more parallel work.

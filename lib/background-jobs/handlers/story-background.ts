@@ -255,17 +255,17 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const appearanceInputs: AppearanceResolutionInput[] = [];
   const projectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
   for (const char of validCharacters) {
-    let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
+    let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> | undefined;
     try {
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       if (equippedSlots) {
         const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots, {
           projectMountPointIds,
         });
-        const flat: Array<{ slot: string; title: string; description?: string | null }> = [];
+        const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = [];
         for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
           for (const item of resolved.leafItemsBySlot[slot]) {
-            flat.push({ slot, title: item.title, description: item.description });
+            flat.push({ slot, title: item.title, description: item.description, imagePrompt: item.imagePrompt });
           }
         }
         if (flat.length > 0) {

@@ -940,7 +940,7 @@ async function resolveAppearances(
         const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
         const appearanceInputs: AppearanceResolutionInput[] = [];
         for (const p of resolvedPlaceholders.filter(p => p.entityId && p.descriptions?.length)) {
-          let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
+          let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> | undefined;
           if (context.chatId && p.entityId) {
             try {
               const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(context.chatId, p.entityId);
@@ -948,10 +948,10 @@ async function resolveAppearances(
                 const resolved = await resolveEquippedOutfitForCharacter(repos, p.entityId, equippedSlots, {
                   projectMountPointIds,
                 });
-                const flat: Array<{ slot: string; title: string; description?: string | null }> = [];
+                const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = [];
                 for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
                   for (const item of resolved.leafItemsBySlot[slot]) {
-                    flat.push({ slot, title: item.title, description: item.description });
+                    flat.push({ slot, title: item.title, description: item.description, imagePrompt: item.imagePrompt });
                   }
                 }
                 if (flat.length > 0) {

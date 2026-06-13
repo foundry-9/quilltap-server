@@ -183,6 +183,9 @@ export function buildWardrobeItemFile(
   if (item.appropriateness != null && item.appropriateness !== '') {
     data.appropriateness = item.appropriateness;
   }
+  if (item.imagePrompt != null && item.imagePrompt !== '') {
+    data.imagePrompt = item.imagePrompt;
+  }
   if (item.isDefault) {
     data.default = true;
   }

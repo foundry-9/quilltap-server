@@ -806,7 +806,9 @@ export async function resolveAppearance(
     let wardrobeSection = ''
     if (char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0) {
       const valuesFor = (slot: string): string[] =>
-        char.equippedWardrobeItems!.filter(i => i.slot === slot).map(i => i.title)
+        char.equippedWardrobeItems!
+          .filter(i => i.slot === slot)
+          .map(i => (i.imagePrompt?.trim() ? i.imagePrompt.trim() : i.title))
       const outfitDescription = describeOutfit({
         top: valuesFor('top'),
         bottom: valuesFor('bottom'),

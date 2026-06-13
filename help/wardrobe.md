@@ -38,6 +38,7 @@ To furnish a character's wardrobe, open the **Wardrobe** dialog — the clothes-
 3. Use the **"Add to"** selector to choose where the garment lives — **This character** (a personal item, the default), **Shared — everywhere** (a household archetype), or **Shared — this project** (offered when you've opened the dialog inside a project's chat). See [Where Wardrobe Items Come From](#where-wardrobe-items-come-from-three-tiers) for what each tier means.
 4. Choose the **slot(s)** the garment covers (top, bottom, footwear, or accessories)
 5. Give the item a **title** (e.g., "Burgundy velvet smoking jacket") and a **description** --- as lavish or as terse as you please --- that the AI will use when referencing the garment
+6. Optionally supply a **Portrait Cue** --- a short, literal phrase whispered to the portraitist and the Lantern when a likeness is drawn (see [Portrait Cues](#portrait-cues-dressing-for-the-camera) below)
 
 You may edit or remove your personal items at any time via each row's `⋮` menu. The wardrobe is yours to curate, though your characters may have opinions about it (see below).
 
@@ -172,9 +173,26 @@ This ensures that every conversation starts with the appropriate sartorial conte
 
 ## How the Wardrobe Affects Image Generation
 
-When Quilltap generates images of a character --- whether through the Lantern background system or direct image generation --- it consults the currently equipped wardrobe items rather than any legacy clothing description. Each equipped item's description is fed to the image provider, so what the character is *actually wearing* in the conversation is what appears in the picture.
+When Quilltap generates images of a character --- whether through the Lantern background system or direct image generation --- it consults the currently equipped wardrobe items rather than any legacy clothing description, so what the character is *actually wearing* in the conversation is what appears in the picture.
+
+What the picture-maker is *told*, however, is each equipped item's **title** (or its Portrait Cue, if you have set one --- see below). The lavish prose **description** is reserved for human eyes and for the AI's own references; it is deliberately *not* handed to the image provider, lest a paragraph of purple costume-writing be parroted, word for word, onto the canvas.
 
 If no wardrobe items are equipped, the system falls back gracefully to the character's legacy clothing description, so nothing breaks for characters who have not yet been fitted with a proper wardrobe.
+
+### Portrait Cues (Dressing for the Camera)
+
+Some garments are named perfectly well for a wardrobe drawer yet say nothing useful to a painter. "Captain's Epaulet" tells the portraitist precisely nothing about what to *draw*; a title like "Garden Party Hat #3" is worse still. And a few items carry a meaning no name can convey at all --- a rank glyph, a heraldic device, an insignia whose particular geometry matters.
+
+For these, each wardrobe item offers an optional **Portrait Cue**: a short, literal, plain-text phrase handed to the avatar generator and the Lantern *in place of* the title whenever a likeness is drawn. Set one, and the picture-maker hears your words instead of the bare name; leave it blank, and the title speaks as before.
+
+A few principles for a cue that actually lands:
+
+- **Be literal and visual, not lavish.** "Intricate dense burnished-gold circular insignia on the shoulder" --- not a paragraph of lore. The flowery Description is for humans; the Cue is for the easel.
+- **Keep it terse.** Cues are stitched together into a single comma-separated list of what the character has on, so a runaway sentence crowds out the rest of the outfit.
+- **Let complexity carry meaning.** Image-makers cannot reliably reproduce a *specific* arbitrary glyph from a description, but they handle relative *busyness* well. "Intricate, many-ringed gold glyph" for a senior rank versus "small, simple gold glyph" for a junior one reads, at a glance, exactly as you intend --- even if the precise number of rings is left to the painter's hand.
+- **Placement is a suggestion, not a command.** Phrases like "on the left shoulder" nudge but do not bind; picture-makers are famously cavalier about where they put things.
+
+A Portrait Cue changes only what the *image* pipeline is told. The title still appears in lists and tools, the description still informs the AI's prose, and a character referring to the garment in conversation is none the wiser. Should you need a glyph rendered with true fidelity --- exact rings, exact spokes --- a Cue will get you the *impression*; for the genuine article, compose the portrait without the insignia and lay the real artwork over the shoulder afterward.
 
 ## Aurora's Wardrobe Announcements
 

@@ -350,18 +350,15 @@ export async function restore(
       }
     }
 
-    // 19. Wardrobe Items
+    // 19. Wardrobe Items — DEFERRED to step 22g (after doc-store mounts exist).
+    // Wardrobe is vault-only: `wardrobe.create` writes into the character's
+    // Character Vault / Quilltap General document store and now refuses a
+    // SQL-row fallback. At this point in the restore those mounts haven't been
+    // recreated yet (they land at 22a), so resolving the vault would fail.
+    // Items from a post-cutover backup already restore as `Wardrobe/*.md`
+    // documents via 22c–22e; only LEGACY (pre-cutover) backups carry
+    // `data.wardrobeItems`, and those are seeded into the vault at 22g.
     let wardrobeItemsRestored = 0;
-    for (const item of data.wardrobeItems || []) {
-      try {
-        const { id, createdAt, updatedAt, ...itemData } = item;
-        await globalRepos.wardrobe.create(itemData, { id: item.id });
-        wardrobeItemsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore wardrobe item "${item.title}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore wardrobe item', { wardrobeItemId: item.id, error });
-      }
-    }
 
     // 20. Outfit Presets — REMOVED: presets are now composite WardrobeItems and
     // were folded into data.wardrobeItems at parse time for back-compat with
@@ -507,6 +504,25 @@ export async function restore(
             moduleLogger.warn('Failed to restore doc mount blob', { blobId: blob.id, error });
           }
         }
+      }
+    }
+
+    // 22f-bis. Legacy wardrobe items (deferred from step 19). The doc-store
+    // mounts, folders, and file rows now exist (22a–22f), so each character's
+    // Character Vault — and Quilltap General for shared archetypes — resolves.
+    // `wardrobe.create` therefore writes these straight into the vault document
+    // store (its sole home); it no longer falls back to a SQL `wardrobe_items`
+    // row. Post-cutover backups carry their wardrobe as `Wardrobe/*.md`
+    // documents (already restored above) and leave `data.wardrobeItems` empty,
+    // so this loop only fires for older, pre-cutover backups.
+    for (const item of data.wardrobeItems || []) {
+      try {
+        const { id, createdAt, updatedAt, ...itemData } = item;
+        await globalRepos.wardrobe.create(itemData, { id: item.id });
+        wardrobeItemsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore wardrobe item "${item.title}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore wardrobe item', { wardrobeItemId: item.id, error });
       }
     }
 

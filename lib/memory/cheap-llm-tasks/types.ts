@@ -222,5 +222,7 @@ export interface CharacterAppearanceInput {
     slot: string        // 'top', 'bottom', 'footwear', 'accessories'
     title: string
     description?: string | null
+    /** Plain-text image cue; preferred over `title` in image prompts. */
+    imagePrompt?: string | null
   }>
 }

@@ -962,6 +962,10 @@
         },
         "title": { "type": "string", "minLength": 1 },
         "description": { "type": ["string", "null"] },
+        "imagePrompt": {
+          "type": ["string", "null"],
+          "description": "Optional plain-text cue fed to image-generation pipelines (avatar + Lantern) in place of the title; falls back to title when absent. Not Markdown."
+        },
         "types": {
           "type": "array",
           "minItems": 1,

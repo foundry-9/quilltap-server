@@ -364,21 +364,22 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
           return vault.value;
         }
 
-        // Fallback — no vault mount resolved (e.g. Quilltap General not yet
-        // provisioned on a freshly-cloned instance). Legacy DB row + sync-out.
-        await this.assertNoComponentCycles(
-          candidateId,
-          data.componentItemIds ?? [],
-          data.characterId ?? null,
-        );
-        const item = await this._create(data, { ...options, id: candidateId });
-        logger.info('Wardrobe item created (DB fallback)', {
-          wardrobeItemId: item.id,
-          characterId: data.characterId ?? null,
-          title: data.title,
+        // No vault mount resolved. Wardrobe is fully vault-first: the document
+        // store ("Character Vault" / Quilltap General) is the sole *source* for
+        // new items, and we must never write one as a primary SQL row. (The DB
+        // mirror that the projection sweep relies on is populated only by the
+        // sync path's `createFromVault`, not here.) If we land here, the General
+        // mount isn't provisioned yet — surface that rather than silently
+        // creating an authoritative item the vault doesn't know about.
+        logger.error('Wardrobe create has no resolvable vault mount; refusing SQL fallback', {
+          wardrobeItemId: newItem.id,
+          characterId: newItem.characterId,
+          title: newItem.title,
         });
-        await syncCharacterVaultWardrobe(item.characterId);
-        return item;
+        throw new Error(
+          'Cannot create wardrobe item: no Character Vault or Quilltap General mount is available. ' +
+            'Wardrobe items are stored exclusively in the document store.',
+        );
       },
       'Error creating wardrobe item',
       { characterId: data.characterId ?? null, title: data.title }
@@ -407,6 +408,9 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
         );
         return this._create(
           {
+            // `imagePrompt` deliberately omitted: the legacy wardrobe_items
+            // table has no such column on pre-existing instances (see `create`).
+            // It lives in the vault, which is the authoritative store.
             characterId: item.characterId ?? null,
             title: item.title,
             description: item.description ?? null,

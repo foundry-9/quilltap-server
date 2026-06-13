@@ -100,6 +100,7 @@ export function WardrobeItemEditor({
   const { formData, handleChange } = useFormState({
     title: item?.title || '',
     description: item?.description || '',
+    imagePrompt: item?.imagePrompt || '',
     appropriateness: item?.appropriateness || '',
     isDefault: item?.isDefault || false,
   })
@@ -371,6 +372,7 @@ export function WardrobeItemEditor({
       const payload: Record<string, unknown> = {
         title: formData.title,
         description: formData.description || null,
+        imagePrompt: formData.imagePrompt || null,
         types: typesToSave,
         appropriateness: formData.appropriateness || null,
         isDefault: formData.isDefault,
@@ -833,6 +835,34 @@ export function WardrobeItemEditor({
               />
               <p className="mt-1 text-xs qt-text-small">
                 When is this appropriate to wear? e.g., formal, casual, intimate, combat.
+              </p>
+            </div>
+
+            {/* Portrait cue — plain-text phrase handed to the image-makers. */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="wardrobe-image-prompt" className="qt-label">
+                  Portrait Cue
+                </label>
+                <span className={`text-xs ${charCountClass(formData.imagePrompt.length, 200)}`}>
+                  {formData.imagePrompt.length}/200
+                </span>
+              </div>
+              <input
+                type="text"
+                id="wardrobe-image-prompt"
+                name="imagePrompt"
+                value={formData.imagePrompt}
+                onChange={handleChange}
+                maxLength={200}
+                placeholder="e.g., intricate burnished-gold circular rank glyph on the shoulder"
+                className="qt-input"
+              />
+              <p className="mt-1 text-xs qt-text-small">
+                A short, literal phrase whispered to the portraitist and the Lantern when a likeness
+                is drawn --- used <em>in place of</em> the title above, should the bare name fail to
+                conjure the right picture. Keep it terse and visual; the flowery Description below is
+                for human eyes and never reaches the easel. Leave it empty to let the title speak.
               </p>
             </div>
 

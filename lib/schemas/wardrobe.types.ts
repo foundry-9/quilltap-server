@@ -38,6 +38,16 @@ export const WardrobeItemSchema = z.object({
   characterId: UUIDSchema.nullable().optional(),
   title: z.string().min(1),
   description: z.string().nullable().optional(),
+  /**
+   * Optional plain-text phrase fed to image-generation pipelines (avatar +
+   * Lantern scene) IN PLACE OF the title when present; falls back to `title`
+   * when absent/empty. Unlike `description` (human prose / Markdown, stripped
+   * from image prompts), this is a short, literal visual cue meant for a
+   * diffusion model — e.g. "intricate dense burnished-gold circular rank glyph
+   * on the shoulder". Keep it terse; it is joined into a comma-separated outfit
+   * list. Never Markdown.
+   */
+  imagePrompt: z.string().nullable().optional(),
   /** Coverage tags — which slots this item covers (e.g., ["top"], ["top","bottom"] for a dress) */
   types: z.array(WardrobeItemTypeEnum).min(1),
   /**
