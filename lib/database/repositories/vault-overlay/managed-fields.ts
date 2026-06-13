@@ -15,7 +15,6 @@ import type {
   Character,
   PhysicalDescription,
 } from '@/lib/schemas/types';
-import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import {
   buildSystemPromptFile,
@@ -49,7 +48,6 @@ import {
   readCharacterVaultScenarios,
 } from './vault-readers';
 import { projectArrayIntoVaultFolder } from './vault-projection';
-import { projectVaultWardrobe } from './wardrobe-sync';
 
 // ============================================================================
 // CONSOLIDATED VAULT READERS
@@ -170,19 +168,19 @@ export async function readCharacterVaultManagedFields(
 // FULL-CHARACTER VAULT WRITER
 //
 // Counterpart to readCharacterVaultManagedFields: given a raw (non-overlaid)
-// character plus its wardrobe/outfit-preset rows, project every vault-managed
-// field out to the vault's files. Used by the sync-properties-to-vault action
-// to push the DB row's state into the vault wholesale.
+// character, project every vault-managed content field out to the vault's
+// files. Used when provisioning or repopulating a character vault. Wardrobe is
+// NOT handled here — it lives solely in the vault and is written through the
+// wardrobe-writes path; see the note at the end of the function body.
 //
 // This intentionally writes every managed file (not just a patch), so after a
-// successful call the vault is a faithful snapshot of the DB. Prompts/ and
-// Scenarios/ folders are reprojected — files that don't correspond to a DB
-// entry are deleted so the vault listing matches the DB arrays exactly.
+// successful call the vault is a faithful snapshot of the DB row's content.
+// Prompts/ and Scenarios/ folders are reprojected — files that don't correspond
+// to a DB entry are deleted so the vault listing matches the DB arrays exactly.
 // ============================================================================
 
 export interface VaultManagedFieldsWriteInput {
   character: Character;
-  wardrobeItems: readonly WardrobeItem[];
 }
 
 export interface VaultManagedFieldsWriteResult {
@@ -190,20 +188,18 @@ export interface VaultManagedFieldsWriteResult {
   singleFileWriteCount: number;
   systemPromptsWritten: number;
   scenariosWritten: number;
-  wardrobeItemsWritten: number;
   /** True when the character has no physicalDescription and the physical-* files were skipped. */
   physicalSkippedNoPrimary: boolean;
 }
 
 export async function writeCharacterVaultManagedFields(
   mountPointId: string,
-  { character, wardrobeItems }: VaultManagedFieldsWriteInput,
+  { character }: VaultManagedFieldsWriteInput,
 ): Promise<VaultManagedFieldsWriteResult> {
   const result: VaultManagedFieldsWriteResult = {
     singleFileWriteCount: 0,
     systemPromptsWritten: 0,
     scenariosWritten: 0,
-    wardrobeItemsWritten: 0,
     physicalSkippedNoPrimary: false,
   };
 
@@ -285,8 +281,11 @@ export async function writeCharacterVaultManagedFields(
   );
   result.scenariosWritten = character.scenarios?.length ?? 0;
 
-  await projectVaultWardrobe(mountPointId, character.id, wardrobeItems);
-  result.wardrobeItemsWritten = wardrobeItems.length;
+  // Wardrobe is NOT projected here. Wardrobe items live solely in the vault and
+  // are written through the vault-first `wardrobe.create()` / wardrobe-writes
+  // path (which re-projects the `Wardrobe/` folder itself). Projecting it here
+  // would require an authoritative item list; passing an empty one would make
+  // the projection sweep delete any existing `Wardrobe/*.md` files.
 
   return result;
 }
@@ -299,11 +298,12 @@ export async function writeCharacterVaultManagedFields(
 // fields to vault files instead of the DB row. Returns the unmanaged
 // remainder so the caller can still do its DB write for the rest.
 //
-// "Vault is source of truth" semantics: managed fields written here do NOT
-// also update the DB column. The DB row stays at the value it held when
-// overlay was toggled on. Toggling overlay off restores those frozen DB
-// values; the user can run sync-properties-from-vault first to copy recent
-// vault edits into the DB before flipping the switch.
+// Vault-only invariant: the 4.6 cutover dropped the DB columns for every
+// managed field, so those fields live exclusively in the vault. There is no
+// overlay toggle and no "frozen DB value" to fall back to — routing is
+// unconditional. Managed fields are stripped from the DB-bound patch here, and
+// `_update` strips MANAGED_FIELDS again defensively; the DB row never carries
+// them.
 // ============================================================================
 
 /**
@@ -440,11 +440,9 @@ export async function applyDocumentStoreWriteOverlay(
           }),
           characterId,
         );
-        // Mirror the vault projection into the DB column so the two stay in
-        // sync. The overlay reads from the vault while the toggle is on, but
-        // keeping the DB current means flipping the toggle off later doesn't
-        // resurrect prompts the user had cleared.
-        dbPatch.systemPrompts = incoming;
+        // Vault owns systemPrompts post-cutover; the DB column was dropped in
+        // 4.6, so nothing flows back (and `_update` strips it regardless).
+        delete dbPatch.systemPrompts;
         break;
       }
       case 'scenarios-dir': {
@@ -460,8 +458,9 @@ export async function applyDocumentStoreWriteOverlay(
           }),
           characterId,
         );
-        // Mirror the vault projection into the DB column (see prompts-dir).
-        dbPatch.scenarios = incoming;
+        // Vault owns scenarios post-cutover; the DB column was dropped in 4.6,
+        // so nothing flows back (and `_update` strips it regardless).
+        delete dbPatch.scenarios;
         break;
       }
     }

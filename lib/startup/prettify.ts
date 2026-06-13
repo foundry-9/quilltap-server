@@ -190,6 +190,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'migrate-outfit-presets-to-composites-v1': 'Folding outfit presets into composite items',
   'convert-equipped-outfit-to-arrays-v1': 'Converting equipped-outfit slots to arrays',
   'drop-outfit-presets-table-v1': 'Retiring the outfit-presets table',
+  'drop-wardrobe-items-table-v1': 'Clearing out the old wardrobe ledger',
 
   // Files + storage
   'fix-missing-storage-keys-v1': 'Mending missing storage keys',

@@ -50,7 +50,7 @@ import {
   readCharacterVaultSystemPrompts,
   readCharacterVaultScenarios,
   writeCharacterVaultManagedFields,
-  syncCharacterVaultWardrobe,
+  projectVaultWardrobe,
   readCharacterVaultWardrobe,
   CharacterVaultPropertiesSchema,
   CharacterVaultPhysicalPromptsSchema,
@@ -1370,7 +1370,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
 
     const result = await writeCharacterVaultManagedFields('mount-1', {
       character,
-      wardrobeItems: [],
     });
 
     expect(result.physicalSkippedNoPrimary).toBe(false);
@@ -1423,7 +1422,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
 
     const result = await writeCharacterVaultManagedFields('mount-2', {
       character,
-      wardrobeItems: [],
     });
 
     expect(result.physicalSkippedNoPrimary).toBe(true);
@@ -1471,7 +1469,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
 
     const result = await writeCharacterVaultManagedFields('mount-3', {
       character,
-      wardrobeItems: [],
     });
 
     expect(result.systemPromptsWritten).toBe(2);
@@ -1505,7 +1502,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
 
     const result = await writeCharacterVaultManagedFields('mount-4', {
       character,
-      wardrobeItems: [],
     });
 
     expect(result.scenariosWritten).toBe(1);
@@ -1559,7 +1555,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
 
     await writeCharacterVaultManagedFields('mount-5', {
       character,
-      wardrobeItems: [],
     });
 
     const deletedPaths = deleteDatabaseDocumentMock.mock.calls.map(([, p]) => p);
@@ -1568,13 +1563,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
   });
 
   it('projects leaf wardrobe items into Wardrobe/*.md with frontmatter and freeform body', async () => {
-    const character = makeCharacter({
-      id: 'char-wardrobe',
-      physicalDescription: null,
-      systemPrompts: [],
-      scenarios: [],
-    });
-
     const wardrobeItems = [
       {
         id: 'item-1',
@@ -1592,12 +1580,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       },
     ];
 
-    const result = await writeCharacterVaultManagedFields('mount-6', {
-      character,
-      wardrobeItems,
-    });
-
-    expect(result.wardrobeItemsWritten).toBe(1);
+    await projectVaultWardrobe('mount-6', 'char-wardrobe', wardrobeItems);
 
     // The retired Outfits/ folder is no longer projected — composites fold
     // into Wardrobe/*.md. The legacy wardrobe.json must never be re-seeded.
@@ -1620,13 +1603,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     // A composite "Rain Outfit" references three leaf items by id; the writer
     // should translate those ids to slugs (kebab-case from the leaf titles)
     // when emitting the frontmatter, so vault hand-edits are friendlier.
-    const character = makeCharacter({
-      id: 'char-composite',
-      physicalDescription: null,
-      systemPrompts: [],
-      scenarios: [],
-    });
-
     const raincoat = {
       id: 'raincoat-1',
       characterId: 'char-composite',
@@ -1658,12 +1634,12 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       updatedAt: '2026-01-01T00:00:00.000Z',
     };
 
-    const result = await writeCharacterVaultManagedFields('mount-7', {
-      character,
-      wardrobeItems: [raincoat, jeans, wellies, rainOutfit],
-    });
-
-    expect(result.wardrobeItemsWritten).toBe(4);
+    await projectVaultWardrobe('mount-7', 'char-composite', [
+      raincoat,
+      jeans,
+      wellies,
+      rainOutfit,
+    ]);
 
     const compositeFile = getWrite('Wardrobe/Rain Outfit.md');
     expect(compositeFile).toBeDefined();
@@ -1675,236 +1651,6 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     expect(compositeFile).toContain('- blue-jeans');
     expect(compositeFile).toContain('- wellies');
     expect(compositeFile).toContain('Bundle for a rainy day.');
-  });
-});
-
-describe('syncCharacterVaultWardrobe — vault-only items', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  // Regression: a wardrobe Markdown file written via Document Mode (no DB
-  // row) used to be deleted on the next sync, because the projection treated
-  // the DB-only list as authoritative and swept any unmanaged file. Now the
-  // sync ingests vault-only items into the DB before projecting, so the file
-  // survives and the equip handler's deterministic UUID still resolves.
-  it('promotes a vault-only wardrobe item into the DB instead of deleting its file', async () => {
-    // The mocked DB starts empty; createFromVault appends so the subsequent
-    // findByCharacterIdRaw call inside the projection step sees the promoted
-    // item and the projection re-writes its file instead of sweeping it.
-    const dbItems: any[] = [];
-    const findByCharacterIdRaw = jest.fn(async () => dbItems.slice());
-    const createFromVault = jest.fn(async (item) => {
-      dbItems.push(item);
-      return item;
-    });
-    const findByIdRaw = jest.fn().mockResolvedValue({
-      id: 'gary',
-      characterDocumentMountPointId: 'mount-gary',
-    });
-
-    const findManyByMountPointsInFolder = jest
-      .fn()
-      .mockImplementation((_ids: string[], folder: string) => {
-        if (folder === 'Wardrobe') {
-          return Promise.resolve([
-            {
-              id: 'doc-dressing-gown',
-              mountPointId: 'mount-gary',
-              relativePath: 'Wardrobe/Dressing Gown.md',
-              fileName: 'Dressing Gown.md',
-              fileType: 'markdown',
-              contentSha256: 'x'.repeat(64),
-              plainTextLength: 100,
-              folderId: null,
-              lastModified: 0,
-              createdAt: '2026-04-26T22:01:00.000Z',
-              updatedAt: '2026-04-26T22:06:00.000Z',
-              content: [
-                '---',
-                'title: Dressing Gown',
-                'types:',
-                '- top',
-                '- bottom',
-                'appropriateness: casual, around the house',
-                '---',
-                '',
-                'A silk dressing gown with a sash to tie it.',
-              ].join('\n'),
-            },
-          ]);
-        }
-        return Promise.resolve([]);
-      });
-
-    getRepositoriesMock.mockReturnValue({
-      docMountDocuments: {
-        findManyByMountPointsAndPath: jest.fn().mockResolvedValue([]),
-        findManyByMountPointsInFolder,
-      },
-      characters: { findByIdRaw },
-      wardrobe: {
-        findByCharacterIdRaw,
-        createFromVault,
-      },
-    });
-
-    await syncCharacterVaultWardrobe('gary');
-
-    // The vault-only Dressing Gown was promoted into the DB.
-    expect(createFromVault).toHaveBeenCalledTimes(1);
-    expect(createFromVault).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Dressing Gown',
-        types: ['top', 'bottom'],
-        characterId: 'gary',
-      }),
-    );
-
-    // And the projection step did not sweep the file away.
-    const deletedPaths = deleteDatabaseDocumentMock.mock.calls.map(([, p]) => p);
-    expect(deletedPaths).not.toContain('Wardrobe/Dressing Gown.md');
-  });
-
-  it('skips ingestion when every vault item already has a DB row', async () => {
-    const existingItemId = 'a1b2c3d4-e5f6-4789-aabb-ccddeeff0011';
-    const existingItem = {
-      id: existingItemId,
-      characterId: 'gary',
-      title: 'Velvet Robe',
-      description: null,
-      types: ['top' as const, 'bottom' as const],
-      componentItemIds: [],
-      appropriateness: null,
-      isDefault: false,
-      migratedFromClothingRecordId: null,
-      archivedAt: null,
-      createdAt: '2026-04-26T00:00:00.000Z',
-      updatedAt: '2026-04-26T00:00:00.000Z',
-    };
-    const findByCharacterIdRaw = jest.fn().mockResolvedValue([existingItem]);
-    const createFromVault = jest.fn();
-
-    getRepositoriesMock.mockReturnValue({
-      docMountDocuments: {
-        findManyByMountPointsAndPath: jest.fn().mockResolvedValue([]),
-        findManyByMountPointsInFolder: jest
-          .fn()
-          .mockImplementation((_ids: string[], folder: string) => {
-            if (folder === 'Wardrobe') {
-              return Promise.resolve([
-                {
-                  id: 'doc-velvet',
-                  mountPointId: 'mount-gary',
-                  relativePath: 'Wardrobe/Velvet Robe.md',
-                  fileName: 'Velvet Robe.md',
-                  fileType: 'markdown',
-                  contentSha256: 'x'.repeat(64),
-                  plainTextLength: 50,
-                  folderId: null,
-                  lastModified: 0,
-                  createdAt: '2026-04-26T00:00:00.000Z',
-                  updatedAt: '2026-04-26T00:00:00.000Z',
-                  content: [
-                    '---',
-                    `id: ${existingItemId}`,
-                    'title: Velvet Robe',
-                    'types:',
-                    '- top',
-                    '- bottom',
-                    '---',
-                    '',
-                  ].join('\n'),
-                },
-              ]);
-            }
-            return Promise.resolve([]);
-          }),
-      },
-      characters: {
-        findByIdRaw: jest.fn().mockResolvedValue({
-          id: 'gary',
-          characterDocumentMountPointId: 'mount-gary',
-        }),
-      },
-      wardrobe: {
-        findByCharacterIdRaw,
-        createFromVault,
-      },
-    });
-
-    await syncCharacterVaultWardrobe('gary');
-
-    expect(createFromVault).not.toHaveBeenCalled();
-  });
-
-  // Regression: deleting a wardrobe item from a vault-overlay character used
-  // to be a no-op. The DB row was removed, then the post-write sync's
-  // ingestion step saw a vault file with no DB row and re-created the row
-  // (preserving the same id) via createFromVault, leaving the projection
-  // step nothing to sweep. Now the delete path passes the deleted id as a
-  // tombstone via excludeIds: ingestion skips it, the projection treats the
-  // file as unmanaged, and the file is deleted.
-  it('skips ingestion for tombstoned ids and lets the projection sweep their files', async () => {
-    const tombstonedId = 'b1c2d3e4-f5a6-4789-aabb-ccddeeff0099';
-    const findByCharacterIdRaw = jest.fn().mockResolvedValue([]);
-    const createFromVault = jest.fn();
-
-    getRepositoriesMock.mockReturnValue({
-      docMountDocuments: {
-        findManyByMountPointsAndPath: jest.fn().mockResolvedValue([]),
-        findManyByMountPointsInFolder: jest
-          .fn()
-          .mockImplementation((_ids: string[], folder: string) => {
-            if (folder === 'Wardrobe') {
-              return Promise.resolve([
-                {
-                  id: 'doc-tombstoned',
-                  mountPointId: 'mount-gary',
-                  relativePath: 'Wardrobe/Tombstoned Shirt.md',
-                  fileName: 'Tombstoned Shirt.md',
-                  fileType: 'markdown',
-                  contentSha256: 'x'.repeat(64),
-                  plainTextLength: 50,
-                  folderId: null,
-                  lastModified: 0,
-                  createdAt: '2026-04-26T00:00:00.000Z',
-                  updatedAt: '2026-04-26T00:00:00.000Z',
-                  content: [
-                    '---',
-                    `id: ${tombstonedId}`,
-                    'title: Tombstoned Shirt',
-                    'types:',
-                    '- top',
-                    '---',
-                    '',
-                  ].join('\n'),
-                },
-              ]);
-            }
-            return Promise.resolve([]);
-          }),
-      },
-      characters: {
-        findByIdRaw: jest.fn().mockResolvedValue({
-          id: 'gary',
-          characterDocumentMountPointId: 'mount-gary',
-        }),
-      },
-      wardrobe: {
-        findByCharacterIdRaw,
-        createFromVault,
-      },
-    });
-
-    await syncCharacterVaultWardrobe('gary', new Set([tombstonedId]));
-
-    // Tombstoned id was not promoted into the DB.
-    expect(createFromVault).not.toHaveBeenCalled();
-
-    // And the projection step deleted the tombstoned vault file.
-    const deletedPaths = deleteDatabaseDocumentMock.mock.calls.map(([, p]) => p);
-    expect(deletedPaths).toContain('Wardrobe/Tombstoned Shirt.md');
   });
 });
 

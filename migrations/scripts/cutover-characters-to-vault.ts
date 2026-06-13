@@ -62,7 +62,10 @@ import {
   parseMountIndexBackupFilename,
 } from '../../lib/database/backends/sqlite/physical-backup';
 import { ensureCharacterVault } from '../../lib/mount-index/character-vault';
-import { writeCharacterVaultManagedFields } from '../../lib/database/repositories/character-properties-overlay';
+import {
+  writeCharacterVaultManagedFields,
+  projectVaultWardrobe,
+} from '../../lib/database/repositories/character-properties-overlay';
 import { getRepositories } from '../../lib/repositories/factory';
 import { writeDatabaseDocument } from '../../lib/mount-index/database-store';
 import type { Character } from '../../lib/schemas/character.types';
@@ -522,10 +525,11 @@ async function processOneCharacter(character: Character): Promise<CharacterOutco
   // "DB row is authoritative; push it into the vault wholesale".
   try {
     const wardrobeItems = await getRepositories().wardrobe.findByCharacterIdRaw(character.id);
-    await writeCharacterVaultManagedFields(mountPointId, {
-      character,
-      wardrobeItems,
-    });
+    await writeCharacterVaultManagedFields(mountPointId, { character });
+    // Wardrobe is projected separately now that the full-character writer no
+    // longer handles it. The raw DB rows are still the source here (the table
+    // exists when this cutover runs) and project into the vault's Wardrobe/ folder.
+    await projectVaultWardrobe(mountPointId, character.id, wardrobeItems);
     outcome.action = 'populated';
   } catch (err) {
     outcome.action = 'blocked';

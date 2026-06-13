@@ -118,7 +118,6 @@ export {
 export {
   type WardrobeOverlayOptions,
   getOverlaidWardrobeItems,
-  syncCharacterVaultWardrobe,
   projectVaultWardrobe,
 } from './vault-overlay/wardrobe-sync';
 
