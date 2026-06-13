@@ -1,10 +1,9 @@
 /**
  * Create Wardrobe Item Tool Definition
  *
- * Provides a tool interface for LLMs to create new wardrobe items —
- * either leaf items (a single garment) or composite items (a bundle of
- * other wardrobe items, like a "Rain Outfit" containing a coat, jeans,
- * and boots).
+ * `wardrobe_create` makes a new wardrobe item — either a leaf item (a single
+ * garment) or a composite item (a bundle of other wardrobe items, like a "Rain
+ * Outfit" containing a coat, jeans, and boots) — and optionally equips it.
  *
  * For leaf items: provide `title` and `types` (the slots the item covers).
  * For composite items: provide `title` plus EITHER `component_item_ids` or
@@ -15,13 +14,12 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 /**
- * Zod schema for the wardrobe create item tool's input.
+ * Zod schema for the wardrobe create tool's input.
  */
-export const wardrobeCreateItemToolInputSchema = z
+export const wardrobeCreateToolInputSchema = z
   .object({
     title: z
       .string()
@@ -31,6 +29,16 @@ export const wardrobeCreateItemToolInputSchema = z
     description: z
       .string()
       .describe('A detailed description of the wardrobe item.')
+      .optional(),
+    image_prompt: z
+      .string()
+      .describe(
+        'Optional Portrait Cue — a short, literal, plain-text visual phrase fed ' +
+        'to the image generator IN PLACE OF the title (e.g. "intricate dense ' +
+        'burnished-gold circular rank glyph on the shoulder"). Terse, never ' +
+        'Markdown; it is joined into a comma-separated outfit list. Omit to fall ' +
+        'back to the title.'
+      )
       .optional(),
     types: z
       .array(z.enum(['top', 'bottom', 'footwear', 'accessories']))
@@ -75,7 +83,8 @@ export const wardrobeCreateItemToolInputSchema = z
       .describe(
         'IDs of existing wardrobe items that this new item bundles. ' +
         'Supplying this makes the new item a composite. The slots it covers ' +
-        'are computed from the union of the components\' slots.'
+        'are computed from the union of the components\' slots. Components may ' +
+        'come from the character\'s own wardrobe, the project, or Quilltap General.'
       )
       .optional(),
     component_titles: z
@@ -110,12 +119,12 @@ export const wardrobeCreateItemToolInputSchema = z
 /**
  * Input parameters for the create wardrobe item tool
  */
-export type WardrobeCreateItemToolInput = z.infer<typeof wardrobeCreateItemToolInputSchema>
+export type WardrobeCreateToolInput = z.infer<typeof wardrobeCreateToolInputSchema>
 
 /**
  * Output from the create wardrobe item tool
  */
-export interface WardrobeCreateItemToolOutput {
+export interface WardrobeCreateToolOutput {
   success: boolean;
   item_id: string;
   title: string;
@@ -152,10 +161,10 @@ export interface WardrobeCreateItemToolOutput {
 /**
  * Tool definition compatible with OpenAI's tool_calls format
  */
-export const wardrobeCreateItemToolDefinition = {
+export const wardrobeCreateToolDefinition = {
   type: 'function',
   function: {
-    name: 'create_wardrobe_item',
+    name: 'wardrobe_create',
     description:
       'Create a new wardrobe item and optionally equip it immediately. ' +
       'Use this for two cases: (1) a single garment — supply title and types ' +
@@ -163,19 +172,20 @@ export const wardrobeCreateItemToolDefinition = {
       'outfit that bundles other wardrobe items — supply title and component_item_ids ' +
       '(or component_titles) referring to existing items in the character\'s wardrobe. ' +
       'For composites, the slots covered are computed from the union of the components\' ' +
-      'slots, so you do not need to supply types yourself. ' +
+      'slots, so you do not need to supply types yourself. Optionally set image_prompt ' +
+      '(a Portrait Cue) to steer image generation. ' +
       'You can give the item to another character in the chat by specifying a recipient.',
-    parameters: zodToOpenAISchema(wardrobeCreateItemToolInputSchema),
+    parameters: zodToOpenAISchema(wardrobeCreateToolInputSchema),
   },
 };
 
 /**
  * Helper to validate tool input parameters
  */
-export function validateWardrobeCreateItemInput(
+export function validateWardrobeCreateInput(
   input: unknown
-): input is WardrobeCreateItemToolInput {
-  return wardrobeCreateItemToolInputSchema.safeParse(input).success;
+): input is WardrobeCreateToolInput {
+  return wardrobeCreateToolInputSchema.safeParse(input).success
 }
 
 /** Re-export the slot type for the union-of-types computation in the handler. */

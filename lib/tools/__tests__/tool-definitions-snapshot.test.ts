@@ -55,10 +55,13 @@ import { submitFinalResponseToolDefinition } from '../submit-final-response-tool
 import { terminalListToolDefinition } from '../terminal-list-tool'
 import { terminalReadToolDefinition } from '../terminal-read-tool'
 import { upsertAnnotationToolDefinition } from '../upsert-annotation-tool'
-import { wardrobeChangeItemToolDefinition } from '../wardrobe-change-item-tool'
-import { wardrobeCreateItemToolDefinition } from '../wardrobe-create-item-tool'
 import { wardrobeListToolDefinition } from '../wardrobe-list-tool'
-import { wardrobeUpdateOutfitToolDefinition } from '../wardrobe-update-outfit-tool'
+import { wardrobeReadToolDefinition } from '../wardrobe-read-tool'
+import { wardrobeCreateToolDefinition } from '../wardrobe-create-tool'
+import { wardrobeUpdateToolDefinition } from '../wardrobe-update-tool'
+import { wardrobeArchiveToolDefinition } from '../wardrobe-archive-tool'
+import { wardrobeWearToolDefinition } from '../wardrobe-wear-tool'
+import { wardrobeTakeOffToolDefinition } from '../wardrobe-take-off-tool'
 import { webSearchToolDefinition } from '../web-search-tool'
 import { whisperToolDefinition } from '../whisper-tool'
 
@@ -107,10 +110,13 @@ const ALL_TOOLS = {
   terminalList: terminalListToolDefinition,
   terminalRead: terminalReadToolDefinition,
   upsertAnnotation: upsertAnnotationToolDefinition,
-  wardrobeChangeItem: wardrobeChangeItemToolDefinition,
-  wardrobeCreateItem: wardrobeCreateItemToolDefinition,
   wardrobeList: wardrobeListToolDefinition,
-  wardrobeUpdateOutfit: wardrobeUpdateOutfitToolDefinition,
+  wardrobeRead: wardrobeReadToolDefinition,
+  wardrobeCreate: wardrobeCreateToolDefinition,
+  wardrobeUpdate: wardrobeUpdateToolDefinition,
+  wardrobeArchive: wardrobeArchiveToolDefinition,
+  wardrobeWear: wardrobeWearToolDefinition,
+  wardrobeTakeOff: wardrobeTakeOffToolDefinition,
   webSearch: webSearchToolDefinition,
   whisper: whisperToolDefinition,
 }

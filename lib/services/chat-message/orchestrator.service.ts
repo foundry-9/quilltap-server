@@ -841,8 +841,8 @@ async function processMessage(
       agentMode.enabled, // agentModeEnabled - enables submit_final_response tool
       isMultiCharacter, // isMultiCharacter - enables whisper tool
       helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
-      canDressThemselves, // canDressThemselves - enables list_wardrobe and update_outfit_item
-      canCreateOutfits, // canCreateOutfits - enables create_wardrobe_item
+      canDressThemselves, // enables wardrobe_list, wardrobe_read, wardrobe_wear, wardrobe_take_off
+      canCreateOutfits, // enables wardrobe_create, wardrobe_update, wardrobe_archive
       documentEditingEnabled, // documentEditingEnabled - enables doc_* editing tools
       askCarinaEnabled // askCarinaEnabled - enables ask_carina tool when an answerer exists
     )

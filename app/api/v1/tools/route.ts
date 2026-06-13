@@ -33,8 +33,12 @@ import {
   selfInventoryToolDefinition,
   whisperToolDefinition,
   wardrobeListToolDefinition,
-  wardrobeUpdateOutfitToolDefinition,
-  wardrobeCreateItemToolDefinition,
+  wardrobeReadToolDefinition,
+  wardrobeCreateToolDefinition,
+  wardrobeUpdateToolDefinition,
+  wardrobeArchiveToolDefinition,
+  wardrobeWearToolDefinition,
+  wardrobeTakeOffToolDefinition,
 } from '@/lib/tools';
 import {
   searchScriptoriumToolDefinition,
@@ -73,9 +77,13 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   state: stateToolDefinition,
   self_inventory: selfInventoryToolDefinition,
   whisper: whisperToolDefinition,
-  list_wardrobe: wardrobeListToolDefinition,
-  update_outfit_item: wardrobeUpdateOutfitToolDefinition,
-  create_wardrobe_item: wardrobeCreateItemToolDefinition,
+  wardrobe_list: wardrobeListToolDefinition,
+  wardrobe_read: wardrobeReadToolDefinition,
+  wardrobe_create: wardrobeCreateToolDefinition,
+  wardrobe_update: wardrobeUpdateToolDefinition,
+  wardrobe_archive: wardrobeArchiveToolDefinition,
+  wardrobe_wear: wardrobeWearToolDefinition,
+  wardrobe_take_off: wardrobeTakeOffToolDefinition,
   doc_read_file: docReadFileTool,
   doc_write_file: docWriteFileTool,
   doc_str_replace: docStrReplaceTool,
@@ -182,23 +190,51 @@ const BUILT_IN_TOOLS = [
     category: 'utility',
   },
   {
-    id: 'list_wardrobe',
+    id: 'wardrobe_list',
     name: 'List Wardrobe',
-    description: 'Retrieve wardrobe items and outfit presets for the current character',
+    description: 'Browse wardrobe items (own plus shared project / Quilltap General items) for the current character',
     source: 'built-in' as const,
     category: 'wardrobe',
   },
   {
-    id: 'update_outfit_item',
-    name: 'Update Outfit',
-    description: 'Equip or remove a wardrobe item, or apply an outfit preset',
+    id: 'wardrobe_read',
+    name: 'Read Wardrobe Item',
+    description: 'Read the full detail of one wardrobe item, including its Portrait Cue',
     source: 'built-in' as const,
     category: 'wardrobe',
   },
   {
-    id: 'create_wardrobe_item',
+    id: 'wardrobe_create',
     name: 'Create Wardrobe Item',
     description: 'Create a new wardrobe item, optionally equip it, or gift it to another character',
+    source: 'built-in' as const,
+    category: 'wardrobe',
+  },
+  {
+    id: 'wardrobe_update',
+    name: 'Update Wardrobe Item',
+    description: 'Edit the stored fields of an existing wardrobe item (own items only)',
+    source: 'built-in' as const,
+    category: 'wardrobe',
+  },
+  {
+    id: 'wardrobe_archive',
+    name: 'Archive Wardrobe Item',
+    description: 'Retire a wardrobe item (own items only; restorable by a human)',
+    source: 'built-in' as const,
+    category: 'wardrobe',
+  },
+  {
+    id: 'wardrobe_wear',
+    name: 'Wear Wardrobe Items',
+    description: 'Put on one or more wardrobe items (single garments or composite outfits)',
+    source: 'built-in' as const,
+    category: 'wardrobe',
+  },
+  {
+    id: 'wardrobe_take_off',
+    name: 'Take Off Wardrobe Items',
+    description: 'Take off worn wardrobe items or empty slots',
     source: 'built-in' as const,
     category: 'wardrobe',
   },
@@ -610,14 +646,18 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
               tool.unavailableReason = 'Whisper requires a multi-character chat with more than one active character';
             }
             break;
-          case 'list_wardrobe':
-          case 'update_outfit_item':
+          case 'wardrobe_list':
+          case 'wardrobe_read':
+          case 'wardrobe_wear':
+          case 'wardrobe_take_off':
             if (!chatContext.canDressThemselves) {
               tool.available = false;
               tool.unavailableReason = 'Character does not have wardrobe self-dressing enabled';
             }
             break;
-          case 'create_wardrobe_item':
+          case 'wardrobe_create':
+          case 'wardrobe_update':
+          case 'wardrobe_archive':
             if (!chatContext.canCreateOutfits) {
               tool.available = false;
               tool.unavailableReason = 'Character does not have wardrobe item creation enabled';

@@ -132,14 +132,19 @@ Items that have fallen out of favour need not be destroyed entirely. **Archiving
 
 ## Characters and Their Wardrobe Tools
 
-During a chat, characters with the appropriate permissions can interact with the wardrobe using four tools:
+During a chat, characters with the appropriate permissions may attend to their toilette by means of seven tools, each named with a tidy `wardrobe_` prefix so there is never any doubt as to whose drawer one is rummaging through. Wearing and editing are handled by altogether separate instruments — for a single garment and a whole bundled ensemble alike behave identically, the item's own *replace* setting deciding whether it layers atop what is worn or sweeps the slot clean.
 
-- **list_wardrobe** --- Browse all available items in the character's wardrobe (composites are flagged as such, with their components listed)
-- **wardrobe_change_item** --- Adjust a single garment. Modes: `wear` (put it on across every slot it covers, honoring the item's replace setting — ordinarily layering it on), `replace` (clear those slots first, then put it on — a forced swap), `add_to_slot` (layer an item into one named slot), `remove_from_slot` (take off one specific item), `clear_slot` (empty a slot entirely). Each result tells the character exactly what happened — layered or replaced. Refuses composite outfits — those have their own tool
-- **wardrobe_set_outfit** --- Wear or remove a composite outfit (a wardrobe item that bundles multiple pieces, like a "Rain Outfit" containing coat, jeans, and boots). Modes: `wear` (put the bundle on, honoring its replace setting — additive bundles layer on), `replace` (clear the slots it covers first, then put it on), and `remove` (take the bundle off). Refuses single garments — use `wardrobe_change_item` for those
-- **create_wardrobe_item** --- Invent an entirely new garment and add it to the wardrobe, OR compose a new outfit out of existing items by supplying `component_item_ids` or `component_titles` (a composite). You may also **gift one to another character** in the chat
+Throughout, a character sees not only the items in their **own** wardrobe but also any shared garments hanging in the **project** stores and the great communal cloakroom that is **Quilltap General** — though shared items, being held in common, may be *worn* but never *altered* by a single character's hand.
 
-For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[CHANGE_ITEM]]`, `[[SET_OUTFIT]]`, and `[[CREATE_WARDROBE_ITEM]]`.
+- **wardrobe_list** --- Survey the available garments — one's own plus the shared finery of the project and Quilltap General. Composites are flagged with their components listed; each item notes whether you own it (and may thus edit it) or merely borrow it.
+- **wardrobe_read** --- Inspect one item in full: its Portrait Cue, its default-outfit standing, its composite particulars, and the slots it presently occupies. Where `wardrobe_list` offers a glance, this offers a proper appraisal.
+- **wardrobe_wear** --- Put garments on. Hand it an ordered list of changes and it applies them in sequence — force-swap the coat, *then* layer a muffler over it, all in a single gesture. Per item: `wear` (don it across every slot it covers, honoring its replace setting — ordinarily a gentle layering), `replace` (clear those slots first, a decisive swap), or `add_to_slot` (tuck it into one named slot).
+- **wardrobe_take_off** --- Remove garments, or empty a slot entirely. Likewise an ordered list. Per item: `remove` (take a worn piece off across every slot it covers, leaving any other layers undisturbed — narrow it to a single slot if you wish) or `clear_slot` (sweep one slot bare).
+- **wardrobe_create** --- Invent an entirely new garment and add it to the wardrobe, OR compose a new outfit from existing items via `component_item_ids` or `component_titles` (a composite). One may furnish a **Portrait Cue** (`image_prompt`) to steer the artist's hand, and one may **gift the item to another character** in the chat.
+- **wardrobe_update** --- Amend an item one already owns — its name, its description, its Portrait Cue, its appropriateness, its coverage, and so forth. Only the particulars you supply are changed; the rest stands. Shared garments, being communal property, are politely declined.
+- **wardrobe_archive** --- Retire an item one owns to the back of the closet: hidden from listings and no longer wearable, yet not destroyed — a human may restore it from the Aurora page at leisure. (No character may *permanently* discard a garment; that remains a human prerogative.) Shared garments are, again, declined.
+
+For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[READ_WARDROBE]]`, `[[WEAR]]`, `[[TAKE_OFF]]`, `[[CREATE_WARDROBE_ITEM]]`, `[[UPDATE_WARDROBE_ITEM]]`, and `[[ARCHIVE_WARDROBE_ITEM]]`.
 
 ### Gifting Wardrobe Items
 
@@ -153,8 +158,8 @@ For models using text-block syntax, gifting uses the `recipient` attribute: `[[C
 
 Two flags on each character govern what they are permitted to do with their own clothing:
 
-- **canDressThemselves** --- When enabled (the default), the character may use `list_wardrobe` and `update_outfit_item` to browse and change their outfit during conversation. Disable this if you prefer to maintain strict authorial control over what they wear.
-- **canCreateOutfits** --- When enabled (also the default), the character may use `create_wardrobe_item` to fabricate new garments on the fly. This is delightful for characters with a flair for fashion, but you may wish to disable it if your character's wardrobe should remain fixed.
+- **canDressThemselves** --- When enabled (the default), the character may use `wardrobe_list`, `wardrobe_read`, `wardrobe_wear`, and `wardrobe_take_off` to browse and change their outfit during conversation. Disable this if you prefer to maintain strict authorial control over what they wear.
+- **canCreateOutfits** --- When enabled (also the default), the character may use `wardrobe_create`, `wardrobe_update`, and `wardrobe_archive` to fabricate, amend, and retire garments on the fly. This is delightful for characters with a flair for fashion, but you may wish to disable it if your character's wardrobe should remain fixed.
 
 Both flags can be found in the character's settings on the Aurora page.
 

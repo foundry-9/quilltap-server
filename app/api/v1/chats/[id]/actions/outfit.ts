@@ -5,7 +5,7 @@
  * GET /api/v1/chats/[id]?action=outfit-summary — Per-character resolved title summary
  * POST /api/v1/chats/[id]?action=equip         — Mutate equipped state
  *
- * The POST body uses the same `mode` enum as the `wardrobe_set_outfit` LLM
+ * The POST body uses the same `mode` enum as the `wardrobe_wear`/`wardrobe_take_off` LLM
  * tool: `equip`, `add_to_slot`, `remove_from_slot`, `clear_slot`. Internally
  * each mode dispatches to the matching primitive in
  * `lib/wardrobe/outfit-displacement.ts`.
@@ -188,7 +188,7 @@ export async function handleGetOutfitSummary(
  * POST ?action=equip — Mutate equipped state for a character in this chat.
  *
  * Body: `{ characterId, mode, slot?, itemId? }` — same `mode` semantics as
- * the `wardrobe_set_outfit` LLM tool.
+ * the `wardrobe_wear`/`wardrobe_take_off` LLM tools.
  */
 export async function handleEquipSlot(
   req: NextRequest,

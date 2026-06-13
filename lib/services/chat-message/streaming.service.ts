@@ -150,9 +150,9 @@ export async function buildTools(
   isMultiCharacter?: boolean,
   /** Whether help tools are enabled for this character (enables help_search and help_settings) */
   helpToolsEnabled?: boolean,
-  /** Whether this character can dress themselves (enables list_wardrobe, wardrobe_set_outfit, and wardrobe_change_item) */
+  /** Whether this character can dress themselves (enables wardrobe_list, wardrobe_read, wardrobe_wear, and wardrobe_take_off) */
   canDressThemselves?: boolean,
-  /** Whether this character can create new outfits (enables create_wardrobe_item) */
+  /** Whether this character can create new outfits (enables wardrobe_create, wardrobe_update, and wardrobe_archive) */
   canCreateOutfits?: boolean,
   /** Whether document editing tools are enabled (project has linked document stores or files) */
   documentEditingEnabled?: boolean,
@@ -218,9 +218,12 @@ export async function buildTools(
     helpSettings: !!helpToolsEnabled,
     helpNavigate: !!helpToolsEnabled,
     wardrobeList: canDressThemselves !== false,
-    wardrobeUpdateOutfit: canDressThemselves !== false,
-    wardrobeChangeItem: canDressThemselves !== false,
-    wardrobeCreateItem: canCreateOutfits !== false,
+    wardrobeRead: canDressThemselves !== false,
+    wardrobeWear: canDressThemselves !== false,
+    wardrobeTakeOff: canDressThemselves !== false,
+    wardrobeCreate: canCreateOutfits !== false,
+    wardrobeUpdate: canCreateOutfits !== false,
+    wardrobeArchive: canCreateOutfits !== false,
     whisper: !!isMultiCharacter,
     documentEditing: !!documentEditingEnabled,
     askCarina: askCarinaEnabled,

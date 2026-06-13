@@ -36,14 +36,20 @@ export interface TextBlockPromptOptions {
   helpNavigate?: boolean
   /** Enable create note tool */
   createNote?: boolean
-  /** Enable list wardrobe tool */
+  /** Enable wardrobe_list tool */
   wardrobeList?: boolean
-  /** Enable composite-outfit tool (wardrobe_set_outfit) */
-  wardrobeUpdateOutfit?: boolean
-  /** Enable atomic-item tool (wardrobe_change_item) */
-  wardrobeChangeItem?: boolean
-  /** Enable create wardrobe item tool */
-  wardrobeCreateItem?: boolean
+  /** Enable wardrobe_read tool */
+  wardrobeRead?: boolean
+  /** Enable wardrobe_wear tool */
+  wardrobeWear?: boolean
+  /** Enable wardrobe_take_off tool */
+  wardrobeTakeOff?: boolean
+  /** Enable wardrobe_create tool */
+  wardrobeCreate?: boolean
+  /** Enable wardrobe_update tool */
+  wardrobeUpdate?: boolean
+  /** Enable wardrobe_archive tool */
+  wardrobeArchive?: boolean
 }
 
 /**
@@ -146,41 +152,61 @@ Format: [[CREATE_NOTE title="Meeting Notes"]]content of the note[[/CREATE_NOTE]]
   if (options.wardrobeList) {
     toolDocs.push(`
 ### List Wardrobe
-Browse your wardrobe to see available clothing and outfits.
+Browse the clothing and outfits available to you — your own plus shared project / Quilltap General items.
 Format: [[WARDROBE /]]
 With filters: [[WARDROBE type_filter="top" /]]`)
   }
 
-  if (options.wardrobeChangeItem) {
+  if (options.wardrobeRead) {
     toolDocs.push(`
-### Change Wardrobe Item (single garment)
-Wear, layer, or remove a SINGLE garment in your outfit. For composite outfits (bundles of items), use SET_OUTFIT instead.
-To wear (honors the item's replace flag — layers it on unless the item is set to replace): [[CHANGE_ITEM mode="wear" id="item-uuid" /]]
-By name: [[CHANGE_ITEM mode="wear" title="Charcoal Sweater" /]]
-To swap it on, taking off what's there first: [[CHANGE_ITEM mode="replace" id="item-uuid" /]]
-To layer over what's already worn: [[CHANGE_ITEM mode="add_to_slot" slot="top" id="item-uuid" /]]
-To take off one specific item: [[CHANGE_ITEM mode="remove_from_slot" slot="top" id="item-uuid" /]]
-To clear a slot entirely: [[CHANGE_ITEM mode="clear_slot" slot="top" /]]`)
+### Read Wardrobe Item
+See the full detail of one item (including its Portrait Cue and whether you own it).
+By id: [[READ_WARDROBE id="item-uuid" /]]
+By name: [[READ_WARDROBE title="Charcoal Sweater" /]]`)
   }
 
-  if (options.wardrobeUpdateOutfit) {
+  if (options.wardrobeWear) {
     toolDocs.push(`
-### Set Outfit (composite outfits)
-Put on or take off a composite outfit — a wardrobe item that bundles multiple pieces (e.g. "Rain Outfit" = coat + jeans + boots).
-To wear (honors the bundle's replace flag — additive bundles layer on): [[SET_OUTFIT mode="wear" id="item-uuid" /]]
-By name: [[SET_OUTFIT mode="wear" title="Rain Outfit" /]]
-To swap it on, clearing those slots first: [[SET_OUTFIT mode="replace" id="item-uuid" /]]
-To remove: [[SET_OUTFIT mode="remove" id="item-uuid" /]]
-For single garments, use CHANGE_ITEM instead.`)
+### Wear (put on / layer / swap)
+Put on a garment or composite outfit. Works the same for single items and bundles — the item's own settings decide layer-vs-swap.
+To wear (honors the item's replace flag — layers it on unless set to replace): [[WEAR mode="wear" id="item-uuid" /]]
+By name: [[WEAR mode="wear" title="Charcoal Sweater" /]]
+To swap it on, taking off what's there first: [[WEAR mode="replace" id="item-uuid" /]]
+To layer into one slot: [[WEAR mode="add_to_slot" slot="top" id="item-uuid" /]]`)
   }
 
-  if (options.wardrobeCreateItem) {
+  if (options.wardrobeTakeOff) {
+    toolDocs.push(`
+### Take Off (remove / clear)
+Take a worn item off, or empty a slot.
+To take off a worn item across every slot it covers: [[TAKE_OFF mode="remove" id="item-uuid" /]]
+By name: [[TAKE_OFF mode="remove" title="Charcoal Sweater" /]]
+To clear a slot entirely: [[TAKE_OFF mode="clear_slot" slot="top" /]]`)
+  }
+
+  if (options.wardrobeCreate) {
     toolDocs.push(`
 ### Create Wardrobe Item
-Design and add a new clothing item to your wardrobe, or gift one to another character. You can also build composite outfits that bundle existing items.
+Design and add a new clothing item to your wardrobe, or gift one to another character. You can also build composite outfits that bundle existing items, and set a Portrait Cue (image_prompt) to steer image generation.
 Single garment: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" appropriateness="casual"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]
 Composite outfit (bundles existing items by id or title): [[CREATE_WARDROBE_ITEM title="Rain Outfit" component_titles="Yellow Slicker,Dark Jeans,Wellington Boots"]]Practical attire for a downpour[[/CREATE_WARDROBE_ITEM]]
 Gift to another character: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" recipient="CharacterName"]]A gift for you[[/CREATE_WARDROBE_ITEM]]`)
+  }
+
+  if (options.wardrobeUpdate) {
+    toolDocs.push(`
+### Update Wardrobe Item
+Edit an existing item you own (title, description, Portrait Cue, etc.). Only your own items can be edited.
+By id: [[UPDATE_WARDROBE_ITEM id="item-uuid" cue="weathered oilskin coat, brass buckles" /]]
+By name: [[UPDATE_WARDROBE_ITEM name="Rain Outfit" context="formal" /]]`)
+  }
+
+  if (options.wardrobeArchive) {
+    toolDocs.push(`
+### Archive Wardrobe Item
+Retire an item you own — hidden from listings and no longer wearable, but a human can restore it. Only your own items can be archived.
+By id: [[ARCHIVE_WARDROBE_ITEM id="item-uuid" /]]
+By name: [[ARCHIVE_WARDROBE_ITEM title="Red Scarf" /]]`)
   }
 
   if (toolDocs.length === 0) {

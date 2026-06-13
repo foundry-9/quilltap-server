@@ -33,7 +33,7 @@ interface BuildContentParams {
 /**
  * Opening-of-chat outfit announcement. Establishes how a character is dressed
  * before the first character speaks. Reports only what they're wearing now —
- * the LLM can call `list_wardrobe` if it needs the full register.
+ * the LLM can call `wardrobe_list` if it needs the full register.
  */
 export function buildOpeningOutfitContent(params: BuildContentParams): string {
   const { characterName, outfit } = params;

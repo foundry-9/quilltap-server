@@ -71,7 +71,13 @@ interface ToolResult {
 }
 
 /** Wardrobe tool names that should show an action notice */
-const WARDROBE_ACTION_TOOLS = new Set(['update_outfit_item', 'create_wardrobe_item'])
+const WARDROBE_ACTION_TOOLS = new Set([
+  'wardrobe_wear',
+  'wardrobe_take_off',
+  'wardrobe_create',
+  'wardrobe_update',
+  'wardrobe_archive',
+])
 
 /**
  * Build a human-readable wardrobe action summary from tool result data.
@@ -87,28 +93,19 @@ function buildWardrobeActionSummary(toolData: ToolResult): { label: string; line
 
   const lines: string[] = []
 
-  if (toolData.toolName === 'update_outfit_item') {
-    const action = result.action as string
-    const item = result.item as { item_id?: string; title?: string } | null
-    const slot = result.slot as string
+  if (toolData.toolName === 'wardrobe_wear' || toolData.toolName === 'wardrobe_take_off') {
+    const operations = (result.operations as Array<{ effect_summary?: string; error?: string }> | undefined) ?? []
     const coverageSummary = result.coverage_summary as string | undefined
 
-    if (action === 'equipped' && slot === 'preset') {
-      lines.push('Applied an outfit preset.')
-    } else if (action === 'equipped' && item?.title) {
-      lines.push(`Equipped "${item.title}" in the ${slot} slot.`)
-    } else if (action === 'removed') {
-      lines.push(`Removed item from the ${slot} slot.`)
+    for (const op of operations) {
+      if (op.effect_summary) lines.push(op.effect_summary)
     }
-
-    if (coverageSummary) {
-      lines.push(coverageSummary)
-    }
+    if (coverageSummary) lines.push(coverageSummary)
 
     return lines.length > 0 ? { label: 'Wardrobe', lines } : null
   }
 
-  if (toolData.toolName === 'create_wardrobe_item') {
+  if (toolData.toolName === 'wardrobe_create') {
     const title = result.title as string | undefined
     const equipped = result.equipped as boolean | undefined
     const recipientName = result.recipient_name as string | undefined
@@ -126,6 +123,18 @@ function buildWardrobeActionSummary(toolData: ToolResult): { label: string; line
       }
     }
 
+    return lines.length > 0 ? { label: 'Wardrobe', lines } : null
+  }
+
+  if (toolData.toolName === 'wardrobe_update') {
+    const title = result.title as string | undefined
+    if (title) lines.push(`Updated "${title}".`)
+    return lines.length > 0 ? { label: 'Wardrobe', lines } : null
+  }
+
+  if (toolData.toolName === 'wardrobe_archive') {
+    const title = result.title as string | undefined
+    if (title) lines.push(`Archived "${title}" (a human can restore it).`)
     return lines.length > 0 ? { label: 'Wardrobe', lines } : null
   }
 
@@ -273,18 +282,38 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🧭',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
-    list_wardrobe: {
+    wardrobe_list: {
       displayName: 'Wardrobe',
       icon: '👗',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
-    update_outfit_item: {
-      displayName: 'Outfit Change',
+    wardrobe_read: {
+      displayName: 'Wardrobe Item',
       icon: '👗',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
-    create_wardrobe_item: {
+    wardrobe_wear: {
+      displayName: 'Put On',
+      icon: '👗',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    wardrobe_take_off: {
+      displayName: 'Take Off',
+      icon: '👗',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    wardrobe_create: {
       displayName: 'New Wardrobe Item',
+      icon: '🧵',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    wardrobe_update: {
+      displayName: 'Edit Wardrobe Item',
+      icon: '🧵',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    wardrobe_archive: {
+      displayName: 'Archive Wardrobe Item',
       icon: '🧵',
       bgColor: 'qt-bg-muted border qt-border-default',
     },

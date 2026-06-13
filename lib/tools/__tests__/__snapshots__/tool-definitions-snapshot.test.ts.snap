@@ -1466,48 +1466,24 @@ exports[`tool definitions: derived OpenAI parameters upsertAnnotation: parameter
 }
 `;
 
-exports[`tool definitions: derived OpenAI parameters wardrobeChangeItem: parameters snapshot 1`] = `
+exports[`tool definitions: derived OpenAI parameters wardrobeArchive: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
   "properties": {
     "item_id": {
-      "description": "The ID of the wardrobe item. Required for "wear", "replace", and "add_to_slot". Optional for "remove_from_slot" (omit to clear the slot). Ignored by "clear_slot". The item must be a leaf (no components); composites are rejected — use wardrobe_set_outfit for those.",
+      "description": "The wardrobe item ID to archive. Preferred lookup.",
       "type": "string",
     },
     "item_title": {
-      "description": "Fallback lookup by title if item_id is not known.",
-      "type": "string",
-    },
-    "mode": {
-      "description": ""wear" (put it on honoring the item's replace flag — layers if the flag is off, replaces the slots if on), "replace" (clear the slots it covers, then put it on — a forced swap), "add_to_slot" (layer into one slot), "remove_from_slot" (take off one item), "clear_slot" (empty the slot entirely).",
-      "enum": [
-        "wear",
-        "replace",
-        "add_to_slot",
-        "remove_from_slot",
-        "clear_slot",
-      ],
-      "type": "string",
-    },
-    "slot": {
-      "description": "Required for "add_to_slot", "remove_from_slot", and "clear_slot". Optional for "wear"/"replace" — slots are inferred from the item.",
-      "enum": [
-        "top",
-        "bottom",
-        "footwear",
-        "accessories",
-      ],
+      "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
       "type": "string",
     },
   },
-  "required": [
-    "mode",
-  ],
   "type": "object",
 }
 `;
 
-exports[`tool definitions: derived OpenAI parameters wardrobeCreateItem: parameters snapshot 1`] = `
+exports[`tool definitions: derived OpenAI parameters wardrobeCreate: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
   "properties": {
@@ -1516,7 +1492,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreateItem: paramet
       "type": "string",
     },
     "component_item_ids": {
-      "description": "IDs of existing wardrobe items that this new item bundles. Supplying this makes the new item a composite. The slots it covers are computed from the union of the components' slots.",
+      "description": "IDs of existing wardrobe items that this new item bundles. Supplying this makes the new item a composite. The slots it covers are computed from the union of the components' slots. Components may come from the character's own wardrobe, the project, or Quilltap General.",
       "items": {
         "type": "string",
       },
@@ -1537,6 +1513,10 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreateItem: paramet
       "default": false,
       "description": "If true, wear the item immediately after creation. Defaults to false. Wearing honors the new item's replace flag: off (the default) layers it over what is already worn, on replaces those slots. For composites this places the composite (as a single id) into every slot it covers. The response reports the resulting effect (layered vs replaced).",
       "type": "boolean",
+    },
+    "image_prompt": {
+      "description": "Optional Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator IN PLACE OF the title (e.g. "intricate dense burnished-gold circular rank glyph on the shoulder"). Terse, never Markdown; it is joined into a comma-separated outfit list. Omit to fall back to the title.",
+      "type": "string",
     },
     "recipient": {
       "description": "Name of a character in this chat to give the item to. If omitted, the item is added to your own wardrobe.",
@@ -1601,30 +1581,180 @@ exports[`tool definitions: derived OpenAI parameters wardrobeList: parameters sn
 }
 `;
 
-exports[`tool definitions: derived OpenAI parameters wardrobeUpdateOutfit: parameters snapshot 1`] = `
+exports[`tool definitions: derived OpenAI parameters wardrobeRead: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
   "properties": {
     "item_id": {
-      "description": "The ID of the composite wardrobe item. The item must have components (componentItemIds non-empty); leaf items are rejected — use wardrobe_change_item for those.",
+      "description": "The wardrobe item ID to read. Preferred lookup.",
       "type": "string",
     },
     "item_title": {
-      "description": "Fallback lookup by title if item_id is not known.",
-      "type": "string",
-    },
-    "mode": {
-      "description": ""wear" — put the composite outfit on, honoring its replace flag (additive bundles layer over what is worn; replace bundles clear those slots first). "replace" — clear every slot the bundle covers, then put it on (a forced swap). "remove" — take the composite outfit off; layered items stay.",
-      "enum": [
-        "wear",
-        "replace",
-        "remove",
-      ],
+      "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
       "type": "string",
     },
   },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeTakeOff: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "operations": {
+      "description": "An ordered list of take-off changes applied in sequence. Apply multiple removals in one call rather than calling the tool repeatedly.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "item_id": {
+            "description": "The worn item to take off. Required for mode=remove (with item_title as a fallback). For a composite outfit, this filters the outfit out of every slot it covers. Items from the character's own wardrobe, the project, and Quilltap General all resolve.",
+            "type": "string",
+          },
+          "item_title": {
+            "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
+            "type": "string",
+          },
+          "mode": {
+            "description": ""remove" (default) — take the named item off across every slot it covers; other layers in those slots stay. Pass a slot to restrict the removal to that one slot. "clear_slot" — empty one named slot entirely (requires slot).",
+            "enum": [
+              "remove",
+              "clear_slot",
+            ],
+            "type": "string",
+          },
+          "slot": {
+            "description": "Required for clear_slot. Optional for remove (restricts the removal to that single slot instead of every slot the item covers).",
+            "enum": [
+              "top",
+              "bottom",
+              "footwear",
+              "accessories",
+            ],
+            "type": "string",
+          },
+        },
+        "type": "object",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+  },
   "required": [
-    "mode",
+    "operations",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeUpdate: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "appropriateness": {
+      "description": "New context tags (e.g. "casual", "formal"). Omit to leave unchanged.",
+      "type": "string",
+    },
+    "component_item_ids": {
+      "description": "Replace the composite component list. An empty array makes the item a leaf. Omit to leave unchanged.",
+      "items": {
+        "type": "string",
+      },
+      "type": "array",
+    },
+    "description": {
+      "description": "New description. Omit to leave unchanged.",
+      "type": "string",
+    },
+    "image_prompt": {
+      "description": "New Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator in place of the title. Terse, never Markdown. Omit to leave unchanged.",
+      "type": "string",
+    },
+    "is_default": {
+      "description": "Whether this item is part of the default outfit. Omit to leave unchanged.",
+      "type": "boolean",
+    },
+    "item_id": {
+      "description": "The wardrobe item ID to edit. Preferred lookup.",
+      "type": "string",
+    },
+    "item_title": {
+      "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
+      "type": "string",
+    },
+    "replace": {
+      "description": "Composite behaviour on equip: false = additive (layer), true = clear-then-set. Omit to leave unchanged.",
+      "type": "boolean",
+    },
+    "title": {
+      "description": "New name. Omit to leave unchanged.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "types": {
+      "description": "Replace the coverage slots. Omit to leave unchanged.",
+      "items": {
+        "enum": [
+          "top",
+          "bottom",
+          "footwear",
+          "accessories",
+        ],
+        "type": "string",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeWear: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "operations": {
+      "description": "An ordered list of put-on changes applied in sequence. Each operation builds on the result of the previous one (e.g. force-swap the top, then layer a cardigan over it). Apply multiple changes in one call rather than calling the tool repeatedly.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "item_id": {
+            "description": "The wardrobe item to put on. Required for every mode (with item_title as a fallback). May be a single garment OR a composite outfit — both are handled the same way. Items from the character's own wardrobe, the project, and Quilltap General all resolve.",
+            "type": "string",
+          },
+          "item_title": {
+            "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
+            "type": "string",
+          },
+          "mode": {
+            "description": ""wear" (default) — put the item on across every slot it covers, honoring its replace flag (off layers over what is worn; on replaces those slots). "replace" — force a swap: clear every slot it covers, then put it on. "add_to_slot" — layer the item into one named slot (requires slot).",
+            "enum": [
+              "wear",
+              "replace",
+              "add_to_slot",
+            ],
+            "type": "string",
+          },
+          "slot": {
+            "description": "Target slot. Required for add_to_slot; ignored by wear/replace.",
+            "enum": [
+              "top",
+              "bottom",
+              "footwear",
+              "accessories",
+            ],
+            "type": "string",
+          },
+        },
+        "type": "object",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "required": [
+    "operations",
   ],
   "type": "object",
 }

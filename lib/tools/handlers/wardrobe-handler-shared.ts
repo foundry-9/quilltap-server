@@ -4,7 +4,72 @@ import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
+import { getRepositories } from '@/lib/repositories/factory';
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor';
+
+type WardrobeRepos = ReturnType<typeof getRepositories>;
+
+/**
+ * Sentinels an LLM sometimes emits for "no item". Treated as undefined so a
+ * stray `item_id: "none"` doesn't get looked up as a real id.
+ */
+export const NO_ITEM_SENTINELS = new Set(['none', 'null', '']);
+
+export function normalizeNoItemSentinel(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return NO_ITEM_SENTINELS.has(value.trim().toLowerCase()) ? undefined : value;
+}
+
+/**
+ * Resolve a wardrobe item across all (non-group) tiers — the character's own
+ * wardrobe, the project store(s), and Quilltap General — by id (preferred) or
+ * title (case-insensitive fallback).
+ *
+ * - by id: `findByIdForCharacter` already spans character → project → general
+ *   (and includes archived items, which callers reject as needed).
+ * - by title: scan the character's own items first (character wins on
+ *   collision), then the merged archetype set.
+ *
+ * The group tier is intentionally NOT covered yet — the repository doesn't
+ * accept group mounts. Wiring it in is a tracked follow-up.
+ */
+export async function resolveWardrobeItemAcrossTiers(
+  repos: WardrobeRepos,
+  characterId: string,
+  itemId: string | undefined,
+  itemTitle: string | undefined,
+  projectMountPointIds?: string[],
+): Promise<WardrobeItem | null> {
+  if (itemId) {
+    const found = await repos.wardrobe.findByIdForCharacter(characterId, itemId, {
+      projectMountPointIds,
+    });
+    if (found) return found;
+  }
+
+  if (itemTitle) {
+    const lower = itemTitle.trim().toLowerCase();
+    const own = await repos.wardrobe.findByCharacterId(characterId, true);
+    const ownMatch = own.find((i) => i.title.toLowerCase() === lower);
+    if (ownMatch) return ownMatch;
+
+    const archetypes = await repos.wardrobe.findArchetypes(false, { projectMountPointIds });
+    const archMatch = archetypes.find((i) => i.title.toLowerCase() === lower);
+    if (archMatch) return archMatch;
+  }
+
+  return null;
+}
+
+/**
+ * True when the item belongs to THIS character (editable), false when it is a
+ * shared archetype (project / Quilltap General; `characterId === null`) or owned
+ * by someone else. The single guard standing between the model and a repo
+ * update/archive that would mutate a communal item for everyone.
+ */
+export function isOwnWardrobeItem(item: WardrobeItem, characterId: string): boolean {
+  return item.characterId === characterId;
+}
 
 interface WardrobeReposForSummary {
   chats: {

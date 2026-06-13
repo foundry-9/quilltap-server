@@ -16,6 +16,7 @@ import type { WardrobeListToolInput, WardrobeListToolOutput, WardrobeListItemRes
 import { validateWardrobeListInput } from '../wardrobe-list-tool';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
+import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 
 /**
  * Context required for wardrobe list tool execution
@@ -61,7 +62,7 @@ function findEquippedSlots(
 }
 
 /**
- * Execute the list_wardrobe tool
+ * Execute the wardrobe_list tool
  *
  * @param input - The tool input parameters
  * @param context - Execution context including user ID, chat ID, and character ID
@@ -93,9 +94,19 @@ export async function executeWardrobeListTool(
     const validatedInput = input as WardrobeListToolInput;
     const { type_filter, appropriateness_filter, include_equipped } = validatedInput;
 
-    const allItemsRaw = await repos.wardrobe.findByCharacterId(context.characterId);
+    // Merge the character's own wardrobe with shared archetypes (project +
+    // Quilltap General). Character items win on id collision so a personal
+    // override masks the shared item. (The group tier is a tracked follow-up —
+    // the repo doesn't accept group mounts yet.)
+    const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
+    const ownRaw = await repos.wardrobe.findByCharacterId(context.characterId);
+    const archetypesRaw = await repos.wardrobe.findArchetypes(false, { projectMountPointIds });
 
-    const allItems = allItemsRaw.filter((item) => !item.archivedAt);
+    const byId = new Map<string, WardrobeItem>();
+    for (const item of archetypesRaw) byId.set(item.id, item);
+    for (const item of ownRaw) byId.set(item.id, item); // character overrides shared
+
+    const allItems = Array.from(byId.values()).filter((item) => !item.archivedAt);
 
     const equippedSlots: EquippedSlots | null = await repos.chats.getEquippedOutfitForCharacter(
       context.chatId,
@@ -139,8 +150,10 @@ export async function executeWardrobeListTool(
         item_id: item.id,
         title: item.title,
         description: item.description ?? null,
+        image_prompt: item.imagePrompt ?? null,
         types: item.types,
         appropriateness: item.appropriateness ?? null,
+        is_own: item.characterId === context.characterId,
         is_equipped: equipped.length > 0,
         // Preserve the original single-slot field shape; with arrays-per-slot
         // we expose the *first* slot the item appears in for back-compat,
@@ -217,8 +230,10 @@ export function formatWardrobeListResults(output: WardrobeListToolOutput): strin
   for (const item of output.items) {
     const typeTags = item.types.map((t) => `[${t}]`).join(' ');
     const equippedTag = item.is_equipped ? ` (EQUIPPED in ${item.equipped_slot})` : '';
+    const sharedTag = item.is_own ? '' : ' [shared — read-only]';
     const appropriatenessTag = item.appropriateness ? ` | ${item.appropriateness}` : '';
     const description = item.description ? ` - ${item.description}` : '';
+    const cueTag = item.image_prompt ? ` (cue: ${item.image_prompt})` : '';
     const composite = item as WardrobeListItemResult & {
       is_composite?: boolean;
       component_titles?: string[];
@@ -227,7 +242,7 @@ export function formatWardrobeListResults(output: WardrobeListToolOutput): strin
       ? ` [composite: ${(composite.component_titles ?? []).join(', ') || 'unresolved components'}]`
       : '';
 
-    lines.push(`  ${typeTags} ${item.title}${equippedTag}${appropriatenessTag}${compositeTag}${description}`);
+    lines.push(`  ${typeTags} ${item.title}${equippedTag}${sharedTag}${appropriatenessTag}${compositeTag}${cueTag}${description}`);
   }
 
   return lines.join('\n');

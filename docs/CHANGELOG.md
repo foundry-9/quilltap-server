@@ -4,6 +4,18 @@
 
 ### 4.7-dev
 
+#### Renamed and consolidated the wardrobe LLM tools
+
+The four inconsistently named wardrobe tools were replaced with a consistent, `wardrobe_`-prefixed CRUD-plus-wear set. This also adds the ability for characters to read item detail, edit stored items, and set the Portrait Cue — none of which the old tools could do — and fixes a latent registration bug.
+
+- New tool set (7): `wardrobe_list` (was `list_wardrobe`), `wardrobe_read` (new), `wardrobe_create` (was `create_wardrobe_item`), `wardrobe_update` (new), `wardrobe_archive` (new, soft-archive only), `wardrobe_wear` (new), `wardrobe_take_off` (new). The old `wardrobe_change_item` and `wardrobe_set_outfit` are removed — wearing and removing are now split into `wardrobe_wear` / `wardrobe_take_off`, each taking an ordered `operations` array so several changes apply in one call (and avatar generation + the Aurora announcement fire once per call, not once per change).
+- `wardrobe_create` and `wardrobe_update` can set the Portrait Cue (`image_prompt`); `wardrobe_list` and `wardrobe_read` now return it. Previously the field could not be set or seen by any tool even though it drives image generation.
+- Multi-tier resolution: `wardrobe_list` and the other tools now resolve items across the character's own wardrobe **plus** the project stores and Quilltap General. `wardrobe_list` previously showed only the character's own items. List/read results carry an `is_own` flag. (The **group** tier is not yet wired into the wardrobe repository — a known limitation, tracked for a follow-up.)
+- Write guard: `wardrobe_update` and `wardrobe_archive` can locate a shared item but refuse to mutate it (own items only), since shared archetypes are communal.
+- `wardrobe_archive` is soft-only — it sets `archivedAt` (restorable from the Aurora UI) and never hard-deletes. Permanent deletion stays a human-only action.
+- Fixed a registration drift in `GET /api/v1/tools`: it previously registered an `update_outfit_item` id that never matched the executor's dispatch name and omitted the equip tool entirely; tool ids, dispatch names, and `function.name` are now identical across the board (which also revives a dead wardrobe-summary branch in the chat UI).
+- Capability gates unchanged: `canDressThemselves` enables list/read/wear/take_off; `canCreateOutfits` enables create/update/archive.
+
 #### Added a "Head & Shoulders" physical-description prompt for avatars
 
 Character avatars are a head-and-shoulders crop, but avatar generation used the full-body physical description — which often described below-the-crop anatomy that image-provider moderation (e.g. OpenAI `gpt-image-2`) rejects, even for fully-clothed characters. Added a dedicated head-and-shoulders prompt variant and made avatars prefer it.

@@ -40,7 +40,7 @@ describe('ToolMessage', () => {
     }) as unknown as typeof fetch
   })
 
-  it('renders a wardrobe preset summary with actor attribution', () => {
+  it('renders a wardrobe wear summary with actor attribution', () => {
     render(
       <ToolMessage
         character={{ id: 'char-1', name: 'Riya' }}
@@ -48,12 +48,11 @@ describe('ToolMessage', () => {
           id: 'msg-1',
           createdAt: '2026-04-09T00:00:00.000Z',
           content: JSON.stringify({
-            tool: 'update_outfit_item',
+            tool: 'wardrobe_wear',
             success: true,
             initiatedBy: 'character',
             result: {
-              action: 'equipped',
-              slot: 'preset',
+              operations: [{ effect_summary: 'Layered "Velvet Coat" into top.' }],
               coverage_summary: 'Wearing a velvet coat and riding boots.',
             },
           }),
@@ -61,7 +60,7 @@ describe('ToolMessage', () => {
       />
     )
 
-    expect(screen.getByText('Applied an outfit preset.')).toBeInTheDocument()
+    expect(screen.getByText('Layered "Velvet Coat" into top.')).toBeInTheDocument()
     expect(screen.getByText('Wearing a velvet coat and riding boots.')).toBeInTheDocument()
     expect(screen.getByText('Riya ran')).toBeInTheDocument()
   })
