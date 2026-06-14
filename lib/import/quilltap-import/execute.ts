@@ -370,11 +370,17 @@ export async function executeImport(
     // Post-import reconciliation
     await reconcileRelationships(userId, repos, idMaps, warnings);
 
+    // Destination character IDs — for the `duplicate` strategy every value is a
+    // freshly created character (see import-characters). The Salon "Summon from
+    // Lore" flow reads these to select the character it just summoned.
+    const importedCharacterIds = Array.from(idMaps.characters.values());
+
     moduleLogger.info('Import execution completed successfully', {
       userId,
       imported,
       skipped,
       warningCount: warnings.length,
+      importedCharacterIdCount: importedCharacterIds.length,
     });
 
     return {
@@ -382,6 +388,7 @@ export async function executeImport(
       imported,
       skipped,
       warnings,
+      importedCharacterIds,
     };
   } catch (error) {
     const errorMessage =
@@ -399,6 +406,7 @@ export async function executeImport(
         ...warnings,
         `Import failed: ${errorMessage}`,
       ],
+      importedCharacterIds: Array.from(idMaps.characters.values()),
     };
   }
 }

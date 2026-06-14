@@ -4,6 +4,14 @@
 
 ### 4.7-dev
 
+#### Salon "Add Character": ad-hoc NPC fixes and "Summon from Lore"
+
+The Salon's Add Character dialog gained a second way to bring in a character, and the ad-hoc NPC dialog now actually saves two fields it had been dropping.
+
+- **Ad-hoc NPC data-loss fix.** The "Create Ad-hoc NPC" dialog sent payload keys the server schema didn't accept, so Zod silently stripped them — every NPC lost its **Scenario** and **Physical Description**. The dialog now sends a `scenarios` array (was a scalar `scenario`) and a singular `physicalDescription` object (was a plural `physicalDescriptions` array), matching `createCharacterSchema`. Both fields now persist. Added a `CreateNPCDialog` regression test asserting the outgoing POST body shape.
+- **New "Summon from Lore" button.** Add Character → **Summon from Lore** opens the existing Aurora AI-import wizard inside the Salon. On success the summoned character is preselected in the picker so you finish adding it (connection profile, outfit) through the normal controls — no immediate auto-add. The button always appears (the wizard accepts pasted text). New `components/chat/SummonFromLoreModal.tsx` wraps `AIImportWizard`; no new API or schema.
+- **Created-character id is now surfaced.** `executeImport`'s `ImportResult` gained `importedCharacterIds` (the destination character id-map values), threaded through the import-execute response, `useAIImport`, and `AIImportWizard.onImportSuccess(characterIds?)` so the Salon can select the summoned character. Backward-compatible: the Aurora caller ignores the argument. The Salon wrapper surfaces a clear message when a summon yields zero or more than one character (single-character summon is the supported case).
+
 #### Roleplay delimiters: hide toggle, style palette, and per-rule flourishes
 
 Each roleplay-template delimiter can now hide its own marks when rendered and carry layered text decorations, and there's a new set of theme-aware style classes to assign.

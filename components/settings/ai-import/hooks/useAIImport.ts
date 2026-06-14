@@ -67,6 +67,7 @@ export function useAIImport() {
     success: boolean;
     importedCount: number;
     warnings: string[];
+    importedCharacterIds: string[];
   } | null>(null);
 
   // Fetch connection profiles on mount
@@ -318,9 +319,11 @@ export function useAIImport() {
     [profileId, uploadedFiles, sourceText, includeMemories, includeChats, generation.stepResults]
   );
 
-  // Import the generated .qtap data
+  // Import the generated .qtap data. Returns the result (including the created
+  // character ids) so callers can act on it immediately without waiting for the
+  // importResult state to settle.
   const importCharacter = useCallback(async () => {
-    if (!generation.result) return;
+    if (!generation.result) return null;
 
     setImporting(true);
     setError(null);
@@ -343,13 +346,17 @@ export function useAIImport() {
         throw new Error(data.error || 'Import failed');
       }
 
-      setImportResult({
-        success: data.success,
+      const result = {
+        success: !!data.success,
         importedCount: data.imported || 0,
         warnings: data.warnings || [],
-      });
+        importedCharacterIds: (data.importedCharacterIds as string[] | undefined) ?? [],
+      };
+      setImportResult(result);
+      return result;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
+      return null;
     } finally {
       setImporting(false);
     }

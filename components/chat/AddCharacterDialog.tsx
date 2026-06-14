@@ -21,6 +21,7 @@ import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import CreateNPCDialog from './CreateNPCDialog'
+import SummonFromLoreModal from './SummonFromLoreModal'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { OutfitSelector } from '@/components/wardrobe'
 import type { OutfitSelection } from '@/components/wardrobe'
@@ -74,6 +75,7 @@ export default function AddCharacterDialog({
   const [searchTerm, setSearchTerm] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [isCreateNPCOpen, setIsCreateNPCOpen] = useState(false)
+  const [isSummonOpen, setIsSummonOpen] = useState(false)
   const [outfitSelection, setOutfitSelection] = useState<OutfitSelection | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -253,6 +255,14 @@ export default function AddCharacterDialog({
 
     // Close the create NPC dialog
     setIsCreateNPCOpen(false)
+  }
+
+  const handleSummoned = (characterId: string) => {
+    // Hand the freshly-summoned character back to the picker, preselected, so
+    // the operator can finish adding it (connection profile, outfit) via the
+    // usual controls — mirrors handleNPCCreated.
+    setSelectedCharacterId(characterId)
+    setIsSummonOpen(false)
   }
 
   if (!isOpen) return null
@@ -444,6 +454,30 @@ export default function AddCharacterDialog({
                           </div>
                         </div>
                       </button>
+
+                      {/* Summon from Lore Button */}
+                      <button
+                        onClick={() => setIsSummonOpen(true)}
+                        disabled={isAdding}
+                        className="p-3 rounded-lg border border-dashed qt-border-default hover:qt-border-primary/50 hover:qt-bg-primary/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Sparkles Icon */}
+                          <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 text-primary flex-shrink-0">
+                            <Icon name="sparkles" className="w-6 h-6" />
+                          </div>
+
+                          {/* Text */}
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-primary truncate">
+                              Summon from Lore
+                            </div>
+                            <div className="qt-text-xs qt-text-secondary truncate">
+                              Conjure a soul from your worldbuilding notes
+                            </div>
+                          </div>
+                        </div>
+                      </button>
                     </>
                   )}
                 </div>
@@ -584,6 +618,13 @@ export default function AddCharacterDialog({
         onClose={() => setIsCreateNPCOpen(false)}
         chatId={chatId}
         onNPCCreated={handleNPCCreated}
+      />
+
+      {/* Summon from Lore Dialog */}
+      <SummonFromLoreModal
+        isOpen={isSummonOpen}
+        onClose={() => setIsSummonOpen(false)}
+        onSummoned={handleSummoned}
       />
     </div>
   )

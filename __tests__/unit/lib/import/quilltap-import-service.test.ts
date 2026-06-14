@@ -436,6 +436,10 @@ describe('quilltap-import-service', () => {
       expect(result.imported.characters).toBe(1);
       expect(mockUserRepos.characters.create).toHaveBeenCalled();
 
+      // The created character's destination id is surfaced so callers (e.g. the
+      // Salon "Summon from Lore" flow) can find what was just brought into being.
+      expect(result.importedCharacterIds).toHaveLength(1);
+
       // Verify name was modified
       const createCall = mockUserRepos.characters.create.mock.calls[0][0];
       expect(createCall.name).toBe('Original (imported)');

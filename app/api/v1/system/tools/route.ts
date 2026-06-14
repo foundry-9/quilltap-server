@@ -801,6 +801,7 @@ async function handleImportExecute(req: NextRequest, context: any) {
       imported: result.imported,
       skipped: result.skipped,
       warningCount: result.warnings.length,
+      importedCharacterIdCount: result.importedCharacterIds.length,
     });
 
     return NextResponse.json(result);

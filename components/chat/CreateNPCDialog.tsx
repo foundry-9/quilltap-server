@@ -174,9 +174,13 @@ export default function CreateNPCDialog({
         defaultConnectionProfileId: selectedConnectionProfileId,
       }
 
-      // Add optional fields
+      // Add optional fields. The server schema expects a `scenarios` array of
+      // { id?, title, content }, not a scalar `scenario` (Zod silently strips
+      // the unknown key), so wrap the single field in a one-element array.
       if (scenario.trim()) {
-        characterData.scenario = scenario.trim()
+        characterData.scenarios = [
+          { id: crypto.randomUUID(), title: 'Default', content: scenario.trim() },
+        ]
       }
 
       // Add system prompt if provided
@@ -193,17 +197,17 @@ export default function CreateNPCDialog({
         ]
       }
 
-      // Add physical description if provided
+      // Add physical description if provided. The server schema expects a
+      // singular `physicalDescription` object, not a plural `physicalDescriptions`
+      // array (Zod silently strips the unknown plural key), so send the object.
       if (physicalDescription.trim()) {
-        characterData.physicalDescriptions = [
-          {
-            id: crypto.randomUUID(),
-            name: 'Default',
-            fullDescription: physicalDescription.trim(),
-            createdAt: now,
-            updatedAt: now,
-          },
-        ]
+        characterData.physicalDescription = {
+          id: crypto.randomUUID(),
+          name: 'Default',
+          fullDescription: physicalDescription.trim(),
+          createdAt: now,
+          updatedAt: now,
+        }
       }
 
       const createResponse = await fetch('/api/v1/characters', {

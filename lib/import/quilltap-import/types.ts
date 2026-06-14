@@ -95,6 +95,13 @@ export interface ImportResult {
   imported: QuilltapExportCounts;
   skipped: QuilltapExportCounts;
   warnings: string[];
+  /**
+   * Destination character IDs touched by the import (the values of the
+   * character id-map). For the `duplicate` conflict strategy these are the
+   * newly created characters; consumers such as the Salon "Summon from Lore"
+   * flow read this to find the character that was just brought into being.
+   */
+  importedCharacterIds: string[];
 }
 
 export interface IdMappingState {

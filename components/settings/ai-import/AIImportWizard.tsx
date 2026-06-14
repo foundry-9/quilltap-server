@@ -545,7 +545,12 @@ function ReviewStep({
 
 interface AIImportWizardProps {
   onClose?: () => void;
-  onImportSuccess?: (characterId?: string) => void;
+  /**
+   * Fired after a successful import with the destination character ids (the
+   * Aurora caller ignores the argument; the Salon "Summon from Lore" wrapper
+   * uses it to select the summoned character).
+   */
+  onImportSuccess?: (characterIds?: string[]) => void;
 }
 
 export default function AIImportWizard({ onClose, onImportSuccess }: AIImportWizardProps = {}) {
@@ -586,8 +591,11 @@ export default function AIImportWizard({ onClose, onImportSuccess }: AIImportWiz
   } = useAIImport();
 
   const handleImport = useCallback(async () => {
-    await importCharacter();
-    onImportSuccess?.();
+    const result = await importCharacter();
+    // Only signal success when the import actually succeeded; hand the created
+    // character ids to the caller (empty array on failure so listeners that
+    // merely refetch — e.g. Aurora — still run without selecting anything).
+    onImportSuccess?.(result?.success ? result.importedCharacterIds : []);
   }, [importCharacter, onImportSuccess]);
 
   const stepLabels = ['Source Material', 'Configuration', 'Generation', 'Review'];
