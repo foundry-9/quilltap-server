@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Image orientation gating and resolution negotiation
+
+Image generation previously hard-coded a request size that was wrong for about half the providers. Avatars asked for `1024x1792` and backgrounds for `1792x1024` regardless of model; on OpenAI's gpt-image that silently degrades to `1024x1024`, so "portrait" avatars came back square — and the stored width/height lied about it. There is now one provider-agnostic way to ask for a shape.
+
+- New semantic `orientation` (`portrait | landscape | square`) is the single way callers and the `generate_image` tool request shape. A host resolver (`lib/image-gen/orientation.ts`) maps it onto each provider's real mechanism — a concrete size (OpenAI, Z.AI), an aspect ratio (Google, Grok, OpenRouter), or prompt wording — using capabilities the plugins advertise. Avatars default to portrait, story backgrounds to landscape.
+- Providers now advertise orientation support. New `OrientationStrategy`, `OrientationMapping`, and `ImageOrientationSupport` types in `@quilltap/plugin-types` (bumped to 2.5.2), added to `ImageProviderConstraints` (provider-level) and `ImageGenerationModelInfo` (per-model, required where legal sizes differ by model). OpenAI is keyed per model: gpt-image portrait is `1024x1536`, DALL·E 3 is `1024x1792`, DALL·E 2 is square-only (its portrait/landscape degrade to a prompt hint rather than sending a size the API rejects). Aspect-ratio providers map portrait→3:4 and landscape→16:9.
+- The `generate_image` tool gains an `orientation` parameter (preferred over the now provider-dependent `size`/`aspectRatio`). The stale hand-rolled provider-constraints switch was removed in favor of the registry-backed data.
+- Stored dimensions are now measured from the actual returned image. `convertToWebP` reads back the WebP's real width/height via sharp; the avatar, story-background, and `generate_image` handlers store those instead of hard-coded constants. Moderation reroute paths re-resolve orientation for the fallback provider.
+- Built-in plugin bumps: openai 1.0.50, google 1.1.38, grok 1.0.41, z-ai 1.1.12, openrouter 1.0.46.
+
 #### Reworked roleplay-template formatting (delimiter kinds, unified renderers and toolbar)
 
 Roleplay-template formatting was built from three independently-authored layers that had drifted: the schema, the toolbar's two insertion paths, and two duplicated renderers. A delimiter is now defined once and all three behaviors derive from it.

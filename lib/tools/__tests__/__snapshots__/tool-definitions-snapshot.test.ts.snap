@@ -979,7 +979,7 @@ exports[`tool definitions: derived OpenAI parameters imageGeneration: parameters
   "additionalProperties": false,
   "properties": {
     "aspectRatio": {
-      "description": "Aspect ratio for image generation. Only used for providers that support aspect ratios (e.g., Google Imagen). Examples: 1:1 (square), 16:9 (landscape), 9:16 (portrait).",
+      "description": "Advanced, provider-dependent: an exact aspect ratio honoured only by aspect-ratio providers (e.g. Google, Grok, OpenRouter). Prefer \`orientation\`.",
       "enum": [
         "1:1",
         "3:4",
@@ -999,6 +999,15 @@ exports[`tool definitions: derived OpenAI parameters imageGeneration: parameters
     "negativePrompt": {
       "description": "Optional description of what to avoid in the image. Example: "blurry, low quality, watermark"",
       "maxLength": 1000,
+      "type": "string",
+    },
+    "orientation": {
+      "description": "PREFERRED way to control image shape. The system maps this onto whatever each provider supports (a concrete size, an aspect ratio, or prompt wording), so it works everywhere. "portrait" = taller than wide, "landscape" = wider than tall, "square" = 1:1. Use this instead of \`size\`/\`aspectRatio\` unless you have a specific reason not to.",
+      "enum": [
+        "portrait",
+        "landscape",
+        "square",
+      ],
       "type": "string",
     },
     "prompt": {
@@ -1029,7 +1038,7 @@ Bad: "A woman with brown hair sitting with a man" (missing placeholders!)",
     },
     "size": {
       "default": "1024x1024",
-      "description": "Image dimensions. Use 1024x1024 for square, 1792x1024 for landscape, 1024x1792 for portrait.",
+      "description": "Advanced, provider-dependent: an exact pixel size honoured only by some providers (e.g. OpenAI). Most providers ignore it. Prefer \`orientation\`.",
       "enum": [
         "1024x1024",
         "1792x1024",

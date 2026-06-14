@@ -13,6 +13,8 @@ import {
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { getImageProviderConstraints } from '@/lib/plugins/provider-registry';
+import { resolveOrientation } from '@/lib/image-gen/orientation';
+import type { ImageOrientation } from '@quilltap/plugin-types';
 import {
   ImageGenerationToolInput,
   ImageGenerationToolOutput,
@@ -170,8 +172,10 @@ async function saveGeneratedImage(
       originalFilename,
       mimeType: written.storedMimeType,
       size: written.sizeBytes,
-      width: null,
-      height: null,
+      // Actual dimensions measured from the stored bytes (see
+      // image-orientation-gating) rather than left null.
+      width: converted.width ?? null,
+      height: converted.height ?? null,
       linkedTo,
       source: 'GENERATED' as FileSource,
       category,
@@ -254,6 +258,28 @@ function mergeParameters(
 }
 
 /**
+ * Mutate merged params in place to satisfy the requested orientation for a
+ * given provider/model. Sets `size` or `aspectRatio` (overriding any raw value
+ * the LLM supplied) and/or appends a prompt hint, per the host resolver.
+ */
+function applyOrientation(
+  params: { prompt: string; model: string; size?: string; aspectRatio?: string },
+  provider: string,
+  orientation: ImageOrientation,
+): void {
+  const resolved = resolveOrientation(provider, params.model, orientation);
+  if (resolved.params.size) {
+    params.size = resolved.params.size;
+  }
+  if (resolved.params.aspectRatio) {
+    params.aspectRatio = resolved.params.aspectRatio;
+  }
+  if (resolved.promptHint) {
+    params.prompt = `${params.prompt}\n\n${resolved.promptHint}`;
+  }
+}
+
+/**
  * Validate and load image profile with error handling
  */
 async function loadAndValidateProfile(
@@ -324,6 +350,12 @@ async function generateImagesWithProvider(
     imageProfile.parameters as Record<string, unknown>,
     imageProfile.modelName
   );
+
+  // Resolve the requested orientation onto this provider/model's own mechanism.
+  // Orientation takes precedence over any raw size/aspectRatio the LLM passed.
+  // `mergedParams.prompt` is already the expanded prompt, so appending the hint
+  // here is the intended final form.
+  applyOrientation(mergedParams, imageProfile.provider, toolInput.orientation ?? 'square');
 
   // Generate images. Tracks the profile that actually produced the final
   // response — updated if the Concierge swaps in the uncensored profile
@@ -411,6 +443,8 @@ async function generateImagesWithProvider(
       reroute.profile.parameters as Record<string, unknown>,
       reroute.profile.modelName
     );
+    // Re-resolve for the reroute provider/model — its shape mechanism may differ.
+    applyOrientation(rerouteMergedParams, reroute.profile.provider, toolInput.orientation ?? 'square');
     const rerouteStartTime = Date.now();
     try {
       generationResponse = await rerouteProvider.generateImage(rerouteMergedParams, reroute.apiKey);

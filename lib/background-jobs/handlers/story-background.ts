@@ -41,6 +41,7 @@ import {
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { convertToWebP } from '@/lib/files/webp-conversion';
+import { resolveOrientation } from '@/lib/image-gen/orientation';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
@@ -636,13 +637,16 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
   let generationResponse;
   const genStartTime = Date.now();
+  // Backgrounds default to landscape; the resolver maps that onto the provider's
+  // own size / aspect ratio / prompt wording.
+  const resolved = resolveOrientation(imageProfile.provider, imageProfile.modelName, 'landscape');
+  const genPrompt = resolved.promptHint ? `${finalPrompt}\n\n${resolved.promptHint}` : finalPrompt;
   try {
-    // Request landscape-oriented image for backgrounds
     generationResponse = await provider.generateImage({
-      prompt: finalPrompt,
+      prompt: genPrompt,
       model: imageProfile.modelName,
       n: 1,
-      size: '1792x1024', // Wide landscape for backgrounds (16:9 roughly)
+      ...resolved.params,
       quality: (imageProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
       style: 'natural', // Natural style works better for ambient backgrounds
     }, decryptedKey);
@@ -715,12 +719,15 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
     const rerouteProvider = createImageProvider(reroute.profile.provider);
     const rerouteStartTime = Date.now();
+    // Re-resolve for the reroute provider/model — its shape mechanism may differ.
+    const rerouteResolved = resolveOrientation(reroute.profile.provider, reroute.profile.modelName, 'landscape');
+    const reroutePrompt = rerouteResolved.promptHint ? `${finalPrompt}\n\n${rerouteResolved.promptHint}` : finalPrompt;
     try {
       generationResponse = await rerouteProvider.generateImage({
-        prompt: finalPrompt,
+        prompt: reroutePrompt,
         model: reroute.profile.modelName,
         n: 1,
-        size: '1792x1024',
+        ...rerouteResolved.params,
         quality: (reroute.profile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
         style: 'natural',
       }, reroute.apiKey);
@@ -893,8 +900,10 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       originalFilename,
       mimeType: storedMimeType,
       size: storedSize,
-      width: 1792,
-      height: 1024,
+      // Actual dimensions measured from the stored bytes (see
+      // image-orientation-gating) — providers may return a different shape.
+      width: converted.width ?? null,
+      height: converted.height ?? null,
       linkedTo,
       source,
       category,

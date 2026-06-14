@@ -859,6 +859,10 @@ CREATE TABLE "files" (
   "originalFilename" TEXT NOT NULL,
   "mimeType" TEXT NOT NULL,
   "size" INTEGER NOT NULL,
+  -- width/height are the ACTUAL stored-raster dimensions, measured from the
+  -- bytes after WebP conversion (convertToWebP), not the requested size. For
+  -- generated images this matters because providers often return a different
+  -- shape than asked; null when not a raster image (e.g. SVG) or unmeasured.
   "width" INTEGER,
   "height" INTEGER,
   "isPlainText" INTEGER,

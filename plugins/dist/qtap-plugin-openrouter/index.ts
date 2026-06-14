@@ -15,6 +15,7 @@ import type {
   TextProviderPlugin,
   EmbeddingModelInfo,
   ImageGenerationModelInfo,
+  ImageOrientationSupport,
   ProviderOptionsSchema,
 } from './types';
 import { OpenRouterProvider } from './provider';
@@ -347,11 +348,20 @@ export const plugin: TextProviderPlugin = {
    * Returns cached information about popular OpenRouter image generation models
    */
   getImageGenerationModels: (): ImageGenerationModelInfo[] => {
+    // OpenRouter passes an aspect_ratio through to the underlying model.
+    // Portrait → 3:4, landscape → 16:9, square → 1:1.
+    const aspectOrientation: ImageOrientationSupport = {
+      strategy: 'aspectRatio',
+      portrait: { aspectRatio: '3:4' },
+      landscape: { aspectRatio: '16:9' },
+      square: { aspectRatio: '1:1' },
+    };
     return [
       {
         id: 'google/gemini-2.0-flash-exp:free',
         name: 'Gemini 2.0 Flash Experimental (Free)',
         supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+        orientationSupport: aspectOrientation,
         description:
           'Free experimental Gemini 2.0 model with image generation capabilities',
       },
@@ -359,6 +369,7 @@ export const plugin: TextProviderPlugin = {
         id: 'google/gemini-2.5-flash-preview-05-20',
         name: 'Gemini 2.5 Flash Preview',
         supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+        orientationSupport: aspectOrientation,
         description:
           'Fast preview model with state-of-the-art image generation',
       },
@@ -366,6 +377,7 @@ export const plugin: TextProviderPlugin = {
         id: 'google/gemini-2.5-flash-preview-native-image',
         name: 'Gemini 2.5 Flash Native Image',
         supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+        orientationSupport: aspectOrientation,
         description:
           'Native image generation variant of Gemini 2.5 Flash',
       },
@@ -373,6 +385,7 @@ export const plugin: TextProviderPlugin = {
         id: 'google/gemini-3-pro-image-preview',
         name: 'Nano Banana Pro (Gemini 3 Pro Image)',
         supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9', '21:9'],
+        orientationSupport: aspectOrientation,
         description:
           'Advanced image generation with fine-grained creative controls, 2K/4K output support',
       },

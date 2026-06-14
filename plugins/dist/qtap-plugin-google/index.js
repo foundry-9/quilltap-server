@@ -51388,6 +51388,12 @@ var plugin = {
    * Returns cached information about Google image generation models
    */
   getImageGenerationModels: () => {
+    const aspectOrientation = {
+      strategy: "aspectRatio",
+      portrait: { aspectRatio: "3:4" },
+      landscape: { aspectRatio: "16:9" },
+      square: { aspectRatio: "1:1" }
+    };
     return [
       // Gemini image generation models (use generateContent API)
       {
@@ -51405,6 +51411,7 @@ var plugin = {
           "16:9",
           "21:9"
         ],
+        orientationSupport: aspectOrientation,
         description: "Fast, efficient model for general image generation with text rendering"
       },
       {
@@ -51422,6 +51429,7 @@ var plugin = {
           "16:9",
           "21:9"
         ],
+        orientationSupport: aspectOrientation,
         description: "Advanced image generation with reasoning, fine-grained creative controls, 2K/4K output, up to 14 reference images"
       },
       // Imagen models (use predict API via GoogleImagenProvider)
@@ -51429,12 +51437,14 @@ var plugin = {
         id: "imagen-4",
         name: "Imagen 4",
         supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
+        orientationSupport: aspectOrientation,
         description: "High-quality image generation with Imagen 4"
       },
       {
         id: "imagen-4-fast",
         name: "Imagen 4 Fast",
         supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
+        orientationSupport: aspectOrientation,
         description: "Faster image generation variant of Imagen 4"
       }
     ];

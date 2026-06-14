@@ -27,6 +27,7 @@ export type {
 
   // Shape 2: Text -> Image
   ImageProvider,
+  ImageOrientation,
   ImageGenParams,
   GeneratedImage,
   ImageGenResponse,
@@ -105,6 +106,9 @@ export type {
   ImageGenerationModelInfo,
   ImageStyleInfo,
   ImageProviderConstraints,
+  OrientationStrategy,
+  OrientationMapping,
+  ImageOrientationSupport,
   IconProps,
   PluginIconData,
   ProviderPluginExport,
@@ -246,4 +250,4 @@ export { createConsoleLogger, createNoopLogger } from './common/logger';
  * Version of the plugin-types package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_TYPES_VERSION = '2.5.0';
+export const PLUGIN_TYPES_VERSION = '2.5.2';

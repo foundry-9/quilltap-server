@@ -207,3 +207,35 @@ describe('story-background handler — sha256 of stored bytes', () => {
     expect(Buffer.compare(arg.content, CONVERTED_WEBP_BYTES)).toBe(0)
   })
 })
+
+describe('story-background handler — orientation + measured dimensions', () => {
+  it('stores the measured dimensions from the converted buffer, not a hard-coded landscape size', async () => {
+    mockConvertToWebP.mockResolvedValue({
+      buffer: CONVERTED_WEBP_BYTES,
+      mimeType: 'image/webp',
+      filename: 'story_background.webp',
+      wasConverted: true,
+      width: 1280,
+      height: 720,
+    } as any)
+
+    await handleStoryBackgroundGeneration(makeJob())
+
+    const arg = filesCreate.mock.calls[0][0] as { width: number | null; height: number | null }
+    expect(arg.width).toBe(1280)
+    expect(arg.height).toBe(720)
+    // The old hard-coded 1792x1024 must be gone.
+    expect(arg.width).not.toBe(1792)
+  })
+
+  it('requests landscape orientation (no hard-coded size) and appends the landscape hint when the provider is unknown to the registry', async () => {
+    await handleStoryBackgroundGeneration(makeJob())
+
+    const providerInstance = mockCreateImageProvider.mock.results[0].value as { generateImage: jest.Mock }
+    const genArg = providerInstance.generateImage.mock.calls[0][0] as { prompt: string; size?: string }
+
+    // No registry plugin in the unit env → host fallback (prompt hint, no size).
+    expect(genArg.size).toBeUndefined()
+    expect(genArg.prompt).toMatch(/landscape/i)
+  })
+})

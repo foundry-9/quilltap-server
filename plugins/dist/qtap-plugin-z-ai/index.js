@@ -10764,7 +10764,15 @@ var Z_AI_IMAGE_CONSTRAINTS = {
     "928x1664",
     "1472x1104",
     "1104x1472"
-  ]
+  ],
+  // Z.AI takes a concrete size (OpenAI-shaped HTTP). Portrait/landscape use the
+  // 1056x1568 / 1568x1056 pair from the advertised set; square is 1024x1024.
+  orientationSupport: {
+    strategy: "size",
+    portrait: { size: "1056x1568", nominalWidth: 1056, nominalHeight: 1568 },
+    landscape: { size: "1568x1056", nominalWidth: 1568, nominalHeight: 1056 },
+    square: { size: "1024x1024", nominalWidth: 1024, nominalHeight: 1024 }
+  }
 };
 var metadata = {
   providerName: "Z_AI",

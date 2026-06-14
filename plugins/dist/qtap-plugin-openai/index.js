@@ -11109,6 +11109,42 @@ var plugin = {
     return new OpenAIImageProvider();
   },
   /**
+   * Statically-declared image generation models with per-model orientation
+   * support. OpenAI is the proof case for model-keyed orientation: gpt-image
+   * portrait is 1024x1536, DALL·E 3 portrait is 1024x1792, and DALL·E 2 is
+   * square only (its portrait/landscape are omitted so the host degrades to a
+   * prompt hint rather than sending a size the API rejects).
+   */
+  getImageGenerationModels: () => {
+    const gptImageOrientation = {
+      strategy: "size",
+      portrait: { size: "1024x1536", nominalWidth: 1024, nominalHeight: 1536 },
+      landscape: { size: "1536x1024", nominalWidth: 1536, nominalHeight: 1024 },
+      square: { size: "1024x1024", nominalWidth: 1024, nominalHeight: 1024 }
+    };
+    const dalle3Orientation = {
+      strategy: "size",
+      portrait: { size: "1024x1792", nominalWidth: 1024, nominalHeight: 1792 },
+      landscape: { size: "1792x1024", nominalWidth: 1792, nominalHeight: 1024 },
+      square: { size: "1024x1024", nominalWidth: 1024, nominalHeight: 1024 }
+    };
+    const dalle2Orientation = {
+      strategy: "size",
+      // DALL·E 2 supports square only; portrait/landscape intentionally omitted.
+      portrait: {},
+      landscape: {},
+      square: { size: "1024x1024", nominalWidth: 1024, nominalHeight: 1024 }
+    };
+    return [
+      { id: "gpt-image-2", name: "GPT Image 2", supportedSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"], orientationSupport: gptImageOrientation },
+      { id: "gpt-image-1.5", name: "GPT Image 1.5", supportedSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"], orientationSupport: gptImageOrientation },
+      { id: "gpt-image-1", name: "GPT Image 1", supportedSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"], orientationSupport: gptImageOrientation },
+      { id: "gpt-image-1-mini", name: "GPT Image 1 Mini", supportedSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"], orientationSupport: gptImageOrientation },
+      { id: "dall-e-3", name: "DALL\xB7E 3", supportedSizes: ["1024x1024", "1024x1792", "1792x1024"], orientationSupport: dalle3Orientation },
+      { id: "dall-e-2", name: "DALL\xB7E 2", supportedSizes: ["256x256", "512x512", "1024x1024"], orientationSupport: dalle2Orientation }
+    ];
+  },
+  /**
    * Factory method to create an OpenAI embedding provider instance
    */
   createEmbeddingProvider: (baseUrl) => {

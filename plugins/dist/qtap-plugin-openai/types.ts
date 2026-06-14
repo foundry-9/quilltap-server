@@ -24,6 +24,8 @@ export type {
   AttachmentSupport,
   ModelInfo,
   EmbeddingModelInfo,
+  ImageGenerationModelInfo,
+  ImageOrientationSupport,
   EmbeddingProvider,
   EmbeddingResult,
   EmbeddingOptions,

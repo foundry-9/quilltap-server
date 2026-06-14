@@ -8,6 +8,16 @@
  */
 
 /**
+ * Semantic image shape intent.
+ *
+ * Callers and the `generate_image` tool speak orientation; the host resolver
+ * maps it onto whatever each provider actually supports (a concrete size, an
+ * aspect ratio, or prompt wording). This is the provider-agnostic core of the
+ * orientation-gating design.
+ */
+export type ImageOrientation = 'portrait' | 'landscape' | 'square';
+
+/**
  * Image generation parameters
  */
 export interface ImageGenParams {
@@ -21,6 +31,12 @@ export interface ImageGenParams {
   size?: string;
   /** Aspect ratio (e.g., '16:9') */
   aspectRatio?: string;
+  /**
+   * Semantic shape intent. When set, the host resolver maps it onto this
+   * provider's own supported size / aspect ratio / prompt wording before the
+   * call, writing `size` or `aspectRatio` (or appending to `prompt`) as needed.
+   */
+  orientation?: ImageOrientation;
   /** Image quality */
   quality?: 'standard' | 'hd';
   /** Image style */
