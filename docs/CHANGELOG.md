@@ -4,6 +4,14 @@
 
 ### 4.7-dev
 
+#### Fix: project default image profile dangled on import/restore
+
+A project's `defaultImageProfileId` was not remapped during quilltap-import or backup restore, so the reference pointed at a stale (or nonexistent) profile id after importing the project into a different instance. This was a pre-existing bug, not a regression.
+
+- `lib/import/quilltap-import/reconcile.ts`: the project reconcile loop now remaps `defaultImageProfileId` through `idMaps.imageProfiles` (mirrors the character path).
+- `lib/backup/restore/uuid-remap.ts`: added `defaultImageProfileId` to the project `remapFields` list.
+- Added regression tests (`uuid-remapper.test.ts` for `remapBackupData`; quilltap-import project reconciliation). No schema/DDL change — the field was already exported.
+
 #### Per-project default roleplay template
 
 Projects can now set their own default roleplay template, overriding the global default for chats created in that project.
