@@ -230,6 +230,24 @@ export async function reconcileRelationships(
         }
       }
 
+      // Remap defaultImageProfileId
+      if (project.defaultImageProfileId) {
+        const newImgProfileId = remapId(project.defaultImageProfileId, idMaps.imageProfiles);
+        if (newImgProfileId) {
+          updates.defaultImageProfileId = newImgProfileId;
+          hasUpdates = true;
+        }
+      }
+
+      // Remap defaultRoleplayTemplateId (custom templates get fresh ids on import)
+      if (project.defaultRoleplayTemplateId) {
+        const newTemplateId = remapId(project.defaultRoleplayTemplateId, idMaps.roleplayTemplates);
+        if (newTemplateId) {
+          updates.defaultRoleplayTemplateId = newTemplateId;
+          hasUpdates = true;
+        }
+      }
+
       if (hasUpdates) {
         await repos.projects.update(newId, updates);
       }

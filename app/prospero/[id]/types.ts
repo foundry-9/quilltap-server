@@ -80,6 +80,7 @@ export interface Project {
   defaultAgentModeEnabled?: boolean | null
   defaultAvatarGenerationEnabled?: boolean | null
   defaultImageProfileId?: string | null
+  defaultRoleplayTemplateId?: string | null
   defaultAlertCharactersOfLanternImages?: boolean | null
   color?: string | null
   icon?: string | null

@@ -44,6 +44,7 @@ export default function ProjectDetailPage() {
     handleSaveAgentMode,
     handleSaveAvatarGeneration,
     handleSaveDefaultImageProfile,
+    handleSaveDefaultRoleplayTemplate,
     handleSaveBackgroundDisplayMode,
     handleSaveAlertCharactersOfLanternImages,
     handleRemoveCharacter,
@@ -174,6 +175,7 @@ export default function ProjectDetailPage() {
         <ModelBehaviorCard
           project={project}
           onAgentModeChange={handleSaveAgentMode}
+          onDefaultRoleplayTemplateChange={handleSaveDefaultRoleplayTemplate}
           expanded={cardState.modelBehavior}
           onToggle={() => toggleCard('modelBehavior')}
         />

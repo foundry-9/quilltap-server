@@ -239,7 +239,7 @@ export function remapBackupData(
   // Remap projects
   const remappedProjects = data.projects.map((project) => ({
     ...remapper.remapArrayFields(
-      remapper.remapFields(project, ['id', 'staticBackgroundImageId', 'storyBackgroundImageId']),
+      remapper.remapFields(project, ['id', 'staticBackgroundImageId', 'storyBackgroundImageId', 'defaultImageProfileId', 'defaultRoleplayTemplateId']),
       ['characterRoster']
     ),
     userId: targetUserId,

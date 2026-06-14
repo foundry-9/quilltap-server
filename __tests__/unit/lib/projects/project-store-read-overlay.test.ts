@@ -49,8 +49,13 @@ function row(id: string, mountPointId: string | null): Project {
 }
 
 const CHAR_UUID = '11111111-1111-4111-8111-111111111111';
+const TEMPLATE_UUID = '22222222-2222-4222-8222-222222222222';
 const FULL_FILES = {
-  'properties.json': JSON.stringify({ allowAnyCharacter: true, characterRoster: [CHAR_UUID] }),
+  'properties.json': JSON.stringify({
+    allowAnyCharacter: true,
+    characterRoster: [CHAR_UUID],
+    defaultRoleplayTemplateId: TEMPLATE_UUID,
+  }),
   'description.md': 'A grand description',
   'instructions.md': '',
   'state.json': JSON.stringify({ turn: 3 }),
@@ -65,6 +70,7 @@ describe('applyProjectStoreOverlayOne', () => {
     expect(out).not.toBeNull();
     expect(out!.allowAnyCharacter).toBe(true);
     expect(out!.characterRoster).toEqual([CHAR_UUID]);
+    expect(out!.defaultRoleplayTemplateId).toBe(TEMPLATE_UUID);
     expect(out!.description).toBe('A grand description');
     expect(out!.instructions).toBeNull(); // empty markdown → null
     expect(out!.state).toEqual({ turn: 3 });

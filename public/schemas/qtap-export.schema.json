@@ -1100,6 +1100,7 @@
         "defaultAgentModeEnabled": { "type": ["boolean", "null"] },
         "defaultAvatarGenerationEnabled": { "type": ["boolean", "null"] },
         "defaultImageProfileId": { "type": ["string", "null"] },
+        "defaultRoleplayTemplateId": { "type": ["string", "null"] },
         "defaultAlertCharactersOfLanternImages": { "type": ["boolean", "null"] },
         "state": { "type": "object" },
         "storyBackgroundsEnabled": { "type": ["boolean", "null"] },

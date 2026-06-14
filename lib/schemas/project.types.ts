@@ -62,6 +62,9 @@ export const ProjectPropertiesSchema = z.object({
   /** Default image generation profile for new chats in this project (null = inherit from character or global) */
   defaultImageProfileId: UUIDSchema.nullable().optional(),
 
+  /** Default roleplay template for new chats in this project (null = inherit from global) */
+  defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),
+
   /** When an image is generated (Lantern background, avatar, or character-invoked), inject an assistant message announcing it to characters (null = inherit from global, default false) */
   defaultAlertCharactersOfLanternImages: z.boolean().nullable().optional(),
 
@@ -147,6 +150,7 @@ export const PROJECT_STORE_MANAGED_FIELDS: ReadonlySet<keyof Project> = new Set<
   'defaultAgentModeEnabled',
   'defaultAvatarGenerationEnabled',
   'defaultImageProfileId',
+  'defaultRoleplayTemplateId',
   'defaultAlertCharactersOfLanternImages',
   'storyBackgroundsEnabled',
   'staticBackgroundImageId',

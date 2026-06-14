@@ -1054,7 +1054,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   );
 
   const chatSettings = await repos.chatSettings.findByUserId(user.id);
-  const defaultRoleplayTemplateId = chatSettings?.defaultRoleplayTemplateId || null;
   const now = new Date().toISOString();
   const participantsWithTimestamps: ChatParticipantBaseInput[] = buildResult.participants.map((p) => ({
     ...p,
@@ -1070,6 +1069,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   };
   let projectAvatarGenerationDefault: boolean | null = null;
   let projectDefaultImageProfileId: string | null = null;
+  let projectDefaultRoleplayTemplateId: string | null = null;
 
   if (validatedData.projectId) {
     const project = await repos.projects.findById(validatedData.projectId);
@@ -1084,6 +1084,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     };
     projectAvatarGenerationDefault = project.defaultAvatarGenerationEnabled ?? null;
     projectDefaultImageProfileId = project.defaultImageProfileId ?? null;
+    projectDefaultRoleplayTemplateId = project.defaultRoleplayTemplateId ?? null;
 
     if (!project.allowAnyCharacter) {
       const characterIds = participantsWithTimestamps
@@ -1104,6 +1105,20 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
   // Resolve image profile: request > project default > character default > null
   const chatImageProfileId = validatedData.imageProfileId || projectDefaultImageProfileId || buildResult.firstImageProfileId || null;
+
+  // Resolve roleplay template: project default > user/global default > null.
+  // Baked onto the chat at creation so the project's preference sticks.
+  const defaultRoleplayTemplateId =
+    projectDefaultRoleplayTemplateId || chatSettings?.defaultRoleplayTemplateId || null;
+  logger.debug('[Chats v1] Resolved default roleplay template for new chat', {
+    projectId: validatedData.projectId || null,
+    resolvedTemplateId: defaultRoleplayTemplateId,
+    source: projectDefaultRoleplayTemplateId
+      ? 'project'
+      : chatSettings?.defaultRoleplayTemplateId
+        ? 'user'
+        : 'none',
+  });
 
   const chat = await repos.chats.create({
     userId: user.id,

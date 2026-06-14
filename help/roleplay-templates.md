@@ -138,6 +138,10 @@ Use a default template if you:
 4. Existing chats keep their settings
 5. You can still override per-chat
 
+### Per-Project Defaults
+
+A project may appoint its own default template that overrides your global one for chats begun inside it. Open the project's page (Prospero), find the **Model Behavior** card, and choose a **Default Roleplay Template**. New chats in that project inherit the project's choice; leave it on "Inherit from global default" to defer to the global setting. See [Project Settings](project-settings.md) for the full priority chain.
+
 ## Creating Custom Templates
 
 ### Why Create Custom Templates?

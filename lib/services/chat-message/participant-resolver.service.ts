@@ -278,13 +278,34 @@ export async function getRoleplayTemplate(
 ): Promise<{ systemPrompt: string } | null> {
   let roleplayTemplateId = chat.roleplayTemplateId
 
-  // If chat doesn't have a template set (older or imported chat), inherit from user default
+  // If chat doesn't have a template set (older or imported chat), inherit the
+  // first available default: project default (for project chats) > user/global default.
   if (roleplayTemplateId === undefined || roleplayTemplateId === null) {
-    const userDefaultTemplateId = chatSettings?.defaultRoleplayTemplateId
-    if (userDefaultTemplateId) {
+    let inheritedTemplateId: string | null | undefined
+    let inheritedSource: 'project' | 'user' = 'user'
 
-      await repos.chats.update(chat.id, { roleplayTemplateId: userDefaultTemplateId })
-      roleplayTemplateId = userDefaultTemplateId
+    if (chat.projectId) {
+      const project = await repos.projects.findById(chat.projectId)
+      if (project?.defaultRoleplayTemplateId) {
+        inheritedTemplateId = project.defaultRoleplayTemplateId
+        inheritedSource = 'project'
+      }
+    }
+    if (!inheritedTemplateId) {
+      inheritedTemplateId = chatSettings?.defaultRoleplayTemplateId
+      inheritedSource = 'user'
+    }
+
+    if (inheritedTemplateId) {
+      // Persist the inherited default onto the chat so it sticks for future runs.
+      await repos.chats.update(chat.id, { roleplayTemplateId: inheritedTemplateId })
+      roleplayTemplateId = inheritedTemplateId
+      logger.debug('Inherited roleplay template for chat with no template set', {
+        chatId: chat.id,
+        projectId: chat.projectId ?? null,
+        roleplayTemplateId: inheritedTemplateId,
+        source: inheritedSource,
+      })
     }
   }
 

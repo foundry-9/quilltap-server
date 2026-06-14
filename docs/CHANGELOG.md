@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### Per-project default roleplay template
+
+Projects can now set their own default roleplay template, overriding the global default for chats created in that project.
+
+- New `defaultRoleplayTemplateId` field on a project's `properties.json` (added to `ProjectPropertiesSchema`, `PROJECT_STORE_MANAGED_FIELDS`, and the project PUT validation schema). Null means inherit from the global default.
+- A **Default Roleplay Template** dropdown was added to the **Model Behavior** card on the project (Prospero) page. Choosing a template saves immediately; "Inherit from global default" leaves it unset.
+- New chats created in a project resolve their template as: project default → user/global default → none, and the resolved id is baked onto the chat at creation.
+- Runtime fallback: `getRoleplayTemplate` now prefers the project default over the user default for any project chat that still has no template set, and auto-saves it onto the chat (covers chats created before a project default existed).
+- Import/restore now remap a project's `defaultRoleplayTemplateId` so custom-template references survive an import (quilltap-import reconcile + backup restore uuid-remap). Added to the `.qtap` export schema and DDL.
+- Help: documented in `help/project-settings.md` (new "Default Roleplay Template" section) and cross-linked from `help/roleplay-templates.md`.
+
 #### Salon "Add Character": ad-hoc NPC fixes and "Summon from Lore"
 
 The Salon's Add Character dialog gained a second way to bring in a character, and the ad-hoc NPC dialog now actually saves two fields it had been dropping.

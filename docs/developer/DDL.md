@@ -796,7 +796,7 @@ columns. Everything else lives in the project's **official document store**
 | `description` | `description.md` | Markdown body |
 | `instructions` | `instructions.md` | Markdown body |
 | `state` | `state.json` | the JSON object |
-| `allowAnyCharacter`, `characterRoster`, `color`, `icon`, `defaultDisabledTools`, `defaultDisabledToolGroups`, `defaultAgentModeEnabled`, `defaultAvatarGenerationEnabled`, `defaultImageProfileId`, `defaultAlertCharactersOfLanternImages`, `storyBackgroundsEnabled`, `staticBackgroundImageId`, `storyBackgroundImageId`, `backgroundDisplayMode` | `properties.json` | one flat JSON object |
+| `allowAnyCharacter`, `characterRoster`, `color`, `icon`, `defaultDisabledTools`, `defaultDisabledToolGroups`, `defaultAgentModeEnabled`, `defaultAvatarGenerationEnabled`, `defaultImageProfileId`, `defaultRoleplayTemplateId`, `defaultAlertCharactersOfLanternImages`, `storyBackgroundsEnabled`, `staticBackgroundImageId`, `storyBackgroundImageId`, `backgroundDisplayMode` | `properties.json` | one flat JSON object |
 
 The repository (`projects.repository.ts`) overlays these files on read
 (`applyProjectStoreOverlay`) and routes them back to the store on write, so the
