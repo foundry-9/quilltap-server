@@ -309,6 +309,16 @@ Speech (dialogue) is everything that isn't delimited as narration. If your templ
 | Standard | `*` | `*She crossed her arms.* ` |
 | Quilltap RP | `[`, `]` | `[She crossed her arms.]` |
 
+### Formatting Delimiters and Their Kinds
+
+Beyond narration, a template can declare a list of **formatting delimiters**. Each delimiter is defined once and powers a composer toolbar button *and* the styling applied to matching text — in the live chat and in server-rendered views alike, so they always agree. Every delimiter has a **kind**:
+
+- **Wrap** — an open/close marker around an inline span. The marker can be the same on both sides (`*action*`) or a distinct pair (`[action]`, `{thoughts}`). This is the classic inline style.
+- **Line prefix** — a marker at the *start of a line* that styles the whole line, such as `// ` for an out-of-character aside. (The Quilltap RP built-in uses this for OOC.)
+- **Tag prefix** — a bracketed token at the start of a line that styles the whole line *when the token matches a pattern you choose*. For example, `[CAPTAIN] All hands on deck!` styles the entire line. The default token rule accepts uppercase letters and non-cased scripts but never lowercase, so `[captain] …` would not match. This is a general capability you author yourself — Quilltap does not ship a "ranks" template, just the building block.
+
+Wrap delimiters style only the span between the markers; line-prefix and tag-prefix delimiters style the entire line they begin.
+
 ### Formatting Conventions
 
 Common elements to define:

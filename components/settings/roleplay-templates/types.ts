@@ -3,6 +3,7 @@
  */
 
 import type { TemplateDelimiter } from '@/lib/schemas/template.types'
+import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
 
 export interface RoleplayTemplate {
   id: string
@@ -21,12 +22,22 @@ export interface RoleplayTemplate {
 }
 
 export interface DelimiterFormEntry {
+  /** Which delimiter kind this entry authors. */
+  kind: 'wrap' | 'linePrefix' | 'tagPrefix'
   name: string
   buttonName: string
-  /** 'single' = same open/close, 'pair' = different open/close */
+  /** wrap only: 'single' = same open/close, 'pair' = different open/close */
   delimiterMode: 'single' | 'pair'
   delimiterOpen: string
   delimiterClose: string
+  /** linePrefix only: the line-start marker (e.g. "// ") */
+  marker: string
+  /** tagPrefix only: opening bracket (e.g. "[") */
+  tagOpen: string
+  /** tagPrefix only: closing bracket (e.g. "]") */
+  tagClose: string
+  /** tagPrefix only: the inner-token constraint regex (default prefilled, editable) */
+  tokenPattern: string
   style: string
 }
 
@@ -45,11 +56,16 @@ export interface TemplateFormData {
 }
 
 export const EMPTY_DELIMITER: DelimiterFormEntry = {
+  kind: 'wrap',
   name: '',
   buttonName: '',
   delimiterMode: 'single',
   delimiterOpen: '',
   delimiterClose: '',
+  marker: '',
+  tagOpen: '[',
+  tagClose: ']',
+  tokenPattern: DEFAULT_TAG_TOKEN_PATTERN,
   style: '',
 }
 

@@ -8,6 +8,7 @@
  */
 
 import type { TemplateDelimiter, AnnotationButton, RenderingPattern, NarrationDelimiters } from '@/lib/schemas/template.types'
+import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
 import { escapeRegex } from '@/lib/utils/regex'
 
 // Re-export for convenience
@@ -57,13 +58,24 @@ export const MARKDOWN_FORMATS: MarkdownFormatConfig[] = [
 // ============================================================================
 
 /**
- * Convert a TemplateDelimiter to prefix/suffix format for text insertion
+ * Convert a TemplateDelimiter to prefix/suffix form for text insertion / tooltips.
+ * - `wrap` → its open/close (string ⇒ same on both sides; tuple ⇒ [open, close]).
+ * - `linePrefix` → { prefix: marker, suffix: '' }.
+ * - `tagPrefix` → { prefix: open, suffix: close }.
  */
 export function delimiterToPrefixSuffix(delimiter: TemplateDelimiter): { prefix: string; suffix: string } {
-  if (typeof delimiter.delimiters === 'string') {
-    return { prefix: delimiter.delimiters, suffix: delimiter.delimiters }
+  switch (delimiter.kind) {
+    case 'linePrefix':
+      return { prefix: delimiter.marker, suffix: '' }
+    case 'tagPrefix':
+      return { prefix: delimiter.open, suffix: delimiter.close }
+    case 'wrap':
+    default:
+      if (typeof delimiter.delimiters === 'string') {
+        return { prefix: delimiter.delimiters, suffix: delimiter.delimiters }
+      }
+      return { prefix: delimiter.delimiters[0], suffix: delimiter.delimiters[1] }
   }
-  return { prefix: delimiter.delimiters[0], suffix: delimiter.delimiters[1] }
 }
 
 // ============================================================================
@@ -88,27 +100,31 @@ export function generateRenderingPatterns(
 
   for (const d of delimiters) {
     const { prefix, suffix } = delimiterToPrefixSuffix(d)
-    const key = `${prefix}|${suffix}`
+    // Include kind in the dedupe key: a `wrap` [ … ] and a `tagPrefix` [ … ] are
+    // distinct rules that happen to share the same prefix/suffix.
+    const key = `${d.kind}|${prefix}|${suffix}`
     if (seen.has(key)) continue
     seen.add(key)
 
-    const pattern = buildDelimiterPattern(prefix, suffix)
+    const pattern = buildDelimiterPattern(d)
     if (pattern) {
       patterns.push({
         pattern: pattern.regex,
         className: d.style,
         ...(pattern.flags ? { flags: pattern.flags } : {}),
+        ...(pattern.scope === 'line' ? { scope: 'line' as const } : {}),
       })
     }
   }
 
-  // Add narration delimiters if not already covered
+  // Add narration delimiters if not already covered. Narration is always a
+  // wrap-style (inline) rule.
   if (narrationDelimiters) {
     const narPrefix = Array.isArray(narrationDelimiters) ? narrationDelimiters[0] : narrationDelimiters
     const narSuffix = Array.isArray(narrationDelimiters) ? narrationDelimiters[1] : narrationDelimiters
-    const key = `${narPrefix}|${narSuffix}`
+    const key = `wrap|${narPrefix}|${narSuffix}`
     if (!seen.has(key)) {
-      const pattern = buildDelimiterPattern(narPrefix, narSuffix)
+      const pattern = buildWrapPattern(narPrefix, narSuffix)
       if (pattern) {
         patterns.push({
           pattern: pattern.regex,
@@ -122,22 +138,58 @@ export function generateRenderingPatterns(
   return patterns
 }
 
+/** A compiled-pattern descriptor: regex source, optional flags, and render scope. */
+interface BuiltPattern {
+  regex: string
+  flags?: string
+  scope: 'inline' | 'line'
+}
+
 /**
- * Build a regex pattern for a given prefix/suffix delimiter pair.
- * Returns null if the delimiter is empty or can't form a meaningful pattern.
+ * Build a regex pattern for a delimiter, dispatching by kind. Returns null if
+ * the delimiter can't form a meaningful pattern.
+ *
+ * - `wrap` → inline open/close span (see {@link buildWrapPattern}).
+ * - `linePrefix` → whole-line marker match (`^marker.+$`, multiline, scope line).
+ * - `tagPrefix` → whole-line bracketed-token match (`^open(token)close.*$`,
+ *   multiline + unicode, scope line).
  */
-function buildDelimiterPattern(
-  prefix: string,
-  suffix: string
-): { regex: string; flags?: string } | null {
+function buildDelimiterPattern(delimiter: TemplateDelimiter): BuiltPattern | null {
+  switch (delimiter.kind) {
+    case 'linePrefix': {
+      if (!delimiter.marker) return null
+      return { regex: `^${escapeRegex(delimiter.marker)}.+$`, flags: 'm', scope: 'line' }
+    }
+    case 'tagPrefix': {
+      if (!delimiter.open || !delimiter.close) return null
+      const token = delimiter.tokenPattern && delimiter.tokenPattern.trim()
+        ? delimiter.tokenPattern
+        : DEFAULT_TAG_TOKEN_PATTERN
+      return {
+        regex: `^${escapeRegex(delimiter.open)}(?:${token})${escapeRegex(delimiter.close)}.*$`,
+        flags: 'mu',
+        scope: 'line',
+      }
+    }
+    case 'wrap':
+    default: {
+      const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
+      return buildWrapPattern(prefix, suffix)
+    }
+  }
+}
+
+/**
+ * Build an inline wrap regex for a prefix/suffix pair.
+ * Returns null if the pair is empty. Scope is always `inline`.
+ */
+function buildWrapPattern(prefix: string, suffix: string): BuiltPattern | null {
   if (!prefix && !suffix) return null
 
-  // Line-start prefix with no suffix (e.g., "// " for OOC)
+  // Defensive: a wrap with an empty suffix degrades to a line-start prefix.
+  // (The migration reclassifies such legacy entries to `linePrefix`.)
   if (prefix && !suffix) {
-    return {
-      regex: `^${escapeRegex(prefix)}.+$`,
-      flags: 'm',
-    }
+    return { regex: `^${escapeRegex(prefix)}.+$`, flags: 'm', scope: 'inline' }
   }
 
   const escapedPrefix = escapeRegex(prefix)
@@ -149,6 +201,7 @@ function buildDelimiterPattern(
     // Avoid matching doubled delimiters (like ** for bold)
     return {
       regex: `(?<!${escapedPrefix})${escapedPrefix}[^${escapedPrefix}]+${escapedSuffix}(?!${escapedSuffix})`,
+      scope: 'inline',
     }
   }
 
@@ -158,6 +211,7 @@ function buildDelimiterPattern(
   const linkExclusion = suffix === ']' ? '(?!\\()' : ''
   return {
     regex: `${escapedPrefix}[^${escapedSuffix}]+${escapedSuffix}${linkExclusion}`,
+    scope: 'inline',
   }
 }
 
@@ -168,8 +222,17 @@ function buildDelimiterPattern(
  * @returns Tooltip text showing name and delimiter syntax
  */
 export function getDelimiterTooltip(delimiter: TemplateDelimiter): string {
-  const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
-  const suffixText = suffix || 'EOL'
-  return `${delimiter.name} (${prefix}...${suffixText})`
+  switch (delimiter.kind) {
+    case 'linePrefix':
+      return `${delimiter.name} (${delimiter.marker}…EOL)`
+    case 'tagPrefix':
+      return `${delimiter.name} (${delimiter.open}TOKEN${delimiter.close} at line start)`
+    case 'wrap':
+    default: {
+      const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
+      const suffixText = suffix || 'EOL'
+      return `${delimiter.name} (${prefix}...${suffixText})`
+    }
+  }
 }
 

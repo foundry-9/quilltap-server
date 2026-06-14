@@ -338,6 +338,8 @@ import { addAutonomousRunMilestonesMigration } from './add-autonomous-run-milest
 import { addCarinaFlagMigration } from './add-carina-flag-v1';
 // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
 import { addCarinaMessageMetaMigration } from './add-carina-message-meta-v1';
+// RP formatting overhaul: add kind discriminant (wrap/linePrefix) to template delimiters
+import { rpDelimiterKindsMigration } from './rp-delimiter-kinds-v1';
 
 /**
  * All available migrations.
@@ -672,6 +674,8 @@ export const migrations: Migration[] = [
   createGroupsTableMigration,
   // Groups: join tables — group_doc_mount_links + group_character_members (mount-index DB)
   createGroupJoinTablesMigration,
+  // RP formatting overhaul: add kind discriminant (wrap/linePrefix) to template delimiters
+  rpDelimiterKindsMigration,
 ];
 
 export {
@@ -987,5 +991,7 @@ export {
   createGroupsTableMigration,
   // Groups: join tables — group_doc_mount_links + group_character_members (mount-index DB)
   createGroupJoinTablesMigration,
+  // RP formatting overhaul: add kind discriminant (wrap/linePrefix) to template delimiters
+  rpDelimiterKindsMigration,
 };
 

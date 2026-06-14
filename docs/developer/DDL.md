@@ -1024,6 +1024,14 @@ CREATE INDEX "idx_roleplay_templates_createdAt" ON "roleplay_templates" ("create
 CREATE INDEX "idx_roleplay_templates_userId" ON "roleplay_templates" ("userId");
 ```
 
+> **`delimiters` JSON shape (since `rp-delimiter-kinds-v1`):** each entry is a
+> discriminated union on `kind`: `{ kind: 'wrap', name, buttonName, delimiters, style }`
+> (string or `[open, close]`), `{ kind: 'linePrefix', name, buttonName, marker, style }`,
+> or `{ kind: 'tagPrefix', name, buttonName, open, close, tokenPattern?, style }`. Legacy
+> entries with no `kind` are read as `wrap`. `renderingPatterns` entries may carry an
+> optional `scope: 'inline' | 'line'` (absent ⇒ `inline`); `linePrefix`/`tagPrefix` rules
+> are `line`-scoped (the class lands on the whole block, not an inline span).
+
 ### tags
 
 ```sql

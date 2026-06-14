@@ -97,12 +97,25 @@ export async function importRoleplayTemplates(
           'Internal Monologue': 'qt-chat-inner-monologue', 'Int': 'qt-chat-inner-monologue',
           'Out of Character': 'qt-chat-ooc', 'OOC': 'qt-chat-ooc',
         };
-        template.delimiters = oldButtons.map(btn => ({
-          name: btn.label || btn.abbrev || 'Unknown',
-          buttonName: btn.abbrev || btn.label || '?',
-          delimiters: (btn.prefix === btn.suffix) ? (btn.prefix || '') : [btn.prefix || '', btn.suffix || ''] as [string, string],
-          style: styleMap[btn.label || ''] || styleMap[btn.abbrev || ''] || 'qt-chat-narration',
-        }));
+        template.delimiters = oldButtons.map(btn => {
+          const prefix = btn.prefix || '';
+          const suffix = btn.suffix || '';
+          const name = btn.label || btn.abbrev || 'Unknown';
+          const buttonName = btn.abbrev || btn.label || '?';
+          const style = styleMap[btn.label || ''] || styleMap[btn.abbrev || ''] || 'qt-chat-narration';
+          // A prefix with no suffix is a line-start marker (e.g. "// " OOC);
+          // everything else is a wrap delimiter. Mirrors the kinds migration.
+          if (prefix && !suffix) {
+            return { kind: 'linePrefix' as const, name, buttonName, marker: prefix, style };
+          }
+          return {
+            kind: 'wrap' as const,
+            name,
+            buttonName,
+            delimiters: prefix === suffix ? prefix : ([prefix, suffix] as [string, string]),
+            style,
+          };
+        });
         delete templateAny.annotationButtons;
       }
       // Remove legacy pluginName field if present

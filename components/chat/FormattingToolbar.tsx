@@ -13,10 +13,12 @@ import {
   delimiterToPrefixSuffix,
   type MarkdownFormatConfig,
 } from '@/lib/chat/annotations'
+import { toggleWrap, toggleLinePrefix, insertTagPrefix } from '@/lib/chat/text-transforms'
 import {
   INSERT_HEADING_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
   INSERT_ORDERED_LIST_COMMAND,
+  APPLY_DELIMITER_COMMAND,
 } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
 import { type HeadingTagType, $createQuoteNode } from '@lexical/rich-text'
 
@@ -134,26 +136,12 @@ export default function FormattingToolbar({
   /** Toggle wrap/unwrap of prefix+suffix around the current selection in the textarea */
   const sourceToggleWrap = useCallback(
     (textarea: HTMLTextAreaElement, prefix: string, suffix: string) => {
-      const { selectionStart: start, selectionEnd: end, value } = textarea
-      const selected = value.slice(start, end)
-
-      if (selected) {
-        // Toggle: unwrap if already wrapped, wrap if not
-        if (selected.startsWith(prefix) && selected.endsWith(suffix)) {
-          const inner = selected.slice(prefix.length, selected.length - suffix.length)
-          const newValue = value.slice(0, start) + inner + value.slice(end)
-          sourceApply(textarea, newValue, start + inner.length)
-        } else {
-          const wrapped = `${prefix}${selected}${suffix}`
-          const newValue = value.slice(0, start) + wrapped + value.slice(end)
-          sourceApply(textarea, newValue, start + wrapped.length)
-        }
-      } else {
-        // No selection: insert with cursor between
-        const inserted = `${prefix}${suffix}`
-        const newValue = value.slice(0, start) + inserted + value.slice(end)
-        sourceApply(textarea, newValue, start + prefix.length)
-      }
+      const { value, cursor } = toggleWrap(
+        { value: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd },
+        prefix,
+        suffix,
+      )
+      sourceApply(textarea, value, cursor)
     },
     [sourceApply],
   )
@@ -319,53 +307,34 @@ export default function FormattingToolbar({
     e.preventDefault()
   }, [])
 
-  // Handle delimiter button click — wrap/unwrap selection, or insert at cursor
+  // Handle delimiter button click. Both editing surfaces route through the same
+  // pure transforms (lib/chat/text-transforms): source mode applies the result
+  // to the textarea; rich-text mode dispatches APPLY_DELIMITER_COMMAND, whose
+  // handler runs the very same transforms inside the Lexical editor.
   const handleDelimiterClick = useCallback(
     (delimiter: TemplateDelimiter) => {
-      const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
-
-      // Source mode: use textarea manipulation
+      // Source mode: apply the matching transform to the textarea by kind.
       if (showSource && sourceTextareaRef?.current) {
-        sourceToggleWrap(sourceTextareaRef.current, prefix, suffix)
+        const textarea = sourceTextareaRef.current
+        const state = { value: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd }
+        let result
+        if (delimiter.kind === 'linePrefix') {
+          result = toggleLinePrefix(state, delimiter.marker)
+        } else if (delimiter.kind === 'tagPrefix') {
+          result = insertTagPrefix(state, delimiter.open, delimiter.close)
+        } else {
+          const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
+          result = toggleWrap(state, prefix, suffix)
+        }
+        sourceApply(textarea, result.value, result.cursor)
         return
       }
 
-      // Rich text mode
-      editor.update(() => {
-        const selection = $getSelection()
-        if (!$isRangeSelection(selection)) return
-
-        const selectedText = selection.getTextContent()
-        if (selectedText) {
-          if (selectedText.startsWith(prefix) && selectedText.endsWith(suffix)) {
-            const inner = selectedText.slice(prefix.length, selectedText.length - suffix.length)
-            selection.insertRawText(inner)
-          } else {
-            selection.insertRawText(`${prefix}${selectedText}${suffix}`)
-          }
-        } else {
-          selection.insertRawText(`${prefix}${suffix}`)
-          const updatedSelection = $getSelection()
-          if ($isRangeSelection(updatedSelection)) {
-            const nodes = updatedSelection.getNodes()
-            if (nodes.length > 0) {
-              const lastNode = nodes[nodes.length - 1]
-              if (lastNode.getType() === 'text') {
-                const cursorPos = lastNode.getTextContentSize() - suffix.length
-                updatedSelection.setTextNodeRange(
-                  lastNode as import('lexical').TextNode,
-                  cursorPos,
-                  lastNode as import('lexical').TextNode,
-                  cursorPos,
-                )
-              }
-            }
-          }
-        }
-      })
+      // Rich text mode: a single dispatch; the command handler dispatches by kind.
+      editor.dispatchCommand(APPLY_DELIMITER_COMMAND, delimiter)
       editor.focus()
     },
-    [editor, showSource, sourceTextareaRef, sourceToggleWrap]
+    [editor, showSource, sourceTextareaRef, sourceApply]
   )
 
   // Build the narration button from delimiters, and filter out any template
@@ -382,6 +351,7 @@ export default function FormattingToolbar({
     const narSuffix = Array.isArray(narrationDelimiters) ? narrationDelimiters[1] : narrationDelimiters
 
     const btn: TemplateDelimiter = {
+      kind: 'wrap',
       name: 'Narration',
       buttonName: 'Nar',
       delimiters: narrationDelimiters,

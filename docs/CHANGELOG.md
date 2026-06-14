@@ -4,6 +4,18 @@
 
 ### 4.7-dev
 
+#### Reworked roleplay-template formatting (delimiter kinds, unified renderers and toolbar)
+
+Roleplay-template formatting was built from three independently-authored layers that had drifted: the schema, the toolbar's two insertion paths, and two duplicated renderers. A delimiter is now defined once and all three behaviors derive from it.
+
+- Delimiters are now a discriminated union on `kind`: `wrap` (open/close around an inline span, the previous behavior), `linePrefix` (a line-start marker that styles the whole line, e.g. `// ` OOC), and `tagPrefix` (a bracketed token at the line start — e.g. `[CAPTAIN] …` — that styles the whole line when the token matches a per-rule `tokenPattern`). The default `tokenPattern` is `[^\p{Ll}]+` (uppercase/non-cased, never lowercase), compiled with the `u` flag and editable per rule. Quilltap ships the capability, not any specific "ranks" template.
+- New shared core `lib/chat/roleplay-rendering.ts` (`tokenizeInline`, `lineClassFor`, `compileRenderingPatterns`, `escapeMarkdownInBrackets`, dialogue detection). The client renderer (`MessageContent.tsx`, React nodes) and the server renderer (`markdown-renderer.service.ts`, HTML) now both derive from it, so they can't diverge. Whole-line (`linePrefix`/`tagPrefix`) styling is applied at the block element (like dialogue detection), not as an inline span.
+- New pure transforms `lib/chat/text-transforms.ts` (`toggleWrap`, `toggleLinePrefix`, `insertTagPrefix`). Both the formatting toolbar's source-textarea path and its Lexical path now route through these. The previously-dead `INSERT_DELIMITER_COMMAND` is now `APPLY_DELIMITER_COMMAND`, dispatching by kind. `toggleLinePrefix` now toggles the marker off when re-applied.
+- `RenderingPattern` gains an optional `scope` (`inline` | `line`; absent ⇒ inline). Rendering patterns are still regenerated from delimiters on write.
+- Template editor: each delimiter now has a **Kind** selector with kind-specific fields (wrap open/close, line marker, or tag brackets + token pattern). The **Style** field is now a free-text CSS-class input with the four built-in classes as quick-picks. A new **Draft formatting instructions** button appends a kind-aware starter paragraph to the prompt (which stays user-owned and editable).
+- API: `POST`/`PUT /api/v1/roleplay-templates` now validate `delimiters` against the discriminated-union schema (400 on malformed input, including an uncompilable `tokenPattern`).
+- Migration `rp-delimiter-kinds-v1` tags every existing template delimiter with a `kind` (`['marker','']` ⇒ `linePrefix`, otherwise `wrap`) and regenerates rendering patterns; built-in seeds were updated to the new shape. Legacy delimiters with no `kind` are read as `wrap`.
+
 #### Renamed and consolidated the wardrobe LLM tools
 
 The four inconsistently named wardrobe tools were replaced with a consistent, `wardrobe_`-prefixed CRUD-plus-wear set. This also adds the ability for characters to read item detail, edit stored items, and set the Portrait Cue — none of which the old tools could do — and fixes a latent registration bug.

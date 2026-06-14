@@ -237,6 +237,7 @@ const PRETTY_LABELS: Record<string, string> = {
   // Templates + dangerous content
   'add-narration-delimiters-field-v1': 'Adding narration delimiters to templates',
   'migrate-plugin-templates-to-native-v1': 'Moving plugin templates into native templates',
+  'rp-delimiter-kinds-v1': 'Sorting your formatting marks into their proper kinds',
   'migrate-extraction-knobs-to-instance-settings-v1': 'Moving extraction knobs into instance settings',
 
   // Misc / fixes

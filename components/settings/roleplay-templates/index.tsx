@@ -4,6 +4,7 @@ import { useRoleplayTemplates } from './hooks/useRoleplayTemplates'
 import { TemplateCard } from './TemplateCard'
 import { EMPTY_DELIMITER } from './types'
 import type { DelimiterFormEntry } from './types'
+import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 /** Known CSS style options for delimiter entries */
@@ -38,6 +39,7 @@ export default function RoleplayTemplatesTab() {
     handleSave,
     handleDelete,
     handleCopyAsNew,
+    appendFormattingHint,
   } = useRoleplayTemplates()
 
   const builtInTemplates = templates.filter(t => t.isBuiltIn)
@@ -63,13 +65,17 @@ export default function RoleplayTemplatesTab() {
       ...prev,
       delimiters: prev.delimiters.map((d, i) => {
         if (i !== index) return d
-        const updated = { ...d, [field]: value }
-        // Sync close delimiter in single mode
+        const updated = { ...d, [field]: value } as DelimiterFormEntry
+        // Sync close delimiter in single mode (wrap only)
         if (field === 'delimiterOpen' && d.delimiterMode === 'single') {
           updated.delimiterClose = value
         }
         if (field === 'delimiterMode' && value === 'single') {
           updated.delimiterClose = updated.delimiterOpen
+        }
+        // Seed the token pattern the first time a rule becomes a tag prefix.
+        if (field === 'kind' && value === 'tagPrefix' && !updated.tokenPattern.trim()) {
+          updated.tokenPattern = DEFAULT_TAG_TOKEN_PATTERN
         }
         return updated
       }),
@@ -242,9 +248,20 @@ export default function RoleplayTemplatesTab() {
                 </div>
 
                 <div>
-                  <label className="qt-label mb-1">
-                    LLM Prompt <span className="qt-text-destructive">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="qt-label">
+                      LLM Prompt <span className="qt-text-destructive">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={appendFormattingHint}
+                      disabled={formData.delimiters.length === 0 && !formData.narrationOpen.trim()}
+                      className="px-2 py-1 text-xs rounded border qt-border-default qt-hover-accent disabled:opacity-50"
+                      title="Append a starter formatting guide drafted from the delimiters above"
+                    >
+                      Draft formatting instructions
+                    </button>
+                  </div>
                   <p className="qt-text-xs mb-2">
                     The formatting instructions prepended to the character&rsquo;s system prompt when this template is selected.
                     You can use placeholders like {'{{char}}'} and {'{{user}}'}.
@@ -379,6 +396,18 @@ export default function RoleplayTemplatesTab() {
                               Remove
                             </button>
                           </div>
+                          <div className="mb-2">
+                            <label className="qt-text-xs">Kind</label>
+                            <select
+                              value={delimiter.kind}
+                              onChange={(e) => updateDelimiter(index, 'kind', e.target.value)}
+                              className="qt-select w-full text-sm"
+                            >
+                              <option value="wrap">Wrap — open…close around a span (e.g. *action*)</option>
+                              <option value="linePrefix">Line prefix — marker styles the whole line (e.g. // OOC)</option>
+                              <option value="tagPrefix">Tag prefix — [TOKEN] at line start styles the whole line</option>
+                            </select>
+                          </div>
                           <div className="grid grid-cols-2 gap-2 mb-2">
                             <div>
                               <label className="qt-text-xs">Name</label>
@@ -404,70 +433,132 @@ export default function RoleplayTemplatesTab() {
                             </div>
                           </div>
                           <div className="mb-2">
-                            <label className="qt-text-xs">Style</label>
-                            <select
+                            <label className="qt-text-xs">Style (CSS class)</label>
+                            <input
+                              type="text"
+                              list={`qt-style-options-${index}`}
                               value={delimiter.style}
                               onChange={(e) => updateDelimiter(index, 'style', e.target.value)}
-                              className="qt-select w-full text-sm"
-                            >
-                              <option value="">Select a style...</option>
+                              placeholder="qt-chat-narration"
+                              maxLength={50}
+                              className="qt-input w-full text-sm font-mono"
+                            />
+                            <datalist id={`qt-style-options-${index}`}>
                               {STYLE_OPTIONS.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label} ({opt.value})</option>
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
                               ))}
-                            </select>
+                            </datalist>
+                            <p className="qt-text-xs qt-text-secondary mt-1">
+                              Pick a built-in style or enter your own theme class.
+                            </p>
                           </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <label className="qt-text-xs">Delimiters:</label>
-                              <label className="flex items-center gap-1 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  checked={delimiter.delimiterMode === 'single'}
-                                  onChange={() => updateDelimiter(index, 'delimiterMode', 'single')}
-                                  className="qt-radio"
-                                />
-                                <span className="text-xs">Same</span>
-                              </label>
-                              <label className="flex items-center gap-1 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  checked={delimiter.delimiterMode === 'pair'}
-                                  onChange={() => updateDelimiter(index, 'delimiterMode', 'pair')}
-                                  className="qt-radio"
-                                />
-                                <span className="text-xs">Pair</span>
-                              </label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {delimiter.delimiterMode === 'single' ? (
-                                <input
-                                  type="text"
-                                  value={delimiter.delimiterOpen}
-                                  onChange={(e) => updateDelimiter(index, 'delimiterOpen', e.target.value)}
-                                  placeholder="*"
-                                  className="qt-input w-20 font-mono text-center text-sm"
-                                />
-                              ) : (
-                                <>
+
+                          {delimiter.kind === 'wrap' && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <label className="qt-text-xs">Delimiters:</label>
+                                <label className="flex items-center gap-1 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    checked={delimiter.delimiterMode === 'single'}
+                                    onChange={() => updateDelimiter(index, 'delimiterMode', 'single')}
+                                    className="qt-radio"
+                                  />
+                                  <span className="text-xs">Same</span>
+                                </label>
+                                <label className="flex items-center gap-1 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    checked={delimiter.delimiterMode === 'pair'}
+                                    onChange={() => updateDelimiter(index, 'delimiterMode', 'pair')}
+                                    className="qt-radio"
+                                  />
+                                  <span className="text-xs">Pair</span>
+                                </label>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {delimiter.delimiterMode === 'single' ? (
                                   <input
                                     type="text"
                                     value={delimiter.delimiterOpen}
                                     onChange={(e) => updateDelimiter(index, 'delimiterOpen', e.target.value)}
-                                    placeholder="["
+                                    placeholder="*"
                                     className="qt-input w-20 font-mono text-center text-sm"
                                   />
-                                  <span className="qt-text-xs">to</span>
-                                  <input
-                                    type="text"
-                                    value={delimiter.delimiterClose}
-                                    onChange={(e) => updateDelimiter(index, 'delimiterClose', e.target.value)}
-                                    placeholder="]"
-                                    className="qt-input w-20 font-mono text-center text-sm"
-                                  />
-                                </>
-                              )}
+                                ) : (
+                                  <>
+                                    <input
+                                      type="text"
+                                      value={delimiter.delimiterOpen}
+                                      onChange={(e) => updateDelimiter(index, 'delimiterOpen', e.target.value)}
+                                      placeholder="["
+                                      className="qt-input w-20 font-mono text-center text-sm"
+                                    />
+                                    <span className="qt-text-xs">to</span>
+                                    <input
+                                      type="text"
+                                      value={delimiter.delimiterClose}
+                                      onChange={(e) => updateDelimiter(index, 'delimiterClose', e.target.value)}
+                                      placeholder="]"
+                                      className="qt-input w-20 font-mono text-center text-sm"
+                                    />
+                                  </>
+                                )}
+                              </div>
                             </div>
-                          </div>
+                          )}
+
+                          {delimiter.kind === 'linePrefix' && (
+                            <div>
+                              <label className="qt-text-xs">Line marker</label>
+                              <input
+                                type="text"
+                                value={delimiter.marker}
+                                onChange={(e) => updateDelimiter(index, 'marker', e.target.value)}
+                                placeholder="// "
+                                className="qt-input w-28 font-mono text-sm"
+                              />
+                              <p className="qt-text-xs qt-text-secondary mt-1">
+                                A line beginning with this marker is styled in full.
+                              </p>
+                            </div>
+                          )}
+
+                          {delimiter.kind === 'tagPrefix' && (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <label className="qt-text-xs whitespace-nowrap">Brackets:</label>
+                                <input
+                                  type="text"
+                                  value={delimiter.tagOpen}
+                                  onChange={(e) => updateDelimiter(index, 'tagOpen', e.target.value)}
+                                  placeholder="["
+                                  className="qt-input w-16 font-mono text-center text-sm"
+                                />
+                                <span className="qt-text-xs">TOKEN</span>
+                                <input
+                                  type="text"
+                                  value={delimiter.tagClose}
+                                  onChange={(e) => updateDelimiter(index, 'tagClose', e.target.value)}
+                                  placeholder="]"
+                                  className="qt-input w-16 font-mono text-center text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="qt-text-xs">Token pattern (regex, Unicode)</label>
+                                <input
+                                  type="text"
+                                  value={delimiter.tokenPattern}
+                                  onChange={(e) => updateDelimiter(index, 'tokenPattern', e.target.value)}
+                                  placeholder={DEFAULT_TAG_TOKEN_PATTERN}
+                                  className="qt-input w-full font-mono text-sm"
+                                />
+                                <p className="qt-text-xs qt-text-secondary mt-1">
+                                  The token between the brackets must match this. Default = uppercase / non-cased, never lowercase. A line like <code className="font-mono">{delimiter.tagOpen || '['}CAPTAIN{delimiter.tagClose || ']'}</code> at the start of a line is then styled in full.
+                                </p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -525,9 +616,13 @@ export default function RoleplayTemplatesTab() {
                   <h3 className="qt-text-small font-medium mb-2">Formatting Delimiters</h3>
                   <div className="space-y-1">
                     {previewTemplate.delimiters.map((d, i) => {
-                      const delimDisplay = Array.isArray(d.delimiters)
-                        ? `${d.delimiters[0]}...${d.delimiters[1] || 'EOL'}`
-                        : `${d.delimiters}...${d.delimiters}`
+                      const delimDisplay = d.kind === 'linePrefix'
+                        ? `${d.marker}…EOL`
+                        : d.kind === 'tagPrefix'
+                          ? `${d.open}TOKEN${d.close}`
+                          : Array.isArray(d.delimiters)
+                            ? `${d.delimiters[0]}...${d.delimiters[1] || 'EOL'}`
+                            : `${d.delimiters}...${d.delimiters}`
                       return (
                         <div key={i} className="flex items-center gap-2 text-sm">
                           <span className="font-medium">{d.buttonName}</span>

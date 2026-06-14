@@ -18,25 +18,106 @@ import {
 // ============================================================================
 
 /**
- * Configuration for a delimiter entry in a roleplay template.
- * Each entry defines a formatting type (narration, thoughts, OOC, etc.)
- * with its delimiters, toolbar button, and associated CSS style class.
+ * Default token constraint for a `tagPrefix` delimiter: one-or-more characters,
+ * none of which is a lowercase letter (`\p{Ll}`). This admits uppercase letters,
+ * digits, spaces, and non-cased scripts (CJK, Hebrew, …) while rejecting any
+ * lowercase. Compiled with the `u` flag everywhere it is used. Users may edit it.
  */
-export const TemplateDelimiterSchema = z.object({
+export const DEFAULT_TAG_TOKEN_PATTERN = '[^\\p{Ll}]+';
+
+/** Fields shared by every delimiter kind. */
+const delimiterCommonFields = {
   /** Full name displayed in tooltip (e.g., "Narration", "Internal Monologue") */
   name: z.string().min(1).max(50),
   /** Abbreviated label displayed on toolbar button (e.g., "Nar", "Int", "OOC") */
   buttonName: z.string().min(1).max(10),
-  /** Delimiter(s): a single string (same open/close) or [open, close] tuple */
+  /** CSS class name for styling matched text (e.g., "qt-chat-narration") */
+  style: z.string().min(1).max(50),
+};
+
+/**
+ * Wrap delimiter — `open…close` around an inline span (the original behavior).
+ * `delimiters` is a single string (same open/close) or an `[open, close]` tuple.
+ */
+export const WrapDelimiterSchema = z.object({
+  kind: z.literal('wrap'),
+  ...delimiterCommonFields,
   delimiters: z.union([
     z.string(),
     z.tuple([z.string(), z.string()]),
   ]),
-  /** CSS class name for styling matched text (e.g., "qt-chat-narration") */
-  style: z.string().min(1).max(50),
 });
 
-export type TemplateDelimiter = z.infer<typeof TemplateDelimiterSchema>;
+/**
+ * Line-prefix delimiter — a marker at the START of a line styles the WHOLE line
+ * (e.g. `// OOC comment`). The class is applied at the block level, not inline.
+ */
+export const LinePrefixDelimiterSchema = z.object({
+  kind: z.literal('linePrefix'),
+  ...delimiterCommonFields,
+  /** Marker that must begin the line, e.g. "// " */
+  marker: z.string().min(1),
+});
+
+/**
+ * Tag-prefix delimiter — a bracketed token at the START of a line, whose inner
+ * text must satisfy `tokenPattern`, styles the WHOLE line (e.g. `[CAPTAIN] …`).
+ * This is a GENERAL, user-authored capability — NOT a hardcoded "rank" feature.
+ */
+export const TagPrefixDelimiterSchema = z.object({
+  kind: z.literal('tagPrefix'),
+  ...delimiterCommonFields,
+  /** Opening bracket, user-chosen (e.g. "[") */
+  open: z.string().min(1),
+  /** Closing bracket, user-chosen (e.g. "]") */
+  close: z.string().min(1),
+  /**
+   * The Unicode regex (no anchors) the inner token must satisfy, compiled with
+   * the `u` flag. Empty/omitted = the {@link DEFAULT_TAG_TOKEN_PATTERN}. Rejected
+   * at write time if it isn't a compilable Unicode regex (it would otherwise
+   * throw in both renderers).
+   */
+  tokenPattern: z
+    .string()
+    .optional()
+    .refine(
+      (p) => {
+        if (!p) return true;
+        try {
+          void new RegExp(p, 'u');
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'tokenPattern must be a valid Unicode regular expression' },
+    ),
+});
+
+/**
+ * Configuration for a delimiter entry in a roleplay template — a discriminated
+ * union over `kind`. Each entry defines a formatting type (narration, thoughts,
+ * OOC, ranks, …) with its toolbar button and CSS style.
+ *
+ * Legacy rows stored before `kind` existed are read as `wrap` (see the
+ * preprocess below), so old templates keep validating against this schema.
+ */
+const TemplateDelimiterUnionSchema = z.discriminatedUnion('kind', [
+  WrapDelimiterSchema,
+  LinePrefixDelimiterSchema,
+  TagPrefixDelimiterSchema,
+]);
+
+export const TemplateDelimiterSchema = z.preprocess((val) => {
+  // Backfill `kind: 'wrap'` for legacy entries that predate the discriminant so
+  // they don't hard-fail the discriminated union before the migration runs.
+  if (val && typeof val === 'object' && !Array.isArray(val) && !('kind' in val)) {
+    return { ...(val as Record<string, unknown>), kind: 'wrap' };
+  }
+  return val;
+}, TemplateDelimiterUnionSchema);
+
+export type TemplateDelimiter = z.infer<typeof TemplateDelimiterUnionSchema>;
 
 // Legacy type alias for backward compatibility during migration
 export type AnnotationButton = {
@@ -61,6 +142,13 @@ export const RenderingPatternSchema = z.object({
   className: z.string().min(1),
   /** Optional regex flags (e.g., 'm' for multiline) */
   flags: z.string().optional(),
+  /**
+   * How the match is styled. `inline` (the default) wraps the matched span in a
+   * `<span>` within its line; `line` styles the WHOLE block the match belongs to
+   * (applied at the block element, not as an inline span — e.g. a `// OOC` line or
+   * a `[TAG]` line). Absent on legacy patterns, which are treated as `inline`.
+   */
+  scope: z.enum(['inline', 'line']).optional(),
 });
 
 export type RenderingPattern = z.infer<typeof RenderingPatternSchema>;
