@@ -595,6 +595,16 @@
   --qt-tab-divider-color: var(--stroke-soft);
 
   /* Roleplay Annotation Variables */
+  /* Roleplay-template palette (qt-roleplay-1..4) — deep blue / teal / violet / amber */
+  --qt-roleplay-1-bg: hsl(210 45% 42%);
+  --qt-roleplay-1-fg: hsl(0 0% 100%);
+  --qt-roleplay-2-bg: hsl(185 50% 34%);
+  --qt-roleplay-2-fg: hsl(0 0% 100%);
+  --qt-roleplay-3-bg: hsl(265 40% 50%);
+  --qt-roleplay-3-fg: hsl(0 0% 100%);
+  --qt-roleplay-4-bg: hsl(35 70% 48%);
+  --qt-roleplay-4-fg: hsl(220 30% 12%);
+
   --qt-rp-dialogue-color: hsl(var(--text-000));
 
   --qt-rp-narration-color: hsl(var(--text-200));

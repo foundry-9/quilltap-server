@@ -1032,9 +1032,15 @@ CREATE INDEX "idx_roleplay_templates_userId" ON "roleplay_templates" ("userId");
 > discriminated union on `kind`: `{ kind: 'wrap', name, buttonName, delimiters, style }`
 > (string or `[open, close]`), `{ kind: 'linePrefix', name, buttonName, marker, style }`,
 > or `{ kind: 'tagPrefix', name, buttonName, open, close, tokenPattern?, style }`. Legacy
-> entries with no `kind` are read as `wrap`. `renderingPatterns` entries may carry an
-> optional `scope: 'inline' | 'line'` (absent ⇒ `inline`); `linePrefix`/`tagPrefix` rules
-> are `line`-scoped (the class lands on the whole block, not an inline span).
+> entries with no `kind` are read as `wrap`. Every kind also accepts two optional fields:
+> `hideDelimiter` (boolean — strip the delimiter/prefix from rendered output) and
+> `addOns` (`{ bold, italic, reverse, underline: 'none'|'single'|'double', border:
+> 'none'|'solid'|'dashed', font: ''|'sans'|'serif'|'mono'|'display'|'script' }`). Both are
+> absent on legacy/built-in entries (treated as off). `renderingPatterns` entries may carry
+> an optional `scope: 'inline' | 'line'` (absent ⇒ `inline`) and an optional `hideDelimiters`
+> boolean (the renderer then emits the pattern's `rpBody` capture group instead of the full
+> match); add-ons are baked into the pattern's `className`. `linePrefix`/`tagPrefix` rules are
+> `line`-scoped (the class lands on the whole block, not an inline span).
 
 ### tags
 

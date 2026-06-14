@@ -762,6 +762,45 @@
       }
     },
 
+    "DelimiterAddOns": {
+      "type": "object",
+      "description": "Layered text flourishes applied on top of a delimiter's base style class.",
+      "properties": {
+        "bold": { "type": "boolean" },
+        "italic": { "type": "boolean" },
+        "reverse": { "type": "boolean", "description": "Swap foreground/background." },
+        "underline": { "enum": ["none", "single", "double"] },
+        "border": { "enum": ["none", "solid", "dashed"] },
+        "font": { "enum": ["", "sans", "serif", "mono", "display", "script"] }
+      }
+    },
+
+    "TemplateDelimiter": {
+      "type": "object",
+      "description": "A formatting delimiter, discriminated on `kind`. Carries common fields (name/buttonName/style), kind-specific fields, and optional render flourishes (hideDelimiter, addOns).",
+      "required": ["kind", "name", "buttonName", "style"],
+      "additionalProperties": true,
+      "properties": {
+        "kind": { "enum": ["wrap", "linePrefix", "tagPrefix"] },
+        "name": { "type": "string", "minLength": 1, "maxLength": 50 },
+        "buttonName": { "type": "string", "minLength": 1, "maxLength": 10 },
+        "style": { "type": "string", "minLength": 1, "maxLength": 50 },
+        "hideDelimiter": { "type": "boolean", "description": "Hide the delimiter/prefix from rendered output." },
+        "addOns": { "$ref": "#/$defs/DelimiterAddOns" },
+        "delimiters": {
+          "description": "wrap only — single string (same open/close) or [open, close] pair.",
+          "anyOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 2, "maxItems": 2 }
+          ]
+        },
+        "marker": { "type": "string", "description": "linePrefix only — the line-start marker." },
+        "open": { "type": "string", "description": "tagPrefix only — opening bracket." },
+        "close": { "type": "string", "description": "tagPrefix only — closing bracket." },
+        "tokenPattern": { "type": "string", "description": "tagPrefix only — inner-token Unicode regex." }
+      }
+    },
+
     "ExportedRoleplayTemplate": {
       "type": "object",
       "description": "A user-created roleplay template (built-in templates are excluded from exports).",
@@ -775,6 +814,11 @@
         "systemPrompt": { "type": "string", "minLength": 1 },
         "isBuiltIn": { "const": false },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+        "delimiters": {
+          "type": "array",
+          "description": "Formatting delimiters with their styles, hide flag, and add-on flourishes.",
+          "items": { "$ref": "#/$defs/TemplateDelimiter" }
+        },
         "narrationDelimiters": {
           "description": "Narration delimiter(s) — single string or [open, close] pair",
           "anyOf": [

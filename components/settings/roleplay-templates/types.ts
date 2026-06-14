@@ -2,7 +2,7 @@
  * TypeScript types and interfaces for Roleplay Templates feature
  */
 
-import type { TemplateDelimiter } from '@/lib/schemas/template.types'
+import type { TemplateDelimiter, DelimiterAddOns } from '@/lib/schemas/template.types'
 import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
 
 export interface RoleplayTemplate {
@@ -39,6 +39,20 @@ export interface DelimiterFormEntry {
   /** tagPrefix only: the inner-token constraint regex (default prefilled, editable) */
   tokenPattern: string
   style: string
+  /** Hide the delimiter/prefix from the rendered output. */
+  hideDelimiter: boolean
+  /** Layered text decorations applied on top of `style`. */
+  addOns: DelimiterAddOns
+}
+
+/** All add-ons off — the starting point for a fresh delimiter row. */
+export const EMPTY_ADD_ONS: DelimiterAddOns = {
+  bold: false,
+  italic: false,
+  reverse: false,
+  underline: 'none',
+  border: 'none',
+  font: '',
 }
 
 export interface TemplateFormData {
@@ -67,6 +81,8 @@ export const EMPTY_DELIMITER: DelimiterFormEntry = {
   tagClose: ']',
   tokenPattern: DEFAULT_TAG_TOKEN_PATTERN,
   style: '',
+  hideDelimiter: false,
+  addOns: { ...EMPTY_ADD_ONS },
 }
 
 export const INITIAL_FORM_DATA: TemplateFormData = {

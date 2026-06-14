@@ -71,6 +71,12 @@ export interface CompiledRule {
   regex: RegExp
   className: string
   scope: 'inline' | 'line'
+  /**
+   * When true, the delimiter/prefix is dropped from the output: inline rules emit
+   * the `rpBody` capture group instead of the full match; line rules strip the
+   * matched prefix from the block (see {@link lineMatchFor}).
+   */
+  hideDelimiters: boolean
 }
 
 /**
@@ -86,6 +92,7 @@ export function compileRenderingPatterns(patterns: RenderingPattern[]): Compiled
     regex: new RegExp(p.pattern, (p.flags || '').replace('g', '')),
     className: p.className,
     scope: p.scope === 'line' ? 'line' : 'inline',
+    hideDelimiters: p.hideDelimiters ?? false,
   }))
 }
 
@@ -114,18 +121,25 @@ export function tokenizeInline(text: string, rules: CompiledRule[]): Segment[] {
   let remaining = text
 
   while (remaining.length > 0) {
-    let earliest: { index: number; length: number; className: string; text: string } | null = null
+    // `advance` is always the FULL match length (delimiters consumed); `text` is
+    // what we display — the inner `rpBody` group when the rule hides delimiters,
+    // else the full match.
+    let earliest: { index: number; advance: number; className: string; text: string } | null = null
 
     // Find the earliest match among all inline rules.
     for (const rule of inlineRules) {
       const match = remaining.match(rule.regex)
       if (match && match.index !== undefined) {
         if (!earliest || match.index < earliest.index) {
+          const display =
+            rule.hideDelimiters && match.groups?.rpBody !== undefined
+              ? match.groups.rpBody
+              : match[0]
           earliest = {
             index: match.index,
-            length: match[0].length,
+            advance: match[0].length,
             className: rule.className,
-            text: match[0],
+            text: display,
           }
         }
       }
@@ -136,7 +150,7 @@ export function tokenizeInline(text: string, rules: CompiledRule[]): Segment[] {
         segments.push({ text: remaining.substring(0, earliest.index) })
       }
       segments.push({ text: earliest.text, className: earliest.className })
-      remaining = remaining.substring(earliest.index + earliest.length)
+      remaining = remaining.substring(earliest.index + earliest.advance)
     } else {
       segments.push({ text: remaining })
       break
@@ -150,18 +164,35 @@ export function tokenizeInline(text: string, rules: CompiledRule[]): Segment[] {
 // LINE-SCOPED CLASSES (whole-block styling)
 // ============================================================================
 
+/** A whole-block match against a LINE-scoped rule. */
+export interface LineMatch {
+  /** Class(es) to apply to the block element. */
+  className: string
+  /** Whether the matched prefix/marker should be stripped from the block. */
+  hideDelimiters: boolean
+  /** The literal leading delimiter/marker text (e.g. `"// "`, `"[CAPTAIN]"`). */
+  prefix: string
+  /** The kept body with the prefix removed. */
+  body: string
+}
+
 /**
  * If the whole block of `text` is a single line matching a LINE-scoped rule,
- * return that rule's className. Mirrors how dialogue detection tags a `<p>` from
- * its plain text: the class lands on the block element, not an inline span.
+ * return the match details. Mirrors how dialogue detection tags a `<p>` from its
+ * plain text: the class lands on the block element, not an inline span.
  *
  * The rule's regex is matched against the trimmed block with any multiline flag
  * removed, so it only matches when the ENTIRE block is one matching line. A
  * mixed-content paragraph is left to inline styling / unstyled — authors put a
  * line-prefixed or tag-prefixed line on its own line. Returns `undefined` if
  * nothing matches.
+ *
+ * `prefix`/`body` are derived from the `rpBody` capture group (which sits at the
+ * end of every generated line pattern): the prefix is everything before it.
+ * Adapters that hide delimiters strip `prefix` from the block's leading text so
+ * inline formatting in the body survives.
  */
-export function lineClassFor(text: string, rules: CompiledRule[]): string | undefined {
+export function lineMatchFor(text: string, rules: CompiledRule[]): LineMatch | undefined {
   const trimmed = text.trim()
   if (!trimmed) return undefined
 
@@ -172,10 +203,20 @@ export function lineClassFor(text: string, rules: CompiledRule[]): string | unde
     const anchored = new RegExp(rule.regex.source, flags)
     const m = trimmed.match(anchored)
     if (m && m.index === 0 && m[0].length === trimmed.length) {
-      return rule.className
+      const body = m.groups?.rpBody ?? trimmed
+      const prefix = m[0].length >= body.length ? m[0].slice(0, m[0].length - body.length) : ''
+      return { className: rule.className, hideDelimiters: rule.hideDelimiters, prefix, body }
     }
   }
   return undefined
+}
+
+/**
+ * Convenience wrapper over {@link lineMatchFor} for callers that only need the
+ * class, not the hide/strip details.
+ */
+export function lineClassFor(text: string, rules: CompiledRule[]): string | undefined {
+  return lineMatchFor(text, rules)?.className
 }
 
 // ============================================================================
@@ -234,9 +275,11 @@ export function escapeMarkdownInBrackets(content: string, patterns: RenderingPat
   const hasBracketNarration = patterns.some((p) => p.pattern.includes('\\['))
   // Check if patterns include brace-style monologue {...}
   const hasBraceMonologue = patterns.some((p) => p.pattern.includes('\\{'))
-  // Check if patterns include single-asterisk narration *...*
+  // Check if patterns include single-asterisk narration *...*. The className may
+  // carry composed add-on classes (e.g. "qt-chat-narration qt-rp-bold"), so test
+  // for the base class as a token rather than by exact equality.
   const hasAsteriskNarration = patterns.some(
-    (p) => p.pattern.includes('\\*') && p.className === 'qt-chat-narration',
+    (p) => p.pattern.includes('\\*') && p.className.split(/\s+/).includes('qt-chat-narration'),
   )
 
   // If no relevant patterns, return content unchanged

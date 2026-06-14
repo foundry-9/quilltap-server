@@ -19,6 +19,7 @@ import {
   compileRenderingPatterns,
   tokenizeInline,
   lineClassFor,
+  lineMatchFor,
   segmentsToHtml,
   escapeMarkdownInBrackets,
 } from '@/lib/chat/roleplay-rendering'
@@ -151,6 +152,61 @@ describe('roleplay-rendering core', () => {
     it('accepts non-Latin uppercase / non-cased tag tokens', () => {
       expect(lineClassFor('[ÇÉ] hola', tagRule)).toBe('qt-chat-tag')
       expect(lineClassFor('[漢字] greetings', tagRule)).toBe('qt-chat-tag')
+    })
+  })
+
+  describe('hide delimiters', () => {
+    it('emits only the inner content for a hidden inline wrap', () => {
+      const rules = compileRenderingPatterns([
+        { pattern: '(?<!\\+)\\+(?<rpBody>[^+]+)\\+(?!\\+)', className: 'qt-chat-narration', hideDelimiters: true },
+      ])
+      expect(tokenizeInline('a +narr+ b', rules)).toEqual([
+        { text: 'a ' },
+        { text: 'narr', className: 'qt-chat-narration' },
+        { text: ' b' },
+      ])
+    })
+
+    it('keeps the delimiters when hide is off', () => {
+      const rules = compileRenderingPatterns([
+        { pattern: '(?<!\\+)\\+(?<rpBody>[^+]+)\\+(?!\\+)', className: 'qt-chat-narration' },
+      ])
+      expect(tokenizeInline('a +narr+ b', rules)).toEqual([
+        { text: 'a ' },
+        { text: '+narr+', className: 'qt-chat-narration' },
+        { text: ' b' },
+      ])
+    })
+
+    it('lineMatchFor returns the prefix and stripped body for a linePrefix', () => {
+      const rules = compileRenderingPatterns([
+        { pattern: '^// (?<rpBody>.+)$', className: 'qt-chat-ooc', flags: 'm', scope: 'line', hideDelimiters: true },
+      ])
+      expect(lineMatchFor('// an ooc line', rules)).toEqual({
+        className: 'qt-chat-ooc',
+        hideDelimiters: true,
+        prefix: '// ',
+        body: 'an ooc line',
+      })
+    })
+
+    it('lineMatchFor strips the [TAG] for a tagPrefix, keeping the body', () => {
+      const rules = compileRenderingPatterns([
+        { pattern: '^\\[(?:[^\\p{Ll}]+)\\](?<rpBody>.*)$', className: 'qt-chat-tag', flags: 'mu', scope: 'line', hideDelimiters: true },
+      ])
+      expect(lineMatchFor('[CAPTAIN] all hands', rules)).toEqual({
+        className: 'qt-chat-tag',
+        hideDelimiters: true,
+        prefix: '[CAPTAIN]',
+        body: ' all hands',
+      })
+    })
+
+    it('lineClassFor still returns just the class (back-compat wrapper)', () => {
+      const rules = compileRenderingPatterns([
+        { pattern: '^// (?<rpBody>.+)$', className: 'qt-chat-ooc', flags: 'm', scope: 'line', hideDelimiters: true },
+      ])
+      expect(lineClassFor('// ooc', rules)).toBe('qt-chat-ooc')
     })
   })
 

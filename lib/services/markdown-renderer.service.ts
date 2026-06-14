@@ -27,7 +27,7 @@ import {
   DEFAULT_DIALOGUE_DETECTION,
   compileRenderingPatterns,
   tokenizeInline,
-  lineClassFor,
+  lineMatchFor,
   isDialogueParagraph,
   segmentsToHtml,
   escapeMarkdownInBrackets,
@@ -137,14 +137,22 @@ export function applyLineScopedClasses(html: string, compiledRules: CompiledRule
     (match, tag, attrs, content) => {
       // Strip HTML tags to get plain text for the line-match check
       const plainText = content.replace(/<[^>]+>/g, '');
-      const cls = lineClassFor(plainText, lineRules);
-      if (!cls) return match;
+      const lm = lineMatchFor(plainText, lineRules);
+      if (!lm) return match;
+
+      // When the rule hides its delimiter, drop the leading marker/tag from the
+      // block's content. The prefix is literal text before any inline tag, so a
+      // leading slice is safe and preserves inline formatting in the body.
+      let body = content as string;
+      if (lm.hideDelimiters && lm.prefix && body.startsWith(lm.prefix)) {
+        body = body.slice(lm.prefix.length);
+      }
 
       if (attrs.includes('class="')) {
-        const newAttrs = attrs.replace(/class="([^"]*)"/, `class="$1 ${cls}"`);
-        return `<${tag}${newAttrs}>${content}</${tag}>`;
+        const newAttrs = attrs.replace(/class="([^"]*)"/, `class="$1 ${lm.className}"`);
+        return `<${tag}${newAttrs}>${body}</${tag}>`;
       }
-      return `<${tag}${attrs} class="${cls}">${content}</${tag}>`;
+      return `<${tag}${attrs} class="${lm.className}">${body}</${tag}>`;
     },
   );
 }

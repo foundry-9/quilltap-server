@@ -25,6 +25,36 @@ import {
  */
 export const DEFAULT_TAG_TOKEN_PATTERN = '[^\\p{Ll}]+';
 
+/**
+ * Allowed keys for a delimiter's optional add-on font. The empty string means
+ * "inherit" (no font override). The rest map to `.qt-rp-font-<key>` classes that
+ * reference the active theme's font tokens with web-safe fallbacks.
+ */
+export const RP_FONT_KEYS = ['', 'sans', 'serif', 'mono', 'display', 'script'] as const;
+export type RpFontKey = (typeof RP_FONT_KEYS)[number];
+
+/**
+ * Optional, layered text decorations applied ON TOP of a delimiter's base `style`
+ * class. Each maps to a `.qt-rp-*` utility class composed into the rendering
+ * pattern's className at generation time, so the renderers need no special-casing.
+ *
+ * `reverse` swaps the base class's foreground/background. `underline` and `border`
+ * are small enums rather than booleans so the single/double and solid/dashed
+ * variants stay mutually exclusive.
+ */
+export const DelimiterAddOnsSchema = z.object({
+  bold: z.boolean().default(false),
+  italic: z.boolean().default(false),
+  /** Swap the base style's foreground/background (e.g. black-on-white ⇄ white-on-black). */
+  reverse: z.boolean().default(false),
+  underline: z.enum(['none', 'single', 'double']).default('none'),
+  border: z.enum(['none', 'solid', 'dashed']).default('none'),
+  /** One of {@link RP_FONT_KEYS}; '' = inherit (no override). */
+  font: z.enum(RP_FONT_KEYS).default(''),
+});
+
+export type DelimiterAddOns = z.infer<typeof DelimiterAddOnsSchema>;
+
 /** Fields shared by every delimiter kind. */
 const delimiterCommonFields = {
   /** Full name displayed in tooltip (e.g., "Narration", "Internal Monologue") */
@@ -33,6 +63,18 @@ const delimiterCommonFields = {
   buttonName: z.string().min(1).max(10),
   /** CSS class name for styling matched text (e.g., "qt-chat-narration") */
   style: z.string().min(1).max(50),
+  /**
+   * When true, the renderer strips the delimiter/prefix from the displayed output
+   * (e.g. `+narration+` renders as a styled `narration` with no `+`). The stored
+   * text keeps the marks; hiding is purely a render-time concern. Optional/absent
+   * on legacy and built-in entries — treated as `false`.
+   */
+  hideDelimiter: z.boolean().optional(),
+  /**
+   * Layered text decorations applied on top of `style`. Optional/absent on legacy
+   * entries. When present, each sub-field is filled from its default on parse.
+   */
+  addOns: DelimiterAddOnsSchema.optional(),
 };
 
 /**
@@ -149,6 +191,13 @@ export const RenderingPatternSchema = z.object({
    * a `[TAG]` line). Absent on legacy patterns, which are treated as `inline`.
    */
   scope: z.enum(['inline', 'line']).optional(),
+  /**
+   * When true, the renderer hides the delimiter chars, emitting only the kept
+   * content. The pattern wraps that content in capture group 1; the renderer
+   * substitutes `match[1]` for `match[0]` (inline) or the matched block's body
+   * (line). Absent on patterns whose delimiters stay visible.
+   */
+  hideDelimiters: z.boolean().optional(),
 });
 
 export type RenderingPattern = z.infer<typeof RenderingPatternSchema>;

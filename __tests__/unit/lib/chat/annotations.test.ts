@@ -5,6 +5,7 @@
  */
 
 import {
+  addOnClassesFor,
   delimiterToPrefixSuffix,
   generateRenderingPatterns,
   getDelimiterTooltip,
@@ -40,7 +41,14 @@ describe('generateRenderingPatterns', () => {
 
   it('emits a line-scoped pattern for a linePrefix', () => {
     const [p] = generateRenderingPatterns([linePrefix])
-    expect(p).toMatchObject({ pattern: '^// .+$', className: 'qt-chat-ooc', flags: 'm', scope: 'line' })
+    expect(p).toMatchObject({ pattern: '^// (?<rpBody>.+)$', className: 'qt-chat-ooc', flags: 'm', scope: 'line' })
+  })
+
+  it('wraps the kept content in the rpBody capture group for every kind', () => {
+    expect(generateRenderingPatterns([wrapStr])[0].pattern).toContain('(?<rpBody>')
+    expect(generateRenderingPatterns([wrapPair])[0].pattern).toContain('(?<rpBody>')
+    expect(generateRenderingPatterns([linePrefix])[0].pattern).toContain('(?<rpBody>')
+    expect(generateRenderingPatterns([tagPrefix])[0].pattern).toContain('(?<rpBody>')
   })
 
   it('emits a line-scoped, unicode pattern for a tagPrefix using the default token', () => {
@@ -71,6 +79,37 @@ describe('generateRenderingPatterns', () => {
   it('appends the narration pattern when not already covered', () => {
     const patterns = generateRenderingPatterns([linePrefix], '*')
     expect(patterns.some((p) => p.className === 'qt-chat-narration')).toBe(true)
+  })
+})
+
+describe('addOnClassesFor', () => {
+  it('returns [] for no add-ons', () => {
+    expect(addOnClassesFor(undefined)).toEqual([])
+    expect(addOnClassesFor({ bold: false, italic: false, reverse: false, underline: 'none', border: 'none', font: '' })).toEqual([])
+  })
+
+  it('maps each add-on to its utility class', () => {
+    expect(addOnClassesFor({ bold: true, italic: true, reverse: true, underline: 'double', border: 'dashed', font: 'serif' }))
+      .toEqual(['qt-rp-bold', 'qt-rp-italic', 'qt-rp-reverse', 'qt-rp-underline-double', 'qt-rp-border-dashed', 'qt-rp-font-serif'])
+  })
+
+  it('uses the single/solid variants', () => {
+    expect(addOnClassesFor({ bold: false, italic: false, reverse: false, underline: 'single', border: 'solid', font: '' }))
+      .toEqual(['qt-rp-underline', 'qt-rp-border'])
+  })
+})
+
+describe('generateRenderingPatterns — add-ons & hide', () => {
+  it('composes add-on classes onto the base style', () => {
+    const d: TemplateDelimiter = { ...wrapStr, addOns: { bold: true, italic: false, reverse: false, underline: 'single', border: 'none', font: '' } }
+    const [p] = generateRenderingPatterns([d])
+    expect(p.className).toBe('qt-chat-narration qt-rp-bold qt-rp-underline')
+  })
+
+  it('sets hideDelimiters only when the delimiter opts in', () => {
+    expect(generateRenderingPatterns([wrapStr])[0]).not.toHaveProperty('hideDelimiters')
+    const hidden: TemplateDelimiter = { ...wrapStr, hideDelimiter: true }
+    expect(generateRenderingPatterns([hidden])[0]).toMatchObject({ hideDelimiters: true })
   })
 })
 

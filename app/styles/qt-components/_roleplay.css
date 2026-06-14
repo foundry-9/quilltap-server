@@ -1,0 +1,150 @@
+/**
+ * Roleplay-template formatting classes.
+ *
+ * Two families a template delimiter can opt into, plus a layer of add-on
+ * flourishes composed on top of any base style:
+ *
+ *   1. qt-roleplay-1..4        — four distinct high-contrast chips (theme hues)
+ *   2. qt-roleplay-{danger,…}  — semantic chips off the shared --color-* tokens
+ *   3. qt-rp-{bold,italic,…}   — add-ons (bold/italic/reverse/underline/border/font)
+ *
+ * Scoped under .qt-chat-message-content to override Tailwind prose, mirroring the
+ * legacy .qt-chat-* roleplay classes in _chat.css. Add-ons are declared AFTER the
+ * base chips so equal-specificity ties resolve in the add-on's favour (e.g.
+ * .qt-rp-reverse beats a base class's own color).
+ *
+ * The reverse add-on swaps a base class's foreground/background. Every base chip
+ * exposes its colours as --qt-rp-fg / --qt-rp-bg; reverse reads them back the
+ * other way round (and the legacy .qt-chat-* classes expose the same vars).
+ */
+
+@layer components {
+  /* Shared chip geometry for every roleplay-template style. */
+  .qt-chat-message-content :is(
+    .qt-roleplay-1, .qt-roleplay-2, .qt-roleplay-3, .qt-roleplay-4,
+    .qt-roleplay-danger, .qt-roleplay-warning, .qt-roleplay-success,
+    .qt-roleplay-info, .qt-roleplay-muted, .qt-roleplay-code
+  ) {
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.1875rem;
+    display: inline;
+    /* Keep the chip background whole when it wraps across lines. */
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  /* ---- High-contrast palette (1..4) -------------------------------------- */
+  .qt-chat-message-content .qt-roleplay-1 {
+    --qt-rp-fg: var(--qt-roleplay-1-fg);
+    --qt-rp-bg: var(--qt-roleplay-1-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
+  }
+  .qt-chat-message-content .qt-roleplay-2 {
+    --qt-rp-fg: var(--qt-roleplay-2-fg);
+    --qt-rp-bg: var(--qt-roleplay-2-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
+  }
+  .qt-chat-message-content .qt-roleplay-3 {
+    --qt-rp-fg: var(--qt-roleplay-3-fg);
+    --qt-rp-bg: var(--qt-roleplay-3-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
+  }
+  .qt-chat-message-content .qt-roleplay-4 {
+    --qt-rp-fg: var(--qt-roleplay-4-fg);
+    --qt-rp-bg: var(--qt-roleplay-4-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
+  }
+
+  /* ---- Semantic palette -------------------------------------------------- */
+  .qt-chat-message-content .qt-roleplay-danger {
+    --qt-rp-fg: var(--color-destructive-foreground);
+    --qt-rp-bg: var(--color-destructive);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
+  }
+  .qt-chat-message-content .qt-roleplay-warning {
+    --qt-rp-fg: var(--color-warning-foreground);
+    --qt-rp-bg: var(--color-warning);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
+  }
+  .qt-chat-message-content .qt-roleplay-success {
+    --qt-rp-fg: var(--color-success-foreground);
+    --qt-rp-bg: var(--color-success);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
+  }
+  .qt-chat-message-content .qt-roleplay-info {
+    --qt-rp-fg: var(--color-info-foreground);
+    --qt-rp-bg: var(--color-info);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
+  }
+  .qt-chat-message-content .qt-roleplay-muted {
+    --qt-rp-fg: var(--color-muted-foreground);
+    --qt-rp-bg: var(--color-muted);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
+  }
+  .qt-chat-message-content .qt-roleplay-code {
+    --qt-rp-fg: var(--color-foreground);
+    --qt-rp-bg: var(--color-muted);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
+    font-family: var(--font-mono);
+  }
+
+  /* ---- Add-on flourishes (declared last so they win the tie) ------------- */
+  .qt-chat-message-content .qt-rp-bold {
+    font-weight: 700;
+  }
+  .qt-chat-message-content .qt-rp-italic {
+    font-style: italic;
+  }
+  .qt-chat-message-content .qt-rp-underline {
+    text-decoration: underline;
+  }
+  .qt-chat-message-content .qt-rp-underline-double {
+    text-decoration: underline;
+    text-decoration-style: double;
+  }
+  .qt-chat-message-content .qt-rp-border {
+    border: 1px solid currentColor;
+    padding: 0.0625rem 0.25rem;
+    border-radius: 0.1875rem;
+  }
+  .qt-chat-message-content .qt-rp-border-dashed {
+    border: 1px dashed currentColor;
+    padding: 0.0625rem 0.25rem;
+    border-radius: 0.1875rem;
+  }
+  /* Reverse: swap the base chip's foreground/background. Falls back to the
+     page colours when applied to a base class that sets no chip vars. */
+  .qt-chat-message-content .qt-rp-reverse {
+    color: var(--qt-rp-bg, var(--color-background));
+    background-color: var(--qt-rp-fg, var(--color-foreground));
+  }
+
+  /* Font add-ons reference the active theme's font tokens (with web-safe
+     fallbacks). Themes may override --qt-rp-font-display / --qt-rp-font-script
+     to map these to a bundled face. */
+  .qt-chat-message-content .qt-rp-font-sans {
+    font-family: var(--theme-font-sans, ui-sans-serif, system-ui, sans-serif);
+  }
+  .qt-chat-message-content .qt-rp-font-serif {
+    font-family: var(--theme-font-serif, ui-serif, Georgia, "Times New Roman", serif);
+  }
+  .qt-chat-message-content .qt-rp-font-mono {
+    font-family: var(--theme-font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
+  }
+  .qt-chat-message-content .qt-rp-font-display {
+    font-family: var(--qt-rp-font-display, var(--theme-font-serif, Georgia, "Times New Roman", serif));
+  }
+  .qt-chat-message-content .qt-rp-font-script {
+    font-family: var(--qt-rp-font-script, "Segoe Script", "Brush Script MT", cursive);
+  }
+}

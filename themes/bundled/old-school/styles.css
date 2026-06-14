@@ -189,6 +189,16 @@
      ROLEPLAY ANNOTATION VARIABLES
      ========================================================================== */
 
+  /* Roleplay-template palette (qt-roleplay-1..4) — ink / oxide / teal / mustard */
+  --qt-roleplay-1-bg: hsl(220 50% 40%);
+  --qt-roleplay-1-fg: hsl(0 0% 100%);
+  --qt-roleplay-2-bg: hsl(8 60% 45%);
+  --qt-roleplay-2-fg: hsl(0 0% 100%);
+  --qt-roleplay-3-bg: hsl(180 45% 32%);
+  --qt-roleplay-3-fg: hsl(0 0% 100%);
+  --qt-roleplay-4-bg: hsl(45 75% 48%);
+  --qt-roleplay-4-fg: hsl(220 30% 12%);
+
   --qt-rp-narration-color: hsl(220 14% 75%);
   --qt-rp-narration-bg: hsl(220 20% 12% / 0.85);
   --qt-rp-narration-radius: 0.25rem;

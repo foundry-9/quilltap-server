@@ -7,7 +7,7 @@
  * @module lib/chat/annotations
  */
 
-import type { TemplateDelimiter, AnnotationButton, RenderingPattern, NarrationDelimiters } from '@/lib/schemas/template.types'
+import type { TemplateDelimiter, AnnotationButton, RenderingPattern, NarrationDelimiters, DelimiterAddOns } from '@/lib/schemas/template.types'
 import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
 import { escapeRegex } from '@/lib/utils/regex'
 
@@ -79,6 +79,35 @@ export function delimiterToPrefixSuffix(delimiter: TemplateDelimiter): { prefix:
 }
 
 // ============================================================================
+// ADD-ON CLASS COMPOSITION
+// ============================================================================
+
+/**
+ * Map a delimiter's {@link DelimiterAddOns} to the `.qt-rp-*` utility classes that
+ * implement them. Composed onto the base `style` class in {@link generateRenderingPatterns}
+ * so the renderers stay add-on-agnostic — `RenderingPattern.className` is emitted
+ * verbatim into `class="…"` and tolerates a space-separated list.
+ */
+export function addOnClassesFor(addOns?: DelimiterAddOns): string[] {
+  if (!addOns) return []
+  const classes: string[] = []
+  if (addOns.bold) classes.push('qt-rp-bold')
+  if (addOns.italic) classes.push('qt-rp-italic')
+  if (addOns.reverse) classes.push('qt-rp-reverse')
+  if (addOns.underline === 'single') classes.push('qt-rp-underline')
+  else if (addOns.underline === 'double') classes.push('qt-rp-underline-double')
+  if (addOns.border === 'solid') classes.push('qt-rp-border')
+  else if (addOns.border === 'dashed') classes.push('qt-rp-border-dashed')
+  if (addOns.font) classes.push(`qt-rp-font-${addOns.font}`)
+  return classes
+}
+
+/** Compose a delimiter's base style class with its add-on classes. */
+function composeClassName(delimiter: TemplateDelimiter): string {
+  return [delimiter.style, ...addOnClassesFor(delimiter.addOns)].join(' ')
+}
+
+// ============================================================================
 // RENDERING PATTERN AUTO-GENERATION
 // ============================================================================
 
@@ -110,9 +139,10 @@ export function generateRenderingPatterns(
     if (pattern) {
       patterns.push({
         pattern: pattern.regex,
-        className: d.style,
+        className: composeClassName(d),
         ...(pattern.flags ? { flags: pattern.flags } : {}),
         ...(pattern.scope === 'line' ? { scope: 'line' as const } : {}),
+        ...(d.hideDelimiter ? { hideDelimiters: true } : {}),
       })
     }
   }
@@ -158,15 +188,18 @@ function buildDelimiterPattern(delimiter: TemplateDelimiter): BuiltPattern | nul
   switch (delimiter.kind) {
     case 'linePrefix': {
       if (!delimiter.marker) return null
-      return { regex: `^${escapeRegex(delimiter.marker)}.+$`, flags: 'm', scope: 'line' }
+      // Group `rpBody` = the line body after the marker, kept when hiding.
+      return { regex: `^${escapeRegex(delimiter.marker)}(?<rpBody>.+)$`, flags: 'm', scope: 'line' }
     }
     case 'tagPrefix': {
       if (!delimiter.open || !delimiter.close) return null
       const token = delimiter.tokenPattern && delimiter.tokenPattern.trim()
         ? delimiter.tokenPattern
         : DEFAULT_TAG_TOKEN_PATTERN
+      // Token stays non-capturing; group `rpBody` = the body after the [TAG],
+      // kept when hiding. A user token with its own groups can't shift `rpBody`.
       return {
-        regex: `^${escapeRegex(delimiter.open)}(?:${token})${escapeRegex(delimiter.close)}.*$`,
+        regex: `^${escapeRegex(delimiter.open)}(?:${token})${escapeRegex(delimiter.close)}(?<rpBody>.*)$`,
         flags: 'mu',
         scope: 'line',
       }
@@ -182,6 +215,9 @@ function buildDelimiterPattern(delimiter: TemplateDelimiter): BuiltPattern | nul
 /**
  * Build an inline wrap regex for a prefix/suffix pair.
  * Returns null if the pair is empty. Scope is always `inline`.
+ *
+ * The inner content is captured in the named group `rpBody` so the renderer can
+ * emit just the content (dropping the delimiters) when a delimiter opts into hide.
  */
 function buildWrapPattern(prefix: string, suffix: string): BuiltPattern | null {
   if (!prefix && !suffix) return null
@@ -189,7 +225,7 @@ function buildWrapPattern(prefix: string, suffix: string): BuiltPattern | null {
   // Defensive: a wrap with an empty suffix degrades to a line-start prefix.
   // (The migration reclassifies such legacy entries to `linePrefix`.)
   if (prefix && !suffix) {
-    return { regex: `^${escapeRegex(prefix)}.+$`, flags: 'm', scope: 'inline' }
+    return { regex: `^${escapeRegex(prefix)}(?<rpBody>.+)$`, flags: 'm', scope: 'inline' }
   }
 
   const escapedPrefix = escapeRegex(prefix)
@@ -200,7 +236,7 @@ function buildWrapPattern(prefix: string, suffix: string): BuiltPattern | null {
     // Match: delimiter + one or more non-delimiter chars + delimiter
     // Avoid matching doubled delimiters (like ** for bold)
     return {
-      regex: `(?<!${escapedPrefix})${escapedPrefix}[^${escapedPrefix}]+${escapedSuffix}(?!${escapedSuffix})`,
+      regex: `(?<!${escapedPrefix})${escapedPrefix}(?<rpBody>[^${escapedPrefix}]+)${escapedSuffix}(?!${escapedSuffix})`,
       scope: 'inline',
     }
   }
@@ -210,7 +246,7 @@ function buildWrapPattern(prefix: string, suffix: string): BuiltPattern | null {
   // For square brackets, exclude markdown links by adding (?!\()
   const linkExclusion = suffix === ']' ? '(?!\\()' : ''
   return {
-    regex: `${escapedPrefix}[^${escapedSuffix}]+${escapedSuffix}${linkExclusion}`,
+    regex: `${escapedPrefix}(?<rpBody>[^${escapedSuffix}]+)${escapedSuffix}${linkExclusion}`,
     scope: 'inline',
   }
 }

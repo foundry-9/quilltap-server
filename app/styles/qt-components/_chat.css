@@ -1447,8 +1447,10 @@
    * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
   .qt-chat-message-content .qt-chat-dialogue {
-    color: var(--qt-rp-dialogue-color);
-    background: var(--qt-rp-dialogue-bg);
+    --qt-rp-fg: var(--qt-rp-dialogue-color);
+    --qt-rp-bg: var(--qt-rp-dialogue-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
   }
 
   /**
@@ -1457,8 +1459,10 @@
    * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
   .qt-chat-message-content .qt-chat-narration {
-    color: var(--qt-rp-narration-color);
-    background: var(--qt-rp-narration-bg);
+    --qt-rp-fg: var(--qt-rp-narration-color);
+    --qt-rp-bg: var(--qt-rp-narration-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
     font-style: var(--qt-rp-narration-style);
     padding: var(--qt-rp-narration-padding);
     border-radius: var(--qt-rp-narration-radius);
@@ -1471,8 +1475,10 @@
    * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
   .qt-chat-message-content .qt-chat-inner-monologue {
-    color: var(--qt-rp-inner-monologue-color);
-    background: var(--qt-rp-inner-monologue-bg);
+    --qt-rp-fg: var(--qt-rp-inner-monologue-color);
+    --qt-rp-bg: var(--qt-rp-inner-monologue-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
     font-style: var(--qt-rp-inner-monologue-style);
     padding: var(--qt-rp-inner-monologue-padding);
     border-radius: var(--qt-rp-inner-monologue-radius);
@@ -1485,8 +1491,10 @@
    * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
   .qt-chat-message-content .qt-chat-ooc {
-    color: var(--qt-rp-ooc-color);
-    background: var(--qt-rp-ooc-bg);
+    --qt-rp-fg: var(--qt-rp-ooc-color);
+    --qt-rp-bg: var(--qt-rp-ooc-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
     font-family: var(--qt-rp-ooc-font);
     padding: var(--qt-rp-ooc-padding);
     border-radius: var(--qt-rp-ooc-radius);

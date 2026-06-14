@@ -4,6 +4,7 @@ import { useRoleplayTemplates } from './hooks/useRoleplayTemplates'
 import { TemplateCard } from './TemplateCard'
 import { EMPTY_DELIMITER } from './types'
 import type { DelimiterFormEntry } from './types'
+import type { DelimiterAddOns } from '@/lib/schemas/template.types'
 import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
@@ -13,6 +14,26 @@ const STYLE_OPTIONS = [
   { value: 'qt-chat-dialogue', label: 'Dialogue' },
   { value: 'qt-chat-ooc', label: 'Out of Character' },
   { value: 'qt-chat-inner-monologue', label: 'Inner Monologue' },
+  { value: 'qt-roleplay-1', label: 'Style 1 (high contrast)' },
+  { value: 'qt-roleplay-2', label: 'Style 2 (high contrast)' },
+  { value: 'qt-roleplay-3', label: 'Style 3 (high contrast)' },
+  { value: 'qt-roleplay-4', label: 'Style 4 (high contrast)' },
+  { value: 'qt-roleplay-danger', label: 'Danger' },
+  { value: 'qt-roleplay-warning', label: 'Warning' },
+  { value: 'qt-roleplay-success', label: 'Success' },
+  { value: 'qt-roleplay-info', label: 'Info' },
+  { value: 'qt-roleplay-muted', label: 'Muted' },
+  { value: 'qt-roleplay-code', label: 'Code' },
+]
+
+/** Font choices offered by the per-delimiter add-on dropdown. */
+const FONT_OPTIONS: { value: DelimiterAddOns['font']; label: string }[] = [
+  { value: '', label: 'Default' },
+  { value: 'sans', label: 'Sans' },
+  { value: 'serif', label: 'Serif' },
+  { value: 'mono', label: 'Mono' },
+  { value: 'display', label: 'Display' },
+  { value: 'script', label: 'Script' },
 ]
 
 export default function RoleplayTemplatesTab() {
@@ -79,6 +100,28 @@ export default function RoleplayTemplatesTab() {
         }
         return updated
       }),
+    }))
+  }
+
+  // Set a non-string delimiter field (e.g. the hideDelimiter checkbox).
+  const setDelimiterFields = (index: number, patch: Partial<DelimiterFormEntry>) => {
+    setFormData(prev => ({
+      ...prev,
+      delimiters: prev.delimiters.map((d, i) => (i === index ? { ...d, ...patch } : d)),
+    }))
+  }
+
+  // Patch a single add-on for a delimiter.
+  const updateAddOn = <K extends keyof DelimiterAddOns>(
+    index: number,
+    key: K,
+    value: DelimiterAddOns[K],
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      delimiters: prev.delimiters.map((d, i) =>
+        i === index ? { ...d, addOns: { ...d.addOns, [key]: value } } : d,
+      ),
     }))
   }
 
@@ -559,6 +602,90 @@ export default function RoleplayTemplatesTab() {
                               </div>
                             </div>
                           )}
+
+                          {/* Hide-delimiter toggle + layered text flourishes */}
+                          <div className="mt-3 pt-3 border-t qt-border-default space-y-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={delimiter.hideDelimiter}
+                                onChange={(e) => setDelimiterFields(index, { hideDelimiter: e.target.checked })}
+                                className="qt-checkbox"
+                              />
+                              <span className="qt-text-xs">Conceal the marks when rendered</span>
+                            </label>
+
+                            <div>
+                              <label className="qt-text-xs qt-text-secondary">Flourishes</label>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                                <label className="flex items-center gap-1 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={delimiter.addOns.bold}
+                                    onChange={(e) => updateAddOn(index, 'bold', e.target.checked)}
+                                    className="qt-checkbox"
+                                  />
+                                  <span className="text-xs">Bold</span>
+                                </label>
+                                <label className="flex items-center gap-1 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={delimiter.addOns.italic}
+                                    onChange={(e) => updateAddOn(index, 'italic', e.target.checked)}
+                                    className="qt-checkbox"
+                                  />
+                                  <span className="text-xs">Italic</span>
+                                </label>
+                                <label className="flex items-center gap-1 cursor-pointer" title="Swap foreground and background">
+                                  <input
+                                    type="checkbox"
+                                    checked={delimiter.addOns.reverse}
+                                    onChange={(e) => updateAddOn(index, 'reverse', e.target.checked)}
+                                    className="qt-checkbox"
+                                  />
+                                  <span className="text-xs">Reverse</span>
+                                </label>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 mt-2">
+                                <div>
+                                  <label className="qt-text-xs">Underline</label>
+                                  <select
+                                    value={delimiter.addOns.underline}
+                                    onChange={(e) => updateAddOn(index, 'underline', e.target.value as DelimiterAddOns['underline'])}
+                                    className="qt-select w-full text-sm"
+                                  >
+                                    <option value="none">None</option>
+                                    <option value="single">Single</option>
+                                    <option value="double">Double</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="qt-text-xs">Border</label>
+                                  <select
+                                    value={delimiter.addOns.border}
+                                    onChange={(e) => updateAddOn(index, 'border', e.target.value as DelimiterAddOns['border'])}
+                                    className="qt-select w-full text-sm"
+                                  >
+                                    <option value="none">None</option>
+                                    <option value="solid">Solid</option>
+                                    <option value="dashed">Dashed</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="qt-text-xs">Font</label>
+                                  <select
+                                    value={delimiter.addOns.font}
+                                    onChange={(e) => updateAddOn(index, 'font', e.target.value as DelimiterAddOns['font'])}
+                                    className="qt-select w-full text-sm"
+                                  >
+                                    {FONT_OPTIONS.map(opt => (
+                                      <option key={opt.value || 'default'} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>

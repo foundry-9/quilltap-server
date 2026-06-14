@@ -2,6 +2,11 @@
 
 All notable changes to this package will be documented in this file.
 
+## [2.0.13] - 2026-06-14
+
+### Added
+- Bundle `styles.css` template: commented `--qt-roleplay-1..4-bg/fg` scaffold so theme authors can dress the four high-contrast roleplay-template chips in their own hues. The semantic chips (`qt-roleplay-danger/warning/success/info/muted/code`) follow the theme's `--color-*` tokens and need no overrides.
+
 ## [2.0.12] - 2026-06-10
 
 ### Changed

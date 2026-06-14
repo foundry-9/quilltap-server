@@ -2,6 +2,12 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.44] - 2026-06-14
+
+### Added
+- Roleplay-template style classes: the four high-contrast chips `qt-roleplay-1..4` (with `--qt-roleplay-1..4-bg/fg` tokens themes override), the semantic chips `qt-roleplay-danger/warning/success/info/muted/code`, and the add-on flourish classes (`qt-rp-bold`, `qt-rp-italic`, `qt-rp-reverse`, `qt-rp-underline`, `qt-rp-underline-double`, `qt-rp-border`, `qt-rp-border-dashed`, `qt-rp-font-{sans,serif,mono,display,script}`). Mirrors the app-side definitions.
+- `Chat` story: a "Roleplay-Template Styles" section previewing the four chips, the semantic set, and a row of add-on combinations so theme authors can see them across themes.
+
 ## [1.0.43] - 2026-06-11
 
 ### Added

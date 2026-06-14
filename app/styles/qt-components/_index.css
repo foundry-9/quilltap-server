@@ -35,6 +35,7 @@
 @import "./_surfaces.css";     /* Cards, panels, dialogs, popovers */
 @import "./_layout.css";       /* Navbar, sidebar, page containers */
 @import "./_chat.css";         /* Chat messages, composer, participants */
+@import "./_roleplay.css";     /* Roleplay-template chips + add-on flourishes */
 @import "./_content.css";      /* Badges, avatars, code blocks */
 @import "./_typography.css";   /* Semantic typography classes */
 @import "./_utilities.css";    /* Background, border, text color utilities */

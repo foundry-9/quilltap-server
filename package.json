@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.7.0-dev.74",
+  "version": "4.7.0-dev.75",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -81,7 +81,7 @@
     "ajv-formats": "^3.0.1",
     "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.10.0",
     "chokidar": "^5.0.0",
-    "create-quilltap-theme": "^2.0.11",
+    "create-quilltap-theme": "^2.0.13",
     "croner": "^10.0.1",
     "jest-fetch-mock": "^3.0.3",
     "jsonrepair": "^3.14.0",

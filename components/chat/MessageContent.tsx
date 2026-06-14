@@ -16,7 +16,7 @@ import {
   DEFAULT_DIALOGUE_DETECTION,
   compileRenderingPatterns,
   tokenizeInline,
-  lineClassFor,
+  lineMatchFor,
   isDialogueParagraph,
   escapeMarkdownInBrackets,
 } from '@/lib/chat/roleplay-rendering'
@@ -202,6 +202,56 @@ function extractTextContent(children: ReactNode): string {
   return ''
 }
 
+/**
+ * Remove the leading `prefix` (a line-prefix marker or `[TAG]`) from the start of
+ * the children, consuming it from the leading plain-text node(s) only. Inline
+ * formatting in the body survives because we never descend into element nodes —
+ * if the prefix doesn't lead the text as a clean string, we stop and leave the
+ * rest intact. Used when a line-scoped delimiter opts into hiding.
+ */
+function stripLeadingPrefix(children: ReactNode, prefix: string): ReactNode {
+  let remaining = prefix.length
+  if (remaining <= 0) return children
+
+  const consume = (node: ReactNode): ReactNode => {
+    if (remaining <= 0) return node
+    if (typeof node === 'string') {
+      if (remaining >= node.length) {
+        remaining -= node.length
+        return ''
+      }
+      const out = node.slice(remaining)
+      remaining = 0
+      return out
+    }
+    // Prefix doesn't cleanly lead the text as plain string — stop stripping.
+    remaining = 0
+    return node
+  }
+
+  if (Array.isArray(children)) {
+    return children.map((child) => consume(child))
+  }
+  return consume(children)
+}
+
+/**
+ * Shared line-block handling: compute the whole-line class for a block and, when
+ * the matched line rule hides its delimiter, strip the leading marker/tag before
+ * applying inline styling to the (now delimiter-free) children.
+ */
+function renderLineBlock(
+  children: ReactNode,
+  compiledRules: CompiledRule[],
+): { className: string | undefined; content: ReactNode } {
+  const lineMatch = lineMatchFor(extractTextContent(children), compiledRules)
+  const effective =
+    lineMatch?.hideDelimiters && lineMatch.prefix
+      ? stripLeadingPrefix(children, lineMatch.prefix)
+      : children
+  return { className: lineMatch?.className, content: processChildren(effective, compiledRules) }
+}
+
 export default function MessageContent({
   content,
   className = '',
@@ -261,45 +311,49 @@ export default function MessageContent({
     p({ children }) {
       const textContent = extractTextContent(children)
       const isDialogue = isDialogueParagraph(textContent, dialogueConfig)
-      const lineClass = lineClassFor(textContent, compiledRules)
+      const { className: lineClass, content } = renderLineBlock(children, compiledRules)
       const cls = [isDialogue ? dialogueConfig.className : undefined, lineClass]
         .filter(Boolean)
         .join(' ') || undefined
-      return <p className={cls}>{processChildren(children, compiledRules)}</p>
+      return <p className={cls}>{content}</p>
     },
     // Headings - CSS handles sizing, weight, and spacing; custom behavior is
     // whole-line styling and inline roleplay pattern processing on text nodes.
     h1({ children }) {
-      return <h1 className={lineClassFor(extractTextContent(children), compiledRules)}>{processChildren(children, compiledRules)}</h1>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h1 className={className}>{content}</h1>
     },
     h2({ children }) {
-      return <h2 className={lineClassFor(extractTextContent(children), compiledRules)}>{processChildren(children, compiledRules)}</h2>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h2 className={className}>{content}</h2>
     },
     h3({ children }) {
-      return <h3 className={lineClassFor(extractTextContent(children), compiledRules)}>{processChildren(children, compiledRules)}</h3>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h3 className={className}>{content}</h3>
     },
     h4({ children }) {
-      return <h4 className={lineClassFor(extractTextContent(children), compiledRules)}>{processChildren(children, compiledRules)}</h4>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h4 className={className}>{content}</h4>
     },
     h5({ children }) {
-      return <h5 className={lineClassFor(extractTextContent(children), compiledRules)}>{processChildren(children, compiledRules)}</h5>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h5 className={className}>{content}</h5>
     },
     h6({ children }) {
-      return <h6 className={lineClassFor(extractTextContent(children), compiledRules)}>{processChildren(children, compiledRules)}</h6>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h6 className={className}>{content}</h6>
     },
     // List items - CSS handles spacing; whole-line styling + inline patterns on
     // text nodes. ul/ol have no custom behavior, so they are intentionally
     // omitted here — react-markdown renders plain <ul>/<ol> and CSS styles them.
     li({ children }) {
-      return <li className={lineClassFor(extractTextContent(children), compiledRules)}>{processChildren(children, compiledRules)}</li>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <li className={className}>{content}</li>
     },
     // Blockquote - CSS handles styling; whole-line styling + inline patterns.
     blockquote({ children }) {
-      return (
-        <blockquote className={lineClassFor(extractTextContent(children), compiledRules)}>
-          {processChildren(children, compiledRules)}
-        </blockquote>
-      )
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <blockquote className={className}>{content}</blockquote>
     },
     // Links — internal app routes use the Next.js router (required for the
     // Electron shell, which can't honour `target="_blank"`). External links

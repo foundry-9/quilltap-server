@@ -4,8 +4,8 @@ import { useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { RoleplayTemplate, TemplateFormData, DelimiterFormEntry, INITIAL_FORM_DATA } from '../types'
-import type { TemplateDelimiter } from '@/lib/schemas/template.types'
+import { RoleplayTemplate, TemplateFormData, DelimiterFormEntry, INITIAL_FORM_DATA, EMPTY_ADD_ONS } from '../types'
+import type { TemplateDelimiter, DelimiterAddOns } from '@/lib/schemas/template.types'
 import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
 import { generateFormattingPromptHint } from '@/lib/chat/template-prompt-hint'
 
@@ -65,6 +65,8 @@ function delimiterToFormEntry(d: TemplateDelimiter): DelimiterFormEntry {
     tagOpen: '[',
     tagClose: ']',
     tokenPattern: DEFAULT_TAG_TOKEN_PATTERN,
+    hideDelimiter: d.hideDelimiter ?? false,
+    addOns: { ...EMPTY_ADD_ONS, ...(d.addOns ?? {}) },
   }
 
   if (d.kind === 'linePrefix') {
@@ -92,6 +94,22 @@ function delimiterToFormEntry(d: TemplateDelimiter): DelimiterFormEntry {
   }
 }
 
+/** True if any add-on is non-default (so it's worth persisting). */
+function hasAnyAddOn(a: DelimiterAddOns): boolean {
+  return a.bold || a.italic || a.reverse || a.underline !== 'none' || a.border !== 'none' || a.font !== ''
+}
+
+/**
+ * The hide/add-on decorations for a form entry, omitted when at their defaults so
+ * simple delimiters stay lean in storage and exports.
+ */
+function decorationsFor(e: DelimiterFormEntry): { hideDelimiter?: boolean; addOns?: DelimiterAddOns } {
+  return {
+    ...(e.hideDelimiter ? { hideDelimiter: true } : {}),
+    ...(hasAnyAddOn(e.addOns) ? { addOns: e.addOns } : {}),
+  }
+}
+
 /** Convert form entries back to a TemplateDelimiter array, filtering empties. */
 function formEntriesToDelimiters(entries: DelimiterFormEntry[]): TemplateDelimiter[] {
   return entries
@@ -100,9 +118,10 @@ function formEntriesToDelimiters(entries: DelimiterFormEntry[]): TemplateDelimit
       const name = e.name.trim()
       const buttonName = e.buttonName.trim()
       const style = e.style.trim() || 'qt-chat-narration'
+      const deco = decorationsFor(e)
 
       if (e.kind === 'linePrefix') {
-        return { kind: 'linePrefix', name, buttonName, marker: e.marker, style }
+        return { kind: 'linePrefix', name, buttonName, marker: e.marker, style, ...deco }
       }
       if (e.kind === 'tagPrefix') {
         return {
@@ -113,6 +132,7 @@ function formEntriesToDelimiters(entries: DelimiterFormEntry[]): TemplateDelimit
           close: e.tagClose,
           tokenPattern: e.tokenPattern.trim() || undefined,
           style,
+          ...deco,
         }
       }
       return {
@@ -123,6 +143,7 @@ function formEntriesToDelimiters(entries: DelimiterFormEntry[]): TemplateDelimit
           ? [e.delimiterOpen, e.delimiterClose] as [string, string]
           : e.delimiterOpen,
         style,
+        ...deco,
       }
     })
 }

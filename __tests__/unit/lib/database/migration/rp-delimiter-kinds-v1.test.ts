@@ -131,7 +131,7 @@ describe('rp-delimiter-kinds-v1 migration', () => {
       const ooc = patterns.find((p) => p.className === 'qt-chat-ooc');
       expect(ooc).toBeDefined();
       expect(ooc.scope).toBe('line');
-      expect(ooc.pattern).toBe('^// .+$');
+      expect(ooc.pattern).toBe('^// (?<rpBody>.+)$');
     });
 
     it('classifies a single-string delimiter as wrap', async () => {

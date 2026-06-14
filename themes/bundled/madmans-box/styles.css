@@ -249,6 +249,16 @@
   /* ==========================================================================
      ROLEPLAY ANNOTATION VARIABLES
      ========================================================================== */
+  /* Roleplay-template palette (qt-roleplay-1..4) — brass / copper / verdigris / crimson */
+  --qt-roleplay-1-bg: hsl(40 60% 45%);
+  --qt-roleplay-1-fg: hsl(28 32% 8%);
+  --qt-roleplay-2-bg: hsl(22 70% 48%);
+  --qt-roleplay-2-fg: hsl(28 32% 8%);
+  --qt-roleplay-3-bg: hsl(170 45% 34%);
+  --qt-roleplay-3-fg: hsl(40 50% 92%);
+  --qt-roleplay-4-bg: hsl(355 60% 44%);
+  --qt-roleplay-4-fg: hsl(40 50% 92%);
+
   --qt-rp-narration-color: hsl(40 58% 76%);
   --qt-rp-narration-bg: hsl(28 30% 11% / 0.85);
   --qt-rp-narration-radius: 0.25rem;

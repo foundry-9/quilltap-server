@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Roleplay delimiters: hide toggle, style palette, and per-rule flourishes
+
+Each roleplay-template delimiter can now hide its own marks when rendered and carry layered text decorations, and there's a new set of theme-aware style classes to assign.
+
+- New per-delimiter **hide** toggle (`hideDelimiter`). When on, the renderer strips the delimiter/prefix from the displayed output while keeping the styling — `+narration+` renders as a styled `narration` with no `+`. Works for all three kinds: wrap bookends, line-prefix markers, and the leading `[TAG]` of a tag prefix. The stored text is unchanged; hiding is render-only.
+- New per-delimiter **add-ons** (`addOns`): bold, italic, reverse (foreground/background swap), underline (single/double), border (solid/dashed), and a font choice (theme sans/serif/mono/display/script). These compose onto the base style class — no renderer changes were needed because `RenderingPattern.className` already accepts a space-separated class list.
+- New style classes selectable per delimiter: `qt-roleplay-1..4` (four distinct high-contrast color chips) and `qt-roleplay-danger/warning/success/info/muted/code`. Defined for the default theme and all six bundled themes (each picks its own four hues for 1–4); the semantic classes draw from the theme's existing `--color-*` tokens.
+- Implementation: `hideDelimiter`/`addOns` are optional fields on every delimiter kind (Zod), so legacy and built-in delimiters are unaffected. `generateRenderingPatterns` composes the add-on classes and sets a new optional `hideDelimiters` flag on the pattern; the pattern builders wrap the kept content in a named `rpBody` capture group. The shared core (`tokenizeInline`, new `lineMatchFor`) strips the marks, so the client and server renderers stay in lockstep. The template editor gains a hide checkbox, the add-on controls, and the expanded style quick-picks. The `.qtap` export schema now documents the full `delimiters` array (it already round-tripped via NDJSON).
+- No database migration: the new fields live inside the existing `delimiters` JSON. Existing custom templates pick up the new options when re-saved; built-ins re-seed at startup.
+
 #### Image orientation gating and resolution negotiation
 
 Image generation previously hard-coded a request size that was wrong for about half the providers. Avatars asked for `1024x1792` and backgrounds for `1792x1024` regardless of model; on OpenAI's gpt-image that silently degrades to `1024x1024`, so "portrait" avatars came back square — and the stored width/height lied about it. There is now one provider-agnostic way to ask for a shape.
