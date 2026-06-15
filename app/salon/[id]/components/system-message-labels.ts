@@ -10,6 +10,7 @@ const SENDER_DISPLAY_NAMES: Record<NonNullable<Message['systemSender']>, string>
   commonplaceBook: 'The Commonplace Book',
   ariel: 'Ariel',
   carina: 'Carina',
+  suparna: 'Suparṇā',
 }
 
 const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
@@ -46,6 +47,7 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'autonomous-room-paused': 'run paused',
   'autonomous-room-halfway': 'halfway through',
   'autonomous-room-nearing-end': 'nearing the end',
+  'mail-delivery': 'mail delivery',
   timestamp: 'time',
 }
 
@@ -112,6 +114,8 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
       if (c.includes('opened a terminal')) return 'session-opened'
       if (c.includes('closed')) return 'session-closed'
       return 'terminal'
+    case 'suparna':
+      return 'mail-delivery'
   }
   return 'announcement'
 }
@@ -204,6 +208,8 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
   // Carina reference answers render as their own full row (never a collapsed
   // chip), so this importance tier is only a defensive fallback.
   carina: { 'carina-response': 'medium', '*': 'medium' },
+  // A fresh letter is a real event the recipient should act on.
+  suparna: { 'mail-delivery': 'high', '*': 'high' },
 }
 
 const DEFAULT_IMPORTANCE: AnnouncementImportance = 'medium'

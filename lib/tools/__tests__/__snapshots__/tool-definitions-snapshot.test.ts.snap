@@ -1091,6 +1091,14 @@ exports[`tool definitions: derived OpenAI parameters keepImage: parameters snaps
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters listEmail: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {},
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters listImages: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1336,6 +1344,34 @@ exports[`tool definitions: derived OpenAI parameters selfInventory: parameters s
       "type": "array",
     },
   },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters sendMail: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "character": {
+      "description": "The name (or id) of the character you are writing to. Suparṇā will find them by their nameplate; any soul with a postbox may be written to.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "in_reply_to": {
+      "description": "Optional. The message id (the Mail/… path) of a letter in YOUR OWN postbox that you are answering. When supplied, your reply is prefaced with a quoted copy of that original letter.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "message": {
+      "description": "Your letter, written in Markdown — the body only. Do not pen any frontmatter or envelope; the Post Office stamps all of that for you.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "character",
+    "message",
+  ],
   "type": "object",
 }
 `;

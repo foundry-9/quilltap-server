@@ -249,6 +249,9 @@ const BUILT_IN_TOOLS = new Set<string>([
   'terminal_list',
   // Carina — inline answerer tool
   'ask_carina',
+  // Post Office — inter-character mail
+  'send_mail',
+  'list_email',
 ]);
 
 export async function executeToolCallWithContext(
@@ -1055,6 +1058,39 @@ export async function executeToolCallWithContext(
         toolName: 'ask_carina',
         success: out.success,
         result: out.success ? { answer: out.answer } : null,
+        error: out.success ? undefined : out.error,
+      };
+    }
+
+    // Handle send_mail (Post Office — deliver a letter to another character)
+    if (toolCall.name === 'send_mail') {
+      const { executeSendMailTool, formatSendMailResults } = await import('@/lib/tools/handlers/send-mail-handler');
+      const out = await executeSendMailTool(toolCall.arguments, {
+        userId,
+        chatId,
+        characterId,
+        callingParticipantId: context.callingParticipantId,
+      });
+      return {
+        toolName: 'send_mail',
+        success: out.success,
+        result: { formattedText: formatSendMailResults(out), path: out.path },
+        error: out.success ? undefined : out.error,
+      };
+    }
+
+    // Handle list_email (Post Office — list the caller's own mailbox)
+    if (toolCall.name === 'list_email') {
+      const { executeListEmailTool, formatListEmailResults } = await import('@/lib/tools/handlers/list-email-handler');
+      const out = await executeListEmailTool(toolCall.arguments, {
+        userId,
+        chatId,
+        characterId,
+      });
+      return {
+        toolName: 'list_email',
+        success: out.success,
+        result: { formattedText: formatListEmailResults(out), count: out.count },
         error: out.success ? undefined : out.error,
       };
     }

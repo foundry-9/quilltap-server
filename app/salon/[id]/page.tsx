@@ -1074,6 +1074,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (message.systemSender === 'ariel') {
       return { name: 'Ariel', title: null, avatarUrl: '/images/avatars/ariel-avatar.webp', defaultImage: null }
     }
+    if (message.systemSender === 'suparna') {
+      return { name: 'Suparṇā', title: null, avatarUrl: '/images/avatars/suparna-avatar.webp', defaultImage: null }
+    }
     // Carina (inline LLM queries): a reference answer renders with the ANSWERER
     // character's own avatar — there is no dedicated Carina staff avatar. Resolve
     // them via carinaMeta.answererId among participants, then off-scene cards,

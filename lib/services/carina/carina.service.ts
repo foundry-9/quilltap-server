@@ -51,6 +51,7 @@ import {
 } from '@/lib/services/chat-message/tool-execution.service';
 import { supportsCapability } from '@/lib/plugins/provider-registry';
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service';
+import { findCharactersByName } from '@/lib/services/character-resolver';
 import { formatMemoriesForContext } from '@/lib/chat/context/memory-injector';
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer';
 import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
@@ -349,12 +350,9 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
   //    EITHER side is `canBeCarina`: a Carina answerer is reachable by anyone,
   //    AND a Carina-enabled ASKER can reach anyone — even a character that is not
   //    itself an answerer. So match the name first (all matches, oldest first),
-  //    then decide reachability from both sides.
-  const wanted = characterName.trim().toLowerCase();
-  const candidates = await repos.characters.findByUserId(userId);
-  const nameMatches = candidates
-    .filter((c) => c.name.trim().toLowerCase() === wanted)
-    .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+  //    then decide reachability from both sides. The name match is the shared
+  //    resolver; Carina layers its reachability gate on top.
+  const nameMatches = await findCharactersByName(userId, characterName);
 
   // Prefer a Carina-enabled answerer (reachable by anyone). Only when none of the
   // name matches is itself an answerer do we consult the asker side: the human

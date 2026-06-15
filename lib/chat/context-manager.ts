@@ -92,6 +92,12 @@ import {
   postCommonplaceWhisper,
 } from '@/lib/services/commonplace-notifications/writer'
 import {
+  buildSuparnaMailWhisper,
+  buildSuparnaMailLLMContext,
+  postSuparnaMailWhisper,
+} from '@/lib/services/suparna-notifications/writer'
+import { collectUnalertedMail, markAlerted } from '@/lib/post-office/mailbox'
+import {
   assembleCorePacket,
   buildCoreWhisperContent,
   buildCoreWhisperLLMContext,
@@ -1775,6 +1781,50 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
 
+  // Post Office: after the Commonplace Book whisper, check this character's
+  // mailbox for letters Suparṇā has not yet announced. Each new letter triggers
+  // a Suparṇā whisper — EVENT-like, not a snapshot, so we never sweep prior mail
+  // whispers — and is then marked `alerted`.
+  //
+  // Parent-vs-child write boundary: buildContext runs in both the parent (HTTP)
+  // and the forked background-jobs child. The `alerted` flip is a CONTENT update
+  // to an existing file (no link/folder deletion, no GC), routed through
+  // writeDatabaseDocument; the mount-index partition's writes buffer over IPC in
+  // the child and commit parent-side, so the flip replays correctly there too.
+  // The whole check is wrapped warn-only — a mail failure must never break the turn.
+  let suparnaMailLLMContext = ''
+  const mailVaultId = character.characterDocumentMountPointId ?? null
+  if (mailVaultId) {
+    try {
+      const unalerted = await collectUnalertedMail(mailVaultId)
+      if (unalerted.length > 0) {
+        const targetParticipantId = isMultiCharacter ? respondingParticipant?.id ?? null : null
+        await postSuparnaMailWhisper({
+          chatId: chat.id,
+          targetParticipantId,
+          content: buildSuparnaMailWhisper(unalerted),
+        })
+        suparnaMailLLMContext = buildSuparnaMailLLMContext(unalerted)
+        for (const letter of unalerted) {
+          await markAlerted(mailVaultId, letter.path)
+        }
+        logger.debug('[Suparna] Announced and marked mail', {
+          chatId: chat.id,
+          characterId: character.id,
+          vaultId: mailVaultId,
+          count: unalerted.length,
+        })
+      }
+    } catch (mailError) {
+      logger.warn('[Suparna] Mail check failed; turn continues', {
+        chatId: chat.id,
+        characterId: character.id,
+        vaultId: mailVaultId,
+        error: getErrorMessage(mailError),
+      })
+    }
+  }
+
   // Add new user message (only if provided - not in continue mode)
   // In multi-character mode, include the user's character name
   if (newUserMessage) {
@@ -1786,6 +1836,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     const trailingContextSections: string[] = []
     if (coreWhisperLLMContext) trailingContextSections.push(coreWhisperLLMContext)
     if (llmRecallText) trailingContextSections.push(llmRecallText)
+    if (suparnaMailLLMContext) trailingContextSections.push(suparnaMailLLMContext)
     const composedUserContent = trailingContextSections.length > 0
       ? `${newUserMessage}\n\n---\n\n${trailingContextSections.join('\n\n---\n\n')}`
       : newUserMessage

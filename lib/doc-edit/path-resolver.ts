@@ -29,6 +29,18 @@ import {
 
 const logger = createServiceLogger('DocEdit:PathResolver');
 
+/**
+ * Reserved `mount_point` token meaning "the acting character's own vault."
+ * The database already knows which store is a character's vault via
+ * `characters.characterDocumentMountPointId`, so a character can address its own
+ * vault with this stable literal instead of the vault's (renameable, possibly
+ * colliding) name or an opaque UUID. Only resolves when a `characterId` is in
+ * the resolution context; operator / non-character contexts fall through to
+ * normal name/id matching, leaving any store literally named "self" reachable
+ * there. Exported so tool handlers can hand characters the exact same literal.
+ */
+export const SELF_VAULT_TOKEN = 'self';
+
 export type DocEditScope = 'document_store' | 'project' | 'general';
 
 export interface PathResolutionContext {
@@ -297,14 +309,38 @@ async function resolveDocumentStorePath(
     );
   }
 
-  // Try to find mount point by name first (case-insensitive), then by ID
   let mountPoint = null;
   const needle = context.mountPoint.toLowerCase();
-  for (const id of accessibleIds) {
-    const mp = await repos.docMountPoints.findById(id);
-    if (mp && mp.name.toLowerCase() === needle) {
-      mountPoint = mp;
-      break;
+
+  // Reserved self-token: address the acting character's OWN vault directly via
+  // the DB link, rather than its name (see SELF_VAULT_TOKEN). Only a character
+  // acting as itself can use it; without a characterId we fall through to normal
+  // resolution so a store literally named "self" stays reachable elsewhere.
+  if (context.characterId && needle === SELF_VAULT_TOKEN) {
+    const acting = await repos.characters.findByIdRaw(context.characterId);
+    const ownVaultId = acting?.characterDocumentMountPointId ?? null;
+    if (ownVaultId && accessibleIds.includes(ownVaultId)) {
+      mountPoint = await repos.docMountPoints.findById(ownVaultId);
+    }
+    if (!mountPoint) {
+      logger.warn('Self-token resolution failed: no accessible vault for character', {
+        characterId: context.characterId,
+      });
+      throw new PathResolutionError(
+        `No personal vault is available to address as "${SELF_VAULT_TOKEN}"`,
+        'NOT_FOUND'
+      );
+    }
+  }
+
+  // Try to find mount point by name first (case-insensitive), then by ID
+  if (!mountPoint) {
+    for (const id of accessibleIds) {
+      const mp = await repos.docMountPoints.findById(id);
+      if (mp && mp.name.toLowerCase() === needle) {
+        mountPoint = mp;
+        break;
+      }
     }
   }
 

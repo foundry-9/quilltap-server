@@ -4,6 +4,18 @@
 
 ### 4.7-dev
 
+#### The Post Office: inter-character mail
+
+Characters can now send and receive Markdown letters. Delivered by Suparṇā (a new personified Staff member), stored in each character's `Mail/` vault folder, and announced at memory-recall time.
+
+- Two new character tools: `send_mail` (write a letter to another character — any character may write to any character) and `list_email` (list your own mailbox with the exact calls to read/answer/discard each letter). Both are always available to character participants. Reading and deleting reuse the existing `doc_read_file` / `doc_delete_file` tools; replying uses `send_mail`'s `in_reply_to`.
+- A delivered letter lands as `Mail/<epochMillis>-from-<sender-slug>.md` in the recipient's vault. The delivery system owns the frontmatter (`from`, `fromCharacterId`, `sentAt`, `alerted`, `inReplyTo`); the sender writes the body only. No "Sent" copy is kept in the sender's vault.
+- New `systemSender: 'suparna'`. After the Commonplace Book whisper each turn, the Post Office checks the responding character's mailbox; any letters not yet announced trigger a Suparṇā whisper that reads each new letter aloud, names the sender and date, and flips the letter's `alerted` flag. The whisper is event-like (it does not sweep prior mail whispers). Suparṇā is non-opaque (`opaqueContent === content`), so opaque characters still see her announcements.
+- New reserved `mount_point: "self"` token in the document-store path resolver: it maps to the acting character's own vault via `characters.characterDocumentMountPointId`, so the read/delete calls handed to a character are rename- and collision-proof. Falls through to ordinary name/id matching when there is no acting character.
+- Refactor: extracted a shared `resolveCharacterByNameOrId` / `findCharactersByName` helper (`lib/services/character-resolver.ts`) from Carina's inline name matching; Carina now calls it (its reachability gate is unchanged).
+- Schema: added `'suparna'` to the `systemSender` enum (Zod message schema, repository ops schema, `qtap-export.schema.json` enum + description, Salon types/labels/avatar). No migration — the `chat_messages.systemSender` column is unconstrained text. Avatar: `public/images/avatars/suparna-avatar.webp`.
+- Help: `help/post-office.md`.
+
 #### Fix: project default image profile dangled on import/restore
 
 A project's `defaultImageProfileId` was not remapped during quilltap-import or backup restore, so the reference pointed at a stale (or nonexistent) profile id after importing the project into a different instance. This was a pre-existing bug, not a regression.

@@ -42,6 +42,34 @@ export {
   type AskCarinaToolContext,
 } from './handlers/ask-carina-handler';
 
+// Post Office — Send Mail Tool
+export {
+  sendMailToolDefinition,
+  validateSendMailInput,
+  type SendMailToolInput,
+  type SendMailToolOutput,
+} from './send-mail-tool';
+
+export {
+  executeSendMailTool,
+  formatSendMailResults,
+  type SendMailToolContext,
+} from './handlers/send-mail-handler';
+
+// Post Office — List Email Tool
+export {
+  listEmailToolDefinition,
+  validateListEmailInput,
+  type ListEmailToolInput,
+  type ListEmailToolOutput,
+} from './list-email-tool';
+
+export {
+  executeListEmailTool,
+  formatListEmailResults,
+  type ListEmailToolContext,
+} from './handlers/list-email-handler';
+
 // Web Search Tool
 export {
   webSearchToolDefinition,

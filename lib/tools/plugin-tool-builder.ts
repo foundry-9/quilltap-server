@@ -93,6 +93,8 @@ import {
 import {
   askCarinaToolDefinition,
 } from '@/lib/tools/ask-carina-tool';
+import { sendMailToolDefinition } from '@/lib/tools/send-mail-tool';
+import { listEmailToolDefinition } from '@/lib/tools/list-email-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -358,6 +360,11 @@ export async function buildToolsForProvider(
   // Self-inventory tool is always available to character participants —
   // pure introspection, no side effects.
   universalTools.push(selfInventoryToolDefinition as UniversalTool);
+
+  // Post Office tools are always available — mail is ungated (any character may
+  // write to any character, and a character may always list its own postbox).
+  universalTools.push(sendMailToolDefinition as UniversalTool);
+  universalTools.push(listEmailToolDefinition as UniversalTool);
 
   // Scriptorium tools (always enabled - conversation reading, annotations, and search)
   universalTools.push(readConversationToolDefinition as UniversalTool);

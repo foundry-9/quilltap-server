@@ -39,6 +39,8 @@ import {
   wardrobeArchiveToolDefinition,
   wardrobeWearToolDefinition,
   wardrobeTakeOffToolDefinition,
+  sendMailToolDefinition,
+  listEmailToolDefinition,
 } from '@/lib/tools';
 import {
   searchScriptoriumToolDefinition,
@@ -66,6 +68,8 @@ import {
  */
 const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<string, unknown> } }> = {
   ask_carina: askCarinaToolDefinition,
+  send_mail: sendMailToolDefinition,
+  list_email: listEmailToolDefinition,
   generate_image: imageGenerationToolDefinition,
   search: searchScriptoriumToolDefinition,
   search_web: webSearchToolDefinition,
@@ -109,6 +113,20 @@ const BUILT_IN_TOOLS = [
     id: 'ask_carina',
     name: 'Ask Carina',
     description: 'Ask a designated answerer character a quick standalone question without joining the conversation',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
+  {
+    id: 'send_mail',
+    name: 'Send Mail',
+    description: 'Post a Markdown letter to another character, delivered by Suparṇā into their vault mailbox',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
+  {
+    id: 'list_email',
+    name: 'List Email',
+    description: 'List the letters in your own mailbox, with the exact way to read, answer, or discard each',
     source: 'built-in' as const,
     category: 'utility',
   },
