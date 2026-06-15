@@ -13,7 +13,7 @@
  */
 
 import { BackgroundJob, ChatSettings } from '@/lib/schemas/types';
-import type { ChatMetadata } from '@/lib/schemas/chat.types';
+import { isHelpLikeChatType, type ChatMetadata } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
   considerTitleUpdate,
@@ -54,7 +54,7 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
     return;
   }
 
-  const isHelpChat = chat.chatType === 'help';
+  const isHelpChat = isHelpLikeChatType(chat.chatType);
 
   // Get connection profile
   const connectionProfile = await repos.connections.findById(payload.connectionProfileId);

@@ -129,6 +129,7 @@
 [data-icon="themes"] { --_qt-icon-mask: url("/images/icons/themes.svg"); --_qt-icon-bg: none; }
 [data-icon="wardrobe"] { --_qt-icon-mask: url("/images/icons/wardrobe.svg"); --_qt-icon-bg: none; }
 [data-icon="help"] { --_qt-icon-mask: url("/images/icons/help.svg"); --_qt-icon-bg: none; }
+[data-icon="brahma-console"] { --_qt-icon-mask: url("/images/icons/brahma-console.svg"); --_qt-icon-bg: none; }
 [data-icon="sun"] { --_qt-icon-mask: url("/images/icons/sun.svg"); --_qt-icon-bg: none; }
 [data-icon="moon"] { --_qt-icon-mask: url("/images/icons/moon.svg"); --_qt-icon-bg: none; }
 [data-icon="monitor"] { --_qt-icon-mask: url("/images/icons/monitor.svg"); --_qt-icon-bg: none; }

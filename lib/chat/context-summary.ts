@@ -9,7 +9,7 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { foldChatSummary, ChatMessage, generateTitleFromSummary, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
-import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent } from '@/lib/schemas/types'
+import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent, isHelpLikeChatType } from '@/lib/schemas/types'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 import { logger } from '@/lib/logger'
@@ -152,10 +152,10 @@ export function shouldCheckTitleAtInterchange(
   lastCheckedInterchange: number,
   chatType?: string
 ): boolean {
-  const isHelpChat = chatType === 'help'
+  const isHelpChat = isHelpLikeChatType(chatType)
 
-  // Help chats fire at interchange 1 (right after first Q&A)
-  // Regular chats never check before interchange 2
+  // Help-like chats (Help Chat, Brahma Console) fire at interchange 1 (right
+  // after first Q&A). Regular chats never check before interchange 2
   const minimumInterchange = isHelpChat ? 1 : 2
   if (currentInterchange < minimumInterchange) {
     return false
@@ -482,7 +482,7 @@ export async function generateContextSummary(
     }
 
     try {
-      const titleResult = chat.chatType === 'help'
+      const titleResult = isHelpLikeChatType(chat.chatType)
         ? await generateHelpChatTitleFromSummary(newSummary, cheapLLM, userId, chatId)
         : await generateTitleFromSummary(newSummary, cheapLLM, userId, chatId)
       if (titleResult.success && titleResult.result) {
@@ -635,7 +635,7 @@ export async function checkAndGenerateSummaryIfNeeded(
   const isAtTitleCheckpoint = shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange, chat.chatType)
 
   if (isAtTitleCheckpoint) {
-    logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for ${chat.chatType === 'help' ? 'help ' : ''}chat ${chatId}`)
+    logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for ${isHelpLikeChatType(chat.chatType) ? 'help-like ' : ''}chat ${chatId}`)
 
     // Enqueue a TITLE_UPDATE job rather than running the cheap-LLM call
     // inline. Inline used to leak writes when this path ran inside the

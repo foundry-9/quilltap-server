@@ -41,6 +41,7 @@ import {
 } from '@/lib/tools/delete-annotation-tool';
 import {
   searchScriptoriumToolDefinition,
+  searchScriptoriumBrahmaToolDefinition,
 } from '@/lib/tools/search-scriptorium-tool';
 import {
   wardrobeListToolDefinition,
@@ -244,6 +245,24 @@ export interface BuildToolsOptions {
 
   /** Whether to enable the ask_carina tool (inline Carina answerer) */
   askCarina?: boolean;
+
+  /**
+   * Whether to include the always-on "workspace" tool set: self-inventory,
+   * Post Office mail (send_mail/list_email), conversation reading, annotations,
+   * terminal inspection, and the RNG/state game tools. Defaults to `true`
+   * (every character surface gets them). The **Brahma Console** sets this to
+   * `false` — it is a character-less, stripped-down generic-LLM surface that
+   * keeps only search, the doc_* family, web/curl, and submit_final_response.
+   */
+  includeWorkspaceTools?: boolean;
+
+  /**
+   * When true, the `search` (scriptorium) tool is built from its **Brahma**
+   * variant, whose input schema omits the `memories` source — the Brahma
+   * Console has zero memory access. Defaults to `false` (the standard search
+   * tool, which can search memories).
+   */
+  excludeMemorySearch?: boolean;
 }
 
 /**
@@ -347,34 +366,51 @@ export async function buildToolsForProvider(
     universalTools.push(helpNavigateToolDefinition as UniversalTool);
   }
 
+  // The "workspace" tool set — always on for character surfaces, stripped for
+  // the character-less Brahma Console (includeWorkspaceTools === false). This
+  // bundle covers RNG/state, self-inventory, Post Office mail, conversation
+  // reading, annotations, and terminal inspection.
+  const includeWorkspaceTools = options.includeWorkspaceTools !== false;
+
   // Add RNG tool if enabled (defaults to true when not specified)
-  if (options.rng !== false) {
+  if (includeWorkspaceTools && options.rng !== false) {
     universalTools.push(rngToolDefinition as UniversalTool);
   }
 
   // Add state tool if enabled (defaults to true when not specified)
-  if (options.state !== false) {
+  if (includeWorkspaceTools && options.state !== false) {
     universalTools.push(stateToolDefinition as UniversalTool);
   }
 
-  // Self-inventory tool is always available to character participants —
-  // pure introspection, no side effects.
-  universalTools.push(selfInventoryToolDefinition as UniversalTool);
+  if (includeWorkspaceTools) {
+    // Self-inventory tool is always available to character participants —
+    // pure introspection, no side effects.
+    universalTools.push(selfInventoryToolDefinition as UniversalTool);
 
-  // Post Office tools are always available — mail is ungated (any character may
-  // write to any character, and a character may always list its own postbox).
-  universalTools.push(sendMailToolDefinition as UniversalTool);
-  universalTools.push(listEmailToolDefinition as UniversalTool);
+    // Post Office tools are always available — mail is ungated (any character may
+    // write to any character, and a character may always list its own postbox).
+    universalTools.push(sendMailToolDefinition as UniversalTool);
+    universalTools.push(listEmailToolDefinition as UniversalTool);
 
-  // Scriptorium tools (always enabled - conversation reading, annotations, and search)
-  universalTools.push(readConversationToolDefinition as UniversalTool);
-  universalTools.push(upsertAnnotationToolDefinition as UniversalTool);
-  universalTools.push(deleteAnnotationToolDefinition as UniversalTool);
-  universalTools.push(searchScriptoriumToolDefinition as UniversalTool);
+    // Scriptorium conversation reading + annotations (always enabled for characters)
+    universalTools.push(readConversationToolDefinition as UniversalTool);
+    universalTools.push(upsertAnnotationToolDefinition as UniversalTool);
+    universalTools.push(deleteAnnotationToolDefinition as UniversalTool);
+  }
 
-  // Terminal tools (always enabled for Prospero - read-only terminal inspection)
-  universalTools.push(terminalListToolDefinition as UniversalTool);
-  universalTools.push(terminalReadToolDefinition as UniversalTool);
+  // Unified search — available on every surface. The Brahma variant drops the
+  // `memories` source so the console can never search memories.
+  universalTools.push(
+    (options.excludeMemorySearch
+      ? searchScriptoriumBrahmaToolDefinition
+      : searchScriptoriumToolDefinition) as UniversalTool
+  );
+
+  if (includeWorkspaceTools) {
+    // Terminal tools (always enabled for Prospero - read-only terminal inspection)
+    universalTools.push(terminalListToolDefinition as UniversalTool);
+    universalTools.push(terminalReadToolDefinition as UniversalTool);
+  }
 
   // Add whisper tool if enabled (multi-character chats only)
   if (options.whisper) {

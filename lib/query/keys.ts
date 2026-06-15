@@ -130,4 +130,9 @@ export const queryKeys = {
     eligibility: ['help-chat', 'eligibility'] as const,
     pastChats: ['help-chat', 'past-chats'] as const,
   },
+  brahmaConsole: {
+    all: ['brahma-console'] as const,
+    entity: (apiUrl: string) => ['brahma-console', 'entity', apiUrl] as const,
+    pastChats: ['brahma-console', 'past-chats'] as const,
+  },
 } as const

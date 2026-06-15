@@ -1303,6 +1303,54 @@ exports[`tool definitions: derived OpenAI parameters searchScriptorium: paramete
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters searchScriptoriumBrahma: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "default": 10,
+      "description": "Maximum number of results to return across all sources. Default is 10.",
+      "maximum": 20,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "query": {
+      "description": "What to search for across the operator's conversations, documents, and knowledge base. Be specific about the topic, event, or detail you want to find.",
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+    },
+    "scope": {
+      "default": "all",
+      "description": "Which document stores the \`documents\` and \`knowledge\` sources reach into. The Brahma Console searches every enabled document store regardless of scope, so this parameter has no practical effect here.",
+      "enum": [
+        "all",
+        "project",
+        "character",
+        "group",
+      ],
+      "type": "string",
+    },
+    "sources": {
+      "description": "Which layers to search. Defaults to all available sources if not specified. "conversations" searches rendered transcripts of past chats; "documents" searches every file in every document store; "knowledge" searches only files under a \`Knowledge/\` folder inside those stores. NOTE: this console has NO access to memories — the commonplace-book memory source is deliberately unavailable here.",
+      "items": {
+        "enum": [
+          "conversations",
+          "documents",
+          "knowledge",
+        ],
+        "type": "string",
+      },
+      "type": "array",
+    },
+  },
+  "required": [
+    "query",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters selfInventory: parameters snapshot 1`] = `
 {
   "additionalProperties": false,

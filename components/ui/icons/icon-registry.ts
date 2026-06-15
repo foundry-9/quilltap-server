@@ -149,6 +149,7 @@ export const ICON_REGISTRY = {
   'themes':        { defaultFile: '/images/icons/themes.svg',        defaultMode: 'mask' },
   'wardrobe':      { defaultFile: '/images/icons/wardrobe.svg',      defaultMode: 'mask' },
   'help':          { defaultFile: '/images/icons/help.svg',          defaultMode: 'mask' },
+  'brahma-console': { defaultFile: '/images/icons/brahma-console.svg', defaultMode: 'mask' },
   'sun':           { defaultFile: '/images/icons/sun.svg',           defaultMode: 'mask' },
   'moon':          { defaultFile: '/images/icons/moon.svg',          defaultMode: 'mask' },
   'monitor':       { defaultFile: '/images/icons/monitor.svg',       defaultMode: 'mask' },

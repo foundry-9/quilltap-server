@@ -19,6 +19,7 @@ import { ProfileMenu } from './profile-menu'
 import { NavUserMenuThemeContent } from '@/components/dashboard/nav-user-menu-theme'
 import { NavUserMenuQuickHideContent, QuickHideIcon } from '@/components/dashboard/nav-user-menu-quick-hide'
 import { useHelpChatOptional } from '@/components/providers/help-chat-provider'
+import { useBrahmaConsoleOptional } from '@/components/providers/brahma-console-provider'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import { Icon } from '@/components/ui/icon'
 
@@ -96,6 +97,7 @@ export function SidebarFooter() {
   const { hasDangerousChats } = useHasDangerousChats()
   const theme = useTheme()
   const helpChat = useHelpChatOptional()
+  const brahmaConsole = useBrahmaConsoleOptional()
   const wardrobeDialog = useWardrobeDialogOptional()
   const pathname = usePathname()
   const [openPopout, setOpenPopout] = useState<PopoutMenu>(null)
@@ -153,6 +155,17 @@ export function SidebarFooter() {
             title={helpChat.isEligible ? 'Help' : 'Help (requires a help-enabled character with a tool-capable connection)'}
           >
             <Icon name="help" className="qt-left-sidebar-item-icon w-5 h-5" />
+          </button>
+        )}
+        {brahmaConsole && (
+          <button
+            type="button"
+            onClick={brahmaConsole.openConsole}
+            disabled={!brahmaConsole.isEligible}
+            className={`qt-left-sidebar-item justify-center px-0 ${!brahmaConsole.isEligible ? 'opacity-40 cursor-not-allowed' : ''}`}
+            title={brahmaConsole.isEligible ? 'Brahma Console' : 'Brahma Console (requires a connection profile)'}
+          >
+            <Icon name="brahma-console" className="qt-left-sidebar-item-icon w-5 h-5" />
           </button>
         )}
         {wardrobeDialog && (

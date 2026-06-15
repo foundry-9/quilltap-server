@@ -186,7 +186,10 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         const filter: Record<string, unknown> = {
           'participants.characterId': characterId,
           contextSummary: { $exists: true },
-          chatType: { $ne: 'help' },
+          // Exclude the stripped-down floating surfaces (Help Chat, Brahma
+          // Console) from the per-character memory-recap "Recent Conversations"
+          // pool. Any new non-salon type should be added here too.
+          chatType: { $nin: ['help', 'brahma'] },
         };
         if (options.excludeChatId) {
           filter.id = { $ne: options.excludeChatId };
@@ -204,7 +207,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   /**
    * Find chats by user ID and chat type
    */
-  async findByType(userId: string, chatType: 'salon' | 'help'): Promise<ChatMetadata[]> {
+  async findByType(userId: string, chatType: 'salon' | 'help' | 'brahma'): Promise<ChatMetadata[]> {
     return this.findByFilter({ userId, chatType } as TypedQueryFilter<ChatMetadata>);
   }
 

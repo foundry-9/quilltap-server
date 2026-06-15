@@ -157,7 +157,18 @@ export async function buildTools(
   /** Whether document editing tools are enabled (project has linked document stores or files) */
   documentEditingEnabled?: boolean,
   /** Whether the ask_carina tool is enabled for this character */
-  askCarinaEnabled?: boolean
+  askCarinaEnabled?: boolean,
+  /**
+   * Whether to include the always-on "workspace" tool set (mail, annotations,
+   * terminal, conversation reading, self-inventory, RNG/state). Defaults to
+   * true. The Brahma Console passes false to strip them.
+   */
+  includeWorkspaceTools?: boolean,
+  /**
+   * When true, the `search` tool is built from its Brahma variant whose schema
+   * omits the `memories` source (Brahma Console has no memory access).
+   */
+  excludeMemorySearch?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -227,6 +238,8 @@ export async function buildTools(
     whisper: !!isMultiCharacter,
     documentEditing: !!documentEditingEnabled,
     askCarina: askCarinaEnabled,
+    includeWorkspaceTools: includeWorkspaceTools !== false,
+    excludeMemorySearch: !!excludeMemorySearch,
     toolConfigs,
   })
 

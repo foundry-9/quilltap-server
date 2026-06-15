@@ -10,7 +10,7 @@ import { badRequest, serverError } from '@/lib/api/responses';
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
 import { titleChat, titleHelpChat, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
-import type { ChatMetadata } from '@/lib/schemas/types';
+import { isHelpLikeChatType, type ChatMetadata } from '@/lib/schemas/types';
 
 /**
  * Regenerate a chat's title using LLM
@@ -64,7 +64,7 @@ export async function handleRegenerateTitle(
       return badRequest('No messages in chat to generate title from');
     }
 
-    const result = chat.chatType === 'help'
+    const result = isHelpLikeChatType(chat.chatType)
       ? await titleHelpChat(conversationMessages, undefined, cheapLLM, user.id, chatId)
       : await titleChat(conversationMessages, undefined, cheapLLM, user.id, chatId);
 

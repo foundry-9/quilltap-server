@@ -37,9 +37,16 @@ const logger = createServiceLogger('SearchScriptoriumHandler')
  */
 export interface SearchScriptoriumToolContext {
   userId: string
-  characterId: string
+  /** Acting character — absent on the operator surface (Brahma Console). */
+  characterId?: string
   embeddingProfileId?: string
   projectId?: string
+  /**
+   * Operator surface (Brahma Console): character-less, memory-free. When set,
+   * memory search is forced off, documents/knowledge reach every enabled store,
+   * and conversations are searched operator-wide (all the user's chats).
+   */
+  operatorSurface?: boolean
 }
 
 /**
@@ -74,7 +81,11 @@ export async function executeSearchScriptoriumTool(
       minImportance = 0,
     } = input
 
-    const searchMemories = sources.includes('memories')
+    // Operator surface (Brahma Console): no character, no memories. Memory
+    // search is forced off here defensively even if a caller somehow requests
+    // it — the console never reads anyone's commonplace book.
+    const operatorWide = !!context.operatorSurface
+    const searchMemories = sources.includes('memories') && !operatorWide && !!context.characterId
     const searchConversations = sources.includes('conversations')
     const searchDocuments = sources.includes('documents')
     const searchKnowledge = sources.includes('knowledge')
@@ -94,25 +105,36 @@ export async function executeSearchScriptoriumTool(
       globalMountPointId: null,
     }
     let ownsCharacter = false
+    // Operator surface: every enabled store is in scope (no character/project
+    // tiers to resolve). Mirrors the doc path resolver's operator override.
+    let operatorStoreIds: string[] = []
 
     if (searchDocuments || searchKnowledge) {
-      pool = await resolveTieredMountPool(
-        {
-          userId: context.userId,
-          characterId: context.characterId,
-          projectId: context.projectId,
-        },
-        { requireOwnership: true },
-      )
-      // With ownership gating, a character vault is present only when the
-      // calling user owns the character — mirror that for the tier filter below.
-      ownsCharacter = !!pool.characterMountPointId
+      if (operatorWide) {
+        const repos = getRepositories()
+        const enabled = await repos.docMountPoints.findEnabled()
+        operatorStoreIds = enabled.map((mp) => mp.id)
+      } else {
+        pool = await resolveTieredMountPool(
+          {
+            userId: context.userId,
+            characterId: context.characterId,
+            projectId: context.projectId,
+          },
+          { requireOwnership: true },
+        )
+        // With ownership gating, a character vault is present only when the
+        // calling user owns the character — mirror that for the tier filter below.
+        ownsCharacter = !!pool.characterMountPointId
+      }
     }
 
-    // Pool for the `documents` source — every store the LLM can see, narrowed
-    // by `scope`. `all` is the union; `project` is project-linked stores only;
-    // `character` is the character's own vault only.
-    const buildDocumentsPool = (): string[] => flattenTierPool(pool, { scope })
+    // Pool for the `documents` source. On the operator surface this is every
+    // enabled store; otherwise every store the LLM can see, narrowed by `scope`
+    // (`all` is the union; `project` is project-linked stores; `character` is
+    // the character's own vault only).
+    const buildDocumentsPool = (): string[] =>
+      operatorWide ? operatorStoreIds : flattenTierPool(pool, { scope })
 
     // Tiers for the `knowledge` source — same pools, each constrained to
     // `Knowledge/` paths, with tier-specific literal-phrase boosts so a hit in
@@ -123,6 +145,12 @@ export async function executeSearchScriptoriumTool(
       mountPointIds: string[]
       boost: number
     }> => {
+      // Operator surface: a single all-stores tier (labelled 'global').
+      if (operatorWide) {
+        return operatorStoreIds.length > 0
+          ? [{ tier: 'global', mountPointIds: operatorStoreIds, boost: LITERAL_BOOST_GLOBAL }]
+          : []
+      }
       const tiers: Array<{
         tier: 'character' | 'group' | 'project' | 'global'
         mountPointIds: string[]
@@ -147,16 +175,17 @@ export async function executeSearchScriptoriumTool(
       return tiers
     }
 
-    // Search memories if requested
-    if (searchMemories) {
+    // Search memories if requested (never on the operator surface — see above)
+    if (searchMemories && context.characterId) {
+      const characterId = context.characterId
       try {
         // Verify character exists and belongs to user
         const repos = getRepositories()
-        const character = await repos.characters.findById(context.characterId)
+        const character = await repos.characters.findById(characterId)
 
         if (character && character.userId === context.userId) {
           const memoryResults = await searchMemoriesSemantic(
-            context.characterId,
+            characterId,
             query,
             {
               userId: context.userId,
@@ -204,7 +233,10 @@ export async function executeSearchScriptoriumTool(
         const conversationResults = await searchConversationChunks(
           embeddingResult.embedding,
           {
+            // Character surface scopes to the character's chats; the operator
+            // surface (no characterId) scopes operator-wide via userId.
             characterId: context.characterId,
+            userId: context.userId,
             limit,
             minScore: 0.3,
             query,

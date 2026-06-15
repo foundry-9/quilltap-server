@@ -512,8 +512,12 @@
         },
 
         "chatType": {
-          "enum": ["salon", "help", "autonomous"],
-          "description": "Chat type discriminator. 'salon' = regular human-driven chat; 'help' = help-assistant chat; 'autonomous' = private character-to-character room (4.6 Private Character Rooms)."
+          "enum": ["salon", "help", "autonomous", "brahma"],
+          "description": "Chat type discriminator. 'salon' = regular human-driven chat; 'help' = help-assistant chat; 'autonomous' = private character-to-character room (4.6 Private Character Rooms); 'brahma' = Brahma Console (character-less generic-LLM) chat."
+        },
+        "consoleConnectionProfileId": {
+          "type": ["string", "null"],
+          "description": "Brahma Console (chatType='brahma') active connection profile (model). NULL on every other chat type."
         },
 
         "budgetMaxTurns": {

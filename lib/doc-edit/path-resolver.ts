@@ -338,7 +338,9 @@ async function resolveDocumentStorePath(
   }
 
   const hasCharacterContext = Boolean(context.characterId) || (context.characterIds?.length ?? 0) > 0;
-  if (!context.projectId && !hasCharacterContext) {
+  // The operator "look everywhere" override carries its own accessible set
+  // (every enabled store) and so needs neither a project nor a character.
+  if (!context.operatorOverride && !context.projectId && !hasCharacterContext) {
     logger.warn('document_store scope requires projectId or characterId in context');
     throw new PathResolutionError(
       'Project ID or character ID is required for document_store scope',

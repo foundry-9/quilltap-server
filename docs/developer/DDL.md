@@ -461,8 +461,9 @@ CREATE TABLE "chats" (
   "characterAvatars" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { imageId, generatedAt, afterMessageCount } } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
   "avatarGenerationEnabled" INTEGER DEFAULT NULL,
   "alertCharactersOfLanternImages" INTEGER DEFAULT NULL,
-  "chatType" TEXT DEFAULT 'salon',
+  "chatType" TEXT DEFAULT 'salon',                  -- 'salon' | 'help' | 'autonomous' | 'brahma'
   "helpPageUrl" TEXT DEFAULT NULL,
+  "consoleConnectionProfileId" TEXT DEFAULT NULL,   -- Brahma Console (chatType='brahma') active model; NULL on other chats
   "scenarioText" TEXT DEFAULT NULL,
   "documentMode" TEXT DEFAULT 'normal',
   "dividerPosition" INTEGER DEFAULT 45,

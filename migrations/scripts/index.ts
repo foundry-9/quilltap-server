@@ -340,6 +340,8 @@ import { addCarinaFlagMigration } from './add-carina-flag-v1';
 import { addCarinaMessageMetaMigration } from './add-carina-message-meta-v1';
 // RP formatting overhaul: add kind discriminant (wrap/linePrefix) to template delimiters
 import { rpDelimiterKindsMigration } from './rp-delimiter-kinds-v1';
+// Brahma Console: consoleConnectionProfileId column on chats (per-chat model selection)
+import { addConsoleConnectionProfileFieldMigration } from './add-console-connection-profile-field';
 
 /**
  * All available migrations.
@@ -676,6 +678,8 @@ export const migrations: Migration[] = [
   createGroupJoinTablesMigration,
   // RP formatting overhaul: add kind discriminant (wrap/linePrefix) to template delimiters
   rpDelimiterKindsMigration,
+  // Brahma Console: consoleConnectionProfileId column on chats (per-chat model selection)
+  addConsoleConnectionProfileFieldMigration,
 ];
 
 export {
@@ -993,5 +997,7 @@ export {
   createGroupJoinTablesMigration,
   // RP formatting overhaul: add kind discriminant (wrap/linePrefix) to template delimiters
   rpDelimiterKindsMigration,
+  // Brahma Console: consoleConnectionProfileId column on chats (per-chat model selection)
+  addConsoleConnectionProfileFieldMigration,
 };
 

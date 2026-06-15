@@ -28,8 +28,17 @@ export interface ConversationSearchResult {
 }
 
 export interface ConversationSearchOptions {
-  /** Character ID to scope search to conversations this character participates in */
-  characterId: string
+  /**
+   * Character ID to scope search to conversations this character participates
+   * in. Omit (together with `userId`) to scope operator-wide — see `userId`.
+   */
+  characterId?: string
+  /**
+   * Operator-wide scope: when set and no `characterId` is given, search across
+   * EVERY chat owned by this user (the Brahma Console's character-less search).
+   * Ignored when `characterId` is provided.
+   */
+  userId?: string
   limit?: number
   minScore?: number
   /**
@@ -61,8 +70,14 @@ export async function searchConversationChunks(
   const limit = options.limit || 10
   const minScore = options.minScore || 0.3
 
-  // Find chats this character participates in
-  const characterChats = await repos.chats.findByCharacterId(options.characterId)
+  // Resolve the set of chats to search. A characterId scopes to that
+  // character's conversations; otherwise an operator-wide userId scopes to
+  // every chat the user owns (the Brahma Console's character-less search).
+  const characterChats = options.characterId
+    ? await repos.chats.findByCharacterId(options.characterId)
+    : options.userId
+      ? await repos.chats.findByUserId(options.userId)
+      : []
   const characterChatIds = new Set(characterChats.map(c => c.id))
 
   if (characterChatIds.size === 0) {

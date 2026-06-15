@@ -170,6 +170,7 @@ export {
   ChatMetadataBaseSchema,
   ChatMetadataLegacySchema,
   ChatTypeEnum,
+  isHelpLikeChatType,
   AutonomousRunStateEnum,
   AutonomousRunVisibilityEnum,
 } from './chat.types';

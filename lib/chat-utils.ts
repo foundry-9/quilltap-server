@@ -41,7 +41,7 @@ export interface SalonChatShape {
   project: { id: string; name: string; color: string | null } | null
   storyBackground: { id: string; filepath: string } | null
   isDangerousChat?: boolean
-  chatType?: 'salon' | 'help' | 'autonomous'
+  chatType?: 'salon' | 'help' | 'autonomous' | 'brahma'
   scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
   _count: { messages: number; memories?: number }
 }

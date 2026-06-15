@@ -208,6 +208,19 @@ export interface ToolExecutionContext {
    * there is no client stream and the post-turn refresh handles surfacing.
    */
   emitCarinaAnswer?: (message: MessageEvent) => void;
+  /**
+   * Operator surface (the **Brahma Console**): a character-less, memory-free
+   * direct line to the LLM. When true:
+   *  - the `search` tool runs WITHOUT a character — memories are never searched,
+   *    documents/knowledge reach every enabled store, and conversations are
+   *    searched operator-wide (all the user's chats);
+   *  - the `doc_*` tools resolve against ALL the user's enabled document stores
+   *    (the operator "look everywhere" scope), since the console has no character
+   *    vault of its own but is the operator's own surface.
+   * Character tool handlers never set this, so their per-character sandbox is
+   * unchanged.
+   */
+  operatorSurface?: boolean;
 }
 
 /**
@@ -918,7 +931,10 @@ export async function executeToolCallWithContext(
 
     // Handle search (Scriptorium unified search)
     if (toolCall.name === 'search') {
-      if (!characterId) {
+      // Character surfaces require a character (memories/conversations are
+      // per-character). The operator surface (Brahma Console) is character-less:
+      // it searches operator-wide and never touches memories.
+      if (!characterId && !context.operatorSurface) {
         return {
           toolName: 'search',
           success: false,
@@ -932,6 +948,7 @@ export async function executeToolCallWithContext(
         characterId,
         embeddingProfileId,
         projectId: context.projectId,
+        operatorSurface: context.operatorSurface,
       };
 
       const result = await executeSearchScriptoriumTool(toolCall.arguments, searchContext);
@@ -1017,6 +1034,8 @@ export async function executeToolCallWithContext(
         chatId,
         projectId: context.projectId,
         characterId,
+        // Operator surface (Brahma Console): resolve against every enabled store.
+        operatorOverride: context.operatorSurface,
       };
 
       const result = await executeDocEditTool(toolCall.name, toolCall.arguments, docEditContext);

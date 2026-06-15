@@ -29,6 +29,14 @@ export interface DocEditToolContext {
   userId: string;
   projectId?: string;
   characterId?: string;
+  /**
+   * Operator "look everywhere" override — every enabled document store is
+   * reachable, regardless of project/character context. Set by the human
+   * operator's surfaces (Document Mode HTTP actions and the Brahma Console),
+   * never by character tool handlers. Passed straight through to the path
+   * resolver's `operatorOverride`.
+   */
+  operatorOverride?: boolean;
 }
 
 /**
@@ -137,6 +145,7 @@ export async function buildReadResolutionContext(
     return {
       projectId: context.projectId,
       mountPoint: input.mount_point,
+      operatorOverride: context.operatorOverride,
     };
   }
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
@@ -145,6 +154,7 @@ export async function buildReadResolutionContext(
     characterId: context.characterId,
     characterIds: peerCharacterIds.length > 0 ? peerCharacterIds : undefined,
     mountPoint: input.mount_point,
+    operatorOverride: context.operatorOverride,
   };
 }
 
@@ -162,6 +172,7 @@ export async function buildWriteResolutionContext(
     return {
       projectId: context.projectId,
       mountPoint: input.mount_point,
+      operatorOverride: context.operatorOverride,
     };
   }
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
@@ -170,6 +181,7 @@ export async function buildWriteResolutionContext(
     projectId: context.projectId,
     characterId: context.characterId,
     mountPoint: input.mount_point,
+    operatorOverride: context.operatorOverride,
   };
 }
 

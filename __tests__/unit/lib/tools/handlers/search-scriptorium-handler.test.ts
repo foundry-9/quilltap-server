@@ -153,6 +153,9 @@ describe('search-scriptorium-handler', () => {
       [0.1, 0.2, 0.3],
       {
         characterId: 'character-1',
+        // userId is now always passed; the conversation searcher prefers
+        // characterId when present (operator-wide scope is character-less).
+        userId: 'user-1',
         limit: 5,
         minScore: 0.3,
         query: 'blueprints',

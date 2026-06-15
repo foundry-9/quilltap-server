@@ -65,8 +65,21 @@ export type SceneState = z.infer<typeof SceneStateSchema>;
 // CHAT TYPE
 // ============================================================================
 
-export const ChatTypeEnum = z.enum(['salon', 'help', 'autonomous']);
+export const ChatTypeEnum = z.enum(['salon', 'help', 'autonomous', 'brahma']);
 export type ChatType = z.infer<typeof ChatTypeEnum>;
+
+/**
+ * Chat types that are "help-like" for titling and summarization: they get
+ * lightweight auto-retitling at the earliest interchange, skip story-background
+ * generation, and never run the autonomous-room machinery. The Brahma Console
+ * (`'brahma'`) joins the Help Chat (`'help'`) here — both are floating,
+ * stripped-down chat surfaces, distinct from the Salon and from autonomous
+ * rooms. (Memory extraction is governed separately: 'help' opts in, 'brahma'
+ * never does. This predicate is ONLY about titling/summary routing.)
+ */
+export function isHelpLikeChatType(chatType: string | null | undefined): boolean {
+  return chatType === 'help' || chatType === 'brahma';
+}
 
 // ============================================================================
 // AUTONOMOUS-ROOM RUN STATE
@@ -660,10 +673,19 @@ export const ChatMetadataSchema = z.object({
   /** Whether to auto-generate character avatars when outfits change (null = disabled) */
   avatarGenerationEnabled: z.boolean().nullable().optional(),
 
-  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms */
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms, 'brahma' for Brahma Console (character-less generic-LLM) chats */
   chatType: ChatTypeEnum.default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
+  /**
+   * For Brahma Console chats (`chatType === 'brahma'`): the connection profile
+   * (model) the console is currently talking to. A Brahma chat has exactly one
+   * model at a time; switching the model PATCHes this column and the same chat
+   * continues with the new engine from that point forward. Seeded from the
+   * user's default connection profile at creation. NULL on every other chat
+   * type.
+   */
+  consoleConnectionProfileId: UUIDSchema.nullable().optional(),
 
   /**
    * Phase H: precompiled per-participant identity stack — the character-static
@@ -966,10 +988,19 @@ export const ChatMetadataBaseSchema = z.object({
   /** Whether to auto-generate character avatars when outfits change (null = disabled) */
   avatarGenerationEnabled: z.boolean().nullable().optional(),
 
-  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms */
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms, 'brahma' for Brahma Console (character-less generic-LLM) chats */
   chatType: ChatTypeEnum.default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
+  /**
+   * For Brahma Console chats (`chatType === 'brahma'`): the connection profile
+   * (model) the console is currently talking to. A Brahma chat has exactly one
+   * model at a time; switching the model PATCHes this column and the same chat
+   * continues with the new engine from that point forward. Seeded from the
+   * user's default connection profile at creation. NULL on every other chat
+   * type.
+   */
+  consoleConnectionProfileId: UUIDSchema.nullable().optional(),
 
   /**
    * Phase H: precompiled per-participant identity stack — the character-static
