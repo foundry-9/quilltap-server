@@ -335,7 +335,7 @@ export function buildIdentityReinforcement(
   // already knows who is in the scene from Host roster announcements and
   // per-message name attribution; the reminder only needs to emphasise
   // staying in {{char}}'s voice.
-  const template = `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for any other character. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.\nDo not prefix or label your response with your name (e.g., do not start with "[{{char}}]" or "{{char}}:"). Simply respond in character directly.`
+  const template = `## Identity Reminder\nYou are {{char}}, and you control ONLY {{char}}. Respond as {{char}} and no one else. Write only {{char}}'s own speech, actions, and inner thoughts for this single turn, then stop and let the others act.\nNEVER write dialogue, actions, thoughts, or narration on behalf of any other character or the user. NEVER continue the scene from another character's point of view, and NEVER label a block of text with another character's name — do not emit speaker tags like "[Another Name]" or "Another Name:" for anyone but yourself. Writing another participant's turn is a serious error; let each of them speak for themselves.\nDo not prefix or label your response with your own name either (e.g., do not start with "[{{char}}]" or "{{char}}:"). Simply respond in character directly.`
 
   return processTemplate(template, {
     char: characterName,

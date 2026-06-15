@@ -4,6 +4,25 @@
 
 ### 4.7-dev
 
+#### Compose Mail button in the Salon composer (Post Office UI)
+
+Added a Compose Mail button to the Salon composer gutter: the operator can send a letter as one of their player-characters (`controlledBy: 'user'`) to another character, optionally quoting a letter from the sender's mailbox. Delivered by Suparṇā through the same Post Office service the `send_mail` tool uses, so the UI and the tool stay in lockstep.
+
+- New composer-gutter button (envelope, *"Post a letter"*) opens the **Compose Mail** modal (`components/chat/ComposeMailDialog.tsx`): From (fixed when you play one character, a dropdown when more — restricted to characters you control in this chat), To (**any** character in the workspace, loaded from `/api/v1/characters`, minus the From — you can mail someone who isn't in the scene), In-reply-to (defaults to "No quoted reply.", lists the From character's mailbox), and a Markdown letter body. Threaded `onComposeMailClick` through `ComposerGutterTools` → `ChatComposer` → `page.tsx`, with `composeMailOpen` state in `useModalState`.
+- Suparṇā joins the Insert Announcement "Staff" list, so the operator can post an announcement bubble in her voice (`StaffSender`/`STAFF_SENDER_ENUM`/the modal's staff options). Her avatar + display name were already wired from the Post Office backend.
+- New chat action `POST /api/v1/chats/[id]?action=send-mail`: validates that `fromCharacterId` is a user-controlled participant of the chat (never trusting the client), then delivers via the shared service. New `GET /api/v1/chats/[id]?action=mailbox&characterId=…` lists a player-character's mailbox letters for the reply dropdown (authorized the same way).
+- Refactor: extracted the compose-and-deliver path (vault provisioning, `in_reply_to` quoting, frontmatter/filename stamping) into `lib/post-office/deliver.ts` (`composeAndDeliverLetter`); the `send_mail` tool handler now calls it instead of duplicating the logic.
+- New `mail` icon (default `public/images/icons/mail.svg` + registry entry + regenerated icon CSS) with a Madman's Box override (`themes/bundled/madmans-box/icons/mail.svg` + manifest line). Other bundled themes fall through to the default envelope.
+- Help: updated `help/post-office.md`.
+
+#### Multi-character anti-hijack safeguards
+
+Hardened multi-character turns so one character (especially a weaker model) can't speak as the others or write the whole scene as a `[Name]`-tagged screenplay.
+
+- Removed a fragile/contradictory prompt instruction: the Anthropic multi-character path used to append "Always begin your response with [Name]," which both contradicted the always-on Identity Reminder ("do not prefix with your name") and taught weaker models the very `[Name] …` transcript format they then ran away with. It now anchors identity in prose and explicitly forbids writing or tagging any other participant's turn (`lib/services/chat-message/context-builder.service.ts`). Non-Anthropic providers keep the structural assistant-prefill anchor.
+- Strengthened the always-on Identity Reminder (`buildIdentityReinforcement`) to forbid writing dialogue/actions/narration for any other character or the user, continuing the scene from another viewpoint, or emitting another character's `[Name]`/`Name:` speaker tag.
+- Added a model-agnostic structural backstop: `truncateAtForeignSpeaker` (`lib/llm/message-formatter.ts`) cuts a finalized response at the first line that opens with another participant's `[Name]`/`Name:` tag, so a hijacked turn can never carry another character's lines into the transcript. Wired into `finalizeMessageResponse` (runs for every provider; matches only the chat's other participant names/aliases, never arbitrary brackets; leaves a response that *opens* with a foreign tag intact to avoid an empty message, and logs it). +7 unit tests.
+
 #### `mount_point: "self"` taught and accepted across all `doc_*` tools
 
 Extends the Post Office's reserved `mount_point: "self"` token (own-vault access via `characters.characterDocumentMountPointId`) to the rest of the document toolset, so every character has one stable, rename- and collision-proof handle for its own vault rather than reconstructing the vault's name.

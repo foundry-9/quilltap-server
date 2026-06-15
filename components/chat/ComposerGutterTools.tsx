@@ -15,6 +15,8 @@ interface ComposerGutterToolsProps {
   onStandaloneGenerateImageClick: () => void
   /** Callback to open the Insert Announcement dialog */
   onInsertAnnouncementClick: () => void
+  /** Callback to open the Compose Mail dialog (The Post Office) */
+  onComposeMailClick: () => void
   /** Chat ID for RNG API calls */
   chatId: string
   /** Callback when RNG result is ready */
@@ -26,10 +28,9 @@ interface ComposerGutterToolsProps {
 /**
  * Gutter tools for the chat composer.
  *
- * Displays small icon buttons for frequently-used message-level tools.
- * The top row is a full-width Insert Announcement button; the lower
- * block is a 2x2 grid:
- * - Row 1: Insert Announcement (megaphone, spans both columns)
+ * Displays small icon buttons for frequently-used message-level tools in a
+ * 3×2 grid:
+ * - Row 1: Insert Announcement (megaphone), Compose Mail (envelope)
  * - Row 2: Library file (document), Generate image (camera)
  * - Row 3: Attach file (paperclip), RNG (dice)
  *
@@ -41,6 +42,7 @@ export function ComposerGutterTools({
   onLibraryFileClick,
   onStandaloneGenerateImageClick,
   onInsertAnnouncementClick,
+  onComposeMailClick,
   chatId,
   onPendingToolResult,
   disabled = false,
@@ -49,17 +51,29 @@ export function ComposerGutterTools({
 
   return (
     <div className="qt-composer-gutter-tools">
-      {/* Row 1: Insert Announcement (spans full width) */}
+      {/* Row 1, Col 1: Insert Announcement */}
       <button
         type="button"
         onClick={onInsertAnnouncementClick}
         disabled={disabled}
-        className="qt-composer-gutter-button qt-composer-gutter-button-wide"
+        className="qt-composer-gutter-button"
         title="Insert announcement"
         aria-label="Insert announcement"
-        style={{ gridColumn: '1 / -1' }}
       >
         <Icon name="megaphone" className="w-5 h-5" />
+      </button>
+
+      {/* Row 1, Col 2: Compose Mail — pairs with the megaphone as another
+          "insert a special message" action (The Post Office) */}
+      <button
+        type="button"
+        onClick={onComposeMailClick}
+        disabled={disabled}
+        className="qt-composer-gutter-button"
+        title="Post a letter"
+        aria-label="Post a letter"
+      >
+        <Icon name="mail" className="w-5 h-5" />
       </button>
 
       {/* Row 2, Col 1: Library File */}
@@ -74,7 +88,7 @@ export function ComposerGutterTools({
         <Icon name="file-plus" className="w-5 h-5" />
       </button>
 
-      {/* Row 1, Col 2: Generate Image */}
+      {/* Row 2, Col 2: Generate Image */}
       <button
         type="button"
         onClick={onStandaloneGenerateImageClick}
@@ -86,7 +100,7 @@ export function ComposerGutterTools({
         <Icon name="camera" className="w-5 h-5" />
       </button>
 
-      {/* Row 2, Col 1: Attach File */}
+      {/* Row 3, Col 1: Attach File */}
       <button
         type="button"
         onClick={onAttachFileClick}
@@ -104,7 +118,7 @@ export function ComposerGutterTools({
         )}
       </button>
 
-      {/* Row 2, Col 2: RNG with dropdown */}
+      {/* Row 3, Col 2: RNG with dropdown */}
       <div ref={rngDropdownRef} className="qt-composer-gutter-rng">
         <RngDropdown
           chatId={chatId}

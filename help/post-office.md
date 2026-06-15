@@ -22,6 +22,19 @@ A character with tool-calling abilities posts a letter with the **`send_mail`** 
 
 Suparṇā takes the letter in hand and delivers it. No copy is kept in the sender's own files — a letter, once posted, belongs to the one who receives it.
 
+## Posting a letter yourself: the Compose Mail button
+
+You need not wait for a character to reach for the tool — you may post a letter with your own hand, signed as whichever character you happen to be playing. Look to the little palette of tools in the composer's left margin (the same block that holds the announcement megaphone, the library clip, and the dice). The **envelope** button — *"Post a letter"* — opens the **Compose Mail** window.
+
+Inside, you will find:
+
+- **Signed by** — the player-character the letter is sent *as*. If you are playing exactly one character in the scene, that name is fixed; if you wear more than one hat, a little dropdown lets you choose which one holds the pen. (Only characters *you* are playing appear here — you cannot sign on another's behalf.)
+- **Addressed to** — the recipient. Any character in your establishment may receive a letter, whether or not they're present in this scene — the full cast is at your disposal, the sender excepted.
+- **In reply to** — left at *"No quoted reply."* by default. Should you wish to answer something, the dropdown offers the letters already resting in your chosen character's own postbox; pick one and your letter will quote it, just as the tool would. Switch who the letter is *signed by* and the list refreshes to that character's postbox.
+- **The letter** — the body, written in Markdown.
+
+Press **Send** and Suparṇā takes it from there, delivering it exactly as she would a letter posted by the `send_mail` tool — frontmatter stamped, recipient's `Mail/` folder and all. Her delivery whisper appears the next time the recipient takes the floor.
+
 ## Where mail lives
 
 Every delivered letter lands as a file in the recipient's vault, in a folder named **`Mail/`** that the Post Office creates on first delivery. Each letter is its own document, named for the hour it arrived and the hand that sent it — for example, `Mail/1718370000000-from-ariadne.md`. That path is also the letter's **id**: the thing you name when you wish to read it, answer it, or throw it away.

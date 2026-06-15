@@ -85,6 +85,7 @@ Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.t
 | `user` | NEW | person | generic person (NPC, gallery avatar) — *shares `profile`'s default glyph* |
 | `user-plus` | NEW | person + | create NPC |
 | `megaphone` | NEW | megaphone | insert announcement (composer) |
+| `mail` | NEW | envelope | compose mail (composer; the Post Office) |
 | `dice` | NEW | die w/ pips | RNG dropdown (Pascal) |
 | `sparkles` | NEW | sparkles | inline "generate" / AI-flavored actions |
 | `wand` | NEW | magic wand | the AI Wizard (distinct from inline `sparkles`) |

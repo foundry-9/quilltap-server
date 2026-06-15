@@ -5,6 +5,7 @@ import {
   formatMessagesForProvider,
   buildMultiCharacterContextSection,
   normalizeContentBlockFormat,
+  truncateAtForeignSpeaker,
 } from '@/lib/llm/message-formatter'
 
 jest.mock('@/lib/logger', () => ({
@@ -177,6 +178,60 @@ describe('message formatter utilities', () => {
     it('handles whitespace around the content block', () => {
       const wrapped = `  [{'type': 'text', 'text': "Extracted content"}]  `
       expect(normalizeContentBlockFormat(wrapped)).toBe('Extracted content')
+    })
+  })
+
+  describe('truncateAtForeignSpeaker', () => {
+    const others = ['Charlie', 'Friday', 'Amy']
+
+    it('truncates at the first foreign [Name] tag and right-trims', () => {
+      const input = "Abigail's own turn, fully in voice.\n\n[Charlie] I think the bug is...\n\n[Friday] The numbers hit me."
+      const { text, truncatedAt } = truncateAtForeignSpeaker(input, others)
+      expect(text).toBe("Abigail's own turn, fully in voice.")
+      expect(truncatedAt).not.toBeNull()
+    })
+
+    it('truncates at a "Name:" speaker label at line start', () => {
+      const input = 'My line here.\nCharlie: stop that.'
+      const { text } = truncateAtForeignSpeaker(input, others)
+      expect(text).toBe('My line here.')
+    })
+
+    it('leaves a clean single-character response untouched', () => {
+      const input = 'Just my own dialogue and *actions*, no one else.'
+      const { text, truncatedAt } = truncateAtForeignSpeaker(input, others)
+      expect(text).toBe(input)
+      expect(truncatedAt).toBeNull()
+    })
+
+    it('does not match roleplay action tags or prose mentions of a name', () => {
+      const input = 'I told Charlie: meet me later. [*sighs*] [Whisper sent.]'
+      const { text, truncatedAt } = truncateAtForeignSpeaker(input, others)
+      // "Charlie:" is mid-line (prose), not a line-start speaker label.
+      expect(text).toBe(input)
+      expect(truncatedAt).toBeNull()
+    })
+
+    it('reports truncatedAt=0 when the response opens with a foreign tag', () => {
+      const input = '[Charlie] hijacking from the very start.'
+      const { text, truncatedAt } = truncateAtForeignSpeaker(input, others)
+      expect(truncatedAt).toBe(0)
+      expect(text).toBe('')
+    })
+
+    it('is a no-op with no foreign names (single-character chat)', () => {
+      const input = '[Charlie] this would be a tag, but no roster supplied.'
+      const { text, truncatedAt } = truncateAtForeignSpeaker(input, [])
+      expect(text).toBe(input)
+      expect(truncatedAt).toBeNull()
+    })
+
+    it('does not truncate on the speaker’s own name (only foreign names are passed)', () => {
+      // Caller passes ONLY other participants; Abigail tagging herself isn't here.
+      const input = 'A line.\n[Abigail] still me, second paragraph.'
+      const { text, truncatedAt } = truncateAtForeignSpeaker(input, others)
+      expect(text).toBe(input)
+      expect(truncatedAt).toBeNull()
     })
   })
 })

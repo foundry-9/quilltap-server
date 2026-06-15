@@ -1059,8 +1059,8 @@ describe('Context Manager', () => {
     it('produces a reminder anchored on the character name', () => {
       const result = buildIdentityReinforcement('Artemis')
       expect(result).toContain('## Identity Reminder')
-      expect(result).toContain('You are Artemis.')
-      expect(result).toContain('Respond only as Artemis.')
+      expect(result).toContain('You are Artemis')
+      expect(result).toContain('Respond as Artemis and no one else.')
       expect(result).not.toContain('{{char}}')
       expect(result).not.toContain('{{user}}')
     })
@@ -1072,8 +1072,9 @@ describe('Context Manager', () => {
       // participant attribution comes from Host roster announcements + each
       // history message's `name` field instead.
       const result = buildIdentityReinforcement('Artemis')
-      expect(result).toContain('Do not write dialogue, actions, or thoughts for any other character.')
-      expect(result).not.toMatch(/Do not write dialogue.*?for [A-Z][a-z]+,/)
+      expect(result).toContain('any other character')
+      // Still static — must not interpolate a comma-separated participant list.
+      expect(result).not.toMatch(/(?:on behalf of|as|for) [A-Z][a-z]+,/)
     })
 
     it('produces byte-identical output across calls for the same character', () => {
@@ -1084,7 +1085,7 @@ describe('Context Manager', () => {
 
     it('instructs LLM not to prefix response with character name', () => {
       const result = buildIdentityReinforcement('Friday')
-      expect(result).toContain('Do not prefix or label your response with your name')
+      expect(result).toContain('Do not prefix or label your response with your own name')
       expect(result).toContain('[Friday]')
       expect(result).toContain('Friday:')
     })

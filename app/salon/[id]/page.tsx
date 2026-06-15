@@ -1390,6 +1390,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onLibraryFileClick={modals.openLibraryFilePicker}
           onStandaloneGenerateImageClick={modals.openStandaloneGenerateImage}
           onInsertAnnouncementClick={modals.openInsertAnnouncement}
+          onComposeMailClick={modals.openComposeMail}
           onStopStreaming={sseStreaming.stopStreaming}
           hideStopButton={modals.showParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
@@ -1530,6 +1531,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           closeStandaloneGenerateImage={modals.closeStandaloneGenerateImage}
           insertAnnouncementOpen={modals.insertAnnouncementOpen}
           closeInsertAnnouncement={modals.closeInsertAnnouncement}
+          composeMailOpen={modals.composeMailOpen}
+          closeComposeMail={modals.closeComposeMail}
           allLLMPauseModalOpen={modals.allLLMPauseModalOpen}
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}
           reattributeDialogState={modals.reattributeDialogState}

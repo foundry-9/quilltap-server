@@ -737,14 +737,21 @@ export async function buildMessageContext(
     }
   })
 
-  // In multi-character chats, anchor the model's response to the correct
-  // character identity. The [Name] prefix is stripped by
-  // stripCharacterNamePrefix() downstream.
-  //
-  // Anthropic 4.6+ rejects requests that end with an assistant message, and
-  // older Claude models follow a system instruction reliably enough that we
-  // use the same path for every Anthropic model rather than maintain a
-  // per-model allowlist.
+  // In multi-character chats, anchor each reply to the responding character and
+  // forbid it from writing anyone else's turn. The two providers take different
+  // routes because Anthropic 4.6+ rejects requests that end with an assistant
+  // message (so we can't prefill it with a "[Name]" turn-opener there):
+  //   - Non-Anthropic: prefill an assistant "[Name]" message. The model
+  //     structurally continues only that character's line; the leading tag is
+  //     stripped downstream by stripCharacterNamePrefix().
+  //   - Anthropic: append a system instruction. We deliberately do NOT tell it
+  //     to emit a "[Name]" tag — that both contradicts the always-on Identity
+  //     Reminder ("do not prefix with your name") and teaches weaker models the
+  //     very screenplay format ("[Name] …") they then run away with, writing
+  //     the whole cast's turns. Instead we anchor identity in prose and forbid
+  //     foreign speaker tags outright. finalizeMessageResponse() truncates a
+  //     response at the first foreign "[Name]"/"Name:" tag as a structural
+  //     backstop regardless of provider.
   if (isMultiCharacter) {
     if (connectionProfile.provider === 'ANTHROPIC') {
       const systemIdx = formattedMessages.findIndex(m => m.role === 'system')
@@ -752,7 +759,7 @@ export async function buildMessageContext(
         formattedMessages[systemIdx] = {
           ...formattedMessages[systemIdx],
           content: formattedMessages[systemIdx].content +
-            `\n\nIMPORTANT: You are ${character.name}. Always begin your response with [${character.name}] to identify yourself.`,
+            `\n\nIMPORTANT — this is a multi-character scene. Respond as ${character.name} and ONLY ${character.name}: write only ${character.name}'s own dialogue, actions, and thoughts for this single turn, then stop. Never write, narrate, quote, or continue another participant's turn, and never label any text with another participant's name (no "[Name]" or "Name:" speaker tags for anyone but ${character.name}). Output only ${character.name}'s contribution.`,
         }
       }
     } else {

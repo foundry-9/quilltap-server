@@ -74,6 +74,7 @@ interface ChatComposerProps {
   onLibraryFileClick: () => void
   onStandaloneGenerateImageClick: () => void
   onInsertAnnouncementClick: () => void
+  onComposeMailClick: () => void
   onStopStreaming: () => void
   /** Hide the stop button (when sidebar has its own stop button) */
   hideStopButton?: boolean
@@ -123,6 +124,7 @@ export function ChatComposer({
   onLibraryFileClick,
   onStandaloneGenerateImageClick,
   onInsertAnnouncementClick,
+  onComposeMailClick,
   onStopStreaming,
   hideStopButton = false,
   onPendingToolResult,
@@ -340,6 +342,7 @@ export function ChatComposer({
               onLibraryFileClick={onLibraryFileClick}
               onStandaloneGenerateImageClick={onStandaloneGenerateImageClick}
               onInsertAnnouncementClick={onInsertAnnouncementClick}
+              onComposeMailClick={onComposeMailClick}
               chatId={id}
               onPendingToolResult={onPendingToolResult}
               disabled={sending || !hasActiveCharacters}

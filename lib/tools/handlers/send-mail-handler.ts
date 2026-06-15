@@ -15,13 +15,7 @@ import { logger } from '@/lib/logger';
 import { validateSendMailInput } from '../send-mail-tool';
 import type { SendMailToolOutput } from '../send-mail-tool';
 import { resolveCharacterByNameOrId } from '@/lib/services/character-resolver';
-import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
-import {
-  MAIL_FOLDER,
-  deliverLetter,
-  readLetter,
-  buildReplyPreface,
-} from '@/lib/post-office/mailbox';
+import { composeAndDeliverLetter } from '@/lib/post-office/deliver';
 import { getRepositories } from '@/lib/repositories/factory';
 
 export type { SendMailToolOutput };
@@ -71,43 +65,28 @@ export async function executeSendMailTool(
       return fail('No soul by that name keeps a postbox here.');
     }
 
-    // Ensure both vaults (idempotent). Use the returned ids — the raw rows may
-    // carry a stale/null FK before provisioning.
-    const { mountPointId: senderVaultId } = await ensureCharacterVault(sender);
-    const { mountPointId: recipientVaultId } = await ensureCharacterVault(recipient);
-
-    // Compose the delivered body, prefacing a quoted original when replying.
-    let body = input.message;
-    if (input.in_reply_to) {
-      const original = await resolveReply(senderVaultId, input.in_reply_to);
-      if (!original) {
-        return fail("That letter isn't in your own postbox, so there's nothing to reply to.");
-      }
-      const preface = buildReplyPreface(original.body, original.frontmatter.sentAt);
-      body = `${preface}\n\n${input.message}`;
-    }
-
-    const sentAt = new Date().toISOString();
-    const { path } = await deliverLetter({
-      recipientVaultId,
-      fromName: sender.name,
-      fromCharacterId: sender.id,
-      sentAt,
-      body,
+    // Compose + deliver via the shared Post Office service (the same path the
+    // Salon "Compose Mail" action uses), so the tool and the UI stay in lockstep.
+    const result = await composeAndDeliverLetter({
+      sender,
+      recipient,
+      message: input.message,
       inReplyTo: input.in_reply_to ?? null,
     });
+    if (!result.ok) {
+      return fail("That letter isn't in your own postbox, so there's nothing to reply to.");
+    }
 
     moduleLogger.debug('send_mail delivered', {
       chatId: context.chatId,
       recipientCharacterId: recipient.id,
-      recipientVaultId,
-      path,
+      path: result.path,
     });
 
     return {
       success: true,
-      message: `Suparṇā has the letter in hand and is already winging it to ${recipient.name}. It will rest in their postbox as ${path}.`,
-      path,
+      message: `Suparṇā has the letter in hand and is already winging it to ${recipient.name}. It will rest in their postbox as ${result.path}.`,
+      path: result.path,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unexpected error in send_mail handler';
@@ -118,17 +97,6 @@ export async function executeSendMailTool(
     );
     return fail(`The Post Office stumbled and the letter went unsent — ${msg}`);
   }
-}
-
-/**
- * Resolve an `in_reply_to` reference: it must be a `Mail/…` path that exists in
- * the SENDER's own mailbox. Returns the parsed original, or null.
- */
-async function resolveReply(senderVaultId: string, inReplyTo: string) {
-  const normalized = inReplyTo.replace(/^\/+/, '');
-  const prefix = `${MAIL_FOLDER}/`;
-  if (!normalized.toLowerCase().startsWith(prefix.toLowerCase())) return null;
-  return readLetter(senderVaultId, normalized);
 }
 
 export function formatSendMailResults(output: SendMailToolOutput): string {

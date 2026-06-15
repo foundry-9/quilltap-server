@@ -118,6 +118,12 @@ export const queryKeys = {
     folders: (projectId?: string) => ['files', 'folders', projectId ?? null] as const,
     content: (url: string) => ['files', 'content', url] as const,
   },
+  mailbox: {
+    all: ['mailbox'] as const,
+    /** Letters in a chat-participant character's Mail/ folder (Compose Mail dialog). */
+    byCharacter: (chatId: string, characterId: string) =>
+      ['mailbox', chatId, characterId] as const,
+  },
   helpChat: {
     all: ['help-chat'] as const,
     entity: (apiUrl: string) => ['help-chat', 'entity', apiUrl] as const,
