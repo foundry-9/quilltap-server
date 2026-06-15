@@ -26,7 +26,7 @@ export const docCopyFileToolInputSchema = z.object({
   source_mount_point: z
     .string()
     .min(1)
-    .describe('Name (or ID) of the document store to copy the file from.'),
+    .describe('Name (or ID) of the document store to copy the file from. Pass "self" for your own character vault.'),
   source_path: z
     .string()
     .min(1)
@@ -34,7 +34,7 @@ export const docCopyFileToolInputSchema = z.object({
   dest_mount_point: z
     .string()
     .min(1)
-    .describe('Name (or ID) of the document store to copy the file into. Must be different from source_mount_point.'),
+    .describe('Name (or ID) of the document store to copy the file into. Pass "self" for your own character vault. Must be different from source_mount_point.'),
   dest_path: z
     .string()
     .describe(

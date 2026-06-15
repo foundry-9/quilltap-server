@@ -13,7 +13,7 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
 export const docListFilesToolInputSchema = z.object({
   mount_point: z
     .string()
-    .describe('Optional: restrict listing to a specific mount point. Without this, lists all mount points.')
+    .describe('Optional: restrict listing to a specific mount point (name or ID). Pass "self" to list only your own character vault. Without this, lists all mount points.')
     .optional(),
   scope: z
     .enum(['document_store', 'project', 'general', 'group'])

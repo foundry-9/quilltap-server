@@ -82,7 +82,7 @@ exports[`tool definitions: derived OpenAI parameters docCopyFile: parameters sna
   "additionalProperties": false,
   "properties": {
     "dest_mount_point": {
-      "description": "Name (or ID) of the document store to copy the file into. Must be different from source_mount_point.",
+      "description": "Name (or ID) of the document store to copy the file into. Pass "self" for your own character vault. Must be different from source_mount_point.",
       "minLength": 1,
       "type": "string",
     },
@@ -91,7 +91,7 @@ exports[`tool definitions: derived OpenAI parameters docCopyFile: parameters sna
       "type": "string",
     },
     "source_mount_point": {
-      "description": "Name (or ID) of the document store to copy the file from.",
+      "description": "Name (or ID) of the document store to copy the file from. Pass "self" for your own character vault.",
       "minLength": 1,
       "type": "string",
     },
@@ -116,7 +116,7 @@ exports[`tool definitions: derived OpenAI parameters docCreateFolder: parameters
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -146,7 +146,7 @@ exports[`tool definitions: derived OpenAI parameters docDeleteBlob: parameters s
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name or ID holding the blob.",
+      "description": "Mount point name or ID holding the blob. Pass "self" for your own character vault.",
       "type": "string",
     },
     "path": {
@@ -167,7 +167,7 @@ exports[`tool definitions: derived OpenAI parameters docDeleteFile: parameters s
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -197,7 +197,7 @@ exports[`tool definitions: derived OpenAI parameters docDeleteFolder: parameters
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -276,7 +276,7 @@ exports[`tool definitions: derived OpenAI parameters docGrep: parameters snapsho
       "type": "integer",
     },
     "mount_point": {
-      "description": "Optional: restrict search to a specific mount point. Without this, searches all mounted points.",
+      "description": "Optional: restrict search to a specific mount point (name or ID). Pass "self" to search only your own character vault. Without this, searches all mounted points.",
       "type": "string",
     },
     "normalize_diacritics": {
@@ -309,7 +309,7 @@ exports[`tool definitions: derived OpenAI parameters docInsertText: parameters s
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "normalize_diacritics": {
@@ -373,7 +373,7 @@ exports[`tool definitions: derived OpenAI parameters docListBlobs: parameters sn
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name or ID to enumerate blobs for.",
+      "description": "Mount point name or ID to enumerate blobs for. Pass "self" for your own character vault.",
       "type": "string",
     },
   },
@@ -398,7 +398,7 @@ exports[`tool definitions: derived OpenAI parameters docListFiles: parameters sn
       "type": "boolean",
     },
     "mount_point": {
-      "description": "Optional: restrict listing to a specific mount point. Without this, lists all mount points.",
+      "description": "Optional: restrict listing to a specific mount point (name or ID). Pass "self" to list only your own character vault. Without this, lists all mount points.",
       "type": "string",
     },
     "pattern": {
@@ -430,7 +430,7 @@ exports[`tool definitions: derived OpenAI parameters docMoveFile: parameters sna
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "new_path": {
@@ -465,7 +465,7 @@ exports[`tool definitions: derived OpenAI parameters docMoveFolder: parameters s
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "new_path": {
@@ -507,7 +507,7 @@ exports[`tool definitions: derived OpenAI parameters docOpenDocument: parameters
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -543,7 +543,7 @@ exports[`tool definitions: derived OpenAI parameters docReadBlob: parameters sna
       "type": "boolean",
     },
     "mount_point": {
-      "description": "Mount point name or ID holding the blob.",
+      "description": "Mount point name or ID holding the blob. Pass "self" for your own character vault.",
       "type": "string",
     },
     "path": {
@@ -570,7 +570,7 @@ exports[`tool definitions: derived OpenAI parameters docReadFile: parameters sna
       "type": "integer",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "offset": {
@@ -613,7 +613,7 @@ exports[`tool definitions: derived OpenAI parameters docReadFrontmatter: paramet
       "type": "array",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -653,7 +653,7 @@ exports[`tool definitions: derived OpenAI parameters docReadHeading: parameters 
       "type": "integer",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -693,7 +693,7 @@ exports[`tool definitions: derived OpenAI parameters docStrReplace: parameters s
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "normalize_diacritics": {
@@ -734,7 +734,7 @@ exports[`tool definitions: derived OpenAI parameters docUpdateFrontmatter: param
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -792,7 +792,7 @@ exports[`tool definitions: derived OpenAI parameters docUpdateHeading: parameter
       "type": "integer",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -841,7 +841,7 @@ exports[`tool definitions: derived OpenAI parameters docWriteBlob: parameters sn
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name or ID that should receive the blob.",
+      "description": "Mount point name or ID that should receive the blob. Pass "self" for your own character vault.",
       "type": "string",
     },
     "original_filename": {
@@ -880,7 +880,7 @@ exports[`tool definitions: derived OpenAI parameters docWriteFile: parameters sn
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {

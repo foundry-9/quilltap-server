@@ -18,7 +18,7 @@ export const docReadFrontmatterToolInputSchema = z.object({
     .optional(),
   mount_point: z
     .string()
-    .describe('Mount point name. Required when scope is "document_store".')
+    .describe('Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.')
     .optional(),
   path: z
     .string()

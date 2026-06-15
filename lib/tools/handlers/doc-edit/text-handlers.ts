@@ -14,6 +14,7 @@ import {
   readFileWithMtime,
   writeFileWithMtimeCheck,
   getAccessibleMountPoints,
+  resolveMountPointRef,
   isTextFile,
   findUniqueMatch,
   findAllMatches,
@@ -594,13 +595,18 @@ export async function handleGrep(
     }
   };
 
-  // Search document store mount points
-  if (!input.mount_point || input.mount_point) {
+  // Search document store mount points. Translate the reserved self-token to
+  // the acting character's own vault ID so `mount_point: "self"` filters to it,
+  // mirroring the path resolver; any other value passes through unchanged.
+  {
+    const mountPointFilter = input.mount_point
+      ? await resolveMountPointRef(input.mount_point, context.characterId)
+      : undefined;
     const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
     const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
 
     for (const mp of mountPoints) {
-      if (input.mount_point && mp.name.toLowerCase() !== input.mount_point.toLowerCase() && mp.id !== input.mount_point) {
+      if (mountPointFilter && mp.name.toLowerCase() !== mountPointFilter.toLowerCase() && mp.id !== mountPointFilter) {
         continue;
       }
       if (mp.mountType === 'database') {
@@ -757,12 +763,17 @@ export async function handleListFiles(
   // Resolve group mount IDs once so per-mount tagging is O(1)
   const groupMountIds = new Set(await resolveGroupMountPointIdsForCharacter(context.characterId));
 
-  // List document store files
+  // List document store files. Translate the reserved self-token to the acting
+  // character's own vault ID so `mount_point: "self"` filters to it, mirroring
+  // the path resolver; any other value passes through unchanged.
   if (shouldIncludeDocStore) {
+    const mountPointFilter = input.mount_point
+      ? await resolveMountPointRef(input.mount_point, context.characterId)
+      : undefined;
     const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
     const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
     for (const mp of mountPoints) {
-      if (input.mount_point && mp.name.toLowerCase() !== input.mount_point.toLowerCase() && mp.id !== input.mount_point) {
+      if (mountPointFilter && mp.name.toLowerCase() !== mountPointFilter.toLowerCase() && mp.id !== mountPointFilter) {
         continue;
       }
       // When scope is 'group', skip any mount that is not a group store

@@ -5,7 +5,7 @@
  * @module tools/handlers/doc-edit/blob-handlers
  */
 
-import { getAccessibleMountPoints } from '@/lib/doc-edit';
+import { getAccessibleMountPoints, resolveMountPointRef } from '@/lib/doc-edit';
 import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { DocWriteBlobInput, DocWriteBlobOutput } from '../../doc-write-blob-tool';
@@ -24,11 +24,14 @@ async function resolveBlobMountPointForRead(
   context: DocEditToolContext
 ): Promise<{ id: string; name: string } | null> {
   if (!context.projectId && !context.characterId) return null;
+  // Translate the reserved self-token to the acting character's own vault ID so
+  // `mount_point: "self"` resolves here too, mirroring the path resolver.
+  const effectiveRef = await resolveMountPointRef(mountPointRef, context.characterId);
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
   const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
-  const needle = mountPointRef.toLowerCase();
+  const needle = effectiveRef.toLowerCase();
   const found = mountPoints.find(
-    mp => mp.name.toLowerCase() === needle || mp.id === mountPointRef
+    mp => mp.name.toLowerCase() === needle || mp.id === effectiveRef
   );
   return found ? { id: found.id, name: found.name } : null;
 }
@@ -38,14 +41,18 @@ async function resolveBlobMountPointForWrite(
   context: DocEditToolContext
 ): Promise<{ id: string; name: string } | null> {
   if (!context.projectId && !context.characterId) return null;
+  // Translate the reserved self-token before matching. "self" is always the
+  // acting character's own vault, never a peer's, so the peer-vault guard below
+  // can run against the original reference unchanged.
+  const effectiveRef = await resolveMountPointRef(mountPointRef, context.characterId);
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
   // Writes must not land in a peer's vault — raise the dedicated read-only error
   // before we even enumerate accessible mounts.
   await assertWriteDoesNotTargetPeerVault(mountPointRef, peerCharacterIds);
   const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId);
-  const needle = mountPointRef.toLowerCase();
+  const needle = effectiveRef.toLowerCase();
   const found = mountPoints.find(
-    mp => mp.name.toLowerCase() === needle || mp.id === mountPointRef
+    mp => mp.name.toLowerCase() === needle || mp.id === effectiveRef
   );
   return found ? { id: found.id, name: found.name } : null;
 }

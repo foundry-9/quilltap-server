@@ -1429,7 +1429,7 @@ function formatVaultCharacter(section: SelfInventoryVaultCharacterSection): stri
   }
 
   const lines = section.files.map(formatVaultFileLine);
-  const footer = `(To read a file: doc_read_file with scope='document_store', mount_point='${section.mountPointName}', path='<relativePath>')`;
+  const footer = `(To read one of these files: doc_read_file with scope='document_store', mount_point='self', path='<relativePath>'. The reserved mount_point 'self' always addresses your own vault, whatever its name; the name '${section.mountPointName}' and its ID work too.)`;
   return `${header}\n${lines.join('\n')}\n${footer}`;
 }
 

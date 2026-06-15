@@ -18,7 +18,7 @@ export const docGrepToolInputSchema = z.object({
     .optional(),
   mount_point: z
     .string()
-    .describe('Optional: restrict search to a specific mount point. Without this, searches all mounted points.')
+    .describe('Optional: restrict search to a specific mount point (name or ID). Pass "self" to search only your own character vault. Without this, searches all mounted points.')
     .optional(),
   is_regex: z
     .boolean()

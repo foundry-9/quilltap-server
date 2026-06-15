@@ -614,6 +614,20 @@ function renderWhisperStoreLine(store: ProsperoDocumentStoreInfo): string {
   return `- **${store.name}**${tagSuffix} — use \`mount_point: "${safeName}"\` (ID \`${store.id}\` also works).`;
 }
 
+/**
+ * Render the character's own-vault line. Unlike a group shelf, the vault has a
+ * stable reserved handle: `mount_point: "self"` always addresses it on any
+ * `doc_*` tool, immune to a later rename. The name and ID are still offered as
+ * equivalents so name/ID matching keeps working.
+ */
+function renderVaultStoreLine(store: ProsperoDocumentStoreInfo): string {
+  const tags: string[] = [`${store.mountType}-backed`, 'your private vault'];
+  if (!store.enabled) tags.push('currently disabled');
+  const tagSuffix = ` *(${tags.join('; ')})*`;
+  const safeName = store.name.replace(/`/g, '\\`');
+  return `- **${store.name}**${tagSuffix} — address it as \`mount_point: "self"\` (the name \`${safeName}\` or ID \`${store.id}\` work too).`;
+}
+
 function buildGroupAndVaultBody(
   groupStores: ProsperoDocumentStoreInfo[],
   vaultStore: ProsperoDocumentStoreInfo | null,
@@ -626,7 +640,7 @@ function buildGroupAndVaultBody(
   }
   if (vaultStore) {
     lines.push('**Your own vault:**', '');
-    lines.push(renderWhisperStoreLine(vaultStore));
+    lines.push(renderVaultStoreLine(vaultStore));
     lines.push('');
   }
 

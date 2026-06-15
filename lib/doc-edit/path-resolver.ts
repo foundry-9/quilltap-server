@@ -41,6 +41,53 @@ const logger = createServiceLogger('DocEdit:PathResolver');
  */
 export const SELF_VAULT_TOKEN = 'self';
 
+/**
+ * Resolve the acting character's own vault mount-point ID via the DB link
+ * (`characters.characterDocumentMountPointId`). Returns null when there is no
+ * character context, the character has no vault, or the lookup fails. Uses the
+ * overlay-free raw read because we only need the pointer and it must survive a
+ * broken vault overlay. Shared by the path resolver and the list/grep/blob tool
+ * handlers so the reserved self-token names the same store everywhere.
+ */
+export async function resolveSelfVaultMountPointId(
+  characterId: string | undefined | null
+): Promise<string | null> {
+  if (!characterId) return null;
+  try {
+    const repos = getRepositories();
+    const acting = await repos.characters.findByIdRaw(characterId);
+    return acting?.characterDocumentMountPointId ?? null;
+  } catch (error) {
+    logger.warn('Failed to resolve self-vault mount point id', {
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+/**
+ * Translate a caller-supplied `mount_point` reference into the literal that
+ * should be matched against accessible stores. The reserved self-token
+ * (case-insensitive) becomes the acting character's own vault mount-point ID;
+ * every other value passes through unchanged. Returns the original reference
+ * when there is no character context or the character has no vault, so a store
+ * literally named "self" still resolves by name elsewhere. This mirrors the
+ * path resolver's self-token handling for the tools that match a mount point by
+ * name/ID rather than calling `resolveDocEditPath` (doc_list_files, doc_grep,
+ * the blob family).
+ */
+export async function resolveMountPointRef(
+  mountPointRef: string,
+  characterId: string | undefined | null
+): Promise<string> {
+  if (characterId && mountPointRef.toLowerCase() === SELF_VAULT_TOKEN) {
+    const ownVaultId = await resolveSelfVaultMountPointId(characterId);
+    if (ownVaultId) return ownVaultId;
+  }
+  return mountPointRef;
+}
+
 export type DocEditScope = 'document_store' | 'project' | 'general';
 
 export interface PathResolutionContext {
@@ -317,8 +364,7 @@ async function resolveDocumentStorePath(
   // acting as itself can use it; without a characterId we fall through to normal
   // resolution so a store literally named "self" stays reachable elsewhere.
   if (context.characterId && needle === SELF_VAULT_TOKEN) {
-    const acting = await repos.characters.findByIdRaw(context.characterId);
-    const ownVaultId = acting?.characterDocumentMountPointId ?? null;
+    const ownVaultId = await resolveSelfVaultMountPointId(context.characterId);
     if (ownVaultId && accessibleIds.includes(ownVaultId)) {
       mountPoint = await repos.docMountPoints.findById(ownVaultId);
     }

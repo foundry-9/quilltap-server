@@ -4,6 +4,18 @@
 
 ### 4.7-dev
 
+#### `mount_point: "self"` taught and accepted across all `doc_*` tools
+
+Extends the Post Office's reserved `mount_point: "self"` token (own-vault access via `characters.characterDocumentMountPointId`) to the rest of the document toolset, so every character has one stable, rename- and collision-proof handle for its own vault rather than reconstructing the vault's name.
+
+- Tool definitions: every `doc_*` tool's `mount_point` description now states that `"self"` addresses the caller's own character vault — `doc_read_file`, `doc_write_file`, `doc_str_replace`, `doc_insert_text`, `doc_delete_file`, `doc_create_folder`, `doc_delete_folder`, `doc_move_file`, `doc_move_folder`, `doc_open_document`, `doc_read_frontmatter`, `doc_read_heading`, `doc_update_frontmatter`, `doc_update_heading`, `doc_list_files`, `doc_grep`, `doc_copy_file` (`source_mount_point`/`dest_mount_point`), and the `doc_*_blob` family.
+- Acceptance: `doc_list_files`, `doc_grep`, and the blob handlers now resolve `"self"` to the acting character's vault, matching the path resolver. Tools that route through `resolveDocEditPath` (read/write/edit/move/copy/folder) already honored it.
+- Shared helpers: new `resolveSelfVaultMountPointId` and `resolveMountPointRef` in `lib/doc-edit/path-resolver.ts` are the single source for self-token resolution; the path resolver's existing inline logic was refactored onto the former, and the name/ID-matching handlers use the latter.
+- Staff guidance switched to `"self"`: Prospero's group + personal-vault whisper teaches `mount_point: "self"` on the own-vault line (the vault's name and ID still shown as equivalents); `self_inventory`'s Character Vault section footer recommends `"self"`.
+- Backwards-compatible: vault name and ID matching still work everywhere. `"self"` only resolves for a character acting as itself, so a store literally named "self" stays reachable for operators and non-character callers.
+- Tests: added `resolveSelfVaultMountPointId` / `resolveMountPointRef` unit tests; extended the Prospero group-context-whisper tests; refreshed the tool-definition snapshot.
+- Help: `help/document-editing-tools.md` gains a "`self` shorthand" section.
+
 #### The Post Office: inter-character mail
 
 Characters can now send and receive Markdown letters. Delivered by Suparṇā (a new personified Staff member), stored in each character's `Mail/` vault folder, and announced at memory-recall time.

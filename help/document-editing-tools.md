@@ -19,10 +19,21 @@ Configure document stores from **The Scriptorium** page and link them to project
 
 Every `doc_*` tool accepts a `scope` parameter that determines where it operates:
 
-- **`document_store`** (default) — Files within mounted document stores. Requires a `mount_point` parameter specifying which store to use.
+- **`document_store`** (default) — Files within mounted document stores. Requires a `mount_point` parameter specifying which store to use. A `mount_point` may be given as the store's name *or* its identifier; a character may also reach into their **own** character vault with the reserved word `"self"` (see below).
 - **`project`** — Files stored in the project's own file area.
 - **`general`** — Files in the general (non-project) file storage.
 - **`group`** — Files in the document stores of the Groups the responding character belongs to. Available on `doc_list_files` (to enumerate just the group shelves) and on `search` (to confine a search to them). A character that belongs to no Groups sees nothing under this scope. Because membership is personal, a character only ever reaches *their own* Groups' stores — never a companion's.
+
+## The `self` shorthand for one's own vault
+
+Every character who keeps a personal vault may address it with the reserved `mount_point` value **`"self"`** — a standing latchkey to one's own private study. It works wherever a `doc_*` tool takes a `mount_point` (and as `source_mount_point` / `dest_mount_point` on `doc_copy_file`, and on the `doc_*_blob` family); it confines `doc_list_files` and `doc_grep` to the vault alone:
+
+```
+doc_read_file(scope: "document_store", mount_point: "self", path: "Mail/letter-001.md")
+doc_list_files(mount_point: "self")
+```
+
+The convenience is twofold. A character need not recall the formal title its vault was christened with, and should that title ever change, `"self"` keeps pointing true. The vault's actual name and identifier continue to work exactly as before — `"self"` is an addition, never a replacement. The shorthand resolves only for the character acting as itself; an operator or a non-character caller falls through to ordinary name-and-identifier matching, so a store one has genuinely *named* "self" remains reachable in those contexts.
 
 ## Available Tools
 

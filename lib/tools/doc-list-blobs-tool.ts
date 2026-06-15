@@ -9,7 +9,7 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc_list_blobs tool's input.
  */
 export const docListBlobsToolInputSchema = z.object({
-  mount_point: z.string().describe('Mount point name or ID to enumerate blobs for.'),
+  mount_point: z.string().describe('Mount point name or ID to enumerate blobs for. Pass "self" for your own character vault.'),
   folder: z
     .string()
     .describe('Optional folder prefix to filter results (e.g. "images").')

@@ -10,7 +10,13 @@
  */
 
 // ── Subject ─────────────────────────────────────────────────────────────────
-import { resolveDocEditPath, PathResolutionError, SELF_VAULT_TOKEN } from '../path-resolver';
+import {
+  resolveDocEditPath,
+  PathResolutionError,
+  SELF_VAULT_TOKEN,
+  resolveSelfVaultMountPointId,
+  resolveMountPointRef,
+} from '../path-resolver';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 import { getRepositories } from '@/lib/repositories/factory';
@@ -76,5 +82,60 @@ describe('self-token resolution', () => {
       mountPoint: 'self',
     });
     expect(resolved.mountPointId).toBe('store-literal');
+  });
+});
+
+// The shared helper behind the self-token, reused by the list/grep/blob tool
+// handlers that match a mount point by name/ID rather than via resolveDocEditPath.
+describe('resolveSelfVaultMountPointId', () => {
+  function mockCharacter(row: unknown) {
+    jest.mocked(getRepositories).mockReturnValue({
+      characters: { findByIdRaw: jest.fn().mockResolvedValue(row) },
+    } as never);
+  }
+
+  it('returns the vault id from the character row', async () => {
+    mockCharacter({ id: 'c1', characterDocumentMountPointId: 'vault-own' });
+    await expect(resolveSelfVaultMountPointId('c1')).resolves.toBe('vault-own');
+  });
+
+  it('returns null without a characterId (no repo call)', async () => {
+    await expect(resolveSelfVaultMountPointId(undefined)).resolves.toBeNull();
+  });
+
+  it('returns null when the character has no vault', async () => {
+    mockCharacter({ id: 'c1', characterDocumentMountPointId: null });
+    await expect(resolveSelfVaultMountPointId('c1')).resolves.toBeNull();
+  });
+
+  it('swallows a repo error and returns null', async () => {
+    jest.mocked(getRepositories).mockReturnValue({
+      characters: { findByIdRaw: jest.fn().mockRejectedValue(new Error('boom')) },
+    } as never);
+    await expect(resolveSelfVaultMountPointId('c1')).resolves.toBeNull();
+  });
+});
+
+describe('resolveMountPointRef', () => {
+  it('translates the self-token to the vault id (case-insensitive)', async () => {
+    jest.mocked(getRepositories).mockReturnValue({
+      characters: { findByIdRaw: jest.fn().mockResolvedValue({ id: 'c1', characterDocumentMountPointId: 'vault-own' }) },
+    } as never);
+    await expect(resolveMountPointRef('SELF', 'c1')).resolves.toBe('vault-own');
+  });
+
+  it('passes a non-self reference through unchanged (no repo call)', async () => {
+    await expect(resolveMountPointRef('Quilltap General', 'c1')).resolves.toBe('Quilltap General');
+  });
+
+  it('passes "self" through unchanged when there is no character context', async () => {
+    await expect(resolveMountPointRef('self', undefined)).resolves.toBe('self');
+  });
+
+  it('passes "self" through when the character has no vault, so a literal store stays reachable', async () => {
+    jest.mocked(getRepositories).mockReturnValue({
+      characters: { findByIdRaw: jest.fn().mockResolvedValue({ id: 'c1', characterDocumentMountPointId: null }) },
+    } as never);
+    await expect(resolveMountPointRef('self', 'c1')).resolves.toBe('self');
   });
 });

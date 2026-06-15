@@ -12,7 +12,7 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
 export const docReadBlobToolInputSchema = z.object({
   mount_point: z
     .string()
-    .describe('Mount point name or ID holding the blob.'),
+    .describe('Mount point name or ID holding the blob. Pass "self" for your own character vault.'),
   path: z
     .string()
     .describe('Relative path to the blob within the mount point (e.g. images/avatar.webp).'),

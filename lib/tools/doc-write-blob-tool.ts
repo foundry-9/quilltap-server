@@ -13,7 +13,7 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
 export const docWriteBlobToolInputSchema = z.object({
   mount_point: z
     .string()
-    .describe('Mount point name or ID that should receive the blob.'),
+    .describe('Mount point name or ID that should receive the blob. Pass "self" for your own character vault.'),
   path: z
     .string()
     .describe('Desired relative path within the mount point, e.g. "images/avatar.png". If the upload is transcoded to WebP the extension is rewritten to .webp.'),
