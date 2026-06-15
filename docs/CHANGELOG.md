@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Larger sidebar icons
+
+Bumped the collapsed left-sidebar icons up one size so they read closer to the user avatar. The navigation and footer action icons went from 20px to 28px, and the Home/brand quill went from 28px to 32px (matching the profile photo). Sizes are set at each `<Icon>` call site via Tailwind `w-`/`h-` utilities (the qt-icon size default intentionally defers to them), so no theme tokens or bundled themes changed.
+
 #### Fixed: character Rename/Replace tab failed with "Unknown action: rename"
 
 The Aurora character editor's Rename/Replace tab has been broken since the v1 API cleanup: the UI posted to `POST /api/v1/characters/[id]?action=rename`, but that action was never carried over when the legacy `/api/characters/[id]/rename` route was removed, so both Preview and Execute returned `400 Unknown action: rename`. Restored the action against the current data model.

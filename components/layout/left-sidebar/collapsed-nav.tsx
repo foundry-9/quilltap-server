@@ -41,7 +41,7 @@ export function CollapsedNav() {
         title="Home"
         aria-label="Home"
       >
-        <Icon name="brand" className="w-7 h-7" />
+        <Icon name="brand" className="w-8 h-8" />
       </a>
       {navItems.map((item) => (
         <a
@@ -51,7 +51,7 @@ export function CollapsedNav() {
           title={item.tooltip}
           aria-label={item.tooltip}
         >
-          <Icon name={item.icon} className="w-5 h-5" />
+          <Icon name={item.icon} className="w-7 h-7" />
         </a>
       ))}
     </nav>

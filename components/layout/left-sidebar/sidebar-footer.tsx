@@ -154,7 +154,7 @@ export function SidebarFooter() {
             className={`qt-left-sidebar-item justify-center px-0 ${!helpChat.isEligible && !helpChat.eligibilityLoading ? 'opacity-40 cursor-not-allowed' : ''}`}
             title={helpChat.isEligible ? 'Help' : 'Help (requires a help-enabled character with a tool-capable connection)'}
           >
-            <Icon name="help" className="qt-left-sidebar-item-icon w-5 h-5" />
+            <Icon name="help" className="qt-left-sidebar-item-icon w-7 h-7" />
           </button>
         )}
         {brahmaConsole && (
@@ -165,7 +165,7 @@ export function SidebarFooter() {
             className={`qt-left-sidebar-item justify-center px-0 ${!brahmaConsole.isEligible ? 'opacity-40 cursor-not-allowed' : ''}`}
             title={brahmaConsole.isEligible ? 'Brahma Console' : 'Brahma Console (requires a connection profile)'}
           >
-            <Icon name="brahma-console" className="qt-left-sidebar-item-icon w-5 h-5" />
+            <Icon name="brahma-console" className="qt-left-sidebar-item-icon w-7 h-7" />
           </button>
         )}
         {wardrobeDialog && (
@@ -186,7 +186,7 @@ export function SidebarFooter() {
             className="qt-left-sidebar-item justify-center px-0"
             title="Wardrobe"
           >
-            <Icon name="wardrobe" className="qt-left-sidebar-item-icon w-5 h-5" />
+            <Icon name="wardrobe" className="qt-left-sidebar-item-icon w-7 h-7" />
           </button>
         )}
 
@@ -195,7 +195,7 @@ export function SidebarFooter() {
           className="qt-left-sidebar-item justify-center px-0"
           title="Settings"
         >
-          <Icon name="settings" className="qt-left-sidebar-item-icon w-5 h-5" />
+          <Icon name="settings" className="qt-left-sidebar-item-icon w-7 h-7" />
         </a>
 
         {showThemes && (
@@ -206,7 +206,7 @@ export function SidebarFooter() {
               className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'themes' ? 'qt-bg-primary/10' : ''}`}
               title="Themes"
             >
-              <Icon name="themes" className="qt-left-sidebar-item-icon w-5 h-5" />
+              <Icon name="themes" className="qt-left-sidebar-item-icon w-7 h-7" />
             </button>
             {openPopout === 'themes' && (
               <div className="absolute bottom-full left-0 mb-1 w-56 bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
@@ -224,7 +224,7 @@ export function SidebarFooter() {
               className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'quickHide' ? 'qt-bg-primary/10' : ''}`}
               title={hasAnyHidden ? 'Show' : 'Hide'}
             >
-              <QuickHideIcon hasHidden={hasAnyHidden} className="qt-left-sidebar-item-icon w-5 h-5" />
+              <QuickHideIcon hasHidden={hasAnyHidden} className="qt-left-sidebar-item-icon w-7 h-7" />
             </button>
             {openPopout === 'quickHide' && (
               <div className="absolute bottom-full left-0 mb-1 w-56 bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
