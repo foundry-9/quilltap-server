@@ -97,6 +97,7 @@ import {
   postSuparnaMailWhisper,
 } from '@/lib/services/suparna-notifications/writer'
 import { collectUnalertedMail, markAlerted } from '@/lib/post-office/mailbox'
+import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail'
 import {
   assembleCorePacket,
   buildCoreWhisperContent,
@@ -1824,6 +1825,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       })
     }
   }
+
+  // Post Office: the block above only covers the RESPONDING (LLM) character's
+  // own mailbox. The operator is always playing a character too, and that
+  // character never takes an LLM turn — so a letter addressed to it would never
+  // be announced. Sweep the operator's character vault(s) as well, posting a
+  // whisper targeted at the operator's participant (visible to them, private
+  // from the others). Idempotent (markAlerted) and warn-only inside, so it
+  // never breaks the turn; the chat-load GET runs the same sweep for idle rooms.
+  await surfaceOperatorMailForChat(chat.id, chat.participants)
 
   // Add new user message (only if provided - not in continue mode)
   // In multi-character mode, include the user's character name

@@ -20,6 +20,7 @@ import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
+import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail';
 import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores, handleGetMailbox } from '../actions';
 import {
   getPhotoLinkSummaryBySha256,
@@ -213,6 +214,13 @@ export async function handleGet(
     // (DB row says "live" but ptyManager doesn't have it) and post the close
     // announcements before we read the message history below.
     await reconcileTerminalSessionsForChat(chatId);
+
+    // The Post Office: announce any letters addressed to the operator's own
+    // character(s) before we read the history below. A user-controlled
+    // participant never takes an LLM turn, so the per-turn mail check never
+    // covers it; without this, mail to the operator's character would sit
+    // unannounced in an idle room. Idempotent and warn-only inside.
+    await surfaceOperatorMailForChat(chatId, chatMetadata.participants);
 
     const enrichedParticipants = await Promise.all(
       chatMetadata.participants.map((p) => enrichParticipantDetail(p, repos, chatId))

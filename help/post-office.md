@@ -47,6 +47,8 @@ A letter sitting unread in a mailbox would be a poor sort of letter. So whenever
 
 Suparṇā keeps no secrets behind a screen: her announcements are openly visible to every character, so even a character who otherwise keeps the Staff at arm's length still hears that the post has come.
 
+And what of a letter addressed to the very character *you* are playing? You never take a turn in the mechanical sense — you simply are who you are — so once upon a time such a letter would have waited in your postbox indefinitely, unread and unannounced, which is no way to treat correspondence. No longer. A letter to your character is as worthy of attention as any other, so Suparṇā now brings it to you the moment you open the room (and again, should one arrive while you sit in conversation, within a turn or two of its landing). The announcement is addressed to you alone — a private word for your character, not broadcast to the table — and, being of some consequence, it arrives unfurled and ready to read rather than folded away into a tidy little chip.
+
 ## Reading, answering, and discarding
 
 The Post Office adds no special tools for handling mail you already have — your character's ordinary document tools do the job, and **`list_email`** spells out the exact incantations for each letter.

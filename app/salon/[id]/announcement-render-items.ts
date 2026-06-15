@@ -30,9 +30,15 @@ export type RenderItem =
  * `systemSender: 'carina'`, they are real reference answers that must always
  * render as a full row (with the answerer character's own avatar and the answer
  * text), not as a collapsed chip.
+ *
+ * Suparṇā mail-delivery whispers are likewise exempt: a letter the operator can
+ * see is one addressed to their own character (the visibility filter only shows
+ * a targeted whisper when it targets a user-controlled participant), and those
+ * are significant enough to read in full rather than pack into a chip.
  */
 function isCollapsedAnnouncement(message: Message, expandedSystemMessageIds: Set<string>): boolean {
   if (message.systemSender === 'carina') return false
+  if (message.systemSender === 'suparna' && message.systemKind === 'mail-delivery') return false
   return !!message.systemSender && !expandedSystemMessageIds.has(message.id)
 }
 

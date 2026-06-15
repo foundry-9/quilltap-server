@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### Post Office: letters to your own character now surface
+
+Mail addressed to the character you play (a `controlledBy: 'user'` participant) is now announced to you, the same way it is for an AI character. Previously the Suparṇā delivery whisper was only generated during an LLM character's turn, so a letter delivered to your character sat in its vault unannounced (`alerted: false`) forever — you never saw it.
+
+- New shared helper `lib/post-office/surface-operator-mail.ts` (`surfaceOperatorMailForChat`): for every user-controlled CHARACTER participant, it sweeps that character's vault for unalerted letters and posts a Suparṇā `mail-delivery` whisper targeted at that participant, then marks each letter alerted. It posts the whisper only — no LLM context is injected, since your character makes no model call. Idempotent (`markAlerted`) and warn-only, so it never breaks a load or a turn; it replays correctly from the forked background-jobs child.
+- Called from two places: the chat-load GET (`app/api/v1/chats/[id]/handlers/get.ts`, alongside the existing terminal-session reconcile) so a pending letter appears the moment you open the chat, and each turn's `buildContext` (`lib/chat/context-manager.ts`) so a letter that arrives mid-session surfaces within a turn (including autonomous rooms).
+- The Salon already shows a targeted whisper when it targets a user-controlled participant, so no visibility change was needed. Mail-delivery whispers now render expanded by default instead of collapsing into a chip (`app/salon/[id]/announcement-render-items.ts`), the same exemption Carina answers get, because a letter to your character is significant.
+- Tests: +9 for the helper, +1 for the render-item expansion.
+
 #### Compose Mail button in the Salon composer (Post Office UI)
 
 Added a Compose Mail button to the Salon composer gutter: the operator can send a letter as one of their player-characters (`controlledBy: 'user'`) to another character, optionally quoting a letter from the sender's mailbox. Delivered by Suparṇā through the same Post Office service the `send_mail` tool uses, so the UI and the tool stay in lockstep.
