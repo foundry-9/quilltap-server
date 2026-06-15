@@ -408,46 +408,36 @@ The character's **Details** view does two helpful things on your behalf. First, 
 
 Every one of these sweeps reaches the *entire* dossier — identity, description, manifesto, personality, every scenario, the first message, the example dialogues, all of the character's system prompts, and the physical-description prose and image prompts. The work is saved at once and the page refreshed, so the counts and buttons settle to reflect the new state of affairs. (System prompts are filed through their own ledger behind the scenes, so a token swap inside a non-default prompt is no longer quietly mislaid.)
 
-## Using Rename/Replace Tab
+## Using the Rename/Replace Tab
 
-The Rename/Replace tab helps with bulk changes to character content.
+Where the tools above polish a single field, the **Rename/Replace** tab conducts a wholesale renaming — a careful sweep that follows a name (or any turn of phrase) clear across the character's entire estate and quietly replaces it everywhere at once.
 
-### Simple Rename
+### What it reaches
 
-If you want to rename the character and update all references:
+A single sweep visits the character's own dossier (the name itself, title, identity, description, manifesto, personality, every scenario, the first message, the example dialogues, the aliases, and all of the character's system prompts), the physical-description prose together with its short/medium/long/complete image prompts, every one of the character's memories, and — most far-reaching of all — the titles and the actual message bodies of every conversation the character has ever appeared in. Messages authored by the Staff (the Lantern, Aurora, the Host, and their colleagues) are left untouched, since their wording is bookkeeping rather than prose.
 
-1. Click **Rename/Replace** tab
-2. Enter **New Name**
-3. Select **Replace in all content** option
-4. Click **Rename**
-5. Character renamed everywhere (description, prompts, etc.)
+### Renaming the character
 
-### Find and Replace
+1. Open the **Rename/Replace** tab.
+2. Type the **New Name**. The **Current Name** is shown beside it, fixed, for reference.
+3. Tick **Case sensitive matching** only if the capitalisation must match exactly.
+4. Click **Preview Changes**.
 
-For bulk text replacement:
+### Replacing nicknames, aliases, or any other term
 
-1. Click **Rename/Replace** tab
-2. Enter **Find** text
-3. Enter **Replace** text
-4. Click **Preview** to see what will change
-5. Click **Replace All** to confirm
-6. All matching text updated
+Beneath the rename, the **Additional Replacements** section takes any number of find-and-replace pairs — splendid for nicknames, an old surname, or a wholesale change of setting. Click **Add**, fill in **Find** and **Replace with**, and toggle the **Aa** box on a row that ought to mind its capitals. You may rename the character, supply additional replacements, or both in the one pass.
 
 **Examples:**
 
-- Find: "pirate ship" → Replace: "airship" (changing genre)
-- Find: "he" → Replace: "she" (changing gender)
-- Find: "London" → Replace: "New York" (changing setting)
+- Find: "Snips" → Replace with: "Ace" (an outdated nickname)
+- Find: "pirate ship" → Replace with: "airship" (changing the genre)
+- Find: "London" → Replace with: "New York" (changing the setting)
 
-### Preview Changes
+### Always preview first
 
-Always use Preview before Replace All:
+**Preview Changes** commits nothing. It lays out a tally — how many occurrences fall under character fields, descriptions, memories, chat titles, and messages — and a table showing each `before → after`, with surrounding context. Read it over; only then click **Execute *N* Replacements** and confirm the dialog. The change cannot be undone, so the preview is your safety net.
 
-1. Enter find/replace terms
-2. Click **Preview**
-3. See highlighted changes
-4. Review carefully
-5. Click **Replace All** if correct
+Once executed, any conversation whose messages were altered is re-indexed for search behind the scenes, so the Scriptorium's archive reflects the new wording rather than the old.
 
 ## Keyboard Shortcuts for Editing
 

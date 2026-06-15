@@ -10,6 +10,7 @@
  * POST /api/v1/characters/[id]?action=optimize-stream - Stream character optimization progress
  * POST /api/v1/characters/[id]?action=generate-external-prompt - Generate standalone system prompt
  * POST /api/v1/characters/[id]?action=refresh-archive - Re-render and re-embed all conversations
+ * POST /api/v1/characters/[id]?action=rename - Bulk rename/replace across character data, memories, and chats
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -23,6 +24,7 @@ import { runCharacterOptimizer } from '@/lib/services/character-optimizer.servic
 import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.service';
 import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
+import { runCharacterRename } from '@/lib/services/character-rename.service';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
 const avatarSchema = z.object({
@@ -58,7 +60,19 @@ const generateExternalPromptSchema = z.object({
   maxTokens: z.number().int().min(1000).max(20000),
 });
 
-const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'toggle-carina', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive'] as const;
+const renameReplacementPairSchema = z.object({
+  oldValue: z.string().min(1, 'Find value is required'),
+  newValue: z.string().min(1, 'Replace value is required'),
+  caseSensitive: z.boolean().default(false),
+});
+
+const renameSchema = z.object({
+  primaryRename: renameReplacementPairSchema.optional(),
+  additionalReplacements: z.array(renameReplacementPairSchema).default([]),
+  dryRun: z.boolean().default(true),
+});
+
+const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'toggle-carina', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive', 'rename'] as const;
 type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 async function handleOptimizeStream(
@@ -340,6 +354,28 @@ export async function handlePost(
       } catch (error) {
         logger.error('[Characters v1] Error refreshing conversation archive', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to refresh conversation archive');
+      }
+    },
+
+    rename: async () => {
+      const body = await req.json();
+      const { primaryRename, additionalReplacements, dryRun } = renameSchema.parse(body);
+
+      if (!primaryRename && additionalReplacements.length === 0) {
+        return badRequest('At least one replacement must be specified');
+      }
+
+      try {
+        const result = await runCharacterRename(
+          character,
+          { primaryRename, additionalReplacements, dryRun },
+          user.id,
+          repos
+        );
+        return NextResponse.json(result);
+      } catch (error) {
+        logger.error('[Characters v1] Error processing rename', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to process rename request');
       }
     },
   };

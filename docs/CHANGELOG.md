@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Fixed: character Rename/Replace tab failed with "Unknown action: rename"
+
+The Aurora character editor's Rename/Replace tab has been broken since the v1 API cleanup: the UI posted to `POST /api/v1/characters/[id]?action=rename`, but that action was never carried over when the legacy `/api/characters/[id]/rename` route was removed, so both Preview and Execute returned `400 Unknown action: rename`. Restored the action against the current data model.
+
+- New `lib/services/character-rename.service.ts` (`runCharacterRename`) does the scan-and-replace in one of two modes — dry run (preview counts + per-occurrence detail) or execute (commit the writes). Wired into the v1 characters POST handler as `action=rename` with a Zod-validated body.
+- Adapted to the post-4.6 model: `physicalDescription` is now a single object (was an array), `scenarios` is an array (was a single field), and the swept fields include `manifesto`, `identity`, and `aliases`. Character-field writes go through `repos.characters.update`, which routes the vault-managed fields into the character's document-store vault; only `name` lands on the row.
+- Sweeps the character's own fields, the physical description and its image prompts, the character's memories (content/summary/keywords), and the titles and message bodies of every chat the character appears in. Staff/personified-feature messages (`systemSender != null`) are skipped so their structured payloads aren't corrupted.
+- After an executed rename that changed chat messages, each affected conversation is re-rendered and re-embedded (the same path the "Refresh Archive" action uses) so the searchable archive reflects the new text. Memory rows are updated in place; their embeddings refresh on next touch.
+- Help: rewrote the Rename/Replace section of `help/character-editing.md` to match the actual UI and document exactly what the sweep reaches. Tests: +5 for the rename service.
+
 #### Startup self-heal: re-render and re-embed half-finished conversations
 
 Added a startup sweep that finds conversations the Scriptorium pipeline left incomplete and re-enqueues them, so the chat list stops accumulating chats that were never rendered or never embedded. Two cases are healed: a chat with real user/assistant messages but no `renderedMarkdown` (the per-turn render never fired, or a render job died on an interrupted shutdown), and a chat with interchange chunks whose `embedding` is still NULL (typically the embedding provider was down when the turn finished). Re-running `CONVERSATION_RENDER` fixes both — it upserts the chunks (preserving existing embeddings) and re-enqueues `EMBEDDING_GENERATE` for any chunk still lacking one.
