@@ -1,6 +1,6 @@
 # Feature Spec: Post Office UI — the "Compose Mail" composer button & modal
 
-> **Companion to** [`post-office.md`](../post-office.md) (the backend mail feature, already implemented). This spec covers **only the Salon UI**: a new composer-gutter button that opens a "Compose Mail" modal letting the operator send a letter as one of their player-characters.
+> **Companion to** [`post-office.md`](post-office.md) (the backend mail feature, already implemented). This spec covers **only the Salon UI**: a new composer-gutter button that opens a "Compose Mail" modal letting the operator send a letter as one of their player-characters.
 >
 > **Status:** Implemented (4.7-dev). The composer button, Compose Mail modal (`components/chat/ComposeMailDialog.tsx`), `send-mail`/`mailbox` chat actions, the shared `lib/post-office/deliver.ts` service, and the `mail` icon (default + Madman's Box) are all in place; see `docs/CHANGELOG.md` (4.7-dev "Compose Mail button in the Salon composer").
 >

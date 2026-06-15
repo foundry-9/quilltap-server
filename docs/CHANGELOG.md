@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Docs: moved completed feature specs into `features/complete/`
+
+Reorganized `docs/developer/features/` so the active folder holds only unshipped or in-progress work. Moved 17 specs whose features have shipped into `features/complete/`: `carina`, `memory-extraction-enrichment`, `memory-recall-relevance`, `adhoc-npc-and-summon-from-lore-in-salon`, `chat-as-any-participant-plan`, `groups`, `per-character-prompt-caching`, `plan-themeable-page-backgrounds`, `post-office`, `scenario-append-plan`, `scenarios-card-redesign-plan`, `scheduled-retention-cleanup`, `themeable-icons`, `user-controlled-character-memories`, `project-store-cutover`, `remove-character-overlay-residue`, and `rp-template-formatting-overhaul`. Each was verified against the CHANGELOG and code (migrations, named code paths) rather than the doc header, several of which were stale ("Planned"/"Proposed" on shipped work). Fixed two relative links broken by the move: `llm_api_costs_breakdown.md` → `complete/per-character-prompt-caching.md`, and `complete/post-office-ui.md` → `post-office.md`. No code change.
+
 #### Post Office: letters to your own character now surface
 
 Mail addressed to the character you play (a `controlledBy: 'user'` participant) is now announced to you, the same way it is for an AI character. Previously the Suparṇā delivery whisper was only generated during an LLM character's turn, so a letter delivered to your character sat in its vault unannounced (`alerted: false`) forever — you never saw it.
