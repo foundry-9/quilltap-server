@@ -4,6 +4,15 @@
 
 ### 4.7-dev
 
+#### Startup self-heal: re-render and re-embed half-finished conversations
+
+Added a startup sweep that finds conversations the Scriptorium pipeline left incomplete and re-enqueues them, so the chat list stops accumulating chats that were never rendered or never embedded. Two cases are healed: a chat with real user/assistant messages but no `renderedMarkdown` (the per-turn render never fired, or a render job died on an interrupted shutdown), and a chat with interchange chunks whose `embedding` is still NULL (typically the embedding provider was down when the turn finished). Re-running `CONVERSATION_RENDER` fixes both — it upserts the chunks (preserving existing embeddings) and re-enqueues `EMBEDDING_GENERATE` for any chunk still lacking one.
+
+- New `lib/startup/reconcile-conversation-rendering.ts` (`reconcileConversationRendering`), wired into `instrumentation.ts` as Phase 3.6 (fire-and-forget, after the background schedulers start). One indexed scan selects incomplete chats; each is enqueued via `enqueueConversationRender`, which dedupes against any render job already pending for the chat. Runs on every startup because the gap recurs; it's a no-op on a healthy instance.
+- Oversized chunks (content longer than `EMBEDDING_MAX_CHARS`) and empty chunks are excluded from the "needs work" test. They're deterministically unembeddable today (the embedder marks them FAILED without retry; oversized interchanges await sub-chunking), so counting them would re-render their chat on every boot for nothing.
+- Runs in the parent process (the sole DB writer), like the other startup self-heals, so the enqueue writes land directly instead of buffering through the job child.
+- Tests: +5 for the sweep.
+
 #### Brahma Console: a character-less, memory-free generic-LLM chat
 
 Added the Brahma Console — a second floating chat surface, sibling to the Help Chat, reached from a new tetra-radial console icon below the Help icon in the sidebar footer. Unlike the Help Chat (a character answering with help-doc context), the Brahma Console is a plain LLM: pick a connection profile and talk to that model directly. It persists, lists past conversations, and lets you switch the model at any time, continuing the same chat.

@@ -781,6 +781,32 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.6: Reconcile half-rendered / un-embedded conversations
+      // ================================================================
+      // Self-heal for the Scriptorium pipeline: re-enqueue a CONVERSATION_RENDER
+      // for any chat with real messages but no rendered Markdown, or with
+      // interchange chunks that were never embedded (e.g. the embedder was down
+      // when the turn fired). Fire-and-forget so a backlog can't delay
+      // readiness; a no-op on a healthy instance. Runs every boot because the
+      // gap recurs. Enqueued here, after the job processor is available.
+      try {
+        const { reconcileConversationRendering } = await import(
+          './lib/startup/reconcile-conversation-rendering'
+        );
+        reconcileConversationRendering().catch((reconcileError) => {
+          logger.warn('Conversation render reconciliation failed', {
+            context: 'instrumentation.register',
+            error: reconcileError instanceof Error ? reconcileError.message : String(reconcileError),
+          });
+        });
+      } catch (reconcileImportError) {
+        logger.warn('Failed to import conversation render reconciliation module', {
+          context: 'instrumentation.register',
+          error: reconcileImportError instanceof Error ? reconcileImportError.message : String(reconcileImportError),
+        });
+      }
+
+      // ================================================================
       // PHASE 4: Mark startup complete
       // ================================================================
       startupState.setPhase('complete');
