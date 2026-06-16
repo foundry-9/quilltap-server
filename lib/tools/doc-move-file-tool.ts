@@ -12,6 +12,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc_move_file tool's input.
  */
 export const docMoveFileToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   scope: z
     .enum(['document_store', 'project', 'general'])
     .default('document_store')
@@ -25,11 +29,12 @@ export const docMoveFileToolInputSchema = z.object({
     .optional(),
   path: z
     .string()
-    .describe('Current relative path to the file within the selected scope.'),
+    .describe('Current relative path to the file within the selected scope.')
+    .optional(),
   new_path: z
     .string()
     .describe('Destination relative path for the file. Parent directories are created automatically.'),
-});
+}).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 
 /**
  * Input parameters for the doc_move_file tool
@@ -57,4 +62,6 @@ export interface DocMoveFileOutput {
   success: boolean;
   old_path: string;
   new_path: string;
+  /** Canonical qtap:// URI for the file's new location. */
+  uri?: string;
 }

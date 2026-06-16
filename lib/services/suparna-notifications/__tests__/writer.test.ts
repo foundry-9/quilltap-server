@@ -36,7 +36,7 @@ describe('buildSuparnaMailWhisper', () => {
     expect(out).toContain('Suparṇā');
     expect(out).toContain('Bertie');
     expect(out).toContain('> How do you do?');
-    expect(out).toContain('mount_point: "self"');
+    expect(out).toContain('doc_read_file({ uri: "qtap://self/Mail/100-from-bertie.md" })');
     expect(out).toContain('Mail/100-from-bertie.md');
   });
 
@@ -61,7 +61,7 @@ describe('buildSuparnaMailLLMContext', () => {
     expect(out).toContain('Suparṇā');
     expect(out).toContain('Bertie');
     expect(out).toContain('How do you do?');
-    expect(out).toContain('mount_point "self"');
+    expect(out).toContain('doc_read_file({ uri: "qtap://self/<its path>" })');
     expect(out).toContain('Mail/100-from-bertie.md');
   });
   it('returns empty string for no letters', () => {

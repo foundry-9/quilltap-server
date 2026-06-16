@@ -10,6 +10,7 @@ import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search'
+import { buildDocStoreUriResolver } from '@/lib/doc-edit/uri-producers'
 import {
   LITERAL_BOOST_CHARACTER,
   LITERAL_BOOST_GROUP,
@@ -91,6 +92,11 @@ export async function executeSearchScriptoriumTool(
     const searchKnowledge = sources.includes('knowledge')
 
     const results: SearchScriptoriumResult[] = []
+
+    // Resolver for emitting a canonical qtap:// URI per document/knowledge hit
+    // (self-vault → qtap://self/…, else the store name with UUID fallback).
+    // Built once so per-row tagging stays synchronous.
+    const docUriResolver = await buildDocStoreUriResolver(context.characterId)
 
     // Resolve the tri-tier mount pool up front so both the `documents` and
     // `knowledge` branches pick from the same deduped set, scoped by `scope`.
@@ -350,6 +356,7 @@ export async function executeSearchScriptoriumTool(
                       mountPointName: kr.mountPointName,
                       fileName: kr.fileName,
                       filePath: kr.relativePath,
+                      uri: docUriResolver.uriForMount(kr.mountPointName, kr.mountPointId, kr.relativePath),
                       chunkIndex: kr.chunkIndex,
                       headingContext: kr.headingContext ?? undefined,
                       knowledgeTier: tier,
@@ -391,6 +398,7 @@ export async function executeSearchScriptoriumTool(
           mountPointName: dr.mountPointName,
           fileName: dr.fileName,
           filePath: dr.relativePath,
+          uri: docUriResolver.uriForMount(dr.mountPointName, dr.mountPointId, dr.relativePath),
           chunkIndex: dr.chunkIndex,
           headingContext: dr.headingContext ?? undefined,
         },

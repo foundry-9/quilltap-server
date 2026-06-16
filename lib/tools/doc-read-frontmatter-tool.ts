@@ -11,6 +11,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc-read-frontmatter tool's input.
  */
 export const docReadFrontmatterToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   scope: z
     .enum(['document_store', 'project', 'general'])
     .default('document_store')
@@ -22,12 +26,13 @@ export const docReadFrontmatterToolInputSchema = z.object({
     .optional(),
   path: z
     .string()
-    .describe('Relative path to the markdown file within the selected scope.'),
+    .describe('Relative path to the markdown file within the selected scope.')
+    .optional(),
   keys: z
     .array(z.string())
     .describe('Specific frontmatter keys to retrieve. If omitted, returns all keys.')
     .optional(),
-});
+}).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 
 /**
  * Input parameters for the doc-read-frontmatter tool
@@ -55,4 +60,6 @@ export function validateDocReadFrontmatterInput(input: unknown): input is DocRea
 export interface DocReadFrontmatterOutput {
   frontmatter: Record<string, unknown> | null;
   path: string;
+  /** Canonical qtap:// URI for the file. */
+  uri?: string;
 }

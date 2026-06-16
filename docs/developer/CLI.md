@@ -43,6 +43,22 @@ Read-only verbs: `list`, `show`, `files`, `ls`/`dir`, `tree` (ASCII folder hiera
 
 Server-required verbs: `scan`, `reindex` (re-extract + re-chunk), `embed` (enqueue embedding jobs — `--wait` polls to completion), and the write verbs (`write`/`delete`/`mkdir`/`move`/`copy`). `reindex` and `embed` are explicit triggers for the two background pipelines; they refuse to run when the server is unreachable.
 
+### Addressing documents with `qtap://` URIs
+
+Anywhere a verb takes a positional `<mount> <relativePath>` pair (`read`, `write`, `delete`, `mkdir`, `ls`/`dir`, `tree`, `files`, `move`, `copy`, `link`, `rmdir`, `mvdir`), you may pass a single `qtap://…` URI in its place:
+
+```
+npx quilltap docs read qtap://notes/today.md
+npx quilltap docs move qtap://drafts/foo.md qtap://notes/2026/foo.md
+npx quilltap docs grep --mount qtap://notes/ "TODO"
+```
+
+The URI authority is matched name-first, UUID as fallback — the same rule as a bare `<mount>` (`qtap://<store name>/…` or `qtap://<uuid>/…`). Two-target verbs (`move`/`copy`/`link`/`mvdir`) accept two `qtap://` URIs or the legacy four positionals. `find`/`grep` take the URI via `--mount`.
+
+**CLI limitation:** the CLI addresses document stores only. `qtap://self/…` needs a character context (there is none at the shell) and is rejected with guidance; `qtap://project/…` and `qtap://general/…` are likewise not CLI-addressable — pass a store name or UUID instead.
+
+**Emitting URIs:** `--json` output for `find`, `grep`, `ls`, `files`, and `tree` carries a `uri` field per row/node. `--uri` switches the text output of `find`, `grep`, and `files` to show the canonical `qtap://` URI as the locator (name form, UUID when the store name is ambiguous).
+
 ## Memories CLI (`npx quilltap memories`)
 
 Read-only namespace. Verbs: `ls`, `find` (substring on summary/content), `grep` (pattern search inside content with snippets), `show <id|prefix>` (full record + related-memory neighbors), `tree <id|prefix>` (ASCII walk of the bidirectional related-memory graph with cycle handling), `status` (per-holder rollup including AUTO/MANUAL split, about-distribution, embedding presence, graph stats, dangling-edge count), `validate` (read-only health check; exit 1 on any dangling edge — `--list` prints offending source IDs and dangling targets).

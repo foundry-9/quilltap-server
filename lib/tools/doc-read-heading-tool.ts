@@ -11,6 +11,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc-read-heading tool's input.
  */
 export const docReadHeadingToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   scope: z
     .enum(['document_store', 'project', 'general'])
     .default('document_store')
@@ -22,10 +26,12 @@ export const docReadHeadingToolInputSchema = z.object({
     .optional(),
   path: z
     .string()
-    .describe('Relative path to the markdown file within the selected scope.'),
+    .describe('Relative path to the markdown file within the selected scope.')
+    .optional(),
   heading: z
     .string()
-    .describe('Heading text without # markers. For example, "Character Backstory" for the heading "## Character Backstory".'),
+    .describe('Heading text without # markers. For example, "Character Backstory" for the heading "## Character Backstory".')
+    .optional(),
   level: z
     .number()
     .int()
@@ -33,7 +39,7 @@ export const docReadHeadingToolInputSchema = z.object({
     .max(6)
     .describe('Heading level (1-6) if the heading text is ambiguous. Use this to disambiguate when the same heading text appears at different levels.')
     .optional(),
-});
+}).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 
 /**
  * Input parameters for the doc-read-heading tool
@@ -63,4 +69,6 @@ export interface DocReadHeadingOutput {
   heading: string;
   level: number;
   path: string;
+  /** Canonical qtap:// URI for the file (fragment carries the heading). */
+  uri?: string;
 }

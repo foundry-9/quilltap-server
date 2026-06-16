@@ -41,6 +41,7 @@ import {
 } from '@/lib/embedding/literal-boost';
 import { dedupeTierTriple } from '@/lib/mount-index/tiered-mount-pool';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
+import { formatSelfUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
 import { estimateTokens } from '@/lib/tokens/token-counter';
 import { getRepositories } from '@/lib/repositories/factory';
 import { createServiceLogger } from '@/lib/logging/create-logger';
@@ -362,9 +363,24 @@ function tierLabel(tier: KnowledgeTier): string {
   return 'general';
 }
 
+/**
+ * Canonical qtap:// URI for a knowledge candidate. The `character` tier IS the
+ * acting character's own vault, so it gets the stable `qtap://self/…` form;
+ * every other tier addresses its store by name (model-only context).
+ */
+function knowledgeUri(c: Candidate): string {
+  if (c.tier === 'character') return formatSelfUri(c.filePath);
+  return formatDocStoreUri({
+    mountPointName: c.mountPointName,
+    mountPointId: c.mountPointId,
+    path: c.filePath,
+  });
+}
+
 function renderInlineEntry(c: Candidate): string {
+  const uri = knowledgeUri(c);
   const lines: string[] = [];
-  lines.push(`### Knowledge (${tierLabel(c.tier)}) — ${c.mountPointName}/${c.filePath}`);
+  lines.push(`### Knowledge (${tierLabel(c.tier)}) — ${uri}`);
   if (c.fmTags) {
     lines.push(`Tags: ${c.fmTags}`);
   }
@@ -372,14 +388,15 @@ function renderInlineEntry(c: Candidate): string {
   lines.push((c.body ?? '').trimEnd());
   lines.push('');
   lines.push(
-    `If you need to re-read with offset/limit: doc_read_file(scope="document_store", mount_point="${c.mountPointName}", path="${c.filePath}")`,
+    `If you need to re-read with offset/limit: doc_read_file(uri="${uri}")`,
   );
   return lines.join('\n');
 }
 
 function renderPointerEntry(c: Candidate): string {
+  const uri = knowledgeUri(c);
   const lines: string[] = [];
-  lines.push(`### Knowledge (${tierLabel(c.tier)}) — ${c.mountPointName}/${c.filePath}`);
+  lines.push(`### Knowledge (${tierLabel(c.tier)}) — ${uri}`);
   if (c.pointerTeaser) {
     lines.push(`Why: ${c.pointerTeaser}`);
   }
@@ -387,7 +404,7 @@ function renderPointerEntry(c: Candidate): string {
     lines.push(`Tags: ${c.fmTags}`);
   }
   lines.push(
-    `Read with: doc_read_file(scope="document_store", mount_point="${c.mountPointName}", path="${c.filePath}")`,
+    `Read with: doc_read_file(uri="${uri}")`,
   );
   return lines.join('\n');
 }

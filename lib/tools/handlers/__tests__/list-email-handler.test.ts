@@ -64,7 +64,7 @@ describe('executeListEmailTool', () => {
     expect(out.listing).toContain('Bertie');
     expect(out.listing).toContain('Mail/200-from-bertie.md');
     expect(out.listing).toContain('doc_read_file');
-    expect(out.listing).toContain('mount_point: "self"');
+    expect(out.listing).toContain('doc_read_file({ uri: "qtap://self/Mail/200-from-bertie.md" })');
     expect(out.listing).toContain('doc_delete_file');
     expect(out.listing).toContain('in_reply_to');
   });

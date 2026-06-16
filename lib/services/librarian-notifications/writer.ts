@@ -24,6 +24,7 @@ import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
+import { formatScopedUri, formatSelfUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
 import type { MessageEvent } from '@/lib/schemas/types';
 
 export type LibrarianOpenKind =
@@ -127,6 +128,22 @@ export interface LibrarianAttachAnnouncement {
   description?: string;
 }
 
+/**
+ * Single canonical qtap:// URI for a Librarian-announced document, built from
+ * the scope/mountPoint/path the announcement already carries — replacing the
+ * old three-part `path/scope/mount_point` detail string. `mountPoint` may be
+ * the reserved 'self' literal (a character acting on its own vault).
+ */
+function librarianUri(
+  scope: 'project' | 'document_store' | 'general',
+  mountPoint: string | null | undefined,
+  path: string,
+): string {
+  if (scope === 'project' || scope === 'general') return formatScopedUri(scope, path);
+  if (!mountPoint || mountPoint.toLowerCase() === 'self') return formatSelfUri(path);
+  return formatDocStoreUri({ mountPointName: mountPoint, mountPointId: '', path });
+}
+
 function scopeLabel(scope: 'project' | 'document_store' | 'general', mountPoint?: string | null): string {
   if (scope === 'document_store' && mountPoint) {
     return `the document store "${mountPoint}"`;
@@ -153,7 +170,7 @@ export function buildOpenContent(params: LibrarianOpenAnnouncement): string {
   const { displayTitle, filePath, scope, mountPoint, isNew, origin } = params;
   const where = scopeLabel(scope, mountPoint);
   const who = requesterLabel(origin);
-  const pathDetails = `path: "${filePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = librarianUri(scope, mountPoint, filePath);
 
   if (isNew) {
     return `The Librarian has laid out a fresh, blank page titled "${displayTitle}" upon the table at ${who}. You may use doc_read_file and the other doc_* editing tools to read or amend it (${pathDetails}).`;
@@ -165,7 +182,7 @@ export function buildOpenOpaqueContent(params: LibrarianOpenAnnouncement): strin
   const { displayTitle, filePath, scope, mountPoint, isNew, origin } = params;
   const where = scopeLabel(scope, mountPoint);
   const who = origin.kind === 'opened-by-user' ? "the user's request" : `${origin.characterName}'s request`;
-  const pathDetails = `path: "${filePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = librarianUri(scope, mountPoint, filePath);
 
   if (isNew) {
     return `Document created: "${displayTitle}" — opened blank at ${who}. Use doc_read_file and the other doc_* editing tools to read or amend it (${pathDetails}).`;
@@ -176,14 +193,14 @@ export function buildOpenOpaqueContent(params: LibrarianOpenAnnouncement): strin
 export function buildRenameContent(params: LibrarianRenameAnnouncement): string {
   const { oldDisplayTitle, newDisplayTitle, oldFilePath, newFilePath, scope, mountPoint } = params;
   const where = scopeLabel(scope, mountPoint);
-  const pathDetails = `old_path: "${oldFilePath}", new_path: "${newFilePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = `was ${librarianUri(scope, mountPoint, oldFilePath)}, now ${librarianUri(scope, mountPoint, newFilePath)}`;
   return `The Librarian has rechristened the volume formerly catalogued as "${oldDisplayTitle}" in ${where} — it now answers to "${newDisplayTitle}", and the card in the catalogue has been amended to suit. Subsequent references should use the new name (${pathDetails}).`;
 }
 
 export function buildRenameOpaqueContent(params: LibrarianRenameAnnouncement): string {
   const { oldDisplayTitle, newDisplayTitle, oldFilePath, newFilePath, scope, mountPoint } = params;
   const where = scopeLabel(scope, mountPoint);
-  const pathDetails = `old_path: "${oldFilePath}", new_path: "${newFilePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = `was ${librarianUri(scope, mountPoint, oldFilePath)}, now ${librarianUri(scope, mountPoint, newFilePath)}`;
   return `Document renamed in ${where}: "${oldDisplayTitle}" → "${newDisplayTitle}". Subsequent references should use the new name (${pathDetails}).`;
 }
 
@@ -297,7 +314,7 @@ export function buildDeleteContent(params: LibrarianDeleteAnnouncement): string 
   const { displayTitle, filePath, scope, mountPoint, origin } = params;
   const where = scopeLabel(scope, mountPoint);
   const who = actorLabel(origin);
-  const pathDetails = `path: "${filePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = librarianUri(scope, mountPoint, filePath);
   return `The Librarian has removed "${displayTitle}" from ${where} at ${who}. The volume is gone from the shelves, and its card struck from the catalogue (${pathDetails}).`;
 }
 
@@ -305,7 +322,7 @@ export function buildDeleteOpaqueContent(params: LibrarianDeleteAnnouncement): s
   const { displayTitle, filePath, scope, mountPoint, origin } = params;
   const where = scopeLabel(scope, mountPoint);
   const who = origin.kind === 'by-user' ? "the user's instruction" : `${origin.characterName}'s instruction`;
-  const pathDetails = `path: "${filePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = librarianUri(scope, mountPoint, filePath);
   return `Document removed: "${displayTitle}" from ${where} at ${who} (${pathDetails}).`;
 }
 
@@ -313,7 +330,7 @@ export function buildFolderCreatedContent(params: LibrarianFolderCreatedAnnounce
   const { folderPath, scope, mountPoint, origin } = params;
   const where = scopeLabel(scope, mountPoint);
   const who = actorLabel(origin);
-  const pathDetails = `path: "${folderPath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = librarianUri(scope, mountPoint, folderPath);
   return `The Librarian has set aside a fresh shelf for "${folderPath}" in ${where} at ${who} — a new folder, presently empty, awaiting its tenants (${pathDetails}).`;
 }
 
@@ -321,7 +338,7 @@ export function buildFolderCreatedOpaqueContent(params: LibrarianFolderCreatedAn
   const { folderPath, scope, mountPoint, origin } = params;
   const where = scopeLabel(scope, mountPoint);
   const who = origin.kind === 'by-user' ? "the user's instruction" : `${origin.characterName}'s instruction`;
-  const pathDetails = `path: "${folderPath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = librarianUri(scope, mountPoint, folderPath);
   return `Folder created: "${folderPath}" in ${where} at ${who} — currently empty (${pathDetails}).`;
 }
 
@@ -329,7 +346,7 @@ export function buildFolderDeletedContent(params: LibrarianFolderDeletedAnnounce
   const { folderPath, scope, mountPoint, origin } = params;
   const where = scopeLabel(scope, mountPoint);
   const who = actorLabel(origin);
-  const pathDetails = `path: "${folderPath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = librarianUri(scope, mountPoint, folderPath);
   return `The Librarian has dismantled the empty shelf at "${folderPath}" in ${where} at ${who}. The folder has been cleared from the catalogue (${pathDetails}).`;
 }
 
@@ -337,7 +354,7 @@ export function buildFolderDeletedOpaqueContent(params: LibrarianFolderDeletedAn
   const { folderPath, scope, mountPoint, origin } = params;
   const where = scopeLabel(scope, mountPoint);
   const who = origin.kind === 'by-user' ? "the user's instruction" : `${origin.characterName}'s instruction`;
-  const pathDetails = `path: "${folderPath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = librarianUri(scope, mountPoint, folderPath);
   return `Folder removed: "${folderPath}" in ${where} at ${who} (${pathDetails}).`;
 }
 
@@ -379,7 +396,7 @@ function attachIdHint(linkId: string, isImage: boolean): string {
 export function buildAttachContent(params: LibrarianAttachAnnouncement): string {
   const { displayTitle, filePath, mountPoint, mimeType, description, mountFileId } = params;
   const where = mountPoint ? `the document store "${mountPoint}"` : 'the document store';
-  const pathDetails = `path: "${filePath}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = librarianUri('document_store', mountPoint, filePath);
   const isImage = isImageMime(mimeType);
   const kindPhrase = isImage
     ? `the illustration "${displayTitle}"`
@@ -399,7 +416,7 @@ export function buildAttachContent(params: LibrarianAttachAnnouncement): string 
 export function buildAttachOpaqueContent(params: LibrarianAttachAnnouncement): string {
   const { displayTitle, filePath, mountPoint, mimeType, description, mountFileId } = params;
   const where = mountPoint ? `the document store "${mountPoint}"` : 'the document store';
-  const pathDetails = `path: "${filePath}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const pathDetails = librarianUri('document_store', mountPoint, filePath);
   const isImage = isImageMime(mimeType);
   const kindPhrase = isImage
     ? `Image attached: "${displayTitle}"`

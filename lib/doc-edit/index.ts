@@ -49,5 +49,19 @@ export {
 } from './unified-diff';
 
 export {
+  QTAP_URI_SCHEME,
+  isQtapUri,
+  parseQtapUri,
+  formatQtapUri,
+  qtapUriToResolverInput,
+  formatDocStoreUri,
+  formatScopedUri,
+  formatSelfUri,
+  QtapUriError,
+  type QtapUriParts,
+  type QtapUriErrorCode,
+} from './qtap-uri';
+
+export {
   reindexSingleFile,
 } from './reindex-file';

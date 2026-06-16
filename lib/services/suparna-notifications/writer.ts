@@ -25,6 +25,7 @@ import { getErrorMessage } from '@/lib/error-utils';
 import type { MessageEvent } from '@/lib/schemas/types';
 import type { DeliveredLetterSummary } from '@/lib/post-office/mailbox';
 import { formatLetterActions, formatLetterDate } from '@/lib/post-office/instructions';
+import { formatSelfUri } from '@/lib/doc-edit/qtap-uri';
 
 export type SuparnaWhisperKind = 'mail-delivery';
 
@@ -68,13 +69,13 @@ export function buildSuparnaMailLLMContext(letters: DeliveredLetterSummary[]): s
     `${letters.length === 1 ? '' : ` (${letters.length} letters)`}. Each letter is below.`;
   const parts = letters.map((letter) =>
     [
-      `Letter from ${letter.from}, delivered ${formatLetterDate(letter.sentAt)} (id: ${letter.path}):`,
+      `Letter from ${letter.from}, delivered ${formatLetterDate(letter.sentAt)} (${formatSelfUri(letter.path)}):`,
       letter.body.trim() || '(the letter is blank)',
     ].join('\n'),
   );
   const howto =
-    `You can read any letter again with doc_read_file (scope "document_store", mount_point "self", and its id as the path), ` +
-    `answer it with send_mail (set in_reply_to to its id), or discard it with doc_delete_file.`;
+    `You can read any letter again with doc_read_file({ uri: "qtap://self/<its path>" }), ` +
+    `answer it with send_mail (set in_reply_to to its id — its path), or discard it with doc_delete_file({ uri: "qtap://self/<its path>" }).`;
   return `${intro}\n\n${parts.join('\n\n')}\n\n${howto}`;
 }
 

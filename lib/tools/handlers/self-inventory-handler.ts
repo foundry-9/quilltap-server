@@ -21,6 +21,7 @@ import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types';
 import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
 import { isAutomaticImagePath, isOsCruftName, IMAGE_FILE_EXTENSIONS } from '@/lib/files/folder-utils';
+import { formatSelfUri, formatScopedUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
 import {
   isDockerEnvironment,
   isElectronShell,
@@ -142,7 +143,8 @@ function mapVaultFiles(
   rows: DocMountFileRow[],
   mountPointName: string,
   includeAutomaticImages: boolean,
-  treatImagesFolderAsGenerated: boolean
+  treatImagesFolderAsGenerated: boolean,
+  makeUri: (relativePath: string) => string
 ): SelfInventoryVaultFile[] {
   return rows
     .filter((row) =>
@@ -155,6 +157,7 @@ function mapVaultFiles(
       fileType: row.fileType,
       fileSizeBytes: row.fileSizeBytes,
       lastModified: row.lastModified,
+      uri: makeUri(row.relativePath),
     }))
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
@@ -191,7 +194,10 @@ async function buildVaultCharacterSection(
   }
 
   const rows = await repos.docMountFiles.findByMountPointId(mountPointId);
-  const files = mapVaultFiles(rows, mountPoint.name, includeAutomaticImages, true);
+  // The character's own vault → the stable, readable self form.
+  const files = mapVaultFiles(rows, mountPoint.name, includeAutomaticImages, true, (rel) =>
+    formatSelfUri(rel)
+  );
 
   logger.debug('self_inventory: vault.character built', {
     context: 'self-inventory-handler',
@@ -287,7 +293,10 @@ async function buildVaultGroupsSection(
       const mountPoint = await repos.docMountPoints.findById(mountPointId);
       if (!mountPoint) continue;
       const rows = await repos.docMountFiles.findByMountPointId(mountPointId);
-      const files = mapVaultFiles(rows, mountPoint.name, includeAutomaticImages, false);
+      // A group store, not the acting character's own vault → address by name.
+      const files = mapVaultFiles(rows, mountPoint.name, includeAutomaticImages, false, (rel) =>
+        formatDocStoreUri({ mountPointName: mountPoint.name, mountPointId: mountPoint.id, path: rel })
+      );
       out.push({
         groupId: group.groupId,
         groupName: group.groupName,
@@ -1134,29 +1143,45 @@ async function buildContextCharacters(
   return { available: true, characters: out };
 }
 
-function buildHowToReach(
+/**
+ * Build the canonical qtap:// URI for a chat-context document from the triple
+ * stored on the chat_documents row. The row carries only the mount-point
+ * *name* (or the reserved 'self' literal, or null), so document-store URIs use
+ * the name form; that is enough for a copy-pasteable hint.
+ */
+function buildContextFileUri(
   scope: 'project' | 'document_store' | 'general',
   mountPoint: string | null,
   filePath: string
 ): string {
-  if (scope === 'document_store') {
-    const mp = mountPoint ?? '<mount_point>';
-    return `doc_read_file(scope='document_store', mount_point='${mp}', path='${filePath}')`;
+  if (scope === 'project' || scope === 'general') {
+    return formatScopedUri(scope, filePath);
   }
-  return `doc_read_file(scope='${scope}', path='${filePath}')`;
+  if (!mountPoint || mountPoint.toLowerCase() === 'self') {
+    return formatSelfUri(filePath);
+  }
+  return formatDocStoreUri({ mountPointName: mountPoint, mountPointId: '', path: filePath });
+}
+
+function buildHowToReach(uri: string): string {
+  return `doc_read_file({ uri: "${uri}" })`;
 }
 
 async function buildContextFiles(chatId: string): Promise<SelfInventoryContextFiles> {
   const repos = getRepositories();
   const docs = await repos.chatDocuments.findByChatId(chatId);
   const files: SelfInventoryContextFile[] = docs
-    .map((d) => ({
-      scope: d.scope,
-      mountPoint: d.mountPoint ?? null,
-      filePath: d.filePath,
-      displayTitle: d.displayTitle ?? null,
-      howToReach: buildHowToReach(d.scope, d.mountPoint ?? null, d.filePath),
-    }))
+    .map((d) => {
+      const uri = buildContextFileUri(d.scope, d.mountPoint ?? null, d.filePath);
+      return {
+        scope: d.scope,
+        mountPoint: d.mountPoint ?? null,
+        filePath: d.filePath,
+        displayTitle: d.displayTitle ?? null,
+        uri,
+        howToReach: buildHowToReach(uri),
+      };
+    })
     .sort((a, b) => a.filePath.localeCompare(b.filePath));
 
   return { available: true, files };
@@ -1429,7 +1454,7 @@ function formatVaultCharacter(section: SelfInventoryVaultCharacterSection): stri
   }
 
   const lines = section.files.map(formatVaultFileLine);
-  const footer = `(To read one of these files: doc_read_file with scope='document_store', mount_point='self', path='<relativePath>'. The reserved mount_point 'self' always addresses your own vault, whatever its name; the name '${section.mountPointName}' and its ID work too.)`;
+  const footer = `(To read one of these files: doc_read_file({ uri: "qtap://self/<relativePath>" }) — the reserved authority 'self' always addresses your own vault, whatever its name. The triple form doc_read_file(scope='document_store', mount_point='self', path='<relativePath>') still works, as do the name '${section.mountPointName}' and its ID.)`;
   return `${header}\n${lines.join('\n')}\n${footer}`;
 }
 
@@ -1447,7 +1472,7 @@ function formatVaultGroups(section: SelfInventoryVaultGroupsSection): string {
       return `${head}\n(no files)`;
     }
     const lines = g.files.map(formatVaultFileLine);
-    const footer = `(To read a file: doc_read_file with scope='document_store', mount_point='${g.mountPointName}', path='<relativePath>')`;
+    const footer = `(To read a file: doc_read_file({ uri: "qtap://${g.mountPointName}/<relativePath>" }) — or doc_read_file(scope='document_store', mount_point='${g.mountPointName}', path='<relativePath>'))`;
     return `${head}\n${lines.join('\n')}\n${footer}`;
   });
 

@@ -47,7 +47,7 @@ describe('buildGroupAndVaultWhisperContent (persona-voiced)', () => {
     expect(out).toContain('**Your own vault:**');
     expect(out).toContain('Aria Vault');
     // The own-vault line teaches the stable reserved handle.
-    expect(out).toContain('mount_point: "self"');
+    expect(out).toContain('qtap://self/');
     expect(out).toContain('scope: "group"');
     expect(out).toContain('scope: "character"');
   });
@@ -67,7 +67,7 @@ describe('buildGroupAndVaultWhisperContent (persona-voiced)', () => {
     expect(out).toContain('the vault that is yours alone');
     expect(out).not.toContain('**Shared shelves of the groups you belong to:**');
     expect(out).toContain('**Your own vault:**');
-    expect(out).toContain('mount_point: "self"');
+    expect(out).toContain('qtap://self/');
     expect(out).toContain('scope: "character"');
     expect(out).not.toContain('scope: "group"');
   });
@@ -84,7 +84,7 @@ describe('buildGroupAndVaultWhisperOpaqueContent (persona-stripped)', () => {
     expect(out).toContain('Document stores you can reach by group membership, plus your own vault:');
     expect(out).toContain('Circle Files');
     expect(out).toContain('Aria Vault');
-    expect(out).toContain('mount_point: "self"');
+    expect(out).toContain('qtap://self/');
   });
 
   it('returns empty string when there is nothing to whisper', () => {

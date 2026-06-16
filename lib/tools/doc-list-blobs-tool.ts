@@ -9,12 +9,16 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc_list_blobs tool's input.
  */
 export const docListBlobsToolInputSchema = z.object({
-  mount_point: z.string().describe('Mount point name or ID to enumerate blobs for. Pass "self" for your own character vault.'),
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
+  mount_point: z.string().describe('Mount point name or ID to enumerate blobs for. Pass "self" for your own character vault.').optional(),
   folder: z
     .string()
     .describe('Optional folder prefix to filter results (e.g. "images").')
     .optional(),
-});
+}).refine((d) => Boolean(d.uri || d.mount_point), 'Provide either a `uri` or a `mount_point`.');
 
 /**
  * Input parameters for the doc_list_blobs tool
@@ -40,6 +44,8 @@ export const docListBlobsToolDefinition = {
 
 export interface DocBlobSummary {
   relative_path: string;
+  /** Canonical qtap:// URI for the blob. */
+  uri?: string;
   original_filename: string;
   original_mime_type: string;
   stored_mime_type: string;

@@ -407,11 +407,13 @@ describe('self-inventory context section', () => {
     if (!filesSection || !filesSection.available) throw new Error('expected available files section')
 
     const docStore = filesSection.files.find(f => f.filePath === 'Notes/plot.md')
+    expect(docStore?.uri).toBe('qtap://My%20Vault/Notes/plot.md')
     expect(docStore?.howToReach).toBe(
-      "doc_read_file(scope='document_store', mount_point='My Vault', path='Notes/plot.md')",
+      'doc_read_file({ uri: "qtap://My%20Vault/Notes/plot.md" })',
     )
     const projectFile = filesSection.files.find(f => f.filePath === 'outline.md')
-    expect(projectFile?.howToReach).toBe("doc_read_file(scope='project', path='outline.md')")
+    expect(projectFile?.uri).toBe('qtap://project/outline.md')
+    expect(projectFile?.howToReach).toBe('doc_read_file({ uri: "qtap://project/outline.md" })')
   })
 
   it('bare context resolves all five parts', async () => {

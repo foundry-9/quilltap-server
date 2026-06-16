@@ -11,6 +11,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc-read-file tool's input.
  */
 export const docReadFileToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   scope: z
     .enum(['document_store', 'project', 'general'])
     .default('document_store')
@@ -22,7 +26,8 @@ export const docReadFileToolInputSchema = z.object({
     .optional(),
   path: z
     .string()
-    .describe('Relative path to the file within the selected scope.'),
+    .describe('Relative path to the file within the selected scope.')
+    .optional(),
   offset: z
     .number()
     .int()
@@ -35,7 +40,7 @@ export const docReadFileToolInputSchema = z.object({
     .min(1)
     .describe('Maximum number of lines to return. Default returns all lines.')
     .optional(),
-});
+}).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 
 /**
  * Input parameters for the doc-read-file tool
@@ -67,6 +72,8 @@ export interface DocReadFileOutput {
   parseError?: { message: string; line?: number };
   mimeType?: string;
   path: string;
+  /** Canonical qtap:// URI for the file (e.g. "qtap://self/Notes/today.md"). */
+  uri?: string;
   mtime: number;
   totalLines: number;
   truncated: boolean;

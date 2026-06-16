@@ -27,7 +27,9 @@ import { databaseDocumentExists } from '@/lib/mount-index/database-store';
 import {
   logger,
   type DocEditToolContext,
+  applyQtapUriToInput,
   buildReadResolutionContext,
+  uriForResolvedPath,
 } from './shared';
 
 /**
@@ -36,9 +38,10 @@ import {
  * a structured response that the frontend interprets to open the editor pane.
  */
 export async function handleOpenDocument(
-  input: DocOpenDocumentInput,
+  rawInput: DocOpenDocumentInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
   const repos = getRepositories();
   const scope = (input.scope || 'project') as 'document_store' | 'project' | 'general';
   const mode = input.mode || 'split';
@@ -46,6 +49,7 @@ export async function handleOpenDocument(
   let displayTitle = input.title || 'Untitled document';
   let isNew = false;
   let mtime: number | undefined;
+  let docUri: string | undefined;
 
   if (filePath) {
     // Opening an existing file — resolve the path to verify it exists.
@@ -53,6 +57,7 @@ export async function handleOpenDocument(
     // cross-character read flag is enabled.
     try {
       const resolved = await resolveDocEditPath(scope, filePath, await buildReadResolutionContext({ mount_point: input.mount_point }, context));
+      docUri = await uriForResolvedPath(resolved, context);
       if (resolved.mountType === 'database' && resolved.mountPointId) {
         const exists = await databaseDocumentExists(resolved.mountPointId, resolved.relativePath);
         if (!exists) throw new Error(`File not found: ${filePath}`);
@@ -86,6 +91,7 @@ export async function handleOpenDocument(
       await fs.writeFile(resolved.absolutePath, '', 'utf-8');
       const stat = await fs.stat(resolved.absolutePath);
       mtime = stat.mtimeMs;
+      docUri = await uriForResolvedPath(resolved, context);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { success: false, error: `Failed to create blank document: ${errorMsg}` };
@@ -118,6 +124,7 @@ export async function handleOpenDocument(
   const result: DocOpenDocumentOutput = {
     success: true,
     filePath,
+    uri: docUri,
     scope,
     mountPoint: input.mount_point,
     displayTitle,

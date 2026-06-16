@@ -27,17 +27,23 @@ import type { DocUpdateHeadingInput, DocUpdateHeadingOutput } from '../../doc-up
 
 import {
   type DocEditToolContext,
+  applyQtapUriToInput,
   buildReadResolutionContext,
   buildWriteResolutionContext,
   triggerReindexIfNeeded,
+  uriForResolvedPath,
 } from './shared';
 
 // --- doc_read_frontmatter ---
 
 export async function handleReadFrontmatter(
-  input: DocReadFrontmatterInput,
+  rawInput: DocReadFrontmatterInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocReadFrontmatterOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` or a `uri` is required.' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildReadResolutionContext(input, context));
 
@@ -45,13 +51,14 @@ export async function handleReadFrontmatter(
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
+  const uri = await uriForResolvedPath(resolved, context);
   const { content } = await readFileWithMtime(resolved);
   const parsed = parseFrontmatter(content);
 
   if (parsed.data === null) {
     return {
       success: true,
-      result: { frontmatter: null, path: input.path },
+      result: { frontmatter: null, path: input.path, uri },
       formattedText: `No frontmatter found in ${input.path}`,
     };
   }
@@ -71,6 +78,7 @@ export async function handleReadFrontmatter(
   const result: DocReadFrontmatterOutput = {
     frontmatter,
     path: input.path,
+    uri,
   };
 
   return {
@@ -83,9 +91,13 @@ export async function handleReadFrontmatter(
 // --- doc_update_frontmatter ---
 
 export async function handleUpdateFrontmatter(
-  input: DocUpdateFrontmatterInput,
+  rawInput: DocUpdateFrontmatterInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocUpdateFrontmatterOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` or a `uri` is required.' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
@@ -108,6 +120,7 @@ export async function handleUpdateFrontmatter(
   const result: DocUpdateFrontmatterOutput = {
     success: true,
     path: input.path,
+    uri: await uriForResolvedPath(resolved, context),
     mtime,
   };
 
@@ -124,9 +137,19 @@ export async function handleUpdateFrontmatter(
 // --- doc_read_heading ---
 
 export async function handleReadHeading(
-  input: DocReadHeadingInput,
+  rawInput: DocReadHeadingInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocReadHeadingOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` or a `uri` is required.' };
+  }
+  // An explicit `heading`/`level` overrides a heading carried by the URI fragment.
+  const headingArg = input.heading ?? input.uriHeading;
+  const levelArg = input.level ?? input.uriLevel;
+  if (typeof headingArg !== 'string') {
+    return { success: false, error: 'A `heading` is required (pass it directly or as a qtap:// fragment, e.g. "...#Childhood").' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildReadResolutionContext(input, context));
 
@@ -134,10 +157,11 @@ export async function handleReadHeading(
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
+  const uri = await uriForResolvedPath(resolved, context);
   const { content } = await readFileWithMtime(resolved);
 
   try {
-    const heading = findHeadingSection(content, input.heading, input.level);
+    const heading = findHeadingSection(content, headingArg, levelArg);
     const sectionContent = readHeadingContent(content, heading);
 
     const result: DocReadHeadingOutput = {
@@ -145,6 +169,7 @@ export async function handleReadHeading(
       heading: heading.text,
       level: heading.level,
       path: input.path,
+      uri,
     };
 
     return {
@@ -163,9 +188,19 @@ export async function handleReadHeading(
 // --- doc_update_heading ---
 
 export async function handleUpdateHeading(
-  input: DocUpdateHeadingInput,
+  rawInput: DocUpdateHeadingInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocUpdateHeadingOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` or a `uri` is required.' };
+  }
+  // An explicit `heading`/`level` overrides a heading carried by the URI fragment.
+  const headingArg = input.heading ?? input.uriHeading;
+  const levelArg = input.level ?? input.uriLevel;
+  if (typeof headingArg !== 'string') {
+    return { success: false, error: 'A `heading` is required (pass it directly or as a qtap:// fragment, e.g. "...#Childhood").' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
@@ -176,7 +211,7 @@ export async function handleUpdateHeading(
   const { content } = await readFileWithMtime(resolved);
 
   try {
-    const heading = findHeadingSection(content, input.heading, input.level);
+    const heading = findHeadingSection(content, headingArg, levelArg);
     const newContent = replaceHeadingContent(
       content,
       heading,
@@ -191,6 +226,7 @@ export async function handleUpdateHeading(
     const result: DocUpdateHeadingOutput = {
       success: true,
       path: input.path,
+      uri: await uriForResolvedPath(resolved, context),
       mtime,
     };
 

@@ -66,7 +66,7 @@ export async function executeListEmailTool(
 
     const header =
       `Your postbox holds ${letters.length} letter${letters.length === 1 ? '' : 's'}, newest first. ` +
-      `(In every call below, mount_point "self" addresses your own vault.)`;
+      `(Each letter shows its qtap://self/… URI; the "self" authority always addresses your own vault.)`;
 
     const blocks = letters.map(
       (letter, i) => `${formatLetterHeading(letter, i + 1)}\n${formatLetterActions(letter)}`,

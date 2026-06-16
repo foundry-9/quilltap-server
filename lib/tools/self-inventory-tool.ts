@@ -122,6 +122,8 @@ export interface SelfInventoryVaultFile {
   fileType: string;
   fileSizeBytes: number;
   lastModified: string;
+  /** Canonical qtap:// URI for reaching this file. */
+  uri?: string;
 }
 
 /** Which vault parts a `vault` request resolved to. Mirrors the quilltap pattern. */
@@ -428,6 +430,8 @@ export interface SelfInventoryContextFile {
   mountPoint: string | null;
   filePath: string;
   displayTitle: string | null;
+  /** Canonical qtap:// URI for reaching this file. */
+  uri: string;
   /** A copy-pasteable doc_read_file(...) invocation for reaching this file. */
   howToReach: string;
 }

@@ -22,6 +22,10 @@ interface ReadDocumentResponse {
   mtime?: number
 }
 
+interface ResolveDocumentResponse {
+  exists: boolean
+}
+
 interface OpenDocumentResponse {
   document: ActiveDocumentRecord
   content?: string
@@ -107,6 +111,28 @@ export async function readDocumentContentForChat(
   })
 
   return parseJsonResponse<ReadDocumentResponse>(response, 'Failed to read document content')
+}
+
+/**
+ * Existence probe for a `qtap://` document target, used to gate clickable links
+ * in the Salon transcript. Returns `{ exists: false }` for an unreachable,
+ * inaccessible, or missing document (the server never reveals bytes here).
+ */
+export async function resolveDocumentExistsForChat(
+  chatId: string,
+  params: {
+    filePath: string
+    scope: DocumentScope
+    mountPoint?: string
+  },
+): Promise<ResolveDocumentResponse> {
+  const response = await fetch(`/api/v1/chats/${chatId}?action=resolve-document`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(params),
+  })
+
+  return parseJsonResponse<ResolveDocumentResponse>(response, 'Failed to resolve document')
 }
 
 export async function openDocumentForChat(

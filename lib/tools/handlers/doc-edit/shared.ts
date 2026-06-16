@@ -15,11 +15,70 @@ import {
   PathResolutionError,
   type ResolvedPath,
 } from '@/lib/doc-edit';
+// Import the pure codec directly (not the barrel) so this module — and the
+// handler tests that mock the barrel — never drag in native conversion deps.
+import { parseQtapUri } from '@/lib/doc-edit/qtap-uri';
 import { getRepositories } from '@/lib/repositories/factory';
+
+// The server-side qtap:// URI producers live in their own converters-free
+// module; re-export them here so the doc-edit handlers keep importing from
+// './shared'.
+export {
+  uriForResolvedPath,
+  docStoreUriFor,
+  buildDocStoreUriResolver,
+} from '@/lib/doc-edit/uri-producers';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 
 export const logger = createServiceLogger('DocEdit:Handler');
+
+/**
+ * The familiar addressing fields a `qtap://` URI populates on a doc-tool call,
+ * plus the heading/level a URI fragment may carry. `applyQtapUriToInput`
+ * projects a `uri` onto these so the rest of a handler reads `scope` /
+ * `mount_point` / `path` exactly as before.
+ */
+export interface QtapAddressableInput {
+  scope?: string;
+  mount_point?: string;
+  path?: string;
+  uri?: string;
+  /** Heading text carried by the URI fragment (resolved by heading tools). */
+  uriHeading?: string;
+  /** Heading level carried by the URI fragment (resolved by heading tools). */
+  uriLevel?: number;
+}
+
+/**
+ * When a doc-tool call carries a `uri`, parse it and project its parts onto the
+ * familiar `scope` / `mount_point` / `path` fields, returning a normalized copy
+ * (the URI wins over any stale scope/mount_point/path on the same input, per
+ * the spec). The fragment's heading/level are surfaced as `uriHeading` /
+ * `uriLevel` for heading tools to apply with explicit-overrides-fragment
+ * precedence. The returned object has `uri` cleared, so the helper is
+ * idempotent (calling it again is a no-op). Pure string work — no DB. A
+ * malformed URI throws `QtapUriError`, which surfaces as a clean tool error.
+ *
+ * Every read/write doc tool funnels its addressing through this helper (the
+ * handler calls it first; the resolution-context builders call it again
+ * defensively), so `uri` support is uniform without per-tool parsing.
+ */
+export function applyQtapUriToInput<T extends QtapAddressableInput>(
+  input: T
+): T & { uriHeading?: string; uriLevel?: number } {
+  if (!input.uri) return input;
+  const parts = parseQtapUri(input.uri);
+  return {
+    ...input,
+    uri: undefined,
+    scope: parts.scope,
+    mount_point: parts.mountPoint,
+    path: parts.path,
+    uriHeading: parts.heading,
+    uriLevel: parts.level,
+  };
+}
 
 /**
  * Context required for doc-edit tool execution.
@@ -135,9 +194,12 @@ export async function assertWriteDoesNotTargetPeerVault(
  * participants are added to `characterIds` so the path resolver admits them.
  */
 export async function buildReadResolutionContext(
-  input: { scope?: string; mount_point?: string },
+  input: QtapAddressableInput,
   context: DocEditToolContext
 ) {
+  // Accept a qtap:// URI in place of scope/mount_point/path. Idempotent when the
+  // handler already normalized (the common case), so this never double-parses.
+  input = applyQtapUriToInput(input);
   const opaque = await actingCharacterIsOpaqueToVaults(context);
   if (opaque) {
     // No characterId / characterIds → resolver admits only project document
@@ -164,9 +226,11 @@ export async function buildReadResolutionContext(
  * a clear read-only error before resolution runs.
  */
 export async function buildWriteResolutionContext(
-  input: { scope?: string; mount_point?: string },
+  input: QtapAddressableInput,
   context: DocEditToolContext
 ) {
+  // Accept a qtap:// URI in place of scope/mount_point/path (see read builder).
+  input = applyQtapUriToInput(input);
   const opaque = await actingCharacterIsOpaqueToVaults(context);
   if (opaque) {
     return {
@@ -233,6 +297,7 @@ export async function resolveOfficialProjectMount(
  * filesystem-only projects (no `officialMountPointId`) return without a
  * `mountPointId` and silently no-op here, as before.
  */
+
 export async function triggerReindexIfNeeded(resolved: ResolvedPath): Promise<void> {
   if (resolved.mountPointId) {
     const mountPointId = resolved.mountPointId;

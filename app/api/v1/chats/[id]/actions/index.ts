@@ -37,6 +37,7 @@ export {
   handleOpenDocument,
   handleCloseDocument,
   handleReadDocument,
+  handleResolveDocument,
   handleWriteDocument,
   handleRenameDocument,
   handleDeleteDocument,

@@ -81,6 +81,8 @@ export interface SearchScriptoriumResult {
     mountPointName?: string
     fileName?: string
     filePath?: string
+    /** Canonical qtap:// URI for the matched document/knowledge file. */
+    uri?: string
     chunkIndex?: number
     headingContext?: string
     // Knowledge-specific

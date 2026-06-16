@@ -18,6 +18,7 @@ import {
   isTextFile,
   findUniqueMatch,
   findAllMatches,
+  parseQtapUri,
   type DocEditScope,
 } from '@/lib/doc-edit';
 import {
@@ -43,11 +44,14 @@ import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-
 import {
   logger,
   type DocEditToolContext,
+  applyQtapUriToInput,
   collectPeerCharacterIdsForReads,
   buildReadResolutionContext,
   buildWriteResolutionContext,
+  buildDocStoreUriResolver,
   resolveOfficialProjectMount,
   triggerReindexIfNeeded,
+  uriForResolvedPath,
 } from './shared';
 
 /**
@@ -64,11 +68,17 @@ function getLineNumber(content: string, offset: number): number {
 // --- doc_read_file ---
 
 export async function handleReadFile(
-  input: DocReadFileInput,
+  rawInput: DocReadFileInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocReadFileOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` or a `uri` is required.' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, await buildReadResolutionContext(input, context));
+  const readContext = await buildReadResolutionContext(input, context);
+  const resolved = await resolveDocEditPath(scope, input.path, readContext);
+  const uri = await uriForResolvedPath(resolved, context);
 
   // For database-backed stores, a non-text file (pdf/docx/arbitrary binary)
   // may still be readable if the blob has an extractedText representation.
@@ -109,6 +119,7 @@ export async function handleReadFile(
           content: outputLines.join('\n'),
           mimeType: blob.storedMimeType,
           path: input.path,
+          uri,
           mtime: new Date(blob.updatedAt).getTime(),
           totalLines,
           truncated,
@@ -186,6 +197,7 @@ export async function handleReadFile(
     parseError: isJsonFamily(mime) ? parseError : undefined,
     mimeType: mime || undefined,
     path: input.path,
+    uri,
     mtime,
     totalLines: lines.length,
     truncated: false,
@@ -201,9 +213,13 @@ export async function handleReadFile(
 // --- doc_write_file ---
 
 export async function handleWriteFile(
-  input: DocWriteFileInput,
+  rawInput: DocWriteFileInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocWriteFileOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` or a `uri` is required.' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
@@ -256,6 +272,7 @@ export async function handleWriteFile(
   const result: DocWriteFileOutput = {
     success: true,
     path: input.path,
+    uri: await uriForResolvedPath(resolved, context),
     mtime,
   };
 
@@ -269,9 +286,13 @@ export async function handleWriteFile(
 // --- doc_str_replace ---
 
 export async function handleStrReplace(
-  input: DocStrReplaceInput,
+  rawInput: DocStrReplaceInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocStrReplaceOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` or a `uri` is required.' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
@@ -316,6 +337,7 @@ export async function handleStrReplace(
   const result: DocStrReplaceOutput = {
     success: true,
     path: input.path,
+    uri: await uriForResolvedPath(resolved, context),
     mtime,
     line_number: lineNumber,
   };
@@ -330,9 +352,13 @@ export async function handleStrReplace(
 // --- doc_insert_text ---
 
 export async function handleInsertText(
-  input: DocInsertTextInput,
+  rawInput: DocInsertTextInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocInsertTextOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` or a `uri` is required.' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
@@ -399,6 +425,7 @@ export async function handleInsertText(
   const result: DocInsertTextOutput = {
     success: true,
     path: input.path,
+    uri: await uriForResolvedPath(resolved, context),
     mtime,
     line_number: lineNumber,
   };
@@ -413,12 +440,14 @@ export async function handleInsertText(
 // --- doc_grep ---
 
 export async function handleGrep(
-  input: DocGrepInput,
+  rawInput: DocGrepInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocGrepOutput; error?: string; formattedText?: string }> {
   if (!context.projectId) {
     return { success: false, error: 'Grep requires a project context' };
   }
+  const input = applyQtapUriToInput(rawInput);
+  const uriResolver = await buildDocStoreUriResolver(context.characterId);
 
   const maxResults = Math.min(input.max_results || 100, 500);
   const contextLines = input.context_lines || 0;
@@ -442,7 +471,8 @@ export async function handleGrep(
   const searchFile = async (
     absolutePath: string,
     displayPath: string,
-    mountPointName?: string
+    mountPointName?: string,
+    makeUri?: (relPath: string) => string
   ): Promise<void> => {
     if (matches.length >= maxResults) return;
     if (!isTextFile(absolutePath)) return;
@@ -466,6 +496,7 @@ export async function handleGrep(
           const grepMatch: DocGrepMatch = {
             path: displayPath,
             mount_point: mountPointName,
+            uri: makeUri?.(displayPath),
             line_number: lineNum,
             match: lines[lineIdx] || '',
           };
@@ -487,6 +518,7 @@ export async function handleGrep(
             const grepMatch: DocGrepMatch = {
               path: displayPath,
               mount_point: mountPointName,
+              uri: makeUri?.(displayPath),
               line_number: i + 1,
               match: lines[i],
             };
@@ -511,7 +543,8 @@ export async function handleGrep(
     baseDir: string,
     displayPrefix: string,
     mountPointName?: string,
-    folder?: string
+    folder?: string,
+    makeUri?: (relPath: string) => string
   ): Promise<void> => {
     const startDir = folder ? path.join(baseDir, folder) : baseDir;
 
@@ -533,7 +566,7 @@ export async function handleGrep(
           } else if (entry.isFile()) {
             if (input.path && !relativePath.startsWith(input.path)) continue;
             const displayPath = displayPrefix ? `${displayPrefix}/${relativePath}` : relativePath;
-            await searchFile(fullPath, displayPath, mountPointName);
+            await searchFile(fullPath, displayPath, mountPointName, makeUri);
           }
         }
       };
@@ -548,7 +581,8 @@ export async function handleGrep(
   const searchContent = (
     content: string,
     displayPath: string,
-    mountPointName?: string
+    mountPointName?: string,
+    makeUri?: (relPath: string) => string
   ): void => {
     if (matches.length >= maxResults) return;
     if (input.normalize_diacritics !== false && !input.is_regex) {
@@ -564,6 +598,7 @@ export async function handleGrep(
         const grepMatch: DocGrepMatch = {
           path: displayPath,
           mount_point: mountPointName,
+          uri: makeUri?.(displayPath),
           line_number: lineNum,
           match: lines[lineIdx] || '',
         };
@@ -581,6 +616,7 @@ export async function handleGrep(
           const grepMatch: DocGrepMatch = {
             path: displayPath,
             mount_point: mountPointName,
+            uri: makeUri?.(displayPath),
             line_number: i + 1,
             match: lines[i],
           };
@@ -609,17 +645,18 @@ export async function handleGrep(
       if (mountPointFilter && mp.name.toLowerCase() !== mountPointFilter.toLowerCase() && mp.id !== mountPointFilter) {
         continue;
       }
+      const makeUri = (relPath: string) => uriResolver.uriForMount(mp.name, mp.id, relPath);
       if (mp.mountType === 'database') {
         const repos = getRepositories();
         const documents = await repos.docMountDocuments.findByMountPointId(mp.id);
         for (const doc of documents) {
           if (matches.length >= maxResults) break;
           if (input.path && !doc.relativePath.startsWith(input.path)) continue;
-          searchContent(doc.content, doc.relativePath, mp.name);
+          searchContent(doc.content, doc.relativePath, mp.name, makeUri);
         }
         continue;
       }
-      await walkAndSearch(mp.basePath, '', mp.name);
+      await walkAndSearch(mp.basePath, '', mp.name, undefined, makeUri);
     }
   }
 
@@ -681,12 +718,27 @@ export async function handleGrep(
 // --- doc_list_files ---
 
 export async function handleListFiles(
-  input: DocListFilesInput,
+  rawInput: DocListFilesInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocListFilesOutput; error?: string; formattedText?: string }> {
   if (!context.projectId) {
     return { success: false, error: 'List files requires a project context' };
   }
+
+  // A qtap:// URI may address a store root (qtap://self/) or a folder
+  // (qtap://self/Knowledge). Project its parts onto scope/mount_point/folder.
+  let input = rawInput;
+  if (rawInput.uri) {
+    const parts = parseQtapUri(rawInput.uri);
+    input = {
+      ...rawInput,
+      uri: undefined,
+      scope: parts.scope,
+      mount_point: parts.mountPoint ?? rawInput.mount_point,
+      folder: parts.path !== '' ? parts.path : rawInput.folder,
+    };
+  }
+  const uriResolver = await buildDocStoreUriResolver(context.characterId);
 
   const files: DocFileInfo[] = [];
   const recursive = input.recursive !== false;
@@ -707,7 +759,8 @@ export async function handleListFiles(
     baseDir: string,
     scope: DocFileInfo['scope'],
     mountPointName?: string,
-    folder?: string
+    folder?: string,
+    makeUri?: (relPath: string) => string
   ): Promise<void> => {
     const startDir = folder ? path.join(baseDir, folder) : baseDir;
 
@@ -724,6 +777,7 @@ export async function handleListFiles(
             files.push({
               path: relativePath,
               mount_point: mountPointName,
+              uri: makeUri?.(relativePath),
               scope,
               size: 0,
               modified: 0,
@@ -738,6 +792,7 @@ export async function handleListFiles(
               files.push({
                 path: relativePath,
                 mount_point: mountPointName,
+                uri: makeUri?.(relativePath),
                 scope,
                 size: stat.size,
                 modified: stat.mtime.getTime(),
@@ -781,6 +836,7 @@ export async function handleListFiles(
         continue;
       }
       const mpScope = groupMountIds.has(mp.id) ? 'group' : 'document_store';
+      const makeUri = (relPath: string) => uriResolver.uriForMount(mp.name, mp.id, relPath);
       if (mp.mountType === 'database') {
         // Bytes live in doc_mount_documents; list from the mirror doc_mount_files rows.
         const dbEntries = await listDatabaseFiles(mp.id, input.folder ? { folder: input.folder } : {});
@@ -789,6 +845,7 @@ export async function handleListFiles(
           files.push({
             path: entry.relativePath,
             mount_point: mp.name,
+            uri: makeUri(entry.relativePath),
             scope: mpScope,
             size: entry.fileSizeBytes,
             modified: new Date(entry.lastModified).getTime(),
@@ -797,7 +854,7 @@ export async function handleListFiles(
         }
         continue;
       }
-      await collectFiles(mp.basePath, mpScope, mp.name, input.folder);
+      await collectFiles(mp.basePath, mpScope, mp.name, input.folder, makeUri);
     }
   }
 
@@ -816,6 +873,7 @@ export async function handleListFiles(
       // branch above has already enumerated this mount; only emit it again
       // when scope was explicitly 'project' so the caller sees results.
       if (input.scope === 'project') {
+        const makeProjectUri = (relPath: string) => uriResolver.uriForScope('project', relPath);
         if (officialMount.mountType === 'database') {
           const dbEntries = await listDatabaseFiles(
             officialMount.id,
@@ -826,6 +884,7 @@ export async function handleListFiles(
             files.push({
               path: entry.relativePath,
               mount_point: officialMount.name,
+              uri: makeProjectUri(entry.relativePath),
               scope: 'project',
               size: entry.fileSizeBytes,
               modified: new Date(entry.lastModified).getTime(),
@@ -833,13 +892,15 @@ export async function handleListFiles(
             });
           }
         } else if (officialMount.basePath) {
-          await collectFiles(officialMount.basePath, 'project', officialMount.name, input.folder);
+          await collectFiles(officialMount.basePath, 'project', officialMount.name, input.folder, makeProjectUri);
         }
       }
     } else {
       const { getFilesDir } = await import('@/lib/paths');
       const projectDir = path.join(getFilesDir(), context.projectId);
-      await collectFiles(projectDir, 'project', undefined, input.folder);
+      await collectFiles(projectDir, 'project', undefined, input.folder, (relPath) =>
+        uriResolver.uriForScope('project', relPath)
+      );
     }
   }
 
@@ -847,7 +908,9 @@ export async function handleListFiles(
   if (shouldIncludeGeneral) {
     const { getFilesDir } = await import('@/lib/paths');
     const generalDir = path.join(getFilesDir(), '_general');
-    await collectFiles(generalDir, 'general', undefined, input.folder);
+    await collectFiles(generalDir, 'general', undefined, input.folder, (relPath) =>
+      uriResolver.uriForScope('general', relPath)
+    );
   }
 
   // Post-collection filter: always strip OS cruft; strip auto-images unless opted in.

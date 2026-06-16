@@ -793,6 +793,58 @@ export async function handleReadDocument(
 }
 
 /**
+ * Existence probe for a Document-Mode target — used to gate clickable
+ * `qtap://` links in the Salon. Resolves `{ filePath, scope, mountPoint }`
+ * through the same access-controlled path the read/open actions use and
+ * returns `{ exists }` WITHOUT returning the file's bytes. Any resolution
+ * failure (invalid path, inaccessible store, not found) yields
+ * `{ exists: false }` so an unreachable URI simply stays plain text. The
+ * reserved `self` authority resolves only when the chat has exactly one
+ * character participant (its vault); otherwise it is treated as non-existent.
+ */
+export async function handleResolveDocument(
+  req: NextRequest,
+  chatId: string,
+  context: AuthenticatedContext
+): Promise<NextResponse> {
+  const body = await req.json();
+  const data = readDocumentSchema.parse(body);
+
+  const chatContext = await getChatContext(chatId, context);
+  if (!chatContext) {
+    return badRequest('Chat not found');
+  }
+
+  try {
+    const isSelf =
+      data.scope === 'document_store' && (data.mountPoint ?? '').toLowerCase() === 'self';
+    const selfCharacterId =
+      isSelf && chatContext.characterIds.length === 1 ? chatContext.characterIds[0] : undefined;
+
+    const resolved = await resolveDocEditPath(data.scope as DocEditScope, data.filePath, {
+      projectId: chatContext.projectId,
+      characterIds: chatContext.characterIds,
+      characterId: selfCharacterId,
+      mountPoint: data.mountPoint,
+      // Operator surface (the human's Salon), matching read/open-document.
+      operatorOverride: true,
+    });
+
+    const exists = await resolvedPathExists(resolved);
+    return successResponse({ exists });
+  } catch (error) {
+    logger.debug('resolve-document: path not resolvable; treating as non-existent', {
+      chatId,
+      filePath: data.filePath,
+      scope: data.scope,
+      mountPoint: data.mountPoint,
+      error: getErrorMessage(error),
+    });
+    return successResponse({ exists: false });
+  }
+}
+
+/**
  * Write file content from the document editor
  */
 export async function handleWriteDocument(

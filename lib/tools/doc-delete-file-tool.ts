@@ -12,6 +12,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc_delete_file tool's input.
  */
 export const docDeleteFileToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   scope: z
     .enum(['document_store', 'project', 'general'])
     .default('document_store')
@@ -25,8 +29,9 @@ export const docDeleteFileToolInputSchema = z.object({
     .optional(),
   path: z
     .string()
-    .describe('Relative path to the file to delete within the selected scope.'),
-});
+    .describe('Relative path to the file to delete within the selected scope.')
+    .optional(),
+}).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 
 /**
  * Input parameters for the doc_delete_file tool
@@ -53,4 +58,6 @@ export const docDeleteFileToolDefinition = {
 export interface DocDeleteFileOutput {
   success: boolean;
   path: string;
+  /** Canonical qtap:// URI for the (now-deleted) file. */
+  uri?: string;
 }

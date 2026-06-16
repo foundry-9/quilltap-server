@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback, ReactNode } from 'react'
 import Link from 'next/link'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -20,6 +20,8 @@ import {
   isDialogueParagraph,
   escapeMarkdownInBrackets,
 } from '@/lib/chat/roleplay-rendering'
+import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
+import { QtapDocLink } from './QtapDocLink'
 
 // Internal links — same-origin, app-route paths starting with a single "/" —
 // must navigate via the Next.js router so they work inside the Electron shell
@@ -355,11 +357,15 @@ export default function MessageContent({
       const { className, content } = renderLineBlock(children, compiledRules)
       return <blockquote className={className}>{content}</blockquote>
     },
-    // Links — internal app routes use the Next.js router (required for the
-    // Electron shell, which can't honour `target="_blank"`). External links
-    // still open in a new tab. CSS (qt-link, scoped chat overrides) handles
-    // appearance.
+    // Links — `qtap://` document URIs become in-app Document-Mode links
+    // (never web URLs). Internal app routes use the Next.js router (required
+    // for the Electron shell, which can't honour `target="_blank"`). External
+    // links still open in a new tab. CSS (qt-link, scoped chat overrides)
+    // handles appearance.
     a({ href, children }) {
+      if (isQtapUri(href)) {
+        return <QtapDocLink href={href}>{children}</QtapDocLink>
+      }
       if (isInternalHref(href)) {
         return (
           <Link href={href} className="qt-link">
@@ -419,6 +425,11 @@ export default function MessageContent({
           // collapsed to a space the way CommonMark does by default. Blank-line
           // paragraph separation still works as before.
           remarkPlugins={[remarkGfm, remarkBreaks]}
+          // react-markdown's default URL sanitizer only allows http(s)/mailto/
+          // etc., so it would strip `qtap://` hrefs before they reach `a()`.
+          // Preserve qtap:// URIs (rendered as in-app Document-Mode links by
+          // QtapDocLink) and defer everything else to the default transform.
+          urlTransform={(url) => (isQtapUri(url) ? url : defaultUrlTransform(url))}
           components={components}
         >
           {processedContent}

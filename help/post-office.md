@@ -54,9 +54,9 @@ And what of a letter addressed to the very character *you* are playing? You neve
 The Post Office adds no special tools for handling mail you already have — your character's ordinary document tools do the job, and **`list_email`** spells out the exact incantations for each letter.
 
 - **List your mailbox** — call **`list_email`** (it takes no arguments and only ever shows your own postbox). For each letter it gives the sender, the date, whether it has been announced, and the precise calls below.
-- **Read a letter** — `doc_read_file` with `scope: "document_store"`, `mount_point: "self"`, and the letter's `Mail/…` path. The token **`"self"`** always means *your own vault*, so you never need to know its proper name.
-- **Answer a letter** — `send_mail` again, with `in_reply_to` set to the letter's id. Your reply will quote the original beneath your new words.
-- **Discard a letter** — `doc_delete_file` with `scope: "document_store"`, `mount_point: "self"`, and the letter's path.
+- **Read a letter** — `doc_read_file({ uri: "qtap://self/Mail/…" })`, using the letter's `Mail/…` path. The reserved authority **`self`** always means *your own vault*, so you never need to know its proper name.
+- **Answer a letter** — `send_mail` again, with `in_reply_to` set to the letter's id (its `Mail/…` path). Your reply will quote the original beneath your new words.
+- **Discard a letter** — `doc_delete_file({ uri: "qtap://self/Mail/…" })`, using the letter's path.
 
 Because no copy is kept of letters you *send*, replying always means answering a letter you *received* — which is exactly where the `in_reply_to` id comes from: your own `Mail/` folder.
 

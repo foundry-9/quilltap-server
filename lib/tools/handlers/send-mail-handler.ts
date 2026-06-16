@@ -17,6 +17,7 @@ import type { SendMailToolOutput } from '../send-mail-tool';
 import { resolveCharacterByNameOrId } from '@/lib/services/character-resolver';
 import { composeAndDeliverLetter } from '@/lib/post-office/deliver';
 import { getRepositories } from '@/lib/repositories/factory';
+import { docStoreUriFor } from '@/lib/doc-edit/uri-producers';
 
 export type { SendMailToolOutput };
 
@@ -83,9 +84,31 @@ export async function executeSendMailTool(
       path: result.path,
     });
 
+    // The confirmation describes the RECIPIENT's postbox, so address it with
+    // the recipient store's qtap:// URI (its name, UUID fallback if ambiguous)
+    // — never qtap://self/, which would name the sender's own vault. Falls back
+    // to the raw path if the recipient's vault mount can't be resolved.
+    let postboxRef = result.path;
+    try {
+      const recipientMountId = recipient.characterDocumentMountPointId;
+      if (recipientMountId) {
+        const mp = await getRepositories().docMountPoints.findById(recipientMountId);
+        if (mp) {
+          const uri = await docStoreUriFor({
+            mountPointId: mp.id,
+            mountPointName: mp.name,
+            relativePath: result.path,
+          });
+          if (uri) postboxRef = uri;
+        }
+      }
+    } catch {
+      // Keep the raw path if anything goes sideways resolving the recipient vault.
+    }
+
     return {
       success: true,
-      message: `Suparṇā has the letter in hand and is already winging it to ${recipient.name}. It will rest in their postbox as ${result.path}.`,
+      message: `Suparṇā has the letter in hand and is already winging it to ${recipient.name}. It will rest in their postbox at ${postboxRef}.`,
       path: result.path,
     };
   } catch (error) {

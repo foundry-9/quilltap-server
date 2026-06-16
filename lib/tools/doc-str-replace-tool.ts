@@ -11,6 +11,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc-str-replace tool's input.
  */
 export const docStrReplaceToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   scope: z
     .enum(['document_store', 'project', 'general'])
     .default('document_store')
@@ -22,7 +26,8 @@ export const docStrReplaceToolInputSchema = z.object({
     .optional(),
   path: z
     .string()
-    .describe('Relative path to the file within the selected scope.'),
+    .describe('Relative path to the file within the selected scope.')
+    .optional(),
   find: z
     .string()
     .describe('Exact text to find in the file. Must be unique — appears exactly once. Include sufficient context to guarantee uniqueness.'),
@@ -39,7 +44,7 @@ export const docStrReplaceToolInputSchema = z.object({
     .default(true)
     .describe('Normalize Unicode diacritics for matching (e.g., "Nimue" matches "Nimuë"). Default is true.')
     .optional(),
-});
+}).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 
 /**
  * Input parameters for the doc-str-replace tool
@@ -67,6 +72,8 @@ export function validateDocStrReplaceInput(input: unknown): input is DocStrRepla
 export interface DocStrReplaceOutput {
   success: boolean;
   path: string;
+  /** Canonical qtap:// URI for the edited file. */
+  uri?: string;
   mtime: number;
   line_number: number;
 }

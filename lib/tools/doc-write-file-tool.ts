@@ -11,6 +11,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc-write-file tool's input.
  */
 export const docWriteFileToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   scope: z
     .enum(['document_store', 'project', 'general'])
     .default('document_store')
@@ -22,7 +26,8 @@ export const docWriteFileToolInputSchema = z.object({
     .optional(),
   path: z
     .string()
-    .describe('Relative path to the file within the selected scope.'),
+    .describe('Relative path to the file within the selected scope.')
+    .optional(),
   content: z
     .unknown()
     .describe('The complete new contents for the file. For JSON/JSONL files, can be a string (validated) or a native object/array (serialized).'),
@@ -34,7 +39,7 @@ export const docWriteFileToolInputSchema = z.object({
     .number()
     .describe('Expected modification time from a previous read. If the file has been modified since this time, the write is rejected to prevent overwriting concurrent changes.')
     .optional(),
-});
+}).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 
 /**
  * Input parameters for the doc-write-file tool
@@ -62,5 +67,7 @@ export function validateDocWriteFileInput(input: unknown): input is DocWriteFile
 export interface DocWriteFileOutput {
   success: boolean;
   path: string;
+  /** Canonical qtap:// URI for the written file. */
+  uri?: string;
   mtime: number;
 }

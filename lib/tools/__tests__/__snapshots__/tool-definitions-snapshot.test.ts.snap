@@ -90,6 +90,10 @@ exports[`tool definitions: derived OpenAI parameters docCopyFile: parameters sna
       "description": "Destination path within the destination document store. If this path already exists as a directory, the file is dropped into it with the source filename. Otherwise it is treated as the full path with filename. Use "" or "." to copy to the root of the destination store.",
       "type": "string",
     },
+    "dest_uri": {
+      "description": "A qtap:// URI for the destination, e.g. "qtap://Shared/Notes/today.md". When provided, it supersedes dest_mount_point/dest_path.",
+      "type": "string",
+    },
     "source_mount_point": {
       "description": "Name (or ID) of the document store to copy the file from. Pass "self" for your own character vault.",
       "minLength": 1,
@@ -100,13 +104,11 @@ exports[`tool definitions: derived OpenAI parameters docCopyFile: parameters sna
       "minLength": 1,
       "type": "string",
     },
+    "source_uri": {
+      "description": "A qtap:// URI for the source document, e.g. "qtap://self/Notes/today.md". When provided, it supersedes source_mount_point/source_path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "source_mount_point",
-    "source_path",
-    "dest_mount_point",
-    "dest_path",
-  ],
   "type": "object",
 }
 `;
@@ -133,10 +135,11 @@ exports[`tool definitions: derived OpenAI parameters docCreateFolder: parameters
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -153,11 +156,11 @@ exports[`tool definitions: derived OpenAI parameters docDeleteBlob: parameters s
       "description": "Relative path to the blob within the mount point.",
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "mount_point",
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -184,10 +187,11 @@ exports[`tool definitions: derived OpenAI parameters docDeleteFile: parameters s
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -214,10 +218,11 @@ exports[`tool definitions: derived OpenAI parameters docDeleteFolder: parameters
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -292,6 +297,10 @@ exports[`tool definitions: derived OpenAI parameters docGrep: parameters snapsho
       "description": "Search string or regex pattern to find.",
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
     "query",
@@ -354,9 +363,12 @@ exports[`tool definitions: derived OpenAI parameters docInsertText: parameters s
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "position",
     "content",
   ],
@@ -376,10 +388,11 @@ exports[`tool definitions: derived OpenAI parameters docListBlobs: parameters sn
       "description": "Mount point name or ID to enumerate blobs for. Pass "self" for your own character vault.",
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "mount_point",
-  ],
   "type": "object",
 }
 `;
@@ -420,6 +433,10 @@ exports[`tool definitions: derived OpenAI parameters docListFiles: parameters sn
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "type": "object",
 }
@@ -451,9 +468,12 @@ exports[`tool definitions: derived OpenAI parameters docMoveFile: parameters sna
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "new_path",
   ],
   "type": "object",
@@ -484,9 +504,12 @@ exports[`tool definitions: derived OpenAI parameters docMoveFolder: parameters s
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "new_path",
   ],
   "type": "object",
@@ -528,6 +551,10 @@ exports[`tool definitions: derived OpenAI parameters docOpenDocument: parameters
       "description": "Display title for new blank documents. Ignored if path is provided.",
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "type": "object",
 }
@@ -550,11 +577,11 @@ exports[`tool definitions: derived OpenAI parameters docReadBlob: parameters sna
       "description": "Relative path to the blob within the mount point (e.g. images/avatar.webp).",
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "mount_point",
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -593,10 +620,11 @@ exports[`tool definitions: derived OpenAI parameters docReadFile: parameters sna
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -630,10 +658,11 @@ exports[`tool definitions: derived OpenAI parameters docReadFrontmatter: paramet
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -670,11 +699,11 @@ exports[`tool definitions: derived OpenAI parameters docReadHeading: parameters 
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-    "heading",
-  ],
   "type": "object",
 }
 `;
@@ -719,9 +748,12 @@ exports[`tool definitions: derived OpenAI parameters docStrReplace: parameters s
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "find",
     "replace",
   ],
@@ -764,9 +796,12 @@ exports[`tool definitions: derived OpenAI parameters docUpdateFrontmatter: param
       },
       "type": "object",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "updates",
   ],
   "type": "object",
@@ -814,10 +849,12 @@ exports[`tool definitions: derived OpenAI parameters docUpdateHeading: parameter
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
-    "heading",
     "content",
   ],
   "type": "object",
@@ -852,10 +889,12 @@ exports[`tool definitions: derived OpenAI parameters docWriteBlob: parameters sn
       "description": "Desired relative path within the mount point, e.g. "images/avatar.png". If the upload is transcoded to WebP the extension is rewritten to .webp.",
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "mount_point",
-    "path",
     "data_base64",
     "original_filename",
     "mime_type",
@@ -897,9 +936,12 @@ exports[`tool definitions: derived OpenAI parameters docWriteFile: parameters sn
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "content",
   ],
   "type": "object",

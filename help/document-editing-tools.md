@@ -35,6 +35,32 @@ doc_list_files(mount_point: "self")
 
 The convenience is twofold. A character need not recall the formal title its vault was christened with, and should that title ever change, `"self"` keeps pointing true. The vault's actual name and identifier continue to work exactly as before — `"self"` is an addition, never a replacement. The shorthand resolves only for the character acting as itself; an operator or a non-character caller falls through to ordinary name-and-identifier matching, so a store one has genuinely *named* "self" remains reachable in those contexts.
 
+## A single address for any document: the `qtap://` URI
+
+Where the older custom hands one a *bundle* of parameters — a scope here, a mount point there, a path besides — there is now a single, tidy way to name any document the Scriptorium can reach: the **`qtap://` URI**. It is, simply, all three particulars folded into one address-card:
+
+```
+qtap://<authority>/<path within the store>
+```
+
+Every `doc_*` tool accepts an optional **`uri`** parameter. When you supply it, it supersedes `scope`, `mount_point`, and `path` — pass the one or the other, whichever suits:
+
+```
+doc_read_file({ uri: "qtap://self/Mail/1781578632981-from-friday.md" })
+doc_write_file({ uri: "qtap://Project Files/Knowledge/rank_markings.md", content: "…" })
+```
+
+The **authority** — the part just after `qtap://` — is read in this order:
+
+- **`self`** — your own vault, exactly as the shorthand above (`qtap://self/Backstory.md`).
+- **`project`** — the project's own file area (`qtap://project/Outline.md`).
+- **`general`** — the general, non-project shelf (`qtap://general/Scenarios/intro.md`).
+- **anything else** — a document store's **name** (the readable, preferred form) or, when a name is shared by more than one store, its **UUID** (the unambiguous escape hatch): `qtap://Voyages of the Covenant/notes/today.md` or `qtap://550e8400-e29b-41d4-a716-446655440000/notes/today.md`.
+
+The three reserved words — `self`, `project`, `general` — always win the authority slot. Should you keep a store genuinely *named* one of them, reach it by its UUID. Names bearing spaces, colons, and other such particulars are percent-encoded in the canonical form (a colon becomes `%3A`, a space `%20`), though a literal colon is graciously accepted on the way in.
+
+These URIs are not merely accepted — they are now what Quilltap *hands back*. Tool results, the self-inventory, search results, and the staff's whispers (Prospero, the Librarian, Suparṇā at the Post Office) all quote documents by their `qtap://` address. And in The Salon, a `qtap://` URI pointing at a document that genuinely exists is rendered as a tidy, clickable link — one tap opens it in the document pane. (A URI for a missing or unreachable document stays plain, unclickable text, lest you be sent chasing a phantom.)
+
 ## Available Tools
 
 ### Reading & Searching

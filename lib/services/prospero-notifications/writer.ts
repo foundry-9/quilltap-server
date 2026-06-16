@@ -17,6 +17,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
+import { formatDocStoreUri, formatScopedUri, formatSelfUri } from '@/lib/doc-edit/qtap-uri';
 import type { MessageEvent } from '@/lib/schemas/types';
 
 export interface ProsperoConnectionProfileChangeAnnouncement {
@@ -216,8 +217,30 @@ async function loadLinkedDocumentStores(
   }
 }
 
+/**
+ * Root `qtap://` URI for the household's shared shelf (the Quilltap General
+ * mount). It is an ordinary store addressed by name/ID — NOT the `general`
+ * scope (`qtap://general/…`, the legacy `_general` storage), which is a
+ * different thing entirely.
+ */
+function generalShelfUri(general: ProsperoGeneralContext): string {
+  return formatDocStoreUri({
+    mountPointName: general.name,
+    mountPointId: general.mountPointId,
+    path: '',
+  });
+}
+
 function buildDocumentStoresSection(stores: ProsperoDocumentStoreInfo[]): string[] {
   if (!stores.length) return [];
+
+  // Names duplicated within the linked set must fall back to the UUID form so
+  // the URI stays unambiguous.
+  const nameCounts = new Map<string, number>();
+  for (const s of stores) {
+    const key = s.name.trim().toLowerCase();
+    nameCounts.set(key, (nameCounts.get(key) ?? 0) + 1);
+  }
 
   const lines: string[] = ['**Document stores linked to this project:**', ''];
   for (const store of stores) {
@@ -228,19 +251,24 @@ function buildDocumentStoresSection(stores: ProsperoDocumentStoreInfo[]): string
     if (!store.enabled) tags.push('currently disabled');
     const tagSuffix = ` *(${tags.join('; ')})*`;
 
-    const safeName = store.name.replace(/`/g, '\\`');
-    const namedRef = `use \`mount_point: "${safeName}"\` (ID \`${store.id}\` also works)`;
+    const nameIsAmbiguous = (nameCounts.get(store.name.trim().toLowerCase()) ?? 0) > 1;
+    const storeUri = formatDocStoreUri({
+      mountPointName: store.name,
+      mountPointId: store.id,
+      path: '',
+      nameIsAmbiguous,
+    });
     const refHint = store.isOfficial
-      ? `pass \`scope: "project"\` to address it directly, or ${namedRef}`
-      : namedRef.charAt(0).toUpperCase() + namedRef.slice(1);
+      ? `reachable at \`${formatScopedUri('project', '')}\` (or \`${storeUri}\`)`
+      : `reachable at \`${storeUri}\``;
 
     lines.push(`- **${store.name}**${tagSuffix} — ${refHint}.`);
   }
   lines.push('');
   lines.push(
-    'Pass any of those names (or IDs) as the `mount_point` argument on `doc_*` tools, ' +
-      'or as `source_mount_point` / `dest_mount_point` on `doc_copy_file`. The `path` ' +
-      'argument is the file\'s relative path within the chosen store.',
+    'Address a file in any of these with a `qtap://` URI — e.g. ' +
+      '`doc_read_file({ uri: "qtap://<store>/<relative path>" })` (or `doc_copy_file` with ' +
+      '`source_uri` / `dest_uri`). The legacy `mount_point` + `path` arguments still work.',
   );
   return lines;
 }
@@ -364,7 +392,7 @@ export function buildGeneralContextContent(general: ProsperoGeneralContext): str
   const lines: string[] = [
     `Prospero would have you remember that, beyond any particular project or vault, every character in this instance has standing access to the household's shared shelf — **${general.name}** — at all times.`,
     '',
-    `Use \`mount_point: "${safeName}"\` on any \`doc_*\` tool (the ID \`${general.mountPointId}\` also works). Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content the household keeps lives here as well.`,
+    `Reach it with a \`qtap://\` URI — \`${generalShelfUri(general)}\` (pass it as the \`uri\` arg to any \`doc_*\` tool); the \`mount_point: "${safeName}"\` form and the ID \`${general.mountPointId}\` still work. Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content the household keeps lives here as well.`,
   ];
   return lines.join('\n');
 }
@@ -374,7 +402,7 @@ export function buildGeneralContextOpaqueContent(general: ProsperoGeneralContext
   const lines: string[] = [
     `Beyond any particular project or vault, every character in this instance has standing access to the shared shelf — **${general.name}** — at all times.`,
     '',
-    `Use \`mount_point: "${safeName}"\` on any \`doc_*\` tool (the ID \`${general.mountPointId}\` also works). Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content lives here as well.`,
+    `Reach it with a \`qtap://\` URI — \`${generalShelfUri(general)}\` (pass it as the \`uri\` arg to any \`doc_*\` tool); the \`mount_point: "${safeName}"\` form and the ID \`${general.mountPointId}\` still work. Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content lives here as well.`,
   ];
   return lines.join('\n');
 }
@@ -437,7 +465,7 @@ export function buildCombinedContextContent(
     if (description || instructions || stores.length) lines.push('');
     const safeName = general.name.replace(/`/g, '\\`');
     lines.push(
-      `Beyond this project, every character in this instance has standing access to the household's shared shelf — **${general.name}** — at all times. Use \`mount_point: "${safeName}"\` on any \`doc_*\` tool (the ID \`${general.mountPointId}\` also works). Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content the household keeps lives here as well.`,
+      `Beyond this project, every character in this instance has standing access to the household's shared shelf — **${general.name}** — at all times. Reach it with a \`qtap://\` URI — \`${generalShelfUri(general)}\` (pass it as the \`uri\` arg to any \`doc_*\` tool); the \`mount_point: "${safeName}"\` form and the ID \`${general.mountPointId}\` still work. Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content the household keeps lives here as well.`,
     );
   }
 
@@ -484,7 +512,7 @@ export function buildCombinedContextOpaqueContent(
     if (description || instructions || stores.length) lines.push('');
     const safeName = general.name.replace(/`/g, '\\`');
     lines.push(
-      `Beyond this project, every character in this instance has standing access to the shared shelf — **${general.name}** — at all times. Use \`mount_point: "${safeName}"\` on any \`doc_*\` tool (the ID \`${general.mountPointId}\` also works). Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content lives here as well.`,
+      `Beyond this project, every character in this instance has standing access to the shared shelf — **${general.name}** — at all times. Reach it with a \`qtap://\` URI — \`${generalShelfUri(general)}\` (pass it as the \`uri\` arg to any \`doc_*\` tool); the \`mount_point: "${safeName}"\` form and the ID \`${general.mountPointId}\` still work. Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content lives here as well.`,
     );
   }
 
@@ -611,13 +639,14 @@ function renderWhisperStoreLine(store: ProsperoDocumentStoreInfo): string {
   if (!store.enabled) tags.push('currently disabled');
   const tagSuffix = ` *(${tags.join('; ')})*`;
   const safeName = store.name.replace(/`/g, '\\`');
-  return `- **${store.name}**${tagSuffix} — use \`mount_point: "${safeName}"\` (ID \`${store.id}\` also works).`;
+  const storeUri = formatDocStoreUri({ mountPointName: store.name, mountPointId: store.id, path: '' });
+  return `- **${store.name}**${tagSuffix} — reachable at \`${storeUri}\` (the \`mount_point: "${safeName}"\` form and ID \`${store.id}\` work too).`;
 }
 
 /**
  * Render the character's own-vault line. Unlike a group shelf, the vault has a
- * stable reserved handle: `mount_point: "self"` always addresses it on any
- * `doc_*` tool, immune to a later rename. The name and ID are still offered as
+ * stable reserved handle: `qtap://self/…` always addresses it on any `doc_*`
+ * tool, immune to a later rename. The name and ID are still offered as
  * equivalents so name/ID matching keeps working.
  */
 function renderVaultStoreLine(store: ProsperoDocumentStoreInfo): string {
@@ -625,7 +654,7 @@ function renderVaultStoreLine(store: ProsperoDocumentStoreInfo): string {
   if (!store.enabled) tags.push('currently disabled');
   const tagSuffix = ` *(${tags.join('; ')})*`;
   const safeName = store.name.replace(/`/g, '\\`');
-  return `- **${store.name}**${tagSuffix} — address it as \`mount_point: "self"\` (the name \`${safeName}\` or ID \`${store.id}\` work too).`;
+  return `- **${store.name}**${tagSuffix} — address it at \`${formatSelfUri('')}\` (the reserved \`self\` authority always names your own vault; the name \`${safeName}\` or ID \`${store.id}\` work too).`;
 }
 
 function buildGroupAndVaultBody(

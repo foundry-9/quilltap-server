@@ -13,6 +13,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc-move-folder tool's input.
  */
 export const docMoveFolderToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   scope: z
     .enum(['document_store'])
     .default('document_store')
@@ -24,11 +28,12 @@ export const docMoveFolderToolInputSchema = z.object({
     .optional(),
   path: z
     .string()
-    .describe('Current relative path to the folder within the selected scope.'),
+    .describe('Current relative path to the folder within the selected scope.')
+    .optional(),
   new_path: z
     .string()
     .describe('Destination relative path for the folder. Parent directories are created automatically for database-backed stores.'),
-});
+}).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 
 /**
  * Input parameters for the doc-move-folder tool
@@ -57,4 +62,6 @@ export interface DocMoveFolderOutput {
   success: boolean;
   old_path: string;
   new_path: string;
+  /** Canonical qtap:// URI for the folder's new location. */
+  uri?: string;
 }
