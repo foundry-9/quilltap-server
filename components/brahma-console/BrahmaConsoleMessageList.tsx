@@ -9,7 +9,7 @@
  * shared `qt-help-*` chat-bubble styling for visual consistency.
  */
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import MessageContent from '@/components/chat/MessageContent'
 
@@ -34,6 +34,42 @@ function ConsoleAvatar() {
     <div className="qt-help-avatar">
       <Icon name="brahma-console" className="w-4 h-4" />
     </div>
+  )
+}
+
+/**
+ * Small "copy as Markdown" affordance shown beneath each settled bubble. It
+ * copies the message's raw content (already Markdown) to the clipboard and
+ * flips to a checkmark for a beat as confirmation. Self-contained per-button
+ * state mirrors the code-block copy control in MessageContent, so the dialog
+ * doesn't need the Salon's toast plumbing. Rendered outside the bubble (on the
+ * dialog background) to stay legible regardless of the bubble fill.
+ */
+function CopyMarkdownButton({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy message', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }, [content])
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="qt-chat-message-action-icon opacity-50 hover:opacity-100"
+      title={copied ? 'Copied!' : 'Copy as Markdown'}
+      aria-label={copied ? 'Copied' : 'Copy message as Markdown'}
+    >
+      <Icon name={copied ? 'check' : 'copy'} />
+    </button>
   )
 }
 
@@ -85,8 +121,17 @@ export function BrahmaConsoleMessageList({
               )}
             </svg>
 
-            <div className={isUser ? 'qt-help-msg-user' : 'qt-help-msg-assistant'}>
-              <MessageContent content={msg.content} />
+            <div
+              className={`flex flex-col gap-0.5 min-w-0 ${isUser ? 'items-end' : 'items-start'}`}
+              style={{ maxWidth: '80%' }}
+            >
+              <div
+                className={isUser ? 'qt-help-msg-user' : 'qt-help-msg-assistant'}
+                style={{ maxWidth: '100%' }}
+              >
+                <MessageContent content={msg.content} />
+              </div>
+              <CopyMarkdownButton content={msg.content} />
             </div>
           </div>
         )

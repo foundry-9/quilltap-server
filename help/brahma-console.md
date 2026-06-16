@@ -16,6 +16,8 @@ At the foot of the left sidebar, just below the Help icon, you will find the **t
 
 The Console opens, as the Help Chat does, to a roster of your **past conversations**. Select one to resume it exactly where you left off, or begin afresh with the composer at the bottom of the window.
 
+Every message in the transcript — yours and the engine's alike — wears a small **copy mark** just beneath it. A single press tucks that message's text, in its original Markdown, onto your clipboard, ready to be pasted wherever you please; the mark winks to a checkmark for a moment to confirm the deed is done.
+
 ## Choosing your engine
 
 Every Console conversation talks to exactly one **connection profile** (your configured model). When you open a fresh conversation, the Console reaches for your **default** profile. Once a conversation is underway, a **model picker** appears in the window's title bar: press it to survey every profile you've established — provider and model plainly labelled — and choose another.

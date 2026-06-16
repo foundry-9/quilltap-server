@@ -4,6 +4,14 @@
 
 ### 4.7-dev
 
+#### Brahma Console: copy any message as Markdown
+
+Each settled message in the Brahma Console transcript — user and assistant alike — now has a small copy button beneath it. Pressing it copies that message's raw Markdown to the clipboard (the same text the model sent/received, not the rendered HTML) and briefly flips to a checkmark to confirm. The button sits on the dialog background just below the bubble, so it stays legible on any theme. Self-contained per-button state (no toast dependency), mirroring the existing code-block copy control.
+
+#### Fixed: unreadable user messages in the Help Chat and Brahma Console on dark themes
+
+User chat bubbles in the Help Chat and Brahma Console rendered their text with the global foreground color instead of the primary-foreground color, so on dark themes (e.g. Madman's Box) you got light text on the gold/primary bubble fill — effectively unreadable. The bubble's `text-primary-foreground` was being overridden by the markdown prose styles (`.qt-prose-auto` pins `--tw-prose-body` to the global foreground in dark mode). Added a `.qt-help-msg-user .qt-chat-message-content` rule that pins the prose body and text color back to `--color-primary-foreground`, mirroring the treatment the Salon's user bubbles already use. CSS-only; no theme tokens or bundled themes changed.
+
 #### Larger sidebar icons
 
 Bumped the collapsed left-sidebar icons up one size so they read closer to the user avatar. The navigation and footer action icons went from 20px to 28px, and the Home/brand quill went from 28px to 32px (matching the profile photo). Sizes are set at each `<Icon>` call site via Tailwind `w-`/`h-` utilities (the qt-icon size default intentionally defers to them), so no theme tokens or bundled themes changed.
