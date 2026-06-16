@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Fix: opening Document Mode (or Terminal Mode) erased unsent composer text
+
+Typing a message and then opening Document Mode wiped whatever was in the Salon composer. `SplitLayout` rendered the chat pane — and the Lexical composer inside it — in a structurally different DOM tree for each mode (`normal`/`split`/`focus`), so switching modes unmounted and remounted the editor, discarding its in-memory text. Because the page-level `input` value intentionally lags live typing (the composer owns the live text to avoid per-keystroke re-renders), the remounted editor reseeded from a stale/empty value and the text was gone. The same loss applied to opening Terminal Mode, toggling focus mode, and closing a document. `SplitLayout` now keeps the chat pane mounted in one stable structure across all modes and varies only its width/visibility, so the composer (and its undo history, cursor, and scroll position) survives every mode change. Touched `app/salon/[id]/components/SplitLayout.tsx` only; no CSS or behavior changes to the document/terminal panes.
+
 #### Fix: SillyTavern export mislabeled every speaker in multi-character chats
 
 Exporting a multi-character chat to SillyTavern JSONL tagged every assistant message with the first character's name instead of the actual speaker. The export only ever received one character name and stamped it on every non-user line, ignoring each message's `participantId`. The export now resolves the speaker per message from a participant-id → name map covering all character participants, falling back to the role-based character/user name for single-character or legacy messages that carry no `participantId`. User-controlled characters export under the character's name, not the human operator's name. Touched `lib/sillytavern/chat.ts` (new optional `participantNames` arg on `exportSTChat`/`exportSTChatAsJSONL`) and the `?action=export` handler in `app/api/v1/chats/[id]/handlers/get.ts` (loads all character participants, threads `participantId` through). Added multi-character export tests.
