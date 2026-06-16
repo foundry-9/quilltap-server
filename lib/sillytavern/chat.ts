@@ -113,13 +113,30 @@ export function importSTChat(
 
 /**
  * Export internal chat to SillyTavern format
+ *
+ * `participantNames` maps a message's `participantId` to the speaker's name and
+ * is how multi-character chats attribute each line to its real author. When a
+ * message has no `participantId` (single-character / legacy chats) or it isn't
+ * in the map, we fall back to the role-based `characterName` / `userName`.
+ * User-controlled characters are included in the map, so their lines export
+ * under the character's name — not the human operator's.
  */
 export function exportSTChat(
   chat: any,
   messages: any[],
   characterName: string,
-  userName: string = 'User'
+  userName: string = 'User',
+  participantNames?: Map<string, string>
 ): STChat {
+  // Resolve the displayed speaker for a single message.
+  const resolveName = (msg: any): string => {
+    if (msg.participantId) {
+      const name = participantNames?.get(msg.participantId)
+      if (name) return name
+    }
+    return msg.role === 'USER' ? userName : characterName
+  }
+
   // Group messages by swipeGroupId
   const messageGroups = new Map<string, any[]>()
   const nonSwipeMessages: any[] = []
@@ -160,7 +177,7 @@ export function exportSTChat(
           )
 
           stMessages.push({
-            name: msg.role === 'USER' ? userName : characterName,
+            name: resolveName(msg),
             is_user: msg.role === 'USER',
             is_name: true,
             send_date: msg.createdAt.getTime(),
@@ -174,7 +191,7 @@ export function exportSTChat(
       } else {
         // Regular message without swipes
         stMessages.push({
-          name: msg.role === 'USER' ? userName : characterName,
+          name: resolveName(msg),
           is_user: msg.role === 'USER',
           is_name: true,
           send_date: msg.createdAt.getTime(),
@@ -206,9 +223,10 @@ export function exportSTChatAsJSONL(
   chat: any,
   messages: any[],
   characterName: string,
-  userName: string = 'User'
+  userName: string = 'User',
+  participantNames?: Map<string, string>
 ): string {
-  const stChat = exportSTChat(chat, messages, characterName, userName)
+  const stChat = exportSTChat(chat, messages, characterName, userName, participantNames)
 
   const lines: string[] = []
 

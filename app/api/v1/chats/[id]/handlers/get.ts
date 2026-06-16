@@ -51,13 +51,32 @@ export async function handleGet(
       const allEvents = await repos.chats.getMessages(chatId);
       const messages = allEvents.filter((event) => event.type === 'message');
 
-      const characterParticipant = chat.participants.find((p) => p.type === 'CHARACTER' && p.characterId);
-      if (!characterParticipant?.characterId) {
+      const characterParticipants = chat.participants.filter(
+        (p) => p.type === 'CHARACTER' && p.characterId
+      );
+      const primaryParticipant = characterParticipants[0];
+      if (!primaryParticipant?.characterId) {
         return notFound('No character in chat');
       }
 
-      const character = await repos.characters.findById(characterParticipant.characterId);
-      if (!character) {
+      // Load every character participant so each message can be attributed to
+      // its real author. The map is keyed by participant id (what messages
+      // carry in `participantId`); broken-vault characters are dropped by
+      // findByIds and simply fall back to the primary name in the export.
+      const characters = await repos.characters.findByIds(
+        characterParticipants
+          .map((p) => p.characterId)
+          .filter((id): id is string => typeof id === 'string')
+      );
+      const charactersById = new Map(characters.map((c) => [c.id, c]));
+      const participantNames = new Map<string, string>();
+      for (const p of characterParticipants) {
+        const name = p.characterId ? charactersById.get(p.characterId)?.name : undefined;
+        if (name) participantNames.set(p.id, name);
+      }
+
+      const primaryCharacter = charactersById.get(primaryParticipant.characterId);
+      if (!primaryCharacter) {
         return notFound('Character');
       }
 
@@ -74,6 +93,7 @@ export async function handleGet(
         swipeIndex: msg.swipeIndex || null,
         tokenCount: msg.tokenCount || null,
         rawResponse: msg.rawResponse || null,
+        participantId: msg.participantId || null,
       }));
 
       const chatForExport = {
@@ -82,9 +102,15 @@ export async function handleGet(
         updatedAt: new Date(chat.updatedAt),
       };
 
-      const jsonlContent = exportSTChatAsJSONL(chatForExport, formattedMessages, character.name, userName);
+      const jsonlContent = exportSTChatAsJSONL(
+        chatForExport,
+        formattedMessages,
+        primaryCharacter.name,
+        userName,
+        participantNames
+      );
       const chatCreatedTime = new Date(chat.createdAt).getTime();
-      const filename = `${character.name}_chat_${chatCreatedTime}.jsonl`;
+      const filename = `${primaryCharacter.name}_chat_${chatCreatedTime}.jsonl`;
 
       return new NextResponse(jsonlContent, {
         headers: {

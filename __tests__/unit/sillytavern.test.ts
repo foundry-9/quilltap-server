@@ -330,6 +330,78 @@ describe('SillyTavern Chat Import/Export', () => {
 
       expect(result.messages.every((m) => !m.mes.includes('System prompt'))).toBe(true)
     })
+
+    it('should attribute each message to its own participant in multi-character chats', () => {
+      // Regression: every assistant line used to be stamped with the first
+      // character's name. Each message must keep its real author.
+      const participantNames = new Map<string, string>([
+        ['participant-alice', 'Alice'],
+        ['participant-bob', 'Bob'],
+        ['participant-carol', 'Carol'], // user-controlled character
+      ])
+
+      const multiCharMessages = [
+        {
+          id: 'mc-1',
+          role: 'USER',
+          content: "Carol's line",
+          swipeGroupId: null,
+          swipeIndex: 0,
+          createdAt: new Date(),
+          rawResponse: null,
+          participantId: 'participant-carol', // user-controlled character
+        },
+        {
+          id: 'mc-2',
+          role: 'ASSISTANT',
+          content: "Alice's line",
+          swipeGroupId: null,
+          swipeIndex: 0,
+          createdAt: new Date(),
+          rawResponse: null,
+          participantId: 'participant-alice',
+        },
+        {
+          id: 'mc-3',
+          role: 'ASSISTANT',
+          content: "Bob's line",
+          swipeGroupId: null,
+          swipeIndex: 0,
+          createdAt: new Date(),
+          rawResponse: null,
+          participantId: 'participant-bob',
+        },
+      ]
+
+      const result = exportSTChat(
+        mockInternalChat,
+        multiCharMessages,
+        'Alice', // primary / fallback name
+        'Operator',
+        participantNames
+      )
+
+      const byContent = (text: string) => result.messages.find((m) => m.mes === text)!
+
+      // Each assistant message keeps its OWN speaker — not the first character's.
+      expect(byContent("Alice's line").name).toBe('Alice')
+      expect(byContent("Bob's line").name).toBe('Bob')
+
+      // A user-controlled character exports under the character's name, not the
+      // human operator's name.
+      expect(byContent("Carol's line").name).toBe('Carol')
+    })
+
+    it('should fall back to role-based names when a message has no participantId', () => {
+      // Legacy / single-character messages carry no participantId, so the
+      // role-based character/user names still apply.
+      const result = exportSTChat(mockInternalChat, mockMessages, 'Character', 'User', new Map())
+
+      const userMsg = result.messages.find((m) => m.is_user)
+      const assistantMsg = result.messages.find((m) => !m.is_user)
+      expect(userMsg?.name).toBe('User')
+      expect(assistantMsg?.name).toBe('Character')
+    })
   })
 
   describe('exportSTChatAsJSONL', () => {

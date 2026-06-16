@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Fix: SillyTavern export mislabeled every speaker in multi-character chats
+
+Exporting a multi-character chat to SillyTavern JSONL tagged every assistant message with the first character's name instead of the actual speaker. The export only ever received one character name and stamped it on every non-user line, ignoring each message's `participantId`. The export now resolves the speaker per message from a participant-id → name map covering all character participants, falling back to the role-based character/user name for single-character or legacy messages that carry no `participantId`. User-controlled characters export under the character's name, not the human operator's name. Touched `lib/sillytavern/chat.ts` (new optional `participantNames` arg on `exportSTChat`/`exportSTChatAsJSONL`) and the `?action=export` handler in `app/api/v1/chats/[id]/handlers/get.ts` (loads all character participants, threads `participantId` through). Added multi-character export tests.
+
 #### `qtap://` document URIs: one address for any file
 
 Added a single, first-class way to address any document the Scriptorium can reach — a `qtap://` URI — and made it the form Quilltap emits everywhere. A URI is just the existing `{ scope, mount_point, path }` triple folded into one string: `qtap://<authority>/<path>`. The authority is matched name-first, UUID as fallback; three reserved authorities name the non-store scopes: `qtap://self/…` (the acting character's own vault), `qtap://project/…`, and `qtap://general/…`. Reserved words always win the authority slot; a store literally named one of them is reachable by its UUID. No database, storage-model, `.qtap`/backup, or migration changes — the URI is a serialization of the existing triple, nothing more.
