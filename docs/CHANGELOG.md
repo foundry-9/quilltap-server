@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Salon composer font now matches your sent messages
+
+The Salon message composer (the Lexical input) now renders in the same typeface used for your rendered user messages, so what you type matches what you read back. The composer previously set no `font-family` and inherited the body sans, while user message bubbles use `--qt-chat-user-font`. In themes that give user messages a distinct font this caused a mismatch — e.g. Madman's Box typed in Raleway but rendered in Mulish; Rains, Old School, and Earl Grey diverged similarly. Pointed `.qt-chat-composer-input` at `--qt-chat-user-font`, the same token user messages use, so the two stay in sync per theme automatically. No-op in the default theme (and Great Estate/Art Deco), where that token already resolves to the body sans. CSS-only; no theme tokens or bundled themes changed.
+
 #### Brahma Console: copy any message as Markdown
 
 Each settled message in the Brahma Console transcript — user and assistant alike — now has a small copy button beneath it. Pressing it copies that message's raw Markdown to the clipboard (the same text the model sent/received, not the rendered HTML) and briefly flips to a checkmark to confirm. The button sits on the dialog background just below the bubble, so it stays legible on any theme. Self-contained per-button state (no toast dependency), mirroring the existing code-block copy control.

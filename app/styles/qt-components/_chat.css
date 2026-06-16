@@ -794,6 +794,12 @@
     background: var(--qt-input-bg);
     color: var(--qt-input-fg);
     border: 1px solid var(--qt-input-border);
+    /* Share the typeface used for rendered user messages
+       (.qt-chat-message-user .qt-chat-message-content) so what you type matches
+       what you'll read back. In the default theme --qt-chat-user-font resolves to
+       --font-sans (a no-op); themes that give user messages a distinct font
+       (e.g. Madman's Box → Mulish) get a matching composer instead of the body sans. */
+    font-family: var(--qt-chat-user-font);
   }
 
   .qt-chat-composer-input:focus,
