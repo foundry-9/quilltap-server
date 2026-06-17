@@ -2,20 +2,21 @@
 
 import { memo } from 'react'
 import { Icon } from '@/components/ui/icon'
-import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
-import { formatMessageTime } from '@/lib/format-time'
-import { TokenBadge } from '@/components/chat/TokenBadge'
 import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
 import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
-import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
 import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-message-labels'
 import { AnnouncementChip, AnnouncementBarContents } from './AnnouncementChip'
 import { CourierBubble } from './CourierBubble'
 import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse-reasoning'
 import { ThinkingBlock } from './ThinkingBlock'
+import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
+import { MessageActionBar } from './message-row/MessageActionBar'
+import { MessageDesktopActions } from './message-row/MessageDesktopActions'
+import { getImageAttachments } from './message-row/helpers'
+import type { MessageAvatarInfo } from './message-row/types'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -27,13 +28,6 @@ function extractTerminalSessionId(content: string | null | undefined): string | 
   if (!content) return null
   const m = content.match(TERMINAL_SESSION_ID_RE)
   return m ? m[1] : null
-}
-
-interface MessageAvatarInfo {
-  name: string
-  title: string | null | undefined
-  avatarUrl?: string
-  defaultImage?: { id: string; filepath: string; url?: string } | null | undefined
 }
 
 interface MessageRowProps {
@@ -120,10 +114,6 @@ interface MessageRowProps {
   showThinking?: boolean
   /** Whether thinking blocks start collapsed (global default). */
   thinkingCollapsedByDefault?: boolean
-}
-
-function getImageAttachments(message: Message) {
-  return (message.attachments || []).filter(a => a.mimeType.startsWith('image/'))
 }
 
 function MessageRowInner({
@@ -231,18 +221,11 @@ function MessageRowInner({
         className={messageRowClasses.concat(['qt-chat-message-row-courier']).join(' ')}
       >
         {message.role === 'ASSISTANT' && shouldShowAvatars && messageAvatar && (
-          <div className={`flex-shrink-0 qt-chat-desktop-avatar${isDangerousChat ? ' qt-chat-avatar-dangerous' : ''}`}>
-            <Avatar
-              name={messageAvatar.name}
-              title={messageAvatar.title}
-              src={messageAvatar}
-              size="chat"
-              showName
-              showTitle
-              className="flex flex-col items-center w-32 gap-1"
-            />
-            <ProviderModelBadge provider={message.provider} modelName={message.modelName} size="xs" />
-          </div>
+          <MessageDesktopAvatar
+            messageAvatar={messageAvatar}
+            dangerous={isDangerousChat}
+            badge={{ provider: message.provider, modelName: message.modelName }}
+          />
         )}
         <div className="qt-chat-message-body group">
           <div className="chat-message qt-chat-message-assistant">
@@ -280,18 +263,11 @@ function MessageRowInner({
     >
       {/* Desktop avatar - assistant (left side) */}
       {message.role === 'ASSISTANT' && shouldShowAvatars && messageAvatar && (
-        <div className={`flex-shrink-0 qt-chat-desktop-avatar${isDangerousChat ? ' qt-chat-avatar-dangerous' : ''}`}>
-          <Avatar
-            name={messageAvatar.name}
-            title={messageAvatar.title}
-            src={messageAvatar}
-            size="chat"
-            showName
-            showTitle
-            className="flex flex-col items-center w-32 gap-1"
-          />
-          <ProviderModelBadge provider={message.provider} modelName={message.modelName} size="xs" />
-        </div>
+        <MessageDesktopAvatar
+          messageAvatar={messageAvatar}
+          dangerous={isDangerousChat}
+          badge={{ provider: message.provider, modelName: message.modelName }}
+        />
       )}
       <div className="qt-chat-message-body group">
         {message.systemSender && !isEditing && onToggleSystemMessageExpanded && (() => {
@@ -464,291 +440,54 @@ function MessageRowInner({
               )}
 
               {/* Action bar - shows action icons at bottom of message */}
-              <div className="qt-chat-message-action-bar">
-                <div className="qt-chat-message-action-bar-icons">
-                  {/* Collapse (Staff-authored messages only) */}
-                  {message.systemSender && onToggleSystemMessageExpanded && (
-                    <button
-                      type="button"
-                      onClick={() => onToggleSystemMessageExpanded(message.id)}
-                      className="qt-chat-message-action-icon"
-                      title="Collapse this message"
-                      aria-label="Collapse this message"
-                    >
-                      <Icon name="chevron-down" className="rotate-180" />
-                    </button>
-                  )}
-                  {/* Copy */}
-                  <button
-                    onClick={() => onCopyContent(message.content)}
-                    className="qt-chat-message-action-icon"
-                    title="Copy message"
-                  >
-                    <Icon name="copy" />
-                  </button>
-                  {/* Save image (only when one or more image attachments are present) */}
-                  {onSaveImage && getImageAttachments(message).length > 0 && (
-                    <button
-                      onClick={() => {
-                        const images = getImageAttachments(message)
-                        if (images.length > 0) {
-                          onSaveImage(message.id, images[0].id)
-                        }
-                      }}
-                      className="qt-chat-message-action-icon"
-                      title={getImageAttachments(message).length > 1
-                        ? 'Save an image to a photo album'
-                        : 'Save image to a photo album'}
-                      aria-label="Save image to a photo album"
-                    >
-                      <Icon name="bookmark" />
-                    </button>
-                  )}
-                  {/* View source/rendered */}
-                  <button
-                    onClick={() => onToggleSourceView(message.id)}
-                    className="qt-chat-message-action-icon"
-                    title={viewSourceMessageIds.has(message.id) ? 'View rendered' : 'View source'}
-                  >
-                    {viewSourceMessageIds.has(message.id) ? (
-                      <Icon name="eye" />
-                    ) : (
-                      <Icon name="code" />
-                    )}
-                  </button>
-                  {/* Edit (user messages only) */}
-                  {message.role === 'USER' && (
-                    <button
-                      onClick={() => onEditStart(message)}
-                      className="qt-chat-message-action-icon"
-                      title="Edit message"
-                    >
-                      <Icon name="pencil" />
-                    </button>
-                  )}
-                  {/* Delete */}
-                  <button
-                    onClick={() => onDelete(message.id)}
-                    className="qt-chat-message-action-icon qt-chat-message-action-icon-danger"
-                    title="Delete message"
-                  >
-                    <Icon name="trash" />
-                  </button>
-                  {/* Regenerate (assistant messages only) */}
-                  {message.role === 'ASSISTANT' && (
-                    <button
-                      onClick={() => onGenerateSwipe(message.id)}
-                      className="qt-chat-message-action-icon"
-                      title="Regenerate response"
-                    >
-                      <Icon name="refresh" />
-                    </button>
-                  )}
-                  {/* Re-attribute (when other participants exist) */}
-                  {onReattribute && participantData.filter(p => p.id !== message.participantId).length > 0 && (
-                    <button
-                      onClick={() => onReattribute(message.id)}
-                      className="qt-chat-message-action-icon"
-                      title="Re-attribute to different participant"
-                    >
-                      <Icon name="swap" />
-                    </button>
-                  )}
-                  {/* View LLM Logs (assistant messages with logs) */}
-                  {hasLLMLogs && message.role === 'ASSISTANT' && onViewLLMLogs && (
-                    <button
-                      onClick={() => onViewLLMLogs(message.id)}
-                      className="qt-chat-message-action-icon"
-                      title="View LLM request/response logs"
-                    >
-                      <Icon name="cpu" />
-                    </button>
-                  )}
-                  {/* Resend (user messages only) */}
-                  {message.role === 'USER' && showResendButton && (
-                    <button
-                      onClick={() => onResend(message)}
-                      className="qt-chat-message-action-icon"
-                      title="Resend this message"
-                    >
-                      <Icon name="send" />
-                    </button>
-                  )}
-                  {/* Swipe controls */}
-                  {message.role === 'ASSISTANT' && swipeState && swipeState.total > 1 && (
-                    <>
-                      <button
-                        onClick={() => onSwitchSwipe(message.swipeGroupId!, 'prev')}
-                        disabled={swipeState.current === 0}
-                        className="qt-chat-message-action-icon disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Previous response"
-                      >
-                        <Icon name="chevron-left" />
-                      </button>
-                      <span className="qt-text-xs px-1">
-                        {swipeState.current + 1}/{swipeState.total}
-                      </span>
-                      <button
-                        onClick={() => onSwitchSwipe(message.swipeGroupId!, 'next')}
-                        disabled={swipeState.current === swipeState.total - 1}
-                        className="qt-chat-message-action-icon disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Next response"
-                      >
-                        <Icon name="chevron-right" />
-                      </button>
-                    </>
-                  )}
-                </div>
-                <div className="qt-chat-message-action-timestamp flex items-center gap-2">
-                  <span>{formatMessageTime(message.createdAt)}</span>
-                  {tokenDisplaySettings?.showPerMessageTokens && (message.promptTokens || message.completionTokens) && (
-                    <TokenBadge
-                      promptTokens={message.promptTokens}
-                      completionTokens={message.completionTokens}
-                      totalTokens={message.tokenCount}
-                      showTokens={tokenDisplaySettings.showPerMessageTokens}
-                      showCost={tokenDisplaySettings.showPerMessageCost}
-                    />
-                  )}
-                </div>
-              </div>
+              <MessageActionBar
+                message={message}
+                viewSourceMessageIds={viewSourceMessageIds}
+                swipeState={swipeState}
+                showResendButton={showResendButton}
+                hasLLMLogs={hasLLMLogs}
+                participantData={participantData}
+                tokenDisplaySettings={tokenDisplaySettings}
+                onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
+                onCopyContent={onCopyContent}
+                onSaveImage={onSaveImage}
+                onToggleSourceView={onToggleSourceView}
+                onEditStart={onEditStart}
+                onDelete={onDelete}
+                onGenerateSwipe={onGenerateSwipe}
+                onReattribute={onReattribute}
+                onViewLLMLogs={onViewLLMLogs}
+                onResend={onResend}
+                onSwitchSwipe={onSwitchSwipe}
+              />
             </>
           )}
         </div>
 
-        {/* Desktop hover action buttons */}
+        {/* Desktop-only affordances (hover toolbar + text actions) */}
         {!isEditing && (
-          <div className="absolute -top-8 right-0 flex gap-1 qt-bg-muted rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity qt-chat-desktop-hover-actions">
-            <button
-              onClick={() => onCopyContent(message.content)}
-              className="p-1 qt-text-secondary hover:text-foreground"
-              title="Copy message"
-            >
-              <Icon name="copy" className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onToggleSourceView(message.id)}
-              className="p-1 qt-text-secondary hover:text-foreground"
-              title={viewSourceMessageIds.has(message.id) ? 'View rendered' : 'View source'}
-            >
-              {viewSourceMessageIds.has(message.id) ? (
-                <Icon name="eye" className="w-4 h-4" />
-              ) : (
-                <Icon name="code" className="w-4 h-4" />
-              )}
-            </button>
-            {hasLLMLogs && message.role === 'ASSISTANT' && onViewLLMLogs && (
-              <button
-                onClick={() => onViewLLMLogs(message.id)}
-                className="p-1 qt-text-secondary hover:text-foreground"
-                title="View LLM logs"
-              >
-                <Icon name="cpu" className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Desktop message actions */}
-        {!isEditing && (
-          <div className="flex gap-2 mt-1 text-sm qt-chat-message-desktop-actions">
-            {message.role === 'USER' && (
-              <>
-                <button
-                  onClick={() => onEditStart(message)}
-                  className="qt-text-secondary hover:text-foreground"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => onDelete(message.id)}
-                  className="qt-text-destructive hover:qt-text-destructive/80"
-                >
-                  Delete
-                </button>
-                {showResendButton && (
-                  <button
-                    onClick={() => onResend(message)}
-                    className="qt-text-warning hover:qt-text-warning/80"
-                    title="Resend this message (deletes blank responses and restores to input)"
-                  >
-                    Resend
-                  </button>
-                )}
-                {onReattribute && participantData.filter(p => p.id !== message.participantId).length > 0 && (
-                  <button
-                    onClick={() => onReattribute(message.id)}
-                    className="qt-text-secondary hover:text-foreground"
-                  >
-                    Re-attribute
-                  </button>
-                )}
-              </>
-            )}
-
-            {message.role === 'ASSISTANT' && (
-              <>
-                <button
-                  onClick={() => onDelete(message.id)}
-                  className="qt-text-destructive hover:qt-text-destructive/80"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={() => onGenerateSwipe(message.id)}
-                  className="qt-text-info hover:qt-text-info/80"
-                >
-                  Regenerate
-                </button>
-                {onReattribute && participantData.filter(p => p.id !== message.participantId).length > 0 && (
-                  <button
-                    onClick={() => onReattribute(message.id)}
-                    className="qt-text-secondary hover:text-foreground"
-                  >
-                    Re-attribute
-                  </button>
-                )}
-
-                {/* Swipe controls */}
-                {swipeState && swipeState.total > 1 && (
-                  <div className="flex items-center gap-2 ml-2">
-                    <button
-                      onClick={() => onSwitchSwipe(message.swipeGroupId!, 'prev')}
-                      disabled={swipeState.current === 0}
-                      className="qt-text-secondary hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-
-                    </button>
-                    <span className="qt-text-xs">
-                      {swipeState.current + 1} / {swipeState.total}
-                    </span>
-                    <button
-                      onClick={() => onSwitchSwipe(message.swipeGroupId!, 'next')}
-                      disabled={swipeState.current === swipeState.total - 1}
-                      className="qt-text-secondary hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+          <MessageDesktopActions
+            message={message}
+            viewSourceMessageIds={viewSourceMessageIds}
+            swipeState={swipeState}
+            showResendButton={showResendButton}
+            hasLLMLogs={hasLLMLogs}
+            participantData={participantData}
+            onCopyContent={onCopyContent}
+            onToggleSourceView={onToggleSourceView}
+            onViewLLMLogs={onViewLLMLogs}
+            onEditStart={onEditStart}
+            onDelete={onDelete}
+            onResend={onResend}
+            onReattribute={onReattribute}
+            onGenerateSwipe={onGenerateSwipe}
+            onSwitchSwipe={onSwitchSwipe}
+          />
         )}
       </div>
       {/* Desktop avatar - user (right side) */}
       {message.role === 'USER' && shouldShowAvatars && messageAvatar && (
-        <div className="flex-shrink-0 qt-chat-desktop-avatar">
-          <Avatar
-            name={messageAvatar.name}
-            title={messageAvatar.title}
-            src={messageAvatar}
-            size="chat"
-            showName
-            showTitle
-            className="flex flex-col items-center w-32 gap-1"
-          />
-        </div>
+        <MessageDesktopAvatar messageAvatar={messageAvatar} />
       )}
     </div>
   )

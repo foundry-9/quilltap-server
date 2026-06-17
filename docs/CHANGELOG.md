@@ -4,6 +4,13 @@
 
 ### 4.7-dev
 
+#### Refactor: split the Salon MessageRow god-component
+
+Broke the 863-line `app/salon/[id]/components/MessageRow.tsx` render function into focused presentational subcomponents, with no behavior change (every className, conditional, and callback wiring is preserved verbatim). `MessageRowInner` has no hooks, so the extraction adds no new state or memo boundaries.
+
+- New `app/salon/[id]/components/message-row/`: `MessageDesktopAvatar` (the left/right avatar column, dedup'd from the three sites that hand-rolled it), `MessageActionBar` (the in-bubble icon toolbar plus timestamp/token badge), and `MessageDesktopActions` (the hover toolbar and desktop text actions), plus shared `types.ts` (`MessageAvatarInfo`) and `helpers.ts` (`getImageAttachments`).
+- `MessageRow.tsx` drops from 863 to 602 lines; it keeps the props contract, the courier/collapsed/main branch structure, the content + tool-layout rendering, and the `memo` comparator unchanged.
+
 #### Refactor: single-source the Carina inline-markup handling
 
 The user-message path (the orchestrator) and the assistant-markup path (the message finalizer) ran near-identical `@Name:` / `@Name?` blocks: detect the markup, fire the isolated reference query, surface the answer live, and route a failure through Prospero. Collapsed both into one shared `runCarinaMarkupQuery` (`lib/services/carina/markup-runner.ts`), with the caller-specific bits — the "Consulting…" status event and the public-answer splice into the live turn, both user-message-only — passed as callbacks. No behavior change; the detection/failure log wording each path used is preserved via label parameters. Net ~60 fewer lines across the two services, plus a new unit test for the shared runner.
