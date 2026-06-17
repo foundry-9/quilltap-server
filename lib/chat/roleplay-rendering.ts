@@ -177,6 +177,69 @@ export interface LineMatch {
 }
 
 /**
+ * A whole-block match against an inline WRAP rule that hides its delimiters.
+ *
+ * Unlike {@link LineMatch}, the class lands on an inline `<span>` wrapping the
+ * (delimiter-stripped) block content — the chat classes are `display: inline`,
+ * so they must never be applied to the block element itself. Both `prefix`
+ * (opening delimiter) and `suffix` (closing delimiter) are stripped from the
+ * content so the styled span holds only the body, while any inline markdown the
+ * markdown parser produced inside the body is preserved.
+ */
+export interface WrapBlockMatch {
+  /** Class(es) for the inline span that wraps the block body. */
+  className: string
+  /** The literal opening delimiter to strip (e.g. `"+"`, `"(("`). */
+  prefix: string
+  /** The literal closing delimiter to strip (e.g. `"+"`, `"))"`). */
+  suffix: string
+}
+
+/**
+ * If the entire block of `text` is a single inline WRAP span whose rule hides its
+ * delimiters, return the span class plus the opening/closing delimiters to strip.
+ *
+ * This is the counterpart to {@link lineMatchFor} for the *wrap* delimiter kind:
+ * a paragraph that is wholly `+narration+` (delimiters hidden) gets styled at the
+ * block level instead of via the inline tokenizer. The win is that the markdown
+ * inside the wrap — `+a *b* c+` → `+a <em>b</em> c+` — has already been parsed
+ * into real nodes by the time this runs, so styling the wrapper preserves it,
+ * whereas the inline tokenizer (a pure string walk) can't span those nodes and
+ * would leave the delimiters literal.
+ *
+ * Only fires for `hideDelimiters` rules with a non-empty `prefix` AND `suffix`:
+ * shown-delimiter wraps keep going through the escape + inline-tokenize path, and
+ * a missing side means it's really a line prefix, handled by {@link lineMatchFor}.
+ */
+export function wrapBlockMatchFor(text: string, rules: CompiledRule[]): WrapBlockMatch | undefined {
+  const trimmed = text.trim()
+  if (!trimmed) return undefined
+
+  for (const rule of rules) {
+    if (rule.scope !== 'inline' || !rule.hideDelimiters) continue
+    // Strip g/m so the match anchors to the WHOLE block, not a sub-span.
+    const flags = rule.regex.flags.replace('g', '').replace('m', '')
+    const anchored = new RegExp(rule.regex.source, flags)
+    const m = trimmed.match(anchored)
+    if (!m || m.index !== 0 || m[0].length !== trimmed.length) continue
+
+    const body = m.groups?.rpBody
+    if (typeof body !== 'string' || body.length === 0) continue
+
+    // `body` is the non-delimiter interior, so it can't appear inside the
+    // all-delimiter opening run — indexOf reliably locates it.
+    const bodyStart = m[0].indexOf(body)
+    if (bodyStart <= 0) continue
+    const prefix = m[0].slice(0, bodyStart)
+    const suffix = m[0].slice(bodyStart + body.length)
+    if (!prefix || !suffix) continue
+
+    return { className: rule.className, prefix, suffix }
+  }
+  return undefined
+}
+
+/**
  * If the whole block of `text` is a single line matching a LINE-scoped rule,
  * return the match details. Mirrors how dialogue detection tags a `<p>` from its
  * plain text: the class lands on the block element, not an inline span.
@@ -251,31 +314,87 @@ export function segmentsToHtml(segments: Segment[]): string {
 // MARKDOWN ESCAPING (shared verbatim by both renderers)
 // ============================================================================
 
+/** Characters that trigger markdown parsing and must be escaped inside spans. */
+const MARKDOWN_CHARS = /([*_~`])/g
+
+/** True if a pattern's regex source carries the generated `(?<rpBody>…)` group. */
+function hasRpBodyGroup(pattern: RenderingPattern): boolean {
+  return pattern.pattern.includes('(?<rpBody>')
+}
+
 /**
- * Escape markdown syntax characters inside roleplay brackets to prevent the
- * markdown parser from breaking up the segments before they can be styled.
- * This handles cases like `[narration with *emphasis* inside]`.
+ * Escape the markdown characters inside the `rpBody` interior of every match of
+ * `pattern` in `part`, leaving the delimiters themselves untouched. Works for ANY
+ * wrap delimiter — `+…+`, `((…))`, `~…~` — because it reads the captured body
+ * straight from the pattern's own regex rather than hard-coding delimiter shapes.
+ */
+function escapeRpBodyInterior(part: string, pattern: RenderingPattern): string {
+  const baseFlags = (pattern.flags || '').replace('g', '')
+  let re: RegExp
+  try {
+    re = new RegExp(pattern.pattern, `${baseFlags}g`)
+  } catch {
+    return part // A malformed stored pattern must never break rendering.
+  }
+  return part.replace(re, (match: string, ...rest: unknown[]) => {
+    // With a named group, the last replace argument is the groups object.
+    const groups = rest[rest.length - 1] as Record<string, string> | undefined
+    const body = groups?.rpBody
+    if (typeof body !== 'string' || body.length === 0) return match
+    // `body` (non-delimiter interior) can't appear inside the all-delimiter
+    // opening run, so indexOf splits delimiter / body / delimiter cleanly.
+    const bodyStart = match.indexOf(body)
+    if (bodyStart < 0) return match
+    const open = match.slice(0, bodyStart)
+    const close = match.slice(bodyStart + body.length)
+    return `${open}${body.replace(MARKDOWN_CHARS, '\\$1')}${close}`
+  })
+}
+
+/**
+ * Escape markdown syntax characters inside roleplay delimiters to prevent the
+ * markdown parser from breaking up a span before it can be styled — e.g.
+ * `[narration with *emphasis* inside]` or `((ooc with *stars*))`.
+ *
+ * Three families are handled:
+ *  1. Generated wrap patterns that expose `(?<rpBody>…)` AND show their
+ *     delimiters: their interior is escaped generically, for any delimiter pair.
+ *  2. Generated wrap patterns that HIDE their delimiters: intentionally left
+ *     alone. A whole-block hidden wrap is restyled at the block level (see
+ *     {@link wrapBlockMatchFor}) where its inner markdown is meant to render.
+ *  3. Legacy built-in patterns that predate `rpBody` (`[…]`, `{…}`, `*…*`):
+ *     recognised by their fixed regex shapes, as before.
  *
  * IMPORTANT: preserves fenced code blocks (``` ``` ```) unchanged to avoid
  * corrupting code content with escape sequences.
  */
 export function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[]): string {
-  // Characters that trigger markdown parsing
-  const markdownChars = /([*_~`])/g
+  const inlinePatterns = patterns.filter((p) => p.scope !== 'line')
 
+  // (1) Shown-delimiter rpBody wraps → escape generically. (2) Hidden ones are
+  // deliberately excluded so their inner markdown survives for block styling.
+  const escapableRpBody = inlinePatterns.filter((p) => hasRpBodyGroup(p) && !p.hideDelimiters)
+
+  // (3) Legacy no-rpBody built-ins recognised by fixed shape.
+  const legacy = inlinePatterns.filter((p) => !hasRpBodyGroup(p))
   // Check if patterns include bracket-style narration [...]
-  const hasBracketNarration = patterns.some((p) => p.pattern.includes('\\['))
+  const hasBracketNarration = legacy.some((p) => p.pattern.includes('\\['))
   // Check if patterns include brace-style monologue {...}
-  const hasBraceMonologue = patterns.some((p) => p.pattern.includes('\\{'))
+  const hasBraceMonologue = legacy.some((p) => p.pattern.includes('\\{'))
   // Check if patterns include single-asterisk narration *...*. The className may
   // carry composed add-on classes (e.g. "qt-chat-narration qt-rp-bold"), so test
   // for the base class as a token rather than by exact equality.
-  const hasAsteriskNarration = patterns.some(
+  const hasAsteriskNarration = legacy.some(
     (p) => p.pattern.includes('\\*') && p.className.split(/\s+/).includes('qt-chat-narration'),
   )
 
   // If no relevant patterns, return content unchanged
-  if (!hasBracketNarration && !hasBraceMonologue && !hasAsteriskNarration) {
+  if (
+    escapableRpBody.length === 0 &&
+    !hasBracketNarration &&
+    !hasBraceMonologue &&
+    !hasAsteriskNarration
+  ) {
     return content
   }
 
@@ -293,10 +412,15 @@ export function escapeMarkdownInBrackets(content: string, patterns: RenderingPat
 
     let result = part
 
+    // Generic path: escape the interior of every shown-delimiter rpBody wrap.
+    for (const pattern of escapableRpBody) {
+      result = escapeRpBodyInterior(result, pattern)
+    }
+
     // Escape inside [...] if bracket narration is in patterns
     if (hasBracketNarration) {
       result = result.replace(/\[([^\]]+)\](?!\()/g, (_match, inner) => {
-        const escaped = inner.replace(markdownChars, '\\$1')
+        const escaped = inner.replace(MARKDOWN_CHARS, '\\$1')
         return `[${escaped}]`
       })
     }
@@ -305,7 +429,7 @@ export function escapeMarkdownInBrackets(content: string, patterns: RenderingPat
     // Excludes {{template}} variables using lookbehind/lookahead.
     if (hasBraceMonologue) {
       result = result.replace(/(?<!\{)\{([^{}]+)\}(?!\})/g, (_match, inner) => {
-        const escaped = inner.replace(markdownChars, '\\$1')
+        const escaped = inner.replace(MARKDOWN_CHARS, '\\$1')
         return `{${escaped}}`
       })
     }

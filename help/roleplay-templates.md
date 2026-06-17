@@ -323,6 +323,15 @@ Beyond narration, a template can declare a list of **formatting delimiters**. Ea
 
 Wrap delimiters style only the span between the markers; line-prefix and tag-prefix delimiters style the entire line they begin.
 
+### Markdown Within the Delimiters
+
+A delicate matter, this: what becomes of ordinary Markdown — your `*italics*`, your `_underlines_` — when it strays *inside* a delimiter's embrace? Quilltap now keeps its composure on both counts.
+
+- **When a wrap delimiter hides its markers** (the "hide delimiter" toggle) and a whole paragraph is given over to it, the markers quietly vanish, the passage takes on its style, and any Markdown nestled within is rendered as written — italics stay italic. Your narration may now carry emphasis without the markers showing their faces.
+- **When a delimiter keeps its markers on display** — or when the wrap sits mid-line amid other prose — the Markdown characters inside are shown verbatim, so the markers themselves are never mistaken or mangled.
+
+In short: a fully-wrapped, marker-hiding passage renders its inner Markdown; a marker-showing or inline wrap presents that Markdown as plain characters.
+
 ### Formatting Conventions
 
 Common elements to define:

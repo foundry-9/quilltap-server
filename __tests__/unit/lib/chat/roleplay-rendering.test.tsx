@@ -19,6 +19,7 @@ import {
   compileRenderingPatterns,
   tokenizeInline,
   lineMatchFor,
+  wrapBlockMatchFor,
   segmentsToHtml,
   escapeMarkdownInBrackets,
 } from '@/lib/chat/roleplay-rendering'
@@ -226,8 +227,78 @@ describe('roleplay-rendering core', () => {
     })
   })
 
+  describe('wrapBlockMatchFor (whole-block hidden wraps)', () => {
+    // The "Covenant RP" narration delimiter: +…+, delimiters hidden.
+    const narrationRule = compileRenderingPatterns([
+      {
+        pattern: '(?<!\\+)\\+(?<rpBody>[^+]+)\\+(?!\\+)',
+        className: 'qt-chat-narration qt-rp-italic',
+        hideDelimiters: true,
+      },
+    ])
+
+    it('matches a block that is wholly a hidden wrap, returning the delimiters to strip', () => {
+      expect(wrapBlockMatchFor('+the room holds its breath+', narrationRule)).toEqual({
+        className: 'qt-chat-narration qt-rp-italic',
+        prefix: '+',
+        suffix: '+',
+      })
+    })
+
+    it('trims surrounding whitespace before matching the whole block', () => {
+      expect(wrapBlockMatchFor('  +narration+  ', narrationRule)?.className).toBe(
+        'qt-chat-narration qt-rp-italic',
+      )
+    })
+
+    it('does NOT match when the wrap is only part of the block (inline)', () => {
+      expect(wrapBlockMatchFor('she said +softly+ to him', narrationRule)).toBeUndefined()
+    })
+
+    it('does NOT match a different open/close pair where they are not both present', () => {
+      expect(wrapBlockMatchFor('+ unbalanced', narrationRule)).toBeUndefined()
+    })
+
+    it('ignores a wrap rule that shows its delimiters (no block restyle)', () => {
+      const shown = compileRenderingPatterns([
+        { pattern: '(?<!\\+)\\+(?<rpBody>[^+]+)\\+(?!\\+)', className: 'qt-chat-narration' },
+      ])
+      expect(wrapBlockMatchFor('+narration+', shown)).toBeUndefined()
+    })
+
+    it('ignores line-scoped rules', () => {
+      const lineRule = compileRenderingPatterns([
+        { pattern: '^// (?<rpBody>.+)$', className: 'qt-chat-ooc', flags: 'm', scope: 'line', hideDelimiters: true },
+      ])
+      expect(wrapBlockMatchFor('// ooc line', lineRule)).toBeUndefined()
+    })
+
+    it('reports a multi-character open/close pair (e.g. ((…)) )', () => {
+      const oocHidden = compileRenderingPatterns([
+        { pattern: '\\(\\((?<rpBody>[^)]+)\\)\\)', className: 'qt-chat-ooc', hideDelimiters: true },
+      ])
+      expect(wrapBlockMatchFor('((an aside))', oocHidden)).toEqual({
+        className: 'qt-chat-ooc',
+        prefix: '((',
+        suffix: '))',
+      })
+    })
+  })
+
   describe('escapeMarkdownInBrackets', () => {
     const BRACKET: RenderingPattern = { pattern: '\\[[^\\]]+\\](?!\\()', className: 'qt-chat-narration' }
+    // A SHOWN-delimiter custom wrap (e.g. OOC ((…)) ): interior must be escaped.
+    const OOC_SHOWN: RenderingPattern = {
+      pattern: '\\(\\((?<rpBody>[^)]+)\\)\\)',
+      className: 'qt-chat-ooc',
+    }
+    // A HIDDEN-delimiter custom wrap (e.g. +…+ narration): interior must be LEFT
+    // ALONE so its markdown renders, then the block is restyled via wrapBlockMatchFor.
+    const NARRATION_HIDDEN: RenderingPattern = {
+      pattern: '(?<!\\+)\\+(?<rpBody>[^+]+)\\+(?!\\+)',
+      className: 'qt-chat-narration qt-rp-italic',
+      hideDelimiters: true,
+    }
 
     it('returns content unchanged when no relevant patterns', () => {
       expect(escapeMarkdownInBrackets('text *with* stars', [])).toBe('text *with* stars')
@@ -236,6 +307,27 @@ describe('roleplay-rendering core', () => {
     it('escapes markdown chars inside [...] when bracket narration present', () => {
       const result = escapeMarkdownInBrackets('[narration with *emphasis*]', [BRACKET])
       expect(result).toContain('\\*')
+    })
+
+    it('escapes the interior of a SHOWN custom wrap (generic rpBody path)', () => {
+      const result = escapeMarkdownInBrackets('((aside with *stars* and _us_))', [OOC_SHOWN])
+      expect(result).toContain('\\*')
+      expect(result).toContain('\\_')
+      // Delimiters themselves are untouched.
+      expect(result.startsWith('((')).toBe(true)
+      expect(result.endsWith('))')).toBe(true)
+    })
+
+    it('leaves a HIDDEN wrap interior un-escaped so its markdown renders', () => {
+      const content = '+al-Latif called his father *Father* in public+'
+      expect(escapeMarkdownInBrackets(content, [NARRATION_HIDDEN])).toBe(content)
+    })
+
+    it('handles a mix: skip the hidden wrap, escape the shown one', () => {
+      const content = '+narration *kept*+ and ((aside *escaped*))'
+      const result = escapeMarkdownInBrackets(content, [NARRATION_HIDDEN, OOC_SHOWN])
+      expect(result).toContain('+narration *kept*+') // hidden wrap untouched
+      expect(result).toContain('((aside \\*escaped\\*))') // shown wrap escaped
     })
 
     it('preserves fenced code blocks unchanged', () => {

@@ -28,6 +28,7 @@ import {
   compileRenderingPatterns,
   tokenizeInline,
   lineMatchFor,
+  wrapBlockMatchFor,
   isDialogueParagraph,
   segmentsToHtml,
   escapeMarkdownInBrackets,
@@ -157,6 +158,47 @@ export function applyLineScopedClasses(html: string, compiledRules: CompiledRule
   );
 }
 
+/**
+ * Wrap whole-block hidden WRAP delimiters in a styled inline span.
+ *
+ * The server counterpart of the client's wrap-block path in
+ * `MessageContent.renderLineBlock`: if a block element's plain text is entirely a
+ * single hidden-delimiter wrap (e.g. a `<p>` that is wholly `+narration+`), strip
+ * the opening/closing delimiters from the block's inner HTML and wrap what's left
+ * in `<span class="…">`. The markdown inside the wrap is already real HTML by now
+ * (`+a <em>b</em> c+`), so wrapping preserves it — the inline tokenizer can't,
+ * since it walks text runs between tags. The class lands on an inline span, never
+ * the block, because the chat classes are `display: inline`. No-op when no
+ * hidden-delimiter wrap rules exist.
+ */
+export function applyWrapBlockClasses(html: string, compiledRules: CompiledRule[]): string {
+  const wrapRules = compiledRules.filter((r) => r.scope === 'inline' && r.hideDelimiters);
+  if (wrapRules.length === 0) return html;
+
+  return html.replace(
+    /<(p|li|blockquote|h[1-6])([^>]*)>([\s\S]*?)<\/\1>/g,
+    (match, tag, attrs, content) => {
+      // Strip HTML tags to get plain text for the whole-block wrap check.
+      const plainText = (content as string).replace(/<[^>]+>/g, '');
+      const wrap = wrapBlockMatchFor(plainText, wrapRules);
+      if (!wrap) return match;
+
+      // The delimiters are literal text at the very start/end of the inner HTML
+      // (they were left un-escaped and aren't markdown), so slicing them off
+      // preserves the inline tags between them.
+      let inner = content as string;
+      if (wrap.prefix && inner.startsWith(wrap.prefix)) {
+        inner = inner.slice(wrap.prefix.length);
+      }
+      if (wrap.suffix && inner.endsWith(wrap.suffix)) {
+        inner = inner.slice(0, inner.length - wrap.suffix.length);
+      }
+
+      return `<${tag}${attrs}><span class="${wrap.className}">${inner}</span></${tag}>`;
+    },
+  );
+}
+
 // ============================================================================
 // MARKDOWN PROCESSOR
 // ============================================================================
@@ -233,17 +275,22 @@ export async function renderMarkdownToHtml(
     const file = await processor.process(escapedContent);
     let html = String(file);
 
-    // Step 5: Apply inline roleplay patterns
+    // Step 5: Wrap whole-block hidden-delimiter wraps in a styled span. Runs
+    // before inline patterns so the stripped delimiters can't be re-matched, and
+    // so the wrap's inner markdown (already real HTML) is preserved.
+    html = applyWrapBlockClasses(html, compiledRules);
+
+    // Step 6: Apply inline roleplay patterns
     html = applyRoleplayPatterns(html, compiledRules);
 
-    // Step 6: Apply whole-line (line-scoped) classes to block elements
+    // Step 7: Apply whole-line (line-scoped) classes to block elements
     html = applyLineScopedClasses(html, compiledRules);
 
-    // Step 7: Apply dialogue detection
+    // Step 8: Apply dialogue detection
     const dialogueConfig = dialogueDetection || DEFAULT_DIALOGUE_DETECTION;
     html = applyDialogueDetection(html, dialogueConfig);
 
-    // Step 8: Wrap in container div with appropriate classes
+    // Step 9: Wrap in container div with appropriate classes
     // Note: We don't add the outer container class here - the client handles that
     return html;
   } catch (error) {

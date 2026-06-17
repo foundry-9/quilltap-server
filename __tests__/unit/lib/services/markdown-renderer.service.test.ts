@@ -21,6 +21,7 @@ import {
   tokenizeInline,
   segmentsToHtml,
   lineMatchFor,
+  wrapBlockMatchFor,
   isDialogueParagraph as coreIsDialogueParagraph,
 } from '@/lib/chat/roleplay-rendering';
 
@@ -141,6 +142,25 @@ function applyDialogueDetection(html: string, detection: DialogueDetection): str
     }
 
     return match;
+  });
+}
+
+/**
+ * HTML wrapper mirroring markdown-renderer.service.applyWrapBlockClasses: a block
+ * that is wholly a hidden-delimiter wrap gets its delimiters stripped and its body
+ * wrapped in an inline styled span (preserving any inner markdown HTML).
+ */
+function applyWrapBlockClasses(html: string, rules: CompiledRule[]): string {
+  const wrapRules = rules.filter((r) => r.scope === 'inline' && r.hideDelimiters);
+  if (wrapRules.length === 0) return html;
+  return html.replace(/<(p|li|blockquote|h[1-6])([^>]*)>([\s\S]*?)<\/\1>/g, (match, tag, attrs, content) => {
+    const plainText = (content as string).replace(/<[^>]+>/g, '');
+    const wrap = wrapBlockMatchFor(plainText, wrapRules);
+    if (!wrap) return match;
+    let inner = content as string;
+    if (wrap.prefix && inner.startsWith(wrap.prefix)) inner = inner.slice(wrap.prefix.length);
+    if (wrap.suffix && inner.endsWith(wrap.suffix)) inner = inner.slice(0, inner.length - wrap.suffix.length);
+    return `<${tag}${attrs}><span class="${wrap.className}">${inner}</span></${tag}>`;
   });
 }
 
@@ -496,6 +516,57 @@ describe('markdown-renderer.service', () => {
       const html = '<p>// looks like ooc</p>';
       const inlineOnly: CompiledRule[] = [{ regex: /\*[^*]+\*/, className: 'qt-chat-narration', scope: 'inline' }];
       expect(applyLineScopedClasses(html, inlineOnly)).toBe(html);
+    });
+  });
+
+  describe('applyWrapBlockClasses', () => {
+    // The "Covenant RP" narration: +…+, delimiters hidden.
+    const wrapRules: CompiledRule[] = [
+      {
+        regex: /(?<!\+)\+(?<rpBody>[^+]+)\+(?!\+)/,
+        className: 'qt-chat-narration qt-rp-italic',
+        scope: 'inline',
+        hideDelimiters: true,
+      },
+    ];
+
+    it('wraps a whole-block hidden wrap in a styled span and strips the delimiters', () => {
+      const result = applyWrapBlockClasses('<p>+the room holds its breath+</p>', wrapRules);
+      expect(result).toBe(
+        '<p><span class="qt-chat-narration qt-rp-italic">the room holds its breath</span></p>',
+      );
+    });
+
+    it('PRESERVES inner markdown (the bug): an <em> inside the wrap survives', () => {
+      // This is exactly the reported failure: markdown inside +…+ used to leave the
+      // delimiters literal and unstyled. Now the <em> is kept inside the span.
+      const html = '<p>+al-Latif called his father <em>Father</em> in public+</p>';
+      const result = applyWrapBlockClasses(html, wrapRules);
+      expect(result).toBe(
+        '<p><span class="qt-chat-narration qt-rp-italic">al-Latif called his father <em>Father</em> in public</span></p>',
+      );
+    });
+
+    it('does not touch a block that is only partly wrapped', () => {
+      const html = '<p>she said +softly+ to him</p>';
+      expect(applyWrapBlockClasses(html, wrapRules)).toBe(html);
+    });
+
+    it('handles other block elements (h2, li, blockquote)', () => {
+      expect(applyWrapBlockClasses('<h2>+a beat+</h2>', wrapRules)).toContain(
+        '<h2><span class="qt-chat-narration qt-rp-italic">a beat</span></h2>',
+      );
+      expect(applyWrapBlockClasses('<li>+a beat+</li>', wrapRules)).toContain(
+        '<li><span class="qt-chat-narration qt-rp-italic">a beat</span></li>',
+      );
+    });
+
+    it('is a no-op when there are no hidden-delimiter wrap rules', () => {
+      const html = '<p>+narration+</p>';
+      const shown: CompiledRule[] = [
+        { regex: /(?<!\+)\+(?<rpBody>[^+]+)\+(?!\+)/, className: 'qt-chat-narration', scope: 'inline', hideDelimiters: false },
+      ];
+      expect(applyWrapBlockClasses(html, shown)).toBe(html);
     });
   });
 

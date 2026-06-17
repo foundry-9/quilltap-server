@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### Fix: Markdown inside a roleplay template's delimiters no longer breaks the delimiter
+
+When a roleplay template wrapped text in a custom delimiter (e.g. `+narration+`) and that text also contained Markdown like `*emphasis*`, the Markdown split the span before the delimiter styling was applied, so the delimiters showed up literally and the narration styling was lost.
+
+The shared roleplay renderer (`lib/chat/roleplay-rendering.ts`, used by both the client `MessageContent` and the server `markdown-renderer.service`) now handles this in two ways:
+
+- **Markdown escaping is generic.** `escapeMarkdownInBrackets` previously only protected the built-in `[…]`, `{…}`, and `*…*` shapes. It now escapes the interior of *any* wrap delimiter that shows its markers (including custom ones like `((ooc))`), reading the captured body straight from the pattern's regex.
+- **Hidden-delimiter wraps render their inner Markdown.** When a whole paragraph is a single delimiter that hides its markers (the `hideDelimiter` toggle), the markers are stripped and the body is wrapped in an inline styled span, so Markdown inside it (e.g. `*Father*` → italic) renders normally. New `wrapBlockMatchFor` in the core; new `applyWrapBlockClasses` step on the server and the matching path in the client block renderer.
+
+Shown-delimiter and inline (mid-line) wraps keep their previous behavior: the styling is applied and the Markdown characters are shown literally. Added unit tests for `wrapBlockMatchFor`, the generic/skip escaping, and the server HTML pass.
+
 #### Refactor: remove dead locals in the self-inventory prompt builder
 
 Dropped two unused locals in `buildPromptSection` (`lib/tools/handlers/self-inventory/builders.ts`): `otherParticipants` (destructured but never read) and `projectContext` (computed but never passed to `buildSystemPrompt`). The latter also ran a wasted `repos.projects.findById` lookup on every self-inventory `prompt` section. No behavior change.

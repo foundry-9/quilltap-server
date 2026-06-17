@@ -17,6 +17,7 @@ import {
   compileRenderingPatterns,
   tokenizeInline,
   lineMatchFor,
+  wrapBlockMatchFor,
   isDialogueParagraph,
   escapeMarkdownInBrackets,
 } from '@/lib/chat/roleplay-rendering'
@@ -238,15 +239,78 @@ function stripLeadingPrefix(children: ReactNode, prefix: string): ReactNode {
 }
 
 /**
- * Shared line-block handling: compute the whole-line class for a block and, when
- * the matched line rule hides its delimiter, strip the leading marker/tag before
- * applying inline styling to the (now delimiter-free) children.
+ * Remove the trailing `suffix` (a wrap delimiter's closing marker) from the end of
+ * the children, consuming it from the trailing plain-text node(s) only. Inline
+ * formatting in the body survives because we never descend into element nodes —
+ * if the suffix doesn't trail the text as a clean string, we stop and leave the
+ * rest intact. The leading-prefix counterpart is {@link stripLeadingPrefix}.
+ */
+function stripTrailingSuffix(children: ReactNode, suffix: string): ReactNode {
+  let remaining = suffix.length
+  if (remaining <= 0) return children
+
+  const consume = (node: ReactNode): ReactNode => {
+    if (remaining <= 0) return node
+    if (typeof node === 'string') {
+      if (remaining >= node.length) {
+        remaining -= node.length
+        return ''
+      }
+      const out = node.slice(0, node.length - remaining)
+      remaining = 0
+      return out
+    }
+    // Suffix doesn't cleanly trail the text as plain string — stop stripping.
+    remaining = 0
+    return node
+  }
+
+  if (Array.isArray(children)) {
+    const result = [...children]
+    for (let i = result.length - 1; i >= 0 && remaining > 0; i--) {
+      result[i] = consume(result[i])
+    }
+    return result
+  }
+  return consume(children)
+}
+
+/**
+ * Shared block handling. Two block-level styling paths, checked in order:
+ *
+ *  1. Whole-block hidden WRAP (e.g. a paragraph that is entirely `+narration+`):
+ *     strip both delimiters and wrap the remaining children — markdown nodes and
+ *     all — in an inline styled `<span>`. This is what lets markdown *inside* a
+ *     hidden-delimiter wrap (`+a *b* c+`) render: the markdown parser already
+ *     produced the `<em>` node, and styling the wrapper keeps it, where the inline
+ *     string tokenizer could not span across the node. The class goes on a span,
+ *     never the block — the chat classes are `display: inline`.
+ *  2. Whole-line LINE rule (`// ooc`, `[TAG] …`): the class lands on the block
+ *     element; the leading marker is stripped when the rule hides delimiters.
+ *
+ * Otherwise the children are passed through unchanged for inline styling.
  */
 function renderLineBlock(
   children: ReactNode,
   compiledRules: CompiledRule[],
 ): { className: string | undefined; content: ReactNode } {
-  const lineMatch = lineMatchFor(extractTextContent(children), compiledRules)
+  const textContent = extractTextContent(children)
+
+  const wrapBlock = wrapBlockMatchFor(textContent, compiledRules)
+  if (wrapBlock) {
+    const stripped = stripTrailingSuffix(
+      stripLeadingPrefix(children, wrapBlock.prefix),
+      wrapBlock.suffix,
+    )
+    return {
+      className: undefined,
+      content: (
+        <span className={wrapBlock.className}>{processChildren(stripped, compiledRules)}</span>
+      ),
+    }
+  }
+
+  const lineMatch = lineMatchFor(textContent, compiledRules)
   const effective =
     lineMatch?.hideDelimiters && lineMatch.prefix
       ? stripLeadingPrefix(children, lineMatch.prefix)
