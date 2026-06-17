@@ -170,12 +170,12 @@ export function ProjectWardrobeManager({
   return (
     <div className="space-y-3">
       {actionError && (
-        <div className="qt-bg-destructive/10 qt-border qt-border-destructive rounded p-3 text-sm qt-text-destructive" role="alert">
+        <div className="qt-alert-error" role="alert">
           {actionError}
         </div>
       )}
       {error && (
-        <div className="qt-bg-destructive/10 qt-border qt-border-destructive rounded p-3 text-sm qt-text-destructive" role="alert">
+        <div className="qt-alert-error" role="alert">
           {error}
         </div>
       )}

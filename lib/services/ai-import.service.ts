@@ -274,15 +274,12 @@ Create 5-8 messages showing natural conversation flow with the character's uniqu
  */
 export function stripCodeFences(text: string): string {
   let cleaned = text.trim();
-  // Remove ```json ... ``` or ``` ... ```
-  if (cleaned.startsWith('```')) {
-    const firstNewline = cleaned.indexOf('\n');
-    if (firstNewline !== -1) {
-      cleaned = cleaned.substring(firstNewline + 1);
-    }
-    if (cleaned.endsWith('```')) {
-      cleaned = cleaned.substring(0, cleaned.length - 3);
-    }
+  // Remove ```json ... ``` or ``` ... ``` (single source for every cheap-LLM JSON
+  // parser; the regex form tolerates both newline- and inline-delimited fences).
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
   }
   return cleaned.trim();
 }

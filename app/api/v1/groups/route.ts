@@ -5,11 +5,11 @@
  * POST /api/v1/groups - Create a new group
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { created, serverError } from '@/lib/api/responses';
+import { created, successResponse } from '@/lib/api/responses';
 
 // ============================================================================
 // Schemas
@@ -27,30 +27,25 @@ const createGroupSchema = z.object({
 // ============================================================================
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
-  try {
-    let groups = await repos.groups.findAll();
+  let groups = await repos.groups.findAll();
 
-    // Sort by createdAt descending
-    groups.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  // Sort by createdAt descending
+  groups.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    // Enrich with member counts
-    const enrichedGroups = await Promise.all(
-      groups.map(async (group) => {
-        const members = await repos.groupCharacterMembers.findByGroupId(group.id);
-        return {
-          ...group,
-          _count: {
-            members: members.length,
-          },
-        };
-      })
-    );
+  // Enrich with member counts
+  const enrichedGroups = await Promise.all(
+    groups.map(async (group) => {
+      const members = await repos.groupCharacterMembers.findByGroupId(group.id);
+      return {
+        ...group,
+        _count: {
+          members: members.length,
+        },
+      };
+    })
+  );
 
-    return NextResponse.json({ groups: enrichedGroups });
-  } catch (error) {
-    logger.error('[Groups v1] Error fetching groups', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to fetch groups');
-  }
+  return successResponse({ groups: enrichedGroups });
 });
 
 // ============================================================================

@@ -121,7 +121,7 @@ export function ScenariosManager({
   return (
     <div className="space-y-3 @container">
       {warnings.length > 0 && (
-        <div className="qt-bg-warning/10 qt-border qt-border-warning rounded p-3 text-sm space-y-1" role="alert">
+        <div className="qt-alert-warning space-y-1" role="alert">
           {warnings.map((w, i) => (
             <p key={i} className="qt-text-warning">{w}</p>
           ))}
@@ -129,13 +129,13 @@ export function ScenariosManager({
       )}
 
       {actionError && (
-        <div className="qt-bg-destructive/10 qt-border qt-border-destructive rounded p-3 text-sm qt-text-destructive" role="alert">
+        <div className="qt-alert-error" role="alert">
           {actionError}
         </div>
       )}
 
       {error && (
-        <div className="qt-bg-destructive/10 qt-border qt-border-destructive rounded p-3 text-sm qt-text-destructive" role="alert">
+        <div className="qt-alert-error" role="alert">
           {error}
         </div>
       )}

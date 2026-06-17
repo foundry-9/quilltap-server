@@ -17,11 +17,11 @@
  * `scenarios` segment ahead of the dynamic `[id]`.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/auth';
 import { logger } from '@/lib/logger';
-import { serverError } from '@/lib/api/responses';
+import { successResponse } from '@/lib/api/responses';
 import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
 import {
   ensureGroupScenariosFolder,
@@ -30,93 +30,84 @@ import {
 
 export const GET = createAuthenticatedHandler(
   async (req: NextRequest, { repos }: RequestContext) => {
-    try {
-      const raw = req.nextUrl.searchParams.get('characterIds') ?? '';
-      const requestedIds = raw
-        .split(',')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
+    const raw = req.nextUrl.searchParams.get('characterIds') ?? '';
+    const requestedIds = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
 
-      if (requestedIds.length === 0) {
-        return NextResponse.json({ groupScenarios: [] });
-      }
-
-      // Only trust character ids the caller can actually access. `repos.characters`
-      // is user-scoped (returns null for ids the user doesn't own), so resolving
-      // each id here prevents probing arbitrary UUIDs for group membership /
-      // scenario metadata via the unscoped membership table.
-      const characterIds: string[] = [];
-      for (const id of requestedIds) {
-        const character = await repos.characters.findById(id);
-        if (character) characterIds.push(id);
-      }
-      if (characterIds.length === 0) {
-        return NextResponse.json({ groupScenarios: [] });
-      }
-
-      // Collect the distinct set of groups that ANY supplied participant belongs
-      // to. A group qualifies as long as at least one selected participant is a
-      // member — it does not matter that other participants aren't.
-      const groupIds = new Set<string>();
-      for (const characterId of characterIds) {
-        const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
-        for (const m of memberships) groupIds.add(m.groupId);
-      }
-
-      logger.debug('[Groups v1] Aggregating group scenarios for New Chat', {
-        requestedCount: requestedIds.length,
-        accessibleCount: characterIds.length,
-        groupCount: groupIds.size,
-      });
-
-      const groupScenarios: Array<{
-        groupId: string;
-        groupName: string;
-        mountPointId: string;
-        scenarios: unknown[];
-        warnings: string[];
-      }> = [];
-
-      for (const groupId of groupIds) {
-        try {
-          // findByIdRaw — we only need name + officialMountPointId, not the
-          // hydrated store content.
-          const group = await repos.groups.findByIdRaw(groupId);
-          if (!group) continue;
-
-          const ensured = await ensureGroupOfficialStore(group.id, group.name);
-          if (!ensured) continue;
-          await ensureGroupScenariosFolder(ensured.mountPointId);
-
-          const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId);
-          if (scenarios.length === 0) continue;
-
-          groupScenarios.push({
-            groupId: group.id,
-            groupName: group.name,
-            mountPointId: ensured.mountPointId,
-            scenarios,
-            warnings,
-          });
-        } catch (error) {
-          logger.warn('[Groups v1] Failed to load scenarios for a group; skipping', {
-            groupId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-
-      // Stable ordering by group name for a predictable menu.
-      groupScenarios.sort((a, b) => a.groupName.localeCompare(b.groupName));
-
-      return NextResponse.json({ groupScenarios });
-    } catch (error) {
-      logger.error(
-        '[Groups v1] Failed to aggregate group scenarios',
-        {},
-        error instanceof Error ? error : undefined,
-      );
-      return serverError('Failed to aggregate group scenarios');
+    if (requestedIds.length === 0) {
+      return successResponse({ groupScenarios: [] });
     }
+
+    // Only trust character ids the caller can actually access. `repos.characters`
+    // is user-scoped (returns null for ids the user doesn't own), so resolving
+    // each id here prevents probing arbitrary UUIDs for group membership /
+    // scenario metadata via the unscoped membership table.
+    const characterIds: string[] = [];
+    for (const id of requestedIds) {
+      const character = await repos.characters.findById(id);
+      if (character) characterIds.push(id);
+    }
+    if (characterIds.length === 0) {
+      return successResponse({ groupScenarios: [] });
+    }
+
+    // Collect the distinct set of groups that ANY supplied participant belongs
+    // to. A group qualifies as long as at least one selected participant is a
+    // member — it does not matter that other participants aren't.
+    const groupIds = new Set<string>();
+    for (const characterId of characterIds) {
+      const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
+      for (const m of memberships) groupIds.add(m.groupId);
+    }
+
+    logger.debug('[Groups v1] Aggregating group scenarios for New Chat', {
+      requestedCount: requestedIds.length,
+      accessibleCount: characterIds.length,
+      groupCount: groupIds.size,
+    });
+
+    const groupScenarios: Array<{
+      groupId: string;
+      groupName: string;
+      mountPointId: string;
+      scenarios: unknown[];
+      warnings: string[];
+    }> = [];
+
+    for (const groupId of groupIds) {
+      try {
+        // findByIdRaw — we only need name + officialMountPointId, not the
+        // hydrated store content.
+        const group = await repos.groups.findByIdRaw(groupId);
+        if (!group) continue;
+
+        const ensured = await ensureGroupOfficialStore(group.id, group.name);
+        if (!ensured) continue;
+        await ensureGroupScenariosFolder(ensured.mountPointId);
+
+        const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId);
+        if (scenarios.length === 0) continue;
+
+        groupScenarios.push({
+          groupId: group.id,
+          groupName: group.name,
+          mountPointId: ensured.mountPointId,
+          scenarios,
+          warnings,
+        });
+      } catch (error) {
+        logger.warn('[Groups v1] Failed to load scenarios for a group; skipping', {
+          groupId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Stable ordering by group name for a predictable menu.
+    groupScenarios.sort((a, b) => a.groupName.localeCompare(b.groupName));
+
+    return successResponse({ groupScenarios });
   },
 );

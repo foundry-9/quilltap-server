@@ -59,7 +59,7 @@ async function runOnProjectStoreChain(
   }
 }
 
-/** The 14 property-bag keys, derived from the schema so they can't drift. */
+/** The property-bag keys, derived from the schema so they can't drift. */
 const PROPERTY_KEYS = Object.keys(ProjectPropertiesSchema.shape) as (keyof ProjectProperties)[];
 
 /**

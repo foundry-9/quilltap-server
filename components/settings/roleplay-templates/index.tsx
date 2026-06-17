@@ -136,13 +136,13 @@ export default function RoleplayTemplatesTab() {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="qt-bg-destructive/10 border qt-border-destructive rounded p-4 qt-text-destructive">
+        <div className="qt-alert-error">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="qt-bg-success/10 border qt-border-success rounded p-4 qt-text-success">
+        <div className="qt-alert-success">
           {success}
         </div>
       )}
@@ -216,7 +216,7 @@ export default function RoleplayTemplatesTab() {
           <button
             type="button"
             onClick={openCreateModal}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:qt-bg-primary/90"
+            className="qt-button qt-button-primary px-4 py-2 rounded-md"
           >
             Create Template
           </button>
@@ -706,7 +706,7 @@ export default function RoleplayTemplatesTab() {
                   type="button"
                   onClick={handleSave}
                   disabled={saving || !formData.name.trim() || !formData.systemPrompt.trim() || !formData.narrationOpen.trim() || (formData.narrationDelimiterMode === 'pair' && !formData.narrationClose.trim())}
-                  className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:qt-bg-primary/90 disabled:opacity-50"
+                  className="qt-button qt-button-primary px-4 py-2 rounded-md disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : editingTemplate ? 'Save Changes' : 'Create Template'}
                 </button>
@@ -785,7 +785,7 @@ export default function RoleplayTemplatesTab() {
                 <button
                   type="button"
                   onClick={() => setPreviewTemplate(null)}
-                  className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:qt-bg-primary/90"
+                  className="qt-button qt-button-primary px-4 py-2 rounded-md"
                 >
                   Close
                 </button>

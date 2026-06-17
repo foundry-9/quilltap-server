@@ -7,11 +7,8 @@
 export {
   handleGetDefault,
   handleGetMembers,
-  handleGetStores,
   handlePutDefault,
   handleDeleteGroup,
   handleAddMember,
   handleRemoveMember,
-  handleLinkStore,
-  handleUnlinkStore,
 } from './group-crud';

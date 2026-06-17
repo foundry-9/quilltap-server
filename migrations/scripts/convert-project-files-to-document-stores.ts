@@ -52,6 +52,7 @@ import { alignDocMountPointsSchema } from '../lib/mount-index-schema';
 import { getFilesDir, getMountIndexDatabasePath } from '../../lib/paths';
 import { convertBufferToPlainText } from '../../lib/mount-index/converters';
 import { PROJECT_OWN_STORE_NAME_PREFIX } from '../../lib/mount-index/project-store-naming';
+import { nextUniqueMountPointName } from '../../lib/mount-index/unique-mount-point-name';
 
 // ============================================================================
 // DDL — matches the Zod schemas in lib/schemas/mount-index.types.ts and the
@@ -536,15 +537,11 @@ async function importProjectDirectory(
 }
 
 function uniqueMountPointName(mountDb: DatabaseType, desiredName: string): string {
-  const countStmt = mountDb.prepare(
-    `SELECT COUNT(*) as n FROM "doc_mount_points" WHERE name = ?`
-  );
-  let candidate = desiredName;
-  let suffix = 2;
-  while (((countStmt.get(candidate) as { n: number }).n) > 0) {
-    candidate = `${desiredName} (${suffix++})`;
-  }
-  return candidate;
+  const rows = mountDb
+    .prepare(`SELECT name FROM "doc_mount_points"`)
+    .all() as Array<{ name: string }>;
+  const taken = new Set(rows.map((r) => r.name));
+  return nextUniqueMountPointName(taken, desiredName);
 }
 
 function updateMountPointTotals(mountDb: DatabaseType, mountPointId: string): void {

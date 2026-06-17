@@ -17,12 +17,12 @@
  * folder.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound, serverError, created } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, created, successResponse } from '@/lib/api/responses';
 import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
 import {
   ensureGroupScenariosFolder,
@@ -54,32 +54,23 @@ const createScenarioSchema = z.object({
 
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (_req: NextRequest, { user, repos }: RequestContext, { id }) => {
-    try {
-      const group = await repos.groups.findById(id);
-      if (!group) return notFound('Group');
+    const group = await repos.groups.findById(id);
+    if (!group) return notFound('Group');
 
-      const ensured = await ensureGroupOfficialStore(group.id, group.name);
-      if (!ensured) {
-        return serverError('Failed to ensure group document store');
-      }
-      await ensureGroupScenariosFolder(ensured.mountPointId);
-      await ensureGroupKnowledgeFolder(ensured.mountPointId);
-
-      const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId);
-
-      return NextResponse.json({
-        mountPointId: ensured.mountPointId,
-        scenarios,
-        warnings,
-      });
-    } catch (error) {
-      logger.error(
-        '[Groups v1] Failed to list group scenarios',
-        { groupId: id },
-        error instanceof Error ? error : undefined,
-      );
-      return serverError('Failed to list group scenarios');
+    const ensured = await ensureGroupOfficialStore(group.id, group.name);
+    if (!ensured) {
+      return serverError('Failed to ensure group document store');
     }
+    await ensureGroupScenariosFolder(ensured.mountPointId);
+    await ensureGroupKnowledgeFolder(ensured.mountPointId);
+
+    const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId);
+
+    return successResponse({
+      mountPointId: ensured.mountPointId,
+      scenarios,
+      warnings,
+    });
   },
 );
 
@@ -89,76 +80,64 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
-    try {
-      const group = await repos.groups.findById(id);
-      if (!group) return notFound('Group');
+    const group = await repos.groups.findById(id);
+    if (!group) return notFound('Group');
 
-      const body = await req.json();
-      const validated = createScenarioSchema.parse(body);
+    const body = await req.json();
+    const validated = createScenarioSchema.parse(body);
 
-      const ensured = await ensureGroupOfficialStore(group.id, group.name);
-      if (!ensured) {
-        return serverError('Failed to ensure group document store');
-      }
-      await ensureGroupScenariosFolder(ensured.mountPointId);
-      await ensureGroupKnowledgeFolder(ensured.mountPointId);
-
-      const cleanedFilename = sanitizeFileName(validated.filename).replace(/\.md$/i, '');
-      if (!cleanedFilename) {
-        return badRequest('Filename cannot be empty after sanitisation');
-      }
-      const relativePath = `${GROUP_SCENARIOS_FOLDER}/${cleanedFilename}.md`;
-
-      // Reject collision — caller can rename.
-      const existing = await repos.docMountDocuments.findByMountPointAndPath(
-        ensured.mountPointId,
-        relativePath,
-      );
-      if (existing) {
-        return badRequest(`A scenario named "${cleanedFilename}" already exists`);
-      }
-
-      const fileContent = buildScenarioFileContent({
-        name: validated.name,
-        description: validated.description,
-        isDefault: validated.isDefault,
-        body: validated.body,
-      });
-
-      await writeDatabaseDocument(ensured.mountPointId, relativePath, fileContent);
-
-      // If this scenario was marked default, demote any siblings that were
-      // also default. setGroupScenarioDefault handles both directions.
-      if (validated.isDefault) {
-        await setGroupScenarioDefault(ensured.mountPointId, relativePath);
-      }
-
-      logger.info('[Groups v1] Created group scenario', {
-        groupId: id,
-        userId: user.id,
-        mountPointId: ensured.mountPointId,
-        relativePath,
-        isDefault: validated.isDefault === true,
-      });
-
-      // Return the freshly listed scenarios so the client doesn't need a follow-up GET.
-      const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId);
-      return created({
-        mountPointId: ensured.mountPointId,
-        path: relativePath,
-        scenarios,
-        warnings,
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return badRequest(`Invalid request body: ${error.issues.map(i => i.message).join('; ')}`);
-      }
-      logger.error(
-        '[Groups v1] Failed to create group scenario',
-        { groupId: id },
-        error instanceof Error ? error : undefined,
-      );
-      return serverError('Failed to create group scenario');
+    const ensured = await ensureGroupOfficialStore(group.id, group.name);
+    if (!ensured) {
+      return serverError('Failed to ensure group document store');
     }
+    await ensureGroupScenariosFolder(ensured.mountPointId);
+    await ensureGroupKnowledgeFolder(ensured.mountPointId);
+
+    const cleanedFilename = sanitizeFileName(validated.filename).replace(/\.md$/i, '');
+    if (!cleanedFilename) {
+      return badRequest('Filename cannot be empty after sanitisation');
+    }
+    const relativePath = `${GROUP_SCENARIOS_FOLDER}/${cleanedFilename}.md`;
+
+    // Reject collision — caller can rename.
+    const existing = await repos.docMountDocuments.findByMountPointAndPath(
+      ensured.mountPointId,
+      relativePath,
+    );
+    if (existing) {
+      return badRequest(`A scenario named "${cleanedFilename}" already exists`);
+    }
+
+    const fileContent = buildScenarioFileContent({
+      name: validated.name,
+      description: validated.description,
+      isDefault: validated.isDefault,
+      body: validated.body,
+    });
+
+    await writeDatabaseDocument(ensured.mountPointId, relativePath, fileContent);
+
+    // If this scenario was marked default, demote any siblings that were
+    // also default. setGroupScenarioDefault handles both directions.
+    if (validated.isDefault) {
+      await setGroupScenarioDefault(ensured.mountPointId, relativePath);
+    }
+
+    logger.info('[Groups v1] Created group scenario', {
+      groupId: id,
+      userId: user.id,
+      mountPointId: ensured.mountPointId,
+      relativePath,
+      isDefault: validated.isDefault === true,
+    });
+
+    // Return the freshly listed scenarios so the client doesn't need a follow-up GET.
+    const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId);
+    return created({
+      mountPointId: ensured.mountPointId,
+      path: relativePath,
+      scenarios,
+      warnings,
+    });
   },
 );

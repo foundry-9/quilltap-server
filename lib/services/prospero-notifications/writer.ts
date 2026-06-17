@@ -37,14 +37,17 @@ export function buildConnectionProfileChangeContent(
   return `${characterName}'s current response model is now ${newPhrase}; previous model was ${oldPhrase}.`;
 }
 
+/**
+ * A connection-profile change carries no persona names or private detail, so the
+ * opaque (other-participant) voicing is identical to the visible one. Delegate
+ * rather than duplicate the body so the two can never drift.
+ */
 export function buildConnectionProfileChangeOpaqueContent(
   characterName: string,
   oldProfileLabel: string | null,
   newProfileLabel: string | null,
 ): string {
-  const newPhrase = newProfileLabel ?? 'unassigned';
-  const oldPhrase = oldProfileLabel ?? 'unassigned';
-  return `${characterName}'s current response model is now ${newPhrase}; previous model was ${oldPhrase}.`;
+  return buildConnectionProfileChangeContent(characterName, oldProfileLabel, newProfileLabel);
 }
 
 async function postProsperoMessage(
@@ -273,11 +276,14 @@ function buildDocumentStoresSection(stores: ProsperoDocumentStoreInfo[]): string
   return lines;
 }
 
-export function buildProjectContextContent(project: ProsperoProjectContext): string {
-  const lines: string[] = [
-    `Prospero opens his ledger to the project at hand — *${project.name}* — and lays its particulars before you:`,
-    '',
-  ];
+/**
+ * Append a project's body — description, instructions, and document-stores
+ * section, in that order with blank-line separators — to `lines`. Shared by the
+ * visible and opaque combined-context builders so the assembly can't drift.
+ * Returns whether any body content was pushed, so callers can gate a trailing
+ * separator before the general-shelf section.
+ */
+function appendProjectBodySection(lines: string[], project: ProsperoProjectContext): boolean {
   const description = project.description?.trim();
   const instructions = project.instructions?.trim();
   const stores = project.documentStores ?? [];
@@ -287,50 +293,18 @@ export function buildProjectContextContent(project: ProsperoProjectContext): str
     lines.push('');
     lines.push(description);
   }
-
   if (instructions) {
     if (description) lines.push('');
     lines.push('**Project instructions:**');
     lines.push('');
     lines.push(instructions);
   }
-
   if (stores.length) {
     if (description || instructions) lines.push('');
     lines.push(...buildDocumentStoresSection(stores));
   }
 
-  return lines.join('\n').trimEnd();
-}
-
-export function buildProjectContextOpaqueContent(project: ProsperoProjectContext): string {
-  const lines: string[] = [
-    `Project context — *${project.name}*:`,
-    '',
-  ];
-  const description = project.description?.trim();
-  const instructions = project.instructions?.trim();
-  const stores = project.documentStores ?? [];
-
-  if (description) {
-    lines.push('**Project description:**');
-    lines.push('');
-    lines.push(description);
-  }
-
-  if (instructions) {
-    if (description) lines.push('');
-    lines.push('**Project instructions:**');
-    lines.push('');
-    lines.push(instructions);
-  }
-
-  if (stores.length) {
-    if (description || instructions) lines.push('');
-    lines.push(...buildDocumentStoresSection(stores));
-  }
-
-  return lines.join('\n').trimEnd();
+  return Boolean(description) || Boolean(instructions) || stores.length > 0;
 }
 
 function projectHasContent(project: ProsperoProjectContext | null): boolean {
@@ -441,28 +415,10 @@ export function buildCombinedContextContent(
   }
   lines.push('');
 
-  const description = project.description?.trim();
-  const instructions = project.instructions?.trim();
-  const stores = project.documentStores ?? [];
-
-  if (description) {
-    lines.push('**Project description:**');
-    lines.push('');
-    lines.push(description);
-  }
-  if (instructions) {
-    if (description) lines.push('');
-    lines.push('**Project instructions:**');
-    lines.push('');
-    lines.push(instructions);
-  }
-  if (stores.length) {
-    if (description || instructions) lines.push('');
-    lines.push(...buildDocumentStoresSection(stores));
-  }
+  const hasBody = appendProjectBodySection(lines, project);
 
   if (general) {
-    if (description || instructions || stores.length) lines.push('');
+    if (hasBody) lines.push('');
     const safeName = general.name.replace(/`/g, '\\`');
     lines.push(
       `Beyond this project, every character in this instance has standing access to the household's shared shelf — **${general.name}** — at all times. Reach it with a \`qtap://\` URI — \`${generalShelfUri(general)}\` (pass it as the \`uri\` arg to any \`doc_*\` tool); the \`mount_point: "${safeName}"\` form and the ID \`${general.mountPointId}\` still work. Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content the household keeps lives here as well.`,
@@ -488,28 +444,10 @@ export function buildCombinedContextOpaqueContent(
     `Project context — *${project.name}*:`,
     '',
   ];
-  const description = project.description?.trim();
-  const instructions = project.instructions?.trim();
-  const stores = project.documentStores ?? [];
-
-  if (description) {
-    lines.push('**Project description:**');
-    lines.push('');
-    lines.push(description);
-  }
-  if (instructions) {
-    if (description) lines.push('');
-    lines.push('**Project instructions:**');
-    lines.push('');
-    lines.push(instructions);
-  }
-  if (stores.length) {
-    if (description || instructions) lines.push('');
-    lines.push(...buildDocumentStoresSection(stores));
-  }
+  const hasBody = appendProjectBodySection(lines, project);
 
   if (general) {
-    if (description || instructions || stores.length) lines.push('');
+    if (hasBody) lines.push('');
     const safeName = general.name.replace(/`/g, '\\`');
     lines.push(
       `Beyond this project, every character in this instance has standing access to the shared shelf — **${general.name}** — at all times. Reach it with a \`qtap://\` URI — \`${generalShelfUri(general)}\` (pass it as the \`uri\` arg to any \`doc_*\` tool); the \`mount_point: "${safeName}"\` form and the ID \`${general.mountPointId}\` still work. Its \`Scenarios/\` folder holds the general chat-starter scenarios offered alongside project- and character-specific ones; other curated content lives here as well.`,

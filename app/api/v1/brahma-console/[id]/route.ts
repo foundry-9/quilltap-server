@@ -15,7 +15,8 @@ import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import type { ChatMetadata } from '@/lib/schemas/types';
-import { notFound, badRequest, serverError, successResponse, messageResponse } from '@/lib/api/responses';
+import { badRequest, serverError, successResponse, messageResponse } from '@/lib/api/responses';
+import { verifyBrahmaChat } from '../_shared';
 
 const logger = createServiceLogger('BrahmaConsoleItemRoute');
 
@@ -33,27 +34,6 @@ const renameSchema = z.object({
 const setModelSchema = z.object({
   connectionProfileId: z.string().uuid('A connection profile id is required'),
 });
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Verify the chat exists, belongs to the user, and is a Brahma Console chat.
- */
-async function verifyBrahmaChat(
-  id: string,
-  context: AuthenticatedContext
-): Promise<{ chat: ChatMetadata } | NextResponse> {
-  const { user, repos } = context;
-  const chat = await repos.chats.findById(id);
-
-  if (!chat || chat.userId !== user.id || chat.chatType !== 'brahma') {
-    return notFound('Brahma Console chat');
-  }
-
-  return { chat };
-}
 
 // ============================================================================
 // Handler Functions

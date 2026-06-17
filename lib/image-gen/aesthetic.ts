@@ -18,6 +18,8 @@
  * guidance file couldn't be read.
  */
 
+import { z } from 'zod';
+import type { NextRequest } from 'next/server';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
@@ -218,6 +220,43 @@ export async function writeAestheticForMount(
   content: string,
 ): Promise<void> {
   await writeStoreFile(mountPointId, FILENAME_BY_KIND[kind], content);
+}
+
+// ============================================================================
+// Shared route helpers (project + system aesthetic editors)
+// ============================================================================
+
+/**
+ * Parse the `kind` query param for an aesthetic editor route. Returns the typed
+ * kind, or null when absent/invalid (caller responds with a 400).
+ */
+export function parseAestheticKind(req: NextRequest): AestheticKind | null {
+  const kind = req.nextUrl.searchParams.get('kind');
+  return kind === 'lantern' || kind === 'aurora' ? kind : null;
+}
+
+/** Request-body schema for the aesthetic editor PUT routes. */
+export const aestheticContentSchema = z.object({ content: z.string() });
+
+/**
+ * Single-tier read for an aesthetic editor route, coalescing the "absent" and
+ * read-error cases to `''` so callers can return the value directly.
+ */
+export async function readAesthetic(
+  mountPointId: string,
+  kind: AestheticKind,
+): Promise<string> {
+  const content = await readAestheticForMount(mountPointId, kind);
+  return content ?? '';
+}
+
+/** Editor writer for an aesthetic editor route; empty content deletes the file. */
+export async function writeAesthetic(
+  mountPointId: string,
+  kind: AestheticKind,
+  content: string,
+): Promise<void> {
+  await writeAestheticForMount(mountPointId, kind, content);
 }
 
 // ============================================================================

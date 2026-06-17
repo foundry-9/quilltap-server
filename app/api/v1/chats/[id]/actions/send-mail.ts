@@ -11,9 +11,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound } from '@/lib/api/responses';
+import { badRequest, notFound, created } from '@/lib/api/responses';
 import { composeAndDeliverLetter } from '@/lib/post-office/deliver';
 import { sendMailActionSchema } from '../schemas';
+import { findOperatorPlayedParticipant } from '../participant-auth';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 
@@ -29,13 +30,7 @@ export async function handleSendMail(
   // The operator may only post AS a character they actually play in this chat.
   // Re-verify against the participant list — never trust the client to send as
   // an LLM character or a stranger.
-  const fromParticipant = chat.participants.find(
-    (p) =>
-      p.type === 'CHARACTER'
-      && p.characterId === validated.fromCharacterId
-      && p.controlledBy === 'user'
-      && !p.removedAt,
-  );
+  const fromParticipant = findOperatorPlayedParticipant(chat, validated.fromCharacterId);
   if (!fromParticipant) {
     logger.warn('[Chats v1] Compose Mail rejected: from-character not a player in this chat', {
       chatId,
@@ -82,5 +77,5 @@ export async function handleSendMail(
     path: result.path,
   });
 
-  return NextResponse.json({ success: true, path: result.path }, { status: 201 });
+  return created({ success: true, path: result.path });
 }

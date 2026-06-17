@@ -6,7 +6,7 @@
  * The whole point of `lib/chat/roleplay-rendering.ts` is that the client renderer
  * (React nodes) and the server renderer (HTML string) derive from ONE tokenizer,
  * so they can't drift. These tests:
- *   1. lock `tokenizeInline` / `lineClassFor` / `compileRenderingPatterns` behavior, and
+ *   1. lock `tokenizeInline` / `lineMatchFor` / `compileRenderingPatterns` behavior, and
  *   2. assert the React adapter and the HTML emit-helper serialize the SAME
  *      Segment[] to identical markup.
  */
@@ -18,7 +18,6 @@ import {
   type Segment,
   compileRenderingPatterns,
   tokenizeInline,
-  lineClassFor,
   lineMatchFor,
   segmentsToHtml,
   escapeMarkdownInBrackets,
@@ -116,7 +115,7 @@ describe('roleplay-rendering core', () => {
     })
   })
 
-  describe('lineClassFor', () => {
+  describe('lineMatchFor (class projection)', () => {
     const oocRule = compileRenderingPatterns([
       { pattern: '^// .+$', className: 'qt-chat-ooc', flags: 'm', scope: 'line' },
     ])
@@ -125,33 +124,33 @@ describe('roleplay-rendering core', () => {
     ])
 
     it('returns the class when the whole block is one matching line', () => {
-      expect(lineClassFor('// out of character', oocRule)).toBe('qt-chat-ooc')
+      expect(lineMatchFor('// out of character', oocRule)?.className).toBe('qt-chat-ooc')
     })
 
     it('returns undefined for a mixed multi-line block', () => {
-      expect(lineClassFor('// ooc line\nnormal line', oocRule)).toBeUndefined()
+      expect(lineMatchFor('// ooc line\nnormal line', oocRule)?.className).toBeUndefined()
     })
 
     it('returns undefined when nothing matches', () => {
-      expect(lineClassFor('just narration', oocRule)).toBeUndefined()
+      expect(lineMatchFor('just narration', oocRule)?.className).toBeUndefined()
     })
 
     it('ignores inline-scoped rules', () => {
       const inlineOoc = compileRenderingPatterns([{ pattern: '^// .+$', className: 'qt-chat-ooc', flags: 'm' }])
-      expect(lineClassFor('// ooc', inlineOoc)).toBeUndefined()
+      expect(lineMatchFor('// ooc', inlineOoc)?.className).toBeUndefined()
     })
 
     it('matches an uppercase tag token (the [CAPTAIN] case)', () => {
-      expect(lineClassFor('[CAPTAIN] All hands on deck!', tagRule)).toBe('qt-chat-tag')
+      expect(lineMatchFor('[CAPTAIN] All hands on deck!', tagRule)?.className).toBe('qt-chat-tag')
     })
 
     it('rejects a lowercase tag token', () => {
-      expect(lineClassFor('[captain] all hands', tagRule)).toBeUndefined()
+      expect(lineMatchFor('[captain] all hands', tagRule)?.className).toBeUndefined()
     })
 
     it('accepts non-Latin uppercase / non-cased tag tokens', () => {
-      expect(lineClassFor('[ÇÉ] hola', tagRule)).toBe('qt-chat-tag')
-      expect(lineClassFor('[漢字] greetings', tagRule)).toBe('qt-chat-tag')
+      expect(lineMatchFor('[ÇÉ] hola', tagRule)?.className).toBe('qt-chat-tag')
+      expect(lineMatchFor('[漢字] greetings', tagRule)?.className).toBe('qt-chat-tag')
     })
   })
 
@@ -202,11 +201,11 @@ describe('roleplay-rendering core', () => {
       })
     })
 
-    it('lineClassFor still returns just the class (back-compat wrapper)', () => {
+    it('projects just the class via ?.className', () => {
       const rules = compileRenderingPatterns([
         { pattern: '^// (?<rpBody>.+)$', className: 'qt-chat-ooc', flags: 'm', scope: 'line', hideDelimiters: true },
       ])
-      expect(lineClassFor('// ooc', rules)).toBe('qt-chat-ooc')
+      expect(lineMatchFor('// ooc', rules)?.className).toBe('qt-chat-ooc')
     })
   })
 

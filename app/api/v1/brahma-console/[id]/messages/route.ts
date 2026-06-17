@@ -9,7 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { handleBrahmaConsoleMessage } from '@/lib/services/brahma-console/orchestrator.service';
-import { notFound, successResponse } from '@/lib/api/responses';
+import { successResponse } from '@/lib/api/responses';
+import { verifyBrahmaChat } from '../../_shared';
 
 // ============================================================================
 // Schemas
@@ -19,24 +20,6 @@ const sendMessageSchema = z.object({
   content: z.string().min(1, 'Message content is required'),
   fileIds: z.array(z.string().uuid()).optional(),
 });
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-async function verifyBrahmaChat(
-  id: string,
-  context: AuthenticatedContext
-): Promise<{ chat: unknown } | NextResponse> {
-  const { user, repos } = context;
-  const chat = await repos.chats.findById(id);
-
-  if (!chat || chat.userId !== user.id || chat.chatType !== 'brahma') {
-    return notFound('Brahma Console chat');
-  }
-
-  return { chat };
-}
 
 // ============================================================================
 // Handler Functions
