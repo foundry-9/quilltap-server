@@ -518,7 +518,7 @@ export async function buildPromptSection(
     };
   }
 
-  const { respondingParticipant, otherParticipants, userCharacter } = resolved;
+  const { respondingParticipant, userCharacter } = resolved;
 
   let roleplayTemplate: { systemPrompt: string } | null = null;
   if (chat.roleplayTemplateId) {
@@ -526,21 +526,6 @@ export async function buildPromptSection(
       const tpl = await repos.roleplayTemplates.findById(chat.roleplayTemplateId);
       if (tpl && typeof (tpl as { systemPrompt?: unknown }).systemPrompt === 'string') {
         roleplayTemplate = { systemPrompt: (tpl as { systemPrompt: string }).systemPrompt };
-      }
-    } catch (err) {
-    }
-  }
-
-  let projectContext: { name: string; description?: string | null; instructions?: string | null } | null = null;
-  if (chat.projectId) {
-    try {
-      const project = await repos.projects.findById(chat.projectId);
-      if (project) {
-        projectContext = {
-          name: project.name,
-          description: project.description ?? null,
-          instructions: project.instructions ?? null,
-        };
       }
     } catch (err) {
     }

@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Refactor: remove dead locals in the self-inventory prompt builder
+
+Dropped two unused locals in `buildPromptSection` (`lib/tools/handlers/self-inventory/builders.ts`): `otherParticipants` (destructured but never read) and `projectContext` (computed but never passed to `buildSystemPrompt`). The latter also ran a wasted `repos.projects.findById` lookup on every self-inventory `prompt` section. No behavior change.
+
 #### Fix: the Salon's desktop text-row swipe buttons rendered blank
 
 The previous/next swipe buttons in a message's desktop text-actions row had empty bodies, so they were invisible and effectively unusable. (The icon action bar's swipe controls were unaffected.) Added the chevron icons and accessible labels/titles, matching the icon action bar. Pre-existing on `main`; surfaced during the MessageRow split.
