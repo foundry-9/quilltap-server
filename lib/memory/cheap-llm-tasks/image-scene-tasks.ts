@@ -6,6 +6,7 @@ import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { logger } from '@/lib/logger'
 import { describeOutfit } from '@/lib/wardrobe/outfit-description'
+import { stripCodeFences } from '@/lib/services/ai-import.service'
 import { executeCheapLLMTask } from './core-execution'
 import type {
   AppearanceResolutionItem,
@@ -665,24 +666,18 @@ Update the scene state based on these new messages:`,
     llmMessages,
     userId,
     (content: string): Record<string, unknown> => {
-      let cleanContent = content.trim()
+      const rawContent = content.trim()
 
       // Empty or near-empty response = content refusal
-      if (!cleanContent || cleanContent.length < 10) {
+      if (!rawContent || rawContent.length < 10) {
         logger.warn('[SceneStateTracking] Empty or near-empty LLM response, likely content refusal', {
-          contentLength: cleanContent.length,
-          content: cleanContent.substring(0, 100),
+          contentLength: rawContent.length,
+          content: rawContent.substring(0, 100),
         })
         throw new Error('Empty LLM response (likely content refusal)')
       }
 
-      // Remove markdown code blocks if present
-      if (cleanContent.startsWith('```json')) {
-        cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-      } else if (cleanContent.startsWith('```')) {
-        cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-      }
-
+      const cleanContent = stripCodeFences(content)
       const parsed = JSON.parse(cleanContent)
 
       // Validate the parsed result has meaningful content
@@ -858,13 +853,7 @@ Determine what each character currently looks like and is wearing:`,
     userId,
     (content: string): AppearanceResolutionItem[] => {
       try {
-        let cleanContent = content.trim()
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        }
-
+        const cleanContent = stripCodeFences(content)
         const parsed = JSON.parse(cleanContent)
         if (!Array.isArray(parsed)) {
           return []
@@ -919,13 +908,7 @@ export async function sanitizeAppearance(
     userId,
     (content: string): Array<{ characterId: string; appearanceText: string }> => {
       try {
-        let cleanContent = content.trim()
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        }
-
+        const cleanContent = stripCodeFences(content)
         const parsed = JSON.parse(cleanContent)
         if (!Array.isArray(parsed)) {
           return appearances // Return originals if parsing fails

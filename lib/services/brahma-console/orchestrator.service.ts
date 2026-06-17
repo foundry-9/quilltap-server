@@ -51,6 +51,7 @@ import { hasTextBlockMarkers } from '@/lib/tools'
 import {
   buildAgentModeInstructions,
   buildForceFinalMessage,
+  extractSubmitFinalResponseFromText,
 } from '@/lib/services/chat-message/agent-mode-resolver.service'
 import { triggerContextSummaryCheck } from '@/lib/services/chat-message/memory-trigger.service'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
@@ -473,24 +474,6 @@ async function processBrahmaResponse(
       costResult.source
     )
   }
-}
-
-/**
- * Extract the response text from a submit_final_response JSON that was output
- * as plain text instead of a proper tool call (e.g. {"response":"..."}).
- */
-function extractSubmitFinalResponseFromText(text: string): string {
-  const trimmed = text.trim()
-  if (!trimmed.startsWith('{"response"')) return text
-  try {
-    const parsed = JSON.parse(trimmed)
-    if (typeof parsed?.response === 'string' && parsed.response.length > 0) {
-      return parsed.response
-    }
-  } catch {
-    /* not valid JSON */
-  }
-  return text
 }
 
 /**

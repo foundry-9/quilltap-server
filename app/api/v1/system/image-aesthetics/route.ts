@@ -18,18 +18,14 @@ import { successResponse, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import {
-  readAestheticForMount,
-  writeAestheticForMount,
-  type AestheticKind,
+  parseAestheticKind,
+  aestheticContentSchema,
+  readAesthetic,
+  writeAesthetic,
 } from '@/lib/image-gen/aesthetic';
 
-function parseKind(req: NextRequest): AestheticKind | null {
-  const kind = req.nextUrl.searchParams.get('kind');
-  return kind === 'lantern' || kind === 'aurora' ? kind : null;
-}
-
 export const GET = createAuthenticatedHandler(async (req: NextRequest) => {
-  const kind = parseKind(req);
+  const kind = parseAestheticKind(req);
   if (!kind) {
     return badRequest('Query param "kind" must be "lantern" or "aurora"');
   }
@@ -38,12 +34,12 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest) => {
     // Quilltap General store not provisioned yet — nothing to show.
     return successResponse({ content: '' });
   }
-  const content = await readAestheticForMount(mountId, kind);
-  return successResponse({ content: content ?? '' });
+  const content = await readAesthetic(mountId, kind);
+  return successResponse({ content });
 });
 
 export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user }) => {
-  const kind = parseKind(req);
+  const kind = parseAestheticKind(req);
   if (!kind) {
     return badRequest('Query param "kind" must be "lantern" or "aurora"');
   }
@@ -52,8 +48,8 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user })
     return serverError('Quilltap General document store is not available');
   }
   const body = await req.json().catch(() => ({}));
-  const content = typeof body?.content === 'string' ? body.content : '';
-  await writeAestheticForMount(mountId, kind, content);
+  const content = aestheticContentSchema.safeParse(body).data?.content ?? '';
+  await writeAesthetic(mountId, kind, content);
   logger.info('[System v1] Default image aesthetic updated', {
     kind,
     mountPointId: mountId,

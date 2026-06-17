@@ -519,23 +519,35 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       chat.projectId ?? null,
     );
 
-    let answer = '';
-    let rawResponse: unknown = null;
+    // Accumulate one streamed LLM call into { answer, rawResponse }. The base
+    // call shape is fixed for this query; only the offered tool slate and the
+    // native web-search flag vary across the initial call, each tool-loop turn,
+    // and the forced-text final turn.
+    const runStream = async (
+      streamMessages: typeof currentMessages,
+      streamTools: typeof tools,
+      streamUseNativeWebSearch: boolean,
+    ): Promise<{ answer: string; rawResponse: unknown }> => {
+      let streamAnswer = '';
+      let streamRaw: unknown = null;
+      for await (const chunk of streamMessage({
+        messages: streamMessages,
+        connectionProfile,
+        apiKey,
+        modelParams,
+        tools: streamTools,
+        useNativeWebSearch: streamUseNativeWebSearch,
+        userId,
+        chatId,
+        characterId: answerer.id,
+      })) {
+        if (chunk.content) streamAnswer += chunk.content;
+        if (chunk.done) streamRaw = chunk.rawResponse;
+      }
+      return { answer: streamAnswer, rawResponse: streamRaw };
+    };
 
-    for await (const chunk of streamMessage({
-      messages: currentMessages,
-      connectionProfile,
-      apiKey,
-      modelParams,
-      tools,
-      useNativeWebSearch,
-      userId,
-      chatId,
-      characterId: answerer.id,
-    })) {
-      if (chunk.content) answer += chunk.content;
-      if (chunk.done) rawResponse = chunk.rawResponse;
-    }
+    let { answer, rawResponse } = await runStream(currentMessages, tools, useNativeWebSearch);
 
     let iterations = 0;
     while (rawResponse && iterations < MAX_TOOL_ITERATIONS) {
@@ -575,22 +587,7 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
         }
       }
 
-      answer = '';
-      rawResponse = null;
-      for await (const chunk of streamMessage({
-        messages: currentMessages,
-        connectionProfile,
-        apiKey,
-        modelParams,
-        tools,
-        useNativeWebSearch,
-        userId,
-        chatId,
-        characterId: answerer.id,
-      })) {
-        if (chunk.content) answer += chunk.content;
-        if (chunk.done) rawResponse = chunk.rawResponse;
-      }
+      ({ answer, rawResponse } = await runStream(currentMessages, tools, useNativeWebSearch));
     }
 
     // Forced-text final turn. If we ran the tool budget dry while the model was
@@ -611,22 +608,7 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
           answererId: answerer.id,
           iterations,
         });
-        answer = '';
-        rawResponse = null;
-        for await (const chunk of streamMessage({
-          messages: currentMessages,
-          connectionProfile,
-          apiKey,
-          modelParams,
-          tools: [],
-          useNativeWebSearch: false,
-          userId,
-          chatId,
-          characterId: answerer.id,
-        })) {
-          if (chunk.content) answer += chunk.content;
-          if (chunk.done) rawResponse = chunk.rawResponse;
-        }
+        ({ answer, rawResponse } = await runStream(currentMessages, [], false));
       }
     }
 

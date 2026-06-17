@@ -101,9 +101,10 @@ function performReplacement(
 }
 
 /** A short snippet of surrounding text for the preview table. */
-function getContext(text: string, searchTerm: string, maxLength = 100): string {
+function getContext(text: string, searchTerm: string): string {
+  const MAX_LENGTH = 100;
   const index = text.toLowerCase().indexOf(searchTerm.toLowerCase());
-  if (index === -1) return text.slice(0, maxLength);
+  if (index === -1) return text.slice(0, MAX_LENGTH);
 
   const start = Math.max(0, index - 30);
   const end = Math.min(text.length, index + searchTerm.length + 30);

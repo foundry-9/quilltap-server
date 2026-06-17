@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger';
 import { badRequest, notFound, forbidden } from '@/lib/api/responses';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 import { listMailbox } from '@/lib/post-office/mailbox';
+import { findOperatorPlayedParticipant } from '../participant-auth';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
 export async function handleGetMailbox(
@@ -31,13 +32,7 @@ export async function handleGetMailbox(
   }
 
   // Authorize: only a character the operator plays in this chat.
-  const participant = chat.participants.find(
-    (p) =>
-      p.type === 'CHARACTER'
-      && p.characterId === characterId
-      && p.controlledBy === 'user'
-      && !p.removedAt,
-  );
+  const participant = findOperatorPlayedParticipant(chat, characterId);
   if (!participant) {
     return forbidden('You may only inspect the mailbox of a character you are playing in this scene.');
   }

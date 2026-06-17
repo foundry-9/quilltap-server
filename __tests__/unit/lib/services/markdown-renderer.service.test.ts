@@ -20,7 +20,7 @@ import {
   escapeMarkdownInBrackets as coreEscapeMarkdownInBrackets,
   tokenizeInline,
   segmentsToHtml,
-  lineClassFor,
+  lineMatchFor,
   isDialogueParagraph as coreIsDialogueParagraph,
 } from '@/lib/chat/roleplay-rendering';
 
@@ -153,7 +153,7 @@ function applyLineScopedClasses(html: string, rules: CompiledRule[]): string {
   if (lineRules.length === 0) return html;
   return html.replace(/<(p|li|blockquote|h[1-6])([^>]*)>([\s\S]*?)<\/\1>/g, (match, tag, attrs, content) => {
     const plainText = content.replace(/<[^>]+>/g, '');
-    const cls = lineClassFor(plainText, lineRules);
+    const cls = lineMatchFor(plainText, lineRules)?.className;
     if (!cls) return match;
     if (attrs.includes('class="')) {
       const newAttrs = attrs.replace(/class="([^"]*)"/, `class="$1 ${cls}"`);

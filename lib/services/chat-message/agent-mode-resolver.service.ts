@@ -140,6 +140,27 @@ export function buildForceFinalMessage(): string {
 }
 
 /**
+ * Extract the response text from a `submit_final_response` payload that a model
+ * emitted as plain text instead of a proper tool call — e.g. some models output
+ * the tool arguments as raw JSON: `{"response":"actual content here"}`. Returns
+ * the inner `response` string when the text is exactly such a payload, otherwise
+ * the original text unchanged.
+ */
+export function extractSubmitFinalResponseFromText(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('{"response"')) return text
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (typeof parsed?.response === 'string' && parsed.response.length > 0) {
+      return parsed.response
+    }
+  } catch {
+    /* not valid JSON — fall through and return the original text */
+  }
+  return text
+}
+
+/**
  * Generate a summary of an agent iteration for collapsing in the UI
  *
  * This function creates a brief summary of what happened during an agent iteration,

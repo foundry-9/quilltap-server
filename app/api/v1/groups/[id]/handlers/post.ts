@@ -2,16 +2,15 @@
  * Groups API v1 - POST Handler
  *
  * POST /api/v1/groups/[id]?action=addMember - Add character to group
- * POST /api/v1/groups/[id]?action=linkStore - Link document store to group
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { badRequest } from '@/lib/api/responses';
-import { handleAddMember, handleLinkStore } from '../actions';
+import { handleAddMember } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
-const GROUP_POST_ACTIONS = ['addMember', 'linkStore'] as const;
+const GROUP_POST_ACTIONS = ['addMember'] as const;
 type GroupPostAction = typeof GROUP_POST_ACTIONS[number];
 
 /**
@@ -30,7 +29,6 @@ export async function handlePost(
 
   const actionHandlers: Record<GroupPostAction, () => Promise<NextResponse>> = {
     addMember: () => handleAddMember(req, groupId, ctx),
-    linkStore: () => handleLinkStore(req, groupId, ctx),
   };
 
   return actionHandlers[action]();

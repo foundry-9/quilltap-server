@@ -58,6 +58,7 @@ import { getRepositories } from '../../lib/repositories/factory';
 import { getMountIndexSQLiteClient } from '../../lib/database/backends/sqlite/mount-index-client';
 import { loadMountIndexConfig } from '../../lib/database/config';
 import { PROJECT_OWN_STORE_NAME_PREFIX } from '../../lib/mount-index/project-store-naming';
+import { nextUniqueMountPointName } from '../../lib/mount-index/unique-mount-point-name';
 import { writeProjectStoreManagedFields } from '../../lib/projects/project-store/write-overlay';
 import { readDatabaseDocument } from '../../lib/mount-index/database-store';
 import type { Project } from '../../lib/schemas/project.types';
@@ -281,9 +282,7 @@ export async function resolveStoreForLegacyProject(project: Project): Promise<st
   const desiredName = `${PROJECT_OWN_STORE_NAME_PREFIX}${(project.name || 'Untitled').trim()}`.slice(0, 200);
   const allMounts = await repos.docMountPoints.findAll();
   const taken = new Set(allMounts.map((mp) => mp.name));
-  let finalName = desiredName;
-  let suffix = 2;
-  while (taken.has(finalName)) finalName = `${desiredName} (${suffix++})`;
+  const finalName = nextUniqueMountPointName(taken, desiredName);
 
   const mountPoint = await repos.docMountPoints.create({
     name: finalName,

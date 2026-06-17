@@ -73,8 +73,6 @@ import {
 import {
   buildConnectionProfileChangeContent,
   buildConnectionProfileChangeOpaqueContent,
-  buildProjectContextContent,
-  buildProjectContextOpaqueContent,
   buildGeneralContextContent,
   buildGeneralContextOpaqueContent,
   buildCombinedContextContent,
@@ -267,10 +265,10 @@ describe('Prospero opaque builders', () => {
       .toBe("Beatrice's current response model is now unassigned; previous model was old.")
   })
 
-  it('project context', () => {
+  it('project context (combined builder, project only)', () => {
     const project = { name: 'Foggy Tale', description: 'A novel.', instructions: null, documentStores: [] }
-    expect(buildProjectContextContent(project)).toContain('Prospero opens his ledger')
-    const opaque = buildProjectContextOpaqueContent(project)
+    expect(buildCombinedContextContent(project, null)).toContain('Prospero opens his ledger')
+    const opaque = buildCombinedContextOpaqueContent(project, null)
     expect(opaque).toContain('Foggy Tale')
     expect(opaque).toContain('A novel.')
     expectNoPersonaNames(opaque)

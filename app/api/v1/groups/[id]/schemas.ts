@@ -20,11 +20,3 @@ export const addMemberSchema = z.object({
 export const removeMemberSchema = z.object({
   characterId: z.uuid(),
 });
-
-export const linkStoreSchema = z.object({
-  mountPointId: z.string().min(1, 'Mount point ID is required'),
-});
-
-export const unlinkStoreSchema = z.object({
-  mountPointId: z.string().min(1, 'Mount point ID is required'),
-});

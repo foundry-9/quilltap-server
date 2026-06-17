@@ -58,6 +58,7 @@ jest.mock('@/lib/services/chat-message/pseudo-tool.service', () => ({
 jest.mock('@/lib/services/chat-message/agent-mode-resolver.service', () => ({
   buildAgentModeInstructions: jest.fn(() => 'agent instructions'),
   buildForceFinalMessage: jest.fn(() => 'force final'),
+  extractSubmitFinalResponseFromText: jest.fn((text: string) => text),
 }))
 
 jest.mock('@/lib/services/chat-message/memory-trigger.service', () => ({

@@ -16,6 +16,7 @@ import {
   type ContextTag,
 } from '@/lib/memory/recall-tags'
 import { executeCheapLLMTask } from './core-execution'
+import { stripCodeFences } from '@/lib/services/ai-import.service'
 import type {
   ChatMessage,
   CheapLLMTaskResult,
@@ -320,9 +321,9 @@ ${canonBlock}`
  * caches can hit regardless of which (observer, subject) pair is in play.
  * The actual names and canon block sit in a CONTEXT footer at the end.
  *
- * `subjectIsUser` is plumbed through but not currently branched in the
- * prompt body; it is the wired-in branch point for stricter user-subject
- * phrasing if early runs against real data show attribution failures.
+ * Each subject's `isUser` flag is rendered into the CONTEXT footer as a
+ * parenthetical label so the model can distinguish the user-controlled
+ * character from AI characters without branching the stable prompt body.
  */
 function otherBodyForCap(perSubjectCap: number): string {
   return `You produce memory entries that the observer would retain about
@@ -480,6 +481,41 @@ ${subjectsBlock}`
 }
 
 /**
+ * Coerce a raw parsed object into a MemoryCandidate, or return null when
+ * the row is empty (no content and no summary).
+ *
+ * `opts.applyTags` — when true the three targeting-tag axes (temporal /
+ * scope / context) are validated and merged into the keyword array via
+ * `applyTargetingTags`. When false the raw keyword array is used as-is
+ * (batch extraction path, which does not emit targeting tags).
+ */
+function coerceMemoryCandidate(
+  item: Record<string, unknown>,
+  opts: { applyTags: boolean },
+): MemoryCandidate | null {
+  const freeKeywords = Array.isArray(item.keywords)
+    ? (item.keywords as unknown[]).filter((k): k is string => typeof k === 'string')
+    : []
+  const candidate: MemoryCandidate = {
+    content: typeof item.content === 'string'
+      ? item.content
+      : (item.content ? JSON.stringify(item.content) : undefined),
+    summary: typeof item.summary === 'string'
+      ? item.summary
+      : (item.summary ? JSON.stringify(item.summary) : undefined),
+    keywords: opts.applyTags
+      ? applyTargetingTags(freeKeywords, item)
+      : freeKeywords,
+    importance: typeof item.importance === 'number' ? item.importance : 0.5,
+  }
+  if ((!candidate.content || candidate.content.length === 0) &&
+      (!candidate.summary || candidate.summary.length === 0)) {
+    return null
+  }
+  return candidate
+}
+
+/**
  * Multi-subject parser: routes each item back to its subject by 1-based
  * `subjectIndex`. Items missing/invalid subjectIndex are dropped, items
  * beyond the per-subject cap are dropped, items beyond the total cap
@@ -496,12 +532,7 @@ function parseOtherCandidatesBySubject(
   if (subjects.length === 0) return result
   const totalCap = perSubjectCap * subjects.length
 
-  let cleanContent = content.trim()
-  if (cleanContent.startsWith('```json')) {
-    cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-  } else if (cleanContent.startsWith('```')) {
-    cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-  }
+  const cleanContent = stripCodeFences(content)
 
   let parsed: unknown
   try {
@@ -524,23 +555,8 @@ function parseOtherCandidatesBySubject(
     const bucket = result.get(subject.id)
     if (!bucket || bucket.length >= perSubjectCap) continue
 
-    const freeKeywords = Array.isArray(item.keywords)
-      ? (item.keywords as unknown[]).filter((k): k is string => typeof k === 'string')
-      : []
-    const candidate: MemoryCandidate = {
-      content: typeof item.content === 'string'
-        ? item.content
-        : (item.content ? JSON.stringify(item.content) : undefined),
-      summary: typeof item.summary === 'string'
-        ? item.summary
-        : (item.summary ? JSON.stringify(item.summary) : undefined),
-      keywords: applyTargetingTags(freeKeywords, item),
-      importance: typeof item.importance === 'number' ? item.importance : 0.5,
-    }
-    if ((!candidate.content || candidate.content.length === 0) &&
-        (!candidate.summary || candidate.summary.length === 0)) {
-      continue
-    }
+    const candidate = coerceMemoryCandidate(item, { applyTags: true })
+    if (!candidate) continue
 
     bucket.push(candidate)
     total++
@@ -610,33 +626,13 @@ If there are no memories, respond with exactly: NO_MEMORIES`
  */
 function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
   try {
-    let cleanContent = content.trim()
-    if (cleanContent.startsWith('```json')) {
-      cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-    } else if (cleanContent.startsWith('```')) {
-      cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-    }
-
+    const cleanContent = stripCodeFences(content)
     const parsed = JSON.parse(cleanContent)
     const items = Array.isArray(parsed) ? parsed : [parsed]
 
     return items
-      .map(item => {
-        const freeKeywords = Array.isArray(item.keywords)
-          ? (item.keywords as unknown[]).filter((k): k is string => typeof k === 'string')
-          : []
-        return {
-          content: typeof item.content === 'string'
-            ? item.content
-            : (item.content ? JSON.stringify(item.content) : undefined),
-          summary: typeof item.summary === 'string'
-            ? item.summary
-            : (item.summary ? JSON.stringify(item.summary) : undefined),
-          keywords: applyTargetingTags(freeKeywords, item as Record<string, unknown>),
-          importance: typeof item.importance === 'number' ? item.importance : 0.5,
-        }
-      })
-      .filter(m => (m.content && m.content.length > 0) || (m.summary && m.summary.length > 0))
+      .map(item => coerceMemoryCandidate(item as Record<string, unknown>, { applyTags: true }))
+      .filter((m): m is MemoryCandidate => m !== null)
       .slice(0, HARD_CANDIDATE_CAP)
   } catch {
     return []
@@ -876,33 +872,15 @@ ${exchangesText}`,
     userId,
     (content: string): MemoryCandidate[] => {
       try {
-        // Clean the response
-        let cleanContent = content.trim()
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        }
-
+        const cleanContent = stripCodeFences(content)
         const parsed = JSON.parse(cleanContent)
         if (!Array.isArray(parsed)) {
           return []
         }
 
-        return parsed.map((item: Record<string, unknown>) => {
-          const content = typeof item.content === 'string'
-            ? item.content
-            : (item.content ? JSON.stringify(item.content) : undefined)
-          const summary = typeof item.summary === 'string'
-            ? item.summary
-            : (item.summary ? JSON.stringify(item.summary) : undefined)
-          return {
-            content,
-            summary,
-            keywords: (item.keywords as string[]) || [],
-            importance: typeof item.importance === 'number' ? item.importance : 0.5,
-          }
-        })
+        return parsed
+          .map((item: Record<string, unknown>) => coerceMemoryCandidate(item, { applyTags: false }))
+          .filter((m): m is MemoryCandidate => m !== null)
       } catch {
         // If parsing fails, return empty array
         return []
@@ -976,14 +954,7 @@ export async function extractMemorySearchKeywords(
     userId,
     (content: string): MemorySearchExtraction => {
       try {
-        // Clean the response - remove markdown code blocks if present
-        let cleanContent = content.trim()
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        }
-
+        const cleanContent = stripCodeFences(content)
         const parsed = JSON.parse(cleanContent)
 
         // Accept either the new object shape { keywords, temporal, context } or a

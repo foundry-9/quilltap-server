@@ -429,6 +429,29 @@ export async function updateAutonomousRoomSettings(
 }
 
 /**
+ * Build the chat patch that pauses an autonomous run but leaves it *resumable in
+ * place*: a fresh `currentRunId` (so any zombie/retry turn job exits via the
+ * stale-run guard), `runEndedAt` cleared, and `runPausedAt` anchored to the last
+ * activity so a later resume excludes the outage from the wall-clock budget. The
+ * cause is recorded in `runStateMessage`; the turn/token counters are
+ * deliberately left untouched. Single source for both the startup reconcile and
+ * the terminal-failure reconcile, so the resume contract can't drift between them.
+ */
+function buildResumablePausePatch(
+  chat: { lastMessageAt?: string | null; runStartedAt?: string | null },
+  runStateMessage: string,
+  nowIso: string,
+): Partial<ChatMetadataBase> {
+  return {
+    runState: 'paused',
+    runStateMessage,
+    currentRunId: randomUUID(),
+    runEndedAt: null,
+    runPausedAt: chat.lastMessageAt ?? chat.runStartedAt ?? nowIso,
+  } as unknown as Partial<ChatMetadataBase>;
+}
+
+/**
  * Startup reconcile for autonomous-room runs interrupted by a server crash
  * or restart. Any chat with `chatType = 'autonomous'` and `runState =
  * 'running'` had its turn-worker killed mid-execution; without this sweep
@@ -466,13 +489,7 @@ export async function reconcileAutonomousRunsAtStartup(): Promise<{ reconciledCo
 
   const nowIso = new Date().toISOString();
   for (const chat of stuck) {
-    await repos.chats.update(chat.id, {
-      runState: 'paused',
-      runStateMessage: 'restart:interrupted',
-      currentRunId: randomUUID(),
-      runEndedAt: null,
-      runPausedAt: chat.lastMessageAt ?? chat.runStartedAt ?? nowIso,
-    } as unknown as Partial<ChatMetadataBase>);
+    await repos.chats.update(chat.id, buildResumablePausePatch(chat, 'restart:interrupted', nowIso));
     logger.info('Autonomous-room: reconciled stuck run at startup (paused, resumable)', {
       context: HANDLER,
       chatId: chat.id,
@@ -532,13 +549,7 @@ export async function reconcileFailedAutonomousTurn(
     if (chat.runState !== 'running' && chat.runState !== 'idle') return;
 
     const nowIso = new Date().toISOString();
-    await repos.chats.update(chatId, {
-      runState: 'paused',
-      runStateMessage: `turn_failed:${failureReason}`.slice(0, 500),
-      currentRunId: randomUUID(),
-      runEndedAt: null,
-      runPausedAt: chat.lastMessageAt ?? chat.runStartedAt ?? nowIso,
-    } as unknown as Partial<ChatMetadataBase>);
+    await repos.chats.update(chatId, buildResumablePausePatch(chat, `turn_failed:${failureReason}`.slice(0, 500), nowIso));
 
     logger.warn('Autonomous-room: turn job failed terminally; run paused (resumable)', {
       context: HANDLER,

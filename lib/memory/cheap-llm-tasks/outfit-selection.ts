@@ -12,6 +12,7 @@ import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { WardrobeItem, EquippedSlots } from '@/lib/schemas/wardrobe.types'
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
+import { stripCodeFences } from '@/lib/services/ai-import.service'
 import { executeCheapLLMTask } from './core-execution'
 import type { CheapLLMTaskResult } from './types'
 import { logger } from '@/lib/logger'
@@ -126,14 +127,7 @@ Choose what ${characterName} should wear for this scene:`,
     messages,
     userId,
     (content: string): EquippedSlots => {
-      // Strip markdown code fences if present
-      let cleanContent = content.trim()
-      if (cleanContent.startsWith('```json')) {
-        cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-      } else if (cleanContent.startsWith('```')) {
-        cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-      }
-
+      const cleanContent = stripCodeFences(content)
       const parsed = JSON.parse(cleanContent)
 
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {

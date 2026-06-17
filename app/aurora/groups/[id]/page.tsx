@@ -216,7 +216,7 @@ export default function GroupEditorPage({ params }: GroupEditorPageProps) {
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex items-center rounded-lg bg-primary px-6 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="qt-button qt-button-primary inline-flex items-center rounded-lg px-6 py-2 font-semibold qt-shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>

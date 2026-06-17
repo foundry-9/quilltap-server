@@ -6,7 +6,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import { WardrobeItem, WardrobeItemSchema, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+import { WardrobeItem, WardrobeItemSchema } from '@/lib/schemas/wardrobe.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { getOverlaidWardrobeItems } from './character-properties-overlay';
 import {
@@ -118,22 +118,6 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
       },
       'Error finding wardrobe items by character + ids',
       { characterId, idCount: ids.length }
-    );
-  }
-
-  /**
-   * Find wardrobe items for a character that include a specific type/slot.
-   * Since types is stored as a JSON array, we fetch by characterId then filter in JS.
-   * Honours the document-store overlay via `findByCharacterId`.
-   */
-  async findByCharacterIdAndTypes(characterId: string, type: WardrobeItemType): Promise<WardrobeItem[]> {
-    return this.safeQuery(
-      async () => {
-        const items = await this.findByCharacterId(characterId);
-        return items.filter((item) => item.types.includes(type));
-      },
-      'Error finding wardrobe items by character ID and type',
-      { characterId, type }
     );
   }
 

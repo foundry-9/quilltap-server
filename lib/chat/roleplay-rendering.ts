@@ -65,7 +65,7 @@ export interface Segment {
  * - `inline` rules wrap a matched span *within* a line (e.g. `*narration*`).
  * - `line` rules style the WHOLE block they match (e.g. a `// OOC` line or a
  *   `[CAPTAIN]` tag line). Line rules are applied at the block element by each
- *   adapter, never as an inline span — see {@link lineClassFor}.
+ *   adapter, never as an inline span — see {@link lineMatchFor}.
  */
 export interface CompiledRule {
   regex: RegExp
@@ -104,7 +104,7 @@ export function compileRenderingPatterns(patterns: RenderingPattern[]): Compiled
  * Walk `text` once, finding the earliest match among the INLINE rules, and emit
  * neutral segments. Unmatched runs become plain `{ text }` segments; matched
  * runs become `{ text, className }`. Line-scoped rules are ignored here — the
- * adapters apply those at the block level via {@link lineClassFor}.
+ * adapters apply those at the block level via {@link lineMatchFor}.
  *
  * Matching the earliest span and advancing past it (rather than running each
  * pattern's `replace` independently) is what prevents a later pattern from
@@ -209,14 +209,6 @@ export function lineMatchFor(text: string, rules: CompiledRule[]): LineMatch | u
     }
   }
   return undefined
-}
-
-/**
- * Convenience wrapper over {@link lineMatchFor} for callers that only need the
- * class, not the hide/strip details.
- */
-export function lineClassFor(text: string, rules: CompiledRule[]): string | undefined {
-  return lineMatchFor(text, rules)?.className
 }
 
 // ============================================================================

@@ -3,7 +3,6 @@
  *
  * GET /api/v1/groups/[id] - Get group details
  * GET /api/v1/groups/[id]?action=members - List member characters
- * GET /api/v1/groups/[id]?action=stores - List linked document stores
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -11,11 +10,10 @@ import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import {
   handleGetDefault,
   handleGetMembers,
-  handleGetStores,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
-const GROUP_GET_ACTIONS = ['members', 'stores'] as const;
+const GROUP_GET_ACTIONS = ['members'] as const;
 type GroupGetAction = typeof GROUP_GET_ACTIONS[number];
 
 /**
@@ -34,7 +32,6 @@ export async function handleGet(
 
   const actionHandlers: Record<GroupGetAction, () => Promise<NextResponse>> = {
     members: () => handleGetMembers(groupId, ctx),
-    stores: () => handleGetStores(groupId, ctx),
   };
 
   return actionHandlers[action]();
