@@ -92,9 +92,7 @@ import {
   type RngToolCall,
 } from './rng-pattern-detector.service'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
-import { parseCarinaQuery } from '@/lib/chat/carina-parser'
-import { runCarinaQuery } from '@/lib/services/carina/carina.service'
-import { postProsperoCarinaError } from '@/lib/services/prospero-notifications/writer'
+import { runCarinaMarkupQuery } from '@/lib/services/carina/markup-runner'
 import {
   finalizeMessageResponse,
 } from './message-finalizer.service'
@@ -685,61 +683,30 @@ async function processMessage(
   // post-turn fetchChat() refresh; it carries systemSender:'carina', so it is
   // excluded from memory extraction automatically.
   if (!isContinueMode && content) {
-    const carinaQuery = parseCarinaQuery(content)
-    if (carinaQuery) {
-      logger.info('Carina query detected in user message', {
-        chatId,
-        userId,
-        answerer: carinaQuery.characterName,
-        whisper: carinaQuery.whisper,
-      })
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
+    await runCarinaMarkupQuery({
+      userId,
+      chatId,
+      text: content,
+      askerParticipantId: userParticipantId ?? null,
+      // The human operator typed this markup — they can reach any character,
+      // regardless of whether their persona is itself a Carina answerer.
+      operatorInitiated: true,
+      logLabels: { detected: 'user message', failed: 'user-message' },
+      // Emit a "Consulting …" status before the query runs.
+      onConsulting: (characterName) => safeEnqueue(controller, encodeStatusEvent(encoder, {
         stage: 'gathering',
-        message: `Consulting ${carinaQuery.characterName}...`,
+        message: `Consulting ${characterName}...`,
         characterName: character.name,
         characterId: character.id,
-      }))
-      try {
-        const carinaResult = await runCarinaQuery({
-          userId,
-          chatId,
-          characterName: carinaQuery.characterName,
-          question: carinaQuery.question,
-          whisper: carinaQuery.whisper,
-          askerParticipantId: userParticipantId ?? null,
-          // The human operator typed this markup — they can reach any character,
-          // regardless of whether their persona is itself a Carina answerer.
-          operatorInitiated: true,
-          // Surface the answer to the Salon the instant it returns — before the
-          // first character even starts responding — rather than at end-of-turn.
-          onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
-        })
-        if (carinaResult.ok) {
-          // Splice a PUBLIC answer into this turn's in-memory context so the
-          // first character to respond in the same cycle hears it (parallels the
-          // RNG-result push above; the DB copy already covers later turns). A
-          // whisper answer is scoped to the asker, so it is NOT injected into any
-          // responder's context.
-          if (!carinaQuery.whisper) {
-            existingMessages.push(carinaResult.message)
-          }
-        } else {
-          await postProsperoCarinaError({
-            chatId,
-            kind: carinaResult.error.kind,
-            characterName: carinaResult.error.characterName,
-            detail: carinaResult.error.detail,
-            whisper: carinaQuery.whisper,
-            askerParticipantId: userParticipantId ?? null,
-          })
-        }
-      } catch (carinaError) {
-        logger.warn('Carina user-message query failed', {
-          chatId,
-          error: carinaError instanceof Error ? carinaError.message : String(carinaError),
-        })
-      }
-    }
+      })),
+      // Surface the answer to the Salon the instant it returns — before the
+      // first character even starts responding — rather than at end-of-turn.
+      onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
+      // Splice a PUBLIC answer into this turn's in-memory context so the first
+      // character to respond in the same cycle hears it (parallels the
+      // RNG-result push above; the DB copy already covers later turns).
+      onPublicAnswer: (msg) => existingMessages.push(msg),
+    })
   }
 
   // Build final user message content

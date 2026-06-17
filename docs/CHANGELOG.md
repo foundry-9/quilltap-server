@@ -4,6 +4,36 @@
 
 ### 4.7-dev
 
+#### Fix: the Salon's desktop text-row swipe buttons rendered blank
+
+The previous/next swipe buttons in a message's desktop text-actions row had empty bodies, so they were invisible and effectively unusable. (The icon action bar's swipe controls were unaffected.) Added the chevron icons and accessible labels/titles, matching the icon action bar. Pre-existing on `main`; surfaced during the MessageRow split.
+
+#### Refactor: split the WardrobeItemEditor god-component
+
+Broke the 954-line `components/wardrobe/wardrobe-item-editor.tsx` into the parent plus two presentational subcomponents, with no behavior change. All hooks, state, effects, and the save logic stay in the parent — only self-contained JSX blocks moved out, so there is no hook-ordering risk.
+
+- New `components/wardrobe/wardrobe-item-editor/`: `WardrobeComponentPicker` (the whole bundle-mode components section — coverage badges, selected-component chips, the searchable grouped candidate list, and the replace-slots designation) and `WardrobeModeChangePrompt` (the bundle→single confirmation dialog), plus shared `types.ts` (`CandidateItem` / `CandidateGroup`) and `constants.ts` (the group labels/order, type badge classes, and `getCandidateGroup`).
+- `wardrobe-item-editor.tsx` drops from 954 to 709 lines; the props contract and the `WardrobeCreateScope` export are unchanged.
+
+#### Refactor: split the Salon MessageRow god-component
+
+Broke the 863-line `app/salon/[id]/components/MessageRow.tsx` render function into focused presentational subcomponents, with no behavior change (every className, conditional, and callback wiring is preserved verbatim). `MessageRowInner` has no hooks, so the extraction adds no new state or memo boundaries.
+
+- New `app/salon/[id]/components/message-row/`: `MessageDesktopAvatar` (the left/right avatar column, dedup'd from the three sites that hand-rolled it), `MessageActionBar` (the in-bubble icon toolbar plus timestamp/token badge), and `MessageDesktopActions` (the hover toolbar and desktop text actions), plus shared `types.ts` (`MessageAvatarInfo`) and `helpers.ts` (`getImageAttachments`).
+- `MessageRow.tsx` drops from 863 to 602 lines; it keeps the props contract, the courier/collapsed/main branch structure, the content + tool-layout rendering, and the `memo` comparator unchanged.
+
+#### Refactor: single-source the Carina inline-markup handling
+
+The user-message path (the orchestrator) and the assistant-markup path (the message finalizer) ran near-identical `@Name:` / `@Name?` blocks: detect the markup, fire the isolated reference query, surface the answer live, and route a failure through Prospero. Collapsed both into one shared `runCarinaMarkupQuery` (`lib/services/carina/markup-runner.ts`), with the caller-specific bits — the "Consulting…" status event and the public-answer splice into the live turn, both user-message-only — passed as callbacks. No behavior change; the detection/failure log wording each path used is preserved via label parameters. Net ~60 fewer lines across the two services, plus a new unit test for the shared runner.
+
+#### Refactor: split the self-inventory tool handler into focused modules
+
+Broke the 1,867-line `lib/tools/handlers/self-inventory-handler.ts` god-file into a module directory by responsibility, with no behavior change. The dozens of small functions inside it already had single responsibilities; they were just all in one file. `tsc`, eslint, and the unit suite stay green.
+
+- New `lib/tools/handlers/self-inventory/` holds `helpers.ts` (the shared `SelfInventoryToolContext` type, the high-importance threshold, and the number/date/vault-file primitives), `builders.ts` (the GATHER half — every `build*Section` / `resolve*IncludedParts`), and `formatters.ts` (the RENDER half — every `format*` plus the public `formatSelfInventoryResults`).
+- `self-inventory-handler.ts` is now just the orchestrator (`executeSelfInventoryTool`) and re-exports the public surface (`formatSelfInventoryResults`, `SelfInventoryToolContext`), so every existing import path is unchanged.
+- Builders and formatters are independent (a formatter never calls a builder and vice versa); both depend only on the shared helpers, so the split is a clean DAG. The handler's existing 16-test suite drives the public API end-to-end and is unchanged.
+
 #### Refactor: unify the project-store and group-store implementations
 
 Collapsed the near-verbatim duplication between the project and group document-store subsystems into one shared implementation. No behavior change; `tsc`, eslint, and the full unit suite (7437 tests) stay green.
