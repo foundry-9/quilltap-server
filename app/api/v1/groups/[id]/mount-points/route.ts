@@ -45,7 +45,9 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
     );
 
     // Filter out any null results (mount points that were deleted but links remain)
-    const validMountPoints = mountPoints.filter((mp: any) => mp !== null);
+    const validMountPoints = mountPoints.filter(
+      (mp): mp is NonNullable<typeof mp> => mp !== null,
+    );
 
     return successResponse({ mountPoints: validMountPoints });
   }

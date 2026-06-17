@@ -429,6 +429,29 @@ export async function updateAutonomousRoomSettings(
 }
 
 /**
+ * Build the chat patch that pauses an autonomous run but leaves it *resumable in
+ * place*: a fresh `currentRunId` (so any zombie/retry turn job exits via the
+ * stale-run guard), `runEndedAt` cleared, and `runPausedAt` anchored to the last
+ * activity so a later resume excludes the outage from the wall-clock budget. The
+ * cause is recorded in `runStateMessage`; the turn/token counters are
+ * deliberately left untouched. Single source for both the startup reconcile and
+ * the terminal-failure reconcile, so the resume contract can't drift between them.
+ */
+function buildResumablePausePatch(
+  chat: { lastMessageAt?: string | null; runStartedAt?: string | null },
+  runStateMessage: string,
+  nowIso: string,
+): Partial<ChatMetadataBase> {
+  return {
+    runState: 'paused',
+    runStateMessage,
+    currentRunId: randomUUID(),
+    runEndedAt: null,
+    runPausedAt: chat.lastMessageAt ?? chat.runStartedAt ?? nowIso,
+  } as unknown as Partial<ChatMetadataBase>;
+}
+
+/**
  * Startup reconcile for autonomous-room runs interrupted by a server crash
  * or restart. Any chat with `chatType = 'autonomous'` and `runState =
  * 'running'` had its turn-worker killed mid-execution; without this sweep
@@ -452,29 +475,6 @@ export async function updateAutonomousRoomSettings(
  * Parent-process only. Idempotent — when nothing is stuck this is a single
  * findAll + filter with no writes.
  */
-/**
- * Build the chat patch that pauses an autonomous run *resumably in place*: a
- * fresh `currentRunId` (so any zombie/retry turn job exits via the stale-run
- * guard), `runEndedAt` cleared, and `runPausedAt` anchored to the last activity
- * so a later resume excludes the outage from the wall-clock budget. The cause is
- * recorded in `runStateMessage`; the turn/token counters are deliberately left
- * untouched. Single source for both the startup reconcile and the
- * terminal-failure reconcile, so the resume contract can't drift between them.
- */
-function buildResumablePausePatch(
-  chat: { lastMessageAt?: string | null; runStartedAt?: string | null },
-  runStateMessage: string,
-  nowIso: string,
-): Partial<ChatMetadataBase> {
-  return {
-    runState: 'paused',
-    runStateMessage,
-    currentRunId: randomUUID(),
-    runEndedAt: null,
-    runPausedAt: chat.lastMessageAt ?? chat.runStartedAt ?? nowIso,
-  } as unknown as Partial<ChatMetadataBase>;
-}
-
 export async function reconcileAutonomousRunsAtStartup(): Promise<{ reconciledCount: number }> {
   const repos = getRepositories();
 
