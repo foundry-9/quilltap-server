@@ -318,7 +318,7 @@ export async function importChats(
         }
 
         if (options.conflictStrategy === 'overwrite') {
-          await repos.chats.delete(chat.id);
+          await repos.chats.delete(chat.id, { syncVaults: false });
         }
 
         if (options.conflictStrategy === 'duplicate') {

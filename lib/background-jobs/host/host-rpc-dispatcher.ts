@@ -88,6 +88,20 @@ async function runMethod(
       const params = args[0] as Parameters<typeof writeLanternBackgroundToMountStore>[0];
       return writeLanternBackgroundToMountStore(params);
     }
+    case 'writeConversationSummaryToVaults': {
+      const { writeConversationSummaryToVaults } = await import(
+        '@/lib/file-storage/conversation-summary-vault-bridge'
+      );
+      const params = args[0] as Parameters<typeof writeConversationSummaryToVaults>[0];
+      return writeConversationSummaryToVaults(params);
+    }
+    case 'removeConversationSummariesFromVaults': {
+      const { removeConversationSummariesFromVaults } = await import(
+        '@/lib/file-storage/conversation-summary-vault-bridge'
+      );
+      const params = args[0] as Parameters<typeof removeConversationSummariesFromVaults>[0];
+      return removeConversationSummariesFromVaults(params);
+    }
     case 'startScheduledAutonomousRun': {
       const { startScheduledAutonomousRun } = await import(
         '@/lib/background-jobs/handlers/autonomous-run-start'

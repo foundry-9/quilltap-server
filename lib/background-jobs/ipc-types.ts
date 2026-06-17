@@ -135,10 +135,16 @@ export interface ChildShutdownAckMessage {
  *   - `uploadFile` — project-scoped `FileStorageManager.uploadFile`
  *   - `writeCharacterAvatarToVault` — the project-less character-vault bridge
  *   - `writeLanternBackgroundToMountStore` — the project-less Lantern bridge
- * The latter two embed a server-generated `blobId`/`linkId` (deduped by sha,
- * so the id may reference a pre-existing blob) into the returned `storageKey`,
- * which the handler persists into `files.create` — a buffered/synthetic id
- * would dangle, hence host-RPC rather than the buffered-write proxy.
+ *   - `writeConversationSummaryToVaults` — mirror a context summary into every
+ *     participant character's vault
+ *   - `removeConversationSummariesFromVaults` — sweep a deleted conversation's
+ *     summary out of every participant vault
+ * `writeCharacterAvatarToVault`/`writeLanternBackgroundToMountStore` embed a
+ * server-generated `blobId`/`linkId` (deduped by sha, so the id may reference a
+ * pre-existing blob) into the returned `storageKey`, which the handler persists
+ * into `files.create` — a buffered/synthetic id would dangle, hence host-RPC
+ * rather than the buffered-write proxy. The two summary methods route here so
+ * their `doc_mount_*` document writes commit on the RW connection.
  *
  * `args` must be structured-clone-serialisable (Buffers OK because the
  * fork is configured with `serialization: 'advanced'`).
@@ -150,6 +156,8 @@ export interface ChildHostRpcRequestMessage {
     | 'uploadFile'
     | 'writeCharacterAvatarToVault'
     | 'writeLanternBackgroundToMountStore'
+    | 'writeConversationSummaryToVaults'
+    | 'removeConversationSummariesFromVaults'
     | 'startScheduledAutonomousRun';
   args: unknown[];
 }

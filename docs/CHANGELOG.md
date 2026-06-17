@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### Feature: conversation summaries are mirrored into each character's vault
+
+Whenever a conversation's rolling context summary is generated or refreshed, a copy is now written into every participant character's vault under a `Conversation Summaries/` folder (created on demand). This is Part A of improving the Commonplace Book retrieval system: because vault documents are chunked and embedded, past-conversation summaries become retrievable per-character.
+
+Each summary file carries YAML frontmatter: the conversation UUID, the participating characters (names and IDs), the count of real messages (USER/ASSISTANT only — staff announcements, whispers, and custom announcements are excluded), and the first/last message timestamps. The file is named after the conversation's current title.
+
+- The conversation UUID in the frontmatter is the key for replacement: each regeneration finds and deletes its own prior file (even if the conversation has since been renamed) before writing the new one. A name collision with a *different* conversation is disambiguated with the short chat ID.
+- Deleting a conversation sweeps its summary file out of every participant vault. Backup restore and import skip this per-chat cleanup since they manage vaults wholesale.
+- Writes go to all participant characters with a vault (both LLM- and user-controlled). The write/delete paths run through the existing host-RPC bridge so they commit correctly from background jobs.
+- New `lib/file-storage/conversation-summary-vault-bridge.ts`; hooked into `generateContextSummary` (`lib/chat/context-summary.ts`) and `ChatsRepository.delete`.
+
 #### Fix: character model picker shows the connection-profile name; profile names must be unique
 
 The per-character model dropdown in the Salon labeled each option by the raw model name (e.g. `claude-sonnet-4-6`) instead of the connection-profile's name. That made profiles indistinguishable when several share a provider and model but differ in settings. The dropdown now shows the profile name, with the model appended as a hint when it differs (e.g. `Opus 4.7 Adaptive — claude-opus-4-8`). Display-only change; selection has always stored the profile ID.

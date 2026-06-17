@@ -287,11 +287,32 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 
   /**
-   * Delete a chat (removes both metadata and messages)
+   * Delete a chat (removes both metadata and messages).
+   *
+   * @param options.syncVaults When true (default), sweep this conversation's
+   *   summary file out of every participant character's vault. Bulk callers
+   *   that manage vaults wholesale (backup restore, import) pass `false`.
    */
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, options?: { syncVaults?: boolean }): Promise<boolean> {
+    const syncVaults = options?.syncVaults ?? true;
     return this.safeQuery(
       async () => {
+        // Capture participants before the row is gone so we know which vaults
+        // to sweep. Read fails closed — no participants means no cleanup.
+        let participantCharacterIds: string[] = [];
+        if (syncVaults) {
+          try {
+            const chat = await this.findById(id);
+            if (chat) {
+              participantCharacterIds = Array.from(
+                new Set(chat.participants.map(p => p.characterId))
+              );
+            }
+          } catch {
+            // best-effort — proceed with the delete regardless
+          }
+        }
+
         const result = await this._delete(id);
 
         if (!result) {
@@ -313,6 +334,24 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
             chatId: id,
             error: error instanceof Error ? error.message : String(error),
           });
+        }
+
+        // Sweep the conversation's summary file out of each participant vault.
+        if (syncVaults && participantCharacterIds.length > 0) {
+          try {
+            const { removeConversationSummariesFromVaults } = await import(
+              '@/lib/file-storage/conversation-summary-vault-bridge'
+            );
+            await removeConversationSummariesFromVaults({
+              chatId: id,
+              participantCharacterIds,
+            });
+          } catch (error) {
+            logger.warn('Failed to sweep conversation summaries from vaults', {
+              chatId: id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         }
 
         logger.info('Chat deleted', { chatId: id });

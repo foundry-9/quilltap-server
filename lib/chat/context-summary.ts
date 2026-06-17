@@ -17,6 +17,7 @@ import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/ser
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { enqueueTitleUpdate } from '@/lib/background-jobs/queue-service'
 import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
+import { writeConversationSummaryToVaults, computeConversationStats } from '@/lib/file-storage/conversation-summary-vault-bridge'
 
 /**
  * Rolling-window summarization cadence.
@@ -458,6 +459,30 @@ export async function generateContextSummary(
       })
     } catch (e) {
       logger.error('[Context Summary] Failed to post broadcast summary whisper:', { chatId }, e instanceof Error ? e : new Error(String(e)))
+    }
+
+    // Mirror the fresh summary into every participant character's vault under
+    // "Conversation Summaries/" (Commonplace Book retrieval — Part A). The UUID
+    // in the file's frontmatter lets this replace its own prior file across
+    // renames. Best-effort: a vault-write failure must never fail the summary.
+    try {
+      const participantCharacterIds = Array.from(
+        new Set(chat.participants.map(p => p.characterId))
+      )
+      const stats = computeConversationStats(allChatMessages)
+      await writeConversationSummaryToVaults({
+        chatId,
+        chatTitle: chat.title,
+        summary: newSummary,
+        summaryGeneration: newGeneration,
+        participantCharacterIds,
+        messageCount: stats.messageCount,
+        firstMessageAt: stats.firstMessageAt,
+        lastMessageAt: stats.lastMessageAt,
+        updatedAt: new Date().toISOString(),
+      })
+    } catch (e) {
+      logger.error('[Context Summary] Failed to mirror summary into character vaults:', { chatId }, e instanceof Error ? e : new Error(String(e)))
     }
 
     if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {

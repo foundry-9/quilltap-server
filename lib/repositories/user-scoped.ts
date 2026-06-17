@@ -175,6 +175,12 @@ class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadat
     return this.filterByUser(chats);
   }
 
+  async delete(id: string, options?: { syncVaults?: boolean }): Promise<boolean> {
+    const chat = await this.findById(id);
+    if (!chat) return false;
+    return this.baseRepo.delete(id, options);
+  }
+
   async getMessages(chatId: string): Promise<ChatEvent[]> {
     const chat = await this.findById(chatId);
     if (!chat) return [];

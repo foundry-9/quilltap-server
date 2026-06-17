@@ -121,7 +121,7 @@ export async function deleteUserData(userId: string): Promise<void> {
   // Delete all entities (including user-created templates, projects, and LLM logs)
   await Promise.all([
     ...characters.map((c) => repos.characters.delete(c.id)),
-    ...chats.map((c) => repos.chats.delete(c.id)),
+    ...chats.map((c) => repos.chats.delete(c.id, { syncVaults: false })),
     ...tags.map((t) => repos.tags.delete(t.id)),
     ...connectionProfiles.map((cp) => repos.connections.delete(cp.id)),
     ...imageProfiles.map((ip) => repos.imageProfiles.delete(ip.id)),
