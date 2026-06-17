@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Fix: the Salon's desktop text-row swipe buttons rendered blank
+
+The previous/next swipe buttons in a message's desktop text-actions row had empty bodies, so they were invisible and effectively unusable. (The icon action bar's swipe controls were unaffected.) Added the chevron icons and accessible labels/titles, matching the icon action bar. Pre-existing on `main`; surfaced during the MessageRow split.
+
 #### Refactor: split the WardrobeItemEditor god-component
 
 Broke the 954-line `components/wardrobe/wardrobe-item-editor.tsx` into the parent plus two presentational subcomponents, with no behavior change. All hooks, state, effects, and the save logic stay in the parent — only self-contained JSX blocks moved out, so there is no hook-ordering risk.

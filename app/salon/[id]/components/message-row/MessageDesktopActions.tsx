@@ -143,8 +143,10 @@ export function MessageDesktopActions({
                   onClick={() => onSwitchSwipe(message.swipeGroupId!, 'prev')}
                   disabled={swipeState.current === 0}
                   className="qt-text-secondary hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Previous response"
+                  aria-label="Previous response"
                 >
-
+                  <Icon name="chevron-left" className="w-4 h-4" />
                 </button>
                 <span className="qt-text-xs">
                   {swipeState.current + 1} / {swipeState.total}
@@ -153,8 +155,10 @@ export function MessageDesktopActions({
                   onClick={() => onSwitchSwipe(message.swipeGroupId!, 'next')}
                   disabled={swipeState.current === swipeState.total - 1}
                   className="qt-text-secondary hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Next response"
+                  aria-label="Next response"
                 >
-
+                  <Icon name="chevron-right" className="w-4 h-4" />
                 </button>
               </div>
             )}
