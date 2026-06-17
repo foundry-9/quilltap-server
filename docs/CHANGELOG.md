@@ -4,6 +4,13 @@
 
 ### 4.7-dev
 
+#### Refactor: split the WardrobeItemEditor god-component
+
+Broke the 954-line `components/wardrobe/wardrobe-item-editor.tsx` into the parent plus two presentational subcomponents, with no behavior change. All hooks, state, effects, and the save logic stay in the parent — only self-contained JSX blocks moved out, so there is no hook-ordering risk.
+
+- New `components/wardrobe/wardrobe-item-editor/`: `WardrobeComponentPicker` (the whole bundle-mode components section — coverage badges, selected-component chips, the searchable grouped candidate list, and the replace-slots designation) and `WardrobeModeChangePrompt` (the bundle→single confirmation dialog), plus shared `types.ts` (`CandidateItem` / `CandidateGroup`) and `constants.ts` (the group labels/order, type badge classes, and `getCandidateGroup`).
+- `wardrobe-item-editor.tsx` drops from 954 to 709 lines; the props contract and the `WardrobeCreateScope` export are unchanged.
+
 #### Refactor: split the Salon MessageRow god-component
 
 Broke the 863-line `app/salon/[id]/components/MessageRow.tsx` render function into focused presentational subcomponents, with no behavior change (every className, conditional, and callback wiring is preserved verbatim). `MessageRowInner` has no hooks, so the extraction adds no new state or memo boundaries.
