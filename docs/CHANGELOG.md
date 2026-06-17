@@ -4,6 +4,14 @@
 
 ### 4.7-dev
 
+#### Refactor: split the self-inventory tool handler into focused modules
+
+Broke the 1,867-line `lib/tools/handlers/self-inventory-handler.ts` god-file into a module directory by responsibility, with no behavior change. The dozens of small functions inside it already had single responsibilities; they were just all in one file. `tsc`, eslint, and the unit suite stay green.
+
+- New `lib/tools/handlers/self-inventory/` holds `helpers.ts` (the shared `SelfInventoryToolContext` type, the high-importance threshold, and the number/date/vault-file primitives), `builders.ts` (the GATHER half — every `build*Section` / `resolve*IncludedParts`), and `formatters.ts` (the RENDER half — every `format*` plus the public `formatSelfInventoryResults`).
+- `self-inventory-handler.ts` is now just the orchestrator (`executeSelfInventoryTool`) and re-exports the public surface (`formatSelfInventoryResults`, `SelfInventoryToolContext`), so every existing import path is unchanged.
+- Builders and formatters are independent (a formatter never calls a builder and vice versa); both depend only on the shared helpers, so the split is a clean DAG. The handler's existing 16-test suite drives the public API end-to-end and is unchanged.
+
 #### Refactor: unify the project-store and group-store implementations
 
 Collapsed the near-verbatim duplication between the project and group document-store subsystems into one shared implementation. No behavior change; `tsc`, eslint, and the full unit suite (7437 tests) stay green.
