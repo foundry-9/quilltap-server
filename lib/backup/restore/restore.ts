@@ -20,6 +20,7 @@ import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-clien
 import { rawQuery } from '@/lib/database/manager';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { TextReplacementRuleConflictError } from '@/lib/database/repositories';
+import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
 import type { RestoreOptions, RestoreSummary } from '../types';
 import { UuidRemapper } from '../uuid-remapper';
 import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
@@ -76,12 +77,26 @@ export async function restore(
       }
     }
 
-    // 2. Connection profiles (no entity dependencies, but have tag refs)
+    // 2. Connection profiles (no entity dependencies, but have tag refs).
+    // Names are unique per user (DB index). Pre-migration backups can carry
+    // duplicate names, and merge restores can collide with existing profiles —
+    // rename on collision rather than letting the constraint drop the profile.
+    const existingConnectionProfiles = await repos.connections.findAll();
+    const takenConnectionNames = new Set(existingConnectionProfiles.map((p) => normalizeProfileName(p.name)));
     for (const profile of data.connectionProfiles) {
       try {
         const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
         // Note: apiKeyId is not restored as API keys are encrypted and can't be restored
-        await repos.connections.create({ ...profileData, apiKeyId: null }, { id: profile.id });
+        const uniqueName = makeUniqueProfileName(profileData.name, takenConnectionNames);
+        if (uniqueName !== profileData.name) {
+          moduleLogger.debug('Renamed connection profile on restore to avoid name collision', {
+            profileId: profile.id,
+            from: profileData.name,
+            to: uniqueName,
+          });
+        }
+        takenConnectionNames.add(normalizeProfileName(uniqueName));
+        await repos.connections.create({ ...profileData, name: uniqueName, apiKeyId: null }, { id: profile.id });
       } catch (error) {
         warnings.push(`Failed to restore connection profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore connection profile', { profileId: profile.id, error });

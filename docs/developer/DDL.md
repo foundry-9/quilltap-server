@@ -783,6 +783,11 @@ CREATE TABLE "connection_profiles" (
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);
 CREATE INDEX "idx_connection_profiles_provider" ON "connection_profiles" ("provider");
 CREATE INDEX "idx_connection_profiles_userId" ON "connection_profiles" ("userId");
+
+-- Profile names are unique per user, case-insensitive and whitespace-trimmed.
+-- The expression mirrors normalizeProfileName() in lib/llm/connection-profile-names.ts.
+-- Added by add-connection-profile-unique-name-index-v1 (which de-dups first).
+CREATE UNIQUE INDEX "idx_connection_profiles_userId_name" ON "connection_profiles" ("userId", lower(trim("name")));
 ```
 
 ### projects

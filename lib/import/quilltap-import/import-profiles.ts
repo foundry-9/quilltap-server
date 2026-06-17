@@ -14,6 +14,7 @@ import type {
   ImageProfile,
   EmbeddingProfile,
 } from '@/lib/schemas/types';
+import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
 import type { ImportOptions, IdMappingState, ImportCounts } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
@@ -29,6 +30,12 @@ export async function importConnectionProfiles(
 ): Promise<ImportCounts> {
   let imported = 0;
   let skipped = 0;
+
+  // Connection-profile names are unique per user (enforced by a DB index), so
+  // an insert must never reuse a name already present. Seed the taken-name set
+  // from existing profiles and add each freshly-inserted name as we go.
+  const existingProfiles = await repos.connections.findAll();
+  const takenNames = new Set(existingProfiles.map((p) => normalizeProfileName(p.name)));
 
   for (const rawProfile of profiles) {
     // Older exports predate the per-profile supportsImageUpload flag; seed it
@@ -50,16 +57,26 @@ export async function importConnectionProfiles(
 
         if (options.conflictStrategy === 'overwrite') {
           await repos.connections.delete(profile.id);
+          // The overwritten row's name is no longer taken by it.
+          takenNames.delete(normalizeProfileName(existing.name));
         }
 
         if (options.conflictStrategy === 'duplicate') {
           const newId = randomUUID();
           idMaps.connectionProfiles.set(profile.id, newId);
           const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
+          const uniqueName = makeUniqueProfileName(`${profileData.name} (imported)`, takenNames);
+          if (uniqueName !== `${profileData.name} (imported)`) {
+            moduleLogger.debug('Renamed connection profile on import to avoid name collision', {
+              from: `${profileData.name} (imported)`,
+              to: uniqueName,
+            });
+          }
+          takenNames.add(normalizeProfileName(uniqueName));
           const newProfile = await repos.connections.create({
             ...profileData,
             apiKeyId: null, // Don't restore API keys
-            name: `${profileData.name} (imported)`,
+            name: uniqueName,
           });
           imported++;
           continue;
@@ -67,9 +84,18 @@ export async function importConnectionProfiles(
       }
 
       const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
+      const uniqueName = makeUniqueProfileName(profileData.name, takenNames);
+      if (uniqueName !== profileData.name) {
+        moduleLogger.debug('Renamed connection profile on import to avoid name collision', {
+          from: profileData.name,
+          to: uniqueName,
+        });
+      }
+      takenNames.add(normalizeProfileName(uniqueName));
       const newProfile = await repos.connections.create({
         ...profileData,
         apiKeyId: null, // Don't restore API keys
+        name: uniqueName,
       });
       idMaps.connectionProfiles.set(profile.id, newProfile.id);
       imported++;

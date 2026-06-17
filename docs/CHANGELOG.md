@@ -4,6 +4,18 @@
 
 ### 4.7-dev
 
+#### Fix: character model picker shows the connection-profile name; profile names must be unique
+
+The per-character model dropdown in the Salon labeled each option by the raw model name (e.g. `claude-sonnet-4-6`) instead of the connection-profile's name. That made profiles indistinguishable when several share a provider and model but differ in settings. The dropdown now shows the profile name, with the model appended as a hint when it differs (e.g. `Opus 4.7 Adaptive — claude-opus-4-8`). Display-only change; selection has always stored the profile ID.
+
+Connection-profile names are now unique per instance, case-insensitive and ignoring surrounding whitespace, enforced at every layer:
+
+- A new unique index `(userId, lower(trim(name)))` on `connection_profiles`.
+- Migration `add-connection-profile-unique-name-index-v1` de-duplicates existing names first (oldest keeps its name; later collisions get a ` (2)`, ` (3)`, … suffix), then creates the index.
+- The create/update API returns `409 Conflict` on a duplicate name.
+- The create/edit modal shows an inline error and disables Save on a duplicate, and the auto-suggested `provider/model` name is suffixed so a second profile on the same provider+model doesn't collide.
+- Import and restore rename connection profiles on collision instead of letting the constraint silently drop them.
+
 #### Chore: remove leftover development debug logging
 
 Removed 91 happy-path debug log calls that were added while building the 4.7 features (Groups, the Post Office, Carina, the Brahma Console, the document-store overlay, the mount-index file pipeline, memory recall, wardrobe vault writes, and others). These only narrated successful normal operation — "resolved", "built", "wrote", "delivered", "listed", "assembled", and so on — and became log noise once the features worked. Kept all error/warn logging plus the debug logs that actually aid diagnosis: fallback/degradation branches, "why was this skipped/empty/unavailable" notes, state-change events, and the theme missing-asset diagnostics. No behavior change. 50 files, 487 deletions; `tsc` and the unit suite stay green.

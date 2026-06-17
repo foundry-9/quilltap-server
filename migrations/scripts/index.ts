@@ -342,6 +342,8 @@ import { addCarinaMessageMetaMigration } from './add-carina-message-meta-v1';
 import { rpDelimiterKindsMigration } from './rp-delimiter-kinds-v1';
 // Brahma Console: consoleConnectionProfileId column on chats (per-chat model selection)
 import { addConsoleConnectionProfileFieldMigration } from './add-console-connection-profile-field';
+// Unique connection-profile names: de-dup + unique index on (userId, lower(trim(name)))
+import { addConnectionProfileUniqueNameIndexMigration } from './add-connection-profile-unique-name-index';
 
 /**
  * All available migrations.
@@ -680,6 +682,8 @@ export const migrations: Migration[] = [
   rpDelimiterKindsMigration,
   // Brahma Console: consoleConnectionProfileId column on chats (per-chat model selection)
   addConsoleConnectionProfileFieldMigration,
+  // Unique connection-profile names: de-dup + unique index on (userId, lower(trim(name)))
+  addConnectionProfileUniqueNameIndexMigration,
 ];
 
 export {
@@ -999,5 +1003,7 @@ export {
   rpDelimiterKindsMigration,
   // Brahma Console: consoleConnectionProfileId column on chats (per-chat model selection)
   addConsoleConnectionProfileFieldMigration,
+  // Unique connection-profile names: de-dup + unique index on (userId, lower(trim(name)))
+  addConnectionProfileUniqueNameIndexMigration,
 };
 

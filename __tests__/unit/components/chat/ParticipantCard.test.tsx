@@ -764,6 +764,31 @@ describe('ParticipantCard', () => {
       expect(options).toHaveLength(4)
     })
 
+    it('labels each option with the profile name and a model hint', () => {
+      const props = createDefaultProps({
+        connectionProfiles: mockProfiles,
+        onConnectionProfileChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      // Profile name leads; the underlying model is appended as a hint so two
+      // profiles on the same provider+model stay distinguishable.
+      expect(screen.getByRole('option', { name: 'GPT-4 — gpt-4-turbo' })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: 'Claude — claude-3-opus' })).toBeInTheDocument()
+    })
+
+    it('omits the model hint when the name already is the model name', () => {
+      const props = createDefaultProps({
+        connectionProfiles: [{ id: 'p', name: 'gpt-4-turbo', provider: 'openai', modelName: 'gpt-4-turbo' }],
+        onConnectionProfileChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      const option = screen.getByRole('option', { name: 'gpt-4-turbo' })
+      expect(option).toBeInTheDocument()
+      expect(option.textContent).not.toContain('—')
+    })
+
     it('selects current connection profile', () => {
       const props = createDefaultProps({
         connectionProfiles: mockProfiles,

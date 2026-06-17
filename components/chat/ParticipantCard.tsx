@@ -401,11 +401,18 @@ export function ParticipantCard({
               >
                 <option value="">Select a provider...</option>
                 <option value={USER_IMPERSONATION_VALUE}>User (you type)</option>
-                {connectionProfiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.modelName || profile.name}
-                  </option>
-                ))}
+                {connectionProfiles.map((profile) => {
+                  const model = profile.modelName?.trim()
+                  const label =
+                    model && model !== profile.name
+                      ? `${profile.name} — ${model}`
+                      : profile.name
+                  return (
+                    <option key={profile.id} value={profile.id}>
+                      {label || model}
+                    </option>
+                  )
+                })}
               </select>
             </div>
           ) : (
