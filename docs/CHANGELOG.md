@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Refactor: single-source the Carina inline-markup handling
+
+The user-message path (the orchestrator) and the assistant-markup path (the message finalizer) ran near-identical `@Name:` / `@Name?` blocks: detect the markup, fire the isolated reference query, surface the answer live, and route a failure through Prospero. Collapsed both into one shared `runCarinaMarkupQuery` (`lib/services/carina/markup-runner.ts`), with the caller-specific bits — the "Consulting…" status event and the public-answer splice into the live turn, both user-message-only — passed as callbacks. No behavior change; the detection/failure log wording each path used is preserved via label parameters. Net ~60 fewer lines across the two services, plus a new unit test for the shared runner.
+
 #### Refactor: split the self-inventory tool handler into focused modules
 
 Broke the 1,867-line `lib/tools/handlers/self-inventory-handler.ts` god-file into a module directory by responsibility, with no behavior change. The dozens of small functions inside it already had single responsibilities; they were just all in one file. `tsc`, eslint, and the unit suite stay green.

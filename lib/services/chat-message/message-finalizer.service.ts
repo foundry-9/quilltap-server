@@ -33,9 +33,7 @@ import {
 } from './memory-trigger.service'
 import { triggerAsyncCompression } from './compression-cache.service'
 import { detectAndConvertRngPatterns } from './rng-pattern-detector.service'
-import { parseCarinaQuery } from '@/lib/chat/carina-parser'
-import { runCarinaQuery } from '@/lib/services/carina/carina.service'
-import { postProsperoCarinaError } from '@/lib/services/prospero-notifications/writer'
+import { runCarinaMarkupQuery } from '@/lib/services/carina/markup-runner'
 
 const logger = createServiceLogger('MessageFinalizer')
 
@@ -319,42 +317,16 @@ export async function finalizeMessageResponse({
   // The asker is this character's participant; the answer carries
   // systemSender:'carina' and is excluded from memory extraction automatically.
   if (cleanedResponse) {
-    const carinaQuery = parseCarinaQuery(cleanedResponse)
-    if (carinaQuery) {
-      logger.info('Carina query detected in assistant response', {
-        chatId,
-        answerer: carinaQuery.characterName,
-        whisper: carinaQuery.whisper,
-      })
-      try {
-        const carinaResult = await runCarinaQuery({
-          userId,
-          chatId,
-          characterName: carinaQuery.characterName,
-          question: carinaQuery.question,
-          whisper: carinaQuery.whisper,
-          askerParticipantId: characterParticipant.id,
-          // Surface the answer live (before this turn's done event) so the Salon
-          // renders the card immediately rather than at the post-turn refresh.
-          onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
-        })
-        if (!carinaResult.ok) {
-          await postProsperoCarinaError({
-            chatId,
-            kind: carinaResult.error.kind,
-            characterName: carinaResult.error.characterName,
-            detail: carinaResult.error.detail,
-            whisper: carinaQuery.whisper,
-            askerParticipantId: characterParticipant.id,
-          })
-        }
-      } catch (carinaError) {
-        logger.warn('Carina assistant-markup query failed', {
-          chatId,
-          error: carinaError instanceof Error ? carinaError.message : String(carinaError),
-        })
-      }
-    }
+    await runCarinaMarkupQuery({
+      userId,
+      chatId,
+      text: cleanedResponse,
+      askerParticipantId: characterParticipant.id,
+      logLabels: { detected: 'assistant response', failed: 'assistant-markup' },
+      // Surface the answer live (before this turn's done event) so the Salon
+      // renders the card immediately rather than at the post-turn refresh.
+      onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
+    })
   }
 
   await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
