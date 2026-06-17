@@ -4,6 +4,14 @@
 
 ### 4.7-dev
 
+#### Refactor: unify the project-store and group-store implementations
+
+Collapsed the near-verbatim duplication between the project and group document-store subsystems into one shared implementation. No behavior change; `tsc`, eslint, and the full unit suite (7437 tests) stay green.
+
+- New generic `createDocumentStoreOverlay` engine (`lib/database/document-store-overlay.ts`) holds the read overlay (hydrate from `properties.json` / `description.md` / `instructions.md` / `state.json`, with the asymmetric throw-on-single / drop-on-list failure), the write overlay (route store-resident fields, strip managed keys), and the per-mount-point write serialization. `lib/projects/project-store` and `lib/groups/group-store` now instantiate it with their own schema/paths/error; their `read-overlay.ts` / `write-overlay.ts` re-export the bound operations, so every existing import path is unchanged.
+- New `AbstractStoreBackedRepository` (`lib/database/repositories/store-backed.repository.ts`) holds the store-aware CRUD skeleton (overlay-on-read, route-and-strip-on-write, provision-on-create, `findByIdRaw` / `findAllRaw`, `setOfficialMountPointId`, and the store-aware `_create` / `_update`). `ProjectsRepository` and `GroupsRepository` now extend it; projects keep only the character-roster methods and seed their create-time roster defaults through a `prepareCreateData` hook.
+- Net ~490 fewer lines, and the two subsystems can no longer drift.
+
 #### Refactor: dedup, dead-code, and API-conformance pass over post-4.6.0 code
 
 A behavior-preserving refactor of code added since the 4.6.0 release, per `.claude/commands/refactor.md` (single source of truth / DRY, SRP, KISS, dead-code removal, API conformance, `qt-*` utilities). No functional, schema, export, or migration changes; `tsc` and the full unit suite stay green.

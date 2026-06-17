@@ -6,22 +6,19 @@
  *
  * As of the project-store cutover (`cutover-projects-to-store-v1`), a project's
  * substantive content lives in its official document store, not in `projects`
- * columns. This repository is the chokepoint that hides that split:
- *
- *   - Every read overlays the store (`applyProjectStoreOverlay[One]`) so callers
- *     see the fully-hydrated `Project` they always did.
- *   - Every write routes store-resident fields to the store
- *     (`applyProjectStoreWriteOverlay`) and strips them (`PROJECT_STORE_MANAGED_FIELDS`)
- *     from the slim DB row.
- *   - `create()` provisions and populates the official store before returning,
- *     so a freshly-created project is never storeless.
+ * columns. The shared {@link AbstractStoreBackedRepository} is the chokepoint
+ * that hides that split (overlay on read, route-and-strip on write,
+ * provision-on-create). This subclass adds only the character-roster operations
+ * and the create-time roster defaults.
  *
  * `userId` is gone — projects are global to the instance (single-user-per-instance).
  */
 
 import { Project, ProjectSchema, PROJECT_STORE_MANAGED_FIELDS } from '@/lib/schemas/types';
-import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { TypedQueryFilter, UpdateSpec } from '../interfaces';
+import {
+  AbstractStoreBackedRepository,
+  StoreOverlayBinding,
+} from './store-backed.repository';
 import { logger } from '@/lib/logger';
 import {
   applyProjectStoreOverlay,
@@ -38,286 +35,31 @@ import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-sto
  * Implements CRUD operations for projects with document-store-backed content
  * and character roster management.
  */
-export class ProjectsRepository extends AbstractBaseRepository<Project> {
+export class ProjectsRepository extends AbstractStoreBackedRepository<Project> {
   constructor() {
     super('projects', ProjectSchema);
   }
 
-  // ==========================================================================
-  // READS (document-store overlay applied)
-  // ==========================================================================
+  protected readonly store: StoreOverlayBinding<Project> = {
+    managedFields: PROJECT_STORE_MANAGED_FIELDS,
+    entityLabel: 'Project',
+    idLogKey: 'projectId',
+    applyOverlay: applyProjectStoreOverlay,
+    applyOverlayOne: applyProjectStoreOverlayOne,
+    applyWriteOverlay: applyProjectStoreWriteOverlay,
+    writeManagedFields: writeProjectStoreManagedFields,
+    ensureOfficialStore: ensureProjectOfficialStore,
+  };
 
-  /**
-   * Find a project by ID, hydrated from its document store. Throws
-   * `ProjectStoreUnavailableError` if the store is missing/unreadable — the
-   * caller asked for this specific project, so fail loudly.
-   */
-  async findById(id: string): Promise<Project | null> {
-    const raw = await this._findById(id);
-    return applyProjectStoreOverlayOne(raw);
-  }
-
-  /**
-   * Find a project by ID **without applying the document-store overlay**. The
-   * returned Project has empty/default values for every store-resident field
-   * (description, instructions, state, and the properties bag) once the cutover
-   * migration has dropped the DB columns — those fields live exclusively in the
-   * project's official document store.
-   *
-   * **Almost no caller wants this.** Use {@link findById} for any normal read.
-   * The legitimate exceptions are the overlay's own bootstrap (it must read the
-   * row before it can apply itself) and startup migrations/backfills that
-   * operate on the row directly (e.g. `backfill-project-stores`).
-   */
-  async findByIdRaw(id: string): Promise<Project | null> {
-    return this._findById(id);
-  }
-
-  /**
-   * Find all projects, each hydrated from its document store. A project whose
-   * store is unavailable is logged at `error` and dropped from the result so
-   * one bad row can't take down the whole list.
-   */
-  async findAll(): Promise<Project[]> {
-    const raw = await this._findAll();
-    return applyProjectStoreOverlay(raw);
-  }
-
-  /**
-   * Find all projects **without applying the document-store overlay**. See the
-   * warnings on {@link findByIdRaw}. Reserved for startup migrations/backfills
-   * and the overlay's own bootstrap.
-   */
-  async findAllRaw(): Promise<Project[]> {
-    return this._findAll();
-  }
-
-  /**
-   * Find projects by IDs, hydrated from their document stores.
-   */
-  async findByIds(ids: string[]): Promise<Project[]> {
-    if (ids.length === 0) return [];
-    const raw = await this.findByFilter({ id: { $in: ids } } as TypedQueryFilter<Project>);
-    return applyProjectStoreOverlay(raw);
-  }
-
-  // ==========================================================================
-  // CREATE / UPDATE / DELETE
-  // ==========================================================================
-
-  /**
-   * Create a new project, provision its official document store, and populate
-   * the store files from the create payload before returning. Fails hard if the
-   * store cannot be provisioned — a storeless project would throw on every read.
-   *
-   * @param data The project data (without id, createdAt, updatedAt)
-   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
-   * @returns Promise<Project> The created, fully-hydrated project
-   */
-  async create(
+  /** Seed the roster defaults a fresh project needs before its row is written. */
+  protected prepareCreateData(
     data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: CreateOptions
-  ): Promise<Project> {
-    return this.safeQuery(
-      async () => {
-        // Drop any incoming officialMountPointId — create always provisions a
-        // fresh store. Importers carrying a source pointer shouldn't reuse it.
-        const projectData = {
-          ...data,
-          allowAnyCharacter: data.allowAnyCharacter ?? false,
-          characterRoster: data.characterRoster ?? [],
-          officialMountPointId: null,
-        } as Omit<Project, 'id' | 'createdAt' | 'updatedAt'>;
-
-        // _create validates the full project (store fields in memory) and writes
-        // only the slim row.
-        const created = await this._create(projectData, options);
-
-        // Provision the official store, then write the four overlay files from
-        // the in-memory create payload (which carries description/instructions/
-        // state/properties). ensureProjectOfficialStore sets officialMountPointId
-        // on the row.
-        const ensured = await ensureProjectOfficialStore(created.id, created.name);
-        if (!ensured) {
-          throw new Error(
-            `Failed to provision official document store for project ${created.id}; ` +
-              `refusing to return a storeless project.`,
-          );
-        }
-        await writeProjectStoreManagedFields(ensured.mountPointId, {
-          ...created,
-          officialMountPointId: ensured.mountPointId,
-        });
-
-        logger.info('Project created', {
-          projectId: created.id,
-          name: created.name,
-          officialMountPointId: ensured.mountPointId,
-        });
-
-        // Reload through the overlay so the returned project reflects the
-        // store-backed state, including the freshly-set mount pointer.
-        const finalProject = await this.findById(created.id);
-        if (!finalProject) {
-          throw new Error(`Project ${created.id} disappeared immediately after creation`);
-        }
-        return finalProject;
-      },
-      'Error creating project',
-      { name: data.name }
-    );
-  }
-
-  /**
-   * Update a project.
-   *
-   * Store-resident fields (description, instructions, state, and the properties
-   * bag) in `data` are routed to the project's official store via
-   * {@link applyProjectStoreWriteOverlay}; the remaining DB-only fields
-   * (`name`, `officialMountPointId`) are written through `_update`. The returned
-   * project is overlaid so callers see the store-backed view, exactly as
-   * {@link findById} would.
-   *
-   * @param id The project ID
-   * @param data Partial project data to update
-   * @returns Promise<Project | null> The updated project if found, null otherwise
-   */
-  async update(id: string, data: Partial<Project>): Promise<Project | null> {
-    return this.safeQuery(
-      async () => {
-        const dbPatch = await applyProjectStoreWriteOverlay(id, data);
-        const hasDbWork = Object.keys(dbPatch).length > 0;
-        const result = hasDbWork ? await this._update(id, dbPatch) : await this._findById(id);
-        if (result) {
-          logger.info('Project updated', { projectId: id });
-        }
-        return applyProjectStoreOverlayOne(result);
-      },
-      'Error updating project',
-      { projectId: id }
-    );
-  }
-
-  /**
-   * Persist ONLY the `officialMountPointId` FK on the slim row, bypassing the
-   * document-store overlay entirely.
-   *
-   * Provisioning (`ensureProjectOfficialStore`) calls this to record a freshly
-   * created store's id BEFORE the store files exist. The normal,
-   * overlay-applying {@link update} cannot be used there: its closing re-read
-   * (`applyProjectStoreOverlayOne`) would throw `ProjectStoreUnavailableError`
-   * ("properties.json missing") because `writeProjectStoreManagedFields` hasn't
-   * run yet. The store-aware `_update` writes the column off the raw row and
-   * never re-reads the store. Write-side sibling of {@link findByIdRaw}; almost
-   * no caller wants this — use {@link update} for any normal write.
-   *
-   * @param id The project ID
-   * @param mountPointId The official store's mount-point ID
-   */
-  async setOfficialMountPointId(id: string, mountPointId: string): Promise<void> {
-    await this._update(id, { officialMountPointId: mountPointId });
-  }
-
-  /**
-   * Delete a project
-   * @param id The project ID
-   * @returns Promise<boolean> True if project was deleted, false if not found
-   */
-  async delete(id: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const result = await this._delete(id);
-
-        if (result) {
-          logger.info('Project deleted', { projectId: id });
-        }
-
-        return result;
-      },
-      'Error deleting project',
-      { projectId: id }
-    );
-  }
-
-  /**
-   * Store-aware override of the base `_create`. Strips store-resident keys
-   * before INSERT so callers that pass e.g. `description` or `state` to
-   * `create()` don't blow up with "no such column" — those fields belong in the
-   * project's document store, not the DB row.
-   */
-  protected async _create(
-    data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: CreateOptions
-  ): Promise<Project> {
-    return this.safeQuery(async () => {
-      const id = options?.id || this.generateId();
-      const now = this.getCurrentTimestamp();
-      const createdAt = options?.createdAt || now;
-      const updatedAt = options?.updatedAt || now;
-
-      const entityInput = {
-        ...data,
-        id,
-        createdAt,
-        updatedAt,
-      };
-
-      const validated = this.validate(entityInput) as Project;
-
-      const dbRow = { ...validated } as Record<string, unknown>;
-      for (const f of PROJECT_STORE_MANAGED_FIELDS) {
-        delete dbRow[f as string];
-      }
-
-      const collection = await this.getCollection();
-      await collection.insertOne(dbRow as Project);
-
-      logger.info('Entity created', { collection: 'projects', id });
-
-      return validated;
-    }, 'Error creating project entity');
-  }
-
-  /**
-   * Store-aware override of the base `_update`. The cutover dropped DB columns
-   * for store-resident fields — they live in the project's document store now.
-   * Read raw, merge, validate, then strip store-resident keys before writing as
-   * a defensive backstop so `$set` never references a dropped column.
-   */
-  protected async _update(id: string, data: Partial<Project>): Promise<Project | null> {
-    return this.safeQuery(async () => {
-      const existing = await this.findByIdRaw(id);
-      if (!existing) {
-        logger.warn('Entity not found for update', { collection: 'projects', id });
-        return null;
-      }
-
-      const now = this.getCurrentTimestamp();
-      const merged = {
-        ...existing,
-        ...data,
-        id: existing.id,
-        createdAt: existing.createdAt,
-        updatedAt: ('updatedAt' in data)
-          ? (data as Record<string, unknown>).updatedAt as string
-          : now,
-      } as Project;
-
-      const validated = this.validate(merged) as Project;
-
-      const dbRow = { ...validated } as Record<string, unknown>;
-      for (const f of PROJECT_STORE_MANAGED_FIELDS) {
-        delete dbRow[f as string];
-      }
-
-      const collection = await this.getCollection();
-      await collection.updateOne(
-        { id } as TypedQueryFilter<Project>,
-        { $set: dbRow } as UpdateSpec<Project>
-      );
-
-      return validated;
-    }, 'Error updating project entity', { id });
+  ): Omit<Project, 'id' | 'createdAt' | 'updatedAt'> {
+    return {
+      ...data,
+      allowAnyCharacter: data.allowAnyCharacter ?? false,
+      characterRoster: data.characterRoster ?? [],
+    };
   }
 
   // ==========================================================================
