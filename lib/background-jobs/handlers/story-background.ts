@@ -490,13 +490,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     resolveAesthetic({ kind: 'aurora', projectOfficialMountPointId }),
   ]);
   const depictionGuidelines = await resolveDepictionGuidelines(validCharacters);
-  logger.debug('[StoryBackground] Resolved aesthetics + depiction guidelines', {
-    context: 'background-jobs.story-background',
-    jobId: job.id,
-    hasSceneAesthetic: Boolean(sceneAesthetic),
-    hasCharacterAesthetic: Boolean(characterAesthetic),
-    depictionGuidelineCount: depictionGuidelines.length,
-  });
 
   // 10. Craft the background prompt using cheap LLM
 

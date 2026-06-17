@@ -71,14 +71,6 @@ export async function executeAskCarinaTool(
       return { success: false, answer: '', error: 'Invalid input: character and question are required' };
     }
 
-    moduleLogger.debug('ask_carina invoked', {
-      chatId: context.chatId,
-      userId: context.userId,
-      character: input.character,
-      whisper: input.whisper,
-      callingParticipantId: context.callingParticipantId ?? null,
-    });
-
     // Dynamic import to break the static import cycle:
     //   tool-executor → ask-carina-handler → carina.service
     //                 → tool-execution.service → tool-executor
@@ -94,12 +86,6 @@ export async function executeAskCarinaTool(
     });
 
     if (result.ok) {
-      moduleLogger.debug('ask_carina answered', {
-        chatId: context.chatId,
-        answererId: result.answererId,
-        answererName: result.answererName,
-        answerLength: result.answer.length,
-      });
       return { success: true, answer: result.answer };
     }
 

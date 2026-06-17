@@ -70,7 +70,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Derived (non-persisted) per-mount capability flags so the file-manager UI
       // can gate verbs from a single server-side source of truth.
       const capabilities = deriveMountCapabilities(mountPoint);
-      logger.debug('[Mount Points v1] Derived capabilities', { mountPointId: id, capabilities });
 
       return NextResponse.json({
         mountPoint: { ...mountPoint, embeddedChunkCount, capabilities },

@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Chore: remove leftover development debug logging
+
+Removed 91 happy-path debug log calls that were added while building the 4.7 features (Groups, the Post Office, Carina, the Brahma Console, the document-store overlay, the mount-index file pipeline, memory recall, wardrobe vault writes, and others). These only narrated successful normal operation — "resolved", "built", "wrote", "delivered", "listed", "assembled", and so on — and became log noise once the features worked. Kept all error/warn logging plus the debug logs that actually aid diagnosis: fallback/degradation branches, "why was this skipped/empty/unavailable" notes, state-change events, and the theme missing-asset diagnostics. No behavior change. 50 files, 487 deletions; `tsc` and the unit suite stay green.
+
 #### Fix: Markdown inside a roleplay template's delimiters no longer breaks the delimiter
 
 When a roleplay template wrapped text in a custom delimiter (e.g. `+narration+`) and that text also contained Markdown like `*emphasis*`, the Markdown split the span before the delimiter styling was applied, so the delimiters showed up literally and the narration styling was lost.

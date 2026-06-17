@@ -62,12 +62,6 @@ export const GET = createAuthenticatedHandler(
       for (const m of memberships) groupIds.add(m.groupId);
     }
 
-    logger.debug('[Groups v1] Aggregating group scenarios for New Chat', {
-      requestedCount: requestedIds.length,
-      accessibleCount: characterIds.length,
-      groupCount: groupIds.size,
-    });
-
     const groupScenarios: Array<{
       groupId: string;
       groupName: string;

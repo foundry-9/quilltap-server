@@ -192,7 +192,6 @@ export async function deliverLetter(params: DeliverLetterParams): Promise<{ path
   await ensureFolderPath(recipientVaultId, MAIL_FOLDER);
   await writeDatabaseDocument(recipientVaultId, path, composeLetterContent(frontmatter, body));
 
-  logger.debug('Letter delivered', { recipientVaultId, path, from: fromName, fromCharacterId });
   return { path };
 }
 
@@ -238,7 +237,6 @@ export async function listMailbox(vaultId: string): Promise<DeliveredLetterSumma
 export async function collectUnalertedMail(vaultId: string): Promise<DeliveredLetterSummary[]> {
   const all = await listMailbox(vaultId);
   const unalerted = all.filter((l) => l.alerted !== true);
-  logger.debug('Collected unalerted mail', { vaultId, total: all.length, unalerted: unalerted.length });
   return unalerted;
 }
 
@@ -251,7 +249,6 @@ export async function markAlerted(vaultId: string, path: string): Promise<void> 
     const { content } = await readDatabaseDocument(vaultId, path);
     const updated = updateFrontmatterInContent(content, { alerted: true });
     await writeDatabaseDocument(vaultId, path, updated);
-    logger.debug('Marked letter alerted', { vaultId, path });
   } catch (err) {
     if (err instanceof DatabaseStoreError && err.code === 'NOT_FOUND') {
       logger.warn('markAlerted: letter no longer present', { vaultId, path });

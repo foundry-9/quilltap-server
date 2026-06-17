@@ -300,12 +300,6 @@ export async function getRoleplayTemplate(
       // Persist the inherited default onto the chat so it sticks for future runs.
       await repos.chats.update(chat.id, { roleplayTemplateId: inheritedTemplateId })
       roleplayTemplateId = inheritedTemplateId
-      logger.debug('Inherited roleplay template for chat with no template set', {
-        chatId: chat.id,
-        projectId: chat.projectId ?? null,
-        roleplayTemplateId: inheritedTemplateId,
-        source: inheritedSource,
-      })
     }
   }
 

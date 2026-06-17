@@ -672,11 +672,6 @@ async function expandPromptWithDescriptions(
           .filter((c): c is NonNullable<typeof c> => Boolean(c));
         depictionGuidelines = await resolveDepictionGuidelines(depicted);
       }
-      logger.debug('[Image Generation] Resolved aesthetics + depiction guidelines', {
-        hasSceneAesthetic: Boolean(sceneAesthetic),
-        hasCharacterAesthetic: Boolean(characterAesthetic),
-        depictionGuidelineCount: depictionGuidelines.length,
-      });
     } catch (err) {
       logger.warn('[Image Generation] Failed to resolve aesthetics; proceeding without', {
         error: getErrorMessage(err),

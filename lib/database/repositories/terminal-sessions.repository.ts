@@ -145,9 +145,6 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
     return this.safeQuery(
       async () => {
         const cutoffMs = olderThan.getTime();
-        logger.debug('Reaping closed terminal sessions', {
-          olderThan: olderThan.toISOString(),
-        });
 
         // SQL NULL semantics already exclude running sessions from a `<`
         // comparison, but we re-check `exitedAt != null` in JS so a backend

@@ -187,11 +187,6 @@ export function createDocumentStoreOverlay<T extends StoreBackedRow, P>(
     const mountPointIds = [
       ...new Set(rows.map((r) => r.officialMountPointId).filter((id): id is string => !!id)),
     ];
-    logger.debug(`apply${Label}StoreOverlay: hydrating ${label}s from store`, {
-      [`${label}Count`]: rows.length,
-      mountPointCount: mountPointIds.length,
-    });
-
     const byPath = await loadStoreFiles(mountPointIds);
 
     const out: T[] = [];
@@ -260,7 +255,6 @@ export function createDocumentStoreOverlay<T extends StoreBackedRow, P>(
         JSON.stringify(entity.state ?? {}, null, 2),
       );
     });
-    logger.debug(`Wrote ${label} store managed fields`, { [idLogKey]: entity.id, mountPointId });
   }
 
   async function applyWriteOverlay(id: string, patch: Partial<T>): Promise<Partial<T>> {
@@ -301,17 +295,14 @@ export function createDocumentStoreOverlay<T extends StoreBackedRow, P>(
         if (touchesDescription) {
           const value = (p.description ?? '') as string;
           await writeDatabaseDocument(mountPointId, paths.description, value);
-          logger.debug(`Wrote ${label} description.md`, { [idLogKey]: id, bytes: value.length });
         }
         if (touchesInstructions) {
           const value = (p.instructions ?? '') as string;
           await writeDatabaseDocument(mountPointId, paths.instructions, value);
-          logger.debug(`Wrote ${label} instructions.md`, { [idLogKey]: id, bytes: value.length });
         }
         if (touchesState) {
           const value = JSON.stringify(p.state ?? {}, null, 2);
           await writeDatabaseDocument(mountPointId, paths.state, value);
-          logger.debug(`Wrote ${label} state.json`, { [idLogKey]: id, bytes: value.length });
         }
         if (touchedProps.length > 0) {
           // Read-modify-write so a partial patch doesn't blow away unspecified
@@ -324,11 +315,6 @@ export function createDocumentStoreOverlay<T extends StoreBackedRow, P>(
           }
           const value = JSON.stringify(config.parseProperties(next), null, 2);
           await writeDatabaseDocument(mountPointId, paths.properties, value);
-          logger.debug(`Wrote ${label} properties.json`, {
-            [idLogKey]: id,
-            touched: touchedProps,
-            bytes: value.length,
-          });
         }
       });
     }

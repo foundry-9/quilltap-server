@@ -119,7 +119,6 @@ export async function reconcileConversationRendering(): Promise<ConversationRend
 
   result.incompleteChats = rows.length;
   if (rows.length === 0) {
-    logger.debug('Conversation render reconciliation: every conversation is rendered and embedded');
     return result;
   }
 

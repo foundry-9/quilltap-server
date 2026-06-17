@@ -19,7 +19,6 @@
  * @module database/repositories/vault-overlay/wardrobe-writes
  */
 
-import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
@@ -141,14 +140,6 @@ async function createAtLocation(loc: WardrobeLocation, item: WardrobeItem): Prom
     assertNoCycles(item, await buildCyclePeers(loc, current));
     const stored: WardrobeItem = { ...item, characterId: loc.characterId };
     await projectVaultWardrobe(loc.mountPointId, loc.scopeId, [...current, stored]);
-    logger.debug('[WardrobeWrites] Created item in vault', {
-      itemId: stored.id,
-      characterId: loc.characterId,
-      scope: loc.scope,
-      mountPointId: loc.mountPointId,
-      title: stored.title,
-      context: 'wardrobe',
-    });
     return stored;
   });
 }
@@ -199,13 +190,6 @@ async function updateAtLocation(
     const next = current.slice();
     next[idx] = merged;
     await projectVaultWardrobe(loc.mountPointId, loc.scopeId, next);
-    logger.debug('[WardrobeWrites] Updated item in vault', {
-      itemId: id,
-      characterId: loc.characterId,
-      scope: loc.scope,
-      mountPointId: loc.mountPointId,
-      context: 'wardrobe',
-    });
     return merged;
   });
 }
@@ -235,13 +219,6 @@ async function deleteAtLocation(loc: WardrobeLocation, id: string): Promise<bool
     const next = current.filter((i) => i.id !== id);
     if (next.length === current.length) return false;
     await projectVaultWardrobe(loc.mountPointId, loc.scopeId, next);
-    logger.debug('[WardrobeWrites] Deleted item from vault', {
-      itemId: id,
-      characterId: loc.characterId,
-      scope: loc.scope,
-      mountPointId: loc.mountPointId,
-      context: 'wardrobe',
-    });
     return true;
   });
 }

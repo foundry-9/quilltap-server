@@ -47,14 +47,6 @@ export async function executeSendMailTool(
       return fail('Only a character may post a letter, and no character holds this pen.');
     }
 
-    moduleLogger.debug('send_mail invoked', {
-      chatId: context.chatId,
-      userId: context.userId,
-      senderCharacterId: context.characterId,
-      recipient: input.character,
-      isReply: Boolean(input.in_reply_to),
-    });
-
     const repos = getRepositories();
     const sender = await repos.characters.findByIdRaw(context.characterId);
     if (!sender) {
@@ -77,12 +69,6 @@ export async function executeSendMailTool(
     if (!result.ok) {
       return fail("That letter isn't in your own postbox, so there's nothing to reply to.");
     }
-
-    moduleLogger.debug('send_mail delivered', {
-      chatId: context.chatId,
-      recipientCharacterId: recipient.id,
-      path: result.path,
-    });
 
     // The confirmation describes the RECIPIENT's postbox, so address it with
     // the recipient store's qtap:// URI (its name, UUID fallback if ambiguous)

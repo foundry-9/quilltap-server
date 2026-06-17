@@ -257,8 +257,6 @@ export async function handlePost(
         const newCanBeCarina = !character.canBeCarina;
         const updatedCharacter = await repos.characters.setCanBeCarina(id, newCanBeCarina);
 
-        logger.debug('[Characters v1] Carina eligibility toggled', { characterId: id, canBeCarina: newCanBeCarina });
-
         return NextResponse.json({ character: updatedCharacter });
       } catch (error) {
         logger.error('[Characters v1] Error toggling Carina eligibility', { characterId: id }, error instanceof Error ? error : undefined);

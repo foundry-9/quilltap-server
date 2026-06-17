@@ -546,11 +546,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   ): Promise<{ completed: number; dead: number }> {
     return this.safeQuery(
       async () => {
-        logger.debug('Reaping finished background jobs by status', {
-          completedOlderThan: completedOlderThan.toISOString(),
-          deadOlderThan: deadOlderThan.toISOString(),
-        });
-
         const completed = await this.deleteMany({
           status: 'COMPLETED',
           completedAt: { $lt: completedOlderThan.toISOString() },

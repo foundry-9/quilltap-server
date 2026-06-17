@@ -6,7 +6,6 @@ import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript'
 import type { Pronouns } from '@/lib/schemas/character.types'
-import { logger } from '@/lib/logger'
 import { formatNameWithPronouns } from '../format-utils'
 import {
   TEMPORAL_VALUES,
@@ -138,14 +137,6 @@ function applyTargetingTags(
   const temporal = TEMPORAL_VALUES.has(rawTemporal) ? rawTemporal : 'present'
   const scope = SCOPE_VALUES.has(rawScope) ? rawScope : 'wide'
   const context = CONTEXT_VALUES.has(rawContext) ? rawContext : 'information'
-
-  if (temporal !== rawTemporal || scope !== rawScope || context !== rawContext) {
-    logger.debug('[Memory] Targeting tag defaulted', {
-      temporal: { raw: rawTemporal || null, used: temporal },
-      scope: { raw: rawScope || null, used: scope },
-      context: { raw: rawContext || null, used: context },
-    })
-  }
 
   return [...freeKeywords, temporal, `scope: ${scope}`, context]
 }

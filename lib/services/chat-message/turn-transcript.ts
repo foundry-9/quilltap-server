@@ -14,7 +14,6 @@
 
 import type { Character, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
-import { logger } from '@/lib/logger'
 
 export interface TurnCharacterSlice {
   characterId: string
@@ -134,10 +133,6 @@ export function buildTurnTranscript(
               contributingMessageIds: [m.id],
               isUserControlled: true,
             }
-            logger.debug(
-              `[Memory] Built user-controlled slice for ${character.name} ` +
-              `(1 contributing message)`,
-            )
           }
         }
       }

@@ -19,7 +19,6 @@
  * @module file-storage/project-store-bridge
  */
 
-import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { pickPrimaryProjectStore } from '@/lib/mount-index/project-store-naming';
 import { storeMountFile } from '@/lib/mount-index/store-file';
@@ -141,12 +140,6 @@ export async function writeProjectFileToMountStore(
   // Build the desired path (pre-transcode extension; storeMountFile will
   // normalise the extension and bump collisions via unique-suffix).
   const desiredPath = folderDir ? `${folderDir}/${safeName}` : safeName;
-
-  logger.debug('writeProjectFileToMountStore: delegating to storeMountFile pipeline', {
-    mountPointId: target.mountPointId,
-    desiredPath,
-    contentType: input.contentType,
-  });
 
   const result = await storeMountFile({
     mountPointId: target.mountPointId,

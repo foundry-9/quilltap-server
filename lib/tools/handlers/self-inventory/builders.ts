@@ -63,15 +63,6 @@ async function buildVaultCharacterSection(
     formatSelfUri(rel)
   );
 
-  logger.debug('self_inventory: vault.character built', {
-    context: 'self-inventory-handler',
-    characterId: character.id,
-    mountPointId: mountPoint.id,
-    totalRows: rows.length,
-    fileCount: files.length,
-    includeAutomaticImages,
-  });
-
   return {
     available: true,
     mountPointName: mountPoint.name,
@@ -172,14 +163,6 @@ async function buildVaultGroupsSection(
     }
   }
 
-  logger.debug('self_inventory: vault.groups built', {
-    context: 'self-inventory-handler',
-    characterId,
-    groupCount: groups.length,
-    storeCount: out.length,
-    includeAutomaticImages,
-  });
-
   return { available: true, groups: out };
 }
 
@@ -229,12 +212,6 @@ async function buildVaultAccessGroupsSection(
 
     out.push({ groupId: group.groupId, groupName: group.groupName, members: memberInfos });
   }
-
-  logger.debug('self_inventory: vaultAccess.groups built', {
-    context: 'self-inventory-handler',
-    characterId,
-    groupCount: out.length,
-  });
 
   return { available: true, groups: out };
 }
@@ -706,13 +683,6 @@ export async function buildCarinaSection(
     .map((c) => ({ name: c.name, isAnswerer: c.canBeCarina === true }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  logger.debug('self_inventory: carina section built', {
-    context: 'self-inventory-handler',
-    characterId,
-    selfEnabled,
-    reachableCount: reachable.length,
-  });
-
   return { available: true, selfEnabled, reachable };
 }
 
@@ -1078,13 +1048,6 @@ export async function buildContextSection(
       message: getErrorMessage(err),
     }));
   }
-
-  logger.debug('self_inventory: context section built', {
-    context: 'self-inventory-handler',
-    characterId: character.id,
-    chatId: context.chatId,
-    parts,
-  });
 
   return out;
 }

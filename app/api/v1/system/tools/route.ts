@@ -353,7 +353,6 @@ async function handleJobConcurrency(req: NextRequest, context: any) {
   const { user } = context;
   try {
     const concurrency = await getMaxConcurrentJobs();
-    logger.debug('[System Tools v1] Read job concurrency cap', { userId: user.id, concurrency });
     return NextResponse.json({ success: true, concurrency });
   } catch (error) {
     logger.error(

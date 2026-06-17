@@ -41,12 +41,6 @@ export async function handleCharacterHeadShouldersBackfill(job: BackgroundJob): 
   const payload = job.payload as unknown as CharacterHeadShouldersBackfillPayload;
   const repos = getRepositories();
 
-  logger.debug('[HeadShouldersBackfill] Starting', {
-    context: CONTEXT,
-    jobId: job.id,
-    characterId: payload.characterId,
-  });
-
   const character = await repos.characters.findById(payload.characterId);
   if (!character) {
     logger.info('[HeadShouldersBackfill] Character not found, skipping', {
@@ -59,21 +53,11 @@ export async function handleCharacterHeadShouldersBackfill(job: BackgroundJob): 
 
   const pd = character.physicalDescription;
   if (!pd) {
-    logger.debug('[HeadShouldersBackfill] No physical description, skipping', {
-      context: CONTEXT,
-      jobId: job.id,
-      characterId: payload.characterId,
-    });
     return;
   }
 
   // Idempotent: another path (or a prior attempt) may have filled it.
   if (pd.headAndShouldersPrompt && pd.headAndShouldersPrompt.trim()) {
-    logger.debug('[HeadShouldersBackfill] Already populated, skipping', {
-      context: CONTEXT,
-      jobId: job.id,
-      characterId: payload.characterId,
-    });
     return;
   }
 
@@ -89,11 +73,6 @@ export async function handleCharacterHeadShouldersBackfill(job: BackgroundJob): 
     ''
   ).trim();
   if (!seedText) {
-    logger.debug('[HeadShouldersBackfill] No source appearance text, skipping', {
-      context: CONTEXT,
-      jobId: job.id,
-      characterId: payload.characterId,
-    });
     return;
   }
 

@@ -344,15 +344,6 @@ export async function resolveTieredMountPool(
   }
 
   const pool: TieredMountPool = { ...deduped, participantMountPointIds };
-  logger.debug('Resolved tiered mount pool', {
-    hasCharacter: !!pool.characterMountPointId,
-    groupCount: pool.groupMountPointIds.length,
-    projectCount: pool.projectMountPointIds.length,
-    participantCount: pool.participantMountPointIds.length,
-    hasGlobal: !!pool.globalMountPointId,
-    requireOwnership,
-    includeParticipants,
-  });
   return pool;
 }
 

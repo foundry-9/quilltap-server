@@ -104,12 +104,6 @@ export async function writeLanternBackgroundToMountStore(
   const safeName = sanitizeLeafName(input.filename);
   const desiredPath = `${input.subfolder}/${safeName}`;
 
-  logger.debug('writeLanternBackgroundToMountStore: delegating to storeMountFile pipeline', {
-    mountPointId: target.mountPointId,
-    desiredPath,
-    contentType: input.contentType,
-  });
-
   const result = await storeMountFile({
     mountPointId: target.mountPointId,
     relativePath: desiredPath,

@@ -24,7 +24,6 @@
 
 import { readVaultTextFile } from '@/lib/database/repositories/character-properties-overlay'
 import { sanitizeFileName } from '@/lib/mount-index/character-vault'
-import { logger } from '@/lib/logger'
 
 export const NO_CANON_FALLBACK =
   '(no canonical identity recorded for this character yet)'
@@ -79,10 +78,6 @@ export function renderSelfCanonBlock(canon: SelfCanon): string {
       fieldsPresent.push(label)
     }
   }
-  logger.debug('[Memory] SELF canon assembled', {
-    characterId: canon.characterId,
-    fieldsPresent,
-  })
   const body = lines.length > 0 ? lines.join('\n') : NO_CANON_FALLBACK
   return `ALREADY ESTABLISHED about ${canon.characterName}\n${body}`
 }
@@ -104,10 +99,6 @@ export function renderOtherCanonBlock(canon: CanonSource): string {
   } else {
     body = NO_CANON_FALLBACK
   }
-  logger.debug('[Memory] OTHER canon assembled', {
-    characterId: canon.characterId,
-    source: canon.source,
-  })
   return `ALREADY ESTABLISHED about ${canon.characterName}\n${body}`
 }
 

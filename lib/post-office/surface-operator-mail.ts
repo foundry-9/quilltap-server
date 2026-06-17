@@ -84,13 +84,6 @@ export async function surfaceOperatorMailForChat(
         await markAlerted(vaultId, letter.path);
       }
 
-      logger.debug('[Suparna] Surfaced operator mail', {
-        chatId,
-        participantId: participant.id,
-        characterId: participant.characterId,
-        vaultId,
-        count: unalerted.length,
-      });
     } catch (error) {
       logger.warn('[Suparna] Operator mail surface failed; continuing', {
         chatId,

@@ -155,13 +155,6 @@ export async function reindexSingleFile(
         lastModified: lastModifiedIso,
       });
       linkId = existingLink.id;
-      logger.debug('Reindexed database-backed file in place (content row untouched)', {
-        mountPointId,
-        relativePath,
-        linkId,
-        chunkCount: chunks.length,
-        plainTextLength: plainText.length,
-      });
     } else {
       if (existingLink) {
         await repos.docMountChunks.deleteByLinkId(existingLink.id);

@@ -44,12 +44,6 @@ export async function executeListEmailTool(
       return fail('Only a character keeps a postbox, and no character holds this one.');
     }
 
-    moduleLogger.debug('list_email invoked', {
-      chatId: context.chatId,
-      userId: context.userId,
-      characterId: context.characterId,
-    });
-
     const repos = getRepositories();
     const me = await repos.characters.findByIdRaw(context.characterId);
     if (!me) {
@@ -60,7 +54,6 @@ export async function executeListEmailTool(
     const letters = await listMailbox(myVaultId);
 
     if (letters.length === 0) {
-      moduleLogger.debug('list_email: empty postbox', { chatId: context.chatId });
       return { success: true, listing: EMPTY_POSTBOX, count: 0 };
     }
 
@@ -72,7 +65,6 @@ export async function executeListEmailTool(
       (letter, i) => `${formatLetterHeading(letter, i + 1)}\n${formatLetterActions(letter)}`,
     );
 
-    moduleLogger.debug('list_email listed', { chatId: context.chatId, count: letters.length });
     return {
       success: true,
       listing: `${header}\n\n${blocks.join('\n\n')}`,

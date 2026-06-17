@@ -121,16 +121,6 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
   // "now" — mirrors handleMemoryExtraction's chronology handling.
   const sourceMessageTimestamp = carinaMessage.createdAt ?? chat.createdAt;
 
-  logger.debug('[CarinaMemoryExtraction] Extracting from reference answer', {
-    jobId: job.id,
-    chatId: payload.chatId,
-    carinaMessageId: carinaMessage.id,
-    answererId: answerer.id,
-    answererName: answerer.name,
-    hasQuestion: question.length > 0,
-    answerLength: answer.length,
-  });
-
   const result = await processTurnForMemory({
     transcript,
     participantCharacters,

@@ -14,9 +14,6 @@
  */
 
 import type { ConnectionProfile } from '@/lib/schemas/types'
-import { logger } from '@/lib/logger'
-
-const brahmaLogger = logger.child({ context: 'BrahmaConsole' })
 
 export interface BrahmaSystemPromptOptions {
   /** The connection profile (model) the console is currently talking to. */
@@ -47,11 +44,6 @@ When you use a tool, you actually call it — you do not merely describe calling
   }
 
   const prompt = parts.join('\n\n').trim()
-
-  brahmaLogger.debug('Built Brahma Console system prompt', {
-    promptLength: prompt.length,
-    hasToolInstructions: !!toolInstructions,
-  })
 
   return prompt
 }

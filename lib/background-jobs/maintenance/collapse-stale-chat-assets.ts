@@ -180,11 +180,6 @@ async function collapseOneChat(
   for (const file of candidates) {
     const skip = await skipReason(file, keepIds, keepShas, repos);
     if (skip) {
-      moduleLogger.debug('Skipping generated asset during collapse', {
-        chatId: chat.id,
-        fileId: file.id,
-        reason: skip,
-      });
       continue;
     }
 
@@ -192,12 +187,6 @@ async function collapseOneChat(
     if (removed) {
       deleted++;
       bytes += file.size ?? 0;
-      moduleLogger.debug('Collapsed superseded generated asset', {
-        chatId: chat.id,
-        fileId: file.id,
-        sha256: file.sha256,
-        sizeBytes: file.size ?? 0,
-      });
     }
   }
 
@@ -221,11 +210,6 @@ export async function collapseStaleChatAssets(
 ): Promise<StaleChatCollapseSummary> {
   const repos = getRepositories();
   const cutoffMs = retentionCutoff(STALE_CHAT_RETENTION_DAYS, now).getTime();
-
-  moduleLogger.debug('Starting stale-chat asset collapse', {
-    staleRetentionDays: STALE_CHAT_RETENTION_DAYS,
-    cutoff: new Date(cutoffMs).toISOString(),
-  });
 
   const allChats = await repos.chats.findAll();
   let staleChats = 0;

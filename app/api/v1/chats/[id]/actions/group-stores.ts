@@ -9,7 +9,6 @@
  * Projects section.
  */
 import { NextResponse } from 'next/server';
-import { logger } from '@/lib/logger';
 import { notFound, successResponse } from '@/lib/api/responses';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
@@ -60,11 +59,6 @@ export async function handleGetGroupStores(
       enabled: mp.enabled,
     });
   }
-
-  logger.debug('[Chats v1] Resolved group stores for chat', {
-    chatId,
-    storeCount: stores.length,
-  });
 
   return successResponse({ stores });
 }

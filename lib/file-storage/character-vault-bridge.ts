@@ -212,12 +212,6 @@ export async function writeCharacterAvatarToVault(
   const safeName = sanitizeLeafName(input.filename);
   const desiredPath = `${HISTORY_FOLDER}/${safeName}`;
 
-  logger.debug('writeCharacterAvatarToVault: delegating history write to storeMountFile pipeline', {
-    mountPointId: target.mountPointId,
-    desiredPath,
-    contentType: input.contentType,
-  });
-
   const result = await storeMountFile({
     mountPointId: target.mountPointId,
     relativePath: desiredPath,

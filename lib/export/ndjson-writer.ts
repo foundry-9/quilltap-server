@@ -425,8 +425,6 @@ async function* streamGroups(
     const group = await repos.groups.findById(id);
     if (!group) continue;
 
-    logger.debug('Exporting group', { groupId: id, groupName: group.name });
-
     const memberCharacterIds: string[] = [];
     const memberNames: string[] = [];
     try {

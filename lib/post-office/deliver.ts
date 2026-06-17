@@ -87,14 +87,6 @@ export async function composeAndDeliverLetter(
     inReplyTo,
   });
 
-  logger.debug('Letter composed and delivered', {
-    fromCharacterId: sender.id,
-    toCharacterId: recipient.id,
-    recipientVaultId,
-    path,
-    isReply: Boolean(inReplyTo),
-  });
-
   return { ok: true, path };
 }
 

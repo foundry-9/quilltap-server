@@ -54,7 +54,6 @@ export async function deleteFolder(input: {
   if (!isFilesystemMount(mp)) {
     // Throws DatabaseStoreError NOT_FOUND / NOT_EMPTY → mapped by fileOpStatus.
     await deleteDatabaseFolder(mp.id, rel);
-    logger.debug('deleteFolder: removed database folder', { mountPointId: mp.id, path: rel });
     return { mountPointId: mp.id, path: rel };
   }
 
@@ -72,7 +71,6 @@ export async function deleteFolder(input: {
     throw new FileOpError(`Folder is not empty: ${rel}. Only empty folders can be deleted.`, 'CONFLICT');
   }
   await fs.rmdir(abs);
-  logger.debug('deleteFolder: removed filesystem folder', { mountPointId: mp.id, path: rel });
   return { mountPointId: mp.id, path: rel };
 }
 
@@ -94,7 +92,6 @@ export async function moveFolder(input: {
 
   if (!isFilesystemMount(mp)) {
     await moveDatabaseFolder(mp.id, fromRel, toRel);
-    logger.debug('moveFolder: moved database folder', { mountPointId: mp.id, fromRel, toRel });
     return { mountPointId: mp.id, fromPath: fromRel, toPath: toRel };
   }
 
@@ -135,6 +132,5 @@ export async function moveFolder(input: {
     emitDocumentMoved({ mountPointId: mp.id, fromRelativePath: link.relativePath, toRelativePath: newPath });
   }
 
-  logger.debug('moveFolder: moved filesystem folder', { mountPointId: mp.id, fromRel, toRel });
   return { mountPointId: mp.id, fromPath: fromRel, toPath: toRel };
 }

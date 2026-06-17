@@ -990,7 +990,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         let turnContext: ContextTag | null = null
         let turnTemporal: TemporalTag | null = null
         if (options.cheapLLMSelection) {
-          const tDistillStart = performance.now()
           try {
             // existingMessages here is the trimmed role/content view (not the
             // ChatEvent shape), so map it directly.
@@ -1016,13 +1015,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
               distilledQuery = distill.result.keywords.join(' ')
               turnContext = distill.result.context ?? null
               turnTemporal = distill.result.temporal ?? null
-              logger.debug('[ContextManager] Dynamic-head query distilled via cheap LLM', {
-                characterId: character.id,
-                keywordCount: distill.result.keywords.length,
-                turnContext,
-                turnTemporal,
-                latencyMs: Math.round(performance.now() - tDistillStart),
-              })
             }
           } catch (error) {
             logger.debug('[ContextManager] Dynamic-head keyword distillation failed; using raw query', {
@@ -1809,12 +1801,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         for (const letter of unalerted) {
           await markAlerted(mailVaultId, letter.path)
         }
-        logger.debug('[Suparna] Announced and marked mail', {
-          chatId: chat.id,
-          characterId: character.id,
-          vaultId: mailVaultId,
-          count: unalerted.length,
-        })
       }
     } catch (mailError) {
       logger.warn('[Suparna] Mail check failed; turn continues', {

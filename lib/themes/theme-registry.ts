@@ -934,12 +934,6 @@ class ThemeRegistry extends AbstractMapRegistry<
 
     deduped.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
-    logger.debug('theme-registry.getImages', {
-      themeId,
-      count: deduped.length,
-      kinds: deduped.map((e) => e.kind),
-    });
-
     return deduped;
   }
 

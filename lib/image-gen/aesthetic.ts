@@ -173,12 +173,6 @@ export async function resolveAesthetic(
   if (args.projectOfficialMountPointId) {
     const hit = await readStoreFileInternal(args.projectOfficialMountPointId, filename, maxChars);
     if (hit) {
-      logger.debug('Aesthetic resolved from project official store', {
-        kind,
-        mountPointId: args.projectOfficialMountPointId,
-        length: hit.content.length,
-        capped: hit.capped,
-      });
       return hit.content;
     }
   }
@@ -188,12 +182,6 @@ export async function resolveAesthetic(
   if (generalMountId) {
     const hit = await readStoreFileInternal(generalMountId, filename, maxChars);
     if (hit) {
-      logger.debug('Aesthetic resolved from Quilltap General store', {
-        kind,
-        mountPointId: generalMountId,
-        length: hit.content.length,
-        capped: hit.capped,
-      });
       return hit.content;
     }
   }

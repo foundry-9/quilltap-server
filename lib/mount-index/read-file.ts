@@ -13,7 +13,6 @@
 
 import path from 'path';
 import { promises as fs } from 'fs';
-import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { isTextFile } from '@/lib/doc-edit/path-resolver';
@@ -22,7 +21,6 @@ import { FileOpError } from './file-op-error';
 import { normaliseRelativePath, detectNativeText, mimeForExtension } from './path-utils';
 import { resolveFsAbsolute } from './file-ops';
 
-const logger = createServiceLogger('MountIndex:ReadFile');
 
 export type FileEncoding = 'utf-8' | 'base64';
 
@@ -181,7 +179,6 @@ export async function readMountFile(
     (options.encoding === undefined && isTextLike(rel, raw.fileType));
 
   if (!wantsText) {
-    logger.debug('readMountFile: base64 read', { mountPointId: mp.id, relativePath: rel, sizeBytes: raw.sizeBytes });
     return {
       mountPointId: mp.id,
       relativePath: rel,
@@ -208,10 +205,6 @@ export async function readMountFile(
     content = window.join('\n');
     truncated = end < totalLines;
   }
-
-  logger.debug('readMountFile: utf-8 read', {
-    mountPointId: mp.id, relativePath: rel, totalLines, truncated,
-  });
 
   return {
     mountPointId: mp.id,

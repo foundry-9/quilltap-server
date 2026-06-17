@@ -357,12 +357,6 @@ export async function handleGet(
           characterFilesTotal: SINGLE_FILE_OVERLAY_PATHS.length,
         };
 
-        logger.debug('[Characters v1] Computed character stats', {
-          characterId: id,
-          ...stats,
-          groupCount: groups.length,
-        });
-
         return NextResponse.json({ stats, groups });
       } catch (error) {
         logger.error('[Characters v1] Error computing character stats', { characterId: id }, error instanceof Error ? error : undefined);

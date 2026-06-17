@@ -84,11 +84,6 @@ export class ProjectsRepository extends AbstractStoreBackedRepository<Project> {
       async () => {
         const all = await this.findAll();
         const matched = all.filter((p) => p.characterRoster.includes(characterId));
-        logger.debug('findByCharacterId: in-memory roster filter', {
-          characterId,
-          scanned: all.length,
-          matched: matched.length,
-        });
         return matched;
       },
       'Error finding projects by character ID',

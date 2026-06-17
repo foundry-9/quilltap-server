@@ -178,14 +178,6 @@ async function loadAskerIdentity(
     // identity text means themselves; otherwise leave it to the generic default.
     const userName = participant.controlledBy === 'user' ? asker.name : null;
     const card = buildPublicIdentityCard(asker, userName);
-    logger.debug('[Carina] Resolved asker identity for answerer attribution', {
-      context: 'carina',
-      chatId,
-      askerParticipantId,
-      askerCharacterId: asker.id,
-      askerName: asker.name,
-      controlledBy: participant.controlledBy ?? 'llm',
-    });
     return card;
   } catch (error) {
     logger.warn('[Carina] Failed to resolve asker identity; answering without attribution', {
@@ -230,12 +222,6 @@ async function loadCarinaMemoryRecall(
     const formatted = formatMemoriesForContext(results, CARINA_MEMORY_TOKEN_BUDGET, provider);
     if (!formatted.content || formatted.memoriesUsed === 0) return null;
 
-    logger.debug('[Carina] Recalled memories for reference answer', {
-      context: 'carina',
-      chatId,
-      characterId,
-      memoriesUsed: formatted.memoriesUsed,
-    });
     return buildCommonplaceLLMContext({ relevant: formatted.content });
   } catch (error) {
     logger.warn('[Carina] Memory recall failed; answering without it', {
@@ -276,11 +262,6 @@ async function askerOpensCarinaLine(
   // The human operator can always reach anyone, even when no persona participant
   // is present to resolve (`askerParticipantId` may be null in that case).
   if (operatorInitiated) {
-    logger.debug('[Carina] Line opened by human operator (regardless of persona flag)', {
-      context: 'carina',
-      chatId,
-      askerParticipantId,
-    });
     return true;
   }
   if (!askerParticipantId) return false;
@@ -290,23 +271,10 @@ async function askerOpensCarinaLine(
     if (!participant?.characterId) return false;
     // A user-controlled asker is the operator's persona — always opens the line.
     if (participant.controlledBy === 'user') {
-      logger.debug('[Carina] Line opened by user-controlled persona asker', {
-        context: 'carina',
-        chatId,
-        askerParticipantId,
-        askerCharacterId: participant.characterId,
-      });
       return true;
     }
     const asker = await repos.characters.findByIdRaw(participant.characterId);
     const enabled = asker?.canBeCarina === true;
-    logger.debug('[Carina] Resolved asker Carina flag for either-side reachability', {
-      context: 'carina',
-      chatId,
-      askerParticipantId,
-      askerCharacterId: participant.characterId,
-      askerEnabled: enabled,
-    });
     return enabled;
   } catch (error) {
     logger.warn('[Carina] Failed to resolve asker Carina flag; treating line as answerer-gated', {
@@ -368,14 +336,6 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
     );
     if (askerOpens) {
       answerer = nameMatches[0];
-      logger.debug('[Carina] Line opened by asker side to a non-answerer', {
-        context: 'carina',
-        chatId,
-        answererId: answerer.id,
-        answererName: answerer.name,
-        askerParticipantId,
-        operatorInitiated: opts.operatorInitiated === true,
-      });
     }
   }
 
@@ -644,12 +604,6 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
     if (opts.onPosted) {
       try {
         opts.onPosted(posted);
-        logger.debug('[Carina] Answer surfaced live to client', {
-          context: 'carina',
-          chatId,
-          messageId: posted.id,
-          answererId: answerer.id,
-        });
       } catch (emitError) {
         logger.warn('[Carina] Live answer emit failed; answer stands', {
           context: 'carina',

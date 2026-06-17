@@ -50,13 +50,6 @@ export async function handleSendMail(
     return notFound('Recipient character');
   }
 
-  logger.debug('[Chats v1] Compose Mail delivering', {
-    chatId,
-    fromCharacterId: sender.id,
-    toCharacterId: recipient.id,
-    isReply: Boolean(validated.inReplyToPath),
-  });
-
   const result = await composeAndDeliverLetter({
     sender,
     recipient,

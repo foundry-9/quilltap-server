@@ -1038,14 +1038,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // notes are layered beneath it; when none did, the notes ARE the scenario.
   const presetBody = resolvedScenario;
   resolvedScenario = combineScenarioText(presetBody, validatedData.scenario);
-  const extraText = validatedData.scenario?.trim();
-  if (extraText) {
-    logger.debug('[Chats v1] combined free-text scenario with resolved preset', {
-      presetPresent: Boolean(presetBody && presetBody.trim().length > 0),
-      extraLength: extraText.length,
-    });
-  }
-
   const chatContext = await buildChatContext(
     buildResult.firstCharacter.characterId,
     buildResult.firstCharacter.userCharacterId,
@@ -1110,15 +1102,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // Baked onto the chat at creation so the project's preference sticks.
   const defaultRoleplayTemplateId =
     projectDefaultRoleplayTemplateId || chatSettings?.defaultRoleplayTemplateId || null;
-  logger.debug('[Chats v1] Resolved default roleplay template for new chat', {
-    projectId: validatedData.projectId || null,
-    resolvedTemplateId: defaultRoleplayTemplateId,
-    source: projectDefaultRoleplayTemplateId
-      ? 'project'
-      : chatSettings?.defaultRoleplayTemplateId
-        ? 'user'
-        : 'none',
-  });
 
   const chat = await repos.chats.create({
     userId: user.id,

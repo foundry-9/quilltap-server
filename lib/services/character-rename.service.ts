@@ -170,12 +170,6 @@ export async function runCharacterRename(
 
   const { dryRun } = request;
 
-  logger.debug('[CharacterRename] Starting', {
-    characterId,
-    dryRun,
-    replacementCount: allReplacements.length,
-  });
-
   const replacements: ReplacementResult[] = [];
   const summary: RenameSummary = {
     characterFields: 0,
@@ -435,12 +429,6 @@ export async function runCharacterRename(
     }
 
     logger.info('[CharacterRename] Completed', {
-      characterId,
-      durationMs: Date.now() - startTime,
-      summary,
-    });
-  } else {
-    logger.debug('[CharacterRename] Dry run completed', {
       characterId,
       durationMs: Date.now() - startTime,
       summary,

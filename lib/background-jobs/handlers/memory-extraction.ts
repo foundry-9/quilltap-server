@@ -134,14 +134,6 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
       });
     }
   }
-  logger.debug('[MemoryExtraction] Orienting context resolved', {
-    jobId: job.id,
-    chatId: payload.chatId,
-    projectId: chat.projectId ?? null,
-    hasProjectDescription: projectDescription !== null,
-    hasChatContextSummary: chatContextSummary !== null,
-  });
-
   // Anchor derived memories to the historical chat timestamp rather than
   // letting createdAt default to "now". Without this, a regenerate sweep
   // re-extracts a chat from 2025-08 and the new memory rows look like

@@ -113,12 +113,6 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     kind: 'aurora',
     projectOfficialMountPointId: await getProjectOfficialMountPointId(chat.projectId),
   });
-  logger.debug('[CharacterAvatar] Resolved aurora aesthetic', {
-    context: 'background-jobs.character-avatar',
-    jobId: job.id,
-    characterId: payload.characterId,
-    hasAesthetic: Boolean(characterAesthetic),
-  });
   const { prompt, hasAppearance, leafCounts } = await buildCharacterAvatarPrompt(repos, character, {
     equippedSlots,
     projectMountPointIds: avatarProjectMountPointIds,

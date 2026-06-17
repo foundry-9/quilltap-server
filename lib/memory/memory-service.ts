@@ -785,25 +785,9 @@ export async function searchMemoriesSemantic(
           const blendedBefore = r.score * 0.4 + (r.effectiveWeight ?? 0) * 0.6
           const adj = combineRecallMultipliers(r.memory, recallContext)
           if (adj.exclude) {
-            logger.debug('[Memory] Recall excluded cross-project narrow memory', {
-              characterId,
-              memoryId: r.memory.id,
-              memoryProjectId: r.memory.projectId ?? null,
-              currentProjectId: recallContext.currentProjectId,
-            })
             continue
           }
           const blendedAfter = blendedBefore * adj.multiplier
-          if (adj.fired.length > 0) {
-            logger.debug('[Memory] Recall adjustment applied', {
-              characterId,
-              memoryId: r.memory.id,
-              fired: adj.fired,
-              multiplier: adj.multiplier,
-              blendedBefore,
-              blendedAfter,
-            })
-          }
           r.recallAdjustment = { multiplier: adj.multiplier, fired: adj.fired, blendedBefore, blendedAfter }
           adjusted.push(r)
         }
@@ -927,12 +911,6 @@ async function expandRelatedMemories(
       recallAdjustment: { multiplier: adj.multiplier, fired: [...adj.fired, 'related↗'], blendedBefore, blendedAfter },
     })
   }
-
-  logger.debug('[Memory] Recall related-memory expansion', {
-    characterId,
-    neighborsPulled: neighborIds.length,
-    neighborsSurvived: survivors.length,
-  })
 
   if (survivors.length === 0) {
     return ranked

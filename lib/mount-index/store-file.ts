@@ -179,11 +179,6 @@ export async function storeMountFile(input: StoreFileInput): Promise<StoreFileRe
     }
     const fsResult = await writeFsFileBytes(mp, rel, input.data);
     const link = await repos.docMountFileLinks.findByMountPointAndPath(mp.id, rel);
-    logger.debug('storeMountFile: wrote filesystem file', {
-      mountPointId: mp.id,
-      relativePath: rel,
-      sizeBytes: fsResult.sizeBytes,
-    });
     return {
       mountPointId: mp.id,
       relativePath: rel,
@@ -234,12 +229,6 @@ export async function storeMountFile(input: StoreFileInput): Promise<StoreFileRe
 
     const link = await repos.docMountFileLinks.findByMountPointAndPath(mp.id, rel);
     const sizeBytes = Buffer.byteLength(text, 'utf-8');
-    logger.debug('storeMountFile: wrote native-text document', {
-      mountPointId: mp.id,
-      relativePath: rel,
-      fileType: nativeText,
-      sizeBytes,
-    });
     return {
       mountPointId: mp.id,
       relativePath: rel,
@@ -379,15 +368,6 @@ export async function storeMountFile(input: StoreFileInput): Promise<StoreFileRe
   } else {
     repos.docMountPoints.refreshStats(mp.id).catch(() => { /* best-effort */ });
   }
-
-  logger.debug('storeMountFile: wrote blob', {
-    mountPointId: mp.id,
-    relativePath: finalPath,
-    storedMimeType: transcoded.storedMimeType,
-    sizeBytes: transcoded.sizeBytes,
-    fileType: mirrorFileType,
-    extracted: hasExtractedText,
-  });
 
   return {
     mountPointId: mp.id,

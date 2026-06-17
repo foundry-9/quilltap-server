@@ -9,7 +9,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { logger } from '@/lib/logger';
 import { badRequest, notFound, forbidden } from '@/lib/api/responses';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 import { listMailbox } from '@/lib/post-office/mailbox';
@@ -44,8 +43,6 @@ export async function handleGetMailbox(
 
   const { mountPointId } = await ensureCharacterVault(character);
   const letters = await listMailbox(mountPointId);
-
-  logger.debug('[Chats v1] Mailbox listed', { chatId, characterId, count: letters.length });
 
   return NextResponse.json({
     letters: letters.map((l) => ({ path: l.path, from: l.from, sentAt: l.sentAt })),
