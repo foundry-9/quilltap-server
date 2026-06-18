@@ -124,7 +124,9 @@ export function BrahmaConsoleMessageList({
 
   const renderItems: RenderItem[] = []
   for (const m of messages) {
-    const role = m.role.toUpperCase()
+    // `getMessages` can return non-message events with no `role` (and old chats
+    // predate some fields) — coerce defensively so a missing role just skips.
+    const role = (m.role ?? '').toUpperCase()
     if (role === 'USER') {
       renderItems.push({ kind: 'bubble', msg: m, isUser: true })
     } else if (role === 'ASSISTANT') {
@@ -132,7 +134,7 @@ export function BrahmaConsoleMessageList({
         renderItems.push({ kind: 'bubble', msg: m, isUser: false })
       }
     } else if (role === 'TOOL') {
-      const sqlData = parseBrahmaSqlToolMessage(m.content)
+      const sqlData = parseBrahmaSqlToolMessage(m.content ?? '')
       if (sqlData) renderItems.push({ kind: 'tool', id: m.id, data: sqlData })
     }
   }

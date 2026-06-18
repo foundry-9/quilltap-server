@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Fix: Brahma Console crash opening older chats
+
+Opening an older Brahma Console conversation could crash with "Cannot read properties of undefined (reading 'toUpperCase')". The new transcript-render loop called `m.role.toUpperCase()` directly, but `getMessages` can return non-message events (and older chats predate some fields) whose `role` is undefined. The loop now coerces a missing `role`/`content` defensively so such events are simply skipped, as the prior filter did.
+
 #### Feature: Brahma Console shows run_sql queries and results inline
 
 When the Brahma Console runs a `run_sql` query, the transcript now surfaces it as a tool card with two collapsible panels: a **Query** panel showing the SQL as a syntax-highlighted, copyable code block (rendered through the shared `MessageContent`/Prism path), and a **Result** panel showing the returned rows as a scrollable table (column headers, NULLs dimmed, a row count, and a "truncated" note when the row cap was hit). Failed/rejected queries show the error text instead. Only `run_sql` tool calls are surfaced; the console's other tools (search, doc_*, web) remain silent intermediate turns as before.
