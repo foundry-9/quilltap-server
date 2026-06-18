@@ -44,6 +44,7 @@ import {
   type StreamOptions,
 } from './streaming.service'
 import { detectToolCallsInResponse, processToolCalls } from './tool-execution.service'
+import { buildAssistantToolCallMessage, buildToolResultMessages } from './tool-call-threading'
 import { buildForceFinalMessage, generateIterationSummary, type ResolvedAgentMode } from './agent-mode-resolver.service'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
 
@@ -308,44 +309,19 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
     toolMessages.push(...results.toolMessages)
     generatedImagePaths.push(...results.generatedImagePaths)
 
-    // Reconstruct the assistant turn so providers can re-thread their native
-    // tool-use blocks. When any tool call carries a callId, attach the full
-    // toolCalls array on the assistant message; otherwise fall through to
-    // text-only tool result framing below.
-    const hasCallIds = toolCalls.some(tc => tc.callId)
-    const assistantToolCalls = hasCallIds
-      ? toolCalls.filter(tc => tc.callId).map(tc => ({
-          id: tc.callId!,
-          type: 'function' as const,
-          function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
-        }))
-      : undefined
-
+    // Reconstruct the assistant turn + tool results through the shared threading
+    // helpers so providers can re-pair their native tool-use blocks. When any
+    // call carries a callId the assistant turn gets the full toolCalls array and
+    // each result is a native `tool` message; otherwise results fall back to
+    // `[Tool Result: …]` user text. (Same primitive the Brahma Console uses.)
     currentMessages = [
       ...currentMessages,
-      {
-        role: 'assistant' as const,
-        content: currentResponse && currentResponse.trim().length > 0 ? currentResponse : '',
-        thoughtSignature: streaming.thoughtSignature,
+      buildAssistantToolCallMessage(toolCalls, currentResponse, {
         reasoningContent: streaming.reasoningContent,
-        name: undefined,
-        toolCalls: assistantToolCalls,
-      },
+        thoughtSignature: streaming.thoughtSignature,
+      }),
+      ...buildToolResultMessages(results.toolMessages),
     ]
-
-    for (const toolMsg of results.toolMessages) {
-      if (toolMsg.callId) {
-        currentMessages = [
-          ...currentMessages,
-          { role: 'tool' as const, content: toolMsg.content, toolCallId: toolMsg.callId, name: toolMsg.toolName, thoughtSignature: undefined, reasoningContent: undefined },
-        ]
-      } else {
-        currentMessages = [
-          ...currentMessages,
-          { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, reasoningContent: undefined, name: undefined },
-        ]
-      }
-    }
 
     // "Running X..." statuses are emitted inside processToolCalls; reset the
     // user-visible stage before the follow-up stream kicks off.

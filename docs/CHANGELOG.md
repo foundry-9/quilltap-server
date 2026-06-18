@@ -4,6 +4,18 @@
 
 ### 4.7-dev
 
+#### Fix: Brahma Console no longer repeats the same query and burns its turn cap
+
+The Console's agent loop could repeat a successful query over and over — getting the same result each time — until it exhausted its 25-turn cap and ended without answering. Root cause: the loop rebuilt the conversation for each turn without the model's tool-call context. Assistant turns that issued native tool calls were stored and replayed with empty content and no `tool_calls`, and tool results were replayed as `tool`-role messages bound to no call (and, on a later request, as raw stored JSON). With no record of what it had already done, a reasoning model re-derived the opening step every turn and re-ran the same query.
+
+The fix threads tool turns the way the Salon already does, via a new shared helper (`lib/services/chat-message/tool-call-threading.ts`) used by both loops so they can't drift:
+
+- Within a turn, the assistant message now carries its native `tool_calls` and each result is paired back by `toolCallId` (or framed as `[Tool Result: …]` text for providers without call IDs). The model can see it already issued a query.
+- On a later request, the Console reloads history through the Salon's `buildConversationMessages`, so a prior turn's tool activity replays as readable `[Tool Result: …]` text (with the existing 3-turn elision) instead of orphaned `tool`-role JSON. Empty tool-turn assistant messages (kept for the tool-card UI) are dropped from the model context.
+- The stuck-loop guard was tightened: it now folds whitespace/case before comparing call signatures, and additionally forces a finalize when consecutive tool iterations surface no result the model hasn't already seen — catching surface-different queries that return identical rows.
+
+The Salon's `runNativeToolLoop` was refactored onto the same helper (behavior unchanged; covered by existing tests). No schema, migration, API, or export change.
+
 #### Docs: correct the autonomous-room daily-token-budget default
 
 The daily token budget for autonomous rooms ships off — `dailyTokenBudget` defaults to `null` (no cap until the user sets one). The help doc and the `AutonomousRoomSettingsSchema` JSDoc both described it as a "pilot: 1,000,000" default, which was never an enforced value. Updated `help/autonomous-rooms.md` and the schema comment in `lib/schemas/settings.types.ts` to state the real behavior. No code or schema change.

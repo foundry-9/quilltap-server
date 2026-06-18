@@ -41,6 +41,12 @@ import {
   detectToolCallsInResponse,
 } from '@/lib/services/chat-message/tool-execution.service'
 import {
+  buildAssistantToolCallMessage,
+  buildToolResultMessages,
+  type ThreadedMessage,
+} from '@/lib/services/chat-message/tool-call-threading'
+import { buildConversationMessages } from '@/lib/services/chat-message/context-builder.service'
+import {
   buildNativeToolSystemInstructions,
   checkShouldUseTextBlockTools,
   buildTextBlockSystemInstructions,
@@ -60,6 +66,30 @@ import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { buildBrahmaSystemPrompt } from '@/lib/brahma-console/system-prompt-builder'
 
 const logger = createServiceLogger('BrahmaConsoleOrchestrator')
+
+/**
+ * Normalize a batch of tool calls into a stable signature for loop detection.
+ * String argument values (notably SQL) are whitespace-collapsed and lowercased
+ * so cosmetic reformatting — extra spaces, a trailing semicolon's surrounding
+ * whitespace, case changes — does not read as a "different" call. Semantic
+ * variation still differs (that is what the stale-result signal catches).
+ */
+function normalizeToolCallSignature(
+  toolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
+): string {
+  const normalizeValue = (value: unknown): unknown =>
+    typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().toLowerCase() : value
+  return JSON.stringify(
+    toolCalls.map(tc => ({
+      name: tc.name,
+      arguments: Object.fromEntries(
+        Object.entries(tc.arguments)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, value]) => [key, normalizeValue(value)]),
+      ),
+    })),
+  )
+}
 
 /**
  * Resolve the connection profile a Brahma chat should talk to: the one pinned
@@ -242,31 +272,25 @@ async function processBrahmaResponse(
     includeSqlAccess: true,
   })
 
-  // Load conversation history (full transcript, no compression)
+  // Load conversation history (full transcript, no compression) and thread it
+  // through the SAME builder the Salon uses, so a prior turn's tool activity is
+  // replayed in a form the model can actually follow: each stored TOOL message
+  // becomes a `[Tool Result: …]` user message (with the 3-turn elision), rather
+  // than a bare `tool`-role message bound to no call. Without this the model
+  // can't tell it already ran a query and re-runs it — the console's loop bug.
   const messages = await repos.chats.getMessages(chatId)
+  const { conversationMessages: history } = buildConversationMessages(messages, false)
 
-  const conversationMessages: Array<{
-    role: string
-    content: string
-    name?: string
-    toolCallId?: string
-    toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
-  }> = [
+  const conversationMessages: ThreadedMessage[] = [
     { role: 'system', content: systemPrompt },
+    // Drop the empty assistant turns the console persists for each tool
+    // iteration (kept for the tool-card UI) — they carry no text and the tool
+    // result already follows as user-readable context. Lowercase the builder's
+    // USER/ASSISTANT roles to the provider wire form.
+    ...history
+      .filter((m) => !(m.role === 'ASSISTANT' && !m.content?.trim()))
+      .map((m) => ({ role: m.role.toLowerCase(), content: m.content })),
   ]
-
-  for (const msg of messages) {
-    if (msg.type === 'message') {
-      const msgEvent = msg as MessageEvent
-      if (msgEvent.role === 'USER') {
-        conversationMessages.push({ role: 'user', content: msgEvent.content })
-      } else if (msgEvent.role === 'ASSISTANT') {
-        conversationMessages.push({ role: 'assistant', content: msgEvent.content })
-      } else if (msgEvent.role === 'TOOL') {
-        conversationMessages.push({ role: 'tool', content: msgEvent.content })
-      }
-    }
-  }
 
   // Effective tools: native tools only when supported and not in text-block mode
   const effectiveTools = (!useTextBlockTools && modelSupportsNativeTools) ? tools : []
@@ -277,6 +301,18 @@ async function processBrahmaResponse(
   const totalUsage = { promptTokens: 0, completionTokens: 0 }
   const toolCallHistory: string[] = []
   const MAX_DUPLICATE_TOOL_CALLS = 2
+  // Stuck-loop detection. Two complementary signals, because models evade an
+  // exact-arguments check by perturbing the query (whitespace, `COLLATE NOCASE`,
+  // an extra `OR …`) while getting the identical result every time:
+  //   1. `toolCallHistory` — normalized call signatures (whitespace/case folded).
+  //   2. `staleIterations` — consecutive tool iterations that surfaced NO result
+  //      the model hadn't already seen. This catches semantically-different
+  //      queries that keep returning the same rows.
+  const seenResultFingerprints = new Set<string>()
+  let staleIterations = 0
+  // Most recent tool result text, surfaced verbatim in the loop-guard nudge so
+  // the model is reminded of the data it already has.
+  let lastToolResultText = ''
 
   // Reasoning ("thinking") accumulators — DISPLAY ONLY. Each agent turn is its
   // own streamMessage call, so the provider's cumulative `reasoningContent`
@@ -297,6 +333,10 @@ async function processBrahmaResponse(
     let turnReasoning = ''
     let streamUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null = null
     let rawResponse: unknown = null
+    // Captured so the assistant tool-call turn can carry it on the follow-up
+    // stream — required by providers (e.g. Anthropic) that pair the thinking
+    // block with the tool-use turn within a request.
+    let turnThoughtSignature: string | undefined
 
     for await (const chunk of streamMessage({
       messages: conversationMessages,
@@ -326,6 +366,7 @@ async function processBrahmaResponse(
       }
       if (chunk.usage) streamUsage = chunk.usage
       if (chunk.rawResponse) rawResponse = chunk.rawResponse
+      if (chunk.thoughtSignature) turnThoughtSignature = chunk.thoughtSignature
     }
 
     // Fold this turn's reasoning into the run-level chain so the next turn's
@@ -381,31 +422,39 @@ async function processBrahmaResponse(
     }
 
     if (hasToolCalls && !isSubmitFinal && toolCallsToProcess && agentTurnCount < maxAgentTurns) {
-      // Stuck-loop guard: detect repeated identical tool calls
-      const callSignature = JSON.stringify(toolCallsToProcess.map(tc => ({ name: tc.name, arguments: tc.arguments })))
+      // Stuck-loop guard. Fire when EITHER the model repeats a normalized call
+      // signature, OR it keeps running tools that surface nothing new (queries
+      // that differ on the surface but return the same rows).
+      const callSignature = normalizeToolCallSignature(toolCallsToProcess)
       const duplicateCount = toolCallHistory.filter(sig => sig === callSignature).length
       toolCallHistory.push(callSignature)
 
-      if (duplicateCount >= MAX_DUPLICATE_TOOL_CALLS) {
+      const isStuck =
+        duplicateCount >= MAX_DUPLICATE_TOOL_CALLS || staleIterations >= MAX_DUPLICATE_TOOL_CALLS
+      if (isStuck) {
         logger.warn('Brahma Console agent stuck in tool call loop, forcing final response', {
           chatId,
           turn: agentTurnCount,
           duplicateCount: duplicateCount + 1,
+          staleIterations,
           toolNames: toolCallsToProcess.map(tc => tc.name),
         })
-        const lastToolResult = [...conversationMessages].reverse().find(m => m.role === 'tool')
-        const toolDataReminder = lastToolResult
-          ? `\n\nHere is the data you already received from your previous tool call:\n${lastToolResult.content}`
+        const toolDataReminder = lastToolResultText
+          ? `\n\nHere is the data you already received from your previous tool call:\n${lastToolResultText}`
           : ''
+        // Content-only assistant turn (no toolCalls) — we are NOT going to
+        // execute these calls, so attaching them would leave an unanswered
+        // tool-use block that strict providers reject.
         conversationMessages.push({ role: 'assistant', content: currentResponse })
         conversationMessages.push({
           role: 'user',
-          content: `You have already called the same tool with the same arguments ${duplicateCount + 1} times and received the same result each time. You already have all the data you need — do NOT call any more tools. Please call the submit_final_response tool NOW with your answer based on the data you already received.${toolDataReminder}`,
+          content: `You have already gathered this data (a repeated call or repeated identical results). You already have what you need — do NOT call any more tools. Please call the submit_final_response tool NOW with your answer based on the data you already received.${toolDataReminder}`,
         })
         continue
       }
 
-      // Save the assistant message carrying the tool calls
+      // Save the assistant message carrying the tool calls (content-only; the
+      // console renders the tool cards from the TOOL messages saved below).
       const assistantMessage: MessageEvent = {
         type: 'message',
         id: crypto.randomUUID(),
@@ -420,7 +469,18 @@ async function processBrahmaResponse(
         createdAt: new Date().toISOString(),
       }
       await repos.chats.addMessage(chatId, assistantMessage)
-      conversationMessages.push({ role: 'assistant', content: currentResponse })
+
+      // Thread the assistant tool-call turn into the live slate WITH its native
+      // tool_calls (paired by callId on the next stream), so the model can see
+      // it already issued these calls — the fix for the repeat-the-same-query
+      // loop. Empty `currentResponse` (native tool calls carry no prose) is
+      // expected and handled by the helper.
+      conversationMessages.push(
+        buildAssistantToolCallMessage(toolCallsToProcess, currentResponse, {
+          reasoningContent: turnReasoning || undefined,
+          thoughtSignature: turnThoughtSignature,
+        }),
+      )
 
       // Execute the tools — operator surface (character-less, all-stores).
       const toolContext: ToolExecutionContext = {
@@ -446,12 +506,22 @@ async function processBrahmaResponse(
           toolResult.toolMessages,
           toolResult.generatedImagePaths,
         )
+        // Pair each result back to its call (native `tool` role + toolCallId, or
+        // `[Tool Result: …]` user text when the provider has no call IDs).
+        conversationMessages.push(...buildToolResultMessages(toolResult.toolMessages))
+
+        // Update stuck-loop tracking: an iteration is "stale" when every result
+        // it produced was one we'd already seen.
+        let producedNewInfo = false
         for (const tm of toolResult.toolMessages) {
-          conversationMessages.push({
-            role: 'tool',
-            content: JSON.stringify({ tool: tm.toolName, success: tm.success, result: tm.content }),
-          })
+          lastToolResultText = tm.content
+          const fingerprint = `${tm.toolName}:${tm.success}:${tm.content}`
+          if (!seenResultFingerprints.has(fingerprint)) {
+            seenResultFingerprints.add(fingerprint)
+            producedNewInfo = true
+          }
         }
+        staleIterations = producedNewInfo ? 0 : staleIterations + 1
       }
 
       continue
