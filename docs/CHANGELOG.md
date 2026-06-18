@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Feature: Brahma Console shows model reasoning ("thinking") live
+
+The Brahma Console now displays a reasoning model's chain-of-thought in a collapsible "Thinking" panel, the same way the Salon does. The orchestrator forwards the provider's cumulative reasoning over the SSE stream (`encodeReasoningChunk`) as it arrives and persists it as `reasoningContent` on the assistant message, so the panel appears live (auto-expanded while streaming, collapsed once done) and survives a reload. Reasoning is accumulated across the agent loop's turns into one continuous chain. It is display-only: never fed back to a model, never stored as a memory. Non-reasoning models show no panel.
+
+The shared `ThinkingBlock` component moved from `app/salon/[id]/components/` to `components/chat/` so both the Salon and the Console use one implementation. Plain-prose answers already streamed; the agent-mode `submit_final_response` summary still arrives as one block (matching the Salon). No schema, migration, or export change — `chat_messages.reasoningContent` already existed.
+
+#### Feature: Brahma Console agentic tool-iteration limit raised to 25
+
+The Brahma Console's agent loop now allows up to 25 tool iterations per turn (was 10). The help chat is unchanged at 10.
+
 #### Feature: Brahma Console read-only SQL access (`run_sql`)
 
 The Brahma Console gains a single new read-only SQL tool, `run_sql`, plus a system-prompt section teaching the model how and when to use it. The model can query any of the three Quilltap databases — main (`quilltap.db`), llm-logs (`quilltap-llm-logs.db`), and mount-index (`quilltap-mount-index.db`) — and read rows back as JSON, so it can answer questions about characters, memories, documents, conversations, model usage, and costs by translating them into queries.

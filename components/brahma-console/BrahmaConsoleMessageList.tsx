@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import MessageContent from '@/components/chat/MessageContent'
+import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 
 interface BrahmaMessage {
   id: string
@@ -20,11 +21,16 @@ interface BrahmaMessage {
   createdAt: string
   provider?: string | null
   modelName?: string | null
+  /** Reasoning ("thinking") for the turn — DISPLAY ONLY. Rendered as a single
+   *  leading, collapsible block above the answer. */
+  reasoningContent?: string | null
 }
 
 interface BrahmaConsoleMessageListProps {
   messages: BrahmaMessage[]
   streamingContent?: string
+  /** Live cumulative reasoning ("thinking") for the in-flight turn. */
+  streamingReasoning?: string
   isStreaming?: boolean
   isExecutingTools?: boolean
 }
@@ -76,6 +82,7 @@ function CopyMarkdownButton({ content }: { content: string }) {
 export function BrahmaConsoleMessageList({
   messages,
   streamingContent,
+  streamingReasoning,
   isStreaming,
   isExecutingTools,
 }: BrahmaConsoleMessageListProps) {
@@ -83,7 +90,7 @@ export function BrahmaConsoleMessageList({
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, streamingContent])
+  }, [messages.length, streamingContent, streamingReasoning])
 
   // Visible messages: user + assistant with non-empty content (hide
   // intermediate tool-using agent turns).
@@ -125,6 +132,9 @@ export function BrahmaConsoleMessageList({
               className={`flex flex-col gap-0.5 min-w-0 ${isUser ? 'items-end' : 'items-start'}`}
               style={{ maxWidth: '80%' }}
             >
+              {!isUser && msg.reasoningContent && (
+                <ThinkingBlock content={msg.reasoningContent} collapsedByDefault />
+              )}
               <div
                 className={isUser ? 'qt-help-msg-user' : 'qt-help-msg-assistant'}
                 style={{ maxWidth: '100%' }}
@@ -137,28 +147,28 @@ export function BrahmaConsoleMessageList({
         )
       })}
 
-      {/* Streaming message */}
-      {isStreaming && streamingContent && (
+      {/* Streaming message — live reasoning above the prose as it arrives, with
+          a status indicator while the engine works or before anything lands. */}
+      {isStreaming && (
         <div className="flex items-start flex-row">
           <ConsoleAvatar />
           <svg className="qt-help-tail qt-help-tail-assistant" viewBox="0 0 10 16" fill="currentColor">
             <path d="M10 0 L0 8 L10 16 Z" />
           </svg>
-          <div className="qt-help-msg-assistant">
-            <MessageContent content={streamingContent} />
-          </div>
-        </div>
-      )}
-
-      {/* Streaming indicator (no content yet, or executing tools) */}
-      {isStreaming && !streamingContent && (
-        <div className="flex items-start flex-row">
-          <ConsoleAvatar />
-          <svg className="qt-help-tail qt-help-tail-assistant" viewBox="0 0 10 16" fill="currentColor">
-            <path d="M10 0 L0 8 L10 16 Z" />
-          </svg>
-          <div className="qt-help-msg-assistant italic">
-            {isExecutingTools ? 'Consulting the stacks…' : 'Thinking…'}
+          <div className="flex flex-col gap-0.5 min-w-0 items-start" style={{ maxWidth: '80%' }}>
+            {streamingReasoning?.trim() && (
+              <ThinkingBlock content={streamingReasoning} streaming />
+            )}
+            {streamingContent && (
+              <div className="qt-help-msg-assistant" style={{ maxWidth: '100%' }}>
+                <MessageContent content={streamingContent} />
+              </div>
+            )}
+            {isExecutingTools ? (
+              <div className="qt-help-msg-assistant italic">Consulting the stacks…</div>
+            ) : (!streamingContent && !streamingReasoning?.trim()) ? (
+              <div className="qt-help-msg-assistant italic">Thinking…</div>
+            ) : null}
           </div>
         </div>
       )}

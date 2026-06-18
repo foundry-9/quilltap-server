@@ -31,6 +31,7 @@ jest.mock('@/lib/services/chat-message/streaming.service', () => ({
   buildTools: jest.fn(),
   streamMessage: jest.fn(),
   encodeContentChunk: jest.fn(() => new Uint8Array()),
+  encodeReasoningChunk: jest.fn(() => new Uint8Array()),
   encodeDoneEvent: jest.fn(() => new Uint8Array()),
   encodeErrorEvent: jest.fn(() => new Uint8Array()),
   safeEnqueue: (controller: ReadableStreamDefaultController<Uint8Array>, data: Uint8Array) => {
@@ -79,7 +80,7 @@ jest.mock('@/lib/tools', () => ({
 }))
 
 // ── Imports (after mocks) ───────────────────────────────────────────────────
-import { buildTools, streamMessage } from '@/lib/services/chat-message/streaming.service'
+import { buildTools, streamMessage, encodeReasoningChunk } from '@/lib/services/chat-message/streaming.service'
 import { detectToolCallsInResponse } from '@/lib/services/chat-message/tool-execution.service'
 import {
   triggerContextSummaryCheck,
@@ -162,6 +163,32 @@ describe('handleBrahmaConsoleMessage — memory omission', () => {
     const saved = repos.chats.addMessage.mock.calls.map((c: unknown[]) => c[1] as { role: string; content: string })
     expect(saved.some(m => m.role === 'USER' && m.content === 'hi there')).toBe(true)
     expect(saved.some(m => m.role === 'ASSISTANT' && m.content === 'Hello from the console.')).toBe(true)
+  })
+
+  it('forwards reasoning ("thinking") live and persists it on the assistant message', async () => {
+    // Provider emits cumulative reasoning across chunks, then prose.
+    jest.mocked(streamMessage).mockImplementation(async function* () {
+      yield { content: '', reasoningContent: 'Let me think.' }
+      yield { content: '', reasoningContent: 'Let me think. Then act.' }
+      yield { content: 'The answer.' }
+      yield { done: true, rawResponse: { finishReason: 'stop' } }
+    } as never)
+
+    const repos = makeMockRepos()
+    const stream = await handleBrahmaConsoleMessage(repos as never, 'chat-1', 'user-1', { content: 'ponder this' })
+    await drain(stream)
+
+    // Live-forwarded: the cumulative chain is emitted as it grows.
+    expect(encodeReasoningChunk).toHaveBeenCalledTimes(2)
+    expect(jest.mocked(encodeReasoningChunk).mock.calls.map(c => c[1])).toEqual([
+      'Let me think.',
+      'Let me think. Then act.',
+    ])
+
+    // Persisted: the saved assistant message carries the full reasoning.
+    const saved = repos.chats.addMessage.mock.calls.map((c: unknown[]) => c[1] as { role: string; content: string; reasoningContent?: string | null })
+    const assistant = saved.find(m => m.role === 'ASSISTANT' && m.content === 'The answer.')
+    expect(assistant?.reasoningContent).toBe('Let me think. Then act.')
   })
 
   it('rejects a non-brahma chat', async () => {

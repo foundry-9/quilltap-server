@@ -11,7 +11,7 @@ import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-
 import { AnnouncementChip, AnnouncementBarContents } from './AnnouncementChip'
 import { CourierBubble } from './CourierBubble'
 import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse-reasoning'
-import { ThinkingBlock } from './ThinkingBlock'
+import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
 import { MessageActionBar } from './message-row/MessageActionBar'
 import { MessageDesktopActions } from './message-row/MessageDesktopActions'

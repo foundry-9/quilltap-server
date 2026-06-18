@@ -4,9 +4,9 @@
  * useBrahmaConsoleStreaming
  *
  * Server-Sent Events streaming for Brahma Console messages. A single,
- * character-less stream: content chunks, a tool-execution status indicator, a
- * `done` event, and errors. No turn/chain/navigation events (those belong to
- * the multi-character Help Chat loop).
+ * character-less stream: content chunks, live reasoning ("thinking") chunks, a
+ * tool-execution status indicator, a `done` event, and errors. No turn/chain/
+ * navigation events (those belong to the multi-character Help Chat loop).
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react'
@@ -15,6 +15,10 @@ interface StreamingState {
   isStreaming: boolean
   isExecutingTools: boolean
   streamingContent: string
+  /** Cumulative reasoning ("thinking") so far this turn — DISPLAY ONLY. The
+   *  server sends the full chain on each chunk, so this is replaced, not
+   *  appended. */
+  streamingReasoning: string
   error: string | null
 }
 
@@ -28,6 +32,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
     isStreaming: false,
     isExecutingTools: false,
     streamingContent: '',
+    streamingReasoning: '',
     error: null,
   })
   const abortRef = useRef<AbortController | null>(null)
@@ -47,6 +52,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
       isStreaming: true,
       isExecutingTools: false,
       streamingContent: '',
+      streamingReasoning: '',
       error: null,
     })
 
@@ -96,6 +102,13 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
               }))
             }
 
+            // Reasoning ("thinking") chunk — cumulative chain so far; replace,
+            // not append. Left intact across tool-execution status so the
+            // chain stays visible between turns. DISPLAY ONLY.
+            if (typeof event.reasoning === 'string') {
+              setState(prev => ({ ...prev, streamingReasoning: event.reasoning }))
+            }
+
             // Tool execution status — clear stale streamed text, show "working"
             if (event.status) {
               currentContent = ''
@@ -110,7 +123,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
             if (event.done) {
               const messageId = event.messageId
               currentContent = ''
-              setState(prev => ({ ...prev, streamingContent: '' }))
+              setState(prev => ({ ...prev, streamingContent: '', streamingReasoning: '' }))
               if (messageId) {
                 onMessageCompleteRef.current?.(messageId)
               }
@@ -118,7 +131,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
 
             // Error
             if (event.error) {
-              setState(prev => ({ ...prev, error: event.error, isStreaming: false }))
+              setState(prev => ({ ...prev, error: event.error, isStreaming: false, streamingReasoning: '' }))
               return
             }
           } catch {
@@ -128,7 +141,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
       }
 
       // Stream closed
-      setState(prev => ({ ...prev, isStreaming: false, streamingContent: '' }))
+      setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '' }))
     } catch (error) {
       if ((error as Error).name === 'AbortError') return
       setState(prev => ({
@@ -141,7 +154,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort()
-    setState(prev => ({ ...prev, isStreaming: false, streamingContent: '' }))
+    setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '' }))
   }, [])
 
   return {

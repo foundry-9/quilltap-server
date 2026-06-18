@@ -35,6 +35,14 @@ The Console is a capable, concise, neutral assistant. Beyond plain conversation,
 - **The ledgers themselves** — It can put **read-only questions** straight to the databases that keep your establishment running. See *Consulting the ledgers*, below.
 - **The wider world** — When the chosen connection profile permits it, the Console can search the web; and when the `curl` plugin is installed and enabled, it can fetch URLs directly.
 
+## Watching the engine think
+
+The Console's replies arrive as they are composed, word following word across the wire rather than landing all at once when the engine has finished. And when you have chosen an engine given to **reasoning aloud** — one of the thinking models — the Console will show you its working as well as its conclusion.
+
+Above each such answer sits a small, dimmed **Thinking** panel. While the engine deliberates the panel stands open, and you may watch the chain of thought unspool in real time; once the answer is settled the panel folds itself shut, leaving the reply uncluttered. Press it open again at any time, on a fresh answer or one long since concluded, to revisit how the engine reasoned its way there.
+
+This musing is shown to you and to you alone. Like everything in the thinking panel throughout Quilltap, it is **for your eyes only** — never fed back to the engine, never filed into a memory, never counted as part of the answer. Engines that do not reason aloud simply show no panel at all.
+
 ## Consulting the ledgers
 
 Behind every character, every conversation, every memory and document and tallied expense, there are three great ledgers — Quilltap's databases — and the Console may now read them directly. Ask it a question in the plain language of your world — *"how lopsided is this character's sense of importance?"*, *"which engine has cost me the most this fortnight?"*, *"how many conversations mention the airship?"* — and it will quietly translate your question into a query, consult the appropriate ledger, and answer you in your own terms. You need never see a line of SQL unless you ask to.

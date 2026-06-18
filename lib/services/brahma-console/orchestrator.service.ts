@@ -29,6 +29,7 @@ import {
   buildTools,
   streamMessage,
   encodeContentChunk,
+  encodeReasoningChunk,
   encodeDoneEvent,
   encodeErrorEvent,
   safeEnqueue,
@@ -227,7 +228,7 @@ async function processBrahmaResponse(
   }
 
   // Agent mode instructions (always enabled)
-  const maxAgentTurns = 10
+  const maxAgentTurns = 25
   const agentInstructions = buildAgentModeInstructions(maxAgentTurns)
   toolInstructions = toolInstructions
     ? `${toolInstructions}\n\n${agentInstructions}`
@@ -277,6 +278,14 @@ async function processBrahmaResponse(
   const toolCallHistory: string[] = []
   const MAX_DUPLICATE_TOOL_CALLS = 2
 
+  // Reasoning ("thinking") accumulators — DISPLAY ONLY. Each agent turn is its
+  // own streamMessage call, so the provider's cumulative `reasoningContent`
+  // resets per turn; we fold completed turns into `priorReasoning` and emit the
+  // growing `runReasoning` so the client watches one continuous chain and the
+  // saved message keeps the whole thing.
+  let priorReasoning = ''
+  let runReasoning = ''
+
   while (agentTurnCount <= maxAgentTurns) {
     agentTurnCount++
 
@@ -285,6 +294,7 @@ async function processBrahmaResponse(
     }
 
     let currentResponse = ''
+    let turnReasoning = ''
     let streamUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null = null
     let rawResponse: unknown = null
 
@@ -298,12 +308,30 @@ async function processBrahmaResponse(
       userId,
       chatId,
     })) {
+      // Capture + live-forward reasoning ("thinking"). Providers emit the
+      // cumulative thinking-so-far on each reasoning-bearing chunk, so we
+      // last-wins it and push the run-level cumulative to the client (which
+      // replaces, not appends). DISPLAY ONLY — never re-fed to a model.
+      if (chunk.reasoningContent && chunk.reasoningContent !== turnReasoning) {
+        if (!turnReasoning) {
+          logger.debug('Brahma Console streaming reasoning', { chatId, turn: agentTurnCount })
+        }
+        turnReasoning = chunk.reasoningContent
+        runReasoning = priorReasoning + turnReasoning
+        safeEnqueue(controller, encodeReasoningChunk(encoder, runReasoning))
+      }
       if (chunk.content) {
         currentResponse += chunk.content
         safeEnqueue(controller, encodeContentChunk(encoder, chunk.content))
       }
       if (chunk.usage) streamUsage = chunk.usage
       if (chunk.rawResponse) rawResponse = chunk.rawResponse
+    }
+
+    // Fold this turn's reasoning into the run-level chain so the next turn's
+    // cumulative thinking appends after it rather than overwriting it.
+    if (turnReasoning.trim()) {
+      priorReasoning = `${runReasoning}\n\n`
     }
 
     totalUsage.promptTokens += streamUsage?.promptTokens || 0
@@ -450,6 +478,10 @@ async function processBrahmaResponse(
       completionTokens: totalUsage.completionTokens,
       tokenCount: totalUsage.promptTokens + totalUsage.completionTokens,
       attachments: [],
+      // Reasoning ("thinking") for the turn — DISPLAY ONLY, never re-fed to a
+      // model. The Console renders it as a single leading block, so no
+      // positioned reasoningSegments are needed.
+      reasoningContent: runReasoning.trim() || null,
       createdAt: new Date().toISOString(),
     }
     await repos.chats.addMessage(chatId, assistantMessage)
@@ -470,6 +502,7 @@ async function processBrahmaResponse(
       toolsExecuted: agentTurnCount > 1,
       provider: connectionProfile.provider,
       modelName: connectionProfile.modelName,
+      reasoningContent: runReasoning.trim() || null,
     }))
 
     await trackMessageTokenUsage(

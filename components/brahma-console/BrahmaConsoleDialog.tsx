@@ -38,6 +38,7 @@ interface ConsoleMessage {
   createdAt: string
   provider?: string | null
   modelName?: string | null
+  reasoningContent?: string | null
 }
 
 export function BrahmaConsoleDialog() {
@@ -90,6 +91,7 @@ export function BrahmaConsoleDialog() {
   const {
     isStreaming,
     streamingContent,
+    streamingReasoning,
     isExecutingTools,
     error: streamError,
     sendMessage,
@@ -278,6 +280,7 @@ export function BrahmaConsoleDialog() {
             <BrahmaConsoleMessageList
               messages={messages}
               streamingContent={streamingContent}
+              streamingReasoning={streamingReasoning}
               isStreaming={isStreaming}
               isExecutingTools={isExecutingTools}
             />

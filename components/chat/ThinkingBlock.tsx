@@ -28,6 +28,10 @@ interface ThinkingBlockProps {
  * (`MessageContent`) so lists, emphasis, and code in the reasoning display
  * properly. Theme-aware via the `qt-chat-thinking-*` tokens (which fall back to
  * the silent-message tokens). DISPLAY ONLY — never fed back to any model.
+ *
+ * Shared by the Salon (live + interleaved per-message reasoning) and the Brahma
+ * Console (single leading block), both of which render through the same
+ * `@/components/chat/MessageContent`.
  */
 export function ThinkingBlock({
   content,
